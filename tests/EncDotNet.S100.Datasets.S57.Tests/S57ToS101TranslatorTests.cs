@@ -1115,4 +1115,64 @@ public class S57ToS101TranslatorTests
         Assert.Equal("20190501", GetSubAttribute(s101, surveyInstance, "dateStart"));
         Assert.Equal("20190815", GetSubAttribute(s101, surveyInstance, "dateEnd"));
     }
+
+    // ── CATPRA → categoryOfProductionArea / categoryOfOffshoreProductionArea ──
+
+    [Fact]
+    public void Translate_Catpra_OnProductionStorageArea_PassesThroughAsCategoryOfProductionArea()
+    {
+        // PRDARE (OBJL 97) → ProductionStorageArea binds categoryOfProductionArea,
+        // whose enumeration shares codes 1..12 with S-57 CATPRA, so the value
+        // (8 = Tank Farm) passes through unchanged.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(97, Attr(48, "8")));
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("categoryOfProductionArea", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("8", attr.Value);
+    }
+
+    [Fact]
+    public void Translate_Catpra_OnOffshoreProductionArea_RedirectsAndRemapsToOffshoreCategory()
+    {
+        // OSPARE (OBJL 88) → OffshoreProductionArea binds the distinct
+        // categoryOfOffshoreProductionArea enumeration. S-57 CATPRA=9 (Wind Farm)
+        // remaps to offshore code 1 (Wind Farm).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(88, Attr(48, "9")));
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("categoryOfOffshoreProductionArea", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("1", attr.Value);
+        Assert.DoesNotContain("categoryOfProductionArea", s101.AttributeTypeCatalogue.Values);
+    }
+
+    [Fact]
+    public void Translate_Catpra_OnOffshoreProductionArea_TankFarmRemapsToOffshoreTankFarm()
+    {
+        // S-57 CATPRA=8 (Tank Farm) → offshore code 4 (Tank Farm).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(88, Attr(48, "8")));
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("categoryOfOffshoreProductionArea", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("4", attr.Value);
+    }
+
+    [Fact]
+    public void Translate_Catpra_OnOffshoreProductionArea_NonOffshoreValueIsDropped()
+    {
+        // S-57 CATPRA=2 (Mine) has no categoryOfOffshoreProductionArea equivalent,
+        // so the attribute is dropped on OffshoreProductionArea and recorded.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(88, Attr(48, "2")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(feat.Attributes);
+        Assert.Contains((ushort)48, diag.RuleDroppedAttributes.Keys);
+    }
 }

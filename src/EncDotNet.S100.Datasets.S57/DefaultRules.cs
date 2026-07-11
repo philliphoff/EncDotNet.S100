@@ -184,7 +184,42 @@ internal static class DefaultRules
         yield return F(82, "MARCUL", "MarineFarmCulture");
         yield return F(83, "MIPARE", "MilitaryPracticeArea");
         yield return F(87, "OFSPLF", "OffshorePlatform");
-        yield return F(88, "OSPARE", "OffshoreProductionArea");
+        // OSPARE — OffshoreProductionArea binds `categoryOfOffshoreProductionArea`
+        // (NOT `categoryOfProductionArea`), a distinct S-101 enumeration
+        // (1=Wind Farm, 2=Wave Farm, 3=Current Farm, 4=Tank Farm,
+        // 5=Seabed Material Extraction Area, 6=Solar Farm). Redirect CATPRA to
+        // that attribute and remap the S-57 codes; S-57 production categories
+        // with no offshore equivalent (quarry, mine, stockpile, power station,
+        // refinery, timber yard, factory, slag/spoil, production plant) are
+        // dropped (no conformant home on this feature).
+        yield return new S57FeatureRule
+        {
+            Objl = 88,
+            S57Acronym = "OSPARE",
+            DefaultS101Code = "OffshoreProductionArea",
+            AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CATPRA"] = new S57AttributeOverride
+                {
+                    S101Code = "categoryOfOffshoreProductionArea",
+                    ValueRemap = new Dictionary<string, string?>
+                    {
+                        ["1"] = null,  // quarry — no offshore equivalent
+                        ["2"] = null,  // mine — no offshore equivalent
+                        ["3"] = null,  // stockpile — no offshore equivalent
+                        ["4"] = null,  // power station area — no offshore equivalent
+                        ["5"] = null,  // refinery area — no offshore equivalent
+                        ["6"] = null,  // timber yard — no offshore equivalent
+                        ["7"] = null,  // factory area — no offshore equivalent
+                        ["8"] = "4",   // tank farm → Tank Farm
+                        ["9"] = "1",   // wind farm → Wind Farm
+                        ["10"] = null, // slag heap/spoil heap — no offshore equivalent
+                        ["11"] = null, // production plant — no offshore equivalent
+                        ["12"] = "6",  // solar farm → Solar Farm
+                    },
+                },
+            },
+        };
         yield return F(89, "OILBAR", "OilBarrier");
         yield return F(91, "PILBOP", "PilotBoardingPlace");
         yield return F(92, "PIPARE", "SubmarinePipelineArea");
@@ -368,6 +403,13 @@ internal static class DefaultRules
         yield return A(44, "CATOLB", "categoryOfOilBarrier");
         yield return A(46, "CATPIL", "categoryOfPilotBoardingPlace");
         yield return A(47, "CATPIP", "categoryOfPipelinePipe");
+        // CATPRA — the S-57 category-of-production-area code maps 1:1 to the
+        // S-101 `categoryOfProductionArea` enumeration (both share codes
+        // 1=Quarry … 9=Wind Farm), which is bound to ProductionStorageArea.
+        // On OffshoreProductionArea the FC binds a *different* attribute
+        // (`categoryOfOffshoreProductionArea`, a distinct enumeration); that
+        // feature carries a per-feature override below to redirect and remap.
+        yield return A(48, "CATPRA", "categoryOfProductionArea");
         yield return A(49, "CATPYL", "categoryOfPylon");
         yield return A(51, "CATRAS", "categoryOfRadarStation");
         yield return A(52, "CATRTB", "categoryOfRadarTransponderBeacon");
