@@ -334,18 +334,20 @@ internal static class DefaultRules
         // *complex* attribute, so a flat emission would be non-conformant;
         // they need complex-attribute assembly, like OBJNAM → featureName).
         // Several complexes are now assembled in the translator directly
-        // (information, featureName, rhythmOfLight, the date ranges, and
-        // zoneOfConfidence/CATZOC). Still deferred:
+        // (information, featureName, rhythmOfLight, the date ranges,
+        // zoneOfConfidence/CATZOC, and surfaceCharacteristics/NATSUR+NATQUA).
+        // Still deferred:
         //   SECTR1/SECTR2 → sectorBearing (light-sector complex),
         //   HORCLR → horizontalClearanceValue (horizontalClearanceFixed/Open),
-        //   NATQUA → natureOfSurfaceQualifyingTerms (surfaceCharacteristics),
         //   SIGSEQ → signalSequence, MLTYLT (light-sector complex),
         //   SORDAT/SORIND (→ complex sourceIndication/reportedDate).
         //
         // Assembled into S-101 complex attributes by S57ToS101Translator (feature
         // binding-gated), NOT emitted here as flat simple attributes:
         //   DATSTA/DATEND → fixedDateRange, PERSTA/PEREND → periodicDateRange,
-        //   SURSTA/SUREND → surveyDateRange (each with dateStart/dateEnd).
+        //   SURSTA/SUREND → surveyDateRange (each with dateStart/dateEnd);
+        //   NATSUR/NATQUA → surfaceCharacteristics (natureOfSurface plus
+        //   natureOfSurfaceQualifyingTerms) on SeabedArea.
         //
         // NOTE: enum (E/L) attributes still pass their values through the
         // FC-driven S101AllowedEnumValues check; S-57 enum values that have no

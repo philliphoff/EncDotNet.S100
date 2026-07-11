@@ -1175,4 +1175,77 @@ public class S57ToS101TranslatorTests
         Assert.Empty(feat.Attributes);
         Assert.Contains((ushort)48, diag.RuleDroppedAttributes.Keys);
     }
+
+    // ── NATSUR / NATQUA → surfaceCharacteristics (SeabedArea) ──
+
+    [Fact]
+    public void Translate_NatsurAndNatqua_OnSeabedArea_BecomeSurfaceCharacteristicsInstance()
+    {
+        // SBDARE (OBJL 121) → SeabedArea, the sole feature class binding
+        // surfaceCharacteristics. NATSUR=4 (sand) + NATQUA=1 (fine) pair into a
+        // single instance carrying natureOfSurface and natureOfSurfaceQualifyingTerms.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(121, Attr(113, "4"), Attr(114, "1")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("4", GetSubAttribute(s101, instance, "natureOfSurface"));
+        Assert.Equal("1", GetSubAttribute(s101, instance, "natureOfSurfaceQualifyingTerms"));
+        // NATSUR/NATQUA must NOT also leak out as top-level simple attributes
+        // (SeabedArea binds neither); the only emitted rows are the complex
+        // marker and its two sub-attributes.
+        Assert.Equal(3, feat.Attributes.Count);
+    }
+
+    [Fact]
+    public void Translate_NatquaOnly_OnSeabedArea_BecomesQualifyingTermsInstance()
+    {
+        // The dominant corpus case: NATQUA present with no NATSUR. Since
+        // natureOfSurface is optional within surfaceCharacteristics, this still
+        // forms a valid instance carrying only natureOfSurfaceQualifyingTerms.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(121, Attr(114, "4")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("4", GetSubAttribute(s101, instance, "natureOfSurfaceQualifyingTerms"));
+        Assert.Null(GetSubAttribute(s101, instance, "natureOfSurface"));
+    }
+
+    [Fact]
+    public void Translate_NatsurAndNatquaLists_OnSeabedArea_PairPositionally()
+    {
+        // NATSUR="4,3" (sand, mud) + NATQUA="1" (fine): position 0 pairs
+        // (4,1); position 1 has surface only (3).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(121, Attr(113, "4,3"), Attr(114, "1")));
+
+        var feat = Assert.Single(s101.Features);
+
+        var first = ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", 1).ToList();
+        Assert.Equal("4", GetSubAttribute(s101, first, "natureOfSurface"));
+        Assert.Equal("1", GetSubAttribute(s101, first, "natureOfSurfaceQualifyingTerms"));
+
+        var second = ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", 2).ToList();
+        Assert.Equal("3", GetSubAttribute(s101, second, "natureOfSurface"));
+        Assert.Null(GetSubAttribute(s101, second, "natureOfSurfaceQualifyingTerms"));
+    }
+
+    [Fact]
+    public void Translate_Natsur_OnNonSeabedFeature_StaysDirectSimpleAttribute()
+    {
+        // LandRegion (OBJL 73) binds a top-level natureOfSurface and does NOT
+        // bind surfaceCharacteristics, so NATSUR passes through unchanged and no
+        // complex is assembled.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(73, Attr(113, "4")));
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("natureOfSurface", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("4", attr.Value);
+        Assert.DoesNotContain("surfaceCharacteristics", s101.AttributeTypeCatalogue.Values);
+    }
 }

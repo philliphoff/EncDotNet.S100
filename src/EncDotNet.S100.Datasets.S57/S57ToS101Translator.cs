@@ -153,6 +153,24 @@ public sealed class S57ToS101Translator
     private const string S101AttrZoneOfConfidence = "zoneOfConfidence";
     private const string S101AttrCategoryOfZocInData = "categoryOfZoneOfConfidenceInData";
 
+    // S-57 NATSUR (Nature of surface, ATTL 113) and NATQUA (Nature of surface,
+    // qualifying terms, ATTL 114) — both list-valued — map onto the S-101
+    // `surfaceCharacteristics` complex attribute's `natureOfSurface` and
+    // `natureOfSurfaceQualifyingTerms` sub-attributes (S-101 Conversion
+    // Guidance; verified against the bundled FC). `surfaceCharacteristics` is
+    // bound only to SeabedArea (SBDARE), which — unlike Coastline, LandRegion,
+    // etc. — does NOT bind a top-level `natureOfSurface`, so on SeabedArea the
+    // NATSUR value has no conformant home except inside the complex. The two
+    // S-57 lists are paired positionally into one repeating complex instance
+    // per position: `natureOfSurface` [0..1] and `natureOfSurfaceQualifyingTerms`
+    // [0..3] are both optional, so positions with only one of the two still
+    // form a valid instance.
+    private const ushort S57AttrNatsur = 113;  // NATSUR — nature of surface
+    private const ushort S57AttrNatqua = 114;  // NATQUA — nature of surface, qualifying terms
+    private const string S101AttrSurfaceCharacteristics = "surfaceCharacteristics";
+    private const string S101AttrNatureOfSurface = "natureOfSurface";
+    private const string S101AttrNatureOfSurfaceQualifyingTerms = "natureOfSurfaceQualifyingTerms";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -565,6 +583,11 @@ public sealed class S57ToS101Translator
             // class that binds the complex (QualityOfBathymetricData).
             bool bindsZoc = _featureBindings.Binds(feature.S101Code, S101AttrZoneOfConfidence);
             string? catzocValue = null;
+            // surfaceCharacteristics source — NATSUR/NATQUA, assembled on the
+            // (single) feature class that binds the complex (SeabedArea).
+            bool bindsSurfaceChar = _featureBindings.Binds(feature.S101Code, S101AttrSurfaceCharacteristics);
+            string? natsurList = null;
+            string? natquaList = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -585,6 +608,8 @@ public sealed class S57ToS101Translator
                     case S57AttrSursta: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surstaValue = a.Value; break;
                     case S57AttrSurend: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surendValue = a.Value; break;
                     case S57AttrCatzoc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) catzocValue = a.Value; break;
+                    case S57AttrNatsur: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natsurList = a.Value; break;
+                    case S57AttrNatqua: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natquaList = a.Value; break;
                 }
             }
 
@@ -618,6 +643,13 @@ public sealed class S57ToS101Translator
                 // On QualityOfBathymetricData, CATZOC is assembled into the
                 // `zoneOfConfidence` complex below rather than passed through.
                 if (bindsZoc && a.AttributeCode is S57AttrCatzoc)
+                    continue;
+
+                // On SeabedArea, NATSUR/NATQUA are assembled into the
+                // `surfaceCharacteristics` complex below. SeabedArea does not
+                // bind a top-level `natureOfSurface`, so passing NATSUR through
+                // would be non-conformant; NATQUA has no top-level home at all.
+                if (bindsSurfaceChar && a.AttributeCode is S57AttrNatsur or S57AttrNatqua)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
@@ -774,6 +806,16 @@ public sealed class S57ToS101Translator
                 }
             }
 
+            // Append `surfaceCharacteristics` complex-attribute instances. The
+            // S-57 NATSUR and NATQUA lists are paired positionally: position i
+            // yields one instance carrying `natureOfSurface` = NATSUR[i] (when
+            // present and permitted) and `natureOfSurfaceQualifyingTerms` =
+            // NATQUA[i] (when present and permitted). Both sub-attributes are
+            // optional, so a position with only one populated still forms a
+            // valid instance; a position where both are dropped emits nothing.
+            if (bindsSurfaceChar && (natsurList is not null || natquaList is not null))
+                AppendSurfaceCharacteristicsInstances(builder, natsurList, natquaList);
+
             return builder;
         }
 
@@ -888,6 +930,70 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(zocCode, 1, string.Empty));
             var catCode = GetOrAssignAttributeCode(S101AttrCategoryOfZocInData);
             builder.Add(new S101Attribute(catCode, 1, categoryOfZoneOfConfidenceInData));
+        }
+
+        // Emits zero or more `surfaceCharacteristics` complex-attribute
+        // instances by pairing the S-57 NATSUR and NATQUA lists positionally.
+        // Each is a flat marker + contiguous-sub-attribute run (the same
+        // convention as the other complex attributes); the S-101 data provider
+        // delimits one repeating instance from the next by the complex marker.
+        // Out-of-range enumerate codes are dropped (and reported) individually,
+        // and a position whose sub-attributes are all dropped emits no instance.
+        private void AppendSurfaceCharacteristicsInstances(
+            List<S101Attribute> builder,
+            string? natsurList,
+            string? natquaList)
+        {
+            var surfaces = SplitEnumList(natsurList);
+            var quals = SplitEnumList(natquaList);
+            int count = Math.Max(surfaces.Count, quals.Count);
+            for (int i = 0; i < count; i++)
+            {
+                string? surface = i < surfaces.Count ? surfaces[i] : null;
+                string? qual = i < quals.Count ? quals[i] : null;
+
+                if (surface is not null
+                    && _allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(S101AttrNatureOfSurface, surface))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrNatureOfSurface, surface);
+                    surface = null;
+                }
+                if (qual is not null
+                    && _allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(S101AttrNatureOfSurfaceQualifyingTerms, qual))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrNatureOfSurfaceQualifyingTerms, qual);
+                    qual = null;
+                }
+
+                if (surface is null && qual is null)
+                    continue;
+
+                var scCode = GetOrAssignAttributeCode(S101AttrSurfaceCharacteristics);
+                // Marker entry — Index=1, value=empty — followed by sub-attributes.
+                builder.Add(new S101Attribute(scCode, 1, string.Empty));
+                if (surface is not null)
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrNatureOfSurface), 1, surface));
+                if (qual is not null)
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrNatureOfSurfaceQualifyingTerms), 1, qual));
+            }
+        }
+
+        // Splits an S-57 list-valued enumerate attribute (comma-separated
+        // integer codes) into its individual non-empty tokens.
+        private static List<string> SplitEnumList(string? list)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(list))
+                return result;
+            foreach (var token in list.Split(','))
+            {
+                var code = token.Trim();
+                if (code.Length > 0)
+                    result.Add(code);
+            }
+            return result;
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)
