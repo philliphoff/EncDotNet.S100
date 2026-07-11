@@ -572,4 +572,127 @@ public class S57ToS101TranslatorTests
 
         Assert.Empty(InformationInstance(s101, feat.Attributes, 1).ToList());
     }
+
+    // ── OBJNAM/NOBJNM → featureName complex attribute ───────────────────
+
+    private static IEnumerable<S101Attribute> ComplexInstance(
+        S101Document doc,
+        IReadOnlyList<S101Attribute> attrs,
+        string complexCode,
+        int instanceIndex)
+    {
+        ushort? code = null;
+        foreach (var (c, n) in doc.AttributeTypeCatalogue)
+        {
+            if (string.Equals(n, complexCode, StringComparison.OrdinalIgnoreCase))
+            {
+                code = c;
+                break;
+            }
+        }
+        if (code is null) yield break;
+
+        int found = 0;
+        bool collecting = false;
+        foreach (var a in attrs)
+        {
+            if (a.NumericCode == code && a.Index == 1)
+            {
+                if (collecting) break;
+                found++;
+                if (found == instanceIndex)
+                {
+                    collecting = true;
+                    yield return a;
+                    continue;
+                }
+            }
+            else if (collecting)
+            {
+                yield return a;
+            }
+        }
+    }
+
+    [Fact]
+    public void Translate_ObjnamAttribute_BecomesFeatureNameComplex_WithEnglish()
+    {
+        var doc = LandRegionWithS57Attributes(Attr(116, "Puget Sound"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+
+        Assert.NotEmpty(instance);
+        Assert.Equal("Puget Sound", GetSubAttribute(s101, instance, "name"));
+        Assert.Equal("eng", GetSubAttribute(s101, instance, "language"));
+    }
+
+    [Fact]
+    public void Translate_NobjnmAttribute_BecomesFeatureNameComplex_WithBlankLanguage()
+    {
+        var doc = LandRegionWithS57Attributes(Attr(301, "Bahía de Todos"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+
+        Assert.Equal("Bahía de Todos", GetSubAttribute(s101, instance, "name"));
+        Assert.Equal("", GetSubAttribute(s101, instance, "language"));
+    }
+
+    [Fact]
+    public void Translate_ObjnamAndNobjnm_EmitTwoFeatureNameInstances()
+    {
+        var doc = LandRegionWithS57Attributes(
+            Attr(116, "English name"),
+            Attr(301, "National name"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        var first = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+        var second = ComplexInstance(s101, feat.Attributes, "featureName", 2).ToList();
+
+        Assert.Equal("English name", GetSubAttribute(s101, first, "name"));
+        Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
+        Assert.Equal("National name", GetSubAttribute(s101, second, "name"));
+        Assert.Equal("", GetSubAttribute(s101, second, "language"));
+    }
+
+    [Fact]
+    public void Translate_EmptyObjnam_EmitsNoFeatureNameInstance()
+    {
+        var doc = LandRegionWithS57Attributes(Attr(116, ""));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_Objnam_IsNotEmittedAsSimpleNameAttribute()
+    {
+        var doc = LandRegionWithS57Attributes(Attr(116, "Some Place"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        // `name` must only appear inside a featureName instance (its marker
+        // precedes it), never as a bare top-level simple attribute.
+        ushort? nameCode = null;
+        ushort? featureNameCode = null;
+        foreach (var (c, n) in s101.AttributeTypeCatalogue)
+        {
+            if (string.Equals(n, "name", StringComparison.OrdinalIgnoreCase)) nameCode = c;
+            if (string.Equals(n, "featureName", StringComparison.OrdinalIgnoreCase)) featureNameCode = c;
+        }
+        Assert.NotNull(nameCode);
+        Assert.NotNull(featureNameCode);
+        Assert.Contains(feat.Attributes, a => a.NumericCode == featureNameCode);
+        // Every `name` row is preceded (somewhere) by a featureName marker.
+        var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Some Place", GetSubAttribute(s101, instance, "name"));
+    }
 }

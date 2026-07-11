@@ -38,15 +38,42 @@ Key types:
 | Multi-point soundings (`SOUNDG`) | Exploded into S-101 `MultiPoint` spatial records and a `Sounding` feature so each depth value is independently portrayable. |
 | `INFORM` / `TXTDSC` (English) | Carried as a single S-101 `information` complex attribute instance with `text` and/or `fileReference` and `language = "eng"`. |
 | `NINFOM` / `NTXTDS` (national language) | Carried as a separate `information` instance with empty `language` (S-57 has no language tag; Data Producers can populate it post-conversion). |
+| `OBJNAM` (English) | Carried as an S-101 `featureName` complex attribute instance with `name` and `language = "eng"`. |
+| `NOBJNM` (national language) | Carried as a separate `featureName` instance with empty `language`. |
 | Spatial relationships | S-57 vector pointer records (`VRPT`, `FSPT`) translated to S-101 spatial associations and ring orientation. |
 
 ## Limitations
 
 - **Base cells only.** Update files (`.001`, `.002`, …) are not applied; the reader rejects them with a clear error.
-- **Breadth-first feature coverage.** Most common feature classes map to S-101 acronyms; uncommon classes pass through unmapped and may not portray.
-- **Listed-value remapping is best-effort.** Some S-57 enumerated attribute values have different numeric codes in S-101; values that aren't permitted by the destination S-101 FC binding are silently dropped.
+- **Breadth-first feature coverage.** Feature-class coverage is derived from the bundled S-101 Feature Catalogue's `<S100FC:alias>` (S-57 acronym) bridge and validated against a 3,636-cell NOAA ENC corpus: ~99% of feature instances now translate. The classes that remain unmapped are ones that need conditional splits (`MORFAC` by `CATMOR`), become S-101 *attributes* rather than features (`TOPMAR`), are aggregation/collection objects (`C_AGGR`, `C_ASSO`), or are meta objects with no S-101 equivalent (`M_CSCL`).
+- **Simple attributes plus two complex names.** Most attribute rules cover S-57 attributes that map to a *directly feature-bound simple* S-101 attribute. The `information` (`INFORM`/`NINFOM`/`TXTDSC`/`NTXTDS`) and `featureName` (`OBJNAM`/`NOBJNM`) complex attributes are also assembled. Attributes that are sub-attributes of the *remaining* S-101 **complex** attributes (`LITCHR`/`SECTR1`→light structure, `DATSTA`/`DATEND`/`PERSTA`/`PEREND`→date ranges, survey dates, quality-of-data) are still left unmapped pending further complex-attribute assembly. `SORDAT`→`reportedDate` is deferred (it binds to only a subset of feature types and the translator has no per-feature binding filter); `SORIND` has no general S-101 equivalent and is intentionally not mapped.
+- **Listed-value remapping is best-effort.** Some S-57 enumerated attribute values have different numeric codes in S-101; values that aren't permitted by the destination S-101 FC binding are dropped (and reported by the translation diagnostics).
 - **Complex-attribute synthesis is minimal.** Sector lights and similar features that require S-101 nested complex attributes may not portray correctly.
 - **`information` is emitted directly on the feature** (per the "generally" path in the conversion guidance) rather than via a separate `NauticalInformation` information type with an `Additional Information` association.
+
+## Translation diagnostics
+
+`S57ToS101Translator.Translate` has an optional overload that accepts an
+`S57TranslationDiagnostics` sink. When supplied, the translator records — as
+compact aggregate counters — exactly what it dropped and why, so a caller (for
+example a corpus-wide conversion audit) can quantify coverage gaps in the
+embedded `S57S101Mapping` without re-deriving the translator's logic:
+
+```csharp
+var diagnostics = new S57TranslationDiagnostics();
+var s101 = new S57ToS101Translator().Translate(s57, diagnostics);
+
+// Object classes present in the data with no mapping rule (a coverage gap):
+foreach (var (objl, count) in diagnostics.UnmappedObjectClasses) { /* … */ }
+```
+
+Passing `null` (or using the parameterless `Translate` overloads) disables
+collection with zero overhead. The counters distinguish a genuine **gap** (no
+rule — `UnmappedObjectClasses` / `UnmappedAttributes`) from a **by-design drop**
+(a rule exists but resolves to nothing — `RuleDroppedObjectClasses` /
+`RuleDroppedAttributes`), and separately report FC-rejected enumerate values
+(`DroppedEnumValues`), geometry loss (`FeaturesDroppedForNoGeometry`), and
+sounding point accounting.
 
 ## Validation
 

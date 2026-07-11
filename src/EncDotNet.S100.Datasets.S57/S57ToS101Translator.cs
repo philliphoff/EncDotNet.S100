@@ -61,12 +61,27 @@ public sealed class S57ToS101Translator
     private const ushort S57AttrNinfom = 300;   // NINFOM  — free text (national)
     private const ushort S57AttrNtxtds = 304;   // NTXTDS  — text-file ref (national)
 
+    // ── S-57 object-name attribute codes (S-57 Appendix A Chapter 2) ──
+    // Per IHO S-57→S-101 Conversion Guidance, OBJNAM/NOBJNM do NOT pass
+    // through as a simple attribute; they become one or more instances of
+    // the S-101 `featureName` complex attribute (sub-attributes name /
+    // language [/ nameUsage]). The FC declares OBJNAM and NOBJNM as the two
+    // aliases of the `name` sub-attribute, mirroring the INFORM/NINFOM split.
+    private const ushort S57AttrObjnam = 116;   // OBJNAM  — object name (Eng.)
+    private const ushort S57AttrNobjnm = 301;   // NOBJNM  — object name (national)
+
     // S-101 attribute codes for the `information` complex attribute and
     // its sub-attributes (verified against the bundled FC).
     private const string S101AttrInformation = "information";
     private const string S101AttrText = "text";
     private const string S101AttrFileReference = "fileReference";
     private const string S101AttrLanguage = "language";
+
+    // S-101 attribute codes for the `featureName` complex attribute and its
+    // sub-attributes (verified against the bundled FC; `name` is [1..1],
+    // `language` is [1..1], `nameUsage` is [0..1] and has no S-57 source).
+    private const string S101AttrFeatureName = "featureName";
+    private const string S101AttrName = "name";
 
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
@@ -102,7 +117,17 @@ public sealed class S57ToS101Translator
     public S101Document Translate(S57Dataset dataset)
     {
         ArgumentNullException.ThrowIfNull(dataset);
-        return Translate(dataset.Document);
+        return Translate(dataset.Document, diagnostics: null);
+    }
+
+    /// <summary>
+    /// Translates an <see cref="S57Dataset"/> into an <see cref="S101Document"/>,
+    /// recording what was dropped into <paramref name="diagnostics"/>.
+    /// </summary>
+    public S101Document Translate(S57Dataset dataset, S57TranslationDiagnostics? diagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        return Translate(dataset.Document, diagnostics);
     }
 
     /// <summary>
@@ -110,10 +135,23 @@ public sealed class S57ToS101Translator
     /// <see cref="S101Document"/>.
     /// </summary>
     public S101Document Translate(EncDotNet.S57.S57Document s57)
+        => Translate(s57, diagnostics: null);
+
+    /// <summary>
+    /// Translates an <see cref="EncDotNet.S57.S57Document"/> into an
+    /// <see cref="S101Document"/>, optionally recording per-drop diagnostics.
+    /// </summary>
+    /// <param name="s57">The parsed S-57 document to translate.</param>
+    /// <param name="diagnostics">
+    /// Optional collector that accumulates the object classes, attributes, and
+    /// enumerate values dropped during translation. Pass <c>null</c> (the
+    /// default) to disable collection with zero overhead.
+    /// </param>
+    public S101Document Translate(EncDotNet.S57.S57Document s57, S57TranslationDiagnostics? diagnostics)
     {
         ArgumentNullException.ThrowIfNull(s57);
 
-        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues);
+        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues, diagnostics);
         ctx.IndexVectorRecords();
         ctx.TranslateNodes();
         ctx.TranslateEdges();
@@ -167,6 +205,7 @@ public sealed class S57ToS101Translator
         private readonly EncDotNet.S57.S57Document _s57;
         private readonly S57S101Mapping _mapping;
         private readonly S101AllowedEnumValues? _allowedEnumValues;
+        private readonly S57TranslationDiagnostics? _diagnostics;
 
         // Index of the document's flat VectorRecords list, keyed by
         // (RecordNameCode, RecordId) for fast lookup from spatial pointers.
@@ -198,11 +237,13 @@ public sealed class S57ToS101Translator
         public TranslationContext(
             EncDotNet.S57.S57Document s57,
             S57S101Mapping mapping,
-            S101AllowedEnumValues? allowedEnumValues)
+            S101AllowedEnumValues? allowedEnumValues,
+            S57TranslationDiagnostics? diagnostics)
         {
             _s57 = s57;
             _mapping = mapping;
             _allowedEnumValues = allowedEnumValues;
+            _diagnostics = diagnostics;
         }
 
         public void IndexVectorRecords()
@@ -292,19 +333,37 @@ public sealed class S57ToS101Translator
                 var objl = (ushort)(int)feat.ObjectCode;
                 if (objl == SoundingObjl)
                 {
+                    if (_diagnostics is not null) _diagnostics.SoundingFeaturesRead++;
                     EmitSoundingMultiPoint(feat);
                     continue;
                 }
 
+                if (_diagnostics is not null) _diagnostics.FeatureRecordsRead++;
+
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
                 var resolved = _mapping.ResolveFeature(objl, acronymView);
-                if (resolved is null) continue;
+                if (resolved is null)
+                {
+                    if (_diagnostics is not null)
+                    {
+                        if (_mapping.FeatureRules.ContainsKey(objl))
+                            _diagnostics.RecordRuleDroppedObjectClass(objl);
+                        else
+                            _diagnostics.RecordUnmappedObjectClass(objl);
+                    }
+                    continue;
+                }
 
                 var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
-                var attributes = TranslateAttributes(feat.Attributes, resolved);
+                var attributes = TranslateAttributes(feat.Attributes, resolved, objl);
                 var spatials = TranslateSpatialPointers(feat);
-                if (spatials.Count == 0) continue;
+                if (spatials.Count == 0)
+                {
+                    _diagnostics?.RecordFeatureWithoutGeometry(resolved.S101Code);
+                    continue;
+                }
 
+                if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
                 Features.Add(new S101FeatureRecord
                 {
                     RecordId = _nextFeatureId++,
@@ -341,7 +400,11 @@ public sealed class S57ToS101Translator
                     triples.Add((s.Y, s.X, s.Depth));
             }
 
-            if (triples.Count == 0) return;
+            if (triples.Count == 0)
+            {
+                if (_diagnostics is not null) _diagnostics.SoundingFeaturesWithoutPoints++;
+                return;
+            }
 
             var mpid = _nextMultiPointId++;
             MultiPoints[mpid] = new S101MultiPointRecord
@@ -349,6 +412,12 @@ public sealed class S57ToS101Translator
                 RecordId = mpid,
                 Points = triples,
             };
+
+            if (_diagnostics is not null)
+            {
+                _diagnostics.SoundingFeaturesEmitted++;
+                _diagnostics.SoundingPointsEmitted += triples.Count;
+            }
 
             var typeCode = GetOrAssignFeatureTypeCode(SoundingS101Code);
             Features.Add(new S101FeatureRecord
@@ -370,17 +439,21 @@ public sealed class S57ToS101Translator
 
         private IReadOnlyList<S101Attribute> TranslateAttributes(
             IReadOnlyList<EncDotNet.S57.S57AttributeValue> attrs,
-            ResolvedFeature feature)
+            ResolvedFeature feature,
+            ushort ownerObjl)
         {
             if (attrs.Count == 0) return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
             // can emit them as one or more S-101 `information` complex-attribute
-            // instances (Conversion Guidance §2.3).
+            // instances (Conversion Guidance §2.3), and OBJNAM / NOBJNM so we
+            // can emit them as `featureName` complex-attribute instances.
             string? informText = null;
             string? ninfomText = null;
             string? txtdscFile = null;
             string? ntxtdsFile = null;
+            string? objnamText = null;
+            string? nobjnmText = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -389,29 +462,42 @@ public sealed class S57ToS101Translator
                     case S57AttrNinfom: ninfomText = a.Value; break;
                     case S57AttrTxtdsc: txtdscFile = a.Value; break;
                     case S57AttrNtxtds: ntxtdsFile = a.Value; break;
+                    case S57AttrObjnam: if (!string.IsNullOrEmpty(a.Value)) objnamText = a.Value; break;
+                    case S57AttrNobjnm: if (!string.IsNullOrEmpty(a.Value)) nobjnmText = a.Value; break;
                 }
             }
 
             var builder = new List<S101Attribute>();
             foreach (var a in attrs)
             {
-                // Textual-info attributes are handled as a complex attribute
-                // group below — skip the per-attribute pass-through.
-                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
+                // Textual-info and object-name attributes are handled as complex
+                // attribute groups below — skip the per-attribute pass-through.
+                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds
+                    or S57AttrObjnam or S57AttrNobjnm)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
                 if (!_mapping.AttributeRules.TryGetValue(attl, out var attrRule))
+                {
+                    _diagnostics?.RecordUnmappedAttribute(ownerObjl, attl);
                     continue;
+                }
 
                 var resolved = _mapping.ResolveAttribute(attrRule.S57Acronym, a.Value, feature);
-                if (resolved is null) continue;
+                if (resolved is null)
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(attl);
+                    continue;
+                }
 
                 // Drop S-57 enum values that aren't in the S-101 FC's allowable
                 // listed values (per IHO S-57→S-101 Conversion Guidance, Jan 2021).
                 if (_allowedEnumValues is not null
                     && !_allowedEnumValues.IsAllowed(resolved.S101Code, resolved.Value))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(resolved.S101Code, resolved.Value);
                     continue;
+                }
 
                 var numeric = GetOrAssignAttributeCode(resolved.S101Code);
                 builder.Add(new S101Attribute(numeric, 1, resolved.Value));
@@ -424,6 +510,15 @@ public sealed class S57ToS101Translator
                 AppendInformationInstance(builder, text: informText, fileReference: txtdscFile, language: LanguageEng);
             if (ninfomText is not null || ntxtdsFile is not null)
                 AppendInformationInstance(builder, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+
+            // Append `featureName` complex-attribute instances. OBJNAM carries
+            // the English name; NOBJNM the national-language name (emitted with
+            // an empty language string, as S-57 carries no language tag —
+            // mirrors the INFORM/NINFOM handling above).
+            if (objnamText is not null)
+                AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng);
+            if (nobjnmText is not null)
+                AppendFeatureNameInstance(builder, name: nobjnmText, language: string.Empty);
 
             return builder;
         }
@@ -447,6 +542,24 @@ public sealed class S57ToS101Translator
                 var fileRefCode = GetOrAssignAttributeCode(S101AttrFileReference);
                 builder.Add(new S101Attribute(fileRefCode, 1, fileReference));
             }
+            var langCode = GetOrAssignAttributeCode(S101AttrLanguage);
+            builder.Add(new S101Attribute(langCode, 1, language));
+        }
+
+        // Emits a `featureName` complex-attribute instance using the same
+        // marker + contiguous-sub-attribute convention as the information
+        // complex (the S-101 data provider identifies an instance by the
+        // complex marker row and collects the sub-rows that follow it).
+        private void AppendFeatureNameInstance(
+            List<S101Attribute> builder,
+            string name,
+            string language)
+        {
+            var featureNameCode = GetOrAssignAttributeCode(S101AttrFeatureName);
+            // Marker entry — Index=1, value=empty — followed by sub-attributes.
+            builder.Add(new S101Attribute(featureNameCode, 1, string.Empty));
+            var nameCode = GetOrAssignAttributeCode(S101AttrName);
+            builder.Add(new S101Attribute(nameCode, 1, name));
             var langCode = GetOrAssignAttributeCode(S101AttrLanguage);
             builder.Add(new S101Attribute(langCode, 1, language));
         }

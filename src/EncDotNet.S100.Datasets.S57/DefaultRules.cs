@@ -136,6 +136,106 @@ internal static class DefaultRules
         yield return F(153, "UWTROC", "UnderwaterAwashRock");
         yield return F(157, "WATFAL", "Waterfall");
         yield return F(159, "WRECKS", "Wreck");
+
+        // --- Gap coverage: S-57 classes with a direct S-101 FC alias ---
+        // Each target is the S-101 Feature Catalogue code declared by that
+        // feature type's <S100FC:alias> (= the originating S-57 acronym), and
+        // was validated as a concrete (non-abstract) feature type. The set was
+        // derived from a 3,636-cell NOAA ENC corpus audit of classes the
+        // translator was silently dropping (no mapping rule). See the
+        // IHO "S-57 to S-101 Conversion Guidance" for the authoritative
+        // conversions; the FC alias is used here as the machine-readable bridge.
+        yield return F(1, "ADMARE", "AdministrationArea");
+        yield return F(12, "BUISGL", "Building");
+        yield return F(20, "CBLARE", "CableArea");
+        yield return F(21, "CBLOHD", "CableOverhead");
+        yield return F(22, "CBLSUB", "CableSubmarine");
+        yield return F(23, "CANALS", "Canal");
+        yield return F(25, "CTSARE", "CargoTranshipmentArea");
+        yield return F(26, "CAUSWY", "Causeway");
+        // CTNARE aliases two S-101 features (DiscolouredWater, CautionArea);
+        // CautionArea is the general-case conversion for S-57 caution areas.
+        yield return F(27, "CTNARE", "CautionArea");
+        yield return F(29, "CGUSTA", "CoastGuardStation");
+        yield return F(31, "CONZNE", "ContiguousZone");
+        yield return F(34, "CONVYR", "Conveyor");
+        yield return F(36, "CURENT", "CurrentNonGravitational");
+        yield return F(38, "DAMCON", "Dam");
+        yield return F(39, "DAYMAR", "Daymark");
+        yield return F(40, "DWRTCL", "DeepWaterRouteCentreline");
+        yield return F(41, "DWRTPT", "DeepWaterRoutePart");
+        yield return F(48, "DMPGRD", "DumpingGround");
+        yield return F(49, "DYKCON", "Dyke");
+        yield return F(50, "EXEZNE", "ExclusiveEconomicZone");
+        yield return F(52, "FNCLNE", "FenceWall");
+        yield return F(53, "FERYRT", "FerryRoute");
+        yield return F(54, "FSHZNE", "FisheryZone");
+        yield return F(55, "FSHFAC", "FishingFacility");
+        yield return F(56, "FSHGRD", "FishingGround");
+        yield return F(58, "FOGSIG", "FogSignal");
+        yield return F(59, "FORSTC", "FortifiedStructure");
+        yield return F(63, "HRBARE", "HarbourAreaAdministrative");
+        yield return F(66, "ICEARE", "IceArea");
+        yield return F(68, "ISTZNE", "InshoreTrafficZone");
+        yield return F(76, "LITFLT", "LightFloat");
+        yield return F(78, "LOCMAG", "LocalMagneticAnomaly");
+        yield return F(80, "LOGPON", "LogPond");
+        yield return F(81, "MAGVAR", "MagneticVariation");
+        yield return F(82, "MARCUL", "MarineFarmCulture");
+        yield return F(83, "MIPARE", "MilitaryPracticeArea");
+        yield return F(87, "OFSPLF", "OffshorePlatform");
+        yield return F(88, "OSPARE", "OffshoreProductionArea");
+        yield return F(89, "OILBAR", "OilBarrier");
+        yield return F(91, "PILBOP", "PilotBoardingPlace");
+        yield return F(92, "PIPARE", "SubmarinePipelineArea");
+        yield return F(93, "PIPOHD", "PipelineOverhead");
+        yield return F(94, "PIPSOL", "PipelineSubmarineOnLand");
+        yield return F(96, "PRCARE", "PrecautionaryArea");
+        yield return F(97, "PRDARE", "ProductionStorageArea");
+        yield return F(98, "PYLONS", "PylonBridgeSupport");
+        yield return F(102, "RADSTA", "RadarStation");
+        yield return F(103, "RTPBCN", "RadarTransponderBeacon");
+        yield return F(104, "RDOCAL", "RadioCallingInPoint");
+        yield return F(105, "RDOSTA", "RadioStation");
+        yield return F(108, "RCRTCL", "RecommendedRouteCentreline");
+        yield return F(109, "RECTRC", "RecommendedTrack");
+        yield return F(110, "RCTLPT", "RecommendedTrafficLanePart");
+        yield return F(111, "RSCSTA", "RescueStation");
+        yield return F(113, "RETRFL", "Retroreflector");
+        yield return F(117, "RUNWAY", "Runway");
+        yield return F(118, "SNDWAV", "Sandwave");
+        yield return F(119, "SEAARE", "SeaAreaNamedWaterArea");
+        yield return F(120, "SPLARE", "SeaplaneLandingArea");
+        yield return F(121, "SBDARE", "SeabedArea");
+        yield return F(123, "SISTAT", "SignalStationTraffic");
+        yield return F(124, "SISTAW", "SignalStationWarning");
+        yield return F(125, "SILTNK", "SiloTank");
+        yield return F(130, "SPRING", "Spring");
+        yield return F(134, "SWPARE", "SweptArea");
+        yield return F(135, "TESARE", "TerritorialSeaArea");
+        yield return F(143, "TIDEWY", "Tideway");
+        yield return F(146, "TSSBND", "TrafficSeparationSchemeBoundary");
+        yield return F(148, "TSSLPT", "TrafficSeparationSchemeLanePart");
+        yield return F(151, "TUNNEL", "Tunnel");
+        yield return F(152, "TWRTPT", "TwoWayRoutePart");
+        yield return F(154, "UNSARE", "UnsurveyedArea");
+        yield return F(155, "VEGATN", "Vegetation");
+        yield return F(156, "WATTUR", "WaterTurbulence");
+        yield return F(158, "WEDKLP", "WeedKelp");
+        yield return F(160, "TS_FEB", "TidalStreamFloodEbb");
+
+        // Meta (M_*) objects. In S-101 several S-57 meta objects become
+        // first-class features carrying data-quality / coverage information.
+        // M_QUAL carries CATZOC (a bathymetric-quality concept) and therefore
+        // converts to QualityOfBathymetricData; QualityOfNonBathymetricData is
+        // sourced from M_ACCY (S-57 → S-101 Conversion Guidance).
+        yield return F(302, "M_COVR", "DataCoverage");
+        yield return F(305, "M_NPUB", "InformationArea");
+        yield return F(306, "M_NSYS", "NavigationalSystemOfMarks");
+        yield return F(308, "M_QUAL", "QualityOfBathymetricData");
+        yield return F(309, "M_SDAT", "SoundingDatum");
+        yield return F(310, "M_SREL", "QualityOfSurvey");
+        yield return F(312, "M_VDAT", "VerticalDatumOfData");
     }
 
     public static IEnumerable<S57AttributeRule> AttributeRules()
@@ -187,6 +287,104 @@ internal static class DefaultRules
         yield return A(184, "VERCSA", "verticalClearanceSafe");
         yield return A(186, "VERLEN", "verticalLength");
         yield return A(187, "WATLEV", "waterLevelEffect");
+
+        // --- Gap coverage: S-57 attributes with a direct S-101 FC alias ---
+        // Each target is the S-101 simple-attribute code declared by that
+        // attribute's <S100FC:alias> (= the originating S-57 acronym), AND is
+        // directly bound to one or more feature types in the FC (verified
+        // against the FC feature bindings). Derived from the same corpus audit
+        // as the feature gap coverage above.
+        //
+        // Deliberately NOT mapped here (they are sub-attributes of an S-101
+        // *complex* attribute, so a flat emission would be non-conformant;
+        // they need complex-attribute assembly, like OBJNAM → featureName):
+        //   OBJNAM→name, LITCHR→lightCharacteristic, SECTR1→sectorBearing,
+        //   HORCLR→horizontalClearanceValue, DATSTA→dateStart, DATEND→dateEnd,
+        //   NATQUA→natureOfSurfaceQualifyingTerms. Also deferred: SORDAT/SORIND
+        //   (→ complex sourceIndication/reportedDate), PERSTA/PEREND (→ complex
+        //   periodicDateRange), SECTR2/MLTYLT (light-sector complex).
+        //
+        // NOTE: enum (E/L) attributes still pass their values through the
+        // FC-driven S101AllowedEnumValues check; S-57 enum values that have no
+        // S-101 equivalent are reported by the translation diagnostics rather
+        // than silently dropping the whole attribute.
+        yield return A(2, "BCNSHP", "beaconShape");
+        yield return A(4, "BOYSHP", "buoyShape");
+        yield return A(7, "CATAIR", "categoryOfAirportAirfield");
+        yield return A(8, "CATACH", "categoryOfAnchorage");
+        yield return A(10, "CATBUA", "categoryOfBuiltUpArea");
+        yield return A(21, "CATDIS", "distanceMarkVisible");
+        yield return A(35, "CATLMK", "categoryOfLandmark");
+        yield return A(41, "CATNAV", "categoryOfNavigationLine");
+        yield return A(45, "CATPLE", "categoryOfPile");
+        yield return A(56, "CATREA", "categoryOfRestrictedArea");
+        yield return A(66, "CATSPM", "categoryOfSpecialPurposeMark");
+        yield return A(92, "EXCLIT", "exhibitionConditionOfLight");
+        yield return A(94, "FUNCTN", "function");
+        yield return A(99, "HORLEN", "horizontalLength");
+        yield return A(106, "LIFCAP", "liftingCapacity");
+        yield return A(108, "LITVIS", "lightVisibility");
+        yield return A(109, "MARSYS", "marksNavigationalSystemOf");
+        yield return A(117, "ORIENT", "orientationValue");
+        yield return A(120, "PICREP", "pictorialRepresentation");
+        yield return A(123, "PRODCT", "product");
+        yield return A(127, "RADIUS", "radius");
+        yield return A(131, "RESTRN", "restriction");
+        yield return A(141, "SIGGRP", "signalGroup");
+        yield return A(142, "SIGPER", "signalPeriod");
+        yield return A(156, "TECSOU", "techniqueOfVerticalMeasurement");
+        yield return A(172, "TRAFIC", "trafficFlow");
+        yield return A(178, "VALNMR", "valueOfNominalRange");
+        yield return A(185, "VERDAT", "verticalDatum");
+
+        // --- Gap coverage (2nd wave): simple attributes surfaced once the
+        // feature classes above began translating. Same provenance rules:
+        // FC <S100FC:alias> = S-57 acronym, single-match, directly feature
+        // bound. Mostly the categoryOf* discriminators of the new features.
+        yield return A(3, "BUISHP", "buildingShape");
+        yield return A(5, "BURDEP", "buriedDepth");
+        yield return A(6, "CALSGN", "callSign");
+        yield return A(11, "CATCBL", "categoryOfCable");
+        yield return A(12, "CATCAN", "categoryOfCanal");
+        yield return A(17, "CATCON", "categoryOfConveyor");
+        yield return A(20, "CATDAM", "categoryOfDam");
+        yield return A(23, "CATDPG", "categoryOfDumpingGround");
+        yield return A(24, "CATFNC", "categoryOfFence");
+        yield return A(25, "CATFRY", "categoryOfFerry");
+        yield return A(26, "CATFIF", "categoryOfFishingFacility");
+        yield return A(27, "CATFOG", "categoryOfFogSignal");
+        yield return A(28, "CATFOR", "categoryOfFortifiedStructure");
+        yield return A(32, "CATICE", "categoryOfIce");
+        yield return A(39, "CATMPA", "categoryOfMilitaryPracticeArea");
+        yield return A(43, "CATOFP", "categoryOfOffshorePlatform");
+        yield return A(44, "CATOLB", "categoryOfOilBarrier");
+        yield return A(46, "CATPIL", "categoryOfPilotBoardingPlace");
+        yield return A(47, "CATPIP", "categoryOfPipelinePipe");
+        yield return A(49, "CATPYL", "categoryOfPylon");
+        yield return A(51, "CATRAS", "categoryOfRadarStation");
+        yield return A(52, "CATRTB", "categoryOfRadarTransponderBeacon");
+        yield return A(53, "CATROS", "categoryOfRadioStation");
+        yield return A(54, "CATTRK", "basedOnFixedMarks");
+        yield return A(55, "CATRSC", "categoryOfRescueStation");
+        yield return A(59, "CATSEA", "categoryOfSeaArea");
+        yield return A(61, "CATSIT", "categoryOfSignalStationTraffic");
+        yield return A(62, "CATSIW", "categoryOfSignalStationWarning");
+        yield return A(63, "CATSIL", "categoryOfSiloTank");
+        yield return A(67, "CATTSS", "iMOAdopted");
+        yield return A(68, "CATVEG", "categoryOfVegetation");
+        yield return A(69, "CATWAT", "categoryOfWaterTurbulence");
+        yield return A(70, "CATWED", "categoryOfWeedKelp");
+        yield return A(103, "JRSDTN", "jurisdiction");
+        yield return A(111, "NATION", "nationality");
+        yield return A(130, "RYRMGV", "referenceYearForMagneticVariation");
+        yield return A(139, "SIGFRQ", "signalFrequency");
+        yield return A(140, "SIGGEN", "signalGeneration");
+        yield return A(150, "SURATH", "surveyAuthority");
+        yield return A(153, "SURTYP", "surveyType");
+        yield return A(171, "TOPSHP", "topmarkDaymarkShape");
+        yield return A(173, "VALACM", "valueOfAnnualChangeInMagneticVariation");
+        yield return A(176, "VALMAG", "valueOfMagneticVariation");
+        yield return A(188, "CAT_TS", "categoryOfTidalStream");
     }
 
     private static S57FeatureRule F(ushort objl, string acronym, string? s101)
