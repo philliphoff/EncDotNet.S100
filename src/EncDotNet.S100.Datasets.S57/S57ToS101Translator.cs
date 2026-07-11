@@ -138,6 +138,21 @@ public sealed class S57ToS101Translator
     private const string S101AttrDateStart = "dateStart";
     private const string S101AttrDateEnd = "dateEnd";
 
+    // S-57 CATZOC (Category of zone of confidence in data, ATTL 72) maps to the
+    // S-101 `zoneOfConfidence` complex attribute's `categoryOfZoneOfConfidence-
+    // InData` sub-attribute (S-101 Conversion Guidance; verified against the
+    // bundled FC). CATZOC is only bound to S-57 M_QUAL, which translates to the
+    // S-101 QualityOfBathymetricData feature — the sole feature class binding
+    // `zoneOfConfidence`. The complex's other sub-attributes (fixedDateRange,
+    // horizontalPositionUncertainty, verticalUncertainty) have no CATZOC-side
+    // source and are left unpopulated. The enumeration values are identical in
+    // S-57 and S-101 (1=A1, 2=A2, 3=B, 4=C, 5=D, 6=U), so no remapping is
+    // needed; an out-of-range code drops the instance (its only sub-attribute
+    // would be missing).
+    private const ushort S57AttrCatzoc = 72;   // CATZOC — category of ZOC in data
+    private const string S101AttrZoneOfConfidence = "zoneOfConfidence";
+    private const string S101AttrCategoryOfZocInData = "categoryOfZoneOfConfidenceInData";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -546,6 +561,10 @@ public sealed class S57ToS101Translator
             string? perendValue = null;
             string? surstaValue = null;
             string? surendValue = null;
+            // zoneOfConfidence source — CATZOC, assembled on the (single) feature
+            // class that binds the complex (QualityOfBathymetricData).
+            bool bindsZoc = _featureBindings.Binds(feature.S101Code, S101AttrZoneOfConfidence);
+            string? catzocValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -565,6 +584,7 @@ public sealed class S57ToS101Translator
                     case S57AttrPerend: if (bindsPeriodicDate && !string.IsNullOrEmpty(a.Value)) perendValue = a.Value; break;
                     case S57AttrSursta: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surstaValue = a.Value; break;
                     case S57AttrSurend: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surendValue = a.Value; break;
+                    case S57AttrCatzoc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) catzocValue = a.Value; break;
                 }
             }
 
@@ -593,6 +613,11 @@ public sealed class S57ToS101Translator
                 if (bindsPeriodicDate && a.AttributeCode is S57AttrPersta or S57AttrPerend)
                     continue;
                 if (bindsSurveyDate && a.AttributeCode is S57AttrSursta or S57AttrSurend)
+                    continue;
+
+                // On QualityOfBathymetricData, CATZOC is assembled into the
+                // `zoneOfConfidence` complex below rather than passed through.
+                if (bindsZoc && a.AttributeCode is S57AttrCatzoc)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
@@ -732,6 +757,23 @@ public sealed class S57ToS101Translator
                     _diagnostics?.RecordRuleDroppedAttribute(S57AttrSursta);
             }
 
+            // Append the `zoneOfConfidence` complex-attribute instance. The only
+            // CATZOC-sourced sub-attribute, `categoryOfZoneOfConfidenceInData`,
+            // is mandatory in practice (nothing else is populated), so an
+            // out-of-range CATZOC code drops the instance and is reported.
+            if (bindsZoc && catzocValue is not null)
+            {
+                if (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrCategoryOfZocInData, catzocValue))
+                {
+                    AppendZoneOfConfidenceInstance(builder, catzocValue);
+                }
+                else
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrCategoryOfZocInData, catzocValue);
+                }
+            }
+
             return builder;
         }
 
@@ -832,6 +874,20 @@ public sealed class S57ToS101Translator
                 var endCode = GetOrAssignAttributeCode(S101AttrDateEnd);
                 builder.Add(new S101Attribute(endCode, 1, dateEnd));
             }
+        }
+
+        // Emits a `zoneOfConfidence` complex-attribute instance (marker +
+        // categoryOfZoneOfConfidenceInData) using the same marker /
+        // contiguous-sub-attribute convention as the other complex attributes.
+        private void AppendZoneOfConfidenceInstance(
+            List<S101Attribute> builder,
+            string categoryOfZoneOfConfidenceInData)
+        {
+            var zocCode = GetOrAssignAttributeCode(S101AttrZoneOfConfidence);
+            // Marker entry — Index=1, value=empty — followed by the sub-attribute.
+            builder.Add(new S101Attribute(zocCode, 1, string.Empty));
+            var catCode = GetOrAssignAttributeCode(S101AttrCategoryOfZocInData);
+            builder.Add(new S101Attribute(catCode, 1, categoryOfZoneOfConfidenceInData));
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)

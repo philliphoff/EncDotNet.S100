@@ -297,12 +297,15 @@ internal static class DefaultRules
         //
         // Deliberately NOT mapped here (they are sub-attributes of an S-101
         // *complex* attribute, so a flat emission would be non-conformant;
-        // they need complex-attribute assembly, like OBJNAM → featureName):
-        //   OBJNAM→name, LITCHR→lightCharacteristic, SECTR1→sectorBearing,
-        //   HORCLR→horizontalClearanceValue,
-        //   NATQUA→natureOfSurfaceQualifyingTerms. Also deferred: SORDAT/SORIND
-        //   (→ complex sourceIndication/reportedDate), SECTR2/MLTYLT
-        //   (light-sector complex).
+        // they need complex-attribute assembly, like OBJNAM → featureName).
+        // Several complexes are now assembled in the translator directly
+        // (information, featureName, rhythmOfLight, the date ranges, and
+        // zoneOfConfidence/CATZOC). Still deferred:
+        //   SECTR1/SECTR2 → sectorBearing (light-sector complex),
+        //   HORCLR → horizontalClearanceValue (horizontalClearanceFixed/Open),
+        //   NATQUA → natureOfSurfaceQualifyingTerms (surfaceCharacteristics),
+        //   SIGSEQ → signalSequence, MLTYLT (light-sector complex),
+        //   SORDAT/SORIND (→ complex sourceIndication/reportedDate).
         //
         // Assembled into S-101 complex attributes by S57ToS101Translator (feature
         // binding-gated), NOT emitted here as flat simple attributes:

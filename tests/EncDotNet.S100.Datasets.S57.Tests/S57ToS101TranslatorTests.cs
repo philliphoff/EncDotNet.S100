@@ -1046,4 +1046,73 @@ public class S57ToS101TranslatorTests
         Assert.Equal("20200401", GetSubAttribute(s101, periodicInstance, "dateStart"));
         Assert.Equal("20200930", GetSubAttribute(s101, periodicInstance, "dateEnd"));
     }
+
+    [Fact]
+    public void Translate_Catzoc_BecomesZoneOfConfidenceComplex()
+    {
+        // M_QUAL (OBJL 308) → QualityOfBathymetricData, the sole feature class
+        // binding zoneOfConfidence. CATZOC=3 (Zone of Confidence B) is carried
+        // as the categoryOfZoneOfConfidenceInData sub-attribute (identical enum).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "3")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "zoneOfConfidence", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("3", GetSubAttribute(s101, instance, "categoryOfZoneOfConfidenceInData"));
+    }
+
+    [Fact]
+    public void Translate_Catzoc_OutOfRangeValueDropsInstance()
+    {
+        // categoryOfZoneOfConfidenceInData permits codes 1..6; an out-of-range
+        // CATZOC leaves the mandatory sub-attribute unpopulated, so the whole
+        // instance is dropped and the value is recorded as a dropped enum.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "9")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstanceStrict(s101, feat.Attributes, "zoneOfConfidence", 1).ToList());
+        Assert.Contains(
+            new S57EnumValueDrop("categoryOfZoneOfConfidenceInData", "9"),
+            diag.DroppedEnumValues.Keys);
+    }
+
+    [Fact]
+    public void Translate_Catzoc_NotEmittedOnFeatureThatDoesNotBindIt()
+    {
+        // LNDRGN (OBJL 73) → LandRegion does not bind zoneOfConfidence, so a
+        // (non-conformant) CATZOC has no home and no complex is emitted.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(73, Attr(72, "3")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstanceStrict(s101, feat.Attributes, "zoneOfConfidence", 1).ToList());
+        Assert.DoesNotContain("zoneOfConfidence", s101.AttributeTypeCatalogue.Values);
+    }
+
+    [Fact]
+    public void Translate_CatzocAndSurveyDateRange_EmittedAsDistinctInstances()
+    {
+        // QualityOfBathymetricData binds BOTH zoneOfConfidence and
+        // surveyDateRange. Both complexes must be emitted as separate instances
+        // on the same feature without cross-contaminating one another.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308,
+                Attr(72, "4"),                                 // CATZOC → zoneOfConfidence
+                Attr(152, "20190501"), Attr(151, "20190815"))); // SURSTA/SUREND → surveyDateRange
+
+        var feat = Assert.Single(s101.Features);
+
+        var zocInstance = ComplexInstanceStrict(
+            s101, feat.Attributes, "zoneOfConfidence", 1, "zoneOfConfidence", "surveyDateRange").ToList();
+        Assert.Equal("4", GetSubAttribute(s101, zocInstance, "categoryOfZoneOfConfidenceInData"));
+
+        var surveyInstance = ComplexInstanceStrict(
+            s101, feat.Attributes, "surveyDateRange", 1, "zoneOfConfidence", "surveyDateRange").ToList();
+        Assert.Equal("20190501", GetSubAttribute(s101, surveyInstance, "dateStart"));
+        Assert.Equal("20190815", GetSubAttribute(s101, surveyInstance, "dateEnd"));
+    }
 }
