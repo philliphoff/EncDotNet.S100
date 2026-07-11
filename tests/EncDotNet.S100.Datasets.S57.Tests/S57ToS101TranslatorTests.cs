@@ -933,6 +933,101 @@ public class S57ToS101TranslatorTests
         Assert.Empty(ComplexInstance(s101, feat.Attributes, "signalSequence", 1).ToList());
     }
 
+    // ── SECTR1/SECTR2/COLOUR/VALNMR/LITVIS → sectorCharacteristics (LightSectored) ──
+
+    [Fact]
+    public void Translate_LightWithSector_RedirectsToLightSectored_AndAssemblesComplex()
+    {
+        // LIGHTS (OBJL 75) carrying a sector arc (SECTR1/SECTR2) redirects to
+        // LightSectored, whose sectorCharacteristics complex is assembled from
+        // LITCHR/COLOUR/VALNMR and the two sector bearings.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),      // LITCHR → lightCharacteristic (Flashing)
+            Attr(75, "3"),       // COLOUR → colour (Red)
+            Attr(178, "10.5"),   // VALNMR → valueOfNominalRange
+            Attr(136, "340.3"),  // SECTR1 → sectorLimitOne.sectorBearing
+            Attr(137, "8.3")));  // SECTR2 → sectorLimitTwo.sectorBearing
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightSectored", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var sc = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList();
+        Assert.NotEmpty(sc);
+        Assert.Equal("2", GetSubAttribute(s101, sc, "lightCharacteristic"));
+        Assert.Equal("3", GetSubAttribute(s101, sc, "colour"));
+        Assert.Equal("10.5", GetSubAttribute(s101, sc, "valueOfNominalRange"));
+
+        // The two bearings live three levels deep, distinguished by their
+        // sectorLimitOne / sectorLimitTwo parent (each appears once, so the
+        // first sectorBearing following each marker is that limit's bearing).
+        var one = ComplexInstance(s101, feat.Attributes, "sectorLimitOne", 1).ToList();
+        Assert.Equal("340.3", GetSubAttribute(s101, one, "sectorBearing"));
+        var two = ComplexInstance(s101, feat.Attributes, "sectorLimitTwo", 1).ToList();
+        Assert.Equal("8.3", GetSubAttribute(s101, two, "sectorBearing"));
+    }
+
+    [Fact]
+    public void Translate_SectoredLight_ColourAndVisibilityLists_SplitIntoMultipleSubAttributes()
+    {
+        // COLOUR and LITVIS are S-57 list-valued enumerations; each code
+        // becomes a separate colour / lightVisibility sub-attribute of the
+        // lightSector.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),     // LITCHR
+            Attr(75, "3,1"),    // COLOUR → Red + White
+            Attr(108, "3,7"),   // LITVIS → Faint + Obscured
+            Attr(136, "10"),    // SECTR1
+            Attr(137, "20")));  // SECTR2
+
+        var feat = Assert.Single(s101.Features);
+        var sc = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList();
+
+        ushort NameCode(string n) => s101.AttributeTypeCatalogue.First(kv => kv.Value == n).Key;
+        var colours = sc.Where(a => a.NumericCode == NameCode("colour")).Select(a => a.Value).ToList();
+        Assert.Equal(new[] { "3", "1" }, colours);
+        var vis = sc.Where(a => a.NumericCode == NameCode("lightVisibility")).Select(a => a.Value).ToList();
+        Assert.Equal(new[] { "3", "7" }, vis);
+    }
+
+    [Fact]
+    public void Translate_LightWithoutSector_StaysLightAllAround_NoSectorComplex()
+    {
+        // A LIGHTS object with no SECTR1 is a non-sectored light: it must still
+        // map to LightAllAround (rhythmOfLight), not LightSectored.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),   // LITCHR
+            Attr(75, "3")));  // COLOUR
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightAllAround", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList());
+        Assert.NotEmpty(ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_SectoredLight_SectorAttributesNotEmittedTopLevel()
+    {
+        // On LightSectored none of the sector attributes bind at the top level,
+        // so COLOUR/VALNMR must not appear as top-level simple attributes —
+        // only inside the sectorCharacteristics complex.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),
+            Attr(75, "3"),
+            Attr(178, "10.5"),
+            Attr(136, "340.3"),
+            Attr(137, "8.3")));
+
+        var feat = Assert.Single(s101.Features);
+        // Nothing precedes the sectorCharacteristics marker (all sector inputs
+        // are diverted into the complex; LITCHR has no top-level home either).
+        var topLevel = feat.Attributes
+            .TakeWhile(a => s101.AttributeTypeCatalogue[a.NumericCode] != "sectorCharacteristics")
+            .Select(a => s101.AttributeTypeCatalogue[a.NumericCode])
+            .ToList();
+        Assert.DoesNotContain("colour", topLevel);
+        Assert.DoesNotContain("valueOfNominalRange", topLevel);
+    }
+
     // ── DATSTA/DATEND, PERSTA/PEREND, SURSTA/SUREND → date-range complexes ──
 
     private static EncDotNet.S57.S57Document PointFeatureWithS57Attributes(

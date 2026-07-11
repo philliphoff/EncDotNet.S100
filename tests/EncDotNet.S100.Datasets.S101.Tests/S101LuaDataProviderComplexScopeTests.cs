@@ -144,6 +144,15 @@ public class S101LuaDataProviderComplexScopeTests
     private const ushort SignalDuration = 14;
     private const ushort SignalStatus = 15;
 
+    // Codes for the three-level sector-geometry nesting test.
+    private const ushort SectorCharacteristics = 20;
+    private const ushort LightSector = 21;
+    private const ushort SectorLimit = 22;
+    private const ushort SectorLimitOne = 23;
+    private const ushort SectorLimitTwo = 24;
+    private const ushort SectorBearing = 25;
+    private const ushort Colour = 26;
+
     [Fact]
     public void NestedComplex_ScopedThroughParent_ResolvesChildSubAttributes()
     {
@@ -190,6 +199,135 @@ public class S101LuaDataProviderComplexScopeTests
             context.Globals["HostFeatureGetComplexAttributeCount"]);
 
         Assert.Equal(2, count(1, "rhythmOfLight:1", "signalSequence"));
+    }
+
+    [Fact]
+    public void DeeplyNestedComplex_ThreeLevels_ResolvesGrandchildSubAttributes()
+    {
+        var provider = CreateSectorProvider();
+        var context = new RecordingLuaContext();
+        provider.RegisterHostFunctions(context);
+
+        var getSimple = Assert.IsAssignableFrom<Func<double, string, string, List<object>>>(
+            context.Globals["HostFeatureGetSimpleAttribute"]);
+
+        // The two sectorBearing values live three levels deep and share the
+        // same code, distinguished only by their sectorLimitOne / sectorLimitTwo
+        // parent. A transitive-descendant scope must isolate each.
+        Assert.Equal(new object[] { "340.3" },
+            getSimple(1, "sectorCharacteristics:1;lightSector:1;sectorLimit:1;sectorLimitOne:1", "sectorBearing"));
+        Assert.Equal(new object[] { "8.3" },
+            getSimple(1, "sectorCharacteristics:1;lightSector:1;sectorLimit:1;sectorLimitTwo:1", "sectorBearing"));
+
+        // A simple sub-attribute one level down must still resolve.
+        Assert.Equal(new object[] { "3" },
+            getSimple(1, "sectorCharacteristics:1;lightSector:1", "colour"));
+
+        // The top-level parent's own simple sub-attribute must remain readable
+        // despite the deeply nested descendants that follow it.
+        Assert.Equal(new object[] { "2" },
+            getSimple(1, "sectorCharacteristics:1", "lightCharacteristic"));
+    }
+
+    private static S101LuaDataProvider CreateSectorProvider()
+    {
+        // Flat pre-order attribute list for one feature carrying a
+        // sectorCharacteristics complex three levels deep:
+        //   [sectorCharacteristics][lightCharacteristic]
+        //     [lightSector][colour]
+        //       [sectorLimit]
+        //         [sectorLimitOne][sectorBearing]
+        //         [sectorLimitTwo][sectorBearing]
+        var attributes = new[]
+        {
+            new S101Attribute(SectorCharacteristics, 1, string.Empty),
+            new S101Attribute(LightCharacteristic, 1, "2"),
+            new S101Attribute(LightSector, 1, string.Empty),
+            new S101Attribute(Colour, 1, "3"),
+            new S101Attribute(SectorLimit, 1, string.Empty),
+            new S101Attribute(SectorLimitOne, 1, string.Empty),
+            new S101Attribute(SectorBearing, 1, "340.3"),
+            new S101Attribute(SectorLimitTwo, 1, string.Empty),
+            new S101Attribute(SectorBearing, 1, "8.3"),
+        };
+
+        var document = new S101Document
+        {
+            Identification = new S101DatasetIdentification { DatasetName = "sector-scope-test" },
+            StructureInfo = new S101DatasetStructureInfo
+            {
+                CoordinateMultiplicationFactorX = 10_000_000,
+                CoordinateMultiplicationFactorY = 10_000_000,
+                CoordinateMultiplicationFactorZ = 10,
+            },
+            FeatureTypeCatalogue = new ReadOnlyDictionary<ushort, string>(
+                new Dictionary<ushort, string> { [1] = "TestFeature" }),
+            AttributeTypeCatalogue = new ReadOnlyDictionary<ushort, string>(
+                new Dictionary<ushort, string>
+                {
+                    [SectorCharacteristics] = "sectorCharacteristics",
+                    [LightCharacteristic] = "lightCharacteristic",
+                    [LightSector] = "lightSector",
+                    [SectorLimit] = "sectorLimit",
+                    [SectorLimitOne] = "sectorLimitOne",
+                    [SectorLimitTwo] = "sectorLimitTwo",
+                    [SectorBearing] = "sectorBearing",
+                    [Colour] = "colour",
+                }),
+            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features =
+            [
+                new S101FeatureRecord
+                {
+                    RecordId = 1,
+                    FeatureTypeCode = 1,
+                    Attributes = attributes,
+                },
+            ],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+        };
+
+        static ComplexAttribute Complex(string code, params string[] refs)
+            => new()
+            {
+                Name = code,
+                Code = code,
+                SubAttributeBindings = refs.Select(r => new SubAttributeBinding
+                {
+                    AttributeRef = r,
+                    Multiplicity = new Multiplicity { Lower = 0, Upper = null, IsInfinite = true },
+                }).ToArray(),
+            };
+
+        var featureCatalogue = new FeatureCatalogue
+        {
+            Name = "S-101 test",
+            VersionNumber = "1.0.0",
+            VersionDate = "2024-01-01",
+            ComplexAttributes =
+            [
+                Complex("sectorCharacteristics", "lightCharacteristic", "lightSector"),
+                Complex("lightSector", "colour", "sectorLimit"),
+                Complex("sectorLimit", "sectorLimitOne", "sectorLimitTwo"),
+                Complex("sectorLimitOne", "sectorBearing"),
+                Complex("sectorLimitTwo", "sectorBearing"),
+            ],
+            SimpleAttributes =
+            [
+                new SimpleAttribute { Name = "Light Characteristic", Code = "lightCharacteristic", ValueType = "enumeration" },
+                new SimpleAttribute { Name = "Colour", Code = "colour", ValueType = "enumeration" },
+                new SimpleAttribute { Name = "Sector Bearing", Code = "sectorBearing", ValueType = "real" },
+            ],
+        };
+
+        return new S101LuaDataProvider(S101Dataset.FromDocument(document), featureCatalogue);
     }
 
     private static S101LuaDataProvider CreateNestedProvider()

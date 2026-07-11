@@ -189,6 +189,41 @@ public sealed class S57ToS101Translator
     private const string S101AttrNatureOfSurface = "natureOfSurface";
     private const string S101AttrNatureOfSurfaceQualifyingTerms = "natureOfSurfaceQualifyingTerms";
 
+    // S-57 sector-light geometry. A LIGHTS object carrying a sector arc
+    // (SECTR1/SECTR2 present) is redirected to the S-101 LightSectored feature
+    // (see DefaultRules), whose mandatory `sectorCharacteristics` [1..*] complex
+    // the translator assembles here. Because each S-57 LIGHTS object encodes a
+    // single sector, one LightSectored feature is emitted per S-57 sector-light,
+    // carrying one `lightSector` (conformant, since `lightSector` is [1..*]);
+    // co-located sectors of one physical light remain distinct features (S-57
+    // encodes them as separate objects and the translator is one-to-one).
+    // Nesting (verified against the bundled FC):
+    //   sectorCharacteristics → lightCharacteristic [1..1], lightSector [1..*],
+    //                           signalGroup [0..*], signalPeriod [0..1],
+    //                           signalSequence [0..*]
+    //   lightSector           → colour [1..*], lightVisibility [0..*],
+    //                           sectorLimit [0..1], valueOfNominalRange [0..1], …
+    //   sectorLimit           → sectorLimitOne [1..1], sectorLimitTwo [1..1]
+    //   sectorLimitOne/Two    → sectorBearing [1..1], sectorLineLength [0..1]
+    // S-57 → S-101 feeds: LITCHR→lightCharacteristic, SIGGRP→signalGroup,
+    // SIGPER→signalPeriod, SIGSEQ→signalSequence, COLOUR→colour (list),
+    // LITVIS→lightVisibility (list), VALNMR→valueOfNominalRange,
+    // SECTR1→sectorLimitOne.sectorBearing, SECTR2→sectorLimitTwo.sectorBearing.
+    private const ushort S57AttrSectr1 = 136;  // SECTR1 — sector limit one (bearing)
+    private const ushort S57AttrSectr2 = 137;  // SECTR2 — sector limit two (bearing)
+    private const ushort S57AttrColour = 75;   // COLOUR — colour (list)
+    private const ushort S57AttrValnmr = 178;  // VALNMR — value of nominal range
+    private const ushort S57AttrLitvis = 108;  // LITVIS — light visibility (list)
+    private const string S101AttrSectorCharacteristics = "sectorCharacteristics";
+    private const string S101AttrLightSector = "lightSector";
+    private const string S101AttrSectorLimit = "sectorLimit";
+    private const string S101AttrSectorLimitOne = "sectorLimitOne";
+    private const string S101AttrSectorLimitTwo = "sectorLimitTwo";
+    private const string S101AttrSectorBearing = "sectorBearing";
+    private const string S101AttrColour = "colour";
+    private const string S101AttrValueOfNominalRange = "valueOfNominalRange";
+    private const string S101AttrLightVisibility = "lightVisibility";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -612,6 +647,21 @@ public sealed class S57ToS101Translator
             bool bindsSurfaceChar = _featureBindings.Binds(feature.S101Code, S101AttrSurfaceCharacteristics);
             string? natsurList = null;
             string? natquaList = null;
+            // sectorCharacteristics sources — assembled on the feature class
+            // that binds the complex (LightSectored). LITCHR anchors the
+            // mandatory `lightCharacteristic`; COLOUR/LITVIS are lists;
+            // SECTR1/SECTR2 the sector bearings; VALNMR the nominal range;
+            // SIGGRP/SIGPER/SIGSEQ nest at the sectorCharacteristics level.
+            bool bindsSectorChar = _featureBindings.Binds(feature.S101Code, S101AttrSectorCharacteristics);
+            string? sectrLitchr = null;
+            string? sectrColour = null;
+            string? sectrLitvis = null;
+            string? sectrValnmr = null;
+            string? sectrSectr1 = null;
+            string? sectrSectr2 = null;
+            string? sectrSiggrp = null;
+            string? sectrSigper = null;
+            string? sectrSigseq = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -622,10 +672,27 @@ public sealed class S57ToS101Translator
                     case S57AttrNtxtds: ntxtdsFile = a.Value; break;
                     case S57AttrObjnam: if (!string.IsNullOrEmpty(a.Value)) objnamText = a.Value; break;
                     case S57AttrNobjnm: if (!string.IsNullOrEmpty(a.Value)) nobjnmText = a.Value; break;
-                    case S57AttrLitchr: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) litchrValue = a.Value; break;
-                    case S57AttrSiggrp: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) siggrpValue = a.Value; break;
-                    case S57AttrSigper: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) sigperValue = a.Value; break;
-                    case S57AttrSigseq: if ((bindsRhythm || bindsSignalSequenceTop) && !string.IsNullOrEmpty(a.Value)) sigseqValue = a.Value; break;
+                    case S57AttrLitchr:
+                        if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) litchrValue = a.Value;
+                        else if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrLitchr = a.Value;
+                        break;
+                    case S57AttrSiggrp:
+                        if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) siggrpValue = a.Value;
+                        else if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSiggrp = a.Value;
+                        break;
+                    case S57AttrSigper:
+                        if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) sigperValue = a.Value;
+                        else if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSigper = a.Value;
+                        break;
+                    case S57AttrSigseq:
+                        if ((bindsRhythm || bindsSignalSequenceTop) && !string.IsNullOrEmpty(a.Value)) sigseqValue = a.Value;
+                        else if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSigseq = a.Value;
+                        break;
+                    case S57AttrColour: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrColour = a.Value; break;
+                    case S57AttrLitvis: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrLitvis = a.Value; break;
+                    case S57AttrValnmr: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrValnmr = a.Value; break;
+                    case S57AttrSectr1: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSectr1 = a.Value; break;
+                    case S57AttrSectr2: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSectr2 = a.Value; break;
                     case S57AttrDatsta: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datstaValue = a.Value; break;
                     case S57AttrDatend: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datendValue = a.Value; break;
                     case S57AttrPersta: if (bindsPeriodicDate && !string.IsNullOrEmpty(a.Value)) perstaValue = a.Value; break;
@@ -683,6 +750,17 @@ public sealed class S57ToS101Translator
                 // bind a top-level `natureOfSurface`, so passing NATSUR through
                 // would be non-conformant; NATQUA has no top-level home at all.
                 if (bindsSurfaceChar && a.AttributeCode is S57AttrNatsur or S57AttrNatqua)
+                    continue;
+
+                // On LightSectored, the sector-geometry attributes are
+                // assembled into the `sectorCharacteristics` complex below.
+                // LightSectored binds none of them at the top level (colour,
+                // lightCharacteristic, valueOfNominalRange, etc. all live inside
+                // the complex per the FC), so passing them through would be
+                // non-conformant.
+                if (bindsSectorChar && a.AttributeCode is S57AttrLitchr or S57AttrColour
+                        or S57AttrLitvis or S57AttrValnmr or S57AttrSectr1 or S57AttrSectr2
+                        or S57AttrSiggrp or S57AttrSigper or S57AttrSigseq)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
@@ -866,6 +944,28 @@ public sealed class S57ToS101Translator
             // `!bindsRhythm` guard prevents any double emission.
             if (bindsSignalSequenceTop && !bindsRhythm && sigseqValue is not null)
                 AppendSignalSequenceInstances(builder, sigseqValue);
+
+            // Append the `sectorCharacteristics` complex-attribute instance on
+            // LightSectored. The FC makes `lightCharacteristic` [1..1] and
+            // `lightSector` [1..*] mandatory; an instance is only emitted when a
+            // valid LITCHR anchors the characteristic (an out-of-range LITCHR is
+            // dropped and reported, which also drops the instance). One
+            // `lightSector` is assembled from the sector's colour/visibility/
+            // range and the SECTR1/SECTR2 bearings.
+            if (bindsSectorChar && sectrLitchr is not null)
+            {
+                if (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrLightCharacteristic, sectrLitchr))
+                {
+                    AppendSectorCharacteristicsInstance(
+                        builder, sectrLitchr, sectrSiggrp, sectrSigper, sectrSigseq,
+                        sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2);
+                }
+                else
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrLightCharacteristic, sectrLitchr);
+                }
+            }
 
             return builder;
         }
@@ -1108,6 +1208,94 @@ public sealed class S57ToS101Translator
 
                 yield return (seconds.ToString(CultureInfo.InvariantCulture), status);
             }
+        }
+
+        // Emits a single `sectorCharacteristics` complex-attribute instance for
+        // a sectored light (LightSectored), using the same flat marker +
+        // contiguous-sub-attribute convention as the other complex attributes
+        // but nested up to three levels deep (the S-101 data provider's scope
+        // resolver descends the FC-declared nesting so the three-level path
+        // `sectorCharacteristics;lightSector;sectorLimit;sectorLimitOne` is
+        // navigable). The pre-order layout is:
+        //   sectorCharacteristics
+        //     lightCharacteristic  (LITCHR, mandatory [1..1])
+        //     signalGroup          (SIGGRP, optional)
+        //     signalPeriod         (SIGPER, optional)
+        //     lightSector          (mandatory [1..*]; one emitted per S-57 sector)
+        //       colour             (COLOUR list, enum, [1..*])
+        //       valueOfNominalRange(VALNMR, real, [0..1])
+        //       lightVisibility    (LITVIS list, enum, [0..*])
+        //       sectorLimit        ([0..1]; emitted when either bearing present)
+        //         sectorLimitOne   (sectorBearing = SECTR1)
+        //         sectorLimitTwo   (sectorBearing = SECTR2)
+        //     signalSequence…      (SIGSEQ phases, nested at this level)
+        // Out-of-range enumerate codes (colour / lightVisibility) are dropped
+        // and reported individually; the caller has already validated LITCHR.
+        private void AppendSectorCharacteristicsInstance(
+            List<S101Attribute> builder,
+            string lightCharacteristic,
+            string? signalGroup,
+            string? signalPeriod,
+            string? signalSequence,
+            string? colourList,
+            string? lightVisibilityList,
+            string? valueOfNominalRange,
+            string? sectorBearingOne,
+            string? sectorBearingTwo)
+        {
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorCharacteristics), 1, string.Empty));
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLightCharacteristic), 1, lightCharacteristic));
+            if (signalGroup is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSignalGroup), 1, signalGroup));
+            if (signalPeriod is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSignalPeriod), 1, signalPeriod));
+
+            // lightSector marker + its sub-attributes.
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLightSector), 1, string.Empty));
+            foreach (var colour in SplitEnumList(colourList))
+            {
+                if (_allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(S101AttrColour, colour))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrColour, colour);
+                    continue;
+                }
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrColour), 1, colour));
+            }
+            if (valueOfNominalRange is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrValueOfNominalRange), 1, valueOfNominalRange));
+            foreach (var visibility in SplitEnumList(lightVisibilityList))
+            {
+                if (_allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(S101AttrLightVisibility, visibility))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrLightVisibility, visibility);
+                    continue;
+                }
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLightVisibility), 1, visibility));
+            }
+
+            // sectorLimit → sectorLimitOne / sectorLimitTwo → sectorBearing.
+            if (sectorBearingOne is not null || sectorBearingTwo is not null)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimit), 1, string.Empty));
+                if (sectorBearingOne is not null)
+                {
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitOne), 1, string.Empty));
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingOne));
+                }
+                if (sectorBearingTwo is not null)
+                {
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitTwo), 1, string.Empty));
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingTwo));
+                }
+            }
+
+            // Nested `signalSequence` sub-complexes at the sectorCharacteristics
+            // level (after the lightSector subtree, so the lightSector scope
+            // terminates at the first signalSequence marker).
+            if (signalSequence is not null)
+                AppendSignalSequenceInstances(builder, signalSequence);
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)

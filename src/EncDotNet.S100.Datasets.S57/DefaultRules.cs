@@ -117,7 +117,32 @@ internal static class DefaultRules
         yield return F(72, "LNDELV", "LandElevation");
         yield return F(73, "LNDRGN", "LandRegion");
         yield return F(74, "LNDMRK", "Landmark");
-        yield return F(75, "LIGHTS", "LightAllAround");
+        // LIGHTS defaults to LightAllAround, but a light object carrying a
+        // sector arc (SECTR1/SECTR2 present) is a sectored light and maps to
+        // LightSectored, whose mandatory sectorCharacteristics complex the
+        // translator assembles from LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/
+        // SIGGRP/SIGPER/SIGSEQ (S-101 FC: LightSectored / sectorCharacteristics
+        // [1..*]).
+        yield return new S57FeatureRule
+        {
+            Objl = 75,
+            S57Acronym = "LIGHTS",
+            DefaultS101Code = "LightAllAround",
+            Redirects = [
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "SECTR1",
+                    ConditionPresent = true,
+                    TargetS101Code = "LightSectored",
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "SECTR2",
+                    ConditionPresent = true,
+                    TargetS101Code = "LightSectored",
+                },
+            ],
+        };
         yield return F(79, "LOKBSN", "LockBasin");
         yield return F(85, "NAVLNE", "NavigationLine");
         yield return F(86, "OBSTRN", "Obstruction");
@@ -337,9 +362,8 @@ internal static class DefaultRules
         // (information, featureName, rhythmOfLight, the date ranges,
         // zoneOfConfidence/CATZOC, and surfaceCharacteristics/NATSUR+NATQUA).
         // Still deferred:
-        //   SECTR1/SECTR2 → sectorBearing (light-sector complex),
         //   HORCLR → horizontalClearanceValue (horizontalClearanceFixed/Open),
-        //   SIGSEQ → signalSequence, MLTYLT (light-sector complex),
+        //   MLTYLT (light-sector complex),
         //   SORDAT/SORIND (→ complex sourceIndication/reportedDate).
         //
         // Assembled into S-101 complex attributes by S57ToS101Translator (feature
@@ -347,7 +371,11 @@ internal static class DefaultRules
         //   DATSTA/DATEND → fixedDateRange, PERSTA/PEREND → periodicDateRange,
         //   SURSTA/SUREND → surveyDateRange (each with dateStart/dateEnd);
         //   NATSUR/NATQUA → surfaceCharacteristics (natureOfSurface plus
-        //   natureOfSurfaceQualifyingTerms) on SeabedArea.
+        //   natureOfSurfaceQualifyingTerms) on SeabedArea;
+        //   LITCHR/SIGGRP/SIGPER/SIGSEQ → rhythmOfLight (non-sectored lights);
+        //   LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/SIGGRP/SIGPER/SIGSEQ →
+        //   sectorCharacteristics/lightSector/sectorLimit (sectored lights →
+        //   LightSectored).
         //
         // NOTE: enum (E/L) attributes still pass their values through the
         // FC-driven S101AllowedEnumValues check; S-57 enum values that have no
@@ -380,6 +408,15 @@ internal static class DefaultRules
         yield return A(156, "TECSOU", "techniqueOfVerticalMeasurement");
         yield return A(172, "TRAFIC", "trafficFlow");
         yield return A(178, "VALNMR", "valueOfNominalRange");
+        // SECTR1/SECTR2 are registered so the feature-redirect condition can
+        // see them in the acronym view (S57S101Mapping.BuildAcronymView only
+        // exposes attributes that carry a rule). Their nominal S-101 target is
+        // `sectorBearing`, but on the only feature that carries them — a
+        // sectored LIGHTS, which redirects to LightSectored — the translator
+        // diverts them into the `sectorCharacteristics` complex and suppresses
+        // this top-level pass-through, so they never leak as flat attributes.
+        yield return A(136, "SECTR1", "sectorBearing");
+        yield return A(137, "SECTR2", "sectorBearing");
         yield return A(185, "VERDAT", "verticalDatum");
 
         // --- Gap coverage (2nd wave): simple attributes surfaced once the

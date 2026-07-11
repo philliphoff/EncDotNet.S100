@@ -628,15 +628,20 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
     /// <summary>
     /// Returns the numeric codes of the complex attributes that the feature
-    /// catalogue declares as complex sub-attributes of the complex attribute
-    /// named by <paramref name="parentCode"/> — i.e. its nested child
-    /// complexes. Used by <see cref="ResolveAttributeScope"/> so that a nested
-    /// complex instance is collected within its parent's scope (and can be
-    /// navigated into with a multi-segment path such as
-    /// <c>rhythmOfLight:1;signalSequence:1</c>) instead of terminating the
-    /// parent's sub-attribute run the way a sibling complex marker does.
+    /// catalogue declares as (transitive) complex descendants of the complex
+    /// attribute named by <paramref name="parentCode"/> — i.e. every complex
+    /// nested at any depth beneath it. Used by <see cref="ResolveAttributeScope"/>
+    /// so that a nested complex instance is collected within its ancestor's
+    /// scope (and can be navigated into with a multi-segment path such as
+    /// <c>rhythmOfLight:1;signalSequence:1</c> or the three-level
+    /// <c>sectorCharacteristics:1;lightSector:1;sectorLimit:1</c>) instead of
+    /// terminating the ancestor's sub-attribute run the way a sibling complex
+    /// marker does. Transitive closure (rather than direct children only) is
+    /// required because a descendant marker such as <c>sectorLimit</c> is a
+    /// grandchild of <c>sectorCharacteristics</c> via <c>lightSector</c> and
+    /// would otherwise wrongly terminate the ancestor scope.
     /// </summary>
-    private HashSet<ushort> GetNestedChildComplexCodes(ushort parentCode)
+    private HashSet<ushort> GetNestedDescendantComplexCodes(ushort parentCode)
     {
         if (_nestedChildComplexCodes is null)
         {
@@ -648,7 +653,8 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
             foreach (var (code, name) in _doc.AttributeTypeCatalogue)
                 codeByName.TryAdd(name, code);
 
-            var map = new Dictionary<ushort, HashSet<ushort>>();
+            // Direct-children map (complex → its immediate complex sub-attributes).
+            var direct = new Dictionary<ushort, HashSet<ushort>>();
             foreach (var (code, name) in _doc.AttributeTypeCatalogue)
             {
                 if (!_complexAttrByCode!.TryGetValue(name, out var ca))
@@ -663,7 +669,30 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                 }
 
                 if (children.Count > 0)
-                    map[code] = children;
+                    direct[code] = children;
+            }
+
+            // Transitive closure with a cycle guard (the FC nesting is a DAG,
+            // but guard defensively against self-references / cycles).
+            var map = new Dictionary<ushort, HashSet<ushort>>();
+            foreach (var parent in direct.Keys)
+            {
+                var closure = new HashSet<ushort>();
+                var stack = new Stack<ushort>(direct[parent]);
+                while (stack.Count > 0)
+                {
+                    var cur = stack.Pop();
+                    if (!closure.Add(cur))
+                        continue;
+                    if (direct.TryGetValue(cur, out var grand))
+                    {
+                        foreach (var g in grand)
+                            stack.Push(g);
+                    }
+                }
+
+                if (closure.Count > 0)
+                    map[parent] = closure;
             }
 
             _nestedChildComplexCodes = map;
@@ -707,7 +736,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
             if (numericCode is null) return [];
 
             var complexCodes = GetComplexAttributeNumericCodes();
-            var nestedChildren = GetNestedChildComplexCodes(numericCode.Value);
+            var nestedDescendants = GetNestedDescendantComplexCodes(numericCode.Value);
 
             // Find the nth instance of this complex attribute and collect sub-attributes
             int found = 0;
@@ -740,14 +769,17 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                     // featureName), `dateStart`, and `dateEnd` (fixedDateRange /
                     // periodicDateRange / surveyDateRange).
                     //
-                    // A marker whose code the FC declares to be a *nested* child
-                    // complex of the current parent (e.g. `signalSequence` within
-                    // `rhythmOfLight`) is instead collected into this scope so it
-                    // — and its sub-attributes — can be navigated into with a
-                    // further path segment (`rhythmOfLight:1;signalSequence:1`).
+                    // A marker whose code the FC declares to be a *nested*
+                    // descendant complex (at any depth) of the current parent
+                    // (e.g. `signalSequence` within `rhythmOfLight`, or
+                    // `lightSector`/`sectorLimit` beneath `sectorCharacteristics`)
+                    // is instead collected into this scope so it — and its
+                    // sub-attributes — can be navigated into with further path
+                    // segments (`rhythmOfLight:1;signalSequence:1` or
+                    // `sectorCharacteristics:1;lightSector:1;sectorLimit:1`).
                     if (attr.Index == 1
                         && complexCodes.Contains(attr.NumericCode)
-                        && !nestedChildren.Contains(attr.NumericCode))
+                        && !nestedDescendants.Contains(attr.NumericCode))
                         break;
                     subAttrs.Add(attr);
                 }

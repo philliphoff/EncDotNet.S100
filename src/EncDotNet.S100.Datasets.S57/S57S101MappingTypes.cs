@@ -67,8 +67,20 @@ public sealed record S57FeatureRedirect
     /// <summary>S-57 attribute acronym used to test the redirect condition.</summary>
     public required string ConditionAttribute { get; init; }
 
-    /// <summary>S-57 attribute values that satisfy the condition.</summary>
-    public required IReadOnlyList<string> ConditionValues { get; init; }
+    /// <summary>
+    /// S-57 attribute values that satisfy the condition. Ignored when
+    /// <see cref="ConditionPresent"/> is <c>true</c>.
+    /// </summary>
+    public IReadOnlyList<string> ConditionValues { get; init; } = [];
+
+    /// <summary>
+    /// When <c>true</c>, the redirect fires whenever <see cref="ConditionAttribute"/>
+    /// is present with any non-empty value, rather than matching a specific
+    /// value in <see cref="ConditionValues"/>. Used for continuous-valued
+    /// discriminators such as a sector light's <c>SECTR1</c> bearing, where the
+    /// mere presence of the attribute (not its value) selects the target class.
+    /// </summary>
+    public bool ConditionPresent { get; init; }
 
     /// <summary>Target S-101 Feature Catalogue code when the condition matches.</summary>
     public required string TargetS101Code { get; init; }

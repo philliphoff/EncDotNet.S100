@@ -98,7 +98,9 @@ public sealed class S57S101Mapping
         foreach (var redirect in rule.Redirects)
         {
             if (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
-                && redirect.ConditionValues.Contains(v, StringComparer.Ordinal))
+                && (redirect.ConditionPresent
+                    ? !string.IsNullOrEmpty(v)
+                    : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)))
             {
                 var combined = MergeOverrides(rule.AttributeOverrides, redirect.AttributeOverrides);
                 return new ResolvedFeature(redirect.TargetS101Code, combined);

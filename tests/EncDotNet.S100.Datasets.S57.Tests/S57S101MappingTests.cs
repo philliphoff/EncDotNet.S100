@@ -422,10 +422,12 @@ public class S57S101MappingTests
     // Attributes that are sub-attributes of an S-101 *complex* attribute must
     // stay unmapped here — a flat emission would be non-conformant. They need
     // dedicated complex-attribute assembly (like OBJNAM → featureName).
+    // (SECTR1/SECTR2 are the exception: they carry a rule so the LightSectored
+    // feature redirect can see them, but the translator still diverts them into
+    // the sectorCharacteristics complex — see SectorLimitRedirectAttributes.)
     [Theory]
     [InlineData(116)] // OBJNAM → name (sub of featureName)
     [InlineData(107)] // LITCHR → lightCharacteristic
-    [InlineData(136)] // SECTR1 → sectorBearing
     [InlineData(98)]  // HORCLR → horizontalClearanceValue
     [InlineData(85)]  // DATEND → dateEnd
     [InlineData(86)]  // DATSTA → dateStart
@@ -436,5 +438,17 @@ public class S57S101MappingTests
     {
         var m = S57S101Mapping.Default;
         Assert.Null(m.ResolveAttributeCode(attl));
+    }
+
+    // SECTR1/SECTR2 carry a rule (mapping to sectorBearing) solely so the
+    // sectored-light feature redirect can detect them in the acronym view; the
+    // translator diverts them into the sectorCharacteristics complex.
+    [Theory]
+    [InlineData(136)] // SECTR1
+    [InlineData(137)] // SECTR2
+    public void SectorLimitRedirectAttributes_MapToSectorBearing(ushort attl)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal("sectorBearing", m.ResolveAttributeCode(attl));
     }
 }
