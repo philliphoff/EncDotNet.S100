@@ -1020,10 +1020,12 @@ public class S57ToS101TranslatorTests
     {
         // sectorLimitOne and sectorLimitTwo are both mandatory under
         // sectorLimit, so a lone SECTR1 bearing must not emit a partial subtree.
+        var diag = new S57TranslationDiagnostics();
         var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
             Attr(107, "2"),      // LITCHR → lightCharacteristic (Flashing)
             Attr(75, "3"),       // COLOUR → colour (Red)
-            Attr(136, "340.3"))); // SECTR1 only
+            Attr(136, "340.3")), // SECTR1 only
+            diag);
 
         var feat = Assert.Single(s101.Features);
         Assert.Equal("LightSectored", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
@@ -1042,6 +1044,9 @@ public class S57ToS101TranslatorTests
         Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorLimit", 1).ToList());
         Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorLimitOne", 1).ToList());
         Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorLimitTwo", 1).ToList());
+
+        // The lone SECTR1 bearing is dropped, so it is recorded for corpus audits.
+        Assert.True(diag.RuleDroppedAttributes.TryGetValue(136, out var dropped) && dropped >= 1);
     }
 
     [Fact]

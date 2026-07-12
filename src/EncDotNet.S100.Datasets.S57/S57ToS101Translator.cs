@@ -1626,7 +1626,8 @@ public sealed class S57ToS101Translator
             // sectorLimit → sectorLimitOne / sectorLimitTwo → sectorBearing. Both
             // sectorLimitOne and sectorLimitTwo are mandatory [1..1] in the FC, so
             // the sectorLimit subtree (itself [0..1]) is only emitted when both
-            // bearings are present; a lone bearing omits the whole subtree.
+            // bearings are present; a lone bearing omits the whole subtree and is
+            // recorded as a rule-dropped attribute so corpus audits see the loss.
             if (sectorBearingOne is not null && sectorBearingTwo is not null)
             {
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimit), 1, string.Empty));
@@ -1634,6 +1635,14 @@ public sealed class S57ToS101Translator
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingOne));
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitTwo), 1, string.Empty));
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingTwo));
+            }
+            else if (sectorBearingOne is not null)
+            {
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrSectr1);
+            }
+            else if (sectorBearingTwo is not null)
+            {
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrSectr2);
             }
 
             // Nested `signalSequence` sub-complexes at the sectorCharacteristics
