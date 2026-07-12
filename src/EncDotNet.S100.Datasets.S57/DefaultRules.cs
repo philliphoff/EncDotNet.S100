@@ -362,7 +362,6 @@ internal static class DefaultRules
         // (information, featureName, rhythmOfLight, the date ranges,
         // zoneOfConfidence/CATZOC, and surfaceCharacteristics/NATSUR+NATQUA).
         // Still deferred:
-        //   MLTYLT (light-sector complex),
         //   SORIND (source indication — no general S-101 equivalent; the FC's
         //   `source` attribute binds only UpdateInformation).
         //
@@ -381,6 +380,10 @@ internal static class DefaultRules
         //   LocalMagneticAnomaly;
         //   RADWAL → radarWaveLength (waveLengthValue + radarBand, one instance
         //   per "value-band" pair) on RadarTransponderBeacon;
+        //   CURVEL → speed (speedMaximum) on CurrentNonGravitational /
+        //   TidalStreamFloodEbb;
+        //   MLTYLT → multiplicityOfFeatures (multiplicityKnown + numberOfFeatures)
+        //   on the light classes;
         //   LITCHR/SIGGRP/SIGPER/SIGSEQ → rhythmOfLight (non-sectored lights);
         //   LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/SIGGRP/SIGPER/SIGSEQ →
         //   sectorCharacteristics/lightSector/sectorLimit (sectored lights →

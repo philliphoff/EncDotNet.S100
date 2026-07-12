@@ -283,6 +283,29 @@ public sealed class S57ToS101Translator
     private const string S101AttrWaveLengthValue = "waveLengthValue";
     private const string S101AttrRadarBand = "radarBand";
 
+    // S-57 CURVEL (Current velocity, ATTL 84) maps to the S-101 `speed`
+    // complex attribute, which the bundled FC binds on CurrentNonGravitational
+    // (CURENT) and TidalStreamFloodEbb (TS_FEB). The complex carries a
+    // mandatory `speedMaximum` [1..1] real sub-attribute (the CURVEL value,
+    // carried verbatim) plus an optional `speedMinimum` [0..1] that has no S-57
+    // source and is left unpopulated. Flat one-level complex, so no consumer
+    // change is required (like CATZOC / valueOfLocalMagneticAnomaly).
+    private const ushort S57AttrCurvel = 84;   // CURVEL — current velocity
+    private const string S101AttrSpeed = "speed";
+    private const string S101AttrSpeedMaximum = "speedMaximum";
+
+    // S-57 MLTYLT (Multiplicity of lights, ATTL 110) maps to the S-101
+    // `multiplicityOfFeatures` complex attribute, which the bundled FC binds on
+    // the light classes (LightAllAround, LightSectored, LightAirObstruction).
+    // The complex carries a mandatory `multiplicityKnown` [1..1] boolean and an
+    // optional `numberOfFeatures` [0..1] integer. The S-57 MLTYLT integer (the
+    // number of lights exhibited) is carried verbatim into `numberOfFeatures`
+    // with `multiplicityKnown` set true.
+    private const ushort S57AttrMltylt = 110;  // MLTYLT — multiplicity of lights
+    private const string S101AttrMultiplicityOfFeatures = "multiplicityOfFeatures";
+    private const string S101AttrMultiplicityKnown = "multiplicityKnown";
+    private const string S101AttrNumberOfFeatures = "numberOfFeatures";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -742,6 +765,14 @@ public sealed class S57ToS101Translator
             // RadarTransponderBeacon (the only feature that binds it).
             bool bindsRadarWaveLength = _featureBindings.Binds(feature.S101Code, S101AttrRadarWaveLength);
             string? radwalValue = null;
+            // speed source — CURVEL, assembled into the `speed` complex on
+            // CurrentNonGravitational / TidalStreamFloodEbb.
+            bool bindsSpeed = _featureBindings.Binds(feature.S101Code, S101AttrSpeed);
+            string? curvelValue = null;
+            // multiplicityOfFeatures source — MLTYLT, assembled into the complex
+            // on the light classes that bind it.
+            bool bindsMultiplicityOfFeatures = _featureBindings.Binds(feature.S101Code, S101AttrMultiplicityOfFeatures);
+            string? mltyltValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -785,6 +816,8 @@ public sealed class S57ToS101Translator
                     case S57AttrHorclr: if (bindsHorClearance && !string.IsNullOrEmpty(a.Value)) horclrValue = a.Value; break;
                     case S57AttrVallma: if (bindsValueOfLocalMagneticAnomaly && !string.IsNullOrEmpty(a.Value)) vallmaValue = a.Value; break;
                     case S57AttrRadwal: if (bindsRadarWaveLength && !string.IsNullOrEmpty(a.Value)) radwalValue = a.Value; break;
+                    case S57AttrCurvel: if (bindsSpeed && !string.IsNullOrEmpty(a.Value)) curvelValue = a.Value; break;
+                    case S57AttrMltylt: if (bindsMultiplicityOfFeatures && !string.IsNullOrEmpty(a.Value)) mltyltValue = a.Value; break;
                 }
             }
 
@@ -865,6 +898,18 @@ public sealed class S57ToS101Translator
                 // On RadarTransponderBeacon, RADWAL is assembled into the
                 // `radarWaveLength` complex below rather than passed through.
                 if (bindsRadarWaveLength && a.AttributeCode is S57AttrRadwal)
+                    continue;
+
+                // On CurrentNonGravitational / TidalStreamFloodEbb, CURVEL is
+                // assembled into the `speed` complex below rather than passed
+                // through.
+                if (bindsSpeed && a.AttributeCode is S57AttrCurvel)
+                    continue;
+
+                // On the light classes that bind it, MLTYLT is assembled into
+                // the `multiplicityOfFeatures` complex below rather than passed
+                // through.
+                if (bindsMultiplicityOfFeatures && a.AttributeCode is S57AttrMltylt)
                     continue;
 
                 // On feature classes that bind `reportedDate`, SORDAT is emitted
@@ -1074,6 +1119,23 @@ public sealed class S57ToS101Translator
             if (bindsRadarWaveLength && radwalValue is not null)
             {
                 AppendRadarWaveLengthInstances(builder, radwalValue);
+            }
+
+            // Append the `speed` complex-attribute instance. Its mandatory
+            // sub-attribute `speedMaximum` is a real carrying the CURVEL value
+            // verbatim; the optional `speedMinimum` has no S-57 source and is
+            // left unpopulated.
+            if (bindsSpeed && curvelValue is not null)
+            {
+                AppendSpeedInstance(builder, curvelValue);
+            }
+
+            // Append the `multiplicityOfFeatures` complex-attribute instance.
+            // MLTYLT (the number of lights) feeds the optional `numberOfFeatures`
+            // integer; the mandatory `multiplicityKnown` boolean is set true.
+            if (bindsMultiplicityOfFeatures && mltyltValue is not null)
+            {
+                AppendMultiplicityOfFeaturesInstance(builder, mltyltValue);
             }
 
             // Append `surfaceCharacteristics` complex-attribute instances. The
@@ -1310,6 +1372,39 @@ public sealed class S57ToS101Translator
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrWaveLengthValue), 1, value));
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrRadarBand), 1, band));
             }
+        }
+
+        // Emits a `speed` complex-attribute instance (marker + its mandatory
+        // `speedMaximum` real sub-attribute) using the same marker /
+        // contiguous-sub-attribute convention as the other complex attributes.
+        // The optional `speedMinimum` has no S-57 source and is omitted.
+        private void AppendSpeedInstance(
+            List<S101Attribute> builder,
+            string speedMaximum)
+        {
+            var complexCode = GetOrAssignAttributeCode(S101AttrSpeed);
+            // Marker entry — Index=1, value=empty — followed by the sub-attribute.
+            builder.Add(new S101Attribute(complexCode, 1, string.Empty));
+            var maxCode = GetOrAssignAttributeCode(S101AttrSpeedMaximum);
+            builder.Add(new S101Attribute(maxCode, 1, speedMaximum));
+        }
+
+        // Emits a `multiplicityOfFeatures` complex-attribute instance (marker +
+        // the mandatory `multiplicityKnown` boolean + the optional
+        // `numberOfFeatures` integer). MLTYLT supplies the count, so
+        // `multiplicityKnown` is emitted true and `numberOfFeatures` carries the
+        // MLTYLT value verbatim.
+        private void AppendMultiplicityOfFeaturesInstance(
+            List<S101Attribute> builder,
+            string numberOfFeatures)
+        {
+            var complexCode = GetOrAssignAttributeCode(S101AttrMultiplicityOfFeatures);
+            // Marker entry — Index=1, value=empty — followed by the sub-attributes.
+            builder.Add(new S101Attribute(complexCode, 1, string.Empty));
+            var knownCode = GetOrAssignAttributeCode(S101AttrMultiplicityKnown);
+            builder.Add(new S101Attribute(knownCode, 1, "true"));
+            var numberCode = GetOrAssignAttributeCode(S101AttrNumberOfFeatures);
+            builder.Add(new S101Attribute(numberCode, 1, numberOfFeatures));
         }
 
         // Emits zero or more `surfaceCharacteristics` complex-attribute

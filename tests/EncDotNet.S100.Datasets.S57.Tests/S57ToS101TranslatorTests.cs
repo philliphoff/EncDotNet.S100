@@ -1147,8 +1147,85 @@ public class S57ToS101TranslatorTests
         Assert.Equal("20220407", attr.Value);
     }
 
-    // ── VALLMA → valueOfLocalMagneticAnomaly, RADWAL → radarWaveLength ─────
+    // ── CURVEL → speed, MLTYLT → multiplicityOfFeatures ───────────────────
 
+    [Fact]
+    public void Translate_CurrentWithCurvel_AssemblesSpeedComplex()
+    {
+        // CURENT (OBJL 36) → CurrentNonGravitational, which binds speed.
+        // CURVEL (ATTL 84) feeds the mandatory speedMaximum sub-attribute.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(36, Attr(84, "1.3")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("CurrentNonGravitational", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("1.3", GetSubAttribute(s101, instance, "speedMaximum"));
+        // speedMinimum has no S-57 source.
+        Assert.Null(GetSubAttribute(s101, instance, "speedMinimum"));
+    }
+
+    [Fact]
+    public void Translate_TidalStreamWithCurvel_AssemblesSpeedComplex()
+    {
+        // TS_FEB (OBJL 160) → TidalStreamFloodEbb, which also binds speed.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(160, Attr(84, "0.9")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("TidalStreamFloodEbb", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
+        Assert.Equal("0.9", GetSubAttribute(s101, instance, "speedMaximum"));
+    }
+
+    [Fact]
+    public void Translate_CurvelOnNonBindingFeature_LeavesCurvelUnmapped()
+    {
+        // ACHARE (OBJL 4) → AnchorageArea does not bind speed; CURVEL has no
+        // conformant home there and is left unmapped.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(4, Attr(84, "1.3")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "speed", 1).ToList());
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Fact]
+    public void Translate_LightWithMltylt_AssemblesMultiplicityOfFeatures()
+    {
+        // LIGHTS (OBJL 75) → LightAllAround, which binds
+        // multiplicityOfFeatures. MLTYLT (ATTL 110) feeds numberOfFeatures with
+        // multiplicityKnown set true.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(75, Attr(110, "3")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightAllAround", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var instance = ComplexInstance(s101, feat.Attributes, "multiplicityOfFeatures", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("true", GetSubAttribute(s101, instance, "multiplicityKnown"));
+        Assert.Equal("3", GetSubAttribute(s101, instance, "numberOfFeatures"));
+    }
+
+    [Fact]
+    public void Translate_MltyltOnNonBindingFeature_LeavesMltyltUnmapped()
+    {
+        // ACHARE (OBJL 4) → AnchorageArea does not bind
+        // multiplicityOfFeatures; MLTYLT has no conformant home and is left
+        // unmapped.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(4, Attr(110, "3")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "multiplicityOfFeatures", 1).ToList());
+        Assert.Empty(feat.Attributes);
+    }
+
+    // ── VALLMA → valueOfLocalMagneticAnomaly, RADWAL → radarWaveLength ─────
     [Fact]
     public void Translate_LocalMagneticAnomalyWithVallma_AssemblesValueComplex()
     {
