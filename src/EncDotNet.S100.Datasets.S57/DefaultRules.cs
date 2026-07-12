@@ -288,7 +288,9 @@ internal static class DefaultRules
         // first-class features carrying data-quality / coverage information.
         // M_QUAL carries CATZOC (a bathymetric-quality concept) and therefore
         // converts to QualityOfBathymetricData; QualityOfNonBathymetricData is
-        // sourced from M_ACCY (S-57 → S-101 Conversion Guidance).
+        // sourced from M_ACCY (S-57 → S-101 Conversion Guidance; the bundled
+        // S-101 FC aliases QualityOfNonBathymetricData to M_ACCY).
+        yield return F(301, "M_ACCY", "QualityOfNonBathymetricData");
         yield return F(302, "M_COVR", "DataCoverage");
         yield return F(305, "M_NPUB", "InformationArea");
         yield return F(306, "M_NSYS", "NavigationalSystemOfMarks");
