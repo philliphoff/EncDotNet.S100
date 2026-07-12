@@ -43,6 +43,15 @@ internal static class CliApp
             config.AddCommand<ListSpecsCommand>("list-specs")
                 .WithDescription("List supported product specifications and headless-render capability.")
                 .WithExample("list-specs");
+
+            config.AddBranch("s57", s57 =>
+            {
+                s57.SetDescription("S-57 (IHO S-57 / ENC) specific operations.");
+
+                s57.AddCommand<S57ConvertCommand>("convert")
+                    .WithDescription("Convert an S-57 base cell to an S-101 dataset (ISO/IEC 8211).")
+                    .WithExample("s57", "convert", "-o", "my-s101-dataset.000", "my-s57-dataset.000");
+            });
         });
         return app;
     }

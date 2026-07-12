@@ -8,6 +8,7 @@ This library reads S-101 datasets encoded in ISO 8211 format and executes the S-
 
 - **`S101Dataset`** — parsed ENC dataset containing features from ISO 8211 records.
 - **`S101Document`**, **`S101DocumentReader`** — low-level ISO 8211 record parsing.
+- **`S101DocumentWriter`** — the symmetric inverse of `S101DocumentReader`: encodes an `S101Document` back to an ISO/IEC 8211 S-101 dataset (`byte[]` / stream / file). Used by the S-57 → S-101 conversion path (`s100 s57 convert`). It emits a Data Descriptive Record (DDR) plus one data record per dataset / spatial / feature / information object; a document read from a `.000` and written back round-trips through the reader. See below.
 - **`S101LuaRuleExecutor`** — `ILuaVectorRuleExecutor` implementation that wraps the product-agnostic `LuaRuleExecutor` from `EncDotNet.S100.Core`, supplying the S-101 seams: the `S101LuaDataProvider` host bridge, the mariner→context-parameter bindings, a feature-anchor provider for augmented line tessellation, and the SAFCON contour-label transform.
 - **`S101PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT/Lua rules, symbols, line styles, area fills, and color palettes.
 - **`S101VectorSource`** — `IVectorSource` implementation for the vector pipeline. Surface geometry resolves both the exterior ring (`Feature.Coordinates`) and any interior rings / holes (`Feature.InteriorRings`) from the RIAS field (USAG = 2), so a sea/depth area encoded around islands (S-100 Part 10a surface topology) renders with the land cut out instead of painting solidly over every `LandArea`.
@@ -154,6 +155,33 @@ Every record-id field also carries `RVER` (record version) and `RUIN`
 attribute fields carry their inline per-element update instructions
 (`SAUI` / `FAUI` / `IUIN` / `ATIN`). These are read into the model to
 drive sequential update application.
+
+## Writing datasets
+
+`S101DocumentWriter` is the inverse of `S101DocumentReader`: it serializes an
+`S101Document` to an ISO/IEC 8211 S-101 dataset.
+
+```csharp
+byte[] bytes = S101DocumentWriter.Write(document);
+S101DocumentWriter.WriteToFile("cell.000", document);
+await S101DocumentWriter.WriteToFileAsync("cell.000", document);
+```
+
+The writer authors a Data Descriptive Record (DDR) covering every field it
+emits (field tags, subfield names, and binary formats matching the canonical
+S-101 encoding), followed by a DSID record (identification, structure info, and
+the feature/attribute/information/association code catalogues), the spatial
+records (`PRID`, `MRID`, `CRID`, `CCID`, `SRID`), the feature records (`FRID`,
+`FOID`, `ATTR`, `SPAS`, `FACS`, `INAS`), and the information records (`IRID`,
+`ATTR`). A document read from a real `.000` and written back is equivalent when
+read again. Feature-to-feature associations (`FACS`) are serialized and
+round-trip when present, although the S-57 translator does not currently produce
+any.
+
+This is the encoder behind the `s100 s57 convert` CLI command, which translates
+an S-57 base cell to `S101Document` and writes it as a base S-101 cell
+(application profile `1`).
+
 
 ## Sequential updates
 

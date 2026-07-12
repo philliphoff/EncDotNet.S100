@@ -30,7 +30,7 @@
     <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.0" />
     <!-- EncDotNet -->
-    <PackageVersion Include="EncDotNet.Iso8211" Version="0.5.1" />
+    <PackageVersion Include="EncDotNet.Iso8211" Version="0.6.0" />
     <PackageVersion Include="EncDotNet.S57" Version="0.5.1" />
     <!-- Mapping / rendering -->
     <PackageVersion Include="FluentIcons.Avalonia" Version="2.1.330" />
