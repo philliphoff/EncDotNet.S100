@@ -1729,9 +1729,8 @@ public static class S100VectorTileRenderer
                     // global capacity returns to the pool within ~one tile raster.
                     // Release the slot under this same lock so concurrent sheds can't
                     // all read the pre-decrement count and over-shed below baseline.
-                    if (currentScene is null
-                        || ShouldWorkerExit(
-                            sceneNull: false,
+                    if (ShouldWorkerExit(
+                            sceneNull: currentScene is null,
                             hasVisible,
                             hasPredicted,
                             state.ActiveWorkers,
@@ -1758,7 +1757,12 @@ public static class S100VectorTileRenderer
 
                     deviceScale = state.PendingDeviceScale;
                     generation = state.PendingGeneration;
-                    scene = currentScene;
+                    // ShouldWorkerExit returns true for a null scene, so reaching
+                    // here means the scene is live; the null-coalescing throw is
+                    // unreachable but gives the compiler its non-null narrowing
+                    // (no scene can vanish while we hold state.Sync).
+                    scene = currentScene ?? throw new InvalidOperationException(
+                        "Scene became null after ShouldWorkerExit returned false.");
                     baseIndex = state.BaseIndex;
                     diskNamespace = state.DiskNamespace;
                     state.InFlight.Add(key);
