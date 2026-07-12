@@ -20,8 +20,8 @@ namespace EncDotNet.S100.Datasets.S101;
 /// This is the encoder consumed by the S-57 → S-101 conversion pipeline: an
 /// <see cref="S101Document"/> produced by the translator is serialized here to a
 /// standalone base cell (application profile <c>1</c>). Feature-to-feature
-/// associations (<c>FASC</c>) are not emitted; the translator produces none and
-/// <see cref="S101DocumentReader"/> does not surface them.
+/// associations (<c>FASC</c>) are not emitted: the S-57 translator produces none,
+/// so there are none to encode.
 /// </para>
 /// </remarks>
 public static class S101DocumentWriter

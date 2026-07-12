@@ -174,8 +174,8 @@ the feature/attribute/information/association code catalogues), the spatial
 records (`PRID`, `MRID`, `CRID`, `CCID`, `SRID`), the feature records (`FRID`,
 `FOID`, `ATTR`, `SPAS`, `INAS`), and the information records (`IRID`, `ATTR`).
 A document read from a real `.000` and written back is equivalent when read
-again. Feature-to-feature associations (`FASC`) are not emitted — the S-57
-translator produces none and the reader does not surface them.
+again. Feature-to-feature associations (`FASC`) are not emitted: the S-57
+translator produces none, so there are none to encode.
 
 This is the encoder behind the `s100 s57 convert` CLI command, which translates
 an S-57 base cell to `S101Document` and writes it as a base S-101 cell
