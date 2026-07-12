@@ -69,7 +69,10 @@ public sealed record S57FeatureRedirect
 
     /// <summary>
     /// S-57 attribute values that satisfy the condition. Ignored when
-    /// <see cref="ConditionPresent"/> is <c>true</c>.
+    /// <see cref="ConditionPresent"/> is <c>true</c>; must contain at least
+    /// one value when <see cref="ConditionPresent"/> is <c>false</c> (a
+    /// value-matching redirect with no values can never match and is rejected
+    /// when the mapping is constructed).
     /// </summary>
     public IReadOnlyList<string> ConditionValues { get; init; } = [];
 

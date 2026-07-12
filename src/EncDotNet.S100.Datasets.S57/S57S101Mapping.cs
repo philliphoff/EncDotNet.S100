@@ -36,6 +36,26 @@ public sealed class S57S101Mapping
         FeatureRules = featureRules;
         AttributeRules = attributeRules;
 
+        // Fail fast on redirects that can never match: a value-matching
+        // redirect (ConditionPresent == false) with no ConditionValues would
+        // silently never fire, masking a mapping-rule authoring mistake.
+        foreach (var (objl, rule) in featureRules)
+        {
+            foreach (var redirect in rule.Redirects)
+            {
+                if (!redirect.ConditionPresent && redirect.ConditionValues.Count == 0)
+                {
+                    throw new ArgumentException(
+                        $"S-57 feature redirect on OBJL {objl} (condition attribute " +
+                        $"'{redirect.ConditionAttribute}', target '{redirect.TargetS101Code}') " +
+                        "has ConditionPresent == false and no ConditionValues, so it can " +
+                        "never match. Set ConditionPresent = true for a presence test, or " +
+                        "provide at least one entry in ConditionValues.",
+                        nameof(featureRules));
+                }
+            }
+        }
+
         var byAcronym = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         foreach (var (attl, rule) in attributeRules)
             byAcronym[rule.S57Acronym] = attl;

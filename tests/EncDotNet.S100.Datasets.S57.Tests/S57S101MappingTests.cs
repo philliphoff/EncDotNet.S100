@@ -153,6 +153,48 @@ public class S57S101MappingTests
     }
 
     [Fact]
+    public void Build_RedirectWithoutPresenceOrValues_Throws()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "CTRPNT",
+            DefaultS101Code = "ControlPoint",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATCTR",
+                // Neither a presence test nor any values: can never match.
+                ConditionPresent = false,
+                TargetS101Code = "Landmark",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("never match", ex.Message);
+    }
+
+    [Fact]
+    public void Build_PresenceRedirectWithoutValues_Succeeds()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "LIGHTS",
+            DefaultS101Code = "LightAllAround",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "SECTR1",
+                ConditionPresent = true,
+                TargetS101Code = "LightSectored",
+            }],
+        };
+
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        Assert.NotNull(m);
+    }
+
+    [Fact]
     public void ResolveAttribute_ValueRemap_DropsAttribute()
     {
         var attrRule = new S57AttributeRule
