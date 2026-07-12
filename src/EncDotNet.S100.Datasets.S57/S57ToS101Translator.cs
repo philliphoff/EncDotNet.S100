@@ -1547,6 +1547,8 @@ public sealed class S57ToS101Translator
         //     signalSequence…      (SIGSEQ phases, nested at this level)
         // Out-of-range enumerate codes (colour / lightVisibility) are dropped
         // and reported individually; the caller has already validated LITCHR.
+        // If no valid colour remains, the whole instance is rolled back because
+        // lightSector/colour are mandatory in the S-101 Feature Catalogue.
         private void AppendSectorCharacteristicsInstance(
             List<S101Attribute> builder,
             string lightCharacteristic,
@@ -1559,6 +1561,8 @@ public sealed class S57ToS101Translator
             string? sectorBearingOne,
             string? sectorBearingTwo)
         {
+            int instanceStart = builder.Count;
+
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorCharacteristics), 1, string.Empty));
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLightCharacteristic), 1, lightCharacteristic));
             if (signalGroup is not null)
@@ -1568,6 +1572,7 @@ public sealed class S57ToS101Translator
 
             // lightSector marker + its sub-attributes.
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLightSector), 1, string.Empty));
+            bool anyColour = false;
             foreach (var colour in SplitEnumList(colourList))
             {
                 if (_allowedEnumValues is not null
@@ -1577,7 +1582,20 @@ public sealed class S57ToS101Translator
                     continue;
                 }
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrColour), 1, colour));
+                anyColour = true;
             }
+
+            // lightSector requires colour [1..*] and sectorCharacteristics requires
+            // lightSector [1..*] (S-101 FC). Without at least one valid colour the
+            // whole subtree is non-conformant, so roll back the entire instance
+            // rather than emit a partial sectorCharacteristics/lightSector.
+            if (!anyColour)
+            {
+                builder.RemoveRange(instanceStart, builder.Count - instanceStart);
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrColour);
+                return;
+            }
+
             if (valueOfNominalRange is not null)
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrValueOfNominalRange), 1, valueOfNominalRange));
             foreach (var visibility in SplitEnumList(lightVisibilityList))

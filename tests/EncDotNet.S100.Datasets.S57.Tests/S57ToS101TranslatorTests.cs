@@ -1045,6 +1045,28 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_SectoredLight_WithoutColour_OmitsSectorCharacteristicsSubtree()
+    {
+        // lightSector requires at least one colour; with no COLOUR on the S-57
+        // feature the entire sectorCharacteristics instance must be rolled back.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),      // LITCHR → lightCharacteristic (Flashing)
+            Attr(136, "340.3"),  // SECTR1
+            Attr(137, "8.3")));  // SECTR2
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightSectored", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var attributeNames = feat.Attributes
+            .Select(a => s101.AttributeTypeCatalogue[a.NumericCode])
+            .ToList();
+        Assert.DoesNotContain("sectorCharacteristics", attributeNames);
+        Assert.DoesNotContain("lightSector", attributeNames);
+        Assert.DoesNotContain("colour", attributeNames);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList());
+    }
+
+    [Fact]
     public void Translate_SectoredLight_ColourAndVisibilityLists_SplitIntoMultipleSubAttributes()
     {
         // COLOUR and LITVIS are S-57 list-valued enumerations; each code
