@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Datasets.S101;
 /// This is the encoder consumed by the S-57 → S-101 conversion pipeline: an
 /// <see cref="S101Document"/> produced by the translator is serialized here to a
 /// standalone base cell (application profile <c>1</c>). Feature-to-feature
-/// associations (<c>FASC</c>) are not emitted: the S-57 translator produces none,
+/// associations (<c>FACS</c>) are not emitted: the S-57 translator produces none,
 /// so there are none to encode.
 /// </para>
 /// </remarks>
@@ -84,10 +84,11 @@ public static class S101DocumentWriter
     /// </summary>
     /// <param name="path">The destination file path.</param>
     /// <param name="document">The document to serialize.</param>
-    /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
     public static void WriteToFile(string path, S101Document document)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentException.ThrowIfNullOrEmpty(path);
         ArgumentNullException.ThrowIfNull(document);
         Iso8211DocumentWriter.WriteToFile(path, BuildDocument(document), Options);
     }
@@ -99,10 +100,11 @@ public static class S101DocumentWriter
     /// <param name="document">The document to serialize.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task that completes when the file has been written.</returns>
-    /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
     public static Task WriteToFileAsync(string path, S101Document document, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(path);
+        ArgumentException.ThrowIfNullOrEmpty(path);
         ArgumentNullException.ThrowIfNull(document);
         return Iso8211DocumentWriter.WriteToFileAsync(path, BuildDocument(document), Options, cancellationToken);
     }

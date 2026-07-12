@@ -129,6 +129,22 @@ public class S101DocumentWriterTests
         }
     }
 
+    [Fact]
+    public void WriteToFile_WithEmptyPath_ThrowsArgumentException()
+    {
+        var document = BuildSampleDocument();
+
+        Assert.Throws<ArgumentException>(() => S101DocumentWriter.WriteToFile("", document));
+    }
+
+    [Fact]
+    public async Task WriteToFileAsync_WithEmptyPath_ThrowsArgumentException()
+    {
+        var document = BuildSampleDocument();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => S101DocumentWriter.WriteToFileAsync("", document));
+    }
+
     [SkippableFact]
     public void ConvertRealS57Fixture_Translate_Write_Read_RoundTrips()
     {
