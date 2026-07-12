@@ -288,17 +288,33 @@ public static class S100VectorTileRenderer
     /// competitor's own workers — rather than all other layers' workers — stops an
     /// unrelated predicted-only layer's workers from wrongly satisfying an
     /// active-visible sibling's reservation.
+    /// <para>
+    /// Keyed <b>weakly</b> via <see cref="ConditionalWeakTable{TKey,TValue}"/> so it
+    /// never roots a <see cref="TileState"/>. <see cref="TileState"/> is otherwise
+    /// held only weakly (in <see cref="s_states"/>, keyed by <see cref="ILayer"/>);
+    /// a plain <see cref="Dictionary{TKey,TValue}"/> here would keep a removed
+    /// layer's tiling state — including its rasterised tile cache and scenes — alive
+    /// for the process lifetime if the layer disappeared while still registered and
+    /// no later paint pruned it. With a weak key the GC reclaims a dead layer's
+    /// entry even when no further paint occurs.
+    /// </para>
     /// </summary>
-    private static readonly Dictionary<TileState, ActiveVisibleEntry> s_visibleLayerStamps = new();
+    private static readonly ConditionalWeakTable<TileState, ActiveVisibleEntry> s_visibleLayerStamps = new();
 
-    /// <summary>Reusable scratch for pruning <see cref="s_visibleLayerStamps"/> without per-call allocation.</summary>
+    /// <summary>Reusable scratch for time-pruning <see cref="s_visibleLayerStamps"/> without per-call allocation.</summary>
     private static readonly List<TileState> s_visibleLayerPruneScratch = new();
 
     /// <summary>
     /// A layer's active-visible registry entry: the <see cref="Stopwatch"/> tick of
-    /// its last paint with visible cold work, and the workers it held then.
+    /// its last paint with visible cold work, and the workers it held then. A mutable
+    /// reference type because <see cref="ConditionalWeakTable{TKey,TValue}"/> requires
+    /// a reference value; it is only ever read/written under <see cref="s_visibleLayerSync"/>.
     /// </summary>
-    private readonly record struct ActiveVisibleEntry(long StampTicks, int ActiveWorkers);
+    private sealed class ActiveVisibleEntry(long stampTicks, int activeWorkers)
+    {
+        public long StampTicks = stampTicks;
+        public int ActiveWorkers = activeWorkers;
+    }
 
 
     /// <summary>
@@ -1639,7 +1655,15 @@ public static class S100VectorTileRenderer
         {
             if (hasVisibleWork)
             {
-                s_visibleLayerStamps[state] = new ActiveVisibleEntry(nowTicks, layerActiveWorkers);
+                if (s_visibleLayerStamps.TryGetValue(state, out var box))
+                {
+                    box.StampTicks = nowTicks;
+                    box.ActiveWorkers = layerActiveWorkers;
+                }
+                else
+                {
+                    s_visibleLayerStamps.AddOrUpdate(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
+                }
             }
             else
             {
@@ -1648,6 +1672,8 @@ public static class S100VectorTileRenderer
 
             var reserved = 0;
             s_visibleLayerPruneScratch.Clear();
+            // A dead layer's weak key drops out of the table on its own; this pass
+            // only evicts still-live layers whose last visible paint aged out.
             foreach (var entry in s_visibleLayerStamps)
             {
                 if (nowTicks - entry.Value.StampTicks > windowTicks)
@@ -1679,9 +1705,10 @@ public static class S100VectorTileRenderer
     {
         lock (s_visibleLayerSync)
         {
-            if (s_visibleLayerStamps.ContainsKey(state))
+            if (s_visibleLayerStamps.TryGetValue(state, out var box))
             {
-                s_visibleLayerStamps[state] = new ActiveVisibleEntry(nowTicks, layerActiveWorkers);
+                box.StampTicks = nowTicks;
+                box.ActiveWorkers = layerActiveWorkers;
             }
         }
     }
