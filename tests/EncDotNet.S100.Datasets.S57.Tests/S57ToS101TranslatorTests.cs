@@ -1387,6 +1387,23 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_RadwalListExceedingFcUpperBound_CapsAtTwoAndReportsDrop()
+    {
+        // RadarTransponderBeacon binds radarWaveLength with multiplicity
+        // upper=2, so a three-pair RADWAL list must emit only two instances;
+        // the surplus pair is dropped and reported.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(103, Attr(126, "0.03-X,0.10-S,0.05-C")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.NotEmpty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 1).ToList());
+        Assert.NotEmpty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 2).ToList());
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 3).ToList());
+        Assert.True(diag.RuleDroppedAttributes.TryGetValue(126, out var dropped) && dropped >= 1);
+    }
+
+    [Fact]
     public void Translate_RadwalMalformedPair_DropsInstance()
     {
         // A RADWAL element that lacks a band token (no '-') cannot fill both

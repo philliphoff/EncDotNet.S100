@@ -1346,11 +1346,17 @@ public sealed class S57ToS101Translator
         // yields one instance carrying the mandatory `waveLengthValue` (real,
         // the numeric part) and `radarBand` (text, the band token). Because
         // both sub-attributes are mandatory, a pair that lacks either part is
-        // dropped and reported.
+        // dropped and reported. At most two instances are emitted because the
+        // S-101 Feature Catalogue binds `radarWaveLength` with multiplicity
+        // upper=2 (e.g. on RadarTransponderBeacon); additional pairs are
+        // dropped and reported to keep the output FC-conformant.
+        private const int RadarWaveLengthMaxInstances = 2;
+
         private void AppendRadarWaveLengthInstances(
             List<S101Attribute> builder,
             string radwalValue)
         {
+            var emitted = 0;
             foreach (var pair in radwalValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
                 var sep = pair.IndexOf('-');
@@ -1368,11 +1374,19 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                if (emitted == RadarWaveLengthMaxInstances)
+                {
+                    // Exceeds the FC upper bound (2); drop the surplus pair.
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrRadwal);
+                    continue;
+                }
+
                 var complexCode = GetOrAssignAttributeCode(S101AttrRadarWaveLength);
                 // Marker entry — Index=1, value=empty — followed by the sub-attributes.
                 builder.Add(new S101Attribute(complexCode, 1, string.Empty));
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrWaveLengthValue), 1, value));
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrRadarBand), 1, band));
+                emitted++;
             }
         }
 

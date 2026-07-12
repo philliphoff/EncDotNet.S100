@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Datasets.S57;
 public readonly record struct S57AttributeDrop(ushort ObjectClass, ushort AttributeCode);
 
 /// <summary>
-/// Identifies an S-101 enumerate value that was dropped during translation
+/// Identifies an S-101 enumerated value that was dropped during translation
 /// because the destination S-101 Feature Catalogue does not list it as an
 /// allowable code for the target attribute (see
 /// <see cref="S101AllowedEnumValues"/>).

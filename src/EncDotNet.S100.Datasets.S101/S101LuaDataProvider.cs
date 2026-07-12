@@ -719,8 +719,18 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         foreach (var segment in segments)
         {
             var colonIdx = segment.IndexOf(':');
+
+            // Guard against malformed path segments: a rule script could pass a
+            // scope string that lacks a colon, has an empty complex code, or a
+            // non-numeric instance index. Rather than throwing (which would
+            // crash the portrayal pipeline), treat any malformed segment as an
+            // unresolvable scope and return no sub-attributes.
+            if (colonIdx <= 0 || colonIdx >= segment.Length - 1)
+                return [];
+
             var complexCode = segment[..colonIdx];
-            var instanceIndex = int.Parse(segment[(colonIdx + 1)..]);
+            if (!int.TryParse(segment[(colonIdx + 1)..], out var instanceIndex))
+                return [];
 
             // Resolve complex attribute numeric code
             ushort? numericCode = null;

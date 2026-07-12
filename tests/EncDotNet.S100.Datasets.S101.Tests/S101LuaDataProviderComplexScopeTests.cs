@@ -57,6 +57,26 @@ public class S101LuaDataProviderComplexScopeTests
         Assert.Equal(1, count(1, "", "periodicDateRange"));
     }
 
+    [Theory]
+    [InlineData("fixedDateRange")]      // no colon
+    [InlineData(":1")]                   // empty complex code
+    [InlineData("fixedDateRange:")]      // empty index
+    [InlineData("fixedDateRange:abc")]   // non-numeric index
+    public void MalformedScopePath_ReturnsEmpty_DoesNotThrow(string badPath)
+    {
+        var provider = CreateProvider();
+        var context = new RecordingLuaContext();
+        provider.RegisterHostFunctions(context);
+
+        var getSimple = Assert.IsAssignableFrom<Func<double, string, string, List<object>>>(
+            context.Globals["HostFeatureGetSimpleAttribute"]);
+
+        // A malformed scope string must be treated as an unresolvable scope
+        // (empty result) rather than crashing the portrayal pipeline.
+        var result = getSimple(1, badPath, "dateStart");
+        Assert.Empty(result);
+    }
+
     private static S101LuaDataProvider CreateProvider()
     {
         // Flat attribute list for one feature carrying two sibling complexes
