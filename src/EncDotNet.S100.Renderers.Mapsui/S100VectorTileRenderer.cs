@@ -1662,7 +1662,7 @@ public static class S100VectorTileRenderer
                 }
                 else
                 {
-                    s_visibleLayerStamps.AddOrUpdate(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
+                    s_visibleLayerStamps.Add(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
                 }
             }
             else
@@ -1728,8 +1728,9 @@ public static class S100VectorTileRenderer
             {
                 // Stop before touching Skia once the process is shutting down,
                 // so ShutdownAndDrain's wait completes and no tile is rasterised
-                // into a half-torn-down Skia. The finally releases the slot and
-                // completes the drain-gate registration.
+                // into a half-torn-down Skia. slotReleased is still false on this
+                // path, so the finally below releases the slot and completes the
+                // drain-gate registration.
                 if (s_drainGate.IsDraining)
                 {
                     return;
