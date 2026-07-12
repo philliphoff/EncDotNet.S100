@@ -172,10 +172,11 @@ emits (field tags, subfield names, and binary formats matching the canonical
 S-101 encoding), followed by a DSID record (identification, structure info, and
 the feature/attribute/information/association code catalogues), the spatial
 records (`PRID`, `MRID`, `CRID`, `CCID`, `SRID`), the feature records (`FRID`,
-`FOID`, `ATTR`, `SPAS`, `INAS`), and the information records (`IRID`, `ATTR`).
-A document read from a real `.000` and written back is equivalent when read
-again. Feature-to-feature associations (`FACS`) are not emitted: the S-57
-translator produces none, so there are none to encode.
+`FOID`, `ATTR`, `SPAS`, `FACS`, `INAS`), and the information records (`IRID`,
+`ATTR`). A document read from a real `.000` and written back is equivalent when
+read again. Feature-to-feature associations (`FACS`) are serialized and
+round-trip when present, although the S-57 translator does not currently produce
+any.
 
 This is the encoder behind the `s100 s57 convert` CLI command, which translates
 an S-57 base cell to `S101Document` and writes it as a base S-101 cell

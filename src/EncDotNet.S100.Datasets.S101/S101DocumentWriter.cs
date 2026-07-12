@@ -20,8 +20,8 @@ namespace EncDotNet.S100.Datasets.S101;
 /// This is the encoder consumed by the S-57 → S-101 conversion pipeline: an
 /// <see cref="S101Document"/> produced by the translator is serialized here to a
 /// standalone base cell (application profile <c>1</c>). Feature-to-feature
-/// associations (<c>FACS</c>) are not emitted: the S-57 translator produces none,
-/// so there are none to encode.
+/// associations (<c>FACS</c>) are serialized when present, although the S-57
+/// translator does not currently produce any.
 /// </para>
 /// </remarks>
 public static class S101DocumentWriter
@@ -37,14 +37,13 @@ public static class S101DocumentWriter
     private const byte RcnmInformation = 150;
 
     private static readonly Iso8211WriterOptions Options = Iso8211WriterOptions.Default;
-    private static readonly IReadOnlyDictionary<string, Iso8211FieldDefinition> FieldDefs = BuildFieldDefinitions();
-
     /// <summary>
     /// Serializes the supplied document to an in-memory ISO 8211 byte buffer.
     /// </summary>
     /// <param name="document">The document to serialize.</param>
     /// <returns>The encoded ISO 8211 dataset bytes.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
+    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static byte[] Write(S101Document document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -57,6 +56,7 @@ public static class S101DocumentWriter
     /// <param name="stream">The destination stream.</param>
     /// <param name="document">The document to serialize.</param>
     /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.</exception>
+    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static void Write(Stream stream, S101Document document)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -72,6 +72,7 @@ public static class S101DocumentWriter
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task that completes when the document has been written.</returns>
     /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.</exception>
+    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static Task WriteAsync(Stream stream, S101Document document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -86,6 +87,7 @@ public static class S101DocumentWriter
     /// <param name="document">The document to serialize.</param>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
+    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static void WriteToFile(string path, S101Document document)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -102,6 +104,7 @@ public static class S101DocumentWriter
     /// <returns>A task that completes when the file has been written.</returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
+    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static Task WriteToFileAsync(string path, S101Document document, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -112,38 +115,49 @@ public static class S101DocumentWriter
     private static Iso8211Document BuildDocument(S101Document doc)
     {
         var builder = new Iso8211DocumentBuilder();
+        var hasFeatureAssociations = doc.Features.Any(f => f.FeatureAssociations.Count > 0);
+        if (hasFeatureAssociations && doc.FeatureAssociationCatalogue.Count > 0)
+        {
+            throw new NotSupportedException(
+                "S101DocumentWriter cannot emit both the feature association code catalogue and feature association pointers because both use ISO 8211 field tag FACS.");
+        }
+
+        var fieldDefs = BuildFieldDefinitions(hasFeatureAssociations);
 
         // The DDR carries the full canonical field definition set, including definitions not emitted in this document.
-        builder.AddRecord(Iso8211DataDescriptiveRecordWriter.BuildDdr(FieldDefs.Values, options: Options));
+        builder.AddRecord(Iso8211DataDescriptiveRecordWriter.BuildDdr(fieldDefs.Values, options: Options));
 
-        builder.AddRecord(BuildDatasetRecord(doc));
+        builder.AddRecord(BuildDatasetRecord(doc, fieldDefs, hasFeatureAssociations));
 
         foreach (var p in doc.Points.Values)
-            builder.AddRecord(BuildPointRecord(p));
+            builder.AddRecord(BuildPointRecord(p, fieldDefs));
         foreach (var m in doc.MultiPoints.Values)
-            builder.AddRecord(BuildMultiPointRecord(m));
+            builder.AddRecord(BuildMultiPointRecord(m, fieldDefs));
         foreach (var c in doc.CurveSegments.Values)
-            builder.AddRecord(BuildCurveRecord(c));
+            builder.AddRecord(BuildCurveRecord(c, fieldDefs));
         foreach (var cc in doc.CompositeCurves.Values)
-            builder.AddRecord(BuildCompositeCurveRecord(cc));
+            builder.AddRecord(BuildCompositeCurveRecord(cc, fieldDefs));
         foreach (var s in doc.Surfaces.Values)
-            builder.AddRecord(BuildSurfaceRecord(s));
+            builder.AddRecord(BuildSurfaceRecord(s, fieldDefs));
         foreach (var info in doc.InformationTypes.Values)
-            builder.AddRecord(BuildInformationRecord(info));
+            builder.AddRecord(BuildInformationRecord(info, fieldDefs));
         foreach (var f in doc.Features)
-            builder.AddRecord(BuildFeatureRecord(f));
+            builder.AddRecord(BuildFeatureRecord(f, fieldDefs));
 
         return builder.Build();
     }
 
     // ── Record builders ─────────────────────────────────────────────────
 
-    private static Iso8211Record BuildDatasetRecord(S101Document doc)
+    private static Iso8211Record BuildDatasetRecord(
+        S101Document doc,
+        IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs,
+        bool featureAssociationFieldsUseFacs)
     {
         var id = doc.Identification;
         var si = doc.StructureInfo;
 
-        var dsid = Field("DSID")
+        var dsid = Field("DSID", fieldDefs)
             .AddSubfields(
                 (int)(id.RecordName == 0 ? RcnmDataset : id.RecordName),
                 id.RecordId,
@@ -160,7 +174,7 @@ public static class S101DocumentWriter
                 id.DatasetEdition,
                 0 /* DSTC */);
 
-        var dssi = Field("DSSI")
+        var dssi = Field("DSSI", fieldDefs)
             .AddSubfields(
                 0d, 0d, 0d, // DCOX/DCOY/DCOZ
                 si.CoordinateMultiplicationFactorX,
@@ -178,41 +192,45 @@ public static class S101DocumentWriter
             .AddField(dsid)
             .AddField(dssi);
 
-        AddCatalogue(record, "FTCS", doc.FeatureTypeCatalogue);
-        AddCatalogue(record, "ATCS", doc.AttributeTypeCatalogue);
-        AddCatalogue(record, "ITCS", doc.InformationTypeCatalogue);
-        AddCatalogue(record, "IACS", doc.InformationAssociationCatalogue);
-        AddCatalogue(record, "FACS", doc.FeatureAssociationCatalogue);
-        AddCatalogue(record, "ARCS", doc.RoleCatalogue);
+        AddCatalogue(record, "FTCS", doc.FeatureTypeCatalogue, fieldDefs);
+        AddCatalogue(record, "ATCS", doc.AttributeTypeCatalogue, fieldDefs);
+        AddCatalogue(record, "ITCS", doc.InformationTypeCatalogue, fieldDefs);
+        AddCatalogue(record, "IACS", doc.InformationAssociationCatalogue, fieldDefs);
+        if (!featureAssociationFieldsUseFacs)
+            AddCatalogue(record, "FACS", doc.FeatureAssociationCatalogue, fieldDefs);
+        AddCatalogue(record, "ARCS", doc.RoleCatalogue, fieldDefs);
 
         return record.Build();
     }
 
-    private static void AddCatalogue(Iso8211RecordBuilder record, string tag, IReadOnlyDictionary<ushort, string> entries)
+    private static void AddCatalogue(
+        Iso8211RecordBuilder record,
+        string tag,
+        IReadOnlyDictionary<ushort, string> entries,
+        IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         if (entries.Count == 0)
             return;
 
-        var field = Field(tag);
+        var field = Field(tag, fieldDefs);
         foreach (var (code, acronym) in entries)
             field.AddSubfields(acronym, (int)code);
         record.AddField(field);
     }
 
-    private static Iso8211Record BuildPointRecord(S101PointRecord p)
+    private static Iso8211Record BuildPointRecord(S101PointRecord p, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
-        var prid = Field("PRID").AddSubfields(
+        var prid = Field("PRID", fieldDefs).AddSubfields(
             (int)RcnmPoint, p.RecordId, (int)p.RecordVersion, (int)p.UpdateInstruction);
-        var c2it = Field("C2IT").AddSubfields(p.Y, p.X);
+        var c2it = Field("C2IT", fieldDefs).AddSubfields(p.Y, p.X);
         return new Iso8211RecordBuilder(Options).AddField(prid).AddField(c2it).Build();
     }
 
-    private static Iso8211Record BuildMultiPointRecord(S101MultiPointRecord m)
+    private static Iso8211Record BuildMultiPointRecord(S101MultiPointRecord m, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
-        var mrid = Field("MRID").AddSubfields(
+        var mrid = Field("MRID", fieldDefs).AddSubfields(
             (int)RcnmMultiPoint, m.RecordId, (int)m.RecordVersion, (int)m.UpdateInstruction);
-
-        var c3il = Field("C3IL");
+        var c3il = Field("C3IL", fieldDefs);
         // Leading VCID (b11) followed by repeating Y/X/Z triples (rep@1).
         c3il.AddSubfield(0);
         foreach (var (y, x, z) in m.Points)
@@ -221,15 +239,15 @@ public static class S101DocumentWriter
         return new Iso8211RecordBuilder(Options).AddField(mrid).AddField(c3il).Build();
     }
 
-    private static Iso8211Record BuildCurveRecord(S101CurveSegmentRecord c)
+    private static Iso8211Record BuildCurveRecord(S101CurveSegmentRecord c, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         var record = new Iso8211RecordBuilder(Options)
-            .AddField(Field("CRID").AddSubfields(
+            .AddField(Field("CRID", fieldDefs).AddSubfields(
                 (int)RcnmCurve, c.RecordId, (int)c.RecordVersion, (int)c.UpdateInstruction));
 
         if (c.PointAssociations.Count > 0)
         {
-            var ptas = Field("PTAS");
+            var ptas = Field("PTAS", fieldDefs);
             foreach (var a in c.PointAssociations)
                 ptas.AddSubfields((int)a.RecordName, a.RecordId, (int)a.Topology);
             record.AddField(ptas);
@@ -237,7 +255,7 @@ public static class S101DocumentWriter
 
         if (c.IntermediateCoordinates.Count > 0)
         {
-            var c2il = Field("C2IL");
+            var c2il = Field("C2IL", fieldDefs);
             foreach (var (y, x) in c.IntermediateCoordinates)
                 c2il.AddSubfields(y, x);
             record.AddField(c2il);
@@ -246,15 +264,15 @@ public static class S101DocumentWriter
         return record.Build();
     }
 
-    private static Iso8211Record BuildCompositeCurveRecord(S101CompositeCurveRecord cc)
+    private static Iso8211Record BuildCompositeCurveRecord(S101CompositeCurveRecord cc, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         var record = new Iso8211RecordBuilder(Options)
-            .AddField(Field("CCID").AddSubfields(
+            .AddField(Field("CCID", fieldDefs).AddSubfields(
                 (int)RcnmCompositeCurve, cc.RecordId, (int)cc.RecordVersion, (int)cc.UpdateInstruction));
 
         if (cc.CurveComponents.Count > 0)
         {
-            var cuco = Field("CUCO");
+            var cuco = Field("CUCO", fieldDefs);
             foreach (var u in cc.CurveComponents)
                 cuco.AddSubfields((int)u.RecordName, u.RecordId, (int)u.Orientation);
             record.AddField(cuco);
@@ -263,15 +281,15 @@ public static class S101DocumentWriter
         return record.Build();
     }
 
-    private static Iso8211Record BuildSurfaceRecord(S101SurfaceRecord s)
+    private static Iso8211Record BuildSurfaceRecord(S101SurfaceRecord s, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         var record = new Iso8211RecordBuilder(Options)
-            .AddField(Field("SRID").AddSubfields(
+            .AddField(Field("SRID", fieldDefs).AddSubfields(
                 (int)RcnmSurface, s.RecordId, (int)s.RecordVersion, (int)s.UpdateInstruction));
 
         if (s.RingAssociations.Count > 0)
         {
-            var rias = Field("RIAS");
+            var rias = Field("RIAS", fieldDefs);
             foreach (var r in s.RingAssociations)
                 rias.AddSubfields((int)r.RecordName, r.RecordId, (int)r.Orientation, (int)r.Usage, 0 /* RAUI */);
             record.AddField(rias);
@@ -280,29 +298,38 @@ public static class S101DocumentWriter
         return record.Build();
     }
 
-    private static Iso8211Record BuildFeatureRecord(S101FeatureRecord f)
+    private static Iso8211Record BuildFeatureRecord(S101FeatureRecord f, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         var record = new Iso8211RecordBuilder(Options)
-            .AddField(Field("FRID").AddSubfields(
+            .AddField(Field("FRID", fieldDefs).AddSubfields(
                 (int)RcnmFeature, f.RecordId, (int)f.FeatureTypeCode, (int)f.RecordVersion, (int)f.UpdateInstruction))
-            .AddField(Field("FOID").AddSubfields(
+            .AddField(Field("FOID", fieldDefs).AddSubfields(
                 (int)f.ProducingAgency, f.FeatureIdentificationNumber, (int)f.FeatureIdentificationSubdivision));
 
-        AddAttributes(record, f.Attributes);
+        AddAttributes(record, f.Attributes, fieldDefs);
 
         if (f.SpatialAssociations.Count > 0)
         {
-            var spas = Field("SPAS");
+            var spas = Field("SPAS", fieldDefs);
             foreach (var a in f.SpatialAssociations)
                 spas.AddSubfields((int)a.RecordName, a.RecordId, (int)a.Orientation, 0 /* SMIN */, 0 /* SMAX */, (int)a.UpdateInstruction);
             record.AddField(spas);
+        }
+
+        if (f.FeatureAssociations.Count > 0)
+        {
+            foreach (var a in f.FeatureAssociations)
+            {
+                record.AddField(Field("FACS", fieldDefs).AddSubfields(
+                    (int)RcnmFeature, a.RecordId, (int)a.NumericCode, (int)a.RoleCode, (int)a.UpdateInstruction));
+            }
         }
 
         if (f.InformationAssociations.Count > 0)
         {
             foreach (var a in f.InformationAssociations)
             {
-                record.AddField(Field("INAS").AddSubfields(
+                record.AddField(Field("INAS", fieldDefs).AddSubfields(
                     (int)RcnmInformation, a.RecordId, (int)a.NumericCode, (int)a.RoleCode, (int)a.UpdateInstruction));
             }
         }
@@ -310,28 +337,31 @@ public static class S101DocumentWriter
         return record.Build();
     }
 
-    private static Iso8211Record BuildInformationRecord(S101InformationRecord info)
+    private static Iso8211Record BuildInformationRecord(S101InformationRecord info, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         var record = new Iso8211RecordBuilder(Options)
-            .AddField(Field("IRID").AddSubfields(
+            .AddField(Field("IRID", fieldDefs).AddSubfields(
                 (int)RcnmInformation, info.RecordId, (int)info.InformationTypeCode, (int)info.RecordVersion, (int)info.UpdateInstruction));
 
-        AddAttributes(record, info.Attributes);
+        AddAttributes(record, info.Attributes, fieldDefs);
         return record.Build();
     }
 
-    private static void AddAttributes(Iso8211RecordBuilder record, IReadOnlyList<S101Attribute> attributes)
+    private static void AddAttributes(
+        Iso8211RecordBuilder record,
+        IReadOnlyList<S101Attribute> attributes,
+        IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         if (attributes.Count == 0)
             return;
 
-        var attr = Field("ATTR");
+        var attr = Field("ATTR", fieldDefs);
         foreach (var a in attributes)
             attr.AddSubfields((int)a.NumericCode, (int)a.Index, (int)a.ParentIndex, (int)a.UpdateInstruction, a.Value);
         record.AddField(attr);
     }
 
-    private static Iso8211FieldBuilder Field(string tag) => new(FieldDefs[tag], Options);
+    private static Iso8211FieldBuilder Field(string tag, IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs) => new(fieldDefs[tag], Options);
 
     // ── Field definitions (the DDR) ─────────────────────────────────────
 
@@ -342,7 +372,7 @@ public static class S101DocumentWriter
     private static Iso8211SubfieldFormat F8 => new() { FormatType = Iso8211SubfieldFormatType.FloatingPoint, Width = 8 };
     private static Iso8211SubfieldFormat A => new() { FormatType = Iso8211SubfieldFormatType.CharacterData, Width = 0 };
 
-    private static IReadOnlyDictionary<string, Iso8211FieldDefinition> BuildFieldDefinitions()
+    private static IReadOnlyDictionary<string, Iso8211FieldDefinition> BuildFieldDefinitions(bool featureAssociationFieldsUseFacs)
     {
         var defs = new List<Iso8211FieldDefinition>
         {
@@ -357,7 +387,10 @@ public static class S101DocumentWriter
             Def("ATCS", "Attribute Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("ATCD", A), ("ANCD", U2)),
             Def("ITCS", "Information Type Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("ITCD", A), ("ITNC", U2)),
             Def("IACS", "Information Association Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("IACD", A), ("IANC", U2)),
-            Def("FACS", "Feature Association Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("FACD", A), ("FANC", U2)),
+            featureAssociationFieldsUseFacs
+                ? Def("FACS", "Feature Association", Iso8211DataStructureCode.Vector, Iso8211DataTypeCode.MixedDataTypes, -1,
+                    ("RRNM", U1), ("RRID", U4), ("NFAC", U2), ("NARC", U2), ("FAUI", U1))
+                : Def("FACS", "Feature Association Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("FACD", A), ("FANC", U2)),
             Def("ARCS", "Association Role Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("ARCD", A), ("ARNC", U2)),
 
             Def("PRID", "Point Record Identifier", Iso8211DataStructureCode.Vector, Iso8211DataTypeCode.ImplicitPoint, -1,

@@ -130,6 +130,27 @@ public class S101DocumentWriterTests
     }
 
     [Fact]
+    public void WriteThenRead_PreservesFeatureAssociations()
+    {
+        var original = BuildSampleDocument();
+        var bytes = S101DocumentWriter.Write(original);
+        using var stream = new MemoryStream(bytes);
+        var rt = S101DocumentReader.ReadFromStream(stream);
+
+        var of = original.Features[0];
+        var rf = rt.Features.Single(f => f.RecordId == of.RecordId);
+
+        Assert.Equal(of.FeatureAssociations.Count, rf.FeatureAssociations.Count);
+        for (int i = 0; i < of.FeatureAssociations.Count; i++)
+        {
+            Assert.Equal(of.FeatureAssociations[i].NumericCode, rf.FeatureAssociations[i].NumericCode);
+            Assert.Equal(of.FeatureAssociations[i].RecordId, rf.FeatureAssociations[i].RecordId);
+            Assert.Equal(of.FeatureAssociations[i].RoleCode, rf.FeatureAssociations[i].RoleCode);
+            Assert.Equal(of.FeatureAssociations[i].UpdateInstruction, rf.FeatureAssociations[i].UpdateInstruction);
+        }
+    }
+
+    [Fact]
     public void WriteToFile_WithEmptyPath_ThrowsArgumentException()
     {
         var document = BuildSampleDocument();
@@ -278,6 +299,31 @@ public class S101DocumentWriterTests
                         new S101Attribute(100, 1, "10.5"),
                     ],
                     SpatialAssociations = [new S101SpatialAssociation(130, 40, 1)],
+                    FeatureAssociations =
+                    [
+                        new S101FeatureAssociation(8, 51, 3, S101UpdateInstruction.Insert),
+                        new S101FeatureAssociation(9, 52, 4, S101UpdateInstruction.Modify),
+                    ],
+                    RecordVersion = 1,
+                    UpdateInstruction = S101UpdateInstruction.Insert,
+                },
+                new S101FeatureRecord
+                {
+                    RecordId = 51,
+                    FeatureTypeCode = 42,
+                    ProducingAgency = 550,
+                    FeatureIdentificationNumber = 123_457,
+                    FeatureIdentificationSubdivision = 1,
+                    RecordVersion = 1,
+                    UpdateInstruction = S101UpdateInstruction.Insert,
+                },
+                new S101FeatureRecord
+                {
+                    RecordId = 52,
+                    FeatureTypeCode = 42,
+                    ProducingAgency = 550,
+                    FeatureIdentificationNumber = 123_458,
+                    FeatureIdentificationSubdivision = 1,
                     RecordVersion = 1,
                     UpdateInstruction = S101UpdateInstruction.Insert,
                 },
