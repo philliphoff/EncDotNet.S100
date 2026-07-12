@@ -473,6 +473,54 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_ListEnumAttribute_SplitsEvenWhenEnforcementDisabled()
+    {
+        // Splitting a comma-separated list enum is a structural S-57→S-101
+        // requirement, independent of FC validation. With enforcement disabled
+        // (allowedEnumValues: null) each code must still become its own
+        // occurrence rather than passing through as a single raw "1,3" value.
+        var translator = new S57ToS101Translator(S57S101Mapping.Default, allowedEnumValues: null);
+        var s101 = translator.Translate(LandRegionDocWithCatlnd("1,3"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Count);
+        Assert.All(feat.Attributes, a =>
+            Assert.Equal("categoryOfLandRegion", s101.AttributeTypeCatalogue[a.NumericCode]));
+        var values = feat.Attributes.Select(a => a.Value).OrderBy(v => v).ToArray();
+        Assert.Equal(new[] { "1", "3" }, values);
+        Assert.Equal(new ushort[] { 1, 2 }, feat.Attributes.Select(a => a.Index).OrderBy(i => i).ToArray());
+    }
+
+    [Fact]
+    public void Translate_ListEnumAttribute_EnforcementDisabled_KeepsOutOfRangeCodes()
+    {
+        // With enforcement disabled, the split still happens but no IsAllowed
+        // filtering is applied, so even out-of-FC codes survive as occurrences.
+        var translator = new S57ToS101Translator(S57S101Mapping.Default, allowedEnumValues: null);
+        var s101 = translator.Translate(LandRegionDocWithCatlnd("3,99"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Count);
+        var values = feat.Attributes.Select(a => a.Value).OrderBy(v => v).ToArray();
+        Assert.Equal(new[] { "3", "99" }, values);
+    }
+
+    [Fact]
+    public void Translate_NonEnumTextAttribute_WithComma_EnforcementDisabled_IsNotSplit()
+    {
+        // Even with enforcement disabled, free text (OBJNAM) that legitimately
+        // contains a comma must not be split — the integer-list fallback
+        // discriminator recognises non-integer tokens as text.
+        var doc = LandRegionWithS57Attributes(Attr(116, "Smith, Jones and Co."));
+
+        var translator = new S57ToS101Translator(S57S101Mapping.Default, allowedEnumValues: null);
+        var s101 = translator.Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Smith, Jones and Co.", GetSubAttribute(s101, instance, "name"));
+    }
+
+    [Fact]
     public void Translate_NonEnumTextAttribute_WithComma_IsNotSplit()
     {
         // OBJNAM (text) is handled as featureName; a comma in the name must

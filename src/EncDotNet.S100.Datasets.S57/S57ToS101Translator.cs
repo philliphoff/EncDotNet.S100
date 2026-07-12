@@ -939,15 +939,22 @@ public sealed class S57ToS101Translator
                 // carry multiple enumerate codes as a comma-separated string
                 // (e.g. "3,3"). The destination S-101 enumerate attribute
                 // encodes each value as a separate occurrence, so split the
-                // list and validate each code independently — otherwise a
-                // single invalid (or simply multi-valued) code would cause the
-                // whole attribute to be dropped. Enumerate codes are integer
-                // tokens and never contain commas, so non-enumerate attributes
-                // (text such as OBJNAM, which may legitimately contain commas)
-                // are never split.
-                if (_allowedEnumValues is not null
-                    && _allowedEnumValues.IsEnumerated(resolved.S101Code)
-                    && a.Value.Contains(','))
+                // list and emit each code independently — otherwise a single
+                // invalid (or simply multi-valued) code would cause the whole
+                // attribute to be dropped. Splitting is a structural
+                // S-57→S-101 correctness requirement independent of FC
+                // validation, so it must still happen when enum enforcement is
+                // disabled (_allowedEnumValues is null). When the FC is
+                // available we use its authoritative enumerate flag; otherwise
+                // we fall back to a structural check: enumerate codes are
+                // integer tokens and never contain commas, so a comma-separated
+                // value whose tokens are all integers is a list enum, whereas
+                // free text (such as OBJNAM, which may legitimately contain
+                // commas) is not.
+                if (a.Value.Contains(',')
+                    && (_allowedEnumValues is not null
+                            ? _allowedEnumValues.IsEnumerated(resolved.S101Code)
+                            : IsIntegerList(a.Value)))
                 {
                     ushort index = 1;
                     foreach (var rawCode in a.Value.Split(','))
@@ -963,7 +970,10 @@ public sealed class S57ToS101Translator
                             continue;
                         }
 
-                        if (!_allowedEnumValues.IsAllowed(sub.S101Code, sub.Value))
+                        // Skip FC allowable-value checks when enforcement is
+                        // disabled; the split itself is still required.
+                        if (_allowedEnumValues is not null
+                            && !_allowedEnumValues.IsAllowed(sub.S101Code, sub.Value))
                         {
                             _diagnostics?.RecordDroppedEnumValue(sub.S101Code, sub.Value);
                             continue;
@@ -1494,6 +1504,27 @@ public sealed class S57ToS101Translator
                     result.Add(code);
             }
             return result;
+        }
+
+        // Structural discriminator used when FC enum enforcement is disabled
+        // (_allowedEnumValues is null) to decide whether a comma-separated
+        // value is a list-valued enumerate (which must be split) rather than
+        // free text. S-57 enumerate codes are integer tokens, so a value whose
+        // non-empty tokens are all integers is treated as a list enum; text
+        // attributes (e.g. OBJNAM) that legitimately contain commas are not.
+        private static bool IsIntegerList(string value)
+        {
+            var any = false;
+            foreach (var token in value.Split(','))
+            {
+                var code = token.Trim();
+                if (code.Length == 0)
+                    continue;
+                if (!int.TryParse(code, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+                    return false;
+                any = true;
+            }
+            return any;
         }
 
         // Emits zero or more `signalSequence` complex-attribute instances by
