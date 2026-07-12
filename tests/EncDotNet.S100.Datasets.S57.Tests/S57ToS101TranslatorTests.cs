@@ -1097,6 +1097,56 @@ public class S57ToS101TranslatorTests
         Assert.Empty(feat.Attributes);
     }
 
+    // ── SORDAT → reportedDate (feature binding-gated simple attribute) ────
+
+    [Fact]
+    public void Translate_SordatOnBindingFeature_BecomesReportedDate()
+    {
+        // LNDARE (OBJL 71) → LandArea, which binds reportedDate. SORDAT (ATTL
+        // 147) feeds it, the YYYYMMDD value carried verbatim.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(71, Attr(147, "20220407")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LandArea", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("reportedDate", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("20220407", attr.Value);
+    }
+
+    [Fact]
+    public void Translate_SordatOnNonBindingFeature_LeavesSordatUnmapped()
+    {
+        // ACHARE (OBJL 4) → AnchorageArea, which does NOT bind reportedDate.
+        // SORDAT has no conformant home there and is left unmapped (no
+        // reportedDate emitted, no other attribute produced).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(4, Attr(147, "20220407")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("AnchorageArea", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.DoesNotContain(feat.Attributes,
+            a => s101.AttributeTypeCatalogue[a.NumericCode] == "reportedDate");
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Fact]
+    public void Translate_SorindOnBindingFeature_StaysUnmapped()
+    {
+        // SORIND (ATTL 148) has no general S-101 equivalent, so even on a
+        // reportedDate-binding feature it produces nothing; only SORDAT →
+        // reportedDate is emitted.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(71,
+                Attr(147, "20220407"),                // SORDAT → reportedDate
+                Attr(148, "US,US,graph,L-105-2022"))); // SORIND → (unmapped)
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("reportedDate", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("20220407", attr.Value);
+    }
+
     // ── DATSTA/DATEND, PERSTA/PEREND, SURSTA/SUREND → date-range complexes ──
 
     private static EncDotNet.S57.S57Document PointFeatureWithS57Attributes(

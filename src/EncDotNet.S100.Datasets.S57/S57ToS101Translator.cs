@@ -243,6 +243,21 @@ public sealed class S57ToS101Translator
     private const string S101AttrHorizontalClearanceFixed = "horizontalClearanceFixed";
     private const string S101AttrHorizontalClearanceValue = "horizontalClearanceValue";
 
+    // S-57 SORDAT (Source date, ATTL 147) maps to the S-101 `reportedDate`
+    // simple attribute (value type S100_TruncatedDate), which the bundled FC
+    // binds directly on ~50 feature types. Unlike a normal attribute rule the
+    // mapping must be gated on the resolved feature actually binding
+    // `reportedDate`: SORDAT is a near-universal S-57 attribute that also
+    // appears on features which do not carry `reportedDate` in S-101, where it
+    // has no conformant home and is left unmapped. The S-57 date value
+    // ("YYYYMMDD", possibly truncated) is carried verbatim, matching the
+    // fidelity of the dateStart / dateEnd sub-attributes. (S-57 SORIND, ATTL
+    // 148, carries a comma-separated source-indication string with no general
+    // S-101 equivalent — the FC's `source` attribute binds only
+    // UpdateInformation — and is intentionally left unmapped.)
+    private const ushort S57AttrSordat = 147;  // SORDAT — source date
+    private const string S101AttrReportedDate = "reportedDate";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -691,6 +706,9 @@ public sealed class S57ToS101Translator
             bool bindsHorClearanceFixed = _featureBindings.Binds(feature.S101Code, S101AttrHorizontalClearanceFixed);
             bool bindsHorClearance = bindsHorClearanceOpen || bindsHorClearanceFixed;
             string? horclrValue = null;
+            // reportedDate source — SORDAT, emitted inline as a top-level simple
+            // attribute on the (many) feature classes that bind `reportedDate`.
+            bool bindsReportedDate = _featureBindings.Binds(feature.S101Code, S101AttrReportedDate);
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -802,6 +820,18 @@ public sealed class S57ToS101Translator
                 // unmapped, having no conformant S-101 home there.)
                 if (bindsHorClearance && a.AttributeCode is S57AttrHorclr)
                     continue;
+
+                // On feature classes that bind `reportedDate`, SORDAT is emitted
+                // here as that top-level simple attribute (S100_TruncatedDate),
+                // the S-57 date value carried verbatim. On a feature that does
+                // not bind `reportedDate`, SORDAT falls through to the no-rule
+                // path below and is recorded unmapped (no conformant S-101 home).
+                if (bindsReportedDate && a.AttributeCode is S57AttrSordat)
+                {
+                    if (!string.IsNullOrEmpty(a.Value))
+                        builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrReportedDate), 1, a.Value));
+                    continue;
+                }
 
                 var attl = (ushort)a.AttributeCode;
                 if (!_mapping.AttributeRules.TryGetValue(attl, out var attrRule))

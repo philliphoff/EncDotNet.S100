@@ -363,7 +363,8 @@ internal static class DefaultRules
         // zoneOfConfidence/CATZOC, and surfaceCharacteristics/NATSUR+NATQUA).
         // Still deferred:
         //   MLTYLT (light-sector complex),
-        //   SORDAT/SORIND (→ complex sourceIndication/reportedDate).
+        //   SORIND (source indication — no general S-101 equivalent; the FC's
+        //   `source` attribute binds only UpdateInformation).
         //
         // Assembled into S-101 complex attributes by S57ToS101Translator (feature
         // binding-gated), NOT emitted here as flat simple attributes:
@@ -373,6 +374,9 @@ internal static class DefaultRules
         //   natureOfSurfaceQualifyingTerms) on SeabedArea;
         //   HORCLR → horizontalClearanceValue of horizontalClearanceOpen (Gate)
         //   or horizontalClearanceFixed (spans/tunnels/shoreline/canals/etc.);
+        //   SORDAT → reportedDate (top-level simple attribute, feature
+        //   binding-gated — SORDAT is near-universal in S-57 but reportedDate
+        //   binds only ~50 feature types);
         //   LITCHR/SIGGRP/SIGPER/SIGSEQ → rhythmOfLight (non-sectored lights);
         //   LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/SIGGRP/SIGPER/SIGSEQ →
         //   sectorCharacteristics/lightSector/sectorLimit (sectored lights →
