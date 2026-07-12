@@ -1164,19 +1164,28 @@ public sealed class S57ToS101Translator
             // dropped and reported, which also drops the instance). One
             // `lightSector` is assembled from the sector's colour/visibility/
             // range and the SECTR1/SECTR2 bearings.
-            if (bindsSectorChar && sectrLitchr is not null)
+            if (bindsSectorChar
+                && sectrLitchr is not null
+                && (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrLightCharacteristic, sectrLitchr)))
             {
-                if (_allowedEnumValues is null
-                    || _allowedEnumValues.IsAllowed(S101AttrLightCharacteristic, sectrLitchr))
-                {
-                    AppendSectorCharacteristicsInstance(
-                        builder, sectrLitchr, sectrSiggrp, sectrSigper, sectrSigseq,
-                        sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2);
-                }
-                else
-                {
+                AppendSectorCharacteristicsInstance(
+                    builder, sectrLitchr, sectrSiggrp, sectrSigper, sectrSigseq,
+                    sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2);
+            }
+            else if (bindsSectorChar)
+            {
+                // No `sectorCharacteristics` instance is emitted (LITCHR missing
+                // or FC-rejected), so the sector-input attributes diverted from
+                // the per-attribute pass-through would otherwise vanish silently.
+                // Record them so corpus audits still see the data loss. A
+                // FC-rejected LITCHR is reported as an enum drop; a missing
+                // LITCHR has nothing to record.
+                if (sectrLitchr is not null)
                     _diagnostics?.RecordDroppedEnumValue(S101AttrLightCharacteristic, sectrLitchr);
-                }
+                RecordDivertedSectorAttributesDropped(
+                    sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2,
+                    sectrSiggrp, sectrSigper, sectrSigseq);
             }
 
             return builder;
@@ -1650,6 +1659,28 @@ public sealed class S57ToS101Translator
             // terminates at the first signalSequence marker).
             if (signalSequence is not null)
                 AppendSignalSequenceInstances(builder, signalSequence);
+        }
+
+        // Records each present sector-input S-57 attribute as rule-dropped. Used
+        // when a LightSectored feature diverts these attributes from the
+        // per-attribute pass-through but no `sectorCharacteristics` instance is
+        // emitted (missing / FC-rejected LITCHR), so corpus audits still see the
+        // data loss.
+        private void RecordDivertedSectorAttributesDropped(
+            string? colour, string? litvis, string? valnmr,
+            string? sectr1, string? sectr2,
+            string? siggrp, string? sigper, string? sigseq)
+        {
+            if (_diagnostics is null)
+                return;
+            if (colour is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrColour);
+            if (litvis is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrLitvis);
+            if (valnmr is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrValnmr);
+            if (sectr1 is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSectr1);
+            if (sectr2 is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSectr2);
+            if (siggrp is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSiggrp);
+            if (sigper is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSigper);
+            if (sigseq is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSigseq);
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)

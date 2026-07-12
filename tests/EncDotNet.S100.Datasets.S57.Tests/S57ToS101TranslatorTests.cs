@@ -1050,6 +1050,31 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_SectoredLight_WithoutLitchr_RecordsDivertedSectorAttributes()
+    {
+        // A sector arc (SECTR1/SECTR2) redirects LIGHTS to LightSectored, but
+        // without a valid LITCHR to anchor the mandatory lightCharacteristic no
+        // sectorCharacteristics instance is emitted. The sector-input attributes
+        // (COLOUR/SECTR1/SECTR2) are diverted from the per-attribute pass-through,
+        // so they must be recorded as dropped for corpus audits rather than
+        // vanishing silently.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(75, "3"),       // COLOUR → colour (Red)
+            Attr(136, "340.3"),  // SECTR1
+            Attr(137, "8.3")),   // SECTR2 (no LITCHR)
+            diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightSectored", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList());
+
+        Assert.True(diag.RuleDroppedAttributes.TryGetValue(75, out var colourDropped) && colourDropped >= 1);
+        Assert.True(diag.RuleDroppedAttributes.TryGetValue(136, out var s1Dropped) && s1Dropped >= 1);
+        Assert.True(diag.RuleDroppedAttributes.TryGetValue(137, out var s2Dropped) && s2Dropped >= 1);
+    }
+
+    [Fact]
     public void Translate_SectoredLight_WithoutColour_OmitsSectorCharacteristicsSubtree()
     {
         // lightSector requires at least one colour; with no COLOUR on the S-57
