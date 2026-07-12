@@ -513,6 +513,32 @@ tiles flow through the existing prediction telemetry
 reads time-to-fill at the new band from the cold-latency histogram and the
 prediction-hit counter.
 
+**A/B result (reference cell `101GB00510210.000`, UKHO S-101 trial set, Apple
+Silicon).** Scripted per-transition harness: fresh dataset load (hot cache
+empty, warm disk cache disabled to remove the cross-run confound), settle at the
+source band, dwell idle ~6 s so the pre-warm workers can drain, then zoom one
+band and measure time-to-idle (`await_render_idle` `waitedMs`, 150 ms quiet
+period) at the new band. `S100_VECTOR_TILE_XBAND=0` (OFF) vs `=1` (ON):
+
+| Zoom transition | OFF `waitedMs` | ON `waitedMs` | Δ |
+|---|---|---|---|
+| 15 → 16 | 729 | 345 | **−53 %** |
+| 15 → 16 (repeat) | 716 | 370 | **−48 %** |
+| 16 → 17 | 641 | 611 | −5 % |
+| 16 → 17 (repeat) | 638 | 601 | −6 % |
+| 17 → 18 | 766 | 749 | −2 % |
+| 17 → 18 (repeat) | 754 | 427 | **−43 %** |
+| **Total** | **4245** | **3102** | **−27 %** |
+
+The largest, most reliable win is the fully-warmed transition (15 → 16: ~52 %
+faster time-to-fill, reproducible). Heavier band + 1 footprints (17 → 18) need a
+longer idle dwell to fully warm under the 24-tile cap + lowest-priority drain —
+the first 17 → 18 trial had only started warming (−2 %), the repeat with more
+accrued idle time reached −43 %. **No transition regressed** in either arm
+(every Δ ≤ 0), confirming the idle gate keeps pre-warm off the on-screen fill
+path. Pre-warm cannot alter draw output — it only pre-rasterises tiles that a
+later zoom would draw identically — so visual parity is exact.
+
 ### D.6 Open follow-ups (Phase 4+)
 
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply.
