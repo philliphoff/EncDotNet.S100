@@ -5,8 +5,9 @@ primary command renders any supported dataset — or a composite of several,
 via repeated `--layer` or by pointing at an entire exchange set / directory —
 to a PNG, JPEG, or WebP image by
 running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
-it can also report a dataset's product specification (`info`) and validate a
-dataset against its specification's normative rule pack (`validate`). It is
+it can also report a dataset's product specification (`info`), validate a
+dataset against its specification's normative rule pack (`validate`), and
+convert an S-57 base cell to an S-101 dataset (`s57 convert`). It is
 intended as the basis for batch scripts (for example, generating previews of
 sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
@@ -244,6 +245,27 @@ after suppression (warnings and info are reported but do not fail); pass
 
 Lists the supported product specifications and whether each supports the
 headless render path.
+
+### `s100 s57 convert -o <output> <source>`
+
+Converts an S-57 base cell (`.000`) to an S-101 dataset, writing an ISO/IEC 8211
+encoded `.000` file (S-100 Part 10a). The source is translated to an
+`S101Document` in memory with the same `S57ToS101Translator` the render/validate
+paths use, then encoded with `S101DocumentWriter`.
+
+```
+s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--output <path>` | _required_ | Path of the S-101 dataset file to write. |
+| `--debug` | off | Show a full stack trace on error. |
+
+The written dataset can be inspected with `s100 info`, validated with
+`s100 validate`, and rendered with `s100 render`. Conversion semantics (feature
+and attribute mapping, allowed-value enforcement) are owned by
+`S57ToS101Translator`; this command only drives it and encodes the result.
 
 ## Supported specifications
 
