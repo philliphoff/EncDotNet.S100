@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Datasets.S101;
@@ -89,9 +88,9 @@ public sealed class S57ToS101Translator
     // On light features these do NOT pass through as simple attributes;
     // they become sub-attributes of the S-101 `rhythmOfLight` complex
     // attribute. LITCHR is the mandatory `lightCharacteristic` [1..1];
-    // SIGGRP/SIGPER are the optional `signalGroup`/`signalPeriod`. (The
-    // nested `signalSequence` sub-complex from SIGSEQ, and the sector
-    // geometry from SECTR1/SECTR2/LITVIS, are deferred.)
+    // SIGGRP/SIGPER are the optional `signalGroup`/`signalPeriod`. SIGSEQ is
+    // assembled as a nested `signalSequence` sub-complex; sector lights
+    // (SECTR1/SECTR2) redirect to LightSectored with `sectorCharacteristics`.
     private const ushort S57AttrLitchr = 107;   // LITCHR  — light characteristic
     private const ushort S57AttrSiggrp = 141;   // SIGGRP  — signal group
     private const ushort S57AttrSigper = 142;   // SIGPER  — signal period
@@ -104,15 +103,6 @@ public sealed class S57ToS101Translator
     private const string S101AttrLightCharacteristic = "lightCharacteristic";
     private const string S101AttrSignalGroup = "signalGroup";
     private const string S101AttrSignalPeriod = "signalPeriod";
-
-    // S-101 feature classes that bind `rhythmOfLight` directly (per the
-    // bundled S-101 FC). On any other feature class, LITCHR/SIGGRP/SIGPER
-    // are handled by the normal per-attribute path (e.g. `signalGroup` /
-    // `signalPeriod` are directly feature-bound simple attributes on
-    // FogSignal / RadarTransponderBeacon).
-    private static readonly FrozenSet<string> RhythmOfLightFeatureClasses =
-        new[] { "LightAllAround", "LightFogDetector", "LightAirObstruction" }
-            .ToFrozenSet(StringComparer.Ordinal);
 
     // S-57 SIGSEQ (Signal sequence, ATTL 143) maps to the S-101
     // `signalSequence` complex attribute. The S-57 value (S-57 Appendix B.1)
@@ -698,9 +688,9 @@ public sealed class S57ToS101Translator
             string? objnamText = null;
             string? nobjnmText = null;
             bool bindsFeatureName = _featureBindings.Binds(feature.S101Code, S101AttrFeatureName);
-            // rhythmOfLight sources — only assembled on light features that
-            // bind the complex (see RhythmOfLightFeatureClasses).
-            bool bindsRhythm = RhythmOfLightFeatureClasses.Contains(feature.S101Code);
+            // rhythmOfLight sources — only assembled on feature classes that
+            // bind the complex in the bundled S-101 Feature Catalogue.
+            bool bindsRhythm = _featureBindings.Binds(feature.S101Code, S101AttrRhythmOfLight);
             string? litchrValue = null;
             string? siggrpValue = null;
             string? sigperValue = null;
@@ -1236,9 +1226,10 @@ public sealed class S57ToS101Translator
         // Emits a `rhythmOfLight` complex-attribute instance (marker +
         // lightCharacteristic + optional signalGroup/signalPeriod), using the
         // same flat marker + contiguous-sub-attribute convention as the other
-        // complex attributes. Only the first level of the FC's structure is
-        // populated; the nested `signalSequence` sub-complex (from SIGSEQ) is
-        // not yet assembled.
+        // complex attributes. When SIGSEQ supplies a signalSequence, it is
+        // appended as nested sub-complex instances after signalGroup/signalPeriod
+        // because the FC declares signalSequence as rhythmOfLight's last
+        // sub-attribute.
         private void AppendRhythmOfLightInstance(
             List<S101Attribute> builder,
             string lightCharacteristic,
@@ -1550,7 +1541,7 @@ public sealed class S57ToS101Translator
         //       colour             (COLOUR list, enum, [1..*])
         //       valueOfNominalRange(VALNMR, real, [0..1])
         //       lightVisibility    (LITVIS list, enum, [0..*])
-        //       sectorLimit        ([0..1]; emitted when either bearing present)
+        //       sectorLimit        ([0..1]; emitted when both bearings present)
         //         sectorLimitOne   (sectorBearing = SECTR1)
         //         sectorLimitTwo   (sectorBearing = SECTR2)
         //     signalSequence…      (SIGSEQ phases, nested at this level)
@@ -1600,20 +1591,17 @@ public sealed class S57ToS101Translator
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLightVisibility), 1, visibility));
             }
 
-            // sectorLimit → sectorLimitOne / sectorLimitTwo → sectorBearing.
-            if (sectorBearingOne is not null || sectorBearingTwo is not null)
+            // sectorLimit → sectorLimitOne / sectorLimitTwo → sectorBearing. Both
+            // sectorLimitOne and sectorLimitTwo are mandatory [1..1] in the FC, so
+            // the sectorLimit subtree (itself [0..1]) is only emitted when both
+            // bearings are present; a lone bearing omits the whole subtree.
+            if (sectorBearingOne is not null && sectorBearingTwo is not null)
             {
                 builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimit), 1, string.Empty));
-                if (sectorBearingOne is not null)
-                {
-                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitOne), 1, string.Empty));
-                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingOne));
-                }
-                if (sectorBearingTwo is not null)
-                {
-                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitTwo), 1, string.Empty));
-                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingTwo));
-                }
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitOne), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingOne));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorLimitTwo), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSectorBearing), 1, sectorBearingTwo));
             }
 
             // Nested `signalSequence` sub-complexes at the sectorCharacteristics

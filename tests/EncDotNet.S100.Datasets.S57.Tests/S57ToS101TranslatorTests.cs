@@ -1016,6 +1016,35 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_SectoredLight_WithOnlyOneBearing_OmitsSectorLimitSubtree()
+    {
+        // sectorLimitOne and sectorLimitTwo are both mandatory under
+        // sectorLimit, so a lone SECTR1 bearing must not emit a partial subtree.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),      // LITCHR → lightCharacteristic (Flashing)
+            Attr(75, "3"),       // COLOUR → colour (Red)
+            Attr(136, "340.3"))); // SECTR1 only
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightSectored", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var sc = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList();
+        Assert.NotEmpty(sc);
+        Assert.Equal("2", GetSubAttribute(s101, sc, "lightCharacteristic"));
+        Assert.NotEmpty(ComplexInstance(s101, feat.Attributes, "lightSector", 1).ToList());
+
+        var attributeNames = feat.Attributes
+            .Select(a => s101.AttributeTypeCatalogue[a.NumericCode])
+            .ToList();
+        Assert.DoesNotContain("sectorLimit", attributeNames);
+        Assert.DoesNotContain("sectorLimitOne", attributeNames);
+        Assert.DoesNotContain("sectorLimitTwo", attributeNames);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorLimit", 1).ToList());
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorLimitOne", 1).ToList());
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "sectorLimitTwo", 1).ToList());
+    }
+
+    [Fact]
     public void Translate_SectoredLight_ColourAndVisibilityLists_SplitIntoMultipleSubAttributes()
     {
         // COLOUR and LITVIS are S-57 list-valued enumerations; each code
