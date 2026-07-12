@@ -272,6 +272,14 @@ internal sealed class ViewerSettings
     public bool? TilePredictionEnabled { get; set; }
 
     /// <summary>
+    /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
+    /// <see langword="null"/> → best default (on, except a no-op on the LowEnd
+    /// tier). Mirrors <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
+    /// <c>S100_VECTOR_TILE_XBAND</c>.
+    /// </summary>
+    public bool? TileCrossBandPrewarmEnabled { get; set; }
+
+    /// <summary>
     /// Whether the warm disk tile cache is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
     /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /

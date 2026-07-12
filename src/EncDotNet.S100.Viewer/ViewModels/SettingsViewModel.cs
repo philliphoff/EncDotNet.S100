@@ -675,6 +675,29 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <summary>Whether the prediction knob is user-editable (not env-pinned).</summary>
     public bool TilePredictionEditable => !RenderingOptimizations.TilePredictionEnvExplicit;
 
+    private bool _tileCrossBandPrewarmEnabled;
+    /// <summary>
+    /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428). Read
+    /// every frame, so the change takes effect live. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_XBAND</c>.
+    /// </summary>
+    public bool TileCrossBandPrewarmEnabled
+    {
+        get => _tileCrossBandPrewarmEnabled;
+        set
+        {
+            if (SetProperty(ref _tileCrossBandPrewarmEnabled, value))
+            {
+                RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
+                _settings.TileCrossBandPrewarmEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the cross-band pre-warm knob is user-editable (not env-pinned).</summary>
+    public bool TileCrossBandPrewarmEditable => !RenderingOptimizations.TileCrossBandPrewarmEnvExplicit;
+
     private bool _tileDiskCacheEnabled;
     /// <summary>
     /// Whether the warm disk tile cache is enabled. The shared cache is created
@@ -1019,6 +1042,13 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
 
         _tilePredictionEnabled = RenderingOptimizations.TilePredictionEnabled;
+
+        if (settings.TileCrossBandPrewarmEnabled is { } tileXBand)
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = tileXBand;
+        }
+
+        _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
 
         if (settings.TileDiskCacheEnabled is { } tileDisk)
         {

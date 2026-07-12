@@ -294,6 +294,13 @@
                     </Grid>
 
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          IsEnabled="{Binding TileCrossBandPrewarmEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileCrossBandPrewarmEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TileCrossBandPrewarmEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding TileCrossBandPrewarmEnabled}" />
+                    </Grid>
+
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
                           IsEnabled="{Binding TileGpuResidencyEditable}"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGpuResidencyEnabled}">
                         <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TileGpuResidencyEnabled}" />

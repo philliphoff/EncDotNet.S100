@@ -369,6 +369,118 @@ internal static class TileGrid
     }
 
     /// <summary>
+    /// The <b>idle cross-band pre-warm set</b> (design §3.6, issue&#160;#428): the
+    /// tiles of the immediately adjacent bands (<paramref name="band"/>&#160;±&#160;1)
+    /// that cover the <em>current</em> viewport, so a subsequent zoom-in or
+    /// zoom-out starts warm instead of paying full cold-tile latency at the new
+    /// band. Unlike <see cref="PredictedTiles"/> (which biases only the two
+    /// band&#160;±&#160;1 <i>centre</i> tiles), this warms the whole viewport
+    /// footprint of each adjacent band.
+    /// </summary>
+    /// <remarks>
+    /// The result is ordered <b>centre-first</b> (nearest tile-centre to the
+    /// viewport centre first, ties broken deterministically on
+    /// <c>(Band, Y, X)</c>) and truncated to <paramref name="maxTiles"/>, so a
+    /// bounded warm budget keeps the most-central — most-likely-next-zoom-target —
+    /// tiles. Out-of-range neighbour bands (<c>&lt; MinBand</c> or
+    /// <c>&gt; MaxBand</c>) are skipped. The band&#160;±&#160;1 tiles are selected
+    /// against the same world viewport at the same live <paramref name="resolution"/>;
+    /// only the tile size differs by band (band+1 yields ~4× the tiles, band-1
+    /// ~¼×), which is exactly why the centre-first cap matters for the finer band.
+    /// Callers run this only when otherwise idle and drain it at the lowest
+    /// worker priority, so it never competes with visible or same-band predicted
+    /// work.
+    /// </remarks>
+    /// <param name="centerX">Viewport centre X (EPSG:3857 metres).</param>
+    /// <param name="centerY">Viewport centre Y (EPSG:3857 metres).</param>
+    /// <param name="widthDip">Viewport width in DIP.</param>
+    /// <param name="heightDip">Viewport height in DIP.</param>
+    /// <param name="resolution">Live resolution in metres/DIP.</param>
+    /// <param name="band">The current (live-fit) band; neighbours are <paramref name="band"/>&#160;±&#160;1.</param>
+    /// <param name="maxTiles">The maximum number of tiles to return (bounds the warm budget). Values ≤ 0 yield an empty set.</param>
+    /// <returns>The centre-first, capped adjacent-band warm set (may be empty).</returns>
+    public static IReadOnlyList<TileKey> CrossBandPrewarmTiles(
+        double centerX, double centerY, double widthDip, double heightDip, double resolution, int band,
+        int maxTiles)
+    {
+        if (maxTiles <= 0)
+        {
+            return Array.Empty<TileKey>();
+        }
+
+        var candidates = new List<TileKey>();
+        for (var neighbour = band - 1; neighbour <= band + 1; neighbour += 2)
+        {
+            if (neighbour < MinBand || neighbour > MaxBand)
+            {
+                continue;
+            }
+
+            var range = VisibleTileRange(centerX, centerY, widthDip, heightDip, resolution, neighbour);
+            if (range.IsEmpty)
+            {
+                continue;
+            }
+
+            for (var y = range.YStart; y <= range.YEnd; y++)
+            {
+                for (var x = range.XStart; x <= range.XEnd; x++)
+                {
+                    candidates.Add(new TileKey(neighbour, x, y));
+                }
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return Array.Empty<TileKey>();
+        }
+
+        // Centre-first: order by squared distance of each tile's world centre to
+        // the viewport centre so the cap keeps the tiles most likely to sit under
+        // the next zoom. Ties break on (Band, Y, X) — the same deterministic
+        // order S100VectorTileRenderer.TakeNearest uses — so the truncation never
+        // depends on enumeration order.
+        candidates.Sort((a, b) =>
+        {
+            var byDist = CenterDistanceSquared(a, centerX, centerY)
+                .CompareTo(CenterDistanceSquared(b, centerX, centerY));
+            if (byDist != 0)
+            {
+                return byDist;
+            }
+
+            if (a.Band != b.Band)
+            {
+                return a.Band.CompareTo(b.Band);
+            }
+
+            if (a.Y != b.Y)
+            {
+                return a.Y.CompareTo(b.Y);
+            }
+
+            return a.X.CompareTo(b.X);
+        });
+
+        if (candidates.Count > maxTiles)
+        {
+            candidates.RemoveRange(maxTiles, candidates.Count - maxTiles);
+        }
+
+        return candidates;
+    }
+
+    /// <summary>The squared EPSG:3857 distance from a tile's world centre to a point.</summary>
+    private static double CenterDistanceSquared(TileKey key, double centerX, double centerY)
+    {
+        var (minX, minY, maxX, maxY) = TileWorldBounds(key);
+        var dx = (minX + maxX) * 0.5 - centerX;
+        var dy = (minY + maxY) * 0.5 - centerY;
+        return dx * dx + dy * dy;
+    }
+
+    /// <summary>
     /// Projects EPSG:3857 world bounds to the north-up viewport's DIP screen
     /// rectangle (top-left origin, +Y down). Used both to place a tile's core
     /// and to place its guttered image.

@@ -416,22 +416,28 @@ hysteresis comes from the velocity EMA, not from retaining stale predictions.
 
 ### D.2 Scheduling
 
-Pending work is split into two queues: `PendingVisible` (on-screen exact-band
-misses, high priority) and `PendingPredicted` (the warm set, low priority). The
-pool of coalescing workers drains visible-first, so prediction always yields to
-tiles the user is actually looking at and never delays an on-screen fill. Within
-each tier a worker dequeues **centre-first** (`TakeNearest`): the pending tile
-whose world centre is nearest the current viewport centre rasterises before the
-perimeter, cutting time-to-centre-fill on a cold pan/zoom. Equal-distance ties
-break deterministically on `(band, y, x)`, so the drain order never depends on
-the pending set's hash iteration order. The pool size is
-`RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
+Pending work is split into three queues drained in strict priority order:
+`PendingVisible` (on-screen exact-band misses, high priority), `PendingPredicted`
+(the same-band warm set, low priority), and `PendingCrossBand` (the idle
+cross-band ±1 pre-warm set, lowest priority — see D.5). The pool of coalescing
+workers drains visible-first, so prediction always yields to tiles the user is
+actually looking at and never delays an on-screen fill; same-band prediction in
+turn drains before cross-band pre-warm, so warming an adjacent band never delays
+either higher tier. Within each tier a worker dequeues **centre-first**
+(`TakeNearest`): the pending tile whose world centre is nearest the current
+viewport centre rasterises before the perimeter, cutting time-to-centre-fill on a
+cold pan/zoom. Equal-distance ties break deterministically on `(band, y, x)`, so
+the drain order never depends on the pending set's hash iteration order. The pool
+size is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
 `ActiveWorkers` count plus a process-wide `s_activeWorkerTotal` cap (core count)
 bound how many run at once.
 
-Speculatively-rasterised keys are tracked in `PredictedInCache`; when a later
-frame finds such a key in the visible set it counts a **prediction hit** and
-drops it from the set (bounded-pruned against the cache to stay small).
+Speculatively-rasterised keys (both same-band predicted and cross-band pre-warm)
+are tracked in `PredictedInCache`; when a later frame finds such a key in the
+visible set it counts a **prediction hit** and drops it from the set
+(bounded-pruned against the cache to stay small). Because `TileKey` carries the
+band, a cross-band pre-warm tile scores its hit when a zoom later makes that band
+visible.
 
 ### D.3 Telemetry
 
@@ -470,7 +476,44 @@ zero-cold, meeting the exit criterion. Pan frame time stays well within budget
 in both arms — the extra ~4 ms p90 with prediction on is the low-priority
 warm-set rasterisation, which never blocks an on-screen fill.
 
-### D.5 Open follow-ups (Phase 4+)
+### D.5 Idle cross-band pre-warm (issue #428)
+
+Same-band prediction (D.1) biases only the two band ± 1 **centre** tiles, so a
+zoom that crosses a band boundary still pays near-full cold latency at the new
+band. Cross-band pre-warm closes that gap: when a layer is otherwise idle the
+renderer warms the whole viewport footprint of both adjacent bands, so a
+subsequent zoom-in or zoom-out starts warm.
+
+- **Warm set** — `TileGrid.CrossBandPrewarmTiles` returns the band ± 1 tiles
+  covering the current viewport (selected against the same world viewport at the
+  same live resolution; only the tile size differs by band). Out-of-range
+  neighbour bands are skipped. The set is **centre-first** and truncated to
+  `CrossBandPrewarmMaxTiles` (24), so the most-central — most-likely-next-zoom —
+  tiles win under the cap (the band + 1 footprint alone is ~4× the visible tile
+  count).
+- **Idle gate** — populated only on a frame with **no cold visible misses**
+  (`PendingVisible` empty), so it never competes with an on-screen fill, and only
+  when the hot cache is below `CrossBandPrewarmHeadroomFraction` (0.75) of its
+  byte budget, so its speculative inserts cannot evict the current working set.
+  Visible target-band tiles are additionally pinned (`TileCache.Protect`) so they
+  are never evicted regardless; the headroom guard protects the same-band
+  predicted and fallback tiles.
+- **Priority** — drained at the lowest worker tier, strictly behind
+  `PendingVisible` and `PendingPredicted` (D.2). Even though it is enqueued in the
+  same frame as the same-band warm set, it only rasterises once that has drained.
+- **Redraw-safe** — its tiles are treated as predictions: they never trigger a
+  redraw (so a published adjacent-band tile cannot start a repaint loop) and are
+  cancelled (rebuilt) every frame. A later zoom that makes one visible scores an
+  ordinary prediction hit.
+
+Cross-band pre-warm is a first-class A/B knob (`S100_VECTOR_TILE_XBAND`,
+`CrossBandPrewarmEnabled`), default on except a no-op on the `LowEnd` tier. Its
+tiles flow through the existing prediction telemetry
+(`s100.render.tile.prediction.rasterized` / `.hits`), so a zoom-transition A/B
+reads time-to-fill at the new band from the cold-latency histogram and the
+prediction-hit counter.
+
+### D.6 Open follow-ups (Phase 4+)
 
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply.
 - A disk-backed tile cache + `styleStateHash` invalidation (palette/settings)
