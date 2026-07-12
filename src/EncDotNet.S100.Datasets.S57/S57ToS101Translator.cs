@@ -147,8 +147,8 @@ public sealed class S57ToS101Translator
     private const string S101AttrDateEnd = "dateEnd";
 
     // S-57 CATZOC (Category of zone of confidence in data, ATTL 72) maps to the
-    // S-101 `zoneOfConfidence` complex attribute's `categoryOfZoneOfConfidence-
-    // InData` sub-attribute (S-101 Conversion Guidance; verified against the
+    // S-101 `zoneOfConfidence` complex attribute's `categoryOfZoneOfConfidenceInData`
+    // sub-attribute (S-101 Conversion Guidance; verified against the
     // bundled FC). CATZOC is only bound to S-57 M_QUAL, which translates to the
     // S-101 QualityOfBathymetricData feature — the sole feature class binding
     // `zoneOfConfidence`. The complex's other sub-attributes (fixedDateRange,

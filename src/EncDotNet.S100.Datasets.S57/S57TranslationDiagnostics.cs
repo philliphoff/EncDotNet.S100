@@ -122,7 +122,7 @@ public sealed class S57TranslationDiagnostics
     public IReadOnlyDictionary<ushort, int> RuleDroppedAttributes => _ruleDroppedAttributes;
 
     /// <summary>
-    /// S-101 enumerate values dropped because the destination Feature Catalogue
+    /// S-101 enumerated values dropped because the destination Feature Catalogue
     /// does not list them as allowable, keyed by (S-101 attribute, value) →
     /// occurrence count. A high count here often signals a defective value
     /// remap (targeting a code the FC rejects) rather than a genuine
