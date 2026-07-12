@@ -1147,6 +1147,96 @@ public class S57ToS101TranslatorTests
         Assert.Equal("20220407", attr.Value);
     }
 
+    // ── VALLMA → valueOfLocalMagneticAnomaly, RADWAL → radarWaveLength ─────
+
+    [Fact]
+    public void Translate_LocalMagneticAnomalyWithVallma_AssemblesValueComplex()
+    {
+        // LOCMAG (OBJL 78) → LocalMagneticAnomaly, which binds
+        // valueOfLocalMagneticAnomaly. VALLMA (ATTL 175) feeds the mandatory
+        // magneticAnomalyValue sub-attribute (the value carried verbatim).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(78, Attr(175, "300")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LocalMagneticAnomaly", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var instance = ComplexInstance(s101, feat.Attributes, "valueOfLocalMagneticAnomaly", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("300", GetSubAttribute(s101, instance, "magneticAnomalyValue"));
+        // referenceDirection has no S-57 source and is not populated.
+        Assert.Null(GetSubAttribute(s101, instance, "referenceDirection"));
+        // VALLMA is not passed through as a top-level simple attribute.
+        Assert.DoesNotContain(feat.Attributes,
+            a => s101.AttributeTypeCatalogue[a.NumericCode] == "valueOfLocalMagneticAnomalyValue");
+    }
+
+    [Fact]
+    public void Translate_RadarTransponderBeaconWithRadwal_AssemblesSingleWaveLength()
+    {
+        // RTPBCN (OBJL 103) → RadarTransponderBeacon, which binds
+        // radarWaveLength. A single "value-band" pair yields one complex
+        // instance (waveLengthValue real + radarBand text).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(103, Attr(126, "0.03-X")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("RadarTransponderBeacon", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var instance = ComplexInstance(s101, feat.Attributes, "radarWaveLength", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("0.03", GetSubAttribute(s101, instance, "waveLengthValue"));
+        Assert.Equal("X", GetSubAttribute(s101, instance, "radarBand"));
+        // Only one instance for a single pair.
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 2).ToList());
+    }
+
+    [Fact]
+    public void Translate_RadarTransponderBeaconWithRadwalList_AssemblesTwoWaveLengths()
+    {
+        // A comma-separated RADWAL list yields one radarWaveLength instance per
+        // "value-band" pair (RadarTransponderBeacon binds radarWaveLength [0..2]).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(103, Attr(126, "0.03-X,0.10-S")));
+
+        var feat = Assert.Single(s101.Features);
+        var first = ComplexInstance(s101, feat.Attributes, "radarWaveLength", 1).ToList();
+        Assert.Equal("0.03", GetSubAttribute(s101, first, "waveLengthValue"));
+        Assert.Equal("X", GetSubAttribute(s101, first, "radarBand"));
+
+        var second = ComplexInstance(s101, feat.Attributes, "radarWaveLength", 2).ToList();
+        Assert.Equal("0.10", GetSubAttribute(s101, second, "waveLengthValue"));
+        Assert.Equal("S", GetSubAttribute(s101, second, "radarBand"));
+    }
+
+    [Fact]
+    public void Translate_RadwalMalformedPair_DropsInstance()
+    {
+        // A RADWAL element that lacks a band token (no '-') cannot fill both
+        // mandatory sub-attributes, so no radarWaveLength instance is emitted.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(103, Attr(126, "0.03")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_VallmaOnNonBindingFeature_LeavesVallmaUnmapped()
+    {
+        // ACHARE (OBJL 4) → AnchorageArea, which does not bind
+        // valueOfLocalMagneticAnomaly. VALLMA has no conformant home there and
+        // is left unmapped.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(4, Attr(175, "300")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("AnchorageArea", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "valueOfLocalMagneticAnomaly", 1).ToList());
+        Assert.Empty(feat.Attributes);
+    }
+
     // ── DATSTA/DATEND, PERSTA/PEREND, SURSTA/SUREND → date-range complexes ──
 
     private static EncDotNet.S57.S57Document PointFeatureWithS57Attributes(

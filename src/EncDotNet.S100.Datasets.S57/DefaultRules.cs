@@ -377,6 +377,10 @@ internal static class DefaultRules
         //   SORDAT → reportedDate (top-level simple attribute, feature
         //   binding-gated — SORDAT is near-universal in S-57 but reportedDate
         //   binds only ~50 feature types);
+        //   VALLMA → valueOfLocalMagneticAnomaly (magneticAnomalyValue) on
+        //   LocalMagneticAnomaly;
+        //   RADWAL → radarWaveLength (waveLengthValue + radarBand, one instance
+        //   per "value-band" pair) on RadarTransponderBeacon;
         //   LITCHR/SIGGRP/SIGPER/SIGSEQ → rhythmOfLight (non-sectored lights);
         //   LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/SIGGRP/SIGPER/SIGSEQ →
         //   sectorCharacteristics/lightSector/sectorLimit (sectored lights →

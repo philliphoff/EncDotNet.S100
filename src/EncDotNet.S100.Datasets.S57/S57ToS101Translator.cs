@@ -258,6 +258,31 @@ public sealed class S57ToS101Translator
     private const ushort S57AttrSordat = 147;  // SORDAT — source date
     private const string S101AttrReportedDate = "reportedDate";
 
+    // S-57 VALLMA (Value of local magnetic anomaly, ATTL 175) maps to the S-101
+    // `valueOfLocalMagneticAnomaly` complex attribute, which the bundled FC
+    // binds on LocalMagneticAnomaly [1..2]. The complex carries a mandatory
+    // `magneticAnomalyValue` [1..1] real sub-attribute (the VALLMA value, in
+    // nanoteslas, carried verbatim) plus an optional `referenceDirection`
+    // [0..1] enum that has no S-57 source and is left unpopulated. Flat
+    // one-level complex, so no consumer change is required (like CATZOC /
+    // horizontalClearance).
+    private const ushort S57AttrVallma = 175;  // VALLMA — value of local magnetic anomaly
+    private const string S101AttrValueOfLocalMagneticAnomaly = "valueOfLocalMagneticAnomaly";
+    private const string S101AttrMagneticAnomalyValue = "magneticAnomalyValue";
+
+    // S-57 RADWAL (Radar wave length, ATTL 126) maps to the S-101
+    // `radarWaveLength` complex attribute, which the bundled FC binds on
+    // RadarTransponderBeacon [0..2]. The complex has two mandatory [1..1]
+    // sub-attributes: `waveLengthValue` (real, metres) and `radarBand` (text,
+    // the band letter). The S-57 value is a list of "value-band" pairs (e.g.
+    // "0.03-X" or "0.03-X,0.10-S"); each pair yields one complex instance.
+    // Because both sub-attributes are mandatory, a pair that does not split
+    // cleanly into a numeric value and a band token is dropped (and reported).
+    private const ushort S57AttrRadwal = 126;  // RADWAL — radar wave length
+    private const string S101AttrRadarWaveLength = "radarWaveLength";
+    private const string S101AttrWaveLengthValue = "waveLengthValue";
+    private const string S101AttrRadarBand = "radarBand";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -709,6 +734,14 @@ public sealed class S57ToS101Translator
             // reportedDate source — SORDAT, emitted inline as a top-level simple
             // attribute on the (many) feature classes that bind `reportedDate`.
             bool bindsReportedDate = _featureBindings.Binds(feature.S101Code, S101AttrReportedDate);
+            // valueOfLocalMagneticAnomaly source — VALLMA, assembled into the
+            // complex on LocalMagneticAnomaly (the only feature that binds it).
+            bool bindsValueOfLocalMagneticAnomaly = _featureBindings.Binds(feature.S101Code, S101AttrValueOfLocalMagneticAnomaly);
+            string? vallmaValue = null;
+            // radarWaveLength source — RADWAL, assembled into the complex on
+            // RadarTransponderBeacon (the only feature that binds it).
+            bool bindsRadarWaveLength = _featureBindings.Binds(feature.S101Code, S101AttrRadarWaveLength);
+            string? radwalValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -750,6 +783,8 @@ public sealed class S57ToS101Translator
                     case S57AttrNatsur: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natsurList = a.Value; break;
                     case S57AttrNatqua: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natquaList = a.Value; break;
                     case S57AttrHorclr: if (bindsHorClearance && !string.IsNullOrEmpty(a.Value)) horclrValue = a.Value; break;
+                    case S57AttrVallma: if (bindsValueOfLocalMagneticAnomaly && !string.IsNullOrEmpty(a.Value)) vallmaValue = a.Value; break;
+                    case S57AttrRadwal: if (bindsRadarWaveLength && !string.IsNullOrEmpty(a.Value)) radwalValue = a.Value; break;
                 }
             }
 
@@ -819,6 +854,17 @@ public sealed class S57ToS101Translator
                 // binding neither, HORCLR falls through and is recorded
                 // unmapped, having no conformant S-101 home there.)
                 if (bindsHorClearance && a.AttributeCode is S57AttrHorclr)
+                    continue;
+
+                // On LocalMagneticAnomaly, VALLMA is assembled into the
+                // `valueOfLocalMagneticAnomaly` complex below rather than passed
+                // through (LocalMagneticAnomaly binds no top-level scalar for it).
+                if (bindsValueOfLocalMagneticAnomaly && a.AttributeCode is S57AttrVallma)
+                    continue;
+
+                // On RadarTransponderBeacon, RADWAL is assembled into the
+                // `radarWaveLength` complex below rather than passed through.
+                if (bindsRadarWaveLength && a.AttributeCode is S57AttrRadwal)
                     continue;
 
                 // On feature classes that bind `reportedDate`, SORDAT is emitted
@@ -1012,6 +1058,24 @@ public sealed class S57ToS101Translator
                 AppendHorizontalClearanceInstance(builder, complexName, horclrValue);
             }
 
+            // Append the `valueOfLocalMagneticAnomaly` complex-attribute
+            // instance. Its mandatory sub-attribute `magneticAnomalyValue` is a
+            // real that carries the VALLMA value verbatim; `referenceDirection`
+            // has no S-57 source and is left unpopulated.
+            if (bindsValueOfLocalMagneticAnomaly && vallmaValue is not null)
+            {
+                AppendValueOfLocalMagneticAnomalyInstance(builder, vallmaValue);
+            }
+
+            // Append one `radarWaveLength` complex-attribute instance per S-57
+            // "value-band" pair in the (list-typed) RADWAL value. Both
+            // sub-attributes are mandatory, so a pair that does not split into a
+            // numeric wavelength and a band token is dropped and reported.
+            if (bindsRadarWaveLength && radwalValue is not null)
+            {
+                AppendRadarWaveLengthInstances(builder, radwalValue);
+            }
+
             // Append `surfaceCharacteristics` complex-attribute instances. The
             // S-57 NATSUR and NATQUA lists are paired positionally: position i
             // yields one instance carrying `natureOfSurface` = NATSUR[i] (when
@@ -1194,6 +1258,58 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(complexCode, 1, string.Empty));
             var valueCode = GetOrAssignAttributeCode(S101AttrHorizontalClearanceValue);
             builder.Add(new S101Attribute(valueCode, 1, horizontalClearanceValue));
+        }
+
+        // Emits a `valueOfLocalMagneticAnomaly` complex-attribute instance
+        // (marker + its mandatory `magneticAnomalyValue` real sub-attribute),
+        // using the same marker / contiguous-sub-attribute convention as the
+        // other complex attributes. The optional `referenceDirection` enum has
+        // no S-57 source and is omitted.
+        private void AppendValueOfLocalMagneticAnomalyInstance(
+            List<S101Attribute> builder,
+            string magneticAnomalyValue)
+        {
+            var complexCode = GetOrAssignAttributeCode(S101AttrValueOfLocalMagneticAnomaly);
+            // Marker entry — Index=1, value=empty — followed by the sub-attribute.
+            builder.Add(new S101Attribute(complexCode, 1, string.Empty));
+            var valueCode = GetOrAssignAttributeCode(S101AttrMagneticAnomalyValue);
+            builder.Add(new S101Attribute(valueCode, 1, magneticAnomalyValue));
+        }
+
+        // Emits zero or more `radarWaveLength` complex-attribute instances from
+        // the S-57 RADWAL value, which is a comma-separated list of
+        // "wavelength-band" pairs (e.g. "0.03-X" or "0.03-X,0.10-S"). Each pair
+        // yields one instance carrying the mandatory `waveLengthValue` (real,
+        // the numeric part) and `radarBand` (text, the band token). Because
+        // both sub-attributes are mandatory, a pair that lacks either part is
+        // dropped and reported.
+        private void AppendRadarWaveLengthInstances(
+            List<S101Attribute> builder,
+            string radwalValue)
+        {
+            foreach (var pair in radwalValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var sep = pair.IndexOf('-');
+                if (sep <= 0 || sep >= pair.Length - 1)
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrRadwal);
+                    continue;
+                }
+
+                var value = pair[..sep].Trim();
+                var band = pair[(sep + 1)..].Trim();
+                if (value.Length == 0 || band.Length == 0)
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrRadwal);
+                    continue;
+                }
+
+                var complexCode = GetOrAssignAttributeCode(S101AttrRadarWaveLength);
+                // Marker entry — Index=1, value=empty — followed by the sub-attributes.
+                builder.Add(new S101Attribute(complexCode, 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrWaveLengthValue), 1, value));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrRadarBand), 1, band));
+            }
         }
 
         // Emits zero or more `surfaceCharacteristics` complex-attribute
