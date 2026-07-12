@@ -689,13 +689,15 @@ public sealed class S57ToS101Translator
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
             // can emit them as one or more S-101 `information` complex-attribute
             // instances (Conversion Guidance §2.3), and OBJNAM / NOBJNM so we
-            // can emit them as `featureName` complex-attribute instances.
+            // can emit them as `featureName` complex-attribute instances when
+            // the resolved feature class binds that complex in the S-101 FC.
             string? informText = null;
             string? ninfomText = null;
             string? txtdscFile = null;
             string? ntxtdsFile = null;
             string? objnamText = null;
             string? nobjnmText = null;
+            bool bindsFeatureName = _featureBindings.Binds(feature.S101Code, S101AttrFeatureName);
             // rhythmOfLight sources — only assembled on light features that
             // bind the complex (see RhythmOfLightFeatureClasses).
             bool bindsRhythm = RhythmOfLightFeatureClasses.Contains(feature.S101Code);
@@ -824,10 +826,15 @@ public sealed class S57ToS101Translator
             var builder = new List<S101Attribute>();
             foreach (var a in attrs)
             {
-                // Textual-info and object-name attributes are handled as complex
-                // attribute groups below — skip the per-attribute pass-through.
-                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds
-                    or S57AttrObjnam or S57AttrNobjnm)
+                // Textual-info attributes are handled as complex attribute
+                // groups below — skip the per-attribute pass-through.
+                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
+                    continue;
+
+                // On feature classes that bind `featureName`, OBJNAM/NOBJNM
+                // are assembled into that complex below; otherwise they have no
+                // conformant home and fall through to be recorded as unmapped.
+                if (bindsFeatureName && a.AttributeCode is (S57AttrObjnam or S57AttrNobjnm))
                     continue;
 
                 // On rhythmOfLight-binding feature classes, LITCHR/SIGGRP/SIGPER
@@ -998,14 +1005,18 @@ public sealed class S57ToS101Translator
             if (ninfomText is not null || ntxtdsFile is not null)
                 AppendInformationInstance(builder, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
 
-            // Append `featureName` complex-attribute instances. OBJNAM carries
-            // the English name; NOBJNM the national-language name (emitted with
-            // an empty language string, as S-57 carries no language tag —
-            // mirrors the INFORM/NINFOM handling above).
-            if (objnamText is not null)
-                AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng);
-            if (nobjnmText is not null)
-                AppendFeatureNameInstance(builder, name: nobjnmText, language: string.Empty);
+            // Append `featureName` complex-attribute instances only on feature
+            // classes that bind the complex. OBJNAM carries the English name;
+            // NOBJNM the national-language name (emitted with an empty language
+            // string, as S-57 carries no language tag — mirrors the
+            // INFORM/NINFOM handling above).
+            if (bindsFeatureName)
+            {
+                if (objnamText is not null)
+                    AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng);
+                if (nobjnmText is not null)
+                    AppendFeatureNameInstance(builder, name: nobjnmText, language: string.Empty);
+            }
 
             // Append the `rhythmOfLight` complex-attribute instance. The FC
             // makes `lightCharacteristic` [1..1] mandatory, so an instance is

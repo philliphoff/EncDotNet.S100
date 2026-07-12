@@ -704,6 +704,55 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_ObjnamAttribute_OnFeatureBindingFeatureName_BecomesFeatureNameComplex()
+    {
+        var doc = PointFeatureWithS57Attributes(71, Attr(116, "Bainbridge Island"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+
+        Assert.NotEmpty(instance);
+        Assert.Equal("LandArea", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Equal("Bainbridge Island", GetSubAttribute(s101, instance, "name"));
+        Assert.Equal("eng", GetSubAttribute(s101, instance, "language"));
+    }
+
+    [Fact]
+    public void Translate_ObjnamAttribute_OnFeatureNotBindingFeatureName_IsRecordedUnmapped()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(116, "Survey Area")), diag);
+
+        var feat = Assert.Single(s101.Features);
+
+        Assert.Equal("QualityOfBathymetricData", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList());
+        Assert.True(
+            diag.UnmappedAttributes.TryGetValue(new S57AttributeDrop(308, 116), out var count),
+            "Expected OBJNAM (ATTL 116) on M_QUAL (OBJL 308) to be recorded as unmapped.");
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public void Translate_NobjnmAttribute_OnFeatureNotBindingFeatureName_IsRecordedUnmapped()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(301, "Área de levantamiento")), diag);
+
+        var feat = Assert.Single(s101.Features);
+
+        Assert.Equal("QualityOfBathymetricData", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList());
+        Assert.True(
+            diag.UnmappedAttributes.TryGetValue(new S57AttributeDrop(308, 301), out var count),
+            "Expected NOBJNM (ATTL 301) on M_QUAL (OBJL 308) to be recorded as unmapped.");
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
     public void Translate_NobjnmAttribute_BecomesFeatureNameComplex_WithBlankLanguage()
     {
         var doc = LandRegionWithS57Attributes(Attr(301, "Bahía de Todos"));
