@@ -153,6 +153,48 @@ public class S57S101MappingTests
     }
 
     [Fact]
+    public void Build_RedirectWithoutPresenceOrValues_Throws()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "CTRPNT",
+            DefaultS101Code = "ControlPoint",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATCTR",
+                // Neither a presence test nor any values: can never match.
+                ConditionPresent = false,
+                TargetS101Code = "Landmark",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("never match", ex.Message);
+    }
+
+    [Fact]
+    public void Build_PresenceRedirectWithoutValues_Succeeds()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "LIGHTS",
+            DefaultS101Code = "LightAllAround",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "SECTR1",
+                ConditionPresent = true,
+                TargetS101Code = "LightSectored",
+            }],
+        };
+
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        Assert.NotNull(m);
+    }
+
+    [Fact]
     public void ResolveAttribute_ValueRemap_DropsAttribute()
     {
         var attrRule = new S57AttributeRule
@@ -331,5 +373,125 @@ public class S57S101MappingTests
     {
         var m = S57S101Mapping.Default;
         Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
+
+    // ── Corpus-audit gap coverage: S-57 → S-101 feature aliases ─────────
+
+    [Theory]
+    [InlineData(1, "AdministrationArea")]    // ADMARE
+    [InlineData(12, "Building")]             // BUISGL
+    [InlineData(21, "CableOverhead")]        // CBLOHD
+    [InlineData(22, "CableSubmarine")]       // CBLSUB
+    [InlineData(27, "CautionArea")]          // CTNARE (ambiguous alias → CautionArea)
+    [InlineData(39, "Daymark")]              // DAYMAR
+    [InlineData(58, "FogSignal")]            // FOGSIG
+    [InlineData(81, "MagneticVariation")]    // MAGVAR
+    [InlineData(87, "OffshorePlatform")]     // OFSPLF
+    [InlineData(94, "PipelineSubmarineOnLand")] // PIPSOL
+    [InlineData(109, "RecommendedTrack")]    // RECTRC
+    [InlineData(119, "SeaAreaNamedWaterArea")] // SEAARE
+    [InlineData(121, "SeabedArea")]          // SBDARE
+    [InlineData(125, "SiloTank")]            // SILTNK
+    [InlineData(148, "TrafficSeparationSchemeLanePart")] // TSSLPT
+    [InlineData(154, "UnsurveyedArea")]      // UNSARE
+    [InlineData(155, "Vegetation")]          // VEGATN
+    [InlineData(158, "WeedKelp")]            // WEDKLP
+    public void GapFeatureClasses_MapToExpectedS101Code(ushort objl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
+
+    [Theory]
+    [InlineData(301, "QualityOfNonBathymetricData")] // M_ACCY
+    [InlineData(302, "DataCoverage")]                // M_COVR
+    [InlineData(305, "InformationArea")]             // M_NPUB
+    [InlineData(306, "NavigationalSystemOfMarks")]   // M_NSYS
+    [InlineData(308, "QualityOfBathymetricData")]    // M_QUAL
+    [InlineData(309, "SoundingDatum")]               // M_SDAT
+    [InlineData(310, "QualityOfSurvey")]             // M_SREL
+    [InlineData(312, "VerticalDatumOfData")]         // M_VDAT
+    public void GapMetaObjects_MapToExpectedS101Feature(ushort objl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
+
+    // ── Corpus-audit gap coverage: S-57 → S-101 attribute aliases ───────
+
+    [Theory]
+    [InlineData(2, "beaconShape")]               // BCNSHP
+    [InlineData(4, "buoyShape")]                 // BOYSHP
+    [InlineData(8, "categoryOfAnchorage")]       // CATACH
+    [InlineData(10, "categoryOfBuiltUpArea")]    // CATBUA
+    [InlineData(35, "categoryOfLandmark")]       // CATLMK
+    [InlineData(45, "categoryOfPile")]           // CATPLE
+    [InlineData(56, "categoryOfRestrictedArea")] // CATREA
+    [InlineData(66, "categoryOfSpecialPurposeMark")] // CATSPM
+    [InlineData(92, "exhibitionConditionOfLight")]   // EXCLIT
+    [InlineData(94, "function")]                 // FUNCTN
+    [InlineData(109, "marksNavigationalSystemOf")]   // MARSYS
+    [InlineData(117, "orientationValue")]        // ORIENT
+    [InlineData(131, "restriction")]             // RESTRN
+    [InlineData(141, "signalGroup")]             // SIGGRP
+    [InlineData(142, "signalPeriod")]            // SIGPER
+    [InlineData(156, "techniqueOfVerticalMeasurement")] // TECSOU
+    [InlineData(172, "trafficFlow")]             // TRAFIC
+    [InlineData(178, "valueOfNominalRange")]     // VALNMR
+    [InlineData(185, "verticalDatum")]           // VERDAT
+    public void GapAttributes_MapToExpectedS101Code(ushort attl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveAttributeCode(attl));
+    }
+
+    [Theory]
+    [InlineData(11, "categoryOfCable")]          // CATCBL
+    [InlineData(27, "categoryOfFogSignal")]      // CATFOG
+    [InlineData(47, "categoryOfPipelinePipe")]   // CATPIP
+    [InlineData(59, "categoryOfSeaArea")]        // CATSEA
+    [InlineData(63, "categoryOfSiloTank")]       // CATSIL
+    [InlineData(68, "categoryOfVegetation")]     // CATVEG
+    [InlineData(70, "categoryOfWeedKelp")]       // CATWED
+    [InlineData(111, "nationality")]             // NATION
+    [InlineData(176, "valueOfMagneticVariation")] // VALMAG
+    [InlineData(188, "categoryOfTidalStream")]   // CAT_TS
+    public void GapAttributesSecondWave_MapToExpectedS101Code(ushort attl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveAttributeCode(attl));
+    }
+
+    // Attributes that are sub-attributes of an S-101 *complex* attribute must
+    // stay unmapped here — a flat emission would be non-conformant. They need
+    // dedicated complex-attribute assembly (like OBJNAM → featureName).
+    // (SECTR1/SECTR2 are the exception: they carry a rule so the LightSectored
+    // feature redirect can see them, but the translator still diverts them into
+    // the sectorCharacteristics complex — see SectorLimitRedirectAttributes.)
+    [Theory]
+    [InlineData(116)] // OBJNAM → name (sub of featureName)
+    [InlineData(107)] // LITCHR → lightCharacteristic
+    [InlineData(98)]  // HORCLR → horizontalClearanceValue
+    [InlineData(85)]  // DATEND → dateEnd
+    [InlineData(86)]  // DATSTA → dateStart
+    [InlineData(114)] // NATQUA → natureOfSurfaceQualifyingTerms
+    [InlineData(147)] // SORDAT → complex sourceIndication/reportedDate
+    [InlineData(148)] // SORIND → complex sourceIndication
+    public void ComplexSubAttributes_RemainUnmapped(ushort attl)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Null(m.ResolveAttributeCode(attl));
+    }
+
+    // SECTR1/SECTR2 carry a rule (mapping to sectorBearing) solely so the
+    // sectored-light feature redirect can detect them in the acronym view; the
+    // translator diverts them into the sectorCharacteristics complex.
+    [Theory]
+    [InlineData(136)] // SECTR1
+    [InlineData(137)] // SECTR2
+    public void SectorLimitRedirectAttributes_MapToSectorBearing(ushort attl)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal("sectorBearing", m.ResolveAttributeCode(attl));
     }
 }

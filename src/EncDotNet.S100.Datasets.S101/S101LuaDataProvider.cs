@@ -30,6 +30,9 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private Dictionary<string, InformationType>? _infoTypeByCode;
     private Dictionary<string, SimpleAttribute>? _simpleAttrByCode;
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
+    private HashSet<ushort>? _complexAttrNumericCodes;
+    private Dictionary<ushort, HashSet<ushort>>? _nestedChildComplexCodes;
+    private static readonly HashSet<ushort> s_emptyComplexCodes = new();
 
     // Collected drawing instruction output
     private readonly List<EmittedInstruction> _emitted = new();
@@ -601,6 +604,106 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     }
 
     /// <summary>
+    /// Returns the set of this document's numeric attribute codes that name a
+    /// complex attribute in the feature catalogue. Used by
+    /// <see cref="ResolveAttributeScope"/> to delimit one complex-attribute
+    /// instance from the next sibling instance in the flat attribute list.
+    /// </summary>
+    private HashSet<ushort> GetComplexAttributeNumericCodes()
+    {
+        if (_complexAttrNumericCodes is not null)
+            return _complexAttrNumericCodes;
+
+        EnsureComplexAttrLookup();
+        var set = new HashSet<ushort>();
+        foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+        {
+            if (_complexAttrByCode!.ContainsKey(name))
+                set.Add(code);
+        }
+
+        _complexAttrNumericCodes = set;
+        return set;
+    }
+
+    /// <summary>
+    /// Returns the numeric codes of the complex attributes that the feature
+    /// catalogue declares as (transitive) complex descendants of the complex
+    /// attribute named by <paramref name="parentCode"/> — i.e. every complex
+    /// nested at any depth beneath it. Used by <see cref="ResolveAttributeScope"/>
+    /// so that a nested complex instance is collected within its ancestor's
+    /// scope (and can be navigated into with a multi-segment path such as
+    /// <c>rhythmOfLight:1;signalSequence:1</c> or the three-level
+    /// <c>sectorCharacteristics:1;lightSector:1;sectorLimit:1</c>) instead of
+    /// terminating the ancestor's sub-attribute run the way a sibling complex
+    /// marker does. Transitive closure (rather than direct children only) is
+    /// required because a descendant marker such as <c>sectorLimit</c> is a
+    /// grandchild of <c>sectorCharacteristics</c> via <c>lightSector</c> and
+    /// would otherwise wrongly terminate the ancestor scope.
+    /// </summary>
+    private HashSet<ushort> GetNestedDescendantComplexCodes(ushort parentCode)
+    {
+        if (_nestedChildComplexCodes is null)
+        {
+            EnsureComplexAttrLookup();
+            var complexCodes = GetComplexAttributeNumericCodes();
+
+            // Reverse map: attribute name → numeric code (first occurrence).
+            var codeByName = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+                codeByName.TryAdd(name, code);
+
+            // Direct-children map (complex → its immediate complex sub-attributes).
+            var direct = new Dictionary<ushort, HashSet<ushort>>();
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+            {
+                if (!_complexAttrByCode!.TryGetValue(name, out var ca))
+                    continue;
+
+                var children = new HashSet<ushort>();
+                foreach (var ab in ca.SubAttributeBindings)
+                {
+                    if (codeByName.TryGetValue(ab.AttributeRef, out var childCode)
+                        && complexCodes.Contains(childCode))
+                        children.Add(childCode);
+                }
+
+                if (children.Count > 0)
+                    direct[code] = children;
+            }
+
+            // Transitive closure with a cycle guard (the FC nesting is a DAG,
+            // but guard defensively against self-references / cycles).
+            var map = new Dictionary<ushort, HashSet<ushort>>();
+            foreach (var parent in direct.Keys)
+            {
+                var closure = new HashSet<ushort>();
+                var stack = new Stack<ushort>(direct[parent]);
+                while (stack.Count > 0)
+                {
+                    var cur = stack.Pop();
+                    if (!closure.Add(cur))
+                        continue;
+                    if (direct.TryGetValue(cur, out var grand))
+                    {
+                        foreach (var g in grand)
+                            stack.Push(g);
+                    }
+                }
+
+                if (closure.Count > 0)
+                    map[parent] = closure;
+            }
+
+            _nestedChildComplexCodes = map;
+        }
+
+        return _nestedChildComplexCodes.TryGetValue(parentCode, out var set)
+            ? set
+            : s_emptyComplexCodes;
+    }
+
+    /// <summary>
     /// Navigate into the flat attribute list to find sub-attributes under the
     /// complex attribute path. Path format: "complexCode:index;complexCode:index;..."
     /// Returns the sub-attributes within the specified complex attribute scope.
@@ -616,8 +719,18 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         foreach (var segment in segments)
         {
             var colonIdx = segment.IndexOf(':');
+
+            // Guard against malformed path segments: a rule script could pass a
+            // scope string that lacks a colon, has an empty complex code, or a
+            // non-numeric instance index. Rather than throwing (which would
+            // crash the portrayal pipeline), treat any malformed segment as an
+            // unresolvable scope and return no sub-attributes.
+            if (colonIdx <= 0 || colonIdx >= segment.Length - 1)
+                return [];
+
             var complexCode = segment[..colonIdx];
-            var instanceIndex = int.Parse(segment[(colonIdx + 1)..]);
+            if (!int.TryParse(segment[(colonIdx + 1)..], out var instanceIndex))
+                return [];
 
             // Resolve complex attribute numeric code
             ushort? numericCode = null;
@@ -631,6 +744,9 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
             }
 
             if (numericCode is null) return [];
+
+            var complexCodes = GetComplexAttributeNumericCodes();
+            var nestedDescendants = GetNestedDescendantComplexCodes(numericCode.Value);
 
             // Find the nth instance of this complex attribute and collect sub-attributes
             int found = 0;
@@ -653,10 +769,28 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                 }
                 else if (collecting)
                 {
-                    // Check if this is another top-level/sibling complex attribute (not a sub-attribute)
-                    // Sub-attributes have Index values that may vary, but we track them by
-                    // whether we've hit another complex attr marker. For simplicity, collect
-                    // until we see a code that matches ANY complex attribute at this level.
+                    // A subsequent complex-attribute marker (Index == 1 whose code
+                    // names a complex attribute in the FC) normally begins a
+                    // sibling complex instance and therefore terminates the
+                    // current instance's sub-attribute run. Without this, the
+                    // sub-attributes of a following complex would be wrongly
+                    // absorbed into this scope, since distinct complexes share
+                    // sub-attribute codes such as `language` (information /
+                    // featureName), `dateStart`, and `dateEnd` (fixedDateRange /
+                    // periodicDateRange / surveyDateRange).
+                    //
+                    // A marker whose code the FC declares to be a *nested*
+                    // descendant complex (at any depth) of the current parent
+                    // (e.g. `signalSequence` within `rhythmOfLight`, or
+                    // `lightSector`/`sectorLimit` beneath `sectorCharacteristics`)
+                    // is instead collected into this scope so it — and its
+                    // sub-attributes — can be navigated into with further path
+                    // segments (`rhythmOfLight:1;signalSequence:1` or
+                    // `sectorCharacteristics:1;lightSector:1;sectorLimit:1`).
+                    if (attr.Index == 1
+                        && complexCodes.Contains(attr.NumericCode)
+                        && !nestedDescendants.Contains(attr.NumericCode))
+                        break;
                     subAttrs.Add(attr);
                 }
             }
