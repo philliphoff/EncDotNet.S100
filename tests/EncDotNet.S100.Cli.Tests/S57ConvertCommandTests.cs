@@ -56,4 +56,20 @@ public sealed class S57ConvertCommandTests : IDisposable
 
         Assert.NotEqual(0, exit);
     }
+
+    [SkippableFact]
+    public void Convert_missing_output_directory_returns_validation_error()
+    {
+        var source = FixturePath("US5MA1BO.000");
+        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+
+        var missingDir = Path.Combine(_outputDir, "missing");
+        var output = Path.Combine(missingDir, "converted.000");
+
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, source]);
+
+        Assert.NotEqual(0, exit);
+        Assert.False(Directory.Exists(missingDir));
+        Assert.False(File.Exists(output));
+    }
 }

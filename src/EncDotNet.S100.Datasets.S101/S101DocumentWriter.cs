@@ -111,7 +111,7 @@ public static class S101DocumentWriter
     {
         var builder = new Iso8211DocumentBuilder();
 
-        // The DDR carries only the field definitions actually used below.
+        // The DDR carries the full canonical field definition set, including definitions not emitted in this document.
         builder.AddRecord(Iso8211DataDescriptiveRecordWriter.BuildDdr(FieldDefs.Values, options: Options));
 
         builder.AddRecord(BuildDatasetRecord(doc));

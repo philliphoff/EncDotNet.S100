@@ -26,10 +26,6 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             var translator = new S57ToS101Translator();
             var document = translator.Translate(dataset);
 
-            var outputDirectory = Path.GetDirectoryName(Path.GetFullPath(settings.OutputPath));
-            if (!string.IsNullOrEmpty(outputDirectory))
-                Directory.CreateDirectory(outputDirectory);
-
             S101DocumentWriter.WriteToFile(settings.OutputPath, document);
 
             AnsiConsole.MarkupLineInterpolated(

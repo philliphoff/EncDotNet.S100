@@ -32,6 +32,10 @@ internal sealed class S57ConvertCommandSettings : CommandSettings
         if (string.IsNullOrWhiteSpace(OutputPath))
             return Spectre.Console.ValidationResult.Error("An output path is required (-o|--output).");
 
+        var dir = Path.GetDirectoryName(Path.GetFullPath(OutputPath));
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            return Spectre.Console.ValidationResult.Error($"Output directory does not exist: {dir}");
+
         return Spectre.Console.ValidationResult.Success();
     }
 }
