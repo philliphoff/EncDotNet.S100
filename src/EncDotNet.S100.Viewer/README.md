@@ -696,7 +696,13 @@ panel and route overlay: `create_route`, `list_routes` (read-only),
 `get_route` (read-only), `delete_route`, `append_waypoint`,
 `insert_waypoint`, `move_waypoint`, `delete_waypoint`,
 `set_leg_attributes`, and `set_route_info` (all mutating; fields mirror
-the in-repo S-421 model). See
+the in-repo S-421 model). Beyond the map, the **activity-panel tools**
+let an agent drive and verify the viewer's non-render UX:
+`list_panels` (read-only — snapshots the left / right / bottom dock
+tabs and their `available` / `selected` / `dockOpen` / `showing`
+state) and `set_panel` (mutating — shows or hides a panel by id, e.g.
+`Datasets`, `LayerStack`, `PickReport`, `Timeline`, so a code / run /
+verify loop can assert panel behaviour without the GUI). See
 `docs/mcp-server.md` for the full catalogue and the read-only /
 mutating split.
 

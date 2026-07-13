@@ -146,6 +146,11 @@ public partial class MainWindow : ShadUI.Window
             new ViewerRenderStateController(
                 App.Services.GetRequiredService<ViewModels.SettingsViewModel>(),
                 App.Services.GetRequiredService<EcdisDisplayState>());
+        // UI controller bridges MCP / scripted callers to the viewer's
+        // activity-panel state (which docks are open and which tab each
+        // shows) without exposing MainViewModel directly.
+        App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
+            new ViewerUiController(_viewModel);
         _loader.Initialize(mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.

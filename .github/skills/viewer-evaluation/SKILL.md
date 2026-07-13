@@ -152,6 +152,8 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `render_to_image` | Capture the framebuffer (PNG `ImageContentBlock`) for visual eval / diffing. |
 | `get_render_stats` | Last on-screen paint: `frameDurationMs`, draw calls, per-style breakdown. |
 | `close_dataset {id}` / `close_all_datasets` | Unload (retention loops without restarting). |
+| `list_panels` | Read-only — enumerate activity panels (left/right/bottom dock tabs) + `available`/`selected`/`dockOpen`/`showing` state. |
+| `set_panel {panel, visible?}` | Show/hide a panel by id (`Datasets`, `LayerStack`, `PickReport`, `Timeline`, …) to drive & verify non-render UX. |
 
 **Canonical visual-eval loop:**
 `open_dataset` → `set_viewport` → `await_render_idle` →
