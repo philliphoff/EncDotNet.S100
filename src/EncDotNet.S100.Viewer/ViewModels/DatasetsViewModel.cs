@@ -54,6 +54,39 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when this entry has in-set S-101 updates to apply.</summary>
     public bool HasUpdates => UpdateRelativePaths.Count > 0;
 
+    /// <summary>
+    /// The coarsest scale denominator (largest value) at which this cell is
+    /// intended to display, from the exchange-set catalogue's
+    /// <c>dataCoverage/minimumDisplayScale</c> (S-100 Part 17;
+    /// S-101 FC §3.1.1 <c>DataCoverage</c>). <see langword="null"/> for plain
+    /// file loads and exchange sets that omit the metadata (e.g. S-57).
+    /// </summary>
+    /// <remarks>
+    /// Drives the hole-safe per-cell zoom-out visibility window (issue #438
+    /// Phase 1): a cell stops drawing once the viewport is zoomed out beyond
+    /// this denominator, so finer nested cells (smaller
+    /// <see cref="MinimumDisplayScale"/>) drop out first and the coarser cell
+    /// underneath remains — removing the redundant overlapping stack without
+    /// leaving gaps.
+    /// </remarks>
+    public int? MinimumDisplayScale { get; }
+
+    /// <summary>
+    /// The finest scale denominator (smallest value) at which this cell is
+    /// intended to display, from the exchange-set catalogue's
+    /// <c>dataCoverage/maximumDisplayScale</c> (S-100 Part 17;
+    /// S-101 FC §3.1.1 <c>DataCoverage</c>). <see langword="null"/> when the
+    /// metadata is absent.
+    /// </summary>
+    /// <remarks>
+    /// Carried for completeness / future use. The zoom-in (under-scale) cutoff
+    /// it would drive is <em>not</em> applied in Phase 1 because hiding a
+    /// coarser cell where a finer cell covers only part of its footprint would
+    /// leave holes; that suppression is deferred to the coverage-clipping work
+    /// (issue #438 Phase 2).
+    /// </remarks>
+    public int? MaximumDisplayScale { get; }
+
     private bool _isLoaded;
     public bool IsLoaded
     {
@@ -391,13 +424,17 @@ internal sealed class DatasetEntry : ViewModelBase
         IAssetSource? source,
         string? relativePath,
         string? displayName,
-        IReadOnlyList<string>? updateRelativePaths = null)
+        IReadOnlyList<string>? updateRelativePaths = null,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
         Source = source;
         RelativePath = relativePath;
         UpdateRelativePaths = updateRelativePaths ?? Array.Empty<string>();
+        MinimumDisplayScale = minimumDisplayScale;
+        MaximumDisplayScale = maximumDisplayScale;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
@@ -824,7 +861,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
         string relativePath,
         string productSpec,
         string? displayName = null,
-        IReadOnlyList<string>? updateRelativePaths = null)
+        IReadOnlyList<string>? updateRelativePaths = null,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -840,7 +879,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
             source: source,
             relativePath: relativePath,
             displayName: displayName,
-            updateRelativePaths: updateRelativePaths);
+            updateRelativePaths: updateRelativePaths,
+            minimumDisplayScale: minimumDisplayScale,
+            maximumDisplayScale: maximumDisplayScale);
         Entries.Insert(0, entry);
         return entry;
     }
