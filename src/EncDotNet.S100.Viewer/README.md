@@ -664,8 +664,8 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Twenty-three viewer-only tools
-are injected when the server starts: `render_to_image` (read-only —
+bound port back to the user's `settings.json`. A family of viewer-only
+tools are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `capture_app_screenshot` (read-only — captures a PNG of the whole
 application window: chart plus docks, panels, timeline, and status bar),

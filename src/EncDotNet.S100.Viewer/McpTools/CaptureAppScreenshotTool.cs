@@ -86,7 +86,9 @@ internal sealed class CaptureAppScreenshotTool
 
     /// <summary>
     /// Reads the pixel dimensions from a PNG's IHDR chunk without decoding
-    /// the image. Returns (0, 0) when the bytes are not a recognisable PNG.
+    /// the image. Validates the 8-byte PNG signature and the IHDR chunk
+    /// marker first, returning (0, 0) when the bytes are not a
+    /// recognisable PNG.
     /// </summary>
     private static (int Width, int Height) TryReadPngSize(byte[] bytes)
     {
@@ -95,6 +97,22 @@ internal sealed class CaptureAppScreenshotTool
         const int WidthOffset = 16;
         const int HeightOffset = 20;
         if (bytes.Length < HeightOffset + 4)
+        {
+            return (0, 0);
+        }
+
+        // Reject anything that is not a real PNG so an arbitrary byte
+        // buffer can't yield plausible-looking dimensions from fixed
+        // offsets. Signature per the PNG spec (RFC 2083 §3.1).
+        ReadOnlySpan<byte> signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        if (!bytes.AsSpan(0, 8).SequenceEqual(signature))
+        {
+            return (0, 0);
+        }
+
+        // The first chunk must be IHDR (offsets 12..16 = 'I','H','D','R').
+        ReadOnlySpan<byte> ihdr = [(byte)'I', (byte)'H', (byte)'D', (byte)'R'];
+        if (!bytes.AsSpan(12, 4).SequenceEqual(ihdr))
         {
             return (0, 0);
         }

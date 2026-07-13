@@ -118,10 +118,20 @@ public class CaptureAppScreenshotToolTests
         Assert.Contains("boom", err!.Message);
     }
 
-    [Fact]
-    public async Task Invoke_omits_dimensions_when_bytes_are_not_a_png()
+    [Theory]
+    [InlineData(4)]   // too short to even reach the offsets
+    [InlineData(64)]  // long enough to read offsets, but not a PNG
+    public async Task Invoke_omits_dimensions_when_bytes_are_not_a_png(int length)
     {
-        var provider = new FakeAppScreenshotProvider(png: [1, 2, 3, 4]);
+        // A non-PNG buffer with non-zero bytes at the width/height offsets:
+        // without signature validation this would yield bogus dimensions.
+        var junk = new byte[length];
+        for (var i = 0; i < junk.Length; i++)
+        {
+            junk[i] = 0x7F;
+        }
+
+        var provider = new FakeAppScreenshotProvider(png: junk);
         var tool = new CaptureAppScreenshotTool(provider);
 
         var result = await tool.InvokeAsync();
