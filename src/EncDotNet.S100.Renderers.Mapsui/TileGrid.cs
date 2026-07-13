@@ -408,7 +408,7 @@ internal static class TileGrid
             return Array.Empty<TileKey>();
         }
 
-        var candidates = new List<TileKey>();
+        var candidates = new List<(TileKey Key, double Dist)>();
         for (var neighbour = band - 1; neighbour <= band + 1; neighbour += 2)
         {
             if (neighbour < MinBand || neighbour > MaxBand)
@@ -426,7 +426,8 @@ internal static class TileGrid
             {
                 for (var x = range.XStart; x <= range.XEnd; x++)
                 {
-                    candidates.Add(new TileKey(neighbour, x, y));
+                    var key = new TileKey(neighbour, x, y);
+                    candidates.Add((key, CenterDistanceSquared(key, centerX, centerY)));
                 }
             }
         }
@@ -438,37 +439,41 @@ internal static class TileGrid
 
         // Centre-first: order by squared distance of each tile's world centre to
         // the viewport centre so the cap keeps the tiles most likely to sit under
-        // the next zoom. Ties break on (Band, Y, X) — the same deterministic
-        // order S100VectorTileRenderer.TakeNearest uses — so the truncation never
+        // the next zoom. The distance is precomputed once per tile above (one
+        // TileWorldBounds call each) rather than recomputed inside the O(n log n)
+        // comparator, so this idle-frame sort stays cheap. Ties break on
+        // (Band, Y, X) — the same deterministic order
+        // S100VectorTileRenderer.TakeNearest uses — so the truncation never
         // depends on enumeration order.
         candidates.Sort((a, b) =>
         {
-            var byDist = CenterDistanceSquared(a, centerX, centerY)
-                .CompareTo(CenterDistanceSquared(b, centerX, centerY));
+            var byDist = a.Dist.CompareTo(b.Dist);
             if (byDist != 0)
             {
                 return byDist;
             }
 
-            if (a.Band != b.Band)
+            if (a.Key.Band != b.Key.Band)
             {
-                return a.Band.CompareTo(b.Band);
+                return a.Key.Band.CompareTo(b.Key.Band);
             }
 
-            if (a.Y != b.Y)
+            if (a.Key.Y != b.Key.Y)
             {
-                return a.Y.CompareTo(b.Y);
+                return a.Key.Y.CompareTo(b.Key.Y);
             }
 
-            return a.X.CompareTo(b.X);
+            return a.Key.X.CompareTo(b.Key.X);
         });
 
-        if (candidates.Count > maxTiles)
+        var count = Math.Min(candidates.Count, maxTiles);
+        var result = new TileKey[count];
+        for (var i = 0; i < count; i++)
         {
-            candidates.RemoveRange(maxTiles, candidates.Count - maxTiles);
+            result[i] = candidates[i].Key;
         }
 
-        return candidates;
+        return result;
     }
 
     /// <summary>The squared EPSG:3857 distance from a tile's world centre to a point.</summary>
