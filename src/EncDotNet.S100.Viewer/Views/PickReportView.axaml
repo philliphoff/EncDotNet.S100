@@ -45,7 +45,7 @@
                         </ToolTip.Tip>
                     </TextBlock>
                     <Grid Grid.Column="2"
-                          ColumnDefinitions="Auto,*"
+                          ColumnDefinitions="Auto,*,Auto"
                           VerticalAlignment="Center">
                         <Border Grid.Column="0"
                                 Width="12" Height="12"
@@ -60,6 +60,7 @@
                                    Text="{Binding DisplayText}"
                                    FontSize="12"
                                    FontWeight="Medium"
+                                   VerticalAlignment="Center"
                                    TextWrapping="NoWrap"
                                    TextTrimming="CharacterEllipsis">
                             <ToolTip.Tip>
@@ -69,6 +70,22 @@
                                 </MultiBinding>
                             </ToolTip.Tip>
                         </TextBlock>
+                        <Button Grid.Column="2"
+                                Width="22" Height="22"
+                                MinWidth="0" MinHeight="0"
+                                Padding="0"
+                                Margin="6,0,0,0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
+                                IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}">
+                            <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" Opacity="0.7" />
+                        </Button>
                     </Grid>
                 </Grid>
                 </StackPanel>
@@ -426,14 +443,24 @@
                                          Opacity="0.6"
                                          TextWrapping="Wrap" />
                 </StackPanel>
-                <Button Grid.Column="2"
-                        VerticalAlignment="Top"
-                        Padding="6"
-                        Background="Transparent"
-                        Command="{Binding CopyIdentityCommand}"
-                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyIdentity}">
-                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
-                </Button>
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="2"
+                            VerticalAlignment="Top">
+                    <Button Padding="6"
+                            Background="Transparent"
+                            Command="{Binding OpenFeatureInExaminerCommand}"
+                            IsVisible="{Binding IsExaminerAvailable}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
+                        <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <Button Padding="6"
+                            Background="Transparent"
+                            Command="{Binding CopyIdentityCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyIdentity}">
+                        <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <!-- References list (xlink:href targets) -->

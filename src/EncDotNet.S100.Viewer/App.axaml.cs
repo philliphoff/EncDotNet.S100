@@ -227,6 +227,16 @@ public partial class App : Application
                     LogCrash("McpServerHost", t.Exception.GetBaseException().ToString());
             }, TaskScheduler.Default);
         };
+
+        // Live-refresh the examiner affordances in the FC and pick panels when
+        // the user toggles the integration or edits the base URL (issue #442),
+        // so the buttons appear/disappear without a catalogue reload or a new
+        // pick.
+        settingsVm.ExaminerSettingsChanged += () =>
+        {
+            s_services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
+            s_services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
+        };
         _ = mcpHost.Apply().ContinueWith(t =>
         {
             if (t.Exception is not null)
@@ -549,6 +559,9 @@ public partial class App : Application
         // About dialog + GitHub-release update check (issue #379).
         services.AddSingleton<IUrlOpener>(sp =>
             new ProcessUrlOpener(sp.GetService<ILogger<ProcessUrlOpener>>()));
+        // S-100 Feature Catalogue eXaminer deep-links (issue #442).
+        services.AddSingleton<IS100ExaminerLinkBuilder>(
+            sp => new S100ExaminerLinkBuilder(sp.GetRequiredService<ViewerSettings>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(
             _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(sp =>
@@ -705,7 +718,10 @@ public partial class App : Application
             sp.GetRequiredService<IGeographicPickPresenter>()));
 
         // View models
-        services.AddSingleton<FeatureCataloguesViewModel>();
+        services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
+            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetService<IS100ExaminerLinkBuilder>(),
+            sp.GetService<IUrlOpener>()));
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton<CatalogPanelViewModel>();
@@ -719,7 +735,11 @@ public partial class App : Application
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
-        services.AddSingleton<PickReportViewModel>();
+        services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
+            sp.GetService<ITimeFormatProvider>(),
+            sp.GetService<IMarinerSettingsProvider>(),
+            sp.GetService<IUrlOpener>(),
+            sp.GetService<IS100ExaminerLinkBuilder>()));
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();

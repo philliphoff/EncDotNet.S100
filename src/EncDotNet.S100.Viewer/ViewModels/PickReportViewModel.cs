@@ -27,6 +27,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 {
     private readonly ITimeFormatProvider? _timeFormat;
     private readonly IMarinerSettingsProvider? _marinerSettings;
+    private readonly IUrlOpener? _urlOpener;
+    private readonly IS100ExaminerLinkBuilder? _examinerLinks;
     private string? _featureType;
     private string? _featureTypeName;
     private string? _featureRef;
@@ -50,9 +52,20 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public PickReportViewModel(
         ITimeFormatProvider? timeFormat,
         IMarinerSettingsProvider? marinerSettings)
+        : this(timeFormat, marinerSettings, urlOpener: null, examinerLinks: null)
+    {
+    }
+
+    public PickReportViewModel(
+        ITimeFormatProvider? timeFormat,
+        IMarinerSettingsProvider? marinerSettings,
+        IUrlOpener? urlOpener,
+        IS100ExaminerLinkBuilder? examinerLinks)
     {
         _timeFormat = timeFormat;
         _marinerSettings = marinerSettings;
+        _urlOpener = urlOpener;
+        _examinerLinks = examinerLinks;
         ClearCommand = new RelayCommand(Clear);
         CopyLocationCommand = new RelayCommand(
             () => { if (_location is { } loc) CopyLocationRequested?.Invoke(this, LatLonFormatter.FormatDecimal(loc.Latitude, loc.Longitude)); },
@@ -69,6 +82,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         TakeHelmCommand = new RelayCommand<DynamicPickHit>(
             hit => { if (hit is not null && TryGetAisMmsi(hit, out var mmsi)) TakeHelmRequested?.Invoke(this, mmsi); },
             hit => hit is not null && TryGetAisMmsi(hit, out _));
+        OpenFeatureInExaminerCommand = new RelayCommand(
+            OpenFeatureInExaminer,
+            () => IsExaminerAvailable && !string.IsNullOrWhiteSpace(FeatureType));
+        OpenAttributeInExaminerCommand = new RelayCommand<PickAttribute>(
+            OpenAttributeInExaminer,
+            a => IsExaminerAvailable && a is not null && !string.IsNullOrWhiteSpace(a.Code));
 
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
@@ -489,7 +508,58 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public event EventHandler<uint>? TakeHelmRequested;
 
     /// <summary>
-    /// Attempts to extract a numeric MMSI from a dynamic hit that
+    /// Opens the selected hit's feature in the S-100 Feature Catalogue
+    /// eXaminer (issue #442). Enabled only when the examiner hosts the
+    /// hit's product spec and a feature type is known.
+    /// </summary>
+    public ICommand OpenFeatureInExaminerCommand { get; }
+
+    /// <summary>
+    /// Opens a specific attribute (parameter) of the selected hit's feature
+    /// in the S-100 Feature Catalogue eXaminer (issue #442). Enabled only
+    /// when the examiner hosts the hit's product spec.
+    /// </summary>
+    public ICommand OpenAttributeInExaminerCommand { get; }
+
+    /// <summary>
+    /// True when the S-100 Feature Catalogue eXaminer integration is enabled
+    /// and hosts a catalogue for the selected hit's product spec. Gates the
+    /// feature- and attribute-level "open in eXaminer" affordances.
+    /// </summary>
+    public bool IsExaminerAvailable => _examinerLinks?.SupportsSpec(ProductSpec) ?? false;
+
+    private void OpenFeatureInExaminer()
+    {
+        if (_urlOpener is null || _examinerLinks is null)
+            return;
+        var url = _examinerLinks.BuildFeatureUrl(ProductSpec, FeatureType);
+        if (!string.IsNullOrEmpty(url))
+            _urlOpener.Open(url);
+    }
+
+    private void OpenAttributeInExaminer(PickAttribute? attribute)
+    {
+        if (_urlOpener is null || _examinerLinks is null || attribute is null)
+            return;
+        var url = _examinerLinks.BuildAttributeUrl(ProductSpec, FeatureType, attribute.Code);
+        if (!string.IsNullOrEmpty(url))
+            _urlOpener.Open(url);
+    }
+
+    /// <summary>
+    /// Re-evaluates the examiner affordances against the current settings.
+    /// Called when the user toggles the integration or changes the base URL
+    /// so the feature- and attribute-level "open in eXaminer" buttons
+    /// appear/disappear immediately, without waiting for the next pick
+    /// (issue #442).
+    /// </summary>
+    public void RefreshExaminerAvailability()
+    {
+        OnPropertyChanged(nameof(IsExaminerAvailable));
+        (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
+    }
+
     /// represents an AIS target. AIS feature ids follow the
     /// <c>"ais:{mmsi}"</c> convention defined by
     /// <c>AisDynamicFeatureSource.FeatureIdForMmsi</c>.
@@ -711,7 +781,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasSecondaryLabel));
         OnPropertyChanged(nameof(Glyph));
         OnPropertyChanged(nameof(IdentityCaption));
+        OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
     }
 
     /// <summary>

@@ -499,6 +499,27 @@ internal sealed class ViewerSettings
     /// </summary>
     public string McpBindAddress { get; set; } = "127.0.0.1";
 
+    /// <summary>
+    /// Whether "open in S-100 Feature Catalogue eXaminer" deep-links are
+    /// surfaced from the Feature Catalogues and Object Information panels
+    /// (issue #442). Enabled by default; can be turned off for air-gapped
+    /// or otherwise restricted deployments where opening a third-party
+    /// site is undesirable.
+    /// </summary>
+    public bool S100ExaminerLinksEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Base URL of the S-100 Feature Catalogue eXaminer used to build the
+    /// deep-links (issue #442). Configurable so an operator can point the
+    /// links at a self-hosted mirror. The builder appends
+    /// <c>?catalog=&amp;feature=&amp;attribute=</c> query parameters; an
+    /// empty or malformed value disables the links.
+    /// </summary>
+    public string S100ExaminerBaseUrl { get; set; } = DefaultS100ExaminerBaseUrl;
+
+    /// <summary>Default S-100 Examiner base URL.</summary>
+    public const string DefaultS100ExaminerBaseUrl = "https://s100examiner.com/";
+
     /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
     public const int MaxRecentDatasets = 10;
 

@@ -186,6 +186,15 @@
   <data name="Tooltip_RemoveCatalogue" xml:space="preserve">
     <value>Remove this catalogue</value>
   </data>
+  <data name="Tooltip_OpenCatalogueInExaminer" xml:space="preserve">
+    <value>View this catalogue in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+  </data>
+  <data name="Tooltip_OpenFeatureInExaminer" xml:space="preserve">
+    <value>View this feature in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+  </data>
+  <data name="Tooltip_OpenAttributeInExaminer" xml:space="preserve">
+    <value>View this attribute in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+  </data>
   <data name="Tooltip_RemoveDataset" xml:space="preserve">
     <value>Remove this dataset</value>
   </data>
@@ -1736,6 +1745,32 @@
   <data name="Toast_McpPortReassignedBody" xml:space="preserve">
     <value>MCP server is now on port {0}. Update your MCP client configuration.</value>
     <comment>{0} = newly-assigned port.</comment>
+  </data>
+
+  <!-- S-100 Feature Catalogue eXaminer links (issue #442) -->
+  <data name="Settings_ExaminerSection" xml:space="preserve">
+    <value>S-100 Feature Catalogue eXaminer</value>
+  </data>
+  <data name="Settings_ExaminerSection_Help" xml:space="preserve">
+    <value>Show links from the Feature Catalogues and Object Information panels that open the picked feature or attribute in the S-100 Feature Catalogue eXaminer website.</value>
+  </data>
+  <data name="Settings_ExaminerEnabled" xml:space="preserve">
+    <value>Show eXaminer links</value>
+  </data>
+  <data name="Settings_ExaminerEnabledTooltip" xml:space="preserve">
+    <value>When on, feature and attribute rows offer a link that opens their definition in the S-100 Feature Catalogue eXaminer. Turn off for offline or restricted deployments.</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrl" xml:space="preserve">
+    <value>eXaminer base URL</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrlTooltip" xml:space="preserve">
+    <value>Base URL of the S-100 Feature Catalogue eXaminer. Change it to point the links at a self-hosted mirror.</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrl_Reset" xml:space="preserve">
+    <value>Reset to default</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrl_ResetTooltip" xml:space="preserve">
+    <value>Restore the default S-100 Feature Catalogue eXaminer URL</value>
   </data>
 
   <!-- Load-failure toast -->
