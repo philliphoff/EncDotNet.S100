@@ -24,6 +24,37 @@ public class TileCrossBandPrewarmTests
     }
 
     [Fact]
+    public void CrossBandPrewarmTiles_CappedSequenceMatchesFullOrderedPrefix()
+    {
+        // Pins the exact drain order of the bounded top-K max-heap (issue #428
+        // review): the capped result must be the same ordered sequence as the
+        // uncapped set's (DistSq, Band, Y, X) prefix, not merely the same set.
+        const int band = 9;
+        var res = TileGrid.ResolutionForBand(band);
+        const double cx = 500_000, cy = 300_000;
+
+        var full = TileGrid.CrossBandPrewarmTiles(cx, cy, W, H, res, band, maxTiles: 100_000);
+        const int cap = 8;
+        var capped = TileGrid.CrossBandPrewarmTiles(cx, cy, W, H, res, band, maxTiles: cap);
+
+        Assert.True(full.Count > cap, "test needs an uncapped set larger than the cap");
+
+        double DistSq(TileKey k)
+        {
+            var (tx, ty) = TileCenter(k);
+            return (tx - cx) * (tx - cx) + (ty - cy) * (ty - cy);
+        }
+
+        var expected = full
+            .OrderBy(DistSq)
+            .ThenBy(k => k.Band).ThenBy(k => k.Y).ThenBy(k => k.X)
+            .Take(cap)
+            .ToList();
+
+        Assert.Equal(expected, capped.ToList());
+    }
+
+    [Fact]
     public void CrossBandPrewarmTiles_CoversBothAdjacentBandsOnly()
     {
         const int band = 8;

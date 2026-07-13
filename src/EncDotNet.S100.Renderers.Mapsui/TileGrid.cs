@@ -408,7 +408,16 @@ internal static class TileGrid
             return Array.Empty<TileKey>();
         }
 
-        var candidates = new List<(TileKey Key, double Dist)>();
+        var found = false;
+
+        // Keep only the maxTiles nearest candidates via a bounded max-heap
+        // (worst-first) rather than materialising and sorting every adjacent-band
+        // tile: VisibleTileRange can enumerate thousands of cells for band + 1, so a
+        // full O(n log n) sort plus O(n) allocation on an idle frame is wasteful when
+        // the renderer only ever keeps the top maxTiles (24). This is O(n log K) time
+        // and O(K) space; the drained order is identical to the previous full sort.
+        var heap = new PriorityQueue<TileKey, (double Dist, int Band, int Y, int X)>(
+            CrossBandWorstFirstComparer);
         for (var neighbour = band - 1; neighbour <= band + 1; neighbour += 2)
         {
             if (neighbour < MinBand || neighbour > MaxBand)
@@ -427,54 +436,72 @@ internal static class TileGrid
                 for (var x = range.XStart; x <= range.XEnd; x++)
                 {
                     var key = new TileKey(neighbour, x, y);
-                    candidates.Add((key, CenterDistanceSquared(key, centerX, centerY)));
+                    var priority = (CenterDistanceSquared(key, centerX, centerY), neighbour, y, x);
+                    found = true;
+                    if (heap.Count < maxTiles)
+                    {
+                        heap.Enqueue(key, priority);
+                    }
+                    else
+                    {
+                        // Heap is full: push the candidate then evict the current
+                        // worst (farthest) of the K + 1, so the heap always retains
+                        // the K nearest tiles seen so far. If the candidate is itself
+                        // the worst, EnqueueDequeue drops it straight back out.
+                        heap.EnqueueDequeue(key, priority);
+                    }
                 }
             }
         }
 
-        if (candidates.Count == 0)
+        if (!found)
         {
             return Array.Empty<TileKey>();
         }
 
-        // Centre-first: order by squared distance of each tile's world centre to
-        // the viewport centre so the cap keeps the tiles most likely to sit under
-        // the next zoom. The distance is precomputed once per tile above (one
-        // TileWorldBounds call each) rather than recomputed inside the O(n log n)
-        // comparator, so this idle-frame sort stays cheap. Ties break on
-        // (Band, Y, X) — the same deterministic order
-        // S100VectorTileRenderer.TakeNearest uses — so the truncation never
-        // depends on enumeration order.
-        candidates.Sort((a, b) =>
+        // Drain worst-first (the comparer puts the farthest tile on top) and fill the
+        // result back-to-front, producing the centre-first order — identical to the
+        // previous Sort's (Dist, Band, Y, X) ordering. Ties are impossible because
+        // each TileKey is unique, so the order is fully deterministic and matches the
+        // (Band, Y, X) tie-break S100VectorTileRenderer.TakeNearest also uses.
+        var result = new TileKey[heap.Count];
+        for (var i = result.Length - 1; i >= 0; i--)
         {
-            var byDist = a.Dist.CompareTo(b.Dist);
+            result[i] = heap.Dequeue();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Worst-first ordering (farthest tile-centre, then largest <c>(Band, Y, X)</c>)
+    /// for the bounded top-K max-heap in <see cref="CrossBandPrewarmTiles"/>: a
+    /// <see cref="PriorityQueue{TElement,TPriority}"/> is a min-heap, so inverting the
+    /// nearest-first order surfaces the most-evictable tile on top and lets
+    /// <see cref="PriorityQueue{TElement,TPriority}.EnqueueDequeue"/> retain the K
+    /// nearest. The drained result is the exact inverse — centre-first.
+    /// </summary>
+    private static readonly IComparer<(double Dist, int Band, int Y, int X)> CrossBandWorstFirstComparer =
+        Comparer<(double Dist, int Band, int Y, int X)>.Create(static (a, b) =>
+        {
+            var byDist = b.Dist.CompareTo(a.Dist);
             if (byDist != 0)
             {
                 return byDist;
             }
 
-            if (a.Key.Band != b.Key.Band)
+            if (a.Band != b.Band)
             {
-                return a.Key.Band.CompareTo(b.Key.Band);
+                return b.Band.CompareTo(a.Band);
             }
 
-            if (a.Key.Y != b.Key.Y)
+            if (a.Y != b.Y)
             {
-                return a.Key.Y.CompareTo(b.Key.Y);
+                return b.Y.CompareTo(a.Y);
             }
 
-            return a.Key.X.CompareTo(b.Key.X);
+            return b.X.CompareTo(a.X);
         });
-
-        var count = Math.Min(candidates.Count, maxTiles);
-        var result = new TileKey[count];
-        for (var i = 0; i < count; i++)
-        {
-            result[i] = candidates[i].Key;
-        }
-
-        return result;
-    }
 
     /// <summary>The squared EPSG:3857 distance from a tile's world centre to a point.</summary>
     private static double CenterDistanceSquared(TileKey key, double centerX, double centerY)

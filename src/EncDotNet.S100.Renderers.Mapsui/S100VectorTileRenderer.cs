@@ -1846,10 +1846,10 @@ public static class S100VectorTileRenderer
                     // all read the pre-decrement count and over-shed below baseline.
                     if (ShouldWorkerExit(
                             sceneNull: currentScene is null,
-                            hasVisible,
-                            hasPredicted || hasCrossBand,
-                            state.ActiveWorkers,
-                            RenderingOptimizations.TileWorkerCount))
+                            hasVisible: hasVisible,
+                            hasPredicted: hasPredicted || hasCrossBand,
+                            layerActiveWorkers: state.ActiveWorkers,
+                            baseline: RenderingOptimizations.TileWorkerCount))
                     {
                         state.ActiveWorkers--;
                         Interlocked.Decrement(ref s_activeWorkerTotal);

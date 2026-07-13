@@ -125,9 +125,11 @@ public static class RenderingOptimizations
             SeedDouble("S100_VECTOR_TILE_BUDGET_MB", MachineProfile.TileBudgetMb(tier), MinTileBudgetMb, MaxTileBudgetMb);
         (s_tilePredictionEnabled, TilePredictionEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_PREDICT", defaultValue: true);
-        // Idle cross-band (±1) pre-warm (issue #428): default on except on the
-        // LowEnd tier, where the extra speculative raster/cache pressure is not
-        // worth it on a constrained host (a no-op there unless env-pinned).
+        // Idle cross-band (±1) pre-warm (issue #428): seed default on except on
+        // the LowEnd tier, where the extra speculative raster/cache pressure is not
+        // worth it on a constrained host. This governs only the default seed (and
+        // the profile-switch default in ApplyProfile); an explicit opt-in via
+        // env var or the setter is still honoured on any tier.
         (s_tileCrossBandPrewarmEnabled, TileCrossBandPrewarmEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_XBAND", defaultValue: tier != PerformanceProfile.LowEnd);
         (s_tileDiskCacheEnabled, TileDiskCacheEnvExplicit) =
@@ -293,11 +295,16 @@ public static class RenderingOptimizations
     /// tiled base plane is otherwise idle (no cold visible misses and cache
     /// headroom to spare) the renderer speculatively rasterises the
     /// band&#160;±&#160;1 tiles covering the current viewport, so a subsequent
-    /// zoom starts warm. Seeded from <c>S100_VECTOR_TILE_XBAND</c> (default on,
-    /// except a no-op on the <see cref="PerformanceProfile.LowEnd"/> tier). Read
-    /// every frame, so a change takes effect live. Independent of
-    /// <see cref="TilePredictionEnabled"/> (same-band halo/fan warm set), but
-    /// drained at a strictly lower worker priority than it.
+    /// zoom starts warm. Seeded from <c>S100_VECTOR_TILE_XBAND</c>; the seed
+    /// <b>default</b> is on, except off on the <see cref="PerformanceProfile.LowEnd"/>
+    /// tier (and re-forced off whenever the profile switches to LowEnd — see
+    /// <see cref="ApplyProfile"/>), where the extra speculative raster/cache
+    /// pressure is not worth it on a constrained host. That LowEnd rule governs the
+    /// <i>default</i> only: an explicit opt-in — env var or this setter (e.g. the
+    /// viewer toggle) — is still honoured on any tier, exactly like
+    /// <see cref="TilePredictionEnabled"/>. Read every frame, so a change takes
+    /// effect live. Independent of <see cref="TilePredictionEnabled"/> (same-band
+    /// halo/fan warm set), but drained at a strictly lower worker priority than it.
     /// </summary>
     public static bool TileCrossBandPrewarmEnabled
     {

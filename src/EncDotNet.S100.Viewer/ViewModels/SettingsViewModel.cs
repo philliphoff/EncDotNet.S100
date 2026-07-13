@@ -686,10 +686,11 @@ internal sealed class SettingsViewModel : ViewModelBase
         get => _tileCrossBandPrewarmEnabled;
         set
         {
-            if (SetProperty(ref _tileCrossBandPrewarmEnabled, value))
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
+            var effective = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+            if (SetProperty(ref _tileCrossBandPrewarmEnabled, effective))
             {
-                RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
-                _settings.TileCrossBandPrewarmEnabled = value;
+                _settings.TileCrossBandPrewarmEnabled = effective;
                 RaiseMarinerChanged();
             }
         }
@@ -841,10 +842,15 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
                 _tileDiskMb = RenderingOptimizations.TileDiskMb;
                 _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
+                // ApplyProfile re-derives the cross-band pre-warm default from the
+                // new tier (off on LowEnd), so mirror it back or the toggle would
+                // drift from the renderer after a profile switch (issue #428).
+                _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
                 OnPropertyChanged(nameof(TileBudgetMb));
                 OnPropertyChanged(nameof(TileGpuBudgetMb));
                 OnPropertyChanged(nameof(TileDiskMb));
                 OnPropertyChanged(nameof(TileWorkerCount));
+                OnPropertyChanged(nameof(TileCrossBandPrewarmEnabled));
                 OnPropertyChanged(nameof(ResolvedProfileLabel));
                 RaiseMarinerChanged();
             }
