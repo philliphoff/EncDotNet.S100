@@ -295,6 +295,65 @@ public static class S100VectorTileRenderer
 
     private static int s_activeWorkerTotal;
 
+    /// <summary>
+    /// Sliding window, in seconds, over which a layer that had visible cold work
+    /// is still counted as an active competitor for the fairness reservation used
+    /// by elastic borrowing (issue #432). A layer that stops painting (culled,
+    /// resolution-hidden, torn down) or that fully caches its visible tiles ages
+    /// out of the <see cref="s_visibleLayerStamps"/> registry within this window,
+    /// so the "active visible layers" divisor never inflates with dead layers.
+    /// A couple of frames' worth is enough to bridge the serialized per-layer
+    /// paint of one frame without over-holding.
+    /// </summary>
+    private const double ElasticFairnessWindowSeconds = 0.5;
+
+    /// <summary>
+    /// Guards <see cref="s_visibleLayerStamps"/> and <see cref="s_visibleLayerPruneScratch"/>.
+    /// Only ever taken on the render/UI thread (layer paint is serialized there),
+    /// so it is effectively uncontended; tile workers never touch it. Always
+    /// acquired <em>after</em> a layer's <c>state.Sync</c> and never the reverse,
+    /// and workers never take it, so it introduces no lock-order cycle.
+    /// </summary>
+    private static readonly object s_visibleLayerSync = new();
+
+    /// <summary>
+    /// Registry of layers that recently had visible cold work, keyed by their
+    /// <see cref="TileState"/>. Each entry records the <see cref="Stopwatch"/> tick
+    /// of the layer's last such paint and the worker count it held at that point,
+    /// so elastic borrowing can reserve each <em>other</em> active-visible layer
+    /// only its <em>shortfall</em> to the <see cref="RenderingOptimizations.TileWorkerCount"/>
+    /// floor before lending idle capacity (issue #432 fairness floor). Counting a
+    /// competitor's own workers — rather than all other layers' workers — stops an
+    /// unrelated predicted-only layer's workers from wrongly satisfying an
+    /// active-visible sibling's reservation.
+    /// <para>
+    /// Keyed <b>weakly</b> via <see cref="ConditionalWeakTable{TKey,TValue}"/> so it
+    /// never roots a <see cref="TileState"/>. <see cref="TileState"/> is otherwise
+    /// held only weakly (in <see cref="s_states"/>, keyed by <see cref="ILayer"/>);
+    /// a plain <see cref="Dictionary{TKey,TValue}"/> here would keep a removed
+    /// layer's tiling state — including its rasterised tile cache and scenes — alive
+    /// for the process lifetime if the layer disappeared while still registered and
+    /// no later paint pruned it. With a weak key the GC reclaims a dead layer's
+    /// entry even when no further paint occurs.
+    /// </para>
+    /// </summary>
+    private static readonly ConditionalWeakTable<TileState, ActiveVisibleEntry> s_visibleLayerStamps = new();
+
+    /// <summary>Reusable scratch for time-pruning <see cref="s_visibleLayerStamps"/> without per-call allocation.</summary>
+    private static readonly List<TileState> s_visibleLayerPruneScratch = new();
+
+    /// <summary>
+    /// A layer's active-visible registry entry: the <see cref="Stopwatch"/> tick of
+    /// its last paint with visible cold work, and the workers it held then. A mutable
+    /// reference type because <see cref="ConditionalWeakTable{TKey,TValue}"/> requires
+    /// a reference value; it is only ever read/written under <see cref="s_visibleLayerSync"/>.
+    /// </summary>
+    private sealed class ActiveVisibleEntry(long stampTicks, int activeWorkers)
+    {
+        public long StampTicks = stampTicks;
+        public int ActiveWorkers = activeWorkers;
+    }
+
 
     /// <summary>
     /// Signals every tile worker to stop and blocks until in-flight tile
@@ -723,6 +782,16 @@ public static class S100VectorTileRenderer
 
             visibleQueueDepth = state.PendingVisible.Count;
 
+            // Refresh this layer's active-visible-layer registry entry and read the
+            // worker reservation owed to OTHER layers that currently have visible
+            // cold work, so the worker-start block below lends only leftover global
+            // capacity to this layer (issue #432 fairness floor). A layer counts as
+            // active-visible whenever it has visible cold tiles (pending OR already
+            // in flight), so a layer mid-raster of its visible burst still keeps its
+            // reservation; the reservation is each sibling's shortfall to its floor,
+            // so siblings already running their share owe nothing.
+            var reservedForOtherLayers = RefreshActiveVisibleLayers(state, coldExposure > 0, state.ActiveWorkers, frameTicks);
+
             // Drop enqueue stamps for tiles no longer visible (panned away before
             // they landed) so the dictionary stays bounded by the visible set.
             if (state.VisibleEnqueueTicks.Count > visibleSet.Count)
@@ -796,21 +865,46 @@ public static class S100VectorTileRenderer
                 state.PendingGeneration = state.Generation;
                 state.PendingCenterX = centerX;
                 state.PendingCenterY = centerY;
-                // Spin up enough workers to cover the pending tiles, capped at the
-                // tier's per-layer pool size, so a cold pan's misses rasterise in
-                // parallel instead of one at a time. A second cap on the total live
-                // workers across every layer keeps N layers × N workers from
-                // oversubscribing the cores (which would starve the UI thread on a
-                // big exchange set). Never start more than there is work for.
-                var perLayer = Math.Min(
-                    RenderingOptimizations.TileWorkerCount,
-                    state.PendingVisible.Count + state.PendingPredicted.Count + state.PendingCrossBand.Count);
-                var globalRoom = s_maxTotalWorkers - Volatile.Read(ref s_activeWorkerTotal);
-                workersToStart = Math.Min(perLayer - state.ActiveWorkers, globalRoom);
+                // Spin up workers to cover the pending tiles. The per-layer
+                // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
+                // a layer with a visible backlog may borrow idle global capacity
+                // toward s_maxTotalWorkers (issue #432), but only for *visible*
+                // work — predicted/speculative tiles (including the idle cross-band
+                // ±1 pre-warm, issue #428) never justify borrowing, so a busy
+                // layer's prewarm can't occupy cores a sibling wants for on-screen
+                // tiles. On a LowEnd (single-worker) host there is nothing to
+                // borrow, so the elastic ceiling collapses to the floor and this
+                // reduces to the pre-elastic behaviour. A per-layer floor is
+                // reserved for every other active-visible layer before any elastic
+                // extra is granted, so a dense bottom-of-z-order layer can't starve
+                // siblings that paint later in the frame.
+                var baseline = RenderingOptimizations.TileWorkerCount;
+                var elasticCeiling = RenderingOptimizations.ResolvedProfile == PerformanceProfile.LowEnd
+                    ? baseline
+                    : s_maxTotalWorkers;
+
+                workersToStart = ComputeWorkersToStart(
+                    baseline,
+                    elasticCeiling,
+                    s_maxTotalWorkers,
+                    Volatile.Read(ref s_activeWorkerTotal),
+                    state.ActiveWorkers,
+                    state.PendingVisible.Count,
+                    state.PendingPredicted.Count + state.PendingCrossBand.Count,
+                    reservedForOtherLayers);
+
                 if (workersToStart > 0)
                 {
                     state.ActiveWorkers += workersToStart;
                     Interlocked.Add(ref s_activeWorkerTotal, workersToStart);
+
+                    // Publish the post-grant worker count so a sibling painting later
+                    // in this same frame sees this layer's true share and reserves
+                    // only its own shortfall against it.
+                    if (coldExposure > 0)
+                    {
+                        RecordActiveVisibleLayerWorkers(state, state.ActiveWorkers, frameTicks);
+                    }
                 }
             }
 
@@ -1500,16 +1594,210 @@ public static class S100VectorTileRenderer
         canvas.Restore();
     }
 
+    /// <summary>
+    /// Computes how many new tile workers a layer may start this paint, turning
+    /// the per-layer <paramref name="baseline"/> from a hard ceiling into a floor
+    /// that a busy layer may exceed by borrowing idle global capacity for
+    /// <em>visible</em> work (issue #432). Pure and deterministic given its inputs
+    /// so the borrow policy is unit-testable without a live render.
+    /// </summary>
+    /// <param name="baseline">
+    /// The per-layer worker reservation (<see cref="RenderingOptimizations.TileWorkerCount"/>).
+    /// Always reachable (subject to <paramref name="maxTotalWorkers"/>); predicted
+    /// work is never served above this count.
+    /// </param>
+    /// <param name="elasticCeiling">
+    /// The maximum workers a single layer may reach when borrowing for visible
+    /// work. Equal to <paramref name="baseline"/> on a LowEnd host (no borrowing),
+    /// otherwise <paramref name="maxTotalWorkers"/>.
+    /// </param>
+    /// <param name="maxTotalWorkers">The process-wide worker cap (<see cref="s_maxTotalWorkers"/>).</param>
+    /// <param name="activeWorkerTotal">Current total live workers across all layers.</param>
+    /// <param name="layerActiveWorkers">This layer's current live workers.</param>
+    /// <param name="pendingVisible">This layer's pending visible (on-screen) cold tiles.</param>
+    /// <param name="pendingPredicted">This layer's pending predicted (speculative) tiles.</param>
+    /// <param name="reservedForOthers">
+    /// Total workers reserved for <em>other</em> active-visible layers — each such
+    /// layer's shortfall to its <paramref name="baseline"/> floor — which this
+    /// layer may not borrow. The fairness floor that stops a dense low-z layer
+    /// starving later-painting siblings.
+    /// </param>
+    /// <returns>The number of new workers to start (never negative).</returns>
+    internal static int ComputeWorkersToStart(
+        int baseline,
+        int elasticCeiling,
+        int maxTotalWorkers,
+        int activeWorkerTotal,
+        int layerActiveWorkers,
+        int pendingVisible,
+        int pendingPredicted,
+        int reservedForOthers)
+    {
+        var totalPending = pendingVisible + pendingPredicted;
+        if (totalPending <= 0)
+        {
+            return 0;
+        }
+
+        var globalRoom = maxTotalWorkers - activeWorkerTotal;
+        if (globalRoom <= 0)
+        {
+            return 0;
+        }
+
+        // Floor grant: reach the per-layer reservation regardless of siblings,
+        // bounded only by global room (the pre-elastic behaviour). Serves visible
+        // and predicted work alike.
+        var desiredBaseline = Math.Min(baseline, totalPending);
+        var baselineStart = Math.Clamp(desiredBaseline - layerActiveWorkers, 0, globalRoom);
+
+        // Elastic grant: borrow toward the elastic ceiling for VISIBLE work only,
+        // from whatever room remains after this layer's own floor and the floor
+        // reservation owed to every other active-visible layer.
+        var elasticStart = 0;
+        var layerCeiling = Math.Max(desiredBaseline, Math.Min(elasticCeiling, pendingVisible));
+        if (layerCeiling > desiredBaseline)
+        {
+            var elasticRoom = globalRoom - baselineStart - Math.Max(0, reservedForOthers);
+            var elasticWant = layerCeiling - Math.Max(layerActiveWorkers, desiredBaseline);
+            if (elasticWant > 0 && elasticRoom > 0)
+            {
+                elasticStart = Math.Min(elasticWant, elasticRoom);
+            }
+        }
+
+        return baselineStart + elasticStart;
+    }
+
+    /// <summary>
+    /// Decides whether a tile worker should leave its drain loop this iteration.
+    /// A worker exits when its layer's scene is gone or all pending work has
+    /// drained, and — the elastic addition (issue #432) — when it is an
+    /// above-<paramref name="baseline"/> ("borrowed") worker that has reached the
+    /// visible→predicted boundary: with no visible work left it sheds instead of
+    /// falling through to speculative work, so borrowed global capacity returns to
+    /// the pool within roughly one tile's raster time rather than leaking into
+    /// prewarm. Pure so the shed policy is unit-testable.
+    /// </summary>
+    /// <param name="sceneNull">True when the layer's scene has been cleared.</param>
+    /// <param name="hasVisible">True when the layer has pending visible tiles.</param>
+    /// <param name="hasPredicted">True when the layer has pending predicted tiles.</param>
+    /// <param name="layerActiveWorkers">This layer's current live workers.</param>
+    /// <param name="baseline">The per-layer floor (<see cref="RenderingOptimizations.TileWorkerCount"/>).</param>
+    /// <returns>True when the worker should exit its loop.</returns>
+    internal static bool ShouldWorkerExit(
+        bool sceneNull,
+        bool hasVisible,
+        bool hasPredicted,
+        int layerActiveWorkers,
+        int baseline) =>
+        sceneNull
+        || (!hasVisible && !hasPredicted)
+        || (!hasVisible && layerActiveWorkers > baseline);
+
+    /// <summary>
+    /// Refreshes <paramref name="state"/>'s entry in the active-visible-layer
+    /// registry and returns the worker reservation owed to <em>other</em> layers
+    /// that have had visible cold work within <see cref="ElasticFairnessWindowSeconds"/>
+    /// — the sum over those layers of their shortfall to the per-layer floor
+    /// (<see cref="RenderingOptimizations.TileWorkerCount"/>). Counting each
+    /// competitor's own workers, rather than all other layers', keeps an unrelated
+    /// predicted-only layer's workers from wrongly satisfying an active-visible
+    /// sibling's reservation. Stamps (or removes) this layer, then prunes stale
+    /// entries so layers that stopped painting — culled, resolution-hidden, or torn
+    /// down — age out of the reservation. Called only on the render thread under
+    /// the layer's <c>state.Sync</c>; takes <see cref="s_visibleLayerSync"/> second,
+    /// never the reverse.
+    /// </summary>
+    /// <param name="state">The painting layer's tile state.</param>
+    /// <param name="hasVisibleWork">True when the layer has visible cold tiles (pending or in flight) this paint.</param>
+    /// <param name="layerActiveWorkers">This layer's current live workers (its own entry excludes itself from the reservation).</param>
+    /// <param name="nowTicks">The current <see cref="Stopwatch"/> tick.</param>
+    /// <returns>The total worker reservation owed to other active-visible layers.</returns>
+    private static int RefreshActiveVisibleLayers(TileState state, bool hasVisibleWork, int layerActiveWorkers, long nowTicks)
+    {
+        var windowTicks = (long)(Stopwatch.Frequency * ElasticFairnessWindowSeconds);
+        var baseline = RenderingOptimizations.TileWorkerCount;
+        lock (s_visibleLayerSync)
+        {
+            if (hasVisibleWork)
+            {
+                if (s_visibleLayerStamps.TryGetValue(state, out var box))
+                {
+                    box.StampTicks = nowTicks;
+                    box.ActiveWorkers = layerActiveWorkers;
+                }
+                else
+                {
+                    s_visibleLayerStamps.Add(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
+                }
+            }
+            else
+            {
+                s_visibleLayerStamps.Remove(state);
+            }
+
+            var reserved = 0;
+            s_visibleLayerPruneScratch.Clear();
+            // A dead layer's weak key drops out of the table on its own; this pass
+            // only evicts still-live layers whose last visible paint aged out.
+            foreach (var entry in s_visibleLayerStamps)
+            {
+                if (nowTicks - entry.Value.StampTicks > windowTicks)
+                {
+                    s_visibleLayerPruneScratch.Add(entry.Key);
+                }
+                else if (!ReferenceEquals(entry.Key, state))
+                {
+                    reserved += Math.Max(0, baseline - entry.Value.ActiveWorkers);
+                }
+            }
+
+            foreach (var stale in s_visibleLayerPruneScratch)
+            {
+                s_visibleLayerStamps.Remove(stale);
+            }
+
+            return reserved;
+        }
+    }
+
+    /// <summary>
+    /// Updates <paramref name="state"/>'s registry entry with its post-grant worker
+    /// count, so a sibling painting later in the same frame sees this layer's true
+    /// share and reserves only its own shortfall against it. No-op if the layer is
+    /// not currently registered as active-visible.
+    /// </summary>
+    private static void RecordActiveVisibleLayerWorkers(TileState state, int layerActiveWorkers, long nowTicks)
+    {
+        lock (s_visibleLayerSync)
+        {
+            if (s_visibleLayerStamps.TryGetValue(state, out var box))
+            {
+                box.StampTicks = nowTicks;
+                box.ActiveWorkers = layerActiveWorkers;
+            }
+        }
+    }
+
     private static void Worker(TileState state)
     {
+        // Set true when this worker releases its pool slot under state.Sync at the
+        // exit decision below, so the finally does not decrement a second time.
+        // Guarding the decrement under the same lock that reads ActiveWorkers is
+        // what lets a cascade of shedding elastic workers converge on the baseline
+        // instead of every one observing the pre-decrement count and over-shedding
+        // (which would stall the predicted drain and thrash the pool).
+        var slotReleased = false;
         try
         {
             while (true)
             {
                 // Stop before touching Skia once the process is shutting down,
                 // so ShutdownAndDrain's wait completes and no tile is rasterised
-                // into a half-torn-down Skia. The single finally clears the
-                // rendering flag and completes the drain-gate registration.
+                // into a half-torn-down Skia. slotReleased is still false on this
+                // path, so the finally below releases the slot and completes the
+                // drain-gate registration.
                 if (s_drainGate.IsDraining)
                 {
                     return;
@@ -1525,24 +1813,37 @@ public static class S100VectorTileRenderer
 
                 lock (state.Sync)
                 {
-                    // Visible tiles always drain before speculative ones, so
-                    // prediction work yields to anything actually on screen; and
-                    // the same-band predicted warm set drains before the
-                    // lowest-priority idle cross-band (±1) pre-warm (issue #428),
-                    // so cross-band never delays either.
-                    if (state.Scene is null
-                        || (state.PendingVisible.Count == 0
-                            && state.PendingPredicted.Count == 0
-                            && state.PendingCrossBand.Count == 0))
+                    var currentScene = state.Scene;
+                    var hasVisible = state.PendingVisible.Count > 0;
+                    var hasPredicted = state.PendingPredicted.Count > 0;
+                    var hasCrossBand = state.PendingCrossBand.Count > 0;
+
+                    // Exit when the scene is gone or all work has drained, and — the
+                    // elastic addition (issue #432) — shed an above-baseline
+                    // ("borrowed") worker the moment visible work runs out rather
+                    // than letting it fall through to speculative work, so borrowed
+                    // global capacity returns to the pool within ~one tile raster.
+                    // The idle cross-band ±1 pre-warm (issue #428) is speculative
+                    // like the predicted set: it keeps a baseline worker alive to
+                    // drain it, but never holds a borrowed worker.
+                    // Release the slot under this same lock so concurrent sheds can't
+                    // all read the pre-decrement count and over-shed below baseline.
+                    if (ShouldWorkerExit(
+                            sceneNull: currentScene is null,
+                            hasVisible,
+                            hasPredicted || hasCrossBand,
+                            state.ActiveWorkers,
+                            RenderingOptimizations.TileWorkerCount))
                     {
-                        // Drained: leave the loop and let the finally decrement
-                        // ActiveWorkers. Decrementing here as well would open a race
-                        // where a frame restarts a worker between this point and the
-                        // finally, over-counting the pool.
+                        state.ActiveWorkers--;
+                        Interlocked.Decrement(ref s_activeWorkerTotal);
+                        slotReleased = true;
                         return;
                     }
 
-                    if (state.PendingVisible.Count > 0)
+                    // Visible tiles always drain before speculative ones, so
+                    // prediction work yields to anything actually on screen.
+                    if (hasVisible)
                     {
                         key = TakeNearest(state.PendingVisible, state.PendingCenterX, state.PendingCenterY);
                         isPrediction = false;
@@ -1565,7 +1866,12 @@ public static class S100VectorTileRenderer
 
                     deviceScale = state.PendingDeviceScale;
                     generation = state.PendingGeneration;
-                    scene = state.Scene;
+                    // ShouldWorkerExit returns true for a null scene, so reaching
+                    // here means the scene is live; the null-coalescing throw is
+                    // unreachable but gives the compiler its non-null narrowing
+                    // (no scene can vanish while we hold state.Sync).
+                    scene = currentScene ?? throw new InvalidOperationException(
+                        "Scene became null after ShouldWorkerExit returned false.");
                     baseIndex = state.BaseIndex;
                     diskNamespace = state.DiskNamespace;
                     state.InFlight.Add(key);
@@ -1668,15 +1974,20 @@ public static class S100VectorTileRenderer
         finally
         {
             // Release this worker's pool slot so the next frame can spin up a fresh
-            // worker for any still-pending tiles. Both normal drain-exit and the
-            // abnormal-exit path land here. Mirror the per-layer slot in the
-            // process-wide total so other layers can reclaim the headroom.
-            lock (state.Sync)
+            // worker for any still-pending tiles, unless the shed/drain path above
+            // already released it under state.Sync. Both the normal drain-exit and
+            // the abnormal-exit (shutdown / exception) paths land here. Mirror the
+            // per-layer slot in the process-wide total so other layers can reclaim
+            // the headroom.
+            if (!slotReleased)
             {
-                state.ActiveWorkers--;
-            }
+                lock (state.Sync)
+                {
+                    state.ActiveWorkers--;
+                }
 
-            Interlocked.Decrement(ref s_activeWorkerTotal);
+                Interlocked.Decrement(ref s_activeWorkerTotal);
+            }
 
             // Pair the TryRegister at the worker-start site. When the last
             // worker completes, this signals ShutdownAndDrain that Skia is idle.

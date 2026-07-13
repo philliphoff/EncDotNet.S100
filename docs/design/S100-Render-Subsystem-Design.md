@@ -386,7 +386,10 @@ the exact band lands. Accepted.
   drains the visible-miss queue in parallel, with a process-wide cap of the
   logical-core count so multi-cell exchange sets don't oversubscribe; measured to
   cut single-cell cold-tile latency ≈3× on a 16-core host. `LowEnd` keeps one
-  worker.
+  worker. The per-layer size is a floor, not a ceiling: a busy layer borrows idle
+  global capacity toward the process-wide cap for visible work, with a fairness
+  floor reserving each other active-visible layer its share (issue #432; design
+  §D.2).
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply and
   are unchanged by tiling.
 
@@ -428,9 +431,35 @@ either higher tier. Within each tier a worker dequeues **centre-first**
 viewport centre rasterises before the perimeter, cutting time-to-centre-fill on a
 cold pan/zoom. Equal-distance ties break deterministically on `(band, y, x)`, so
 the drain order never depends on the pending set's hash iteration order. The pool
-size is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
+size floor is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
 `ActiveWorkers` count plus a process-wide `s_activeWorkerTotal` cap (core count)
 bound how many run at once.
+
+**Elastic borrowing (issue #432).** The per-layer count is a *floor*
+(reservation), not a hard ceiling. When a layer has a visible cold backlog and
+global room exists, it may start workers above its floor toward `s_maxTotalWorkers`
+so idle cores drain a single busy layer's cold-miss queue instead of sitting
+unused (the common one-busy-layer / idle-siblings shape of a cold pan). Three
+invariants keep this safe. **(1) Visible-only:** the elastic ceiling is gated to
+the *visible* pending count — predicted/speculative tiles (including the
+cross-band pre-warm set) never justify borrowing, so a busy layer's off-screen
+prewarm can't occupy borrowed cores a sibling wants for on-screen work.
+`ComputeWorkersToStart` encodes the cap arithmetic (the predicted and cross-band
+sets are summed into its speculative term, so both are served only by the floor).
+**(2) Prompt give-back:** a borrowed (above-floor) worker sheds itself at the
+visible→speculative boundary — `ShouldWorkerExit` returns true once no visible work
+remains and `ActiveWorkers > TileWorkerCount` — releasing its slot under
+`state.Sync` so a cascade of sheds converges on the floor without over-shedding.
+A *baseline* worker instead stays alive while any predicted **or** cross-band work
+remains, so the speculative tiers still drain. Tile rasters are short and
+non-preemptible, so capacity returns within roughly one tile's raster time; no
+preemption machinery is needed. **(3) Fairness floor:** before lending, each
+*other* layer that currently has visible cold work (tracked in a time-windowed
+active-visible-layer registry, keyed by `TileState`) keeps its `TileWorkerCount`
+reservation, so a dense bottom-of-z-order layer painting first cannot borrow the
+whole budget and starve later-painting siblings — it can only lend *leftover*
+room. On a `LowEnd` (single-worker) host the elastic ceiling collapses to the
+floor and the whole path no-ops.
 
 Speculatively-rasterised keys (both same-band predicted and cross-band pre-warm)
 are tracked in `PredictedInCache`; when a later frame finds such a key in the

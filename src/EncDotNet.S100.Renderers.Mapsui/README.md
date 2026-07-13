@@ -599,11 +599,19 @@ native memory; visible tiles are kept most-recently-used so they are never
 evicted mid-frame. A tier-sized pool of coalescing workers per layer drains the
 visible-miss set (replaced every frame), and all cache access is serialised
 through the layer lock so a worker cannot dispose an image the compositor is
-blitting. The pool size is `S100_VECTOR_TILE_WORKERS` (default sized by the
+blitting. The pool size floor is `S100_VECTOR_TILE_WORKERS` (default sized by the
 performance profile — one on low-end hosts, scaling with cores on high-end), so a
 cold pan's visible misses rasterise in parallel instead of one at a time; a
 process-wide cap (logical-core count) stops *N* layers × *N* workers from
-oversubscribing the cores and starving the UI thread on a big exchange set.
+oversubscribing the cores and starving the UI thread on a big exchange set. That
+per-layer size is a **floor, not a ceiling**: a layer with a visible cold backlog
+may borrow idle global capacity toward the process-wide cap (issue #432), but only
+for *visible* work — speculative prewarm never borrows, and a borrowed worker sheds
+itself the moment visible work drains (returning capacity within ~one tile raster)
+rather than falling through to prediction. Before lending, each other layer that
+also has visible work keeps its own floor reserved, so a dense bottom-of-z-order
+layer cannot starve later-painting siblings; on a `LowEnd` (single-worker) host the
+elastic ceiling collapses to the floor and the behaviour is unchanged.
 Telemetry histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration`
 (UI composite pass) attribute the two halves, while `TileColdLatency` measures the
 end-to-end queue-wait-plus-rasterise a cold tile takes to appear. A rotated
