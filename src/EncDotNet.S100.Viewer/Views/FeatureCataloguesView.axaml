@@ -41,15 +41,25 @@
                                        IsVisible="{Binding ShowPath}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                        <Button Grid.Column="1"
-                                Classes="Icon"
-                                Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
-                                CommandParameter="{Binding}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
-                                IsVisible="{Binding !IsBuiltIn}"
-                                VerticalAlignment="Center">
-                            <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
-                        </Button>
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Spacing="2"
+                                    VerticalAlignment="Center">
+                            <Button Classes="Icon"
+                                    Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).OpenInExaminerCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenCatalogueInExaminer}"
+                                    IsVisible="{Binding CanOpenInExaminer}">
+                                <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <Button Classes="Icon"
+                                    Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
+                                    IsVisible="{Binding !IsBuiltIn}">
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                        </StackPanel>
                     </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

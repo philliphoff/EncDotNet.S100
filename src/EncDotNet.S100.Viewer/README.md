@@ -232,6 +232,14 @@ shows:
   `CATPLE`) are shown as friendly names ("Category of pile") and
   enumerated values are shown with their FC labels. Complex
   attribute groups can be collapsed.
+- An **open-in-eXaminer** link on the feature heading and on each
+  attribute row that opens the matching entry on the
+  [S-100 Feature Catalogue eXaminer](https://s100examiner.com/) in
+  your browser, so you can read the full FC definition. The links
+  appear only for product specs the eXaminer hosts; they can be turned
+  off (or pointed at a mirror) under **Settings → S-100 Feature
+  Catalogue eXaminer**. The **Feature Catalogues** panel offers the
+  same catalogue-level link per built-in/loaded catalogue.
 - A **References** section listing every `xlink:href` the feature
   carries. Clicking a row resolves the reference through the same
   processor and re-targets the pick report — particularly useful

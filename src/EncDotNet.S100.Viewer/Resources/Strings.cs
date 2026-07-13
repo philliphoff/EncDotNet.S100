@@ -137,6 +137,9 @@ internal static class Strings
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
     public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
+    public static string Tooltip_OpenCatalogueInExaminer => Get(nameof(Tooltip_OpenCatalogueInExaminer));
+    public static string Tooltip_OpenFeatureInExaminer => Get(nameof(Tooltip_OpenFeatureInExaminer));
+    public static string Tooltip_OpenAttributeInExaminer => Get(nameof(Tooltip_OpenAttributeInExaminer));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_ToggleDatasetVisibility => Get(nameof(Tooltip_ToggleDatasetVisibility));
     public static string Tooltip_DatasetOpacity => Get(nameof(Tooltip_DatasetOpacity));
@@ -658,6 +661,16 @@ internal static class Strings
     public static string Toast_McpPortFindAnother => Get(nameof(Toast_McpPortFindAnother));
     public static string Toast_McpPortReassignedTitle => Get(nameof(Toast_McpPortReassignedTitle));
     public static string Toast_McpPortReassignedBody => Get(nameof(Toast_McpPortReassignedBody));
+
+    // S-100 Feature Catalogue eXaminer links (issue #442)
+    public static string Settings_ExaminerSection => Get(nameof(Settings_ExaminerSection));
+    public static string Settings_ExaminerSection_Help => Get(nameof(Settings_ExaminerSection_Help));
+    public static string Settings_ExaminerEnabled => Get(nameof(Settings_ExaminerEnabled));
+    public static string Settings_ExaminerEnabledTooltip => Get(nameof(Settings_ExaminerEnabledTooltip));
+    public static string Settings_ExaminerBaseUrl => Get(nameof(Settings_ExaminerBaseUrl));
+    public static string Settings_ExaminerBaseUrlTooltip => Get(nameof(Settings_ExaminerBaseUrlTooltip));
+    public static string Settings_ExaminerBaseUrl_Reset => Get(nameof(Settings_ExaminerBaseUrl_Reset));
+    public static string Settings_ExaminerBaseUrl_ResetTooltip => Get(nameof(Settings_ExaminerBaseUrl_ResetTooltip));
 
     // Load-failure toast
     public static string Toast_DatasetErrorTitle => Get(nameof(Toast_DatasetErrorTitle));

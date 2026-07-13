@@ -14,18 +14,46 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class FeatureCataloguesViewModel : ViewModelBase
 {
     private readonly ViewerSettings _settings;
+    private readonly Services.IS100ExaminerLinkBuilder? _examinerLinks;
+    private readonly Services.IUrlOpener? _urlOpener;
 
     public ObservableCollection<CatalogueEntry> Entries { get; } = new();
 
     public ICommand AddCommand { get; }
     public ICommand RemoveCommand { get; }
 
+    /// <summary>
+    /// Opens the row's catalogue in the S-100 Feature Catalogue eXaminer
+    /// (issue #442). No-op when the examiner integration is unavailable.
+    /// </summary>
+    public ICommand OpenInExaminerCommand { get; }
+
     public FeatureCataloguesViewModel(ViewerSettings settings)
+        : this(settings, examinerLinks: null, urlOpener: null)
+    {
+    }
+
+    public FeatureCataloguesViewModel(
+        ViewerSettings settings,
+        Services.IS100ExaminerLinkBuilder? examinerLinks,
+        Services.IUrlOpener? urlOpener)
     {
         _settings = settings;
+        _examinerLinks = examinerLinks;
+        _urlOpener = urlOpener;
         AddCommand = new RelayCommand<string?>(_ => { }); // wired up from view
         RemoveCommand = new RelayCommand<CatalogueEntry>(Remove);
+        OpenInExaminerCommand = new RelayCommand<CatalogueEntry>(OpenInExaminer);
         Reload();
+    }
+
+    private void OpenInExaminer(CatalogueEntry? entry)
+    {
+        if (entry is null || _examinerLinks is null || _urlOpener is null)
+            return;
+        var url = _examinerLinks.BuildCatalogueUrl(entry.ProductSpec);
+        if (!string.IsNullOrEmpty(url))
+            _urlOpener.Open(url);
     }
 
     public void Reload()
@@ -63,17 +91,20 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
             // Built-in specs are always covered by the curated title map, so the
             // parsed-name fallback never fires here.
             var title = ComposeTitle(spec, Strings.SpecDisplayName(spec));
-            Entries.Add(new CatalogueEntry(spec, title, displayPath, isBuiltIn: true, version: version, versionDate: versionDate));
+            Entries.Add(new CatalogueEntry(spec, title, displayPath, isBuiltIn: true, version: version, versionDate: versionDate, canOpenInExaminer: ExaminerSupports(spec)));
         }
     }
 
-    private static CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
+    private bool ExaminerSupports(string spec) =>
+        _examinerLinks?.SupportsSpec(spec) ?? false;
+
+    private CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
     {
         var (name, version, date) = ReadFeatureCatalogueInfo(path);
         // Curated name first; fall back to the catalogue's own declared name
         // (for custom specs outside the bundled set).
         var name2 = Strings.SpecDisplayName(spec) ?? (string.IsNullOrWhiteSpace(name) ? null : name);
-        return new CatalogueEntry(spec, ComposeTitle(spec, name2), path, isBuiltIn: isBuiltIn, version: version, versionDate: date);
+        return new CatalogueEntry(spec, ComposeTitle(spec, name2), path, isBuiltIn: isBuiltIn, version: version, versionDate: date, canOpenInExaminer: ExaminerSupports(spec));
     }
 
     /// <summary>
@@ -253,13 +284,23 @@ internal sealed class CatalogueEntry
     /// </summary>
     public bool ShowPath => !IsBuiltIn && !string.IsNullOrEmpty(Path);
 
+    /// <summary>
+    /// True when this catalogue can be opened in the S-100 Feature Catalogue
+    /// eXaminer (issue #442): the examiner integration is enabled and it
+    /// hosts a Feature Catalogue for <see cref="ProductSpec"/>. Gates the
+    /// per-row "open in eXaminer" button. Always <c>false</c> for portrayal
+    /// catalogue entries.
+    /// </summary>
+    public bool CanOpenInExaminer { get; }
+
     public CatalogueEntry(
         string productSpec,
         string displayTitle,
         string path,
         bool isBuiltIn = false,
         string? version = null,
-        string? versionDate = null)
+        string? versionDate = null,
+        bool canOpenInExaminer = false)
     {
         ProductSpec = productSpec;
         DisplayTitle = displayTitle;
@@ -267,5 +308,6 @@ internal sealed class CatalogueEntry
         IsBuiltIn = isBuiltIn;
         Version = version;
         VersionDate = versionDate;
+        CanOpenInExaminer = canOpenInExaminer;
     }
 }

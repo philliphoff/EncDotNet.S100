@@ -1099,6 +1099,11 @@ internal sealed class SettingsViewModel : ViewModelBase
         _mcpPort = settings.McpPort;
         ResetMcpPortCommand = new RelayCommand(() => McpPort = 0);
 
+        _examinerLinksEnabled = settings.S100ExaminerLinksEnabled;
+        _examinerBaseUrl = settings.S100ExaminerBaseUrl ?? ViewerSettings.DefaultS100ExaminerBaseUrl;
+        ResetExaminerBaseUrlCommand = new RelayCommand(
+            () => ExaminerBaseUrl = ViewerSettings.DefaultS100ExaminerBaseUrl);
+
         var own = settings.OwnShip ?? new OwnShipSettings();
         _ownShipOverlayEnabled = settings.OwnShipOverlayEnabled;
         _ownShipLength = own.LengthMetres;
@@ -1229,6 +1234,58 @@ internal sealed class SettingsViewModel : ViewModelBase
             }
         }
     }
+
+    // ---------------------------------------------------------------
+    // S-100 Feature Catalogue eXaminer deep-links (issue #442).
+    // ---------------------------------------------------------------
+
+    private bool _examinerLinksEnabled;
+    /// <summary>
+    /// Whether feature/attribute rows offer "open in S-100 Feature Catalogue
+    /// eXaminer" deep-links. Persisted to
+    /// <see cref="ViewerSettings.S100ExaminerLinksEnabled"/>.
+    /// </summary>
+    public bool ExaminerLinksEnabled
+    {
+        get => _examinerLinksEnabled;
+        set
+        {
+            if (SetProperty(ref _examinerLinksEnabled, value))
+            {
+                _settings.S100ExaminerLinksEnabled = value;
+                _settings.Save();
+            }
+        }
+    }
+
+    private string _examinerBaseUrl;
+    /// <summary>
+    /// Base URL of the S-100 Feature Catalogue eXaminer used to build
+    /// deep-links. Persisted to
+    /// <see cref="ViewerSettings.S100ExaminerBaseUrl"/>.
+    /// </summary>
+    public string ExaminerBaseUrl
+    {
+        get => _examinerBaseUrl;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value)
+                ? ViewerSettings.DefaultS100ExaminerBaseUrl
+                : value.Trim();
+            if (SetProperty(ref _examinerBaseUrl, normalized))
+            {
+                _settings.S100ExaminerBaseUrl = normalized;
+                _settings.Save();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Command bound to the "Reset to default" button next to the eXaminer
+    /// base-URL field. Restores
+    /// <see cref="ViewerSettings.DefaultS100ExaminerBaseUrl"/>.
+    /// </summary>
+    public ICommand ResetExaminerBaseUrlCommand { get; }
 
     // ---------------------------------------------------------------
     // Own-vessel dimensions (own-ship symbology PR).

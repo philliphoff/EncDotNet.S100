@@ -836,4 +836,94 @@ public class PickReportViewModelTests
         Assert.Null(vm.IdentityCaption);
         Assert.False(vm.CopyIdentityCommand.CanExecute(null));
     }
+
+    // ---- S-100 Feature Catalogue eXaminer links (issue #442) ----
+
+    private sealed class StubUrlOpener : IUrlOpener
+    {
+        public string? LastUrl { get; private set; }
+        public void Open(string url) => LastUrl = url;
+    }
+
+    private static ViewerSettings ExaminerSettings(bool enabled = true)
+    {
+        var path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json");
+        return new ViewerSettings
+        {
+            SettingsFilePath = path,
+            S100ExaminerLinksEnabled = enabled,
+            S100ExaminerBaseUrl = ViewerSettings.DefaultS100ExaminerBaseUrl,
+        };
+    }
+
+    [Fact]
+    public void Examiner_FeatureCommand_OpensDeepLink()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
+        var vm = new PickReportViewModel(null, null, opener, links);
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+
+        Assert.True(vm.IsExaminerAvailable);
+        Assert.True(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+        vm.OpenFeatureInExaminerCommand.Execute(null);
+
+        Assert.Equal("https://s100examiner.com/?catalog=S-101&feature=Building", opener.LastUrl);
+    }
+
+    [Fact]
+    public void Examiner_AttributeCommand_OpensDeepLink()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
+        var vm = new PickReportViewModel(null, null, opener, links);
+        var attr = Leaf("colour", "1");
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101", new[] { attr });
+
+        Assert.True(vm.OpenAttributeInExaminerCommand.CanExecute(attr));
+        vm.OpenAttributeInExaminerCommand.Execute(attr);
+
+        Assert.Equal(
+            "https://s100examiner.com/?catalog=S-101&feature=Building&attribute=colour",
+            opener.LastUrl);
+    }
+
+    [Fact]
+    public void Examiner_Unavailable_ForUnsupportedSpec()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
+        var vm = new PickReportViewModel(null, null, opener, links);
+        vm.SetPick("Iceberg", "Iceberg", "1", "f.gml", "S-411",
+            new[] { Leaf("name", "X") });
+
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Examiner_Unavailable_WhenDisabled()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings(enabled: false));
+        var vm = new PickReportViewModel(null, null, opener, links);
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Examiner_Unavailable_WithoutLinkBuilder()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
 }
