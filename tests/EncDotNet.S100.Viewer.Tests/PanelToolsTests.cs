@@ -50,9 +50,12 @@ internal sealed class FakeViewerUiController : IViewerUiController
             return Task.FromResult(new PanelMutationOutcome(true, false, state, previousShowing));
         }
 
-        // Model the real controller: showing selects + opens (Showing true),
-        // hiding closes the dock (Showing false).
-        var next = state with { Selected = visible, DockOpen = visible, Showing = visible };
+        // Model the real controller: showing selects the tab and opens its
+        // dock (Showing true); hiding closes the dock but leaves the tab
+        // selected (ViewerUiController.HideTab does not change selection).
+        var next = visible
+            ? state with { Selected = true, DockOpen = true, Showing = true }
+            : state with { DockOpen = false, Showing = false };
         _panels[state.Id] = next;
         return Task.FromResult(new PanelMutationOutcome(true, true, next, previousShowing));
     }
