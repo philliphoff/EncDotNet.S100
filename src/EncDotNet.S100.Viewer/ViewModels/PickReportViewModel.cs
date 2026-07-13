@@ -84,10 +84,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             hit => hit is not null && TryGetAisMmsi(hit, out _));
         OpenFeatureInExaminerCommand = new RelayCommand(
             OpenFeatureInExaminer,
-            () => IsExaminerAvailable && !string.IsNullOrEmpty(FeatureType));
+            () => IsExaminerAvailable && !string.IsNullOrWhiteSpace(FeatureType));
         OpenAttributeInExaminerCommand = new RelayCommand<PickAttribute>(
             OpenAttributeInExaminer,
-            a => IsExaminerAvailable && a is not null && !string.IsNullOrEmpty(a.Code));
+            a => IsExaminerAvailable && a is not null && !string.IsNullOrWhiteSpace(a.Code));
 
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
