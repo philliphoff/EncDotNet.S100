@@ -223,6 +223,20 @@ public class SetPanelToolTests
     }
 
     [Fact]
+    public async Task Unavailable_panel_error_echoes_canonical_id_not_caller_casing()
+    {
+        var controller = new FakeViewerUiController(
+            Panel("Helm", "Left", available: false, selected: false, dockOpen: false));
+        var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
+
+        var result = await tool.InvokeAsync(new SetPanelRequest("helm", true));
+
+        Assert.True(result.TryGetError(out var err));
+        var unavailable = Assert.IsType<PanelUnavailable>(err);
+        Assert.Equal("Helm", unavailable.PanelId);
+    }
+
+    [Fact]
     public async Task Hiding_unavailable_panel_is_allowed_noop()
     {
         var controller = new FakeViewerUiController(

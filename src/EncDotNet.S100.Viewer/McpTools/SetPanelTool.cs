@@ -79,13 +79,15 @@ internal sealed class SetPanelTool
 
         // A well-formed request to show a conditionally-registered panel that
         // is not currently available cannot be honoured; hiding one is a
-        // harmless no-op, so only guard the show path.
+        // harmless no-op, so only guard the show path. The panel resolved
+        // (Found), so State carries its canonical id — echo that rather than
+        // the caller-supplied string, which may differ by casing.
+        var state = outcome.State!.Value;
         if (visible && !outcome.Available)
         {
-            return ToolResult<SetPanelResult>.Err(new PanelUnavailable(panelId));
+            return ToolResult<SetPanelResult>.Err(new PanelUnavailable(state.Id));
         }
 
-        var state = outcome.State!.Value;
         return ToolResult<SetPanelResult>.Ok(new SetPanelResult(
             Panel: state.Id,
             Title: state.Title,
