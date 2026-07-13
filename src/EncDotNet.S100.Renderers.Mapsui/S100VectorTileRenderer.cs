@@ -851,7 +851,16 @@ public static class S100VectorTileRenderer
                     CrossBandPrewarmMaxTiles);
                 foreach (var key in crossBand)
                 {
-                    if (!state.Cache.Contains(key) && !state.InFlight.Contains(key))
+                    // Also exclude keys already queued in a higher tier this frame:
+                    // the band ± 1 centre tiles overlap TileGrid.PredictedTiles, so
+                    // without this guard the same key would sit in both PendingPredicted
+                    // and PendingCrossBand and be rasterised twice (predicted tier first,
+                    // then cross-band), double-counting TilePredictionRasterized and
+                    // wasting CPU / disk writes (issue #428 review follow-up).
+                    if (!state.Cache.Contains(key)
+                        && !state.InFlight.Contains(key)
+                        && !state.PendingVisible.Contains(key)
+                        && !state.PendingPredicted.Contains(key))
                     {
                         state.PendingCrossBand.Add(key);
                     }
