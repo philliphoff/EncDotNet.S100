@@ -217,9 +217,11 @@ public class RenderingOptimizationsTests
         var originalProfile = RenderingOptimizations.Profile;
         try
         {
-            // LowEnd is a no-op for cross-band prewarm (issue #428): the extra
+            // LowEnd defaults cross-band prewarm off (issue #428): the extra
             // speculative raster/cache pressure is not worth it on a constrained
-            // host. Any other tier defaults it on.
+            // host. This governs the profile-switch *default* only — an explicit
+            // opt-in via env var or setter is still honoured — and any other tier
+            // defaults it on.
             RenderingOptimizations.Profile = PerformanceProfile.LowEnd;
             Assert.False(RenderingOptimizations.TileCrossBandPrewarmEnabled);
 
