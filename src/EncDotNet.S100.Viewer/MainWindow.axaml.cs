@@ -194,6 +194,12 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceOverlayHost = null;
             _pickHighlightController?.Dispose();
             _pickHighlightController = null;
+            // Clear the late-bound accessors this window owns so panel /
+            // screenshot MCP tools observe the torn-down state (UiNotReady /
+            // WindowNotReady) rather than a stale controller, and so the
+            // MainViewModel / window are not kept alive after close.
+            App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
+            App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
         };
         DataContext = _viewModel;
 
