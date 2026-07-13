@@ -693,6 +693,7 @@ public partial class App : Application
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
+        services.AddSingleton<IViewerUiControllerAccessor, ViewerUiControllerAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
         services.AddSingleton<IRenderActivityMonitor>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>());
@@ -715,7 +716,9 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoadGateway>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
-            sp.GetRequiredService<IGeographicPickPresenter>()));
+            sp.GetRequiredService<IGeographicPickPresenter>(),
+            sp.GetRequiredService<IViewerUiControllerAccessor>(),
+            sp.GetRequiredService<IAppScreenshotProvider>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
