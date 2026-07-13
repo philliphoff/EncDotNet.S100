@@ -841,9 +841,16 @@ public static class S100VectorTileRenderer
             // PendingVisible and PendingPredicted in the worker, so even though it
             // is enqueued in the same frame as the same-band predicted set it only
             // rasterises once that has drained. Excludes cached / in-flight tiles.
+            //
+            // The idle gate keys on coldExposure (every cold visible tile this
+            // frame, pending OR already in flight), not PendingVisible.Count:
+            // PendingVisible excludes cold tiles already handed to a worker, so a
+            // PendingVisible.Count == 0 test would let pre-warm start while the
+            // viewport still had cold holes mid-raster and steal a worker from
+            // finishing the on-screen fill — breaking the guarantee above.
             state.PendingCrossBand.Clear();
             if (CrossBandPrewarmEnabled
-                && state.PendingVisible.Count == 0
+                && coldExposure == 0
                 && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
             {
                 var crossBand = TileGrid.CrossBandPrewarmTiles(
