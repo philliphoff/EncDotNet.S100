@@ -128,7 +128,14 @@ internal sealed class S100ExaminerLinkBuilder : IS100ExaminerLinkBuilder
 
     private string? Build(string? productSpec, string? featureCode, string? attributeCode)
     {
-        if (!SupportsSpec(productSpec) || !TryGetBaseUri(out var baseUri))
+        // Validate spec eligibility and parse the base URI in a single pass.
+        // Calling SupportsSpec here would re-parse the base URI (via IsEnabled)
+        // on top of the TryGetBaseUri call below — wasteful since Build can run
+        // per attribute row.
+        if (!_settings.S100ExaminerLinksEnabled
+            || string.IsNullOrWhiteSpace(productSpec)
+            || !SupportedSpecs.Contains(productSpec)
+            || !TryGetBaseUri(out var baseUri))
             return null;
 
         var query = new List<string>(3)
