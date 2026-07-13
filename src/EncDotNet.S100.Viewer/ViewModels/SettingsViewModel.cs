@@ -678,8 +678,9 @@ internal sealed class SettingsViewModel : ViewModelBase
     private bool _tileCrossBandPrewarmEnabled;
     /// <summary>
     /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428). Read
-    /// every frame, so the change takes effect live. Disabled when pinned by
-    /// <c>S100_VECTOR_TILE_XBAND</c>.
+    /// every frame, so the change takes effect live. Not user-editable (see
+    /// <see cref="TileCrossBandPrewarmEditable"/>) when pinned by
+    /// <c>S100_VECTOR_TILE_XBAND</c> — env pinning can force it either on or off.
     /// </summary>
     public bool TileCrossBandPrewarmEnabled
     {

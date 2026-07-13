@@ -750,8 +750,9 @@ tiles. Like same-band prediction its tiles never request a repaint and are
 rebuilt (cancelled) every frame; a later zoom that reveals one scores an ordinary
 prediction hit (`TileKey` carries the band).
 
-Cross-band pre-warm is on by default (a no-op on the `LowEnd` performance tier)
-and is a first-class A/B knob: `S100_VECTOR_TILE_XBAND=0`
+Cross-band pre-warm is on by default (off by default on the `LowEnd` performance
+tier, though an explicit opt-in via the env var or settings toggle is still
+honoured) and is a first-class A/B knob: `S100_VECTOR_TILE_XBAND=0`
 (`CrossBandPrewarmEnabled`) disables it, leaving the same-band warm set intact.
 Its tiles flow through the existing prediction telemetry, so a zoom-transition
 A/B reads time-to-fill at the new band from `s100.render.tile.cold.latency` and

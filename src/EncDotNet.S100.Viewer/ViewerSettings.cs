@@ -273,8 +273,9 @@ internal sealed class ViewerSettings
 
     /// <summary>
     /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
-    /// <see langword="null"/> → best default (on, except a no-op on the LowEnd
-    /// tier). Mirrors <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
+    /// <see langword="null"/> → best default (on, except off by default on the
+    /// LowEnd tier; an explicit opt-in is still honoured there). Mirrors
+    /// <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
     /// <c>S100_VECTOR_TILE_XBAND</c>.
     /// </summary>
     public bool? TileCrossBandPrewarmEnabled { get; set; }

@@ -540,7 +540,8 @@ subsequent zoom-in or zoom-out starts warm.
   ordinary prediction hit.
 
 Cross-band pre-warm is a first-class A/B knob (`S100_VECTOR_TILE_XBAND`,
-`CrossBandPrewarmEnabled`), default on except a no-op on the `LowEnd` tier. Its
+`CrossBandPrewarmEnabled`), default on except off by default on the `LowEnd` tier
+(an explicit opt-in is still honoured there). Its
 tiles flow through the existing prediction telemetry
 (`s100.render.tile.prediction.rasterized` / `.hits`), so a zoom-transition A/B
 reads time-to-fill at the new band from the cold-latency histogram and the

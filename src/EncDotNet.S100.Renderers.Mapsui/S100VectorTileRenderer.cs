@@ -131,10 +131,10 @@ public static class S100VectorTileRenderer
     /// same-band predicted work), so a subsequent zoom-in or zoom-out starts warm
     /// instead of paying full cold-tile latency at the new band. Sourced from
     /// <see cref="RenderingOptimizations.TileCrossBandPrewarmEnabled"/> (seeded
-    /// from <c>S100_VECTOR_TILE_XBAND</c>, default on except a no-op on the
-    /// LowEnd tier); read every frame so a change takes effect live. Like the
-    /// same-band prediction warm set, its tiles never trigger a redraw and are
-    /// cancelled (rebuilt) every frame.
+    /// from <c>S100_VECTOR_TILE_XBAND</c>, default on except off by default on the
+    /// LowEnd tier — an explicit opt-in is still honoured there); read every frame
+    /// so a change takes effect live. Like the same-band prediction warm set, its
+    /// tiles never trigger a redraw and are cancelled (rebuilt) every frame.
     /// </summary>
     public static bool CrossBandPrewarmEnabled => RenderingOptimizations.TileCrossBandPrewarmEnabled;
 
