@@ -60,6 +60,7 @@
                                    Text="{Binding DisplayText}"
                                    FontSize="12"
                                    FontWeight="Medium"
+                                   VerticalAlignment="Center"
                                    TextWrapping="NoWrap"
                                    TextTrimming="CharacterEllipsis">
                             <ToolTip.Tip>
@@ -70,15 +71,20 @@
                             </ToolTip.Tip>
                         </TextBlock>
                         <Button Grid.Column="2"
-                                Classes="Icon"
-                                Padding="2"
+                                Width="22" Height="22"
+                                MinWidth="0" MinHeight="0"
+                                Padding="0"
                                 Margin="6,0,0,0"
+                                Background="Transparent"
+                                BorderThickness="0"
                                 VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
                                 Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
                                 CommandParameter="{Binding}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
                                 IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}">
-                            <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="13" />
+                            <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" Opacity="0.7" />
                         </Button>
                     </Grid>
                 </Grid>
