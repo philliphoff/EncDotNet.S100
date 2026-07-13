@@ -98,6 +98,23 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     private bool ExaminerSupports(string spec) =>
         _examinerLinks?.SupportsSpec(spec) ?? false;
 
+    /// <summary>
+    /// Re-evaluates <see cref="CatalogueEntry.CanOpenInExaminer"/> for every
+    /// loaded entry against the current examiner settings. Called when the
+    /// user toggles the integration or changes the base URL so the per-row
+    /// "open in eXaminer" buttons appear/disappear without reloading the list
+    /// (issue #442).
+    /// </summary>
+    public void RefreshExaminerAvailability()
+    {
+        // Every entry in this view model is a feature catalogue, so
+        // eligibility reduces to whether the examiner currently hosts the spec.
+        foreach (var entry in Entries)
+        {
+            entry.CanOpenInExaminer = ExaminerSupports(entry.ProductSpec);
+        }
+    }
+
     private CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
     {
         var (name, version, date) = ReadFeatureCatalogueInfo(path);
@@ -233,7 +250,7 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
     }
 }
 
-internal sealed class CatalogueEntry
+internal sealed class CatalogueEntry : ViewModelBase
 {
     public string ProductSpec { get; }
 
@@ -289,9 +306,17 @@ internal sealed class CatalogueEntry
     /// eXaminer (issue #442): the examiner integration is enabled and it
     /// hosts a Feature Catalogue for <see cref="ProductSpec"/>. Gates the
     /// per-row "open in eXaminer" button. Always <c>false</c> for portrayal
-    /// catalogue entries.
+    /// catalogue entries. Live-refreshed by
+    /// <see cref="FeatureCataloguesViewModel.RefreshExaminerAvailability"/>
+    /// when the examiner settings change.
     /// </summary>
-    public bool CanOpenInExaminer { get; }
+    public bool CanOpenInExaminer
+    {
+        get => _canOpenInExaminer;
+        internal set => SetProperty(ref _canOpenInExaminer, value);
+    }
+
+    private bool _canOpenInExaminer;
 
     public CatalogueEntry(
         string productSpec,

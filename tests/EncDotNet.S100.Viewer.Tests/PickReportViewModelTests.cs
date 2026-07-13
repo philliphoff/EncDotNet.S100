@@ -926,4 +926,31 @@ public class PickReportViewModelTests
         Assert.False(vm.IsExaminerAvailable);
         Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
     }
+
+    [Fact]
+    public void Examiner_Refresh_UpdatesAvailability_WhenSettingToggled()
+    {
+        var settings = ExaminerSettings();
+        var links = new S100ExaminerLinkBuilder(settings);
+        var vm = new PickReportViewModel(null, null, new StubUrlOpener(), links);
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+        Assert.True(vm.IsExaminerAvailable);
+
+        var raised = false;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PickReportViewModel.IsExaminerAvailable))
+                raised = true;
+        };
+
+        // User disables the integration; the pick panel must react without a
+        // fresh pick.
+        settings.S100ExaminerLinksEnabled = false;
+        vm.RefreshExaminerAvailability();
+
+        Assert.True(raised);
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
 }

@@ -17,10 +17,18 @@ namespace EncDotNet.S100.Viewer.Services;
 ///   (e.g. <c>S-101</c>) case-insensitively, so the viewer's product-spec
 ///   string maps directly.</item>
 ///   <item><c>?feature=</c> / <c>?attribute=</c> are resolved tolerantly
-///   (exact code → case-insensitive code → name → S-57 alias), so passing
-///   the Feature Catalogue camel-case <c>code</c> — which is exactly what
-///   <c>FeatureType</c> and <c>PickAttribute.Code</c> already carry — is the
-///   canonical form.</item>
+///   (exact code → case-insensitive code → name → S-57 alias). For the
+///   products the examiner hosts, both <c>FeatureType</c> and
+///   <c>PickAttribute.Code</c> already carry the Feature Catalogue
+///   camel-case <c>code</c>: S-101 (ISO 8211) datasets key attributes by
+///   the ATCS code (e.g. <c>categoryOfSpecialPurposeMark</c>,
+///   <c>colour</c>), and GML-encoded products (S-102/104/111/122/124/125/
+///   127/128/129/131/201) use the GML element name, which is the same
+///   camel-case code. The legacy S-57 six-character acronyms
+///   (e.g. <c>OBJNAM</c>, <c>CATPIB</c>) are only ever seen on true S-57
+///   datasets — which the examiner does not host and this builder never
+///   links — and even those resolve via the alias fallback, so the link is
+///   robust regardless of which form reaches it.</item>
 /// </list>
 /// Only the product specifications the examiner actually hosts (see
 /// <see cref="SupportsSpec"/>) produce a link; everything else returns

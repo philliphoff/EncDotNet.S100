@@ -80,14 +80,59 @@ public class ExaminerViewModelTests
     }
 
     [Fact]
-    public void Fc_builtin_entry_unsupported_spec_cannot_open()
+    public void Fc_refresh_updates_can_open_when_links_disabled()
     {
         var settings = NewSettings();
         var links = new S100ExaminerLinkBuilder(settings);
         var vm = new FeatureCataloguesViewModel(settings, links, new StubUrlOpener());
 
-        vm.AddBuiltIn("S-421", "(built-in)");
-        var entry = vm.Entries.Single(e => e.ProductSpec == "S-421");
+        vm.AddBuiltIn("S-101", "(built-in)");
+        var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
+        Assert.True(entry.CanOpenInExaminer);
+
+        // Simulate the user disabling the integration in Settings.
+        settings.S100ExaminerLinksEnabled = false;
+        vm.RefreshExaminerAvailability();
         Assert.False(entry.CanOpenInExaminer);
+
+        // ...and re-enabling it.
+        settings.S100ExaminerLinksEnabled = true;
+        vm.RefreshExaminerAvailability();
+        Assert.True(entry.CanOpenInExaminer);
+    }
+
+    [Fact]
+    public void Settings_change_raises_examiner_settings_changed()
+    {
+        var s = NewSettings();
+        var vm = new SettingsViewModel(s);
+        var count = 0;
+        vm.ExaminerSettingsChanged += () => count++;
+
+        vm.ExaminerLinksEnabled = false;
+        vm.ExaminerBaseUrl = "https://mirror.example.org/";
+
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public void Fc_refresh_raises_property_changed_on_entry()
+    {
+        var settings = NewSettings();
+        var links = new S100ExaminerLinkBuilder(settings);
+        var vm = new FeatureCataloguesViewModel(settings, links, new StubUrlOpener());
+
+        vm.AddBuiltIn("S-101", "(built-in)");
+        var entry = vm.Entries.Single(e => e.ProductSpec == "S-101");
+        var raised = false;
+        entry.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CatalogueEntry.CanOpenInExaminer))
+                raised = true;
+        };
+
+        settings.S100ExaminerLinksEnabled = false;
+        vm.RefreshExaminerAvailability();
+        Assert.True(raised);
     }
 }

@@ -227,6 +227,16 @@ public partial class App : Application
                     LogCrash("McpServerHost", t.Exception.GetBaseException().ToString());
             }, TaskScheduler.Default);
         };
+
+        // Live-refresh the examiner affordances in the FC and pick panels when
+        // the user toggles the integration or edits the base URL (issue #442),
+        // so the buttons appear/disappear without a catalogue reload or a new
+        // pick.
+        settingsVm.ExaminerSettingsChanged += () =>
+        {
+            s_services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
+            s_services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
+        };
         _ = mcpHost.Apply().ContinueWith(t =>
         {
             if (t.Exception is not null)

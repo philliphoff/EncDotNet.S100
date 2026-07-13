@@ -547,7 +547,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     }
 
     /// <summary>
-    /// Attempts to extract a numeric MMSI from a dynamic hit that
+    /// Re-evaluates the examiner affordances against the current settings.
+    /// Called when the user toggles the integration or changes the base URL
+    /// so the feature- and attribute-level "open in eXaminer" buttons
+    /// appear/disappear immediately, without waiting for the next pick
+    /// (issue #442).
+    /// </summary>
+    public void RefreshExaminerAvailability()
+    {
+        OnPropertyChanged(nameof(IsExaminerAvailable));
+        (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (OpenAttributeInExaminerCommand as RelayCommand<PickAttribute>)?.NotifyCanExecuteChanged();
+    }
+
     /// represents an AIS target. AIS feature ids follow the
     /// <c>"ais:{mmsi}"</c> convention defined by
     /// <c>AisDynamicFeatureSource.FeatureIdForMmsi</c>.

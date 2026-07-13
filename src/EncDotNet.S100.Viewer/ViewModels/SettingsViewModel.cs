@@ -1254,6 +1254,7 @@ internal sealed class SettingsViewModel : ViewModelBase
             {
                 _settings.S100ExaminerLinksEnabled = value;
                 _settings.Save();
+                ExaminerSettingsChanged?.Invoke();
             }
         }
     }
@@ -1276,6 +1277,7 @@ internal sealed class SettingsViewModel : ViewModelBase
             {
                 _settings.S100ExaminerBaseUrl = normalized;
                 _settings.Save();
+                ExaminerSettingsChanged?.Invoke();
             }
         }
     }
@@ -1286,6 +1288,14 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <see cref="ViewerSettings.DefaultS100ExaminerBaseUrl"/>.
     /// </summary>
     public ICommand ResetExaminerBaseUrlCommand { get; }
+
+    /// <summary>
+    /// Raised when an examiner setting (<see cref="ExaminerLinksEnabled"/> or
+    /// <see cref="ExaminerBaseUrl"/>) changes, so panels that surface
+    /// "open in eXaminer" affordances can refresh their availability without
+    /// waiting for a reload or the next pick (issue #442).
+    /// </summary>
+    public event Action? ExaminerSettingsChanged;
 
     // ---------------------------------------------------------------
     // Own-vessel dimensions (own-ship symbology PR).
