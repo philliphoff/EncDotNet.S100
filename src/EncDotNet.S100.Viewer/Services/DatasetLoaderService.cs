@@ -1123,6 +1123,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // — without this step those defaults silently win.
         ApplyDisplayState(entry);
 
+        // Hole-safe per-cell zoom-out visibility window (issue #438 Phase 1):
+        // clamp each layer's MaxVisible to the cell's coarsest intended scale
+        // so finer nested cells drop out first as the viewport zooms out,
+        // leaving the coarser cell underneath. Re-applied on every render
+        // because each build produces fresh ILayer instances.
+        ApplyCellScaleWindow(entry, layers);
+
         // Subscribe lazily on first ReplaceLayers so that property
         // changes raised by the UI propagate to the live ILayer
         // instances. The subscription persists across re-renders.
@@ -1147,6 +1154,28 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             _entryOrder.Insert(0, entry);
         }
         _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
+    }
+
+    /// <summary>
+    /// Applies the hole-safe per-cell zoom-out visibility window (issue #438
+    /// Phase 1) to <paramref name="entry"/>'s freshly-built layers when the
+    /// exchange-set catalogue supplied a coarsest display scale
+    /// (<see cref="DatasetEntry.MinimumDisplayScale"/>). Skipped when the
+    /// mariner has opted to ignore scale minima (consistent with the S-101
+    /// in-file out-of-scale-band cap), so a mariner override still shows every
+    /// cell at all zooms. Toggling the setting re-renders (which calls back
+    /// into <see cref="ReplaceLayers"/>), so the window is re-evaluated.
+    /// </summary>
+    private void ApplyCellScaleWindow(DatasetEntry entry, IReadOnlyList<ILayer> layers)
+    {
+        if (layers.Count == 0)
+            return;
+        if (entry.MinimumDisplayScale is not int minimumDisplayScale)
+            return;
+        if (_marinerSettings.Current.IgnoreScaleMinimum)
+            return;
+
+        MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale);
     }
 
     /// <summary>

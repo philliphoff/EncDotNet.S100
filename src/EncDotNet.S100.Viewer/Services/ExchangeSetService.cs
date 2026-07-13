@@ -263,7 +263,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     relativePath,
                     spec,
                     displayName: Path.GetFileName(relativePath),
-                    updateRelativePaths: updateRelativePaths);
+                    updateRelativePaths: updateRelativePaths,
+                    minimumDisplayScale: metadata.ResolveMinimumDisplayScale(),
+                    maximumDisplayScale: metadata.ResolveMaximumDisplayScale());
                 tracked.Entries.Add(entry);
                 loadTasks.Add(_datasets.RequestLoadAsync(entry));
                 dispatched++;
