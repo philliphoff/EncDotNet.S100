@@ -521,12 +521,16 @@ subsequent zoom-in or zoom-out starts warm.
   tiles win under the cap (the band + 1 footprint alone is ~4× the visible tile
   count).
 - **Idle gate** — populated only on a frame with **no cold visible misses**
-  (`PendingVisible` empty), so it never competes with an on-screen fill, and only
-  when the hot cache is below `CrossBandPrewarmHeadroomFraction` (0.75) of its
-  byte budget, so its speculative inserts cannot evict the current working set.
-  Visible target-band tiles are additionally pinned (`TileCache.Protect`) so they
-  are never evicted regardless; the headroom guard protects the same-band
-  predicted and fallback tiles.
+  (`coldExposure == 0` — no cold visible tile this frame, whether still pending
+  *or* already handed to a worker), so it never competes with an on-screen fill.
+  This is deliberately stricter than a `PendingVisible` empty test: `PendingVisible`
+  excludes cold tiles already in flight, so gating on it would let pre-warm start
+  while the viewport still had cold holes mid-raster and steal a worker from the
+  fill. Also gated on the hot cache being below `CrossBandPrewarmHeadroomFraction`
+  (0.75) of its byte budget, so its speculative inserts cannot evict the current
+  working set. Visible target-band tiles are additionally pinned
+  (`TileCache.Protect`) so they are never evicted regardless; the headroom guard
+  protects the same-band predicted and fallback tiles.
 - **Priority** — drained at the lowest worker tier, strictly behind
   `PendingVisible` and `PendingPredicted` (D.2). Even though it is enqueued in the
   same frame as the same-band warm set, it only rasterises once that has drained.
