@@ -704,7 +704,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
             sp.GetRequiredService<IGeographicPickPresenter>(),
-            sp.GetRequiredService<IViewerUiControllerAccessor>()));
+            sp.GetRequiredService<IViewerUiControllerAccessor>(),
+            sp.GetRequiredService<IAppScreenshotProvider>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

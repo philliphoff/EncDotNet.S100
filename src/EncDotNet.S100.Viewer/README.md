@@ -664,9 +664,11 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Twenty-two viewer-only tools
+bound port back to the user's `settings.json`. Twenty-three viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
+`capture_app_screenshot` (read-only — captures a PNG of the whole
+application window: chart plus docks, panels, timeline, and status bar),
 `set_viewport` (mutating — drives the live navigator to a bbox or
 centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
@@ -702,9 +704,13 @@ let an agent drive and verify the viewer's non-render UX:
 tabs and their `available` / `selected` / `dockOpen` / `showing`
 state) and `set_panel` (mutating — shows or hides a panel by id, e.g.
 `Datasets`, `LayerStack`, `PickReport`, `Timeline`, so a code / run /
-verify loop can assert panel behaviour without the GUI). See
-`docs/mcp-server.md` for the full catalogue and the read-only /
-mutating split.
+verify loop can assert panel behaviour without the GUI).
+`capture_app_screenshot` (read-only) completes that loop visually: it
+returns a PNG of the **whole application window** — chart plus the
+surrounding chrome (docks, panels, timeline, status bar) — so an agent
+can *see* the non-render UX, where `render_to_image` captures only the
+map surface. See `docs/mcp-server.md` for the full catalogue and the
+read-only / mutating split.
 
 **Settings isolation.** `--settings <PATH>` points the run at an
 alternate settings file instead of the per-user default.
