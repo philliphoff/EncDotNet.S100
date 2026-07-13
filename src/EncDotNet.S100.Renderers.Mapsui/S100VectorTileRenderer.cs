@@ -123,6 +123,44 @@ public static class S100VectorTileRenderer
     public static bool PredictionEnabled => RenderingOptimizations.TilePredictionEnabled;
 
     /// <summary>
+    /// Whether idle <b>cross-band pre-warm</b> (issue&#160;#428) is enabled. When
+    /// on, and the tiled base plane is otherwise idle for a layer (no cold
+    /// visible misses this frame and cache headroom to spare), the renderer
+    /// speculatively rasterises the band&#160;±&#160;1 tiles covering the current
+    /// viewport at the <em>lowest</em> worker priority (behind visible and
+    /// same-band predicted work), so a subsequent zoom-in or zoom-out starts warm
+    /// instead of paying full cold-tile latency at the new band. Sourced from
+    /// <see cref="RenderingOptimizations.TileCrossBandPrewarmEnabled"/> (seeded
+    /// from <c>S100_VECTOR_TILE_XBAND</c>, default on except off by default on the
+    /// LowEnd tier — an explicit opt-in is still honoured there); read every frame
+    /// so a change takes effect live. Like the same-band prediction warm set, its
+    /// tiles never trigger a redraw and are cancelled (rebuilt) every frame.
+    /// </summary>
+    public static bool CrossBandPrewarmEnabled => RenderingOptimizations.TileCrossBandPrewarmEnabled;
+
+    /// <summary>
+    /// The maximum number of adjacent-band tiles enqueued per frame for idle
+    /// cross-band pre-warm (issue&#160;#428). Bounds the speculative warm budget
+    /// so pre-warm cannot churn the hot cache: the band&#160;+&#160;1 footprint
+    /// alone is ~4× the visible tile count, so an uncapped warm set could evict a
+    /// large share of the working set. The centre-first ordering
+    /// (<see cref="TileGrid.CrossBandPrewarmTiles"/>) keeps the most-central tiles
+    /// under this cap.
+    /// </summary>
+    private const int CrossBandPrewarmMaxTiles = 24;
+
+    /// <summary>
+    /// The fraction of the hot-cache byte budget below which idle cross-band
+    /// pre-warm may run (issue&#160;#428). When the resident set already exceeds
+    /// this, pre-warm is skipped for the frame so its speculative inserts never
+    /// force eviction of the current working set — the "LRU/hot-cache aware"
+    /// bound the feature calls for. Visible target-band tiles are additionally
+    /// pinned via <see cref="TileCache.Protect"/>, so they are never evicted
+    /// regardless; this guard protects the same-band predicted and fallback tiles.
+    /// </summary>
+    private const double CrossBandPrewarmHeadroomFraction = 0.75;
+
+    /// <summary>
     /// Whether the persistent <b>disk tile cache</b> (Phase&#160;4) is enabled.
     /// When on, a tile missing from the in-memory cache is looked up on disk
     /// before being re-rasterised, and freshly rasterised tiles are persisted —
@@ -535,6 +573,7 @@ public static class S100VectorTileRenderer
             state.InFlight.Clear();
             state.PendingVisible.Clear();
             state.PendingPredicted.Clear();
+            state.PendingCrossBand.Clear();
             state.PredictedInCache.Clear();
             state.VisibleEnqueueTicks.Clear();
             // A new scene is a teleport for prediction: drop the stale velocity
@@ -792,21 +831,65 @@ public static class S100VectorTileRenderer
                 }
             }
 
-            if (state.PendingVisible.Count > 0 || state.PendingPredicted.Count > 0)
+            // Enqueue the idle cross-band (±1) pre-warm set at the lowest priority
+            // (issue #428). Only when the layer is otherwise idle — no cold
+            // visible misses this frame — so pre-warm never competes with an
+            // on-screen fill; and only with cache headroom to spare so its
+            // speculative inserts cannot evict the current working set. The warm
+            // set covers the whole viewport footprint of band ± 1 (centre-first,
+            // capped), so a subsequent zoom starts warm. Drained strictly behind
+            // PendingVisible and PendingPredicted in the worker, so even though it
+            // is enqueued in the same frame as the same-band predicted set it only
+            // rasterises once that has drained. Excludes cached / in-flight tiles.
+            //
+            // The idle gate keys on coldExposure (every cold visible tile this
+            // frame, pending OR already in flight), not PendingVisible.Count:
+            // PendingVisible excludes cold tiles already handed to a worker, so a
+            // PendingVisible.Count == 0 test would let pre-warm start while the
+            // viewport still had cold holes mid-raster and steal a worker from
+            // finishing the on-screen fill — breaking the guarantee above.
+            state.PendingCrossBand.Clear();
+            if (CrossBandPrewarmEnabled
+                && coldExposure == 0
+                && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
+            {
+                var crossBand = TileGrid.CrossBandPrewarmTiles(
+                    centerX, centerY, coverWidth, coverHeight, resolution, band,
+                    CrossBandPrewarmMaxTiles);
+                foreach (var key in crossBand)
+                {
+                    // Also exclude keys already queued in a higher tier this frame:
+                    // the band ± 1 centre tiles overlap TileGrid.PredictedTiles, so
+                    // without this guard the same key would sit in both PendingPredicted
+                    // and PendingCrossBand and be rasterised twice (predicted tier first,
+                    // then cross-band), double-counting TilePredictionRasterized and
+                    // wasting CPU / disk writes (issue #428 review follow-up).
+                    if (!state.Cache.Contains(key)
+                        && !state.InFlight.Contains(key)
+                        && !state.PendingVisible.Contains(key)
+                        && !state.PendingPredicted.Contains(key))
+                    {
+                        state.PendingCrossBand.Add(key);
+                    }
+                }
+            }
+
+            if (state.PendingVisible.Count > 0 || state.PendingPredicted.Count > 0
+                || state.PendingCrossBand.Count > 0)
             {
                 state.PendingDeviceScale = deviceScale;
                 state.PendingGeneration = state.Generation;
                 state.PendingCenterX = centerX;
                 state.PendingCenterY = centerY;
-
                 // Spin up workers to cover the pending tiles. The per-layer
                 // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
                 // a layer with a visible backlog may borrow idle global capacity
                 // toward s_maxTotalWorkers (issue #432), but only for *visible*
-                // work — predicted/speculative tiles never justify borrowing, so a
-                // busy layer's prewarm can't occupy cores a sibling wants for
-                // on-screen tiles. On a LowEnd (single-worker) host there is nothing
-                // to borrow, so the elastic ceiling collapses to the floor and this
+                // work — predicted/speculative tiles (including the idle cross-band
+                // ±1 pre-warm, issue #428) never justify borrowing, so a busy
+                // layer's prewarm can't occupy cores a sibling wants for on-screen
+                // tiles. On a LowEnd (single-worker) host there is nothing to
+                // borrow, so the elastic ceiling collapses to the floor and this
                 // reduces to the pre-elastic behaviour. A per-layer floor is
                 // reserved for every other active-visible layer before any elastic
                 // extra is granted, so a dense bottom-of-z-order layer can't starve
@@ -823,7 +906,7 @@ public static class S100VectorTileRenderer
                     Volatile.Read(ref s_activeWorkerTotal),
                     state.ActiveWorkers,
                     state.PendingVisible.Count,
-                    state.PendingPredicted.Count,
+                    state.PendingPredicted.Count + state.PendingCrossBand.Count,
                     reservedForOtherLayers);
 
                 if (workersToStart > 0)
@@ -1749,20 +1832,24 @@ public static class S100VectorTileRenderer
                     var currentScene = state.Scene;
                     var hasVisible = state.PendingVisible.Count > 0;
                     var hasPredicted = state.PendingPredicted.Count > 0;
+                    var hasCrossBand = state.PendingCrossBand.Count > 0;
 
                     // Exit when the scene is gone or all work has drained, and — the
                     // elastic addition (issue #432) — shed an above-baseline
                     // ("borrowed") worker the moment visible work runs out rather
                     // than letting it fall through to speculative work, so borrowed
                     // global capacity returns to the pool within ~one tile raster.
+                    // The idle cross-band ±1 pre-warm (issue #428) is speculative
+                    // like the predicted set: it keeps a baseline worker alive to
+                    // drain it, but never holds a borrowed worker.
                     // Release the slot under this same lock so concurrent sheds can't
                     // all read the pre-decrement count and over-shed below baseline.
                     if (ShouldWorkerExit(
                             sceneNull: currentScene is null,
-                            hasVisible,
-                            hasPredicted,
-                            state.ActiveWorkers,
-                            RenderingOptimizations.TileWorkerCount))
+                            hasVisible: hasVisible,
+                            hasPredicted: hasPredicted || hasCrossBand,
+                            layerActiveWorkers: state.ActiveWorkers,
+                            baseline: RenderingOptimizations.TileWorkerCount))
                     {
                         state.ActiveWorkers--;
                         Interlocked.Decrement(ref s_activeWorkerTotal);
@@ -1777,9 +1864,19 @@ public static class S100VectorTileRenderer
                         key = TakeNearest(state.PendingVisible, state.PendingCenterX, state.PendingCenterY);
                         isPrediction = false;
                     }
-                    else
+                    else if (state.PendingPredicted.Count > 0)
                     {
                         key = TakeNearest(state.PendingPredicted, state.PendingCenterX, state.PendingCenterY);
+                        isPrediction = true;
+                    }
+                    else
+                    {
+                        // Lowest tier: idle cross-band pre-warm. Treated as a
+                        // prediction (tracked in PredictedInCache, never triggers a
+                        // redraw) so a published adjacent-band tile cannot start a
+                        // repaint loop; it is picked up when a later zoom makes it
+                        // visible.
+                        key = TakeNearest(state.PendingCrossBand, state.PendingCenterX, state.PendingCenterY);
                         isPrediction = true;
                     }
 
@@ -2319,6 +2416,12 @@ public static class S100VectorTileRenderer
         // Visible misses drain before speculative (predicted) tiles.
         public readonly HashSet<TileKey> PendingVisible = new();
         public readonly HashSet<TileKey> PendingPredicted = new();
+
+        // Idle cross-band (±1) pre-warm tiles (issue #428): the lowest-priority
+        // tier, drained only after PendingVisible and PendingPredicted are empty.
+        // Populated only when the layer is otherwise idle (no cold visible misses
+        // this frame, cache headroom to spare); rebuilt (cancelled) every frame.
+        public readonly HashSet<TileKey> PendingCrossBand = new();
 
         // First-enqueue Stopwatch ticks for each cold visible tile still awaiting
         // publish, so the worker can record end-to-end cold latency (queue wait +

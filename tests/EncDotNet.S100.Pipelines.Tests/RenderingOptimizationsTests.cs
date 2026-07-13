@@ -184,6 +184,57 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
+    public void TileCrossBandPrewarm_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileCrossBandPrewarmEnvExplicit)
+        {
+            return; // pinned by S100_VECTOR_TILE_XBAND; setter is a no-op
+        }
+
+        var original = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+        try
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = false;
+            Assert.False(RenderingOptimizations.TileCrossBandPrewarmEnabled);
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = true;
+            Assert.True(RenderingOptimizations.TileCrossBandPrewarmEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = original;
+        }
+    }
+
+    [Fact]
+    public void Profile_LowEnd_DisablesCrossBandPrewarm_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.ProfileEnvExplicit ||
+            RenderingOptimizations.TileCrossBandPrewarmEnvExplicit)
+        {
+            return; // env-pinned; profile setter / prewarm default are no-ops
+        }
+
+        var originalProfile = RenderingOptimizations.Profile;
+        try
+        {
+            // LowEnd defaults cross-band prewarm off (issue #428): the extra
+            // speculative raster/cache pressure is not worth it on a constrained
+            // host. This governs the profile-switch *default* only — an explicit
+            // opt-in via env var or setter is still honoured — and any other tier
+            // defaults it on.
+            RenderingOptimizations.Profile = PerformanceProfile.LowEnd;
+            Assert.False(RenderingOptimizations.TileCrossBandPrewarmEnabled);
+
+            RenderingOptimizations.Profile = PerformanceProfile.HighEnd;
+            Assert.True(RenderingOptimizations.TileCrossBandPrewarmEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.Profile = originalProfile;
+        }
+    }
+
+    [Fact]
     public void TileGutter_Clamps_AndRoundTrips_WhenNotEnvPinned()
     {
         if (RenderingOptimizations.TileGutterDipEnvExplicit)
@@ -237,6 +288,7 @@ public class RenderingOptimizationsTests
     public void TileRenderer_StaticProperties_Mirror_Config()
     {
         Assert.Equal(RenderingOptimizations.TilePredictionEnabled, S100VectorTileRenderer.PredictionEnabled);
+        Assert.Equal(RenderingOptimizations.TileCrossBandPrewarmEnabled, S100VectorTileRenderer.CrossBandPrewarmEnabled);
         Assert.Equal(RenderingOptimizations.TileGpuResidencyEnabled, S100VectorTileRenderer.GpuResidencyEnabled);
         Assert.Equal(RenderingOptimizations.TileDiskCacheEnabled, S100VectorTileRenderer.DiskCacheEnabled);
         Assert.Equal(RenderingOptimizations.TileGutterDip, S100VectorTileRenderer.GutterDip);

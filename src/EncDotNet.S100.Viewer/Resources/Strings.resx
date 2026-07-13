@@ -1002,6 +1002,12 @@
   <data name="Tooltip_TilePredictionEnabled" xml:space="preserve">
     <value>Speculatively rasterize tiles a pan or zoom is about to reveal, so newly exposed edges are already cached. Takes effect immediately. Recommended on.</value>
   </data>
+  <data name="Settings_TileCrossBandPrewarmEnabled" xml:space="preserve">
+    <value>Cross-band pre-warm</value>
+  </data>
+  <data name="Tooltip_TileCrossBandPrewarmEnabled" xml:space="preserve">
+    <value>When idle, speculatively rasterize the adjacent zoom levels (±1 band) covering the current view, so a subsequent zoom starts warm. Runs at the lowest priority behind on-screen work. Takes effect immediately. Recommended on.</value>
+  </data>
   <data name="Settings_TileBudgetMb" xml:space="preserve">
     <value>In-memory cache (MB)</value>
   </data>

@@ -729,6 +729,35 @@ Prediction is on by default and is a first-class A/B knob:
 fell from **58 % → 16 %** (the residual is the cold start, not the pan), at a
 ~32 % prediction hit-rate; the steady-pan window itself was entirely zero-cold.
 
+### Idle cross-band pre-warm (issue #428)
+
+Same-band prediction warms only the two z±1 *centre* tiles, so a zoom that
+crosses a band boundary still pays near-full cold latency at the new band. Idle
+cross-band pre-warm closes that gap: when a layer is otherwise idle the renderer
+warms the whole viewport footprint of both adjacent bands
+(`TileGrid.CrossBandPrewarmTiles`), so a subsequent zoom-in or zoom-out starts
+warm.
+
+It runs as a **third, lowest-priority queue** (`PendingCrossBand`), drained
+strictly behind `PendingVisible` and `PendingPredicted`, so warming an adjacent
+band never delays visible or same-band work. It is enqueued only on a frame with
+**no cold visible misses** and only while the hot cache is below 75 % of its byte
+budget, so its speculative inserts never evict the current working set (visible
+target-band tiles are additionally pinned via `TileCache.Protect`). The set is
+centre-first and capped at 24 tiles per frame — the band+1 footprint alone is
+~4× the visible count — so the cap keeps the most-central, most-likely-next-zoom
+tiles. Like same-band prediction its tiles never request a repaint and are
+rebuilt (cancelled) every frame; a later zoom that reveals one scores an ordinary
+prediction hit (`TileKey` carries the band).
+
+Cross-band pre-warm is on by default (off by default on the `LowEnd` performance
+tier, though an explicit opt-in via the env var or settings toggle is still
+honoured) and is a first-class A/B knob: `S100_VECTOR_TILE_XBAND=0`
+(`CrossBandPrewarmEnabled`) disables it, leaving the same-band warm set intact.
+Its tiles flow through the existing prediction telemetry, so a zoom-transition
+A/B reads time-to-fill at the new band from `s100.render.tile.cold.latency` and
+the `s100.render.tile.prediction.hits` counter.
+
 ### Persistent warm disk cache + `styleStateHash` (Phase 4)
 
 Below the in-memory hot cache sits a **persistent, on-disk warm tier**

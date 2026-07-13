@@ -405,6 +405,8 @@ internal static class Strings
     public static string Tooltip_TileGutterDip => Get(nameof(Tooltip_TileGutterDip));
     public static string Settings_TilePredictionEnabled => Get(nameof(Settings_TilePredictionEnabled));
     public static string Tooltip_TilePredictionEnabled => Get(nameof(Tooltip_TilePredictionEnabled));
+    public static string Settings_TileCrossBandPrewarmEnabled => Get(nameof(Settings_TileCrossBandPrewarmEnabled));
+    public static string Tooltip_TileCrossBandPrewarmEnabled => Get(nameof(Tooltip_TileCrossBandPrewarmEnabled));
     public static string Settings_TileBudgetMb => Get(nameof(Settings_TileBudgetMb));
     public static string Tooltip_TileBudgetMb => Get(nameof(Tooltip_TileBudgetMb));
     public static string Settings_PerformanceProfile => Get(nameof(Settings_PerformanceProfile));

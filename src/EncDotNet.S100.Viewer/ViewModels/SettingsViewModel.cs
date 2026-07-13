@@ -675,6 +675,31 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <summary>Whether the prediction knob is user-editable (not env-pinned).</summary>
     public bool TilePredictionEditable => !RenderingOptimizations.TilePredictionEnvExplicit;
 
+    private bool _tileCrossBandPrewarmEnabled;
+    /// <summary>
+    /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428). Read
+    /// every frame, so the change takes effect live. Not user-editable (see
+    /// <see cref="TileCrossBandPrewarmEditable"/>) when pinned by
+    /// <c>S100_VECTOR_TILE_XBAND</c> — env pinning can force it either on or off.
+    /// </summary>
+    public bool TileCrossBandPrewarmEnabled
+    {
+        get => _tileCrossBandPrewarmEnabled;
+        set
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
+            var effective = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+            if (SetProperty(ref _tileCrossBandPrewarmEnabled, effective))
+            {
+                _settings.TileCrossBandPrewarmEnabled = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the cross-band pre-warm knob is user-editable (not env-pinned).</summary>
+    public bool TileCrossBandPrewarmEditable => !RenderingOptimizations.TileCrossBandPrewarmEnvExplicit;
+
     private bool _tileDiskCacheEnabled;
     /// <summary>
     /// Whether the warm disk tile cache is enabled. The shared cache is created
@@ -818,10 +843,15 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
                 _tileDiskMb = RenderingOptimizations.TileDiskMb;
                 _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
+                // ApplyProfile re-derives the cross-band pre-warm default from the
+                // new tier (off on LowEnd), so mirror it back or the toggle would
+                // drift from the renderer after a profile switch (issue #428).
+                _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
                 OnPropertyChanged(nameof(TileBudgetMb));
                 OnPropertyChanged(nameof(TileGpuBudgetMb));
                 OnPropertyChanged(nameof(TileDiskMb));
                 OnPropertyChanged(nameof(TileWorkerCount));
+                OnPropertyChanged(nameof(TileCrossBandPrewarmEnabled));
                 OnPropertyChanged(nameof(ResolvedProfileLabel));
                 RaiseMarinerChanged();
             }
@@ -1019,6 +1049,13 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
 
         _tilePredictionEnabled = RenderingOptimizations.TilePredictionEnabled;
+
+        if (settings.TileCrossBandPrewarmEnabled is { } tileXBand)
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = tileXBand;
+        }
+
+        _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
 
         if (settings.TileDiskCacheEnabled is { } tileDisk)
         {
