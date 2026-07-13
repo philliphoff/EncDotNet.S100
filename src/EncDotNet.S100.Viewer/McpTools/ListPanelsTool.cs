@@ -47,7 +47,7 @@ internal sealed class ListPanelsTool
         var controller = _accessor.Current;
         if (controller is null)
         {
-            return ToolResult<ListPanelsResult>.Err(new MapNotReady(
+            return ToolResult<ListPanelsResult>.Err(new UiNotReady(
                 "the viewer's UI controller has not been initialised yet"));
         }
 

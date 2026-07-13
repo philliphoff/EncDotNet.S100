@@ -66,7 +66,7 @@ internal sealed class SetPanelTool
         var controller = _accessor.Current;
         if (controller is null)
         {
-            return ToolResult<SetPanelResult>.Err(new MapNotReady(
+            return ToolResult<SetPanelResult>.Err(new UiNotReady(
                 "the viewer's UI controller has not been initialised yet"));
         }
 

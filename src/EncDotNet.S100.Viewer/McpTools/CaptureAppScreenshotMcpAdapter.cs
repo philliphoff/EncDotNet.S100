@@ -64,7 +64,7 @@ internal static class CaptureAppScreenshotMcpAdapter
         }
         catch (Exception ex)
         {
-            return InternalError(ex);
+            return ToolErrorPayload.InternalError(ex, JsonOptions);
         }
     }
 
@@ -80,7 +80,7 @@ internal static class CaptureAppScreenshotMcpAdapter
             return Success(value);
         }
         result.TryGetError(out var err);
-        return Failure(err!);
+        return ToolErrorPayload.AsCallToolResult(err!, JsonOptions);
     }
 
     private static CallToolResult Success(CaptureAppScreenshotResult value)
@@ -101,52 +101,6 @@ internal static class CaptureAppScreenshotMcpAdapter
                 new TextContentBlock { Text = metadata.ToJsonString(JsonOptions) },
             ],
             IsError = false,
-        };
-    }
-
-    private static CallToolResult Failure(ToolError error)
-    {
-        var details = JsonSerializer.SerializeToNode(error, error.GetType(), JsonOptions) as JsonObject
-            ?? new JsonObject();
-        details.Remove("code");
-        details.Remove("message");
-        details.Remove("Code");
-        details.Remove("Message");
-
-        var payload = new JsonObject
-        {
-            ["code"] = error.Code,
-            ["message"] = error.Message,
-            ["details"] = details,
-        };
-        return new CallToolResult
-        {
-            Content =
-            [
-                new TextContentBlock { Text = payload.ToJsonString(JsonOptions) },
-            ],
-            IsError = true,
-        };
-    }
-
-    private static CallToolResult InternalError(Exception ex)
-    {
-        var payload = new JsonObject
-        {
-            ["code"] = "internal_error",
-            ["message"] = ex.Message,
-            ["details"] = new JsonObject
-            {
-                ["exceptionType"] = ex.GetType().FullName,
-            },
-        };
-        return new CallToolResult
-        {
-            Content =
-            [
-                new TextContentBlock { Text = payload.ToJsonString(JsonOptions) },
-            ],
-            IsError = true,
         };
     }
 }

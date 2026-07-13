@@ -93,12 +93,12 @@ public class ListPanelsToolTests
     }
 
     [Fact]
-    public async Task Map_not_ready_when_accessor_returns_null()
+    public async Task Ui_not_ready_when_accessor_returns_null()
     {
         var tool = new ListPanelsTool(new FakeUiControllerAccessor { Current = null });
         var result = await tool.InvokeAsync();
         Assert.True(result.TryGetError(out var err));
-        Assert.IsType<MapNotReady>(err);
+        Assert.IsType<UiNotReady>(err);
     }
 
     [Fact]
@@ -237,12 +237,12 @@ public class SetPanelToolTests
     }
 
     [Fact]
-    public async Task Map_not_ready_when_accessor_returns_null()
+    public async Task Ui_not_ready_when_accessor_returns_null()
     {
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = null });
         var result = await tool.InvokeAsync(new SetPanelRequest("Datasets", true));
         Assert.True(result.TryGetError(out var err));
-        Assert.IsType<MapNotReady>(err);
+        Assert.IsType<UiNotReady>(err);
     }
 
     [Fact]
