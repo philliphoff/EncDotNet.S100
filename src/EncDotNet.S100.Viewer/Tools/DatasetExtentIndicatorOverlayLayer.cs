@@ -56,10 +56,12 @@ internal static class DatasetExtentIndicatorOverlayLayer
     // Screen-independent dashed hairline. Kept thin so a border around a whole
     // cell never dominates the (otherwise empty) zoomed-out view. Short dashes
     // and gaps keep the rectangle legible even at coarse zoom, where long
-    // dashes fragment the outline and make the extent hard to read.
+    // dashes fragment the outline and make the extent hard to read. The stroke
+    // is drawn semi-transparent so the indicator stays muted when it overlaps
+    // another dataset's content.
     private const double OutlineWidth = 2.0;
-    private const float OutlineOpacity = 0.9f;
-    private static readonly float[] DashArray = { 2.0f, 2.0f };
+    private const float OutlineOpacity = 0.5f;
+    private static readonly float[] DashArray = { 1.0f, 1.5f };
 
     /// <summary>Creates a fresh, empty overlay layer.</summary>
     public static MemoryLayer Create() => new()
