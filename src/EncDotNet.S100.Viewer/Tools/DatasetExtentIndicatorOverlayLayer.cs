@@ -54,10 +54,12 @@ internal static class DatasetExtentIndicatorOverlayLayer
     public static readonly (byte R, byte G, byte B) DefaultAccent = (0x00, 0x7A, 0xCC);
 
     // Screen-independent dashed hairline. Kept thin so a border around a whole
-    // cell never dominates the (otherwise empty) zoomed-out view.
+    // cell never dominates the (otherwise empty) zoomed-out view. Short dashes
+    // and gaps keep the rectangle legible even at coarse zoom, where long
+    // dashes fragment the outline and make the extent hard to read.
     private const double OutlineWidth = 2.0;
     private const float OutlineOpacity = 0.9f;
-    private static readonly float[] DashArray = { 6.0f, 4.0f };
+    private static readonly float[] DashArray = { 2.0f, 2.0f };
 
     /// <summary>Creates a fresh, empty overlay layer.</summary>
     public static MemoryLayer Create() => new()
