@@ -53,15 +53,17 @@ internal static class DatasetExtentIndicatorOverlayLayer
     /// </summary>
     public static readonly (byte R, byte G, byte B) DefaultAccent = (0x00, 0x7A, 0xCC);
 
-    // Screen-independent dashed hairline. Kept thin so a border around a whole
-    // cell never dominates the (otherwise empty) zoomed-out view. Short dashes
-    // and gaps keep the rectangle legible even at coarse zoom, where long
-    // dashes fragment the outline and make the extent hard to read. The stroke
-    // is drawn semi-transparent so the indicator stays muted when it overlaps
-    // another dataset's content.
+    // Screen-independent dotted hairline. Kept thin so a border around a whole
+    // cell never dominates the (otherwise empty) zoomed-out view. A round stroke
+    // cap combined with a near-zero on-segment renders each dash as a round dot,
+    // which reads more cleanly than dashes at coarse zoom. Values are multiplied
+    // by the pen width by the renderer, so the gap here is ~3x the width. This
+    // only takes effect with PenStyle.UserDefined; the preset PenStyle.Dash
+    // ignores DashArray. The stroke is drawn semi-transparent so the indicator
+    // stays muted when it overlaps another dataset's content.
     private const double OutlineWidth = 2.0;
     private const float OutlineOpacity = 0.5f;
-    private static readonly float[] DashArray = { 1.0f, 1.5f };
+    private static readonly float[] DashArray = { 0.01f, 3.0f };
 
     /// <summary>Creates a fresh, empty overlay layer.</summary>
     public static MemoryLayer Create() => new()
@@ -108,7 +110,8 @@ internal static class DatasetExtentIndicatorOverlayLayer
                 {
                     Color = color,
                     Width = OutlineWidth,
-                    PenStyle = PenStyle.Dash,
+                    PenStyle = PenStyle.UserDefined,
+                    PenStrokeCap = PenStrokeCap.Round,
                     DashArray = DashArray,
                 },
                 Opacity = OutlineOpacity,

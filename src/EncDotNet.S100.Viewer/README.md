@@ -162,7 +162,7 @@ S-101 datasets stop drawing once the map is zoomed out past their
 coarsest intended display scale. When an exchange set spans far-apart
 areas, framing its union extent can zoom out far enough that *every*
 member disappears — leaving an empty map with nothing to aim at. To keep
-those datasets discoverable, the viewer draws a thin dashed accent-colour
+those datasets discoverable, the viewer draws a thin dotted accent-colour
 border around the extent of any loaded, visible dataset **exactly when
 its content has zoomed out of scale**. The border marks where the
 dataset is so you have a target to zoom in on (or double-click its row in
