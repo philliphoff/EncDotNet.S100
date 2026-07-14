@@ -1023,9 +1023,10 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// <see cref="RequestLoad"/>, this also re-centres an <em>already-loaded</em>
     /// dataset — including exchange-set members, which opt out of the loader's
     /// per-dataset auto-zoom — so the user can jump to a far-away cell that has
-    /// zoomed out of view. Fire-and-forget; load failures are surfaced by the
-    /// loader's own notifications. No-op framing when the dataset produced no
-    /// geometry (e.g. an out-of-range time-gated entry). See issue #446.
+    /// zoomed out of view. Load failures are surfaced by the loader's own
+    /// notifications rather than thrown to the caller; callers may await the
+    /// returned task to observe completion. No-op framing when the dataset
+    /// produced no geometry (e.g. an out-of-range time-gated entry). See issue #446.
     /// </summary>
     /// <param name="entry">The dataset entry to reveal.</param>
     /// <returns>A task that completes once the reveal (load + zoom) is done.</returns>
