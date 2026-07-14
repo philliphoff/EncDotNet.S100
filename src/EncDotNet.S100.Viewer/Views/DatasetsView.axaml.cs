@@ -37,7 +37,7 @@ public partial class DatasetsView : UserControl
         vm.RequestLoad(entry);
     }
 
-    private void OnDatasetDoubleTapped(object? sender, TappedEventArgs e)
+    private async void OnDatasetDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (DataContext is not DatasetsViewModel vm) return;
 
@@ -51,8 +51,10 @@ public partial class DatasetsView : UserControl
                 {
                     // Reveal: ensure the dataset is loaded, then fly the map to
                     // its extent — including exchange-set cells that have zoomed
-                    // out of view (issue #446).
-                    _ = vm.RevealDatasetAsync(entry);
+                    // out of view (issue #446). Awaited (async void, like the
+                    // other event handlers here) so a fault surfaces on the UI
+                    // thread instead of becoming an unobserved task exception.
+                    await vm.RevealDatasetAsync(entry);
                     return;
                 }
                 current = current.Parent as Control;
