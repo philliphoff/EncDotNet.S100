@@ -186,6 +186,12 @@
                 </ComboBox>
             </Grid>
 
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowOutOfScaleExtentIndicators}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShowOutOfScaleExtentIndicators}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOutOfScaleExtentIndicators}" />
+            </Grid>
+
             <!-- Render subsystem A/B + tiled knobs (issue #331) -->
             <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
                        FontSize="12"

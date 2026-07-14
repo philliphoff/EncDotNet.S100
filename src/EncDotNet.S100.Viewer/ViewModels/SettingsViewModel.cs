@@ -897,6 +897,33 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Raised when <see cref="ShowOutOfScaleExtentIndicators"/> changes so the
+    /// extent-indicator overlay can be rebuilt without a relaunch.
+    /// </summary>
+    public event Action? ExtentIndicatorsChanged;
+
+    private bool _showOutOfScaleExtentIndicators;
+    /// <summary>
+    /// Whether an accent border is drawn around the extent of a loaded dataset
+    /// that has zoomed out past its display-scale minimum (issue #446).
+    /// Persisted to <see cref="ViewerSettings.ShowOutOfScaleExtentIndicators"/>;
+    /// changing it raises <see cref="ExtentIndicatorsChanged"/>.
+    /// </summary>
+    public bool ShowOutOfScaleExtentIndicators
+    {
+        get => _showOutOfScaleExtentIndicators;
+        set
+        {
+            if (SetProperty(ref _showOutOfScaleExtentIndicators, value))
+            {
+                _settings.ShowOutOfScaleExtentIndicators = value;
+                _settings.Save();
+                ExtentIndicatorsChanged?.Invoke();
+            }
+        }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -1093,6 +1120,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
 
         _basemapMode = settings.BasemapMode;
+        _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;

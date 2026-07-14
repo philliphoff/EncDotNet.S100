@@ -49,7 +49,10 @@ public partial class DatasetsView : UserControl
             {
                 if (current.DataContext is DatasetEntry entry)
                 {
-                    vm.RequestLoad(entry);
+                    // Reveal: ensure the dataset is loaded, then fly the map to
+                    // its extent — including exchange-set cells that have zoomed
+                    // out of view (issue #446).
+                    _ = vm.RevealDatasetAsync(entry);
                     return;
                 }
                 current = current.Parent as Control;

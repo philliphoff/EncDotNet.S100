@@ -233,4 +233,92 @@ public class DatasetsViewModelTests
         Assert.Equal(1.0, a.Opacity);
         Assert.Equal(1.0, sub.Opacity);
     }
+
+    // ----- RevealDatasetAsync (issue #446) -----
+
+    /// <summary>Loader that marks an entry loaded and stamps an extent on load.</summary>
+    private sealed class LoadingLoader : IDatasetLoaderService
+    {
+        private readonly Mapsui.MRect _extent;
+        public List<DatasetEntry> LoadCalls { get; } = new();
+        public LoadingLoader(Mapsui.MRect extent) => _extent = extent;
+
+        public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
+            = new Dictionary<DatasetEntry, IDatasetProcessor>();
+        public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
+            = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
+        public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
+        public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
+        public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
+        public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
+        {
+            LoadCalls.Add(entry);
+            entry.IsLoaded = true;
+            entry.MercatorExtent = _extent;
+            return Task.CompletedTask;
+        }
+        public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
+        public Task ReRenderAllAsync() => Task.CompletedTask;
+        public void RemoveEntry(DatasetEntry entry) { }
+        public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries) { }
+        public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
+    }
+
+    [Fact]
+    public async Task RevealDatasetAsync_AlreadyLoaded_ZoomsToExtent_WithoutReloading()
+    {
+        var loader = new RecordingLoader();
+        var vm = new DatasetsViewModel(loader);
+        var entry = vm.Add("/a.000", "S-101");
+        entry.IsLoaded = true;
+        var extent = new Mapsui.MRect(1, 2, 3, 4);
+        entry.MercatorExtent = extent;
+
+        Mapsui.MRect? zoomed = null;
+        vm.ZoomDispatcher = r => zoomed = r;
+
+        await vm.RevealDatasetAsync(entry);
+
+        Assert.Same(extent, zoomed);
+        Assert.Empty(loader.LoadCalls); // already loaded → no reload
+    }
+
+    [Fact]
+    public async Task RevealDatasetAsync_NotLoaded_LoadsThenZoomsToStampedExtent()
+    {
+        var extent = new Mapsui.MRect(10, 20, 30, 40);
+        var loader = new LoadingLoader(extent);
+        var vm = new DatasetsViewModel(loader);
+        var entry = vm.Add("/a.000", "S-101");
+
+        Mapsui.MRect? zoomed = null;
+        vm.ZoomDispatcher = r => zoomed = r;
+
+        await vm.RevealDatasetAsync(entry);
+
+        Assert.Single(loader.LoadCalls);
+        Assert.Same(extent, zoomed);
+    }
+
+    [Fact]
+    public async Task RevealDatasetAsync_LoadedButNoExtent_DoesNotZoom()
+    {
+        var loader = new RecordingLoader();
+        var vm = new DatasetsViewModel(loader);
+        var entry = vm.Add("/a.000", "S-101");
+        entry.IsLoaded = true; // loaded but produced no geometry (e.g. time-gated)
+
+        var zoomCount = 0;
+        vm.ZoomDispatcher = _ => zoomCount++;
+
+        await vm.RevealDatasetAsync(entry);
+
+        Assert.Equal(0, zoomCount);
+        Assert.Empty(loader.LoadCalls);
+    }
 }

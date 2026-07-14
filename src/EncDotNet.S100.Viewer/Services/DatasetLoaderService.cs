@@ -461,6 +461,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
                 token.ThrowIfCancellationRequested();
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                // Record the dataset's mercator extent so the panel can zoom to
+                // it (double-click reveal) and the out-of-scale extent indicator
+                // can outline it, even for exchange-set entries that opt out of
+                // the auto-zoom below (issue #446).
+                entry.MercatorExtent = result.Extent;
                 // Exchange-set entries opt out of the per-dataset auto-zoom so
                 // the union-extent zoom from `IExchangeSetService` (or the
                 // user's manual Zoom-to-Extent toolbar action) wins. Without
@@ -1168,6 +1173,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// </summary>
     private void ApplyCellScaleWindow(DatasetEntry entry, IReadOnlyList<ILayer> layers)
     {
+        // Default to "never disappears" until we confirm a window was applied.
+        entry.ContentMaxVisibleResolution = null;
+
         if (layers.Count == 0)
             return;
         if (entry.MinimumDisplayScale is not int minimumDisplayScale)
@@ -1176,6 +1184,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             return;
 
         MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale);
+
+        // Record the whole-cell zoom-out cutoff so the out-of-scale extent
+        // indicator (issue #446) knows the resolution at which this dataset
+        // fully drops out. A dataset is visible while at least one layer draws
+        // (resolution <= its MaxVisible), so the cutoff is the largest finite
+        // MaxVisible across the clamped layers — the last layer to vanish.
+        double cutoff = 0.0;
+        foreach (var layer in layers)
+        {
+            if (layer is BaseLayer baseLayer && baseLayer.MaxVisible < double.MaxValue)
+                cutoff = Math.Max(cutoff, baseLayer.MaxVisible);
+        }
+
+        entry.ContentMaxVisibleResolution = cutoff > 0.0 ? cutoff : null;
     }
 
     /// <summary>

@@ -45,6 +45,7 @@ public partial class MainWindow : ShadUI.Window
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
+    private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -194,6 +195,8 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceOverlayHost = null;
             _pickHighlightController?.Dispose();
             _pickHighlightController = null;
+            _extentIndicatorController?.Dispose();
+            _extentIndicatorController = null;
             // Clear the late-bound accessors this window owns so panel /
             // screenshot MCP tools observe the torn-down state (UiNotReady /
             // WindowNotReady) rather than a stale controller, and so the
@@ -396,7 +399,15 @@ public partial class MainWindow : ShadUI.Window
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             App.Services.GetRequiredService<SettingsViewModel>());
 
-        // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
+        // Out-of-scale extent indicators: outline the extents of loaded
+        // datasets that have zoomed out past their display-scale minimum, so a
+        // wide-spread exchange set still shows where its members are (#446).
+        _extentIndicatorController = new EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController(
+            mapHost,
+            _viewModel.Datasets,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>());
         // narrow viewports during resize, and the exception is raised on the
         // render thread where we cannot intercept it.
         Mapsui.Widgets.InfoWidgets.LoggingWidget.ShowLoggingInMap = Mapsui.Widgets.ActiveMode.No;
