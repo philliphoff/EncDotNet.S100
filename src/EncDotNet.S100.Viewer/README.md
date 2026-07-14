@@ -135,6 +135,12 @@ is draggable and persisted. The panel opens on the Exchange sets tab,
 unless only loose datasets are loaded, in which case it opens on the
 Datasets tab.
 
+**Double-click a dataset row to reveal it** — the viewer ensures the
+dataset is loaded and then flies the map to that dataset's extent. This
+is the quickest way to locate a member of a wide-spread exchange set,
+especially one that has zoomed out of scale (see *Out-of-scale extent
+indicators* below).
+
 ## The map view
 
 A Mapsui-backed map fills the centre of the window with a basemap
@@ -149,6 +155,24 @@ The viewer renders directly in WGS-84 latitude/longitude internally
 and projects to EPSG:3857 (Web Mercator) for display. Coverage
 grids tagged with UTM-band CRSs (typical for S-102) are reprojected
 on the fly via ProjNet.
+
+### Out-of-scale extent indicators
+
+S-101 datasets stop drawing once the map is zoomed out past their
+coarsest intended display scale. When an exchange set spans far-apart
+areas, framing its union extent can zoom out far enough that *every*
+member disappears — leaving an empty map with nothing to aim at. To keep
+those datasets discoverable, the viewer draws a thin dotted accent-colour
+border around the extent of any loaded, visible dataset **exactly when
+its content has zoomed out of scale**. The border marks where the
+dataset is so you have a target to zoom in on (or double-click its row in
+the Datasets panel to fly straight to it). Zooming back in past the
+dataset's display-scale limit hides the border and restores its content.
+
+The indicators can be turned off via **Settings → Map → Out-of-scale
+dataset outlines** (on by default). They have no effect when "ignore
+scale minima" is enabled, since datasets then never drop out on
+zoom-out.
 
 ## Routes
 

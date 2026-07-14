@@ -370,6 +370,17 @@ internal sealed class ViewerSettings
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>
+    /// Whether an accent-coloured border is drawn around the extent of a loaded
+    /// dataset that has zoomed out past its display-scale minimum (and therefore
+    /// renders no content). Enabled by default so a mariner who frames a
+    /// wide-spread exchange set still sees where the member datasets are and has
+    /// a target to zoom toward (issue #446). No effect when the
+    /// <see cref="IgnoreScaleMinimum"/> mariner override is set, since datasets
+    /// then never drop out on zoom-out.
+    /// </summary>
+    public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
+
+    /// <summary>
     /// Whether the online OpenStreetMap basemap tile layer is shown
     /// beneath the chart data. Enabled by default. Disabling it removes
     /// the remote tile fetch entirely — useful for offline operation

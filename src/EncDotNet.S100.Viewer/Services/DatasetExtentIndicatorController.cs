@@ -1,0 +1,192 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using Avalonia.Threading;
+using EncDotNet.S100.Viewer.Tools;
+using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui.Layers;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Keeps a map overlay outlining the extents of loaded datasets that have
+/// zoomed out past their display-scale minimum — and therefore render no
+/// content — so a mariner who frames a wide-spread exchange set still sees
+/// where the member datasets are and has a target to zoom toward (issue #446).
+/// </summary>
+/// <remarks>
+/// <para>
+/// The controller observes the <see cref="DatasetsViewModel"/>'s entries: it
+/// rebuilds the overlay whenever a dataset is added, removed, (re)loaded,
+/// hidden/shown, or its captured extent / scale cutoff changes. Each qualifying
+/// entry contributes one dashed accent rectangle whose border style is gated by
+/// <c>MinVisible</c> = the entry's
+/// <see cref="DatasetEntry.ContentMaxVisibleResolution"/>, so Mapsui reveals it
+/// exactly when the dataset's own content drops out on zoom-out (no navigator
+/// subscription required).
+/// </para>
+/// <para>
+/// An entry qualifies only when it is loaded, visible, carries a captured
+/// <see cref="DatasetEntry.MercatorExtent"/>, and has a non-null content cutoff
+/// (i.e. a display-scale minimum that actually suppresses it). Datasets that
+/// never disappear on zoom-out contribute nothing. The whole overlay is
+/// suppressed when the mariner disables
+/// <see cref="SettingsViewModel.ShowOutOfScaleExtentIndicators"/>.
+/// </para>
+/// </remarks>
+internal sealed class DatasetExtentIndicatorController : IDisposable
+{
+    private readonly IMapHost _mapHost;
+    private readonly DatasetsViewModel _datasets;
+    private readonly IMeasureOverlayAppearanceProvider _appearance;
+    private readonly SettingsViewModel _settings;
+    private readonly Action<Action> _marshal;
+    private readonly MemoryLayer _layer;
+    private readonly HashSet<DatasetEntry> _subscribed = new();
+    private bool _disposed;
+
+    /// <summary>
+    /// Creates and attaches the controller. The map host must already be
+    /// initialised (basemap added) so the overlay lands above the basemap.
+    /// </summary>
+    /// <param name="mapHost">Target map host.</param>
+    /// <param name="datasets">The datasets view-model to observe.</param>
+    /// <param name="appearance">Accent/theme provider for the border colour.</param>
+    /// <param name="settings">Settings view-model supplying the on/off toggle.</param>
+    /// <param name="marshal">
+    /// Optional UI-thread marshalling override. Defaults to
+    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
+    /// implementation.
+    /// </param>
+    public DatasetExtentIndicatorController(
+        IMapHost mapHost,
+        DatasetsViewModel datasets,
+        IMeasureOverlayAppearanceProvider appearance,
+        SettingsViewModel settings,
+        Action<Action>? marshal = null)
+    {
+        ArgumentNullException.ThrowIfNull(mapHost);
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(appearance);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        _mapHost = mapHost;
+        _datasets = datasets;
+        _appearance = appearance;
+        _settings = settings;
+        _marshal = marshal ?? DispatcherMarshal;
+
+        _layer = DatasetExtentIndicatorOverlayLayer.Create();
+
+        _datasets.Entries.CollectionChanged += OnEntriesChanged;
+        foreach (var entry in _datasets.Entries)
+            Subscribe(entry);
+
+        _appearance.Changed += OnAppearanceChanged;
+        _settings.ExtentIndicatorsChanged += OnToggleChanged;
+
+        _marshal(() =>
+        {
+            _mapHost.AddOverlayLayer(_layer);
+            Rebuild();
+        });
+    }
+
+    private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+            foreach (DatasetEntry entry in e.OldItems)
+                Unsubscribe(entry);
+
+        if (e.NewItems is not null)
+            foreach (DatasetEntry entry in e.NewItems)
+                Subscribe(entry);
+
+        // A reset clears OldItems/NewItems; resync from scratch.
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var entry in _subscribed)
+                entry.PropertyChanged -= OnEntryChanged;
+            _subscribed.Clear();
+            foreach (var entry in _datasets.Entries)
+                Subscribe(entry);
+        }
+
+        _marshal(Rebuild);
+    }
+
+    private void Subscribe(DatasetEntry entry)
+    {
+        if (_subscribed.Add(entry))
+            entry.PropertyChanged += OnEntryChanged;
+    }
+
+    private void Unsubscribe(DatasetEntry entry)
+    {
+        if (_subscribed.Remove(entry))
+            entry.PropertyChanged -= OnEntryChanged;
+    }
+
+    private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DatasetEntry.MercatorExtent)
+            or nameof(DatasetEntry.ContentMaxVisibleResolution)
+            or nameof(DatasetEntry.IsLoaded)
+            or nameof(DatasetEntry.IsVisible))
+        {
+            _marshal(Rebuild);
+        }
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e) => _marshal(Rebuild);
+
+    private void OnToggleChanged() => _marshal(Rebuild);
+
+    private void Rebuild()
+    {
+        if (_disposed) return;
+
+        var indicators = new List<DatasetExtentIndicator>();
+
+        if (_settings.ShowOutOfScaleExtentIndicators)
+        {
+            foreach (var entry in _datasets.Entries)
+            {
+                if (!entry.IsLoaded || !entry.IsVisible)
+                    continue;
+                if (entry.MercatorExtent is not { } extent)
+                    continue;
+                if (entry.ContentMaxVisibleResolution is not { } cutoff)
+                    continue;
+
+                indicators.Add(new DatasetExtentIndicator(extent, cutoff));
+            }
+        }
+
+        DatasetExtentIndicatorOverlayLayer.Update(_layer, indicators, _appearance.Current.Accent);
+    }
+
+    private static void DispatcherMarshal(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) action();
+        else Dispatcher.UIThread.Post(action);
+    }
+
+    /// <summary>Detaches the overlay layer and unsubscribes. Idempotent.</summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _datasets.Entries.CollectionChanged -= OnEntriesChanged;
+        foreach (var entry in _subscribed)
+            entry.PropertyChanged -= OnEntryChanged;
+        _subscribed.Clear();
+
+        _appearance.Changed -= OnAppearanceChanged;
+        _settings.ExtentIndicatorsChanged -= OnToggleChanged;
+
+        _marshal(() => _mapHost.RemoveOverlayLayer(_layer));
+    }
+}
