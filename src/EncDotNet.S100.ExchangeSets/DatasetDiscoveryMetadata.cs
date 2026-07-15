@@ -96,7 +96,7 @@ public sealed class DatasetDiscoveryMetadata
     public string? MetadataPointOfContact { get; init; }
     public DateOnly? MetadataDateStamp { get; init; }
 
-    public bool? ReplaceData { get; init; }
+    public bool ReplaceData { get; init; }
     /// <summary>
     /// The most-permissive coarsest display-scale denominator across all
     /// <see cref="DataCoverages"/> — the <em>largest</em>
@@ -149,10 +149,6 @@ public sealed class DatasetDiscoveryMetadata
 
         return result;
     }
-
-    public string? DefaultLocaleLanguage { get; init; }
-
-    public string? DataReplacement { get; init; }
 
     public NavigationPurpose? NavigationPurpose { get; init; }
 

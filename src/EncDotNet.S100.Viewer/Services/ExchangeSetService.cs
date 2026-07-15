@@ -950,7 +950,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     }
 
     /// <summary>
-    /// Returns the lexically-greatest non-null
+    /// Returns the Date of the latest issue date among the supplied datasets, or <c>null</c>
     /// </summary>
     private static DateOnly? ResolveLatestIssueDate(
         IReadOnlyList<DatasetDiscoveryMetadata> datasets)
@@ -960,7 +960,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         {
             var s = d.IssueDate;
             if (s == null) continue;
-            if (latest is null || ((DateOnly)s).CompareTo((DateOnly)latest) > 0)
+            if (latest is null || ((DateOnly)s).CompareTo(latest) > 0)
                 latest = s;
         }
         return latest;

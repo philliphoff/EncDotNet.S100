@@ -581,7 +581,10 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var lang = (string?)langCode?.Attribute("codeListValue");
- 
+        if (lang == null)
+            lang = "";
+
+
         var countryCode = moreLocal?
            .Elements(lan + "country")
            .FirstOrDefault()?
@@ -589,7 +592,9 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var country = (string?)countryCode?.Attribute("codeListValue");
- 
+        if (country == null)
+            country = "";
+
         var charEncode = moreLocal?
            .Elements(lan + "characterEncoding")
            .FirstOrDefault()?
@@ -597,6 +602,8 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var encoding = (string?)charEncode?.Attribute("codeListValue");
+        if (encoding == null)
+            encoding = "";
 
         return new PT_Locale
         {
@@ -628,7 +635,7 @@ public static class ExchangeCatalogueReader
             return null;
         }
 
-        // Permit times are xs:time and may carry a trailing 'Z' (e.g. 13:45:30Z).
+        // Permit times are xs:date and may carry a trailing 'Z' (e.g. 13:45:30Z).
         string trimmed = value.Trim().TrimEnd('Z', 'z');
         return TimeOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly time)
             ? time

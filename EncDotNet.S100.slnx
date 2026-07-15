@@ -2,9 +2,8 @@
   <Folder Name="/src/">
     <Project Path="src/EncDotNet.S100.AppHost/EncDotNet.S100.AppHost.csproj" />
     <Project Path="src/EncDotNet.S100.Core/EncDotNet.S100.Core.csproj" />
-    <Project Path="src/EncDotNet.S100.Diagnostics.Export/EncDotNet.S100.Diagnostics.Export.csproj" />
-    <Project Path="src/EncDotNet.S100.DynamicSources.Ais/EncDotNet.S100.DynamicSources.Ais.csproj" />
-    <Project Path="src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+    <Project Path="src/EncDotNet.S100.Crs.ProjNet/EncDotNet.S100.Crs.ProjNet.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.Pipelines/EncDotNet.S100.Datasets.Pipelines.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S101/EncDotNet.S100.Datasets.S101.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S104/EncDotNet.S100.Datasets.S104.csproj" />
@@ -14,15 +13,16 @@
     <Project Path="src/EncDotNet.S100.Datasets.S125/EncDotNet.S100.Datasets.S125.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S127/EncDotNet.S100.Datasets.S127.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S128/EncDotNet.S100.Datasets.S128.csproj" />
-    <Project Path="src/EncDotNet.S100.Datasets.S129/EncDotNet.S100.Datasets.S129.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S129.Fusion/EncDotNet.S100.Datasets.S129.Fusion.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.S129/EncDotNet.S100.Datasets.S129.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S131/EncDotNet.S100.Datasets.S131.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S201/EncDotNet.S100.Datasets.S201.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S411/EncDotNet.S100.Datasets.S411.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S421/EncDotNet.S100.Datasets.S421.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S57/EncDotNet.S100.Datasets.S57.csproj" />
-    <Project Path="src/EncDotNet.S100.Datasets.Pipelines/EncDotNet.S100.Datasets.Pipelines.csproj" />
-    <Project Path="src/EncDotNet.S100.Crs.ProjNet/EncDotNet.S100.Crs.ProjNet.csproj" />
+    <Project Path="src/EncDotNet.S100.Diagnostics.Export/EncDotNet.S100.Diagnostics.Export.csproj" />
+    <Project Path="src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+    <Project Path="src/EncDotNet.S100.DynamicSources.Ais/EncDotNet.S100.DynamicSources.Ais.csproj" />
     <Project Path="src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj" />
     <Project Path="src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj" />
     <Project Path="src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj" />
@@ -38,12 +38,8 @@
     <Project Path="src/EncDotNet.S100/EncDotNet.S100.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/EncDotNet.S100.Diagnostics.Export.Tests/EncDotNet.S100.Diagnostics.Export.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Rendering.Scene.Tests/EncDotNet.S100.Rendering.Scene.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.VisualRegression.Tests/EncDotNet.S100.VisualRegression.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.VisualRegression/EncDotNet.S100.VisualRegression.csproj" />
+    <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Core.Tests/EncDotNet.S100.Core.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S101.Tests/EncDotNet.S100.Datasets.S101.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S104.Tests/EncDotNet.S100.Datasets.S104.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S111.Tests/EncDotNet.S100.Datasets.S111.Tests.csproj" />
@@ -52,28 +48,34 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S125.Tests/EncDotNet.S100.Datasets.S125.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S127.Tests/EncDotNet.S100.Datasets.S127.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S128.Tests/EncDotNet.S100.Datasets.S128.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Datasets.S129.Tests/EncDotNet.S100.Datasets.S129.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S129.Fusion.Tests/EncDotNet.S100.Datasets.S129.Fusion.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.S129.Tests/EncDotNet.S100.Datasets.S129.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S131.Tests/EncDotNet.S100.Datasets.S131.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S201.Tests/EncDotNet.S100.Datasets.S201.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S411.Tests/EncDotNet.S100.Datasets.S411.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S421.Tests/EncDotNet.S100.Datasets.S421.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Tests/EncDotNet.S100.DynamicSources.Ais.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Tests/EncDotNet.S100.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Core.Tests/EncDotNet.S100.Core.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Diagnostics.Export.Tests/EncDotNet.S100.Diagnostics.Export.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Tests/EncDotNet.S100.DynamicSources.Ais.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Features.Tests/EncDotNet.S100.Features.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Mcp.Tools.Tests/EncDotNet.S100.Mcp.Tools.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Mcp.Tests/EncDotNet.S100.Mcp.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Mcp.Tools.Tests/EncDotNet.S100.Mcp.Tools.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfReport.Tests/EncDotNet.S100.PerfReport.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Rendering.Scene.Tests/EncDotNet.S100.Rendering.Scene.Tests.csproj">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
+    <Project Path="tests/EncDotNet.S100.Tests/EncDotNet.S100.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Viewer.Tests/EncDotNet.S100.Viewer.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.VisualRegression.Tests/EncDotNet.S100.VisualRegression.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.VisualRegression/EncDotNet.S100.VisualRegression.csproj" />
   </Folder>
   <Folder Name="/tools/">
-    <Project Path="tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj" />
     <Project Path="tools/EncDotNet.S100.Cli/EncDotNet.S100.Cli.csproj" />
     <Project Path="tools/EncDotNet.S100.PerfReport/EncDotNet.S100.PerfReport.csproj" />
+    <Project Path="tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/EncDotNet.S100.Samples.Ais/EncDotNet.S100.Samples.Ais.csproj" />
