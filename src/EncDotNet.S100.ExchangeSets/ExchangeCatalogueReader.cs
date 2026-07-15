@@ -120,7 +120,7 @@ public static class ExchangeCatalogueReader
         var numberStr = (string?)element.Element(xc + "number");
         CompliancyCategory? comp = null;
         string? compStr = (string?)element.Element(xc + "compliancyCategory");
-        if (compStr != null && Enum.TryParse(typeof(CompliancyCategory), compStr, out var parsedComp))
+        if (compStr != null && Enum.TryParse(typeof(CompliancyCategory), compStr, ignoreCase: true, out var parsedComp))
             comp = (CompliancyCategory)parsedComp;
         return new ProductSpecification
         {
@@ -510,8 +510,11 @@ public static class ExchangeCatalogueReader
         var ufreq = (string?)sigEl.Attribute("userDefinedMaintenanceFrequency");
 
         MaintenanceFrequencyCode? maintFreq = null;
-        if (mfreq != null)
-            maintFreq = (MaintenanceFrequencyCode)Enum.Parse(typeof(MaintenanceFrequencyCode), mfreq);
+        if (!string.IsNullOrWhiteSpace(mfreq)
+            && Enum.TryParse<MaintenanceFrequencyCode>(mfreq, ignoreCase: true, out var parsed))
+        {
+            maintFreq = parsed;
+        }
 
         return new MaintenanceInformation
         {
@@ -578,10 +581,7 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var lang = (string?)langCode?.Attribute("codeListValue");
-        if (lang == null)
-            lang = "";
-
-
+ 
         var countryCode = moreLocal?
            .Elements(lan + "country")
            .FirstOrDefault()?
@@ -589,9 +589,7 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var country = (string?)countryCode?.Attribute("codeListValue");
-        if (country == null)
-            country = "";
-
+ 
         var charEncode = moreLocal?
            .Elements(lan + "characterEncoding")
            .FirstOrDefault()?
@@ -599,8 +597,6 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var encoding = (string?)charEncode?.Attribute("codeListValue");
-        if (encoding == null)
-            encoding = "";
 
         return new PT_Locale
         {
@@ -632,7 +628,7 @@ public static class ExchangeCatalogueReader
             return null;
         }
 
-        // Permit dates are xs:date and may carry a trailing 'Z' (e.g. 2018-03-20Z).
+        // Permit times are xs:time and may carry a trailing 'Z' (e.g. 13:45:30Z).
         string trimmed = value.Trim().TrimEnd('Z', 'z');
         return TimeOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly time)
             ? time

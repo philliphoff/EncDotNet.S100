@@ -951,8 +951,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
     /// <summary>
     /// Returns the lexically-greatest non-null
-    /// <see cref="DatasetDiscoveryMetadata.IssueDate"/> across the
-    /// catalogue, or <c>null</c> if no dataset declared one. 
     /// </summary>
     private static DateOnly? ResolveLatestIssueDate(
         IReadOnlyList<DatasetDiscoveryMetadata> datasets)
