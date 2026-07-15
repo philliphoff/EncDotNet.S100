@@ -55,7 +55,8 @@ public sealed class S57TranslationDiagnostics
     private readonly Dictionary<S57EnumValueDrop, int> _droppedEnumValues = new();
 
     /// <summary>
-    /// Number of non-sounding S-57 feature records the translator iterated.
+    /// Number of non-sounding S-57 feature records the translator iterated,
+    /// including records later absorbed, deferred, dropped, or unmapped.
     /// </summary>
     public int FeatureRecordsRead { get; internal set; }
 
@@ -68,6 +69,44 @@ public sealed class S57TranslationDiagnostics
 
     /// <summary>Number of S-57 SOUNDG (OBJL=129) feature records seen.</summary>
     public int SoundingFeaturesRead { get; internal set; }
+
+    /// <summary>
+    /// Number of co-located S-57 sector-light (<c>LIGHTS</c> with
+    /// <c>SECTR1</c>/<c>SECTR2</c>) feature records absorbed into a neighbouring
+    /// sector light at the same spatial node during the sector-light merge pass.
+    /// An absorbed record produces no S-101 feature of its own, so it is counted
+    /// here <em>instead of</em> in <see cref="FeaturesEmitted"/>. It usually adds
+    /// a <c>sectorCharacteristics</c> instance to the surviving
+    /// <c>LightSectored</c> feature, but members with missing or FC-rejected
+    /// <c>LITCHR</c> contribute no instance and have their diverted sector inputs
+    /// dropped to match the single-feature path. This counter therefore reflects
+    /// records absorbed, which may exceed the instances actually added.
+    /// </summary>
+    public int SectorLightsMerged { get; internal set; }
+
+    /// <summary>
+    /// Number of <c>NauticalInformation</c> information-type records emitted by
+    /// the S-57→S-101 conversion. One is created per feature that carries any of
+    /// the textual attributes <c>INFORM</c>/<c>TXTDSC</c>/<c>NINFOM</c>/
+    /// <c>NTXTDS</c>, bound to that feature through an
+    /// <c>AdditionalInformation</c> association (IHO S-57→S-101 Conversion
+    /// Guidance §2.3 "fuller path"). Equals the number of
+    /// <c>AdditionalInformation</c> associations emitted.
+    /// </summary>
+    public int NauticalInformationTypesEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of synthesised <c>RangeSystem</c> collection features emitted by
+    /// the S-57→S-101 conversion. S-101 has no generic collection object; an
+    /// S-57 <c>C_AGGR</c> whose members are navigational tracks plus the
+    /// navigation aids that define them is mapped to a geometry-less
+    /// <c>RangeSystem</c> feature linked to each member by a
+    /// <c>RangeSystemAggregation</c> association in the member's
+    /// <c>theComponent</c> role (S-101 FC Ed 1.x). C_AGGR groupings that do not
+    /// match this pattern (and all <c>C_ASSO</c>) have no S-101 home and are
+    /// counted under <see cref="UnmappedObjectClasses"/> instead.
+    /// </summary>
+    public int RangeSystemsEmitted { get; internal set; }
 
     /// <summary>
     /// Number of S-101 <c>Sounding</c> features emitted (a SOUNDG feature with at

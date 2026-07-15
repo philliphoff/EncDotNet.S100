@@ -194,6 +194,165 @@ public class S57S101MappingTests
         Assert.NotNull(m);
     }
 
+    // ── Geometry-conditional redirects (S57GeometryPrimitive) ──────────
+
+    [Fact]
+    public void Build_PrimitiveOnlyRedirectWithoutAttribute_Succeeds()
+    {
+        // A purely geometry-based redirect (no ConditionAttribute) is valid.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Curve, S57GeometryPrimitive.Surface],
+                TargetS101Code = "ShorelineConstruction",
+            }],
+        };
+
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        Assert.NotNull(m);
+    }
+
+    [Fact]
+    public void Build_RedirectWithNoConditionAtAll_Throws()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                // No attribute condition and no primitive condition.
+                TargetS101Code = "ShorelineConstruction",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("no condition", ex.Message);
+    }
+
+    [Fact]
+    public void Build_BrokenAttributeConditionWithPrimitive_StillThrows()
+    {
+        // ConditionAttribute set, ConditionPresent false, no values: the
+        // attribute gate can never pass, so it must throw even though a
+        // primitive condition is also present.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATMOR",
+                ConditionPresent = false,
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Bollard",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("never match", ex.Message);
+    }
+
+    [Fact]
+    public void ResolveFeature_PrimitiveRedirect_MatchesOnlyForListedPrimitives()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Curve, S57GeometryPrimitive.Surface],
+                TargetS101Code = "ShorelineConstruction",
+            }],
+        };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        var noAttrs = ReadOnlyDictionary<string, string>.Empty;
+
+        Assert.Equal("ShorelineConstruction",
+            m.ResolveFeature(999, noAttrs, S57GeometryPrimitive.Surface)!.S101Code);
+        Assert.Equal("ShorelineConstruction",
+            m.ResolveFeature(999, noAttrs, S57GeometryPrimitive.Curve)!.S101Code);
+        Assert.Equal("Dolphin",
+            m.ResolveFeature(999, noAttrs, S57GeometryPrimitive.Point)!.S101Code);
+        // No primitive supplied → geometry gate fails → default.
+        Assert.Equal("Dolphin", m.ResolveFeature(999, noAttrs)!.S101Code);
+    }
+
+    [Fact]
+    public void ResolveFeature_CombinedAttributeAndPrimitiveRedirect_RequiresBoth()
+    {
+        // Mirrors the MORFAC CATMOR=3 → Bollard rule: only fires for a point
+        // whose CATMOR is 3.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATMOR",
+                ConditionValues = ["3"],
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Bollard",
+            }],
+        };
+        var attrRule = new S57AttributeRule { Attl = 9004, S57Acronym = "CATMOR", DefaultS101Code = "categoryOfDolphin" };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).AddAttributeRule(attrRule).Build();
+        var catmor3 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CATMOR"] = "3" };
+
+        // Point + CATMOR 3 → Bollard.
+        Assert.Equal("Bollard",
+            m.ResolveFeature(999, catmor3, S57GeometryPrimitive.Point)!.S101Code);
+        // Wrong primitive → default Dolphin.
+        Assert.Equal("Dolphin",
+            m.ResolveFeature(999, catmor3, S57GeometryPrimitive.Surface)!.S101Code);
+        // Right primitive, wrong value → default Dolphin.
+        var catmor2 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CATMOR"] = "2" };
+        Assert.Equal("Dolphin",
+            m.ResolveFeature(999, catmor2, S57GeometryPrimitive.Point)!.S101Code);
+    }
+
+    [Fact]
+    public void ResolveAttribute_DropOverride_RemovesAttribute()
+    {
+        // A redirect that drops the condition attribute (S57AttributeOverride
+        // with Drop = true) must yield null so it is not emitted on the target.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATMOR",
+                ConditionValues = ["3"],
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Bollard",
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATMOR"] = new S57AttributeOverride { Drop = true },
+                },
+            }],
+        };
+        var attrRule = new S57AttributeRule { Attl = 9004, S57Acronym = "CATMOR", DefaultS101Code = "categoryOfDolphin" };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).AddAttributeRule(attrRule).Build();
+        var catmor3 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CATMOR"] = "3" };
+
+        var resolved = m.ResolveFeature(999, catmor3, S57GeometryPrimitive.Point)!;
+        Assert.Equal("Bollard", resolved.S101Code);
+        Assert.Null(m.ResolveAttribute("CATMOR", "3", resolved));
+    }
+
     [Fact]
     public void ResolveAttribute_ValueRemap_DropsAttribute()
     {

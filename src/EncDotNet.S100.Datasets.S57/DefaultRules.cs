@@ -144,6 +144,62 @@ internal static class DefaultRules
             ],
         };
         yield return F(79, "LOKBSN", "LockBasin");
+        // MORFAC — S-101 removed the generic S-57 MooringWarpingFacility class
+        // (it survives only in the sister product S-131). The S-101 portrayal
+        // catalogue wires the MORFAC symbols to Dolphin.lua (point) and
+        // ShorelineConstruction.lua (line/area), which fixes the geometry
+        // default: point MORFAC → Dolphin, line/area MORFAC → ShorelineConstruction.
+        // CATMOR (ATTL 40) refines specific point facilities that DO have a
+        // dedicated S-101 class — bollard → Bollard, post/pile → Pile, mooring
+        // buoy → MooringBuoy — so those redirect regardless of the geometry
+        // default (all such instances are points in practice). On the remaining
+        // point Dolphins, CATMOR maps to categoryOfDolphin, but the S-57 and
+        // S-101 enumerations diverge (S-101 has Mooring/Deviation/Berthing/Fender
+        // dolphins, S-57 has dolphin/deviation-dolphin/bollard/tie-up-wall/pile/
+        // chain/mooring-buoy); only the two coincident meanings are carried —
+        // dolphin → Mooring Dolphin (1), deviation dolphin → Deviation Dolphin
+        // (2) — via the CATMOR attribute rule's value remap. CATMOR is dropped
+        // wherever MORFAC redirects to a class that does not bind
+        // categoryOfDolphin.
+        yield return new S57FeatureRule
+        {
+            Objl = 84,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects =
+            [
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATMOR",
+                    ConditionValues = ["3"], // bollard
+                    ConditionPrimitives = [S57GeometryPrimitive.Point],
+                    TargetS101Code = "Bollard",
+                    AttributeOverrides = DropCatmor,
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATMOR",
+                    ConditionValues = ["5"], // post or pile
+                    ConditionPrimitives = [S57GeometryPrimitive.Point],
+                    TargetS101Code = "Pile",
+                    AttributeOverrides = DropCatmor,
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATMOR",
+                    ConditionValues = ["7"], // mooring buoy
+                    ConditionPrimitives = [S57GeometryPrimitive.Point],
+                    TargetS101Code = "MooringBuoy",
+                    AttributeOverrides = DropCatmor,
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionPrimitives = [S57GeometryPrimitive.Curve, S57GeometryPrimitive.Surface],
+                    TargetS101Code = "ShorelineConstruction",
+                    AttributeOverrides = DropCatmor,
+                },
+            ],
+        };
         yield return F(85, "NAVLNE", "NavigationLine");
         yield return F(86, "OBSTRN", "Obstruction");
         yield return F(90, "PILPNT", "Pile");
@@ -488,7 +544,40 @@ internal static class DefaultRules
         yield return A(173, "VALACM", "valueOfAnnualChangeInMagneticVariation");
         yield return A(176, "VALMAG", "valueOfMagneticVariation");
         yield return A(188, "CAT_TS", "categoryOfTidalStream");
+        // CATMOR (Category of mooring/warping facility) → categoryOfDolphin on
+        // the Dolphin target of MORFAC. The S-57 and S-101 enumerations do not
+        // align, so only the two coincident meanings are carried (1 → 1 Mooring
+        // Dolphin, 2 → 2 Deviation Dolphin). Values that select a different
+        // S-101 class (3 bollard, 5 pile, 7 mooring buoy) or have no dolphin
+        // category (4 tie-up wall, 6 chain/wire/cable) are dropped; on the
+        // redirected classes CATMOR is additionally dropped via the MORFAC
+        // redirect overrides.
+        yield return new S57AttributeRule
+        {
+            Attl = 40,
+            S57Acronym = "CATMOR",
+            DefaultS101Code = "categoryOfDolphin",
+            DefaultValueRemap = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["1"] = "1",  // dolphin → Mooring Dolphin
+                ["2"] = "2",  // deviation dolphin → Deviation Dolphin
+                ["3"] = null, // bollard → Bollard (no dolphin category)
+                ["4"] = null, // tie-up wall → no dolphin category
+                ["5"] = null, // post or pile → Pile (no dolphin category)
+                ["6"] = null, // chain/wire/cable → no dolphin category
+                ["7"] = null, // mooring buoy → MooringBuoy (no dolphin category)
+            },
+        };
     }
+
+    // Shared override that removes CATMOR entirely on a MORFAC redirect target
+    // that does not bind categoryOfDolphin (Bollard, Pile, MooringBuoy,
+    // ShorelineConstruction).
+    private static readonly IReadOnlyDictionary<string, S57AttributeOverride> DropCatmor =
+        new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATMOR"] = new S57AttributeOverride { Drop = true },
+        };
 
     private static S57FeatureRule F(ushort objl, string acronym, string? s101)
         => new() { Objl = objl, S57Acronym = acronym, DefaultS101Code = s101 };

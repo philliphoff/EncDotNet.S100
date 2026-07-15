@@ -50,6 +50,7 @@ public sealed class S57ToS101Translator
 
     private const ushort SoundingObjl = 129;
     private const string SoundingS101Code = "Sounding";
+    private const ushort LightsObjl = 75;  // LIGHTS (S-57 object class)
 
     // ── S-57 textual-info attribute codes (S-57 Appendix A Chapter 2) ──
     // Per IHO S-57→S-101 Conversion Guidance §2.3, these four attributes
@@ -77,6 +78,58 @@ public sealed class S57ToS101Translator
     private const string S101AttrText = "text";
     private const string S101AttrFileReference = "fileReference";
     private const string S101AttrLanguage = "language";
+
+    // ── S-101 NauticalInformation info-type / association / role names ──
+    // Per IHO S-57→S-101 Conversion Guidance §2.3 "fuller path": instead of
+    // the inline `information` complex shortcut, the textual attributes
+    // (INFORM/TXTDSC/NINFOM/NTXTDS) are carried by a standalone
+    // `NauticalInformation` information type bound to the feature through an
+    // `AdditionalInformation` information association whose single role is
+    // `theInformation` (S-101 FC Ed 1.x; the association declares only the
+    // information-end role). Resolved by name via the document catalogues by
+    // the S-100 Part 9A portrayal (see `ProcessNauticalInformation`).
+    private const string S101InfoTypeNauticalInformation = "NauticalInformation";
+    private const string S101AssocAdditionalInformation = "AdditionalInformation";
+    private const string S101RoleTheInformation = "theInformation";
+
+    // ── S-57 collection object + S-101 RangeSystemAggregation names ─────
+    // S-57 has generic collection objects C_AGGR (aggregation) / C_ASSO
+    // (association); S-101 replaced them with a fixed set of purpose-specific
+    // feature associations, each bound to a dedicated collection feature class.
+    // A C_AGGR whose members are navigational tracks plus the navigation aids
+    // that define them maps to a synthesised, geometry-less `RangeSystem`
+    // feature (the `theCollection` head per the S-101 FC) linked to each member
+    // by a `RangeSystemAggregation` association in the member's `theComponent`
+    // role (S-101 FC Ed 1.x; RangeSystemAggregation def: "binding between
+    // navigational tracks and the navigational aids that define the tracks").
+    // C_ASSO has no generic S-101 home (its NOAA use is mostly land-area
+    // partitions) and is intentionally not mapped.
+    private const ushort CAggrObjl = 400;       // C_AGGR (S-57 Appendix A)
+    private const string S101ClassRangeSystem = "RangeSystem";
+    private const string S101AssocRangeSystemAggregation = "RangeSystemAggregation";
+    private const string S101RoleTheComponent = "theComponent";
+
+    // S-101 feature classes the FC permits as `theComponent` of a
+    // `RangeSystemAggregation` (extracted from the bundled FeatureCatalogue.xml
+    // feature bindings). A C_AGGR maps to a RangeSystem only when every member
+    // resolves to one of these classes (or to another qualifying RangeSystem)
+    // and at least one member is a navigational track.
+    private static readonly HashSet<string> RangeSystemComponentClasses = new(StringComparer.Ordinal)
+    {
+        "Building", "CardinalBeacon", "Daymark", "Dolphin", "FortifiedStructure",
+        "IsolatedDangerBeacon", "Landmark", "LateralBeacon", "LightAllAround",
+        "LightSectored", "NavigationLine", "Pile", "RadarTransponderBeacon",
+        "RangeSystem", "RecommendedRouteCentreline", "RecommendedTrack",
+        "SafeWaterBeacon", "SiloTank", "SpecialPurposeGeneralBeacon",
+    };
+
+    // The subset of RangeSystem component classes that are navigational tracks;
+    // a qualifying range system must contain at least one so that arbitrary
+    // navaid clusters (e.g. two beacons) are not misclassified as range systems.
+    private static readonly HashSet<string> RangeSystemTrackClasses = new(StringComparer.Ordinal)
+    {
+        "NavigationLine", "RecommendedTrack", "RecommendedRouteCentreline",
+    };
 
     // S-101 attribute codes for the `featureName` complex attribute and its
     // sub-attributes (verified against the bundled FC; `name` is [1..1],
@@ -151,15 +204,56 @@ public sealed class S57ToS101Translator
     // sub-attribute (S-101 Conversion Guidance; verified against the
     // bundled FC). CATZOC is only bound to S-57 M_QUAL, which translates to the
     // S-101 QualityOfBathymetricData feature — the sole feature class binding
-    // `zoneOfConfidence`. The complex's other sub-attributes (fixedDateRange,
-    // horizontalPositionUncertainty, verticalUncertainty) have no CATZOC-side
-    // source and are left unpopulated. The enumeration values are identical in
+    // `zoneOfConfidence`. The enumeration values are identical in
     // S-57 and S-101 (1=A1, 2=A2, 3=B, 4=C, 5=D, 6=U), so no remapping is
-    // needed; an out-of-range code drops the instance (its only sub-attribute
-    // would be missing).
+    // needed; an out-of-range code drops the instance.
+    //
+    // The complex's `horizontalPositionUncertainty` and `verticalUncertainty`
+    // sub-attributes are populated from the CATZOC-implied accuracy values of
+    // the IHO CATZOC table (IHO S-4 §B-290 / S-57 Appendix A CATZOC), because
+    // NOAA ENCs almost never carry POSACC/SOUACC on M_QUAL to derive them from
+    // directly. Each is itself a complex of `uncertaintyFixed` [1..1] (the
+    // fixed metre term `a`) and `uncertaintyVariableFactor` [0..1] (the
+    // percentage-of-depth term `b`, for the `a + b% × d` accuracy model):
+    //
+    //   ZOC  horizontal (pos accuracy)   vertical (depth accuracy)
+    //   A1   ±5 m + 5% depth             0.50 m + 1% depth
+    //   A2   ±20 m                       1.00 m + 2% depth
+    //   B    ±50 m                       1.00 m + 2% depth
+    //   C    ±500 m                      2.00 m + 5% depth
+    //   D    worse than C (unquantified) worse than C (unquantified)
+    //   U    unassessed                  unassessed
+    //
+    // D and U have no quantified accuracy, so only `categoryOfZoneOfConfidenceInData`
+    // is emitted for them. `fixedDateRange` has no CATZOC-side source and is
+    // always left unpopulated.
     private const ushort S57AttrCatzoc = 72;   // CATZOC — category of ZOC in data
     private const string S101AttrZoneOfConfidence = "zoneOfConfidence";
     private const string S101AttrCategoryOfZocInData = "categoryOfZoneOfConfidenceInData";
+    private const string S101AttrHorizontalPositionUncertainty = "horizontalPositionUncertainty";
+    private const string S101AttrVerticalUncertainty = "verticalUncertainty";
+    private const string S101AttrUncertaintyFixed = "uncertaintyFixed";
+    private const string S101AttrUncertaintyVariableFactor = "uncertaintyVariableFactor";
+
+    // CATZOC-implied uncertainty values keyed by the CATZOC / S-101
+    // categoryOfZoneOfConfidenceInData enumerate code (1=A1 … 4=C). Codes 5 (D)
+    // and 6 (U) are intentionally absent: their accuracy is unquantified /
+    // unassessed. Values are the fixed metre term and (optional) percentage
+    // term from the IHO CATZOC table above.
+    private readonly record struct ZocUncertainty(
+        string HorizontalFixed,
+        string? HorizontalVariable,
+        string VerticalFixed,
+        string VerticalVariable);
+
+    private static readonly IReadOnlyDictionary<string, ZocUncertainty> CatzocUncertainties =
+        new Dictionary<string, ZocUncertainty>
+        {
+            ["1"] = new("5", "5", "0.5", "1"),   // A1
+            ["2"] = new("20", null, "1", "2"),   // A2
+            ["3"] = new("50", null, "1", "2"),   // B
+            ["4"] = new("500", null, "2", "5"),  // C
+        };
 
     // S-57 NATSUR (Nature of surface, ATTL 113) and NATQUA (Nature of surface,
     // qualifying terms, ATTL 114) — both list-valued — map onto the S-101
@@ -419,11 +513,11 @@ public sealed class S57ToS101Translator
             CompositeCurves = ctx.CompositeCurves,
             Surfaces = ctx.Surfaces,
             Features = ctx.Features,
-            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationTypes = ctx.InformationTypes,
+            InformationTypeCatalogue = ctx.InformationTypeCatalogue,
+            InformationAssociationCatalogue = ctx.InformationAssociationCatalogue,
+            FeatureAssociationCatalogue = ctx.FeatureAssociationCatalogue,
+            RoleCatalogue = ctx.RoleCatalogue,
         };
     }
 
@@ -452,8 +546,23 @@ public sealed class S57ToS101Translator
         private uint _nextFeatureId = 1;
         private ushort _nextFeatureTypeCode = 1;
         private ushort _nextAttributeCode = 1;
+        private uint _nextInformationId = 1;
+        private ushort _nextInformationTypeCode = 1;
+        private ushort _nextInformationAssociationCode = 1;
+        private ushort _nextFeatureAssociationCode = 1;
+        private ushort _nextRoleCode = 1;
         private readonly Dictionary<string, ushort> _featureTypeByName = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ushort> _attributeByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ushort> _informationTypeByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ushort> _informationAssociationByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ushort> _featureAssociationByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ushort> _roleByName = new(StringComparer.OrdinalIgnoreCase);
+
+        // Maps an emitted feature's S-57 long name (LNAM: producing agency,
+        // feature id, subdivision) to its allocated S-101 record id, so that
+        // C_AGGR feature-to-feature pointers (which reference members by LNAM,
+        // not RCNM/RCID) can be resolved to the S-101 features in a second pass.
+        private readonly Dictionary<(int agency, long fid, int sub), uint> _recordIdByLnam = new();
 
         public Dictionary<uint, S101PointRecord> Points { get; } = new();
         public Dictionary<uint, S101MultiPointRecord> MultiPoints { get; } = new();
@@ -463,6 +572,11 @@ public sealed class S57ToS101Translator
         public List<S101FeatureRecord> Features { get; } = new();
         public Dictionary<ushort, string> FeatureTypeCatalogue { get; } = new();
         public Dictionary<ushort, string> AttributeTypeCatalogue { get; } = new();
+        public Dictionary<uint, S101InformationRecord> InformationTypes { get; } = new();
+        public Dictionary<ushort, string> InformationTypeCatalogue { get; } = new();
+        public Dictionary<ushort, string> InformationAssociationCatalogue { get; } = new();
+        public Dictionary<ushort, string> FeatureAssociationCatalogue { get; } = new();
+        public Dictionary<ushort, string> RoleCatalogue { get; } = new();
 
         public TranslationContext(
             EncDotNet.S57.S57Document s57,
@@ -560,8 +674,26 @@ public sealed class S57ToS101Translator
 
         public void TranslateFeatures()
         {
-            foreach (var feat in _s57.FeatureRecords)
+            // Sector-light merge: co-located S-57 LIGHTS objects that each carry
+            // a single sector arc (SECTR1/SECTR2) model one physical multi-sector
+            // light. Group them by the S-101 point they resolve to and fold the
+            // absorbed members' sectors into the surviving LightSectored feature
+            // as additional `sectorCharacteristics` instances (S-101 FC makes
+            // `sectorCharacteristics` [1..*]). See BuildSectorMergeGroups.
+            var featureRecords =
+                _s57.FeatureRecords as IReadOnlyList<EncDotNet.S57.S57FeatureRecord>
+                ?? _s57.FeatureRecords.ToList();
+            var (absorbed, extraSectorsByIndex) = BuildSectorMergeGroups(featureRecords);
+
+            // C_AGGR collection objects are deferred to a second pass: their
+            // members are referenced by LNAM and may be emitted after the
+            // C_AGGR in document order, so the member record ids are only known
+            // once every feature has been translated. See EmitRangeSystems.
+            var pendingAggregations = new List<EncDotNet.S57.S57FeatureRecord>();
+
+            for (int fi = 0; fi < featureRecords.Count; fi++)
             {
+                var feat = featureRecords[fi];
                 var objl = (ushort)(int)feat.ObjectCode;
                 if (objl == SoundingObjl)
                 {
@@ -572,8 +704,19 @@ public sealed class S57ToS101Translator
 
                 if (_diagnostics is not null) _diagnostics.FeatureRecordsRead++;
 
+                // Members absorbed into a co-located sector-light merge emit no
+                // feature of their own; their sector rides on the primary.
+                if (absorbed.Contains(fi)) continue;
+
+                if (objl == CAggrObjl)
+                {
+                    // Defer to the RangeSystem second pass (members resolved by LNAM).
+                    pendingAggregations.Add(feat);
+                    continue;
+                }
+
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
-                var resolved = _mapping.ResolveFeature(objl, acronymView);
+                var resolved = _mapping.ResolveFeature(objl, acronymView, MapPrimitive(feat.Primitive));
                 if (resolved is null)
                 {
                     if (_diagnostics is not null)
@@ -586,8 +729,6 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
-                var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
-                var attributes = TranslateAttributes(feat.Attributes, resolved, objl);
                 var spatials = TranslateSpatialPointers(feat);
                 if (spatials.Count == 0)
                 {
@@ -595,10 +736,22 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                // Resolve geometry before translating attributes so that a
+                // feature dropped for lack of geometry does not leave an orphan
+                // NauticalInformation record behind (BuildNauticalInformation
+                // allocates the record as a side effect).
+                var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
+                extraSectorsByIndex.TryGetValue(fi, out var extraSectors);
+                var attributes = TranslateAttributes(
+                    feat.Attributes, resolved, objl, out var infoAssociations, extraSectors);
+
                 if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
+                var recordId = _nextFeatureId++;
+                _recordIdByLnam[((int)feat.RecordName.AgencyCode,
+                    (long)feat.RecordName.FeatureId, (int)feat.RecordName.FeatureSubdivision)] = recordId;
                 Features.Add(new S101FeatureRecord
                 {
-                    RecordId = _nextFeatureId++,
+                    RecordId = recordId,
                     FeatureTypeCode = typeCode,
                     ProducingAgency = (ushort)feat.RecordName.AgencyCode,
                     FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
@@ -606,10 +759,278 @@ public sealed class S57ToS101Translator
                     Attributes = attributes,
                     SpatialAssociations = spatials,
                     FeatureAssociations = [],
+                    InformationAssociations = infoAssociations,
+                });
+            }
+
+            EmitRangeSystems(pendingAggregations);
+        }
+
+        private static (int agency, long fid, int sub) Lnam(EncDotNet.S57.S57RecordName n)
+            => ((int)n.AgencyCode, (long)n.FeatureId, (int)n.FeatureSubdivision);
+
+        // Second pass over deferred S-57 C_AGGR collection objects. S-101 has no
+        // generic aggregation; a C_AGGR whose members are navigational tracks
+        // (NavigationLine / RecommendedTrack / RecommendedRouteCentreline) plus
+        // the navigation aids that define them maps to a synthesised,
+        // geometry-less `RangeSystem` feature — the FC's dedicated `theCollection`
+        // head for a `RangeSystemAggregation` — linked to each member in the
+        // member's `theComponent` role. C_AGGR members are referenced by LNAM
+        // (the FFPT long name), so they are resolved against the LNAM→record-id
+        // map built while translating features. A C_AGGR may itself be a member
+        // of another C_AGGR (RangeSystem is a permitted component), so
+        // qualification is recursive and record ids for qualifying aggregations
+        // are allocated up front (phase 1) before the associations are wired
+        // (phase 2) to keep nested references resolvable. C_AGGR groupings that
+        // do not match the range-system pattern — and all C_ASSO — have no S-101
+        // home and are counted as unmapped instead. (S-101 FC Ed 1.x.)
+        private void EmitRangeSystems(List<EncDotNet.S57.S57FeatureRecord> aggregations)
+        {
+            if (aggregations.Count == 0) return;
+
+            // Index every S-57 feature by LNAM so C_AGGR members (referenced by
+            // long name, not RCNM/RCID) can be resolved to their object class.
+            var featureByLnam = new Dictionary<(int, long, int), EncDotNet.S57.S57FeatureRecord>();
+            foreach (var r in _s57.FeatureRecords)
+                featureByLnam[Lnam(r.RecordName)] = r;
+
+            var pendingByLnam = new Dictionary<(int, long, int), EncDotNet.S57.S57FeatureRecord>();
+            foreach (var a in aggregations)
+                pendingByLnam[Lnam(a.RecordName)] = a;
+
+            var qualifyCache = new Dictionary<(int, long, int), bool>();
+
+            // Resolves a member's S-101 class: a nested C_AGGR contributes
+            // "RangeSystem" when it qualifies; any other feature contributes the
+            // class it maps to (or null when unmapped/dropped).
+            string? MemberClass((int, long, int) key, HashSet<(int, long, int)> visiting)
+            {
+                if (pendingByLnam.ContainsKey(key))
+                    return Qualifies(key, visiting) ? S101ClassRangeSystem : null;
+                if (!featureByLnam.TryGetValue(key, out var mf)) return null;
+                if (!_recordIdByLnam.ContainsKey(key)) return null;
+                var view = _mapping.BuildAcronymView(mf.Attributes);
+                return _mapping.ResolveFeature(
+                    (ushort)(int)mf.ObjectCode, view, MapPrimitive(mf.Primitive))?.S101Code;
+            }
+
+            bool Qualifies((int, long, int) key, HashSet<(int, long, int)> visiting)
+            {
+                if (qualifyCache.TryGetValue(key, out var cached)) return cached;
+                if (!pendingByLnam.TryGetValue(key, out var aggr)) return false;
+                if (!visiting.Add(key)) return false; // cycle guard
+
+                bool hasTrack = false;
+                bool allPermitted = aggr.FeaturePointers.Count > 0;
+                foreach (var fp in aggr.FeaturePointers)
+                {
+                    var cls = MemberClass(Lnam(fp.Name), visiting);
+                    if (cls is null || !RangeSystemComponentClasses.Contains(cls))
+                    {
+                        allPermitted = false;
+                        break;
+                    }
+                    if (RangeSystemTrackClasses.Contains(cls)) hasTrack = true;
+                }
+
+                visiting.Remove(key);
+                var result = allPermitted && hasTrack;
+                qualifyCache[key] = result;
+                return result;
+            }
+
+            // Phase 1: allocate a RangeSystem record id for every qualifying
+            // C_AGGR and register it by LNAM so nested aggregations resolve.
+            var qualifying = new List<(EncDotNet.S57.S57FeatureRecord Aggr, uint RecordId)>();
+            foreach (var a in aggregations)
+            {
+                var key = Lnam(a.RecordName);
+                if (!Qualifies(key, new HashSet<(int, long, int)>()))
+                {
+                    // Not a range system (e.g. a TSS aggregation or land grouping)
+                    // — no S-101 home this round.
+                    _diagnostics?.RecordUnmappedObjectClass(CAggrObjl);
+                    continue;
+                }
+                var recordId = _nextFeatureId++;
+                _recordIdByLnam[key] = recordId;
+                qualifying.Add((a, recordId));
+            }
+
+            if (qualifying.Count == 0) return;
+
+            var assocCode = GetOrAssignFeatureAssociationCode(S101AssocRangeSystemAggregation);
+            var componentRole = GetOrAssignRoleCode(S101RoleTheComponent);
+            var typeCode = GetOrAssignFeatureTypeCode(S101ClassRangeSystem);
+
+            // Phase 2: emit each RangeSystem with a `theComponent` association to
+            // every member that resolved to an emitted S-101 feature. Every
+            // qualifying aggregation is emitted (never dropped) so that the record
+            // ids registered in phase 1 always refer to a real record, keeping
+            // nested-aggregation references intact.
+            foreach (var (aggr, recordId) in qualifying)
+            {
+                var assocs = new List<S101FeatureAssociation>();
+                foreach (var fp in aggr.FeaturePointers)
+                {
+                    if (_recordIdByLnam.TryGetValue(Lnam(fp.Name), out var memberId))
+                        assocs.Add(new S101FeatureAssociation(assocCode, memberId, componentRole));
+                }
+
+                if (_diagnostics is not null) _diagnostics.RangeSystemsEmitted++;
+                Features.Add(new S101FeatureRecord
+                {
+                    RecordId = recordId,
+                    FeatureTypeCode = typeCode,
+                    ProducingAgency = (ushort)aggr.RecordName.AgencyCode,
+                    FeatureIdentificationNumber = (uint)aggr.RecordName.FeatureId,
+                    FeatureIdentificationSubdivision = (ushort)aggr.RecordName.FeatureSubdivision,
+                    Attributes = [],
+                    SpatialAssociations = [],
+                    FeatureAssociations = assocs,
                     InformationAssociations = [],
                 });
             }
         }
+
+        // Groups co-located sector-bearing S-57 LIGHTS features so that a single
+        // S-101 LightSectored feature carries every arc as its own
+        // `sectorCharacteristics` instance. The merge key is the S-101 point the
+        // feature resolves to (a shared S-57 connected/isolated node), which is
+        // how S-57 encodes the several sectors of one physical light. Returns the
+        // set of feature indices that are absorbed (skipped by the main loop) and,
+        // per surviving primary index, the extra sector inputs to append.
+        //
+        // Policy (corpus-derived from NOAA ENC): the lowest-document-order sector
+        // light at a node is the primary; the rest are absorbed. Non-sector
+        // attributes (height, status, name, …) come from the primary — in the
+        // corpus these never diverge within a group (HEIGHT invariant), because
+        // the group is one physical light. Each sector keeps its own light
+        // characteristic, so groups whose members differ in LITCHR/SIGGRP/SIGPER
+        // simply yield several `sectorCharacteristics` instances (all conformant).
+        private (HashSet<int> Absorbed, Dictionary<int, List<SectorInput>> Extras) BuildSectorMergeGroups(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var absorbed = new HashSet<int>();
+            var extras = new Dictionary<int, List<SectorInput>>();
+
+            // Bucket sector-bearing LightSectored feature indices by resolved point.
+            var byPoint = new Dictionary<uint, List<int>>();
+            for (int fi = 0; fi < featureRecords.Count; fi++)
+            {
+                var feat = featureRecords[fi];
+                if ((int)feat.ObjectCode != LightsObjl) continue;
+
+                bool hasSector = false;
+                foreach (var a in feat.Attributes)
+                {
+                    if ((a.AttributeCode == S57AttrSectr1 || a.AttributeCode == S57AttrSectr2)
+                        && !string.IsNullOrEmpty(a.Value))
+                    {
+                        hasSector = true;
+                        break;
+                    }
+                }
+                if (!hasSector) continue;
+
+                var acronymView = _mapping.BuildAcronymView(feat.Attributes);
+                var resolved = _mapping.ResolveFeature(
+                    (ushort)(int)feat.ObjectCode, acronymView, MapPrimitive(feat.Primitive));
+                if (resolved is null
+                    || !_featureBindings.Binds(resolved.S101Code, S101AttrSectorCharacteristics))
+                    continue;
+
+                if (!TryResolvePointId(feat, out var pid)) continue;
+
+                if (!byPoint.TryGetValue(pid, out var bucket))
+                {
+                    bucket = new List<int>();
+                    byPoint[pid] = bucket;
+                }
+                bucket.Add(fi);
+            }
+
+            foreach (var bucket in byPoint.Values)
+            {
+                if (bucket.Count < 2) continue;
+
+                // bucket is in ascending document order (indices appended in order).
+                var primaryIndex = bucket[0];
+                var list = new List<SectorInput>();
+                for (int i = 1; i < bucket.Count; i++)
+                {
+                    var memberIndex = bucket[i];
+                    absorbed.Add(memberIndex);
+
+                    var si = ExtractSectorInput(featureRecords[memberIndex]);
+                    if (si is null)
+                        continue; // no LITCHR to anchor a sectorCharacteristics
+                    if (_allowedEnumValues is not null
+                        && !_allowedEnumValues.IsAllowed(S101AttrLightCharacteristic, si.LightCharacteristic))
+                    {
+                        // Parity with the single-feature path: an FC-rejected
+                        // LITCHR drops the whole instance and its diverted inputs.
+                        _diagnostics?.RecordDroppedEnumValue(S101AttrLightCharacteristic, si.LightCharacteristic);
+                        RecordDivertedSectorAttributesDropped(
+                            si.ColourList, si.LightVisibilityList, si.ValueOfNominalRange,
+                            si.SectorBearingOne, si.SectorBearingTwo,
+                            si.SignalGroup, si.SignalPeriod, si.SignalSequence);
+                        continue;
+                    }
+                    list.Add(si);
+                }
+
+                if (_diagnostics is not null)
+                    _diagnostics.SectorLightsMerged += bucket.Count - 1;
+                extras[primaryIndex] = list;
+            }
+
+            return (absorbed, extras);
+        }
+
+        // Resolves the S-101 point record id a point feature references (via its
+        // first spatial pointer to a connected/isolated node). Mirrors the lookup
+        // in TranslatePointSpatial.
+        private bool TryResolvePointId(EncDotNet.S57.S57FeatureRecord feat, out uint id)
+        {
+            foreach (var ptr in feat.SpatialPointers)
+            {
+                if (TryGetPointId(ptr.Name, out id)) return true;
+            }
+            id = 0;
+            return false;
+        }
+
+        // Extracts the sector-light inputs (light characteristic, signal
+        // group/period/sequence, colour/visibility/range lists and the two sector
+        // bearings) from a single S-57 LIGHTS feature's raw attributes, for use by
+        // the sector-light merge. Returns null when no LITCHR is present (LITCHR
+        // anchors the mandatory `lightCharacteristic`, so without it no
+        // `sectorCharacteristics` instance can be assembled).
+        private static SectorInput? ExtractSectorInput(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            string? litchr = null, colour = null, litvis = null, valnmr = null;
+            string? sectr1 = null, sectr2 = null, siggrp = null, sigper = null, sigseq = null;
+            foreach (var a in feat.Attributes)
+            {
+                if (string.IsNullOrEmpty(a.Value)) continue;
+                switch (a.AttributeCode)
+                {
+                    case S57AttrLitchr: litchr = a.Value; break;
+                    case S57AttrColour: colour = a.Value; break;
+                    case S57AttrLitvis: litvis = a.Value; break;
+                    case S57AttrValnmr: valnmr = a.Value; break;
+                    case S57AttrSectr1: sectr1 = a.Value; break;
+                    case S57AttrSectr2: sectr2 = a.Value; break;
+                    case S57AttrSiggrp: siggrp = a.Value; break;
+                    case S57AttrSigper: sigper = a.Value; break;
+                    case S57AttrSigseq: sigseq = a.Value; break;
+                }
+            }
+            if (litchr is null) return null;
+            return new SectorInput(litchr, siggrp, sigper, sigseq, colour, litvis, valnmr, sectr1, sectr2);
+        }
+
 
         /// <summary>
         /// S-57 SOUNDG (OBJL=129) features carry many depth measurements via SG3D
@@ -672,8 +1093,11 @@ public sealed class S57ToS101Translator
         private IReadOnlyList<S101Attribute> TranslateAttributes(
             IReadOnlyList<EncDotNet.S57.S57AttributeValue> attrs,
             ResolvedFeature feature,
-            ushort ownerObjl)
+            ushort ownerObjl,
+            out IReadOnlyList<S101InformationAssociation> informationAssociations,
+            IReadOnlyList<SectorInput>? extraSectors = null)
         {
+            informationAssociations = [];
             if (attrs.Count == 0) return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
@@ -997,13 +1421,17 @@ public sealed class S57ToS101Translator
                 builder.Add(new S101Attribute(numeric, 1, resolved.Value));
             }
 
-            // Append `information` complex-attribute instances. Each instance
-            // is (marker, text?, fileReference?, language) — language is
-            // mandatory in the S-101 FC's binding for `information`.
-            if (informText is not null || txtdscFile is not null)
-                AppendInformationInstance(builder, text: informText, fileReference: txtdscFile, language: LanguageEng);
-            if (ninfomText is not null || ntxtdsFile is not null)
-                AppendInformationInstance(builder, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+            // Emit the textual attributes via the "fuller path" (IHO S-57→S-101
+            // Conversion Guidance §2.3): rather than an inline `information`
+            // complex on the feature, build a standalone `NauticalInformation`
+            // information type carrying the `information` complex instance(s) and
+            // bind it to the feature with an `AdditionalInformation` association.
+            // English (INFORM/TXTDSC) and national (NINFOM/NTXTDS) text share one
+            // NauticalInformation record (the FC binds `information` [0..*]).
+            var infoAssociation = BuildNauticalInformationAssociation(
+                informText, txtdscFile, ninfomText, ntxtdsFile);
+            if (infoAssociation is not null)
+                informationAssociations = [infoAssociation.Value];
 
             // Append `featureName` complex-attribute instances only on feature
             // classes that bind the complex. OBJNAM carries the English name;
@@ -1198,6 +1626,22 @@ public sealed class S57ToS101Translator
                     sectrSiggrp, sectrSigper, sectrSigseq);
             }
 
+            // Sector-light merge: co-located sector lights absorbed into this
+            // primary each contribute one more `sectorCharacteristics` instance
+            // (already LITCHR-validated in BuildSectorMergeGroups). The FC allows
+            // `sectorCharacteristics` [1..*], so the surviving LightSectored
+            // feature carries every arc of the physical light.
+            if (bindsSectorChar && extraSectors is not null)
+            {
+                foreach (var s in extraSectors)
+                {
+                    AppendSectorCharacteristicsInstance(
+                        builder, s.LightCharacteristic, s.SignalGroup, s.SignalPeriod, s.SignalSequence,
+                        s.ColourList, s.LightVisibilityList, s.ValueOfNominalRange,
+                        s.SectorBearingOne, s.SectorBearingTwo);
+                }
+            }
+
             return builder;
         }
 
@@ -1224,10 +1668,44 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(langCode, 1, language));
         }
 
-        // Emits a `featureName` complex-attribute instance using the same
-        // marker + contiguous-sub-attribute convention as the information
-        // complex (the S-101 data provider identifies an instance by the
-        // complex marker row and collects the sub-rows that follow it).
+        // Builds a `NauticalInformation` information-type record for a feature's
+        // textual attributes and returns the `AdditionalInformation` /
+        // `theInformation` association that binds it to the feature (IHO
+        // S-57→S-101 Conversion Guidance §2.3 "fuller path"). The record carries
+        // the same `information` complex the inline shortcut used — one instance
+        // for the English text (INFORM/TXTDSC, language `eng`) and one for the
+        // national text (NINFOM/NTXTDS, empty language) — so the S-100 Part 9A
+        // portrayal (`ProcessNauticalInformation`, which reads the association)
+        // is unchanged. Returns <see langword="null"/> when the feature has no
+        // textual attributes, in which case no record or association is emitted.
+        private S101InformationAssociation? BuildNauticalInformationAssociation(
+            string? informText, string? txtdscFile, string? ninfomText, string? ntxtdsFile)
+        {
+            bool hasEnglish = informText is not null || txtdscFile is not null;
+            bool hasNational = ninfomText is not null || ntxtdsFile is not null;
+            if (!hasEnglish && !hasNational) return null;
+
+            var infoAttributes = new List<S101Attribute>();
+            if (hasEnglish)
+                AppendInformationInstance(infoAttributes, text: informText, fileReference: txtdscFile, language: LanguageEng);
+            if (hasNational)
+                AppendInformationInstance(infoAttributes, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+
+            var infoId = _nextInformationId++;
+            InformationTypes[infoId] = new S101InformationRecord
+            {
+                RecordId = infoId,
+                InformationTypeCode = GetOrAssignInformationTypeCode(S101InfoTypeNauticalInformation),
+                Attributes = infoAttributes,
+            };
+
+            if (_diagnostics is not null) _diagnostics.NauticalInformationTypesEmitted++;
+
+            return new S101InformationAssociation(
+                GetOrAssignInformationAssociationCode(S101AssocAdditionalInformation),
+                infoId,
+                GetOrAssignRoleCode(S101RoleTheInformation));
+        }
         private void AppendFeatureNameInstance(
             List<S101Attribute> builder,
             string name,
@@ -1312,8 +1790,15 @@ public sealed class S57ToS101Translator
         }
 
         // Emits a `zoneOfConfidence` complex-attribute instance (marker +
-        // categoryOfZoneOfConfidenceInData) using the same marker /
-        // contiguous-sub-attribute convention as the other complex attributes.
+        // categoryOfZoneOfConfidenceInData, followed by the CATZOC-implied
+        // horizontalPositionUncertainty / verticalUncertainty sub-complexes for
+        // ZOC A1–C) using the same flat marker / pre-order sub-attribute
+        // convention as the other nested complex attributes. The FC binding
+        // order is categoryOfZoneOfConfidenceInData, fixedDateRange (no source,
+        // omitted), horizontalPositionUncertainty, verticalUncertainty; each
+        // uncertainty is itself a complex of uncertaintyFixed [1..1] +
+        // uncertaintyVariableFactor [0..1]. ZOC D/U have no quantified accuracy
+        // (absent from CatzocUncertainties) so only the category is emitted.
         private void AppendZoneOfConfidenceInstance(
             List<S101Attribute> builder,
             string categoryOfZoneOfConfidenceInData)
@@ -1323,6 +1808,20 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(zocCode, 1, string.Empty));
             var catCode = GetOrAssignAttributeCode(S101AttrCategoryOfZocInData);
             builder.Add(new S101Attribute(catCode, 1, categoryOfZoneOfConfidenceInData));
+
+            if (!CatzocUncertainties.TryGetValue(categoryOfZoneOfConfidenceInData, out var u))
+                return;
+
+            // horizontalPositionUncertainty → uncertaintyFixed [+ uncertaintyVariableFactor].
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrHorizontalPositionUncertainty), 1, string.Empty));
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.HorizontalFixed));
+            if (u.HorizontalVariable is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.HorizontalVariable));
+
+            // verticalUncertainty → uncertaintyFixed + uncertaintyVariableFactor.
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalUncertainty), 1, string.Empty));
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.VerticalFixed));
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.VerticalVariable));
         }
 
         // Emits a `horizontalClearanceOpen` / `horizontalClearanceFixed`
@@ -1601,6 +2100,21 @@ public sealed class S57ToS101Translator
         //     signalSequence…      (SIGSEQ phases, nested at this level)
         // Out-of-range enumerate codes (colour / lightVisibility) are dropped
         // and reported individually; the caller has already validated LITCHR.
+        // Immutable inputs for one S-101 `sectorCharacteristics` instance,
+        // extracted from a single S-57 LIGHTS feature. Used by the sector-light
+        // merge to carry an absorbed co-located light's arc onto the surviving
+        // LightSectored primary.
+        private sealed record SectorInput(
+            string LightCharacteristic,
+            string? SignalGroup,
+            string? SignalPeriod,
+            string? SignalSequence,
+            string? ColourList,
+            string? LightVisibilityList,
+            string? ValueOfNominalRange,
+            string? SectorBearingOne,
+            string? SectorBearingTwo);
+
         // If no valid colour remains, the whole instance is rolled back because
         // lightSector/colour are mandatory in the S-101 Feature Catalogue.
         private void AppendSectorCharacteristicsInstance(
@@ -1728,6 +2242,18 @@ public sealed class S57ToS101Translator
             };
         }
 
+        // Maps the S-57 wire primitive (1=Point, 2=Line, 3=Area, else None) to
+        // the mapping layer's S57GeometryPrimitive, used to drive
+        // geometry-conditional feature-class redirects (e.g. MORFAC).
+        private static S57GeometryPrimitive MapPrimitive(EncDotNet.S57.S57GeometricPrimitive primitive) =>
+            (int)primitive switch
+            {
+                1 => S57GeometryPrimitive.Point,
+                2 => S57GeometryPrimitive.Curve,
+                3 => S57GeometryPrimitive.Surface,
+                _ => S57GeometryPrimitive.None,
+            };
+
         private IReadOnlyList<S101SpatialAssociation> TranslatePointSpatial(EncDotNet.S57.S57FeatureRecord feat)
         {
             // Point features reference a single isolated/connected node.
@@ -1844,6 +2370,42 @@ public sealed class S57ToS101Translator
             var code = _nextAttributeCode++;
             _attributeByName[s101Code] = code;
             AttributeTypeCatalogue[code] = s101Code;
+            return code;
+        }
+
+        private ushort GetOrAssignInformationTypeCode(string s101Code)
+        {
+            if (_informationTypeByName.TryGetValue(s101Code, out var existing)) return existing;
+            var code = _nextInformationTypeCode++;
+            _informationTypeByName[s101Code] = code;
+            InformationTypeCatalogue[code] = s101Code;
+            return code;
+        }
+
+        private ushort GetOrAssignInformationAssociationCode(string s101Code)
+        {
+            if (_informationAssociationByName.TryGetValue(s101Code, out var existing)) return existing;
+            var code = _nextInformationAssociationCode++;
+            _informationAssociationByName[s101Code] = code;
+            InformationAssociationCatalogue[code] = s101Code;
+            return code;
+        }
+
+        private ushort GetOrAssignFeatureAssociationCode(string s101Code)
+        {
+            if (_featureAssociationByName.TryGetValue(s101Code, out var existing)) return existing;
+            var code = _nextFeatureAssociationCode++;
+            _featureAssociationByName[s101Code] = code;
+            FeatureAssociationCatalogue[code] = s101Code;
+            return code;
+        }
+
+        private ushort GetOrAssignRoleCode(string s101Code)
+        {
+            if (_roleByName.TryGetValue(s101Code, out var existing)) return existing;
+            var code = _nextRoleCode++;
+            _roleByName[s101Code] = code;
+            RoleCatalogue[code] = s101Code;
             return code;
         }
     }

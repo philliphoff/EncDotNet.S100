@@ -20,8 +20,10 @@ namespace EncDotNet.S100.Datasets.S101;
 /// This is the encoder consumed by the S-57 → S-101 conversion pipeline: an
 /// <see cref="S101Document"/> produced by the translator is serialized here to a
 /// standalone base cell (application profile <c>1</c>). Feature-to-feature
-/// associations (<c>FACS</c>) are serialized when present, although the S-57
-/// translator does not currently produce any.
+/// associations (<c>FASC</c>) are serialized when present; the S-57 translator
+/// produces them for RangeSystem aggregations (see the RangeSystemAggregation
+/// mapping), so converted cells that contain such associations round-trip
+/// through <see cref="S101DocumentReader"/>.
 /// </para>
 /// </remarks>
 public static class S101DocumentWriter
@@ -43,7 +45,6 @@ public static class S101DocumentWriter
     /// <param name="document">The document to serialize.</param>
     /// <returns>The encoded ISO 8211 dataset bytes.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static byte[] Write(S101Document document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -56,7 +57,6 @@ public static class S101DocumentWriter
     /// <param name="stream">The destination stream.</param>
     /// <param name="document">The document to serialize.</param>
     /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static void Write(Stream stream, S101Document document)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -72,7 +72,6 @@ public static class S101DocumentWriter
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task that completes when the document has been written.</returns>
     /// <exception cref="ArgumentNullException">A required argument is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static Task WriteAsync(Stream stream, S101Document document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -87,7 +86,6 @@ public static class S101DocumentWriter
     /// <param name="document">The document to serialize.</param>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static void WriteToFile(string path, S101Document document)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -104,7 +102,6 @@ public static class S101DocumentWriter
     /// <returns>A task that completes when the file has been written.</returns>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
     /// <exception cref="ArgumentNullException"><paramref name="document"/> is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The document requires incompatible uses of the <c>FACS</c> field tag.</exception>
     public static Task WriteToFileAsync(string path, S101Document document, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -115,19 +112,12 @@ public static class S101DocumentWriter
     private static Iso8211Document BuildDocument(S101Document doc)
     {
         var builder = new Iso8211DocumentBuilder();
-        var hasFeatureAssociations = doc.Features.Any(f => f.FeatureAssociations.Count > 0);
-        if (hasFeatureAssociations && doc.FeatureAssociationCatalogue.Count > 0)
-        {
-            throw new NotSupportedException(
-                "S101DocumentWriter cannot emit both the feature association code catalogue and feature association pointers because both use ISO 8211 field tag FACS.");
-        }
-
-        var fieldDefs = BuildFieldDefinitions(hasFeatureAssociations);
+        var fieldDefs = BuildFieldDefinitions();
 
         // The DDR carries the full canonical field definition set, including definitions not emitted in this document.
         builder.AddRecord(Iso8211DataDescriptiveRecordWriter.BuildDdr(fieldDefs.Values, options: Options));
 
-        builder.AddRecord(BuildDatasetRecord(doc, fieldDefs, hasFeatureAssociations));
+        builder.AddRecord(BuildDatasetRecord(doc, fieldDefs));
 
         foreach (var p in doc.Points.Values)
             builder.AddRecord(BuildPointRecord(p, fieldDefs));
@@ -151,8 +141,7 @@ public static class S101DocumentWriter
 
     private static Iso8211Record BuildDatasetRecord(
         S101Document doc,
-        IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs,
-        bool featureAssociationFieldsUseFacs)
+        IReadOnlyDictionary<string, Iso8211FieldDefinition> fieldDefs)
     {
         var id = doc.Identification;
         var si = doc.StructureInfo;
@@ -196,8 +185,7 @@ public static class S101DocumentWriter
         AddCatalogue(record, "ATCS", doc.AttributeTypeCatalogue, fieldDefs);
         AddCatalogue(record, "ITCS", doc.InformationTypeCatalogue, fieldDefs);
         AddCatalogue(record, "IACS", doc.InformationAssociationCatalogue, fieldDefs);
-        if (!featureAssociationFieldsUseFacs)
-            AddCatalogue(record, "FACS", doc.FeatureAssociationCatalogue, fieldDefs);
+        AddCatalogue(record, "FACS", doc.FeatureAssociationCatalogue, fieldDefs);
         AddCatalogue(record, "ARCS", doc.RoleCatalogue, fieldDefs);
 
         return record.Build();
@@ -320,7 +308,7 @@ public static class S101DocumentWriter
         {
             foreach (var a in f.FeatureAssociations)
             {
-                record.AddField(Field("FACS", fieldDefs).AddSubfields(
+                record.AddField(Field("FASC", fieldDefs).AddSubfields(
                     (int)RcnmFeature, a.RecordId, (int)a.NumericCode, (int)a.RoleCode, (int)a.UpdateInstruction));
             }
         }
@@ -372,7 +360,7 @@ public static class S101DocumentWriter
     private static Iso8211SubfieldFormat F8 => new() { FormatType = Iso8211SubfieldFormatType.FloatingPoint, Width = 8 };
     private static Iso8211SubfieldFormat A => new() { FormatType = Iso8211SubfieldFormatType.CharacterData, Width = 0 };
 
-    private static IReadOnlyDictionary<string, Iso8211FieldDefinition> BuildFieldDefinitions(bool featureAssociationFieldsUseFacs)
+    private static IReadOnlyDictionary<string, Iso8211FieldDefinition> BuildFieldDefinitions()
     {
         var defs = new List<Iso8211FieldDefinition>
         {
@@ -387,10 +375,9 @@ public static class S101DocumentWriter
             Def("ATCS", "Attribute Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("ATCD", A), ("ANCD", U2)),
             Def("ITCS", "Information Type Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("ITCD", A), ("ITNC", U2)),
             Def("IACS", "Information Association Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("IACD", A), ("IANC", U2)),
-            featureAssociationFieldsUseFacs
-                ? Def("FACS", "Feature Association", Iso8211DataStructureCode.Vector, Iso8211DataTypeCode.MixedDataTypes, -1,
-                    ("RRNM", U1), ("RRID", U4), ("NFAC", U2), ("NARC", U2), ("FAUI", U1))
-                : Def("FACS", "Feature Association Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("FACD", A), ("FANC", U2)),
+            Def("FACS", "Feature Association Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("FACD", A), ("FANC", U2)),
+            Def("FASC", "Feature Association", Iso8211DataStructureCode.Vector, Iso8211DataTypeCode.MixedDataTypes, -1,
+                ("RRNM", U1), ("RRID", U4), ("NFAC", U2), ("NARC", U2), ("FAUI", U1)),
             Def("ARCS", "Association Role Codes", Iso8211DataStructureCode.Array, Iso8211DataTypeCode.MixedDataTypes, 0, ("ARCD", A), ("ARNC", U2)),
 
             Def("PRID", "Point Record Identifier", Iso8211DataStructureCode.Vector, Iso8211DataTypeCode.ImplicitPoint, -1,

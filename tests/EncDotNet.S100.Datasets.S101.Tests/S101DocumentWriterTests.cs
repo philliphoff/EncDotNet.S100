@@ -151,6 +151,40 @@ public class S101DocumentWriterTests
     }
 
     [Fact]
+    public void WriteThenRead_PreservesFeatureAssociationsWithCatalogue()
+    {
+        var original = BuildSampleDocument();
+        // Populate the feature-association code catalogue and role catalogue so the
+        // document exercises BOTH the FACS dataset catalogue and the FASC per-feature
+        // pointers simultaneously (S-101 Part 10a: distinct tags, previously conflated).
+        var featureAssociationCatalogue = Assert.IsAssignableFrom<IDictionary<ushort, string>>(original.FeatureAssociationCatalogue);
+        var roleCatalogue = Assert.IsAssignableFrom<IDictionary<ushort, string>>(original.RoleCatalogue);
+        featureAssociationCatalogue[8] = "RangeSystemAggregation";
+        featureAssociationCatalogue[9] = "AidsToNavigationAssociation";
+        roleCatalogue[3] = "theComponent";
+        roleCatalogue[4] = "theCollection";
+
+        var bytes = S101DocumentWriter.Write(original);
+        using var stream = new MemoryStream(bytes);
+        var rt = S101DocumentReader.ReadFromStream(stream);
+
+        Assert.Equal("RangeSystemAggregation", rt.FeatureAssociationCatalogue[8]);
+        Assert.Equal("AidsToNavigationAssociation", rt.FeatureAssociationCatalogue[9]);
+        Assert.Equal("theComponent", rt.RoleCatalogue[3]);
+
+        var of = original.Features[0];
+        var rf = rt.Features.Single(f => f.RecordId == of.RecordId);
+        Assert.Equal(of.FeatureAssociations.Count, rf.FeatureAssociations.Count);
+        for (int i = 0; i < of.FeatureAssociations.Count; i++)
+        {
+            Assert.Equal(of.FeatureAssociations[i].NumericCode, rf.FeatureAssociations[i].NumericCode);
+            Assert.Equal(of.FeatureAssociations[i].RecordId, rf.FeatureAssociations[i].RecordId);
+            Assert.Equal(of.FeatureAssociations[i].RoleCode, rf.FeatureAssociations[i].RoleCode);
+            Assert.Equal(of.FeatureAssociations[i].UpdateInstruction, rf.FeatureAssociations[i].UpdateInstruction);
+        }
+    }
+
+    [Fact]
     public void WriteToFile_WithEmptyPath_ThrowsArgumentException()
     {
         var document = BuildSampleDocument();
