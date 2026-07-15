@@ -357,7 +357,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var processor = await Task.Run(() =>
             {
                 if (!fromExchangeSet)
-                    return _pipelineFactory.CreateProcessor(entry.FilePath);
+                    return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
 
                 // Collapse a base cell and its in-set sequential updates into a
                 // single up-to-date dataset. S-101 / S-57 / S-100 Part 10a;

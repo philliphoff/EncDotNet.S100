@@ -98,9 +98,17 @@ The viewer accepts:
   as S-100 sets, driven by the S-57 verifier. (Directory/`CATALOG.031`
   only — zipped S-57 sets are not supported, matching the
   directory-rooted S-57 verifier used by the `s100 validate` CLI.)
+- **Catalogue-less ENC cell folders** — point it at a directory that
+  holds loose base cells (`.000`) with no `CATALOG.031`/`CATALOG.XML`
+  and it loads every base cell, sniffing S-57 vs S-101 per cell and
+  applying each cell's sibling filesystem updates (`.001`, `.002`, …).
+  A dropped folder that yields no renderable cells raises a
+  notification instead of being silently ignored.
 - **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
   S-111), `.gml` (any of the GML-encoded products), `.000` S-101
-  ENC cell, or `.000` S-57 ENC cell onto the window.
+  ENC cell, or `.000` S-57 ENC cell onto the window. A dropped `.000`
+  base cell also picks up any sibling `.001`/`.002`… updates that sit
+  next to it on disk.
 - **Recent files** — the **File → Recent** submenu replays previous
   loads in order; entries that no longer exist on disk are skipped.
 

@@ -1381,14 +1381,25 @@ public partial class MainWindow : ShadUI.Window
                 continue;
 
             // Folder drop: treat as an exchange set when CATALOG.XML
-            // (S-100) or CATALOG.031 (S-57) is at the root, otherwise
-            // ignore (the dataset loader is single-file).
+            // (S-100) or CATALOG.031 (S-57) is at the root. Otherwise, a
+            // catalogue-less folder of loose ENC cells (a base ….000 plus
+            // its updates) is scanned and loaded; anything else raises a
+            // notification rather than being silently ignored.
             if (Directory.Exists(path))
             {
                 if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
-                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path))
+                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeLooseCellFolder(path))
                 {
                     await RunExchangeSetAsync(path);
+                }
+                else
+                {
+                    App.Services.GetRequiredService<INotificationService>()
+                        .Create(Strings.Toast_Warning)
+                        .WithSeverity(NotificationSeverity.Warning)
+                        .WithContent(string.Format(Strings.Status_FolderNoDatasets, path))
+                        .Show();
                 }
                 continue;
             }

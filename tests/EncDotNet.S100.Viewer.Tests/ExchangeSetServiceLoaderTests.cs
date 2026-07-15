@@ -315,4 +315,109 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(ExchangeSetDetection.ResolveS57Root(root!), header.SourcePath);
         Assert.Equal(result.Loaded, header.LoadedCount);
     }
+
+    // ── Catalogue-less loose-cell folders (issue #449) ────────────────
+
+    private static string MakeLooseCellFolder(string name, params string[] files)
+    {
+        var folder = Path.Combine(
+            Path.GetTempPath(), $"loose-{name}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        foreach (var file in files)
+            File.WriteAllText(Path.Combine(folder, file), "synthetic");
+        return folder;
+    }
+
+    [Fact]
+    public async Task OpenAsync_LooseCellFolder_LoadsBaseWithFilesystemUpdates()
+    {
+        // A catalogue-less folder: a base cell plus its two sequential
+        // updates, no CATALOG.XML / CATALOG.031. The fake ENC bytes fail
+        // the S-57 DSPM sniff, so the cell is dispatched as S-101 (the
+        // NoopLoader never parses it).
+        var folder = MakeLooseCellFolder(
+            "updates", "US5WA01M.000", "US5WA01M.001", "US5WA01M.002");
+        try
+        {
+            var (datasets, service) = CreateSystem();
+            using var _ = service;
+
+            var result = await service.OpenAsync(folder);
+
+            Assert.Equal(1, result.Total);
+            Assert.Equal(1, result.Loaded);
+            Assert.Equal(0, result.SkippedUnsupported);
+            Assert.False(result.Cancelled);
+            Assert.Null(result.UnionBoundingBox);
+
+            var entry = Assert.Single(datasets.Entries);
+            Assert.Equal("S-101", entry.ProductSpec);
+            Assert.Equal("US5WA01M.000", entry.RelativePath);
+            Assert.True(entry.IsFromExchangeSet);
+            Assert.True(entry.HasUpdates);
+            Assert.Equal(
+                new[] { "US5WA01M.001", "US5WA01M.002" },
+                entry.UpdateRelativePaths);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task OpenAsync_LooseCellFolder_LoadsEveryBaseCell()
+    {
+        var folder = MakeLooseCellFolder(
+            "multi", "US5WA01M.000", "US5WA02M.000", "US5WA02M.001");
+        try
+        {
+            var (datasets, service) = CreateSystem();
+            using var _ = service;
+
+            var result = await service.OpenAsync(folder);
+
+            Assert.Equal(2, result.Total);
+            Assert.Equal(2, result.Loaded);
+            Assert.Equal(2, datasets.Entries.Count);
+
+            // The second cell carries its update; the first has none.
+            var cell2 = Assert.Single(
+                datasets.Entries, e => e.RelativePath == "US5WA02M.000");
+            Assert.Equal(new[] { "US5WA02M.001" }, cell2.UpdateRelativePaths);
+            var cell1 = Assert.Single(
+                datasets.Entries, e => e.RelativePath == "US5WA01M.000");
+            Assert.False(cell1.HasUpdates);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task OpenAsync_LooseCellFolder_RegistersHeaderAndClosesCleanly()
+    {
+        var folder = MakeLooseCellFolder("header", "US5WA01M.000");
+        try
+        {
+            var (datasets, service) = CreateSystem();
+            using var _ = service;
+
+            await service.OpenAsync(folder);
+
+            var header = Assert.Single(datasets.ExchangeSetHeaders);
+            Assert.Equal(folder, header.SourcePath);
+            Assert.Equal(1, header.LoadedCount);
+
+            header.CloseCommand.Execute(null);
+
+            Assert.Empty(datasets.Entries);
+            Assert.Empty(datasets.ExchangeSetHeaders);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

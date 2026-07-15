@@ -558,6 +558,46 @@ public sealed class DatasetPipelineFactory
     }
 
     /// <summary>
+    /// Creates a processor for the base cell file at
+    /// <paramref name="baseFilePath"/>, discovering and applying any sibling
+    /// sequential update files (<c>….001</c>, <c>….002</c>, …) that live in the
+    /// same directory. This gives a single dropped <c>.000</c> cell the same
+    /// up-to-date rendering as one loaded from an exchange set. S-57 and S-101
+    /// cells (told apart by the <c>DSPM</c> content sniff in
+    /// <see cref="DetectProductSpec"/>) both apply updates via their respective
+    /// <c>*WithUpdates</c> path; any other product, or a base cell with no
+    /// updates on disk, falls back to <see cref="CreateProcessor(string)"/>.
+    /// S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+    /// </summary>
+    /// <param name="baseFilePath">Path to the base cell file (<c>….000</c>).</param>
+    public IDatasetProcessor CreateProcessorWithFilesystemUpdates(string baseFilePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(baseFilePath);
+
+        var updates = S101FilesystemUpdateDiscovery.FindSequentialUpdates(baseFilePath);
+        if (updates.Count == 0)
+            return CreateProcessor(baseFilePath);
+
+        var spec = DetectProductSpec(baseFilePath);
+        switch (spec)
+        {
+            case "S-101":
+                return CreateS101ProcessorWithUpdates(baseFilePath, updates);
+            case "S-57":
+                var directory = Path.GetDirectoryName(Path.GetFullPath(baseFilePath))
+                    ?? throw new ArgumentException(
+                        "Base cell path must include a directory.", nameof(baseFilePath));
+                var source = FileSystemAssetSource.Create(directory);
+                var updateNames = updates.Select(Path.GetFileName).OfType<string>().ToList();
+                return CreateS57ProcessorWithUpdates(
+                    source, Path.GetFileName(baseFilePath), updateNames);
+            default:
+                // Non-ENC products never carry .000 sequential updates.
+                return CreateProcessor(baseFilePath);
+        }
+    }
+
+    /// <summary>
     /// Normalizes an exchange-set product identifier (e.g. <c>"S-101"</c>,
     /// <c>"S101"</c>, <c>"s-101"</c>) to the canonical spec strings used
     /// by <see cref="CreateProcessor(string)"/>'s switch (<c>"S-101"</c>, etc.).
