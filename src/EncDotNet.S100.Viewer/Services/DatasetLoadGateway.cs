@@ -61,6 +61,7 @@ internal sealed class DatasetLoadGateway : IDatasetLoadGateway
         {
             return ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
                     || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeLooseCellFolder(path)
                 ? DatasetPathKind.ExchangeSet
                 : DatasetPathKind.File;
         }

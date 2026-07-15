@@ -97,6 +97,17 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 .ConfigureAwait(true);
         }
 
+        // A catalogue-less folder of loose ENC cells (a base ….000 plus its
+        // sequential updates, with no CATALOG.XML/CATALOG.031) is not an
+        // exchange set but is still loadable: scan for base cells and apply
+        // their in-folder updates. S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+        if (ExchangeSetDetection.LooksLikeLooseCellFolder(folderOrZipPath))
+        {
+            return await OpenLooseCellFolderAsync(
+                    folderOrZipPath, progress, cancellationToken, notification)
+                .ConfigureAwait(true);
+        }
+
         // s100.exchangeset.open child span sits under whatever
         // s100.viewer.command span the caller (MainWindow) opened.
         using var activity = Telemetry.ActivitySource.StartActivity(
@@ -578,6 +589,194 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             return new ExchangeSetOpenResult
             {
                 SourcePath = folderOrCataloguePath,
+                FailureMessage = ex.Message,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Opens a catalogue-less folder of loose ENC cells. Each top-level
+    /// base cell (<c>….000</c>) is dispatched with its sibling sequential
+    /// updates (<c>….001</c>, <c>….002</c>, …) applied, mirroring a single
+    /// dropped <c>.000</c> so a folder-of-cells and a lone cell behave
+    /// consistently. Cells are told apart as S-57 vs S-101 by the same
+    /// content sniff the single-file loader uses
+    /// (<see cref="DatasetPipelineFactory.DetectProductSpec"/>); a
+    /// <see cref="FileSystemAssetSource"/> rooted at the folder backs every
+    /// entry and its updates. S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+    /// </summary>
+    private async Task<ExchangeSetOpenResult> OpenLooseCellFolderAsync(
+        string folderPath,
+        IProgress<ExchangeSetProgress>? progress,
+        CancellationToken cancellationToken,
+        INotificationHandle? notification)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "loosecells.folder.open", System.Diagnostics.ActivityKind.Internal);
+        activity?.SetTag("loosecells.source.path", folderPath);
+
+        IAssetSource? source = null;
+        try
+        {
+            var baseCells = ExchangeSetDetection.EnumerateLooseBaseCells(folderPath);
+            activity?.SetTag("loosecells.cell.count", baseCells.Count);
+
+            if (baseCells.Count == 0)
+            {
+                var emptyMsg = string.Format(
+                    Strings.Status_LooseCellFolderNoCells, folderPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = emptyMsg,
+                };
+            }
+
+            progress?.Report(new ExchangeSetProgress(folderPath, baseCells.Count, 0, 0, null));
+
+            source = FileSystemAssetSource.Create(folderPath);
+            var tracked = new TrackedExchangeSet(
+                folderPath,
+                source,
+                owner: source,
+                verifier: null);
+            _tracked.Add(tracked);
+            // Lifetime ownership has transferred to the tracked entry; do not
+            // dispose `source` directly below.
+            source = null;
+
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                tracked.Source,
+                folderPath,
+                producer: null,
+                issueDate: null,
+                baseCells.Count,
+                closeAction: CloseExchangeSetFromHeader);
+
+            var dispatched = 0;
+            var completedLoads = 0;
+            var loadTasks = new List<Task>();
+            foreach (var baseCell in baseCells)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var spec = DatasetPipelineFactory.DetectProductSpec(baseCell);
+                if (spec is null) continue;
+
+                // Discover the sibling updates on disk and pass them as
+                // folder-relative names so they resolve through the same
+                // FileSystemAssetSource as the base cell.
+                var updateRelativePaths = S101FilesystemUpdateDiscovery
+                    .FindSequentialUpdates(baseCell)
+                    .Select(Path.GetFileName)
+                    .OfType<string>()
+                    .ToList();
+
+                var entry = _datasets.AddFromExchangeSet(
+                    tracked.Source,
+                    Path.GetFileName(baseCell),
+                    spec,
+                    displayName: Path.GetFileName(baseCell),
+                    updateRelativePaths: updateRelativePaths);
+                tracked.Entries.Add(entry);
+                loadTasks.Add(_datasets.RequestLoadAsync(entry));
+                dispatched++;
+            }
+
+            // Report progress on actual load completions rather than dispatch
+            // (see the S-100 path for rationale).
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderPath, baseCells.Count, done, 0, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            // Every base cell failed the content sniff (e.g. not actually an
+            // ENC .000) — release the tracked source so the folder handle is
+            // not leaked, and surface a warning instead of an empty group.
+            if (dispatched == 0)
+            {
+                if (tracked.Header is { } orphanHeader)
+                {
+                    _datasets.RemoveExchangeSetHeader(orphanHeader);
+                    tracked.Header = null;
+                }
+                tracked.Owner.Dispose();
+                _tracked.Remove(tracked);
+
+                var noneMsg = string.Format(
+                    Strings.Status_LooseCellFolderNoCells, folderPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, noneMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no loadable cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = noneMsg,
+                };
+            }
+
+            var loadedMsg = string.Format(
+                Strings.Status_ExchangeSetLoaded, dispatched,
+                Notifications.NotificationFormat.ShortenPath(folderPath));
+            var pendingTerminal = new ExchangeSetTerminalInfo(
+                NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
+
+            activity?.SetTag("loosecells.dataset.loaded", dispatched);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = 0;
+            }
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                Total = baseCells.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = 0,
+                Cancelled = false,
+                SkipMessages = Array.Empty<string>(),
+                // Loose cells carry no catalogue bounding box; the drop
+                // handler frames them by unioning loaded layer extents.
+                UnionBoundingBox = null,
+                PendingTerminal = pendingTerminal,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                Cancelled = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderPath, ex.Message);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
                 FailureMessage = ex.Message,
             };
         }

@@ -43,6 +43,11 @@ internal static class ExchangeSetDetection
     /// case-insensitively.</summary>
     private const string S57CatalogueFileName = "CATALOG.031";
 
+    /// <summary>The base-cell extension shared by S-57 (S-57 Ed 3.1
+    /// Appendix B.1) and S-101 (S-100 Part 10a) ENC datasets. Sequential
+    /// updates use <c>.001</c>, <c>.002</c>, …</summary>
+    private const string BaseCellExtension = ".000";
+
     private static bool IsCatalogueFileName(string fileName) =>
         Array.Exists(
             CatalogueFileNames,
@@ -194,5 +199,57 @@ internal static class ExchangeSetDetection
             return Path.GetDirectoryName(Path.GetFullPath(path))!;
 
         throw new FileNotFoundException($"Not an S-57 exchange set: {path}");
+    }
+
+    /// <summary>
+    /// Enumerates the top-level base cells (<c>….000</c> files) in
+    /// <paramref name="folderPath"/>, returning their full paths in
+    /// case-insensitive ordinal name order. Recognises both S-57
+    /// (S-57 Ed 3.1 Appendix B.1) and S-101 (S-100 Part 10a) cells,
+    /// which share the <c>.000</c> extension — the two are told apart
+    /// later by content (the S-57 DSPM sniff in
+    /// <c>DatasetPipelineFactory.DetectProductSpec</c>). Returns an
+    /// empty list when the folder does not exist, is inaccessible, or
+    /// holds no base cells.
+    /// </summary>
+    public static IReadOnlyList<string> EnumerateLooseBaseCells(string folderPath)
+    {
+        if (string.IsNullOrEmpty(folderPath)) return Array.Empty<string>();
+        try
+        {
+            if (!Directory.Exists(folderPath)) return Array.Empty<string>();
+            return Directory
+                .EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly)
+                .Where(f => string.Equals(
+                    Path.GetExtension(f), BaseCellExtension,
+                    StringComparison.OrdinalIgnoreCase))
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (UnauthorizedAccessException) { return Array.Empty<string>(); }
+        catch (IOException) { return Array.Empty<string>(); }
+    }
+
+    /// <summary>
+    /// True when <paramref name="folderPath"/> is a catalogue-less folder
+    /// of loose ENC cells — it contains at least one top-level base cell
+    /// (<c>….000</c>) but <em>no</em> exchange-set catalogue (neither
+    /// <c>CATALOG.XML</c>/<c>catalogue.xml</c> nor <c>CATALOG.031</c>).
+    /// Such folders (e.g. a single cell's subfolder extracted from an
+    /// exchange set) are loaded by scanning for base cells and applying
+    /// their sibling sequential updates, rather than by parsing a
+    /// catalogue. Returns <c>false</c> for any folder that already routes
+    /// to an exchange-set loader, and for I/O or permission failures.
+    /// </summary>
+    public static bool LooksLikeLooseCellFolder(string folderPath)
+    {
+        if (string.IsNullOrEmpty(folderPath)) return false;
+
+        // A folder with a catalogue is handled by the exchange-set
+        // loaders; only genuinely catalogue-less folders take this path.
+        if (LooksLikeExchangeSetFolder(folderPath)) return false;
+        if (LooksLikeS57ExchangeSetFolder(folderPath)) return false;
+
+        return EnumerateLooseBaseCells(folderPath).Count > 0;
     }
 }

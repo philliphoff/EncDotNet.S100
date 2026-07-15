@@ -1208,6 +1208,14 @@
   <data name="Status_S57ExchangeSetNoCells" xml:space="preserve">
     <value>No renderable cells found in the S-57 exchange set {0}.</value>
   </data>
+  <data name="Status_LooseCellFolderNoCells" xml:space="preserve">
+    <value>No renderable ENC cells found in {0}.</value>
+    <comment>{0} = folder path. Shown when a catalogue-less folder of loose cells yields nothing loadable.</comment>
+  </data>
+  <data name="Status_FolderNoDatasets" xml:space="preserve">
+    <value>No S-100 exchange set or ENC cells found in {0}.</value>
+    <comment>{0} = dropped folder path. Shown when a dropped folder has no catalogue and no loose base cells.</comment>
+  </data>
   <data name="Status_ExchangeSetUnsupportedSpec" xml:space="preserve">
     <value>Skipped {0}: unsupported product specification '{1}'.</value>
   </data>
