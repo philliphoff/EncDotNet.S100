@@ -66,7 +66,7 @@ public sealed class LruEvictionPolicyTests
         lru.Touch("c");
 
         var protectedKeys = new HashSet<string> { "a" };
-        var victims = lru.SelectEvictions(retentionBudget: 2, protectedKeys);
+        var victims = lru.SelectEvictions(retentionBudget: 2, protectedKeys: protectedKeys);
 
         // One over budget: the coldest is 'a' but it is protected, so the next
         // coldest unprotected key ('b') is evicted instead.

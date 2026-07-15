@@ -870,7 +870,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         {
             disposableProcessor.Dispose();
         }
-        _entryOrder.Remove(entry);
+        // NB: unlike RemoveEntry, do NOT drop the entry from _entryOrder here.
+        // Eviction keeps the DatasetEntry registered; FlattenLayerOrder already
+        // skips entries with no layers (RemoveEntryLayers cleared _entryLayers
+        // above), so its slot is inert while unloaded but preserved. Removing it
+        // would make the next reload look like a first load and re-insert it at
+        // index 0, reshuffling cross-dataset paint order on every evict/reload
+        // cycle. See issue #458.
         // NB: unlike RemoveEntry, do NOT clear _activeFlags here. Eviction
         // keeps the DatasetEntry registered, so its user-set active/inactive
         // state must survive the unload → reload cycle; dropping the flag would
