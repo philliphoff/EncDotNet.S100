@@ -83,6 +83,20 @@ internal interface IDatasetLoaderService
     void RemoveEntry(DatasetEntry entry);
 
     /// <summary>
+    /// Unloads a lazily-loaded exchange-set cell's bytes (layers and
+    /// processor) but keeps the <see cref="DatasetEntry"/> registered and
+    /// re-marks it <see cref="DatasetEntry.IsDeferred"/> so it can reload
+    /// when it next enters the viewport. The LRU-eviction counterpart to
+    /// <see cref="LoadAsync"/>. See issue #458.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member (delegates to
+    /// <see cref="RemoveEntry"/>) so existing test doubles need not
+    /// override it; the production loader keeps the entry registered.
+    /// </remarks>
+    void UnloadEntry(DatasetEntry entry) => RemoveEntry(entry);
+
+    /// <summary>
     /// Reorders the dataset layers on the map to match the supplied
     /// entry sequence. Lowest-indexed entry paints first (bottom of
     /// the dataset stack). Entries not currently bound to layers are

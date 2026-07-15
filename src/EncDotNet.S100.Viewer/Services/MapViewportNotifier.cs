@@ -104,6 +104,7 @@ internal sealed class MapViewportNotifier : IMapViewportNotifier, IDisposable
             MinLongitude = minLon,
             MaxLatitude = maxLat,
             MaxLongitude = maxLon,
+            MercatorResolution = viewport.Resolution,
         };
     }
 

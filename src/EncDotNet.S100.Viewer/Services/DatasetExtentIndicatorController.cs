@@ -133,6 +133,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         if (e.PropertyName is nameof(DatasetEntry.MercatorExtent)
             or nameof(DatasetEntry.ContentMaxVisibleResolution)
             or nameof(DatasetEntry.IsLoaded)
+            or nameof(DatasetEntry.IsDeferred)
             or nameof(DatasetEntry.IsVisible))
         {
             _marshal(Rebuild);
@@ -153,6 +154,17 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         {
             foreach (var entry in _datasets.Entries)
             {
+                // A cell registered for lazy loading but not yet loaded (issue
+                // #458): outline its catalogue footprint at every zoom
+                // (MinVisible 0) so the mariner sees where unloaded data lies
+                // and that panning/zooming there will pull it in.
+                if (entry.IsDeferred && entry.GeographicBounds is { } bounds)
+                {
+                    if (ToMercatorExtent(bounds) is { } deferredExtent)
+                        indicators.Add(new DatasetExtentIndicator(deferredExtent, 0.0));
+                    continue;
+                }
+
                 if (!entry.IsLoaded || !entry.IsVisible)
                     continue;
                 if (entry.MercatorExtent is not { } extent)
@@ -165,6 +177,35 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         }
 
         DatasetExtentIndicatorOverlayLayer.Update(_layer, indicators, _appearance.Current.Accent);
+    }
+
+    /// <summary>
+    /// Projects an EPSG:4326 catalogue footprint to an EPSG:3857 (web-mercator)
+    /// rectangle for the overlay. Returns <see langword="null"/> for a degenerate
+    /// or unprojectable box.
+    /// </summary>
+    private static Mapsui.MRect? ToMercatorExtent(ExchangeSets.BoundingBox bounds)
+    {
+        var west = bounds.WestBoundLongitude;
+        var east = bounds.EastBoundLongitude;
+        var south = bounds.SouthBoundLatitude;
+        var north = bounds.NorthBoundLatitude;
+        if (double.IsNaN(west) || double.IsNaN(east)
+            || double.IsNaN(south) || double.IsNaN(north))
+        {
+            return null;
+        }
+
+        // Mercator is undefined at the poles; clamp to the projection's limit.
+        south = Math.Clamp(south, -85.05112878, 85.05112878);
+        north = Math.Clamp(north, -85.05112878, 85.05112878);
+
+        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(west, south);
+        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(east, north);
+        if (maxX <= minX || maxY <= minY)
+            return null;
+
+        return new Mapsui.MRect(minX, minY, maxX, maxY);
     }
 
     private static void DispatcherMarshal(Action action)

@@ -842,6 +842,42 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         DatasetRemoved?.Invoke(entry);
     }
 
+    /// <summary>
+    /// Unloads a lazily-loaded exchange-set cell's <em>bytes</em> (layers,
+    /// sub-layers, and processor) while leaving the <see cref="DatasetEntry"/>
+    /// registered in the Datasets panel, and marks it
+    /// <see cref="DatasetEntry.IsDeferred"/> again so it reverts to an extent
+    /// outline that can be reloaded when it next enters the viewport. This is
+    /// the LRU-eviction counterpart to <see cref="LoadAsync"/>; unlike
+    /// <see cref="RemoveEntry"/> it does not fire <see cref="DatasetRemoved"/>
+    /// or drop the entry from the collection. No-op for an entry that owns no
+    /// layers. See issue #458.
+    /// </summary>
+    /// <param name="entry">The exchange-set cell entry to unload.</param>
+    public void UnloadEntry(DatasetEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        RemoveEntryLayers(entry);
+        UnsubscribeSubLayers(entry);
+        entry.SubLayers.Clear();
+        _entryLayerKeys.Remove(entry);
+        _entryStackEntries.Remove(entry);
+        if (_subscribedEntries.Remove(entry))
+            entry.PropertyChanged -= OnEntryPropertyChanged;
+        if (_processors.Remove(entry, out var removedProcessor)
+            && removedProcessor is IDisposable disposableProcessor)
+        {
+            disposableProcessor.Dispose();
+        }
+        _entryOrder.Remove(entry);
+        _activeFlags.Remove(EntryId(entry));
+        _globalTime.Unregister(entry);
+        entry.IsDeferred = true;
+        if (_mapHost is not null)
+            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+    }
+
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
     {
         ArgumentNullException.ThrowIfNull(orderedEntries);
