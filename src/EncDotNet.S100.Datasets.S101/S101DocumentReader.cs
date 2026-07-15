@@ -525,11 +525,11 @@ internal static class S101DocumentReader
             }
         }
 
-        // FACS — Feature associations
+        // FASC — Feature associations
         var featureAssociations = new List<S101FeatureAssociation>();
-        foreach (var facsField in record.GetFieldsByTag("FACS"))
+        foreach (var facsField in record.GetFieldsByTag("FASC"))
         {
-            var facsDef = ddr.GetFieldDefinition("FACS");
+            var facsDef = ddr.GetFieldDefinition("FASC");
             if (facsDef is null) break;
             var facsReader = new Iso8211FieldReader(facsDef, facsField.Data);
             foreach (var group in facsReader.GetSubfieldGroups())
