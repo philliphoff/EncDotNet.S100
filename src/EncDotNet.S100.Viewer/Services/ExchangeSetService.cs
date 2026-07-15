@@ -81,7 +81,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         string folderOrZipPath,
         IProgress<ExchangeSetProgress>? progress = null,
         CancellationToken cancellationToken = default,
-        INotificationHandle? notification = null)
+        INotificationHandle? notification = null,
+        Action<BoundingBox>? onFramingReady = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(folderOrZipPath);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -93,7 +94,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         // own loader. S-100 sets fall through to the logic below.
         if (ExchangeSetDetection.LooksLikeS57ExchangeSet(folderOrZipPath))
         {
-            return await OpenS57Async(folderOrZipPath, progress, cancellationToken, notification)
+            return await OpenS57Async(folderOrZipPath, progress, cancellationToken, notification, onFramingReady)
                 .ConfigureAwait(true);
         }
 
@@ -112,6 +113,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         // s100.viewer.command span the caller (MainWindow) opened.
         using var activity = Telemetry.ActivitySource.StartActivity(
             "s100.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var openStart = System.Diagnostics.Stopwatch.GetTimestamp();
         var sourceKind = ResolveSourceKind(folderOrZipPath);
         activity?.SetTag("s100.exchangeset.source.kind", sourceKind);
         activity?.SetTag("s100.exchangeset.source.path", folderOrZipPath);
@@ -178,6 +180,19 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             activity?.SetTag("s100.exchangeset.plan.count", plan.Count);
 
             progress?.Report(new ExchangeSetProgress(folderOrZipPath, plan.Count, 0, 0, null));
+
+            // Frame the viewport as soon as the union bounding box is known —
+            // before any dataset finishes loading — so incremental per-dataset
+            // paints land in the correctly-framed view rather than off-screen
+            // (issue #448). The same value is returned below on the result, so
+            // the caller can skip the redundant end-of-load reframe.
+            var unionBoundingBox = ComputeUnionBoundingBox(datasets);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+            {
+                var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(openStart).TotalMilliseconds;
+                activity?.SetTag("s100.exchangeset.framing.emitted_ms", elapsedMs);
+                onFramingReady(framingBox);
+            }
 
             var assetSource = exchangeSet.Source;
             var catalogue = exchangeSet.Catalogue;
@@ -379,7 +394,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 SkippedUnsupported = skipped,
                 Cancelled = cancelled,
                 SkipMessages = skipMessages,
-                UnionBoundingBox = ComputeUnionBoundingBox(datasets),
+                UnionBoundingBox = unionBoundingBox,
                 PendingTerminal = pendingTerminal,
             };
         }
@@ -424,10 +439,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         string folderOrCataloguePath,
         IProgress<ExchangeSetProgress>? progress,
         CancellationToken cancellationToken,
-        INotificationHandle? notification)
+        INotificationHandle? notification,
+        Action<BoundingBox>? onFramingReady = null)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(
             "s57.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var openStart = System.Diagnostics.Stopwatch.GetTimestamp();
         activity?.SetTag("s57.exchangeset.source.path", folderOrCataloguePath);
 
         IAssetSource? source = null;
@@ -471,6 +488,18 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             }
 
             progress?.Report(new ExchangeSetProgress(folderOrCataloguePath, cells.Count, 0, 0, null));
+
+            // Frame the viewport up front from the cell union — mirrors the
+            // S-100 path so early per-cell paints land in the correctly-framed
+            // view (issue #448). Reused on the result below to let the caller
+            // skip the redundant end-of-load reframe.
+            var unionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+            {
+                var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(openStart).TotalMilliseconds;
+                activity?.SetTag("s57.exchangeset.framing.emitted_ms", elapsedMs);
+                onFramingReady(framingBox);
+            }
 
             source = FileSystemAssetSource.Create(root);
             var tracked = new TrackedExchangeSet(
@@ -566,7 +595,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 SkippedUnsupported = 0,
                 Cancelled = false,
                 SkipMessages = Array.Empty<string>(),
-                UnionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells),
+                UnionBoundingBox = unionBoundingBox,
                 PendingTerminal = pendingTerminal,
             };
         }
