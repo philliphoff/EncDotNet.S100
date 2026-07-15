@@ -230,14 +230,23 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // Out-of-scale-band declutter. S-57 has no DataCoverage /
         // minimumDisplayScale (S-101 FC §3.1.1); the equivalent cell scale
         // band is the compilation scale denominator carried in the S-57 DSPM
-        // field (CSCL, S-57 Appendix B.1 §7.3.1.1). The per-feature line-work
-        // cap honours the mariner's IgnoreScaleMinimum override (consistent
-        // with the S-101 path); the whole-cell window carries the ungated
-        // value so the viewer can apply its own gate.
+        // field (CSCL, S-57 Appendix B.1 §7.3.1.1).
+        //
+        // S-57 feeds this into the ungated whole-cell window
+        // (CellMinimumDisplayScale) only — NOT the per-feature line-work cap
+        // (OutOfBandMinDisplayScale / ApplyOutOfBandCap). The two mechanisms
+        // trigger at the same denominator, but they differ in placeholder:
+        // the whole-cell window (viewer MapsuiDatasetRenderer.ApplyCellScale
+        // Window) hides the cell AND draws its extent border when zoomed out,
+        // whereas the per-feature cap silently blanks every feature with no
+        // placeholder. Unlike S-101 — whose per-feature cap is driven by an
+        // optional, frequently-absent DataCoverage.minimumDisplayScale band —
+        // S-57's CSCL is always present, so applying it as a per-feature cap
+        // would blank the whole cell at any whole-cell-fit view (no border),
+        // which is both redundant with the whole-cell window and defeats a
+        // full-extent render. The mariner's IgnoreScaleMinimum override is
+        // therefore applied by the viewer against the ungated whole-cell value.
         var cellMinimumDisplayScale = ResolveCellMinimumDisplayScale();
-        var outOfBandMinDisplayScale = mariner.IgnoreScaleMinimum
-            ? (int?)null
-            : cellMinimumDisplayScale;
 
         return new VectorPortrayalResult
         {
@@ -254,11 +263,10 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                     Instructions = prepared,
                     Plane = S98DisplayPlane.BaseChartOver,
                     WithinPlanePriority = 0,
-                    // Mirror the S-101 line-work sub-layer: this single mixed
-                    // sub-layer carries the out-of-scale-band declutter cap so
-                    // the cell is suppressed when zoomed out beyond its
-                    // compilation scale.
-                    ApplyOutOfBandCap = true,
+                    // The per-feature out-of-band cap is deliberately not
+                    // applied for S-57 (see above); the whole-cell window
+                    // handles zoom-out suppression with an extent border.
+                    ApplyOutOfBandCap = false,
                 },
             },
             Palette = palette,
@@ -272,7 +280,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
-            OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
+            OutOfBandMinDisplayScale = null,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
         };
     }

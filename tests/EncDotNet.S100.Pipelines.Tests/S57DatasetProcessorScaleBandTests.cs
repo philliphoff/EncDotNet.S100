@@ -11,10 +11,16 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// Regression tests for the S-57 out-of-scale-band declutter gap (follow-up to
 /// issue #450). An S-57 cell is portrayed with the S-101 catalogue, but before
 /// the fix <see cref="S57DatasetProcessor"/> emitted no
-/// <c>OutOfBandMinDisplayScale</c> and left <c>ApplyOutOfBandCap</c> false, so
-/// the cell never disappeared when zoomed out beyond its compilation scale —
-/// unlike an S-101 cell driven by <c>DataCoverage</c> / <c>minimumDisplayScale</c>.
-/// The fix derives the cap from the S-57 DSPM compilation scale (CSCL).
+/// <c>CellMinimumDisplayScale</c>, so the standalone-loaded cell never
+/// disappeared when zoomed out beyond its compilation scale — unlike an
+/// exchange-set cell driven by <c>CATALOG.XML</c>. The fix derives the
+/// whole-cell zoom-out window from the S-57 DSPM compilation scale (CSCL).
+///
+/// S-57 deliberately does <b>not</b> apply the per-feature out-of-band cap
+/// (<c>OutOfBandMinDisplayScale</c> / <c>ApplyOutOfBandCap</c>): CSCL is always
+/// present, so a per-feature cap would silently blank the whole cell (no extent
+/// border) at any whole-cell-fit view. The whole-cell window handles zoom-out
+/// suppression with a border instead.
 /// </summary>
 public class S57DatasetProcessorScaleBandTests
 {
@@ -32,7 +38,7 @@ public class S57DatasetProcessorScaleBandTests
     }
 
     [SkippableFact]
-    public async Task BuildVectorPortrayal_DerivesOutOfBandCap_FromCompilationScale()
+    public async Task BuildVectorPortrayal_DerivesWholeCellWindow_FromCompilationScale()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
         Skip.IfNot(File.Exists(fixturePath),
@@ -42,26 +48,25 @@ public class S57DatasetProcessorScaleBandTests
 
         var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext());
 
-        // The cell must carry an out-of-band denominator derived from its
-        // compilation scale (a real ENC cell always declares CSCL > 0).
-        Assert.NotNull(result.OutOfBandMinDisplayScale);
-        Assert.True(result.OutOfBandMinDisplayScale > 0,
-            $"Expected a positive out-of-band denominator, got {result.OutOfBandMinDisplayScale}.");
+        // The ungated whole-cell window carries the compilation scale so the
+        // viewer can hide the whole cell (extent border included) when zoomed
+        // out, matching an exchange-set-loaded cell (a real ENC cell always
+        // declares CSCL > 0).
+        Assert.NotNull(result.CellMinimumDisplayScale);
+        Assert.True(result.CellMinimumDisplayScale > 0,
+            $"Expected a positive whole-cell denominator, got {result.CellMinimumDisplayScale}.");
 
-        // The ungated whole-cell window carries the same compilation scale so
-        // the viewer can hide the whole cell (extent border included) when
-        // zoomed out, matching an exchange-set-loaded cell.
-        Assert.Equal(result.OutOfBandMinDisplayScale, result.CellMinimumDisplayScale);
-
-        // The single S-57 sub-layer must carry the declutter cap so the
-        // renderer suppresses the cell out of band.
+        // The per-feature out-of-band cap is deliberately NOT applied for S-57
+        // (it would blank the whole cell with no placeholder — the whole-cell
+        // window does the job with an extent border instead).
+        Assert.Null(result.OutOfBandMinDisplayScale);
         var subLayer = Assert.Single(result.SubLayers);
-        Assert.True(subLayer.ApplyOutOfBandCap,
-            "Expected the s57.main sub-layer to carry the out-of-scale-band cap.");
+        Assert.False(subLayer.ApplyOutOfBandCap,
+            "The s57.main sub-layer must not carry the per-feature out-of-band cap.");
     }
 
     [SkippableFact]
-    public async Task BuildVectorPortrayal_HonorsIgnoreScaleMinimum()
+    public async Task BuildVectorPortrayal_WholeCellWindow_IsUngated()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
         Skip.IfNot(File.Exists(fixturePath),
@@ -74,11 +79,10 @@ public class S57DatasetProcessorScaleBandTests
             Mariner = new MarinerSettings { IgnoreScaleMinimum = true },
         });
 
-        // The mariner override disables the per-feature cap, matching the S-101
-        // path...
+        // The whole-cell window is ungated: it still reports the cell's scale
+        // even under IgnoreScaleMinimum (the viewer applies its own gate). The
+        // per-feature cap remains unused regardless.
         Assert.Null(result.OutOfBandMinDisplayScale);
-        // ...but the ungated whole-cell window still reports the cell's scale
-        // (the viewer applies its own IgnoreScaleMinimum gate).
         Assert.NotNull(result.CellMinimumDisplayScale);
         Assert.True(result.CellMinimumDisplayScale > 0);
     }
