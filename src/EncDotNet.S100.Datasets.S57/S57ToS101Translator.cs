@@ -107,7 +107,6 @@ public sealed class S57ToS101Translator
     private const ushort CAggrObjl = 400;       // C_AGGR (S-57 Appendix A)
     private const string S101ClassRangeSystem = "RangeSystem";
     private const string S101AssocRangeSystemAggregation = "RangeSystemAggregation";
-    private const string S101RoleTheCollection = "theCollection";
     private const string S101RoleTheComponent = "theComponent";
 
     // S-101 feature classes the FC permits as `theComponent` of a

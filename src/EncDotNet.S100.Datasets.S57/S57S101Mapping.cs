@@ -119,6 +119,15 @@ public sealed class S57S101Mapping
     // ── Rule-aware resolution ───────────────────────────────────────────
 
     /// <summary>
+    /// Resolves an S-57 feature instance without considering geometry; equivalent
+    /// to passing <see cref="S57GeometryPrimitive.None"/>.
+    /// </summary>
+    public ResolvedFeature? ResolveFeature(
+        ushort objl,
+        IReadOnlyDictionary<string, string> s57AttributesByAcronym)
+        => ResolveFeature(objl, s57AttributesByAcronym, S57GeometryPrimitive.None);
+
+    /// <summary>
     /// Resolves an S-57 feature instance to the S-101 feature class it should
     /// map to, evaluating any conditional redirects defined for the OBJL
     /// against the supplied S-57 attribute values.
@@ -141,7 +150,7 @@ public sealed class S57S101Mapping
     public ResolvedFeature? ResolveFeature(
         ushort objl,
         IReadOnlyDictionary<string, string> s57AttributesByAcronym,
-        S57GeometryPrimitive primitive = S57GeometryPrimitive.None)
+        S57GeometryPrimitive primitive)
     {
         if (!FeatureRules.TryGetValue(objl, out var rule)) return null;
 
