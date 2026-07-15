@@ -67,7 +67,10 @@ internal static class LazyCellGate
     /// (all values in EPSG:4326 decimal degrees). A touching edge counts as
     /// an overlap. A <see langword="null"/> footprint (container-style cells
     /// with no coverage) is treated as always intersecting so it is never
-    /// culled by geography.
+    /// culled by geography. Either box may cross the ±180° antimeridian seam
+    /// (west &gt; east); such ranges are split into two non-wrapping segments
+    /// (<c>[west, +180]</c> ∪ <c>[-180, east]</c>) before the longitude test
+    /// so seam-crossing cells and viewports still match near the dateline.
     /// </summary>
     public static bool IntersectsViewport(
         BoundingBox? cell,
@@ -79,14 +82,54 @@ internal static class LazyCellGate
         if (cell is null)
             return true;
 
-        // Standard axis-aligned overlap test; disjoint when one box is wholly
-        // to one side of the other.
+        // Latitude never wraps: disjoint when one box is wholly north or
+        // south of the other.
         if (cell.NorthBoundLatitude < viewSouth || cell.SouthBoundLatitude > viewNorth)
             return false;
-        if (cell.EastBoundLongitude < viewWest || cell.WestBoundLongitude > viewEast)
-            return false;
 
-        return true;
+        // Longitude can wrap the ±180° seam, so overlap is tested per
+        // non-wrapping segment pair rather than with a single interval test.
+        return LongitudesOverlap(
+            cell.WestBoundLongitude, cell.EastBoundLongitude, viewWest, viewEast);
+    }
+
+    /// <summary>
+    /// True when two longitude ranges overlap, treating a range whose
+    /// <paramref name="aWest"/> exceeds its <paramref name="aEast"/> (likewise
+    /// for <paramref name="bWest"/>/<paramref name="bEast"/>) as crossing the
+    /// ±180° antimeridian seam. Each range is decomposed into up to two
+    /// non-wrapping segments and every segment pair is tested for a touching
+    /// or overlapping interval.
+    /// </summary>
+    private static bool LongitudesOverlap(
+        double aWest, double aEast, double bWest, double bEast)
+    {
+        foreach (var (aLo, aHi) in SplitLongitude(aWest, aEast))
+            foreach (var (bLo, bHi) in SplitLongitude(bWest, bEast))
+                if (aLo <= bHi && bLo <= aHi)
+                    return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Splits a possibly seam-crossing longitude range into one or two
+    /// non-wrapping <c>[low, high]</c> segments. A range with
+    /// <paramref name="west"/> &gt; <paramref name="east"/> yields
+    /// <c>[west, +180]</c> and <c>[-180, east]</c>.
+    /// </summary>
+    private static IEnumerable<(double Low, double High)> SplitLongitude(
+        double west, double east)
+    {
+        if (west <= east)
+        {
+            yield return (west, east);
+        }
+        else
+        {
+            yield return (west, 180.0);
+            yield return (-180.0, east);
+        }
     }
 
     /// <summary>

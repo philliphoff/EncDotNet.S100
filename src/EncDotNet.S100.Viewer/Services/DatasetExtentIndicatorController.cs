@@ -160,7 +160,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 // and that panning/zooming there will pull it in.
                 if (entry.IsDeferred && entry.GeographicBounds is { } bounds)
                 {
-                    if (ToMercatorExtent(bounds) is { } deferredExtent)
+                    foreach (var deferredExtent in ToMercatorExtents(bounds))
                         indicators.Add(new DatasetExtentIndicator(deferredExtent, 0.0));
                     continue;
                 }
@@ -180,16 +180,41 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     }
 
     /// <summary>
-    /// Projects an EPSG:4326 catalogue footprint to an EPSG:3857 (web-mercator)
-    /// rectangle for the overlay. Returns <see langword="null"/> for a degenerate
-    /// or unprojectable box.
+    /// Projects an EPSG:4326 catalogue footprint to one or two EPSG:3857
+    /// (web-mercator) rectangles for the overlay. A footprint that crosses the
+    /// ±180° antimeridian seam (west &gt; east) is split into two non-wrapping
+    /// boxes — <c>[west, +180]</c> and <c>[-180, east]</c> — so seam-crossing
+    /// deferred cells still show an outline. Yields nothing for a degenerate or
+    /// unprojectable box.
     /// </summary>
-    private static Mapsui.MRect? ToMercatorExtent(ExchangeSets.BoundingBox bounds)
+    private static IEnumerable<Mapsui.MRect> ToMercatorExtents(ExchangeSets.BoundingBox bounds)
     {
         var west = bounds.WestBoundLongitude;
         var east = bounds.EastBoundLongitude;
         var south = bounds.SouthBoundLatitude;
         var north = bounds.NorthBoundLatitude;
+
+        if (!double.IsNaN(west) && !double.IsNaN(east) && west > east)
+        {
+            if (ToMercatorExtent(west, 180.0, south, north) is { } eastSegment)
+                yield return eastSegment;
+            if (ToMercatorExtent(-180.0, east, south, north) is { } westSegment)
+                yield return westSegment;
+            yield break;
+        }
+
+        if (ToMercatorExtent(west, east, south, north) is { } extent)
+            yield return extent;
+    }
+
+    /// <summary>
+    /// Projects a single non-wrapping EPSG:4326 rectangle to an EPSG:3857
+    /// (web-mercator) rectangle for the overlay. Returns <see langword="null"/>
+    /// for a degenerate or unprojectable box.
+    /// </summary>
+    private static Mapsui.MRect? ToMercatorExtent(
+        double west, double east, double south, double north)
+    {
         if (double.IsNaN(west) || double.IsNaN(east)
             || double.IsNaN(south) || double.IsNaN(north))
         {

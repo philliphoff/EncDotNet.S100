@@ -79,6 +79,39 @@ public class LazyCellGateTests
     }
 
     [Fact]
+    public void IntersectsViewport_SeamCrossingCell_ViewportInEasternSegment_True()
+    {
+        // Cell spans the ±180° seam: west 170°E .. east -170°W (west > east).
+        var cell = Box(-10, 170, 10, -170);
+        // Viewport at 175..179°E lies in the cell's [170, +180] segment.
+        Assert.True(LazyCellGate.IntersectsViewport(cell, -5, 175, 5, 179));
+    }
+
+    [Fact]
+    public void IntersectsViewport_SeamCrossingCell_ViewportInWesternSegment_True()
+    {
+        var cell = Box(-10, 170, 10, -170);
+        // Viewport at -179..-175°W lies in the cell's [-180, -170] segment.
+        Assert.True(LazyCellGate.IntersectsViewport(cell, -5, -179, 5, -175));
+    }
+
+    [Fact]
+    public void IntersectsViewport_SeamCrossingCell_ViewportInGap_False()
+    {
+        var cell = Box(-10, 170, 10, -170);
+        // Viewport at 0..10°E lies in the un-covered gap (-170 .. 170).
+        Assert.False(LazyCellGate.IntersectsViewport(cell, -5, 0, 5, 10));
+    }
+
+    [Fact]
+    public void IntersectsViewport_SeamCrossingViewport_NonWrappingCell_True()
+    {
+        // Non-wrapping cell at 175..179°E; viewport crosses the seam.
+        var cell = Box(-10, 175, 10, 179);
+        Assert.True(LazyCellGate.IntersectsViewport(cell, -5, 170, 5, -170));
+    }
+
+    [Fact]
     public void IsBandEligible_OverviewAlwaysEligible()
     {
         Assert.True(LazyCellGate.IsBandEligible(1, 50_000_000));
