@@ -146,8 +146,12 @@ internal interface IExchangeSetService
     /// that incremental per-dataset paints land in the correctly-framed view
     /// (issue #448). Not invoked when no dataset declares a bounding box
     /// (e.g. loose-cell folders); callers should keep a debounce fallback for
-    /// that case. Raised on a background thread — marshal to the UI thread
-    /// before touching view state. The same bounding box is also returned on
+    /// that case. Invoked synchronously on whatever thread /
+    /// synchronization context the catalogue-parse continuation resumes on —
+    /// the caller's context, since the parse is awaited with
+    /// <c>ConfigureAwait(true)</c>. Callers that cannot guarantee that context
+    /// is the UI thread should marshal before touching view state. The same
+    /// bounding box is also returned on
     /// <see cref="ExchangeSetOpenResult.UnionBoundingBox"/>.
     /// </param>
     /// <returns>A summary that is always non-null (even on cancellation

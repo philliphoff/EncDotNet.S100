@@ -1207,9 +1207,9 @@ public partial class MainWindow : ShadUI.Window
             // incremental per-dataset paints appear in the correctly-framed
             // view instead of off-screen (issue #448). The service resumes on
             // this UI thread (ConfigureAwait(true)) before invoking the
-            // callback, so we frame inline here; a Dispatcher.Post fallback
-            // covers any off-thread invocation. A flag lets us skip the
-            // redundant end-of-load reframe below.
+            // callback, so we frame inline here; a Dispatcher.UIThread.Invoke
+            // fallback covers any off-thread invocation. A flag lets us skip
+            // the redundant end-of-load reframe below.
             var framedEarly = false;
             void FrameEarly(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
             {
