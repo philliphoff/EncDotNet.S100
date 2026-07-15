@@ -982,6 +982,16 @@ internal sealed class DatasetsViewModel : ViewModelBase
         var created = new List<DatasetEntry>(registrations.Count);
         foreach (var reg in registrations)
         {
+            // Validate each registration up front for parity with
+            // AddFromExchangeSet, so a caller that accidentally supplies a null
+            // source or empty RelativePath/ProductSpec fails fast here rather
+            // than creating a DatasetEntry in an invalid state that surfaces as
+            // a harder-to-diagnose failure later. See issue #458.
+            ArgumentNullException.ThrowIfNull(reg);
+            ArgumentNullException.ThrowIfNull(reg.Source);
+            ArgumentException.ThrowIfNullOrEmpty(reg.RelativePath);
+            ArgumentException.ThrowIfNullOrEmpty(reg.ProductSpec);
+
             var entry = new DatasetEntry(
                 filePath: reg.RelativePath,
                 productSpec: reg.ProductSpec,

@@ -144,4 +144,46 @@ public class DatasetsViewModelAddRangeTests
         Assert.Equal(1, resets);
         Assert.Equal(0, otherActions);
     }
+
+    [Fact]
+    public void AddRangeFromExchangeSet_EmptyRelativePath_Throws()
+    {
+        var vm = NewVm();
+        var src = new StubAssetSource();
+        var regs = new List<ExchangeSetCellRegistration>
+        {
+            new(src, "", "S-57"),
+        };
+
+        Assert.Throws<ArgumentException>(() => vm.AddRangeFromExchangeSet(regs));
+        // A rejected batch must not partially register anything.
+        Assert.Empty(vm.Entries);
+    }
+
+    [Fact]
+    public void AddRangeFromExchangeSet_EmptyProductSpec_Throws()
+    {
+        var vm = NewVm();
+        var src = new StubAssetSource();
+        var regs = new List<ExchangeSetCellRegistration>
+        {
+            new(src, "a/US1.000", ""),
+        };
+
+        Assert.Throws<ArgumentException>(() => vm.AddRangeFromExchangeSet(regs));
+        Assert.Empty(vm.Entries);
+    }
+
+    [Fact]
+    public void AddRangeFromExchangeSet_NullSource_Throws()
+    {
+        var vm = NewVm();
+        var regs = new List<ExchangeSetCellRegistration>
+        {
+            new(null!, "a/US1.000", "S-57"),
+        };
+
+        Assert.Throws<ArgumentNullException>(() => vm.AddRangeFromExchangeSet(regs));
+        Assert.Empty(vm.Entries);
+    }
 }

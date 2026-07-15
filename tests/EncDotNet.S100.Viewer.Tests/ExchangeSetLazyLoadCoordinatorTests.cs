@@ -300,4 +300,62 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         await Task.Delay(80);
         Assert.Single(loaded);
     }
+
+    [Fact]
+    public async Task QueuedLoad_AbandonedWhenUnregisteredBeforeGate()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var unloaded = new ConcurrentBag<DatasetEntry>();
+
+        var firstStarted = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        var gate = new object();
+        DatasetEntry? blocker = null;
+
+        // MaxConcurrency = 1: the first cell to acquire the gate blocks it while
+        // the second waits queued behind it. See issue #458.
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                bool isBlocker;
+                lock (gate)
+                {
+                    isBlocker = blocker is null;
+                    if (isBlocker) blocker = entry;
+                }
+                if (isBlocker)
+                {
+                    firstStarted.TrySetResult();
+                    await release.Task;
+                }
+                loaded.Add(entry);
+            },
+            entry => unloaded.Add(entry),
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+
+        var cellA = Cell("US5GA", 40, -75, 41, -74);
+        var cellB = Cell("US5GB", 40, -75, 41, -74);
+        coordinator.Register(new[] { cellA, cellB });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => firstStarted.Task.IsCompleted));
+
+        // Close the cell still queued on the gate (whichever did not win it).
+        var queued = ReferenceEquals(blocker, cellA) ? cellB : cellA;
+        coordinator.Unregister(new[] { queued });
+
+        // Release the blocker; the queued load now acquires the gate and must
+        // abandon before running the expensive _loadAsync.
+        release.SetResult();
+
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(blocker!)));
+        await Task.Delay(50);
+
+        // The queued cell's load never ran (not added to loaded), and since no
+        // layers were built it is not unwound either.
+        Assert.DoesNotContain(queued, loaded);
+        Assert.DoesNotContain(queued, unloaded);
+    }
 }

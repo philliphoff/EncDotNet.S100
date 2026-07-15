@@ -336,6 +336,18 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         var disposed = false;
         try
         {
+            // Abandon a load that was queued on the gate but whose exchange set
+            // was closed (Unregister) or whose coordinator was disposed while it
+            // waited: the expensive parse/portray must not run for an entry the
+            // UI has already dropped, and must not touch the map during
+            // shutdown. Nothing to unwind — no layers were added. The gate is
+            // released in the finally. See issue #458.
+            lock (_lock)
+            {
+                if (_disposed || !_loading.Contains(entry))
+                    return;
+            }
+
             await _loadAsync(entry, CancellationToken.None).ConfigureAwait(true);
             lock (_lock)
             {
