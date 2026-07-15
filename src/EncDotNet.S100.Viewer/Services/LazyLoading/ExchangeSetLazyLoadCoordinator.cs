@@ -152,6 +152,16 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             foreach (var entry in entries)
             {
                 if (entry is null) continue;
+                // Idempotent: skip an entry already tracked in any state
+                // (deferred, loading, or loaded). Re-marking a since-loaded cell
+                // IsDeferred would dim it and show a deferred outline while its
+                // layers are still on the map. See issue #458.
+                if (_deferred.Contains(entry)
+                    || _loading.Contains(entry)
+                    || _loadedEntries.Contains(entry))
+                {
+                    continue;
+                }
                 entry.IsDeferred = true;
                 _deferred.Add(entry);
             }

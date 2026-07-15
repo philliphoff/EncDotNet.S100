@@ -302,6 +302,28 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
     }
 
     [Fact]
+    public async Task Register_AlreadyLoadedCell_IsNotReMarkedDeferred()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var unloaded = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = Create(notifier, loaded, unloaded);
+
+        var cell = Cell("US5HH", 40, -75, 41, -74);
+        coordinator.Register(new[] { cell });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        Assert.True(await WaitUntilAsync(() => coordinator.LoadedCount == 1));
+        Assert.False(cell.IsDeferred);
+
+        // Re-registering the same (now-loaded) cell must be idempotent: it must
+        // not re-mark the cell deferred (which would dim it and show a deferred
+        // outline) or disturb its loaded state. See issue #458.
+        coordinator.Register(new[] { cell });
+        Assert.False(cell.IsDeferred);
+        Assert.Equal(1, coordinator.LoadedCount);
+    }
+
+    [Fact]
     public async Task QueuedLoad_AbandonedWhenUnregisteredBeforeGate()
     {
         var notifier = new FakeNotifier();

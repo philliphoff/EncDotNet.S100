@@ -157,11 +157,16 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 // A cell registered for lazy loading but not yet loaded (issue
                 // #458): outline its catalogue footprint at every zoom
                 // (MinVisible 0) so the mariner sees where unloaded data lies
-                // and that panning/zooming there will pull it in.
-                if (entry.IsDeferred && entry.GeographicBounds is { } bounds)
+                // and that panning/zooming there will pull it in. Honour the
+                // visibility toggle here too — a hidden deferred cell shows no
+                // outline, consistent with a hidden loaded dataset.
+                if (entry.IsDeferred)
                 {
-                    foreach (var deferredExtent in ToMercatorExtents(bounds))
-                        indicators.Add(new DatasetExtentIndicator(deferredExtent, 0.0));
+                    if (entry.IsVisible && entry.GeographicBounds is { } bounds)
+                    {
+                        foreach (var deferredExtent in ToMercatorExtents(bounds))
+                            indicators.Add(new DatasetExtentIndicator(deferredExtent, 0.0));
+                    }
                     continue;
                 }
 
