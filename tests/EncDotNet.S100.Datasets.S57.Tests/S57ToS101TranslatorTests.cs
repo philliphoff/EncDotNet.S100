@@ -913,6 +913,56 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_CAggr_WithDroppedMember_NotMappedToRangeSystem()
+    {
+        // NavigationLine (track) + permitted beacon that resolves but is dropped
+        // because it has no geometry. The C_AGGR must not emit a partial collection.
+        var n1 = Node(1, 1000, 2000);
+        var navlne = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var droppedBeacon = Feat(2, 1, 9, featureIdentificationNumber: 11);
+        var aggr = Feat(3, 1, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1 },
+                features: new[] { navlne, droppedBeacon, aggr }), diag);
+
+        Assert.Equal(0, diag.RangeSystemsEmitted);
+        Assert.Null(FeatureOfClass(s101, "RangeSystem"));
+        Assert.Contains(diag.UnmappedObjectClasses, kv => kv.Key == 400);
+    }
+
+    [Fact]
+    public void Translate_FeatureRecordsRead_CountsAllIteratedNonSoundingFeatures()
+    {
+        var sharedLightNode = Node(1, 1000, 2000);
+        var soundingNode = SoundingNode(2, (10, 20, 50));
+        var primaryLight = Feat(1, 1, 75, featureIdentificationNumber: 1,
+            attributes: new[] { Attr(107, "2"), Attr(75, "3"), Attr(136, "10"), Attr(137, "90") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var absorbedLight = Feat(2, 1, 75, featureIdentificationNumber: 2,
+            attributes: new[] { Attr(107, "2"), Attr(75, "1"), Attr(136, "90"), Attr(137, "180") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var droppedBeacon = Feat(3, 1, 9, featureIdentificationNumber: 3);
+        var aggr = Feat(4, 1, 400, featureIdentificationNumber: 4);
+        var sounding = Feat(5, 1, 129, featureIdentificationNumber: 5,
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 2, 1, 0, 0) });
+        var diag = new S57TranslationDiagnostics();
+
+        new S57ToS101Translator().Translate(
+            BuildDocument(
+                vectorRecords: new EncDotNet.S57.S57VectorRecord[] { sharedLightNode, soundingNode },
+                features: new[] { primaryLight, absorbedLight, droppedBeacon, aggr, sounding }),
+            diag);
+
+        Assert.Equal(4, diag.FeatureRecordsRead);
+        Assert.Equal(1, diag.SoundingFeaturesRead);
+        Assert.Equal(1, diag.SectorLightsMerged);
+    }
+
+    [Fact]
     public void Translate_NestedRangeSystemCAggr_LinksToNestedCollection()
     {
         // Inner range system: NavigationLine + beacon. Outer range system:

@@ -694,10 +694,6 @@ public sealed class S57ToS101Translator
 
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
-                // Members absorbed into a co-located sector-light merge emit no
-                // feature of their own; their sector rides on the primary.
-                if (absorbed.Contains(fi)) continue;
-
                 var feat = featureRecords[fi];
                 var objl = (ushort)(int)feat.ObjectCode;
                 if (objl == SoundingObjl)
@@ -707,14 +703,18 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                if (_diagnostics is not null) _diagnostics.FeatureRecordsRead++;
+
+                // Members absorbed into a co-located sector-light merge emit no
+                // feature of their own; their sector rides on the primary.
+                if (absorbed.Contains(fi)) continue;
+
                 if (objl == CAggrObjl)
                 {
                     // Defer to the RangeSystem second pass (members resolved by LNAM).
                     pendingAggregations.Add(feat);
                     continue;
                 }
-
-                if (_diagnostics is not null) _diagnostics.FeatureRecordsRead++;
 
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
                 var resolved = _mapping.ResolveFeature(objl, acronymView, MapPrimitive(feat.Primitive));
@@ -809,6 +809,7 @@ public sealed class S57ToS101Translator
                 if (pendingByLnam.ContainsKey(key))
                     return Qualifies(key, visiting) ? S101ClassRangeSystem : null;
                 if (!featureByLnam.TryGetValue(key, out var mf)) return null;
+                if (!_recordIdByLnam.ContainsKey(key)) return null;
                 var view = _mapping.BuildAcronymView(mf.Attributes);
                 return _mapping.ResolveFeature(
                     (ushort)(int)mf.ObjectCode, view, MapPrimitive(mf.Primitive))?.S101Code;

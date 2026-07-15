@@ -55,7 +55,8 @@ public sealed class S57TranslationDiagnostics
     private readonly Dictionary<S57EnumValueDrop, int> _droppedEnumValues = new();
 
     /// <summary>
-    /// Number of non-sounding S-57 feature records the translator iterated.
+    /// Number of non-sounding S-57 feature records the translator iterated,
+    /// including records later absorbed, deferred, dropped, or unmapped.
     /// </summary>
     public int FeatureRecordsRead { get; internal set; }
 
