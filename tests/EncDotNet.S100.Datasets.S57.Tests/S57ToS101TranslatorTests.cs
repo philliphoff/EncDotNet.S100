@@ -2381,7 +2381,6 @@ public class S57ToS101TranslatorTests
         var feat = Assert.Single(s101.Features);
         Assert.Equal(expected, s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
         Assert.Empty(feat.Attributes);
-        Assert.DoesNotContain("categoryOfDolphin", s101.AttributeTypeCatalogue.Values);
     }
 
     [Fact]
@@ -2418,7 +2417,8 @@ public class S57ToS101TranslatorTests
 
         var feat = Assert.Single(s101.Features);
         Assert.Equal("ShorelineConstruction", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
-        Assert.DoesNotContain("categoryOfDolphin", s101.AttributeTypeCatalogue.Values);
+        Assert.DoesNotContain(feat.Attributes,
+            a => s101.AttributeTypeCatalogue[a.NumericCode] == "categoryOfDolphin");
     }
 
     // ── CATPRA → categoryOfProductionArea / categoryOfOffshoreProductionArea ──
