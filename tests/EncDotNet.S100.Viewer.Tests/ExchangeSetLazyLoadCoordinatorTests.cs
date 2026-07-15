@@ -271,4 +271,33 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         await Task.Delay(50);
         Assert.Equal(0, coordinator.LoadedCount);
     }
+
+    [Fact]
+    public async Task DebouncedRapidViewportChanges_EvaluateOnlyLatestSnapshot()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var unloaded = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = Create(notifier, loaded, unloaded,
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.FromMilliseconds(60) });
+
+        var cell = Cell("US5FF", 40, -75, 41, -74);
+        coordinator.Register(new[] { cell });
+
+        // Rapidly publish several viewports away from the cell, then finally
+        // one that frames it. On the debounced path only the latest snapshot
+        // must drive Evaluate(), so the cell loads exactly once and the
+        // superseded snapshots never fire.
+        notifier.Publish(Viewport(0, 10, 1, 11));
+        notifier.Publish(Viewport(0, 20, 1, 21));
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(cell)));
+        Assert.Equal(1, coordinator.LoadedCount);
+        Assert.False(cell.IsDeferred);
+
+        // Give any stale continuation the chance to (incorrectly) re-run.
+        await Task.Delay(80);
+        Assert.Single(loaded);
+    }
 }

@@ -215,12 +215,22 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
         _ = Task.Delay(_options.ViewportDebounce, newCts.Token).ContinueWith(t =>
         {
-            if (t.IsCanceled || _disposed) return;
+            // Only the most-recent debounce may fire. If a newer viewport
+            // change superseded this one, OnViewportChanged already replaced
+            // (and disposed) _debounceCts, so this stale continuation must
+            // no-op — including when Task.Delay completed before the newer
+            // change could cancel it. When still current, dispose the
+            // completed CTS here so it does not leak (nothing else will).
             lock (_lock)
             {
-                if (ReferenceEquals(_debounceCts, newCts))
-                    _debounceCts = null;
+                if (!ReferenceEquals(_debounceCts, newCts))
+                    return;
+                _debounceCts = null;
+                newCts.Dispose();
             }
+
+            if (t.IsCanceled || _disposed) return;
+
             if (uiContext is not null)
                 uiContext.Post(_ => { if (!_disposed) Evaluate(snapshot); }, null);
             else
