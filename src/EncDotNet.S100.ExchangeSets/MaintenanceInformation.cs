@@ -4,8 +4,8 @@ namespace EncDotNet.S100.ExchangeSets
 
     public enum MaintenanceFrequencyCode
     {
-        asNeeded = 1,
-        irregular = 2
+        AsNeeded = 1,
+        Irregular = 2
     };
 
     public class MaintenanceInformation

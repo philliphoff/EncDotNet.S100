@@ -91,8 +91,8 @@ public static class ExchangeCatalogueReader
         var numberStr = (string?)element.Element(xc + "number");
         CompliancyCategory? comp = null;
         string? compStr = (string?)element.Element(xc + "compliancyCategory");
-        if (compStr != null)
-            comp = (CompliancyCategory)Enum.Parse(typeof(CompliancyCategory), compStr);
+        if (compStr != null && Enum.TryParse(typeof(CompliancyCategory), compStr, out var parsedComp))
+            comp = (CompliancyCategory)parsedComp;
         return new ProductSpecification
         {
             Name = (string?)element.Element(xc + "name"),
@@ -109,8 +109,7 @@ public static class ExchangeCatalogueReader
         Purpose? purpose = null;
         string? purposeStr = (string?)element.Element(xc + "purpose");
         if (!string.IsNullOrWhiteSpace(purposeStr) &&  Enum.TryParse<Purpose>(purposeStr, ignoreCase: true, out var parsedPurpose))
-            purpose = (Purpose)Enum.Parse(typeof(Purpose), purposeStr);
-
+            purpose = parsedPurpose;
 
         NavigationPurpose? navigationPurpose = null;
         string? naxPurposeStr = (string?)element.Element(xc + "navigationPurpose");
@@ -140,7 +139,7 @@ public static class ExchangeCatalogueReader
             IssueDate = ParseDate((string?)element.Element(xc + "issueDate")),
             IssueTime = ParseTime((string?)element.Element(xc + "issueTime")),
             BoundingBox = ReadBoundingBox(element.Element(xc + "boundingBox")),
-            TemporalExtent = ReadTempoalExtent(element, xc),
+            TemporalExtent = ReadTemporalExtent(element, xc),
             ProductSpecification = ReadProductSpecification(element.Element(xc + "productSpecification"), xc),
             ProducingAgency = ReadProducingAgency(element.Element(xc + "producingAgency")),
             EncodingFormat = (string?)element.Element(xc + "encodingFormat"),
@@ -158,7 +157,7 @@ public static class ExchangeCatalogueReader
         };
     }
 
-    private static TemporalExtent? ReadTempoalExtent(XElement element, XNamespace xc)
+    private static TemporalExtent? ReadTemporalExtent(XElement element, XNamespace xc)
     {
         var timeInstantEl = element.Element(xc + "temporalExtent");
         if (timeInstantEl is null) return null;
@@ -282,7 +281,7 @@ public static class ExchangeCatalogueReader
         var minStr = (string?)element.Element(xc + "minimumDisplayScale");
         var optStr = (string?)element.Element(xc + "optimumDisplayScale");
         var resStr = (string?)element.Element(xc + "approximateGridResolution");
-        TemporalExtent? temporalExtent = ReadTempoalExtent(element, xc);
+        TemporalExtent? temporalExtent = ReadTemporalExtent(element, xc);
 
         return new DataCoverage
         {

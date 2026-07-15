@@ -3,11 +3,11 @@ namespace EncDotNet.S100.ExchangeSets
 {
     public enum Purpose
     {
-        newDataset = 1,
-        newEdition = 2,
-        update = 3,
-        reissue = 4,
-        cancellation = 5,
-        delta = 6,
+        NewDataset = 1,
+        NewEdition = 2,
+        Update = 3,
+        Reissue = 4,
+        Cancellation = 5,
+        Delta = 6,
     }
 }

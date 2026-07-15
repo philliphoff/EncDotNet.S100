@@ -215,7 +215,7 @@ public class ExchangeCatalogueReaderTests
         var dataset = ReadTestCatalogue().DatasetDiscoveryMetadata[0];
 
         Assert.Equal("DSA", dataset.DigitalSignatureReference);
-        Assert.Equal(Purpose.newDataset, dataset.Purpose);
+        Assert.Equal(Purpose.NewDataset, dataset.Purpose);
         Assert.Equal(1, dataset.EditionNumber);
         Assert.Equal(DateOnly.Parse("2023-01-16"), dataset.IssueDate);
         Assert.Equal("ISO/IEC 8211", dataset.EncodingFormat);
@@ -246,7 +246,7 @@ public class ExchangeCatalogueReaderTests
 
         Assert.All(catalogue.DatasetDiscoveryMetadata, dataset =>
         {
-            Assert.Equal(Purpose.newDataset, dataset.Purpose);
+            Assert.Equal(Purpose.NewDataset, dataset.Purpose);
             Assert.True(dataset.NotForNavigation);
             Assert.NotNull(dataset.EditionNumber);
             Assert.Equal("DSA", dataset.DigitalSignatureReference);

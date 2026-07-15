@@ -3,8 +3,8 @@ namespace EncDotNet.S100.ExchangeSets
 {
     public enum NavigationPurpose
     {
-        port = 1,
-        transit = 2,
-        overview = 3
+        Port = 1,
+        Transit = 2,
+        Overview = 3
     }
 }
