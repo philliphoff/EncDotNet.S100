@@ -231,11 +231,12 @@ public class ExchangeSetServiceLoaderTests
     [Fact]
     public async Task OpenAsync_FramedFixture_InvokesOnFramingReady_WithUnionBoundingBox()
     {
-        var (_, service) = CreateSystem();
+        var (datasets, service) = CreateSystem();
         using var _ = service;
 
         EncDotNet.S100.ExchangeSets.BoundingBox? framed = null;
         var framedBeforeReturn = false;
+        int? entryCountWhenFramed = null;
 
         var result = await service.OpenAsync(
             FramedFixture(),
@@ -243,6 +244,9 @@ public class ExchangeSetServiceLoaderTests
             {
                 framed = bbox;
                 framedBeforeReturn = true;
+                // Capture how many datasets have been dispatched at the
+                // instant framing is emitted — it must be zero.
+                entryCountWhenFramed = datasets.Entries.Count;
             });
 
         // The callback fired with the union of both dataset boxes,
@@ -253,6 +257,14 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(14, framed.EastBoundLongitude);
         Assert.Equal(48, framed.SouthBoundLatitude);
         Assert.Equal(52, framed.NorthBoundLatitude);
+
+        // Timing guarantee: framing must be emitted *before* any dataset
+        // is dispatched, so early per-dataset paints land in the framed
+        // viewport (issue #448). This fails if framing is moved after the
+        // dispatch loop. The fixture declares two datasets that are both
+        // surfaced as entries by the end of the open.
+        Assert.Equal(0, entryCountWhenFramed);
+        Assert.Equal(2, datasets.Entries.Count);
 
         // The same union is echoed on the result.
         Assert.NotNull(result.UnionBoundingBox);
