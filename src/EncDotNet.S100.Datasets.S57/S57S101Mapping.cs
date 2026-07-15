@@ -43,7 +43,29 @@ public sealed class S57S101Mapping
         {
             foreach (var redirect in rule.Redirects)
             {
-                if (!redirect.ConditionPresent && redirect.ConditionValues.Count == 0)
+                var hasAttrCondition = redirect.ConditionAttribute is not null;
+                var hasPrimitiveCondition = redirect.ConditionPrimitives.Count > 0;
+
+                // A redirect must constrain on something; one with neither an
+                // attribute nor a primitive condition would fire unconditionally
+                // and shadow the rule default (and any later redirects).
+                if (!hasAttrCondition && !hasPrimitiveCondition)
+                {
+                    throw new ArgumentException(
+                        $"S-57 feature redirect on OBJL {objl} (target " +
+                        $"'{redirect.TargetS101Code}') specifies no condition. Provide a " +
+                        "ConditionAttribute (with ConditionPresent or ConditionValues) " +
+                        "and/or a ConditionPrimitives constraint.",
+                        nameof(featureRules));
+                }
+
+                // A value-matching attribute condition (ConditionAttribute set,
+                // ConditionPresent false) needs at least one value, else the
+                // attribute gate can never pass — masking an authoring mistake
+                // even if a primitive condition is also present.
+                if (hasAttrCondition
+                    && !redirect.ConditionPresent
+                    && redirect.ConditionValues.Count == 0)
                 {
                     throw new ArgumentException(
                         $"S-57 feature redirect on OBJL {objl} (condition attribute " +
@@ -107,20 +129,41 @@ public sealed class S57S101Mapping
     /// <see cref="BuildAcronymView"/> to construct this view from a feature's
     /// raw attribute records.
     /// </param>
+    /// <param name="primitive">
+    /// The feature's geometric primitive, used to evaluate geometry-conditional
+    /// redirects (<see cref="S57FeatureRedirect.ConditionPrimitives"/>). Pass
+    /// <see cref="S57GeometryPrimitive.None"/> when geometry is irrelevant.
+    /// </param>
     /// <returns>
     /// A <see cref="ResolvedFeature"/>, or <c>null</c> if the OBJL has no
     /// rule or all matching rules drop the feature.
     /// </returns>
-    public ResolvedFeature? ResolveFeature(ushort objl, IReadOnlyDictionary<string, string> s57AttributesByAcronym)
+    public ResolvedFeature? ResolveFeature(
+        ushort objl,
+        IReadOnlyDictionary<string, string> s57AttributesByAcronym,
+        S57GeometryPrimitive primitive = S57GeometryPrimitive.None)
     {
         if (!FeatureRules.TryGetValue(objl, out var rule)) return null;
 
         foreach (var redirect in rule.Redirects)
         {
-            if (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
-                && (redirect.ConditionPresent
-                    ? !string.IsNullOrEmpty(v)
-                    : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)))
+            // Geometry gate: a redirect constrained to specific primitives only
+            // fires when the feature's primitive is among them.
+            if (redirect.ConditionPrimitives.Count > 0
+                && !redirect.ConditionPrimitives.Contains(primitive))
+            {
+                continue;
+            }
+
+            // Attribute gate: a redirect with no ConditionAttribute is purely
+            // geometry-based and passes the attribute gate unconditionally.
+            var attributeMatches = redirect.ConditionAttribute is null
+                || (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
+                    && (redirect.ConditionPresent
+                        ? !string.IsNullOrEmpty(v)
+                        : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)));
+
+            if (attributeMatches)
             {
                 var combined = MergeOverrides(rule.AttributeOverrides, redirect.AttributeOverrides);
                 return new ResolvedFeature(redirect.TargetS101Code, combined);
@@ -159,6 +202,9 @@ public sealed class S57S101Mapping
 
         if (feature.AttributeOverrides.TryGetValue(s57Acronym, out var ov))
         {
+            // A feature-scoped drop removes the attribute entirely (e.g. CATMOR
+            // on a MORFAC that redirected to ShorelineConstruction).
+            if (ov.Drop) return null;
             if (ov.S101Code is not null) s101Code = ov.S101Code;
             // Per-value code override wins over both rule default and the
             // override's S101Code.

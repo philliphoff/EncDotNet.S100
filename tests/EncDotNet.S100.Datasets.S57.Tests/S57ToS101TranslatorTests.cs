@@ -112,7 +112,8 @@ public class S57ToS101TranslatorTests
         uint featureIdentificationNumber = 1,
         ushort featureIdentificationSubdivision = 0,
         IEnumerable<EncDotNet.S57.S57AttributeValue>? attributes = null,
-        IEnumerable<EncDotNet.S57.S57SpatialPointer>? spatialPointers = null)
+        IEnumerable<EncDotNet.S57.S57SpatialPointer>? spatialPointers = null,
+        IEnumerable<EncDotNet.S57.S57FeaturePointer>? featurePointers = null)
         => new()
         {
             RecordName = new EncDotNet.S57.S57RecordName
@@ -128,6 +129,26 @@ public class S57ToS101TranslatorTests
             Attributes = (attributes ?? Array.Empty<EncDotNet.S57.S57AttributeValue>()).ToArray(),
             NationalAttributes = [],
             SpatialPointers = (spatialPointers ?? Array.Empty<EncDotNet.S57.S57SpatialPointer>()).ToArray(),
+            FeaturePointers = (featurePointers ?? Array.Empty<EncDotNet.S57.S57FeaturePointer>()).ToArray(),
+        };
+
+    // Builds an FFPT feature-to-feature pointer referencing a target feature by
+    // its S-57 long name (LNAM: agency, feature id, subdivision). Mirrors real
+    // S-57 where FFPT names carry rcnm=0/rcid=0 and identify the target by LNAM.
+    private static EncDotNet.S57.S57FeaturePointer Ffpt(
+        ushort producingAgency, uint featureIdentificationNumber,
+        ushort featureIdentificationSubdivision = 0)
+        => new()
+        {
+            Name = new EncDotNet.S57.S57RecordName
+            {
+                RecordNameCode = 0,
+                RecordId = 0,
+                AgencyCode = (int)producingAgency,
+                FeatureId = (int)featureIdentificationNumber,
+                FeatureSubdivision = (int)featureIdentificationSubdivision,
+            },
+            Relationship = EncDotNet.S57.S57RelationshipIndicator.Peer,
         };
 
     // ── Tests ──────────────────────────────────────────────────────────
@@ -533,7 +554,31 @@ public class S57ToS101TranslatorTests
         Assert.Equal("Smith, Jones and Co.", GetSubAttribute(s101, instance, "name"));
     }
 
-    // ── v3.4: INFORM/NINFOM/TXTDSC/NTXTDS → information complex attribute ──
+    // ── v3.4 → #452 #4: INFORM/NINFOM/TXTDSC/NTXTDS → NauticalInformation ──
+    //
+    // The textual attributes now travel via the "fuller path" (Conversion
+    // Guidance §2.3): a standalone NauticalInformation information-type record
+    // carries the `information` complex, bound to the feature by an
+    // AdditionalInformation / theInformation association. These helpers resolve
+    // the NauticalInformation record a feature points at and iterate its
+    // `information` complex instances.
+
+    private static S101InformationRecord? NauticalInformationOf(
+        S101Document doc, S101FeatureRecord feature)
+    {
+        // Resolve the AdditionalInformation association code by name.
+        ushort? assocCode = null;
+        foreach (var (c, n) in doc.InformationAssociationCatalogue)
+            if (string.Equals(n, "AdditionalInformation", StringComparison.OrdinalIgnoreCase)) { assocCode = c; break; }
+        if (assocCode is null) return null;
+
+        foreach (var ia in feature.InformationAssociations)
+        {
+            if (ia.NumericCode != assocCode) continue;
+            if (doc.InformationTypes.TryGetValue(ia.RecordId, out var info)) return info;
+        }
+        return null;
+    }
 
     private static IEnumerable<S101Attribute> InformationInstance(
         S101Document doc,
@@ -606,13 +651,19 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_InformAttribute_BecomesInformationComplexAttribute_WithEnglish()
+    public void Translate_InformAttribute_BecomesNauticalInformation_WithEnglish()
     {
         var doc = LandRegionWithS57Attributes(Attr(102, "Visible all around. Higher intensity on rangeline"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
-        var instance = InformationInstance(s101, feat.Attributes, 1).ToList();
+        // The feature no longer carries an inline `information` complex.
+        Assert.Empty(InformationInstance(s101, feat.Attributes, 1).ToList());
+
+        var info = NauticalInformationOf(s101, feat);
+        Assert.NotNull(info);
+        Assert.Equal("NauticalInformation", s101.InformationTypeCatalogue[info!.InformationTypeCode]);
+        var instance = InformationInstance(s101, info.Attributes, 1).ToList();
 
         Assert.NotEmpty(instance);
         Assert.Equal("Visible all around. Higher intensity on rangeline",
@@ -628,7 +679,9 @@ public class S57ToS101TranslatorTests
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
-        var instance = InformationInstance(s101, feat.Attributes, 1).ToList();
+        var info = NauticalInformationOf(s101, feat);
+        Assert.NotNull(info);
+        var instance = InformationInstance(s101, info!.Attributes, 1).ToList();
 
         Assert.Equal("US5WA23A.TXT", GetSubAttribute(s101, instance, "fileReference"));
         Assert.Equal("eng", GetSubAttribute(s101, instance, "language"));
@@ -636,20 +689,22 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_NinfomAttribute_BecomesInformationComplex_WithBlankLanguage()
+    public void Translate_NinfomAttribute_BecomesNauticalInformation_WithBlankLanguage()
     {
         var doc = LandRegionWithS57Attributes(Attr(300, "Información en español"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
-        var instance = InformationInstance(s101, feat.Attributes, 1).ToList();
+        var info = NauticalInformationOf(s101, feat);
+        Assert.NotNull(info);
+        var instance = InformationInstance(s101, info!.Attributes, 1).ToList();
 
         Assert.Equal("Información en español", GetSubAttribute(s101, instance, "text"));
         Assert.Equal("", GetSubAttribute(s101, instance, "language"));
     }
 
     [Fact]
-    public void Translate_InformAndNinfom_EmitTwoInformationInstances()
+    public void Translate_InformAndNinfom_EmitTwoInformationInstances_OnOneNauticalInformation()
     {
         var doc = LandRegionWithS57Attributes(
             Attr(102, "English text"),
@@ -657,14 +712,20 @@ public class S57ToS101TranslatorTests
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
+        var info = NauticalInformationOf(s101, feat);
+        Assert.NotNull(info);
 
-        var first = InformationInstance(s101, feat.Attributes, 1).ToList();
-        var second = InformationInstance(s101, feat.Attributes, 2).ToList();
+        var first = InformationInstance(s101, info!.Attributes, 1).ToList();
+        var second = InformationInstance(s101, info.Attributes, 2).ToList();
 
         Assert.Equal("English text", GetSubAttribute(s101, first, "text"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
         Assert.Equal("National text", GetSubAttribute(s101, second, "text"));
         Assert.Equal("", GetSubAttribute(s101, second, "language"));
+
+        // Both texts live on a single NauticalInformation record (one association).
+        Assert.Single(feat.InformationAssociations);
+        Assert.Single(s101.InformationTypes);
     }
 
     [Fact]
@@ -676,25 +737,224 @@ public class S57ToS101TranslatorTests
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
+        var info = NauticalInformationOf(s101, feat);
+        Assert.NotNull(info);
 
-        var first = InformationInstance(s101, feat.Attributes, 1).ToList();
+        var first = InformationInstance(s101, info!.Attributes, 1).ToList();
         Assert.Equal("Inline note", GetSubAttribute(s101, first, "text"));
         Assert.Equal("EXTRA.TXT", GetSubAttribute(s101, first, "fileReference"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
 
-        Assert.Empty(InformationInstance(s101, feat.Attributes, 2).ToList());
+        Assert.Empty(InformationInstance(s101, info.Attributes, 2).ToList());
     }
 
     [Fact]
-    public void Translate_NoTextualAttributes_EmitsNoInformationInstance()
+    public void Translate_NoTextualAttributes_EmitsNoNauticalInformation()
     {
         var doc = LandRegionWithS57Attributes(Attr(34, "1"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
 
+        Assert.Empty(feat.InformationAssociations);
+        Assert.Empty(s101.InformationTypes);
         Assert.Empty(InformationInstance(s101, feat.Attributes, 1).ToList());
     }
+
+    [Fact]
+    public void Translate_Inform_WiresAdditionalInformationAssociation_AndCatalogues()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var doc = LandRegionWithS57Attributes(Attr(102, "See caution note"));
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+        var feat = Assert.Single(s101.Features);
+
+        // The feature binds the info type through AdditionalInformation/theInformation.
+        var ia = Assert.Single(feat.InformationAssociations);
+        Assert.Equal("AdditionalInformation", s101.InformationAssociationCatalogue[ia.NumericCode]);
+        Assert.Equal("theInformation", s101.RoleCatalogue[ia.RoleCode]);
+
+        // The association points at the emitted NauticalInformation record.
+        Assert.True(s101.InformationTypes.ContainsKey(ia.RecordId));
+        Assert.Equal("NauticalInformation",
+            s101.InformationTypeCatalogue[s101.InformationTypes[ia.RecordId].InformationTypeCode]);
+
+        Assert.Equal(1, diag.NauticalInformationTypesEmitted);
+    }
+
+    [Fact]
+    public void Translate_SeparateFeaturesWithText_EachGetOwnNauticalInformation()
+    {
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 3000, 4000);
+        var f1 = Feat(recordId: 1, primitive: 1, objectClass: 73,
+            attributes: new[] { Attr(102, "First") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var f2 = Feat(recordId: 2, primitive: 1, objectClass: 73,
+            featureIdentificationNumber: 2,
+            attributes: new[] { Attr(102, "Second") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 }, features: new[] { f1, f2 }), diag);
+
+        Assert.Equal(2, s101.Features.Count);
+        Assert.Equal(2, s101.InformationTypes.Count);
+        Assert.Equal(2, diag.NauticalInformationTypesEmitted);
+        foreach (var feat in s101.Features)
+        {
+            var info = NauticalInformationOf(s101, feat);
+            Assert.NotNull(info);
+        }
+    }
+
+    // ── C_AGGR → RangeSystemAggregation (synthesised RangeSystem) ────────
+
+    // Resolves the S-101 class name of a feature via the FeatureTypeCatalogue.
+    private static string ClassOf(S101Document doc, S101FeatureRecord feat)
+        => doc.FeatureTypeCatalogue[feat.FeatureTypeCode];
+
+    private static S101FeatureRecord? FeatureOfClass(S101Document doc, string s101Class)
+        => doc.Features.FirstOrDefault(f => ClassOf(doc, f) == s101Class);
+
+    [Fact]
+    public void Translate_RangeSystemCAggr_SynthesisesGeometrylessRangeSystem_WithComponentAssociations()
+    {
+        // NavigationLine (track) + RecommendedTrack (track) + SpecialPurposeGeneralBeacon (navaid).
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var n3 = Node(3, 1000, 2200);
+        var navlne = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var rectrc = Feat(2, 1, 109, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var beacon = Feat(3, 1, 9, featureIdentificationNumber: 12,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 3, 1, 0, 0) });
+        var aggr = Feat(4, 1, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 12) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2, n3 },
+                features: new[] { navlne, rectrc, beacon, aggr }), diag);
+
+        Assert.Equal(1, diag.RangeSystemsEmitted);
+        var rangeSystem = FeatureOfClass(s101, "RangeSystem");
+        Assert.NotNull(rangeSystem);
+
+        // The collection feature is geometry-less and self-identifies from the C_AGGR.
+        Assert.Empty(rangeSystem!.SpatialAssociations);
+        Assert.Equal(99u, rangeSystem.FeatureIdentificationNumber);
+
+        // One theComponent association per member, each pointing at the member's record.
+        Assert.Equal(3, rangeSystem.FeatureAssociations.Count);
+        var memberIds = new[] { navlne, rectrc, beacon }
+            .Select(m => FeatureByLnam(s101, m).RecordId).ToHashSet();
+        foreach (var fa in rangeSystem.FeatureAssociations)
+        {
+            Assert.Equal("RangeSystemAggregation", s101.FeatureAssociationCatalogue[fa.NumericCode]);
+            Assert.Equal("theComponent", s101.RoleCatalogue[fa.RoleCode]);
+            Assert.Contains(fa.RecordId, memberIds);
+        }
+        Assert.Equal(3, rangeSystem.FeatureAssociations.Select(a => a.RecordId).Distinct().Count());
+
+        // Members carry no back-association (the collection is the navigable end).
+        foreach (var m in new[] { navlne, rectrc, beacon })
+            Assert.Empty(FeatureByLnam(s101, m).FeatureAssociations);
+    }
+
+    [Fact]
+    public void Translate_CAggr_WithoutTrackMember_NotMappedToRangeSystem()
+    {
+        // Two beacons, no navigational track → not a range system.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var b1 = Feat(1, 1, 9, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var b2 = Feat(2, 1, 9, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var aggr = Feat(3, 1, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 },
+                features: new[] { b1, b2, aggr }), diag);
+
+        Assert.Equal(0, diag.RangeSystemsEmitted);
+        Assert.Null(FeatureOfClass(s101, "RangeSystem"));
+        Assert.Equal(2, s101.Features.Count);
+        Assert.Contains(diag.UnmappedObjectClasses, kv => kv.Key == 400);
+    }
+
+    [Fact]
+    public void Translate_CAggr_WithNonPermittedMember_NotMappedToRangeSystem()
+    {
+        // NavigationLine (track) + LandArea (not a permitted range-system component).
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var navlne = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var land = Feat(2, 1, 71, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var aggr = Feat(3, 1, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 },
+                features: new[] { navlne, land, aggr }), diag);
+
+        Assert.Equal(0, diag.RangeSystemsEmitted);
+        Assert.Null(FeatureOfClass(s101, "RangeSystem"));
+        Assert.Contains(diag.UnmappedObjectClasses, kv => kv.Key == 400);
+    }
+
+    [Fact]
+    public void Translate_NestedRangeSystemCAggr_LinksToNestedCollection()
+    {
+        // Inner range system: NavigationLine + beacon. Outer range system:
+        // RecommendedTrack + the inner C_AGGR (RangeSystem is a permitted component).
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var n3 = Node(3, 1000, 2200);
+        var innerTrack = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var innerBeacon = Feat(2, 1, 9, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var innerAggr = Feat(3, 1, 400, featureIdentificationNumber: 20,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var outerTrack = Feat(4, 1, 109, featureIdentificationNumber: 12,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 3, 1, 0, 0) });
+        var outerAggr = Feat(5, 1, 400, featureIdentificationNumber: 21,
+            featurePointers: new[] { Ffpt(540, 12), Ffpt(540, 20) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2, n3 },
+                features: new[] { innerTrack, innerBeacon, innerAggr, outerTrack, outerAggr }), diag);
+
+        Assert.Equal(2, diag.RangeSystemsEmitted);
+        var rangeSystems = s101.Features.Where(f => ClassOf(s101, f) == "RangeSystem").ToList();
+        Assert.Equal(2, rangeSystems.Count);
+
+        var inner = rangeSystems.Single(r => r.FeatureIdentificationNumber == 20);
+        var outer = rangeSystems.Single(r => r.FeatureIdentificationNumber == 21);
+
+        // The outer range system links to the inner range system as a component.
+        Assert.Contains(outer.FeatureAssociations, a => a.RecordId == inner.RecordId);
+        Assert.Equal(2, outer.FeatureAssociations.Count);
+    }
+
+    private static S101FeatureRecord FeatureByLnam(
+        S101Document doc, EncDotNet.S57.S57FeatureRecord s57)
+        => doc.Features.Single(f =>
+            f.ProducingAgency == (ushort)s57.RecordName.AgencyCode
+            && f.FeatureIdentificationNumber == (uint)s57.RecordName.FeatureId
+            && f.FeatureIdentificationSubdivision == (ushort)s57.RecordName.FeatureSubdivision
+            && ClassOf(doc, f) != "RangeSystem");
 
     // ── OBJNAM/NOBJNM → featureName complex attribute ───────────────────
 
@@ -1206,6 +1466,120 @@ public class S57ToS101TranslatorTests
         Assert.DoesNotContain("valueOfNominalRange", topLevel);
     }
 
+    // ── Co-located sector-light merge (#452 item #2) ─────────────────────
+
+    // Builds N point LIGHTS features, each carrying one sector arc, all sharing
+    // the same connected node (so they resolve to one S-101 point). Each entry
+    // is that light's attribute set.
+    private static EncDotNet.S57.S57Document CoLocatedSectorLights(
+        uint sharedNodeId, params EncDotNet.S57.S57AttributeValue[][] lights)
+    {
+        var n = Node(sharedNodeId, 1000, 2000);
+        var features = new EncDotNet.S57.S57FeatureRecord[lights.Length];
+        for (int i = 0; i < lights.Length; i++)
+        {
+            features[i] = Feat(
+                recordId: (uint)(i + 1), primitive: 1, objectClass: 75,
+                featureIdentificationNumber: (uint)(i + 1),
+                attributes: lights[i],
+                spatialPointers: new[] { Sp(RcnmConnectedNode, sharedNodeId, 1, 0, 0) });
+        }
+        return BuildDocument(vectorRecords: new[] { n }, features: features);
+    }
+
+    private static int CountComplexInstances(
+        S101Document doc, IReadOnlyList<S101Attribute> attrs, string complexCode)
+    {
+        ushort? code = null;
+        foreach (var (c, name) in doc.AttributeTypeCatalogue)
+        {
+            if (string.Equals(name, complexCode, StringComparison.OrdinalIgnoreCase)) { code = c; break; }
+        }
+        if (code is null) return 0;
+        return attrs.Count(a => a.NumericCode == code && a.Index == 1);
+    }
+
+    [Fact]
+    public void Translate_CoLocatedSectorLights_MergeIntoSingleLightSectored()
+    {
+        // Two point LIGHTS sharing a node, each with one sector arc, model one
+        // physical two-sector light. They fold into a single LightSectored
+        // feature carrying two sectorCharacteristics instances.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(CoLocatedSectorLights(1,
+            new[] { Attr(107, "2"), Attr(75, "3"), Attr(136, "10"), Attr(137, "90") },
+            new[] { Attr(107, "2"), Attr(75, "1"), Attr(136, "90"), Attr(137, "180") }),
+            diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightSectored", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Equal(2, CountComplexInstances(s101, feat.Attributes, "sectorCharacteristics"));
+        Assert.Equal(1, diag.SectorLightsMerged);
+
+        // The primary contributes the first arc (Red / 10-90); the absorbed
+        // member contributes the second (White / 90-180).
+        var first = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList();
+        Assert.Equal("3", GetSubAttribute(s101, first, "colour"));
+        var second = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 2).ToList();
+        Assert.Equal("1", GetSubAttribute(s101, second, "colour"));
+    }
+
+    [Fact]
+    public void Translate_CoLocatedSectorLights_DifferingLitchr_EachGetsOwnCharacteristic()
+    {
+        // Members whose LITCHR differs still merge; each simply yields its own
+        // sectorCharacteristics instance (all conformant, FC allows [1..*]).
+        var s101 = new S57ToS101Translator().Translate(CoLocatedSectorLights(1,
+            new[] { Attr(107, "2"), Attr(75, "3"), Attr(136, "10"), Attr(137, "90") },
+            new[] { Attr(107, "4"), Attr(75, "1"), Attr(136, "90"), Attr(137, "180") }));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, CountComplexInstances(s101, feat.Attributes, "sectorCharacteristics"));
+        var first = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList();
+        Assert.Equal("2", GetSubAttribute(s101, first, "lightCharacteristic"));
+        var second = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 2).ToList();
+        Assert.Equal("4", GetSubAttribute(s101, second, "lightCharacteristic"));
+    }
+
+    [Fact]
+    public void Translate_NonCoLocatedSectorLights_StaySeparate()
+    {
+        // Two sector lights on distinct nodes are distinct physical lights and
+        // must not merge.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 5000, 6000);
+        var f1 = Feat(recordId: 1, primitive: 1, objectClass: 75,
+            attributes: new[] { Attr(107, "2"), Attr(75, "3"), Attr(136, "10"), Attr(137, "90") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var f2 = Feat(recordId: 2, primitive: 1, objectClass: 75,
+            featureIdentificationNumber: 2,
+            attributes: new[] { Attr(107, "2"), Attr(75, "1"), Attr(136, "90"), Attr(137, "180") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 }, features: new[] { f1, f2 }), diag);
+
+        Assert.Equal(2, s101.Features.Count);
+        foreach (var feat in s101.Features)
+            Assert.Equal(1, CountComplexInstances(s101, feat.Attributes, "sectorCharacteristics"));
+        Assert.Equal(0, diag.SectorLightsMerged);
+    }
+
+    [Fact]
+    public void Translate_CoLocatedSectorLights_AbsorbedMemberWithoutLitchr_ContributesNoInstance()
+    {
+        // An absorbed member lacking a valid LITCHR cannot anchor a
+        // sectorCharacteristics instance, so it is dropped — but the group is
+        // still merged (the member emits no feature of its own).
+        var s101 = new S57ToS101Translator().Translate(CoLocatedSectorLights(1,
+            new[] { Attr(107, "2"), Attr(75, "3"), Attr(136, "10"), Attr(137, "90") },
+            new[] { Attr(75, "1"), Attr(136, "90"), Attr(137, "180") })); // no LITCHR
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(1, CountComplexInstances(s101, feat.Attributes, "sectorCharacteristics"));
+    }
+
     // ── HORCLR → horizontalClearanceOpen / horizontalClearanceFixed ──────
 
     [Fact]
@@ -1523,6 +1897,42 @@ public class S57ToS101TranslatorTests
         return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
     }
 
+    private static EncDotNet.S57.S57Document LineFeatureWithS57Attributes(
+        ushort objectClass,
+        params EncDotNet.S57.S57AttributeValue[] attrs)
+    {
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 100, 100);
+        var e1 = Edge(10, 1, 2);
+        var feature = Feat(
+            recordId: 1, primitive: 2, objectClass: objectClass,
+            attributes: attrs,
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
+        return BuildDocument(vectorRecords: new[] { n1, n2, e1 }, features: new[] { feature });
+    }
+
+    private static EncDotNet.S57.S57Document AreaFeatureWithS57Attributes(
+        ushort objectClass,
+        params EncDotNet.S57.S57AttributeValue[] attrs)
+    {
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: objectClass,
+            attributes: attrs,
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+        return BuildDocument(vectorRecords: new[] { n1, n2, n3, e1, e2, e3 }, features: new[] { feature });
+    }
+
     private static ushort? ResolveAttributeCode(S101Document doc, string name)
     {
         foreach (var (c, n) in doc.AttributeTypeCatalogue)
@@ -1771,6 +2181,194 @@ public class S57ToS101TranslatorTests
             s101, feat.Attributes, "surveyDateRange", 1, "zoneOfConfidence", "surveyDateRange").ToList();
         Assert.Equal("20190501", GetSubAttribute(s101, surveyInstance, "dateStart"));
         Assert.Equal("20190815", GetSubAttribute(s101, surveyInstance, "dateEnd"));
+    }
+
+    [Fact]
+    public void Translate_CatzocA1_PopulatesHorizontalAndVerticalUncertainty()
+    {
+        // ZOC A1 (CATZOC=1) is the only zone with a horizontal variable factor
+        // (±5 m + 5% depth). Vertical accuracy is 0.50 m + 1% depth. The full
+        // pre-order layout of the zoneOfConfidence subtree is asserted so the two
+        // nested uncertainty complexes are unambiguously scoped.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "1")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "1"),
+                ("horizontalPositionUncertainty", ""),
+                ("uncertaintyFixed", "5"),
+                ("uncertaintyVariableFactor", "5"),
+                ("verticalUncertainty", ""),
+                ("uncertaintyFixed", "0.5"),
+                ("uncertaintyVariableFactor", "1"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+    }
+
+    [Fact]
+    public void Translate_CatzocB_OmitsHorizontalVariableFactor()
+    {
+        // ZOC B (CATZOC=3) has a fixed-only horizontal accuracy (±50 m, no
+        // variable factor) and a vertical accuracy of 1.00 m + 2% depth.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "3")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "3"),
+                ("horizontalPositionUncertainty", ""),
+                ("uncertaintyFixed", "50"),
+                ("verticalUncertainty", ""),
+                ("uncertaintyFixed", "1"),
+                ("uncertaintyVariableFactor", "2"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+    }
+
+    [Fact]
+    public void Translate_CatzocD_EmitsCategoryOnlyWithoutUncertainty()
+    {
+        // ZOC D (CATZOC=5) is "worse than C" and unquantified, so no uncertainty
+        // sub-complexes are emitted — only categoryOfZoneOfConfidenceInData.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "5")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "5"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+    }
+
+    // Projects a feature's attribute rows onto their (catalogue-name, value)
+    // pairs in emission order, for asserting nested complex pre-order layouts.
+    private static (string, string)[] AttributeSequence(
+        S101Document doc, IReadOnlyList<S101Attribute> attrs) =>
+        attrs.Select(a => (doc.AttributeTypeCatalogue[a.NumericCode], a.Value)).ToArray();
+
+    // ── MORFAC → Dolphin / ShorelineConstruction / Bollard / Pile / MooringBuoy ──
+
+    [Fact]
+    public void Translate_PointMorfac_BecomesDolphin()
+    {
+        // S-101 removed the generic MooringWarpingFacility class; a point
+        // MORFAC (OBJL 84) maps to Dolphin (S-101 portrayal wires MORFAC point
+        // symbols to Dolphin.lua).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(84));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Dolphin", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Fact]
+    public void Translate_PointMorfac_DolphinCatmor_MapsToMooringDolphin()
+    {
+        // CATMOR=1 (dolphin) → categoryOfDolphin=1 (Mooring Dolphin).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(84, Attr(40, "1")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Dolphin", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("categoryOfDolphin", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("1", attr.Value);
+    }
+
+    [Fact]
+    public void Translate_PointMorfac_DeviationDolphinCatmor_MapsToDeviationDolphin()
+    {
+        // CATMOR=2 (deviation dolphin) → categoryOfDolphin=2 (Deviation
+        // Dolphin) — the one clean cross-enumeration match.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(84, Attr(40, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Dolphin", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("categoryOfDolphin", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("2", attr.Value);
+    }
+
+    [Theory]
+    [InlineData("4")] // tie-up wall
+    [InlineData("6")] // chain/wire/cable
+    public void Translate_PointMorfac_NonDolphinCatmor_LeavesDolphinWithoutCategory(string catmor)
+    {
+        // CATMOR values with no S-101 dolphin-category equivalent (and no
+        // dedicated class) leave a Dolphin with no categoryOfDolphin.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(84, Attr(40, catmor)));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Dolphin", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Theory]
+    [InlineData("3", "Bollard")]     // bollard
+    [InlineData("5", "Pile")]        // post or pile
+    [InlineData("7", "MooringBuoy")] // mooring buoy
+    public void Translate_PointMorfac_DedicatedCatmor_RedirectsToNamedClass(string catmor, string expected)
+    {
+        // CATMOR values that name a facility with its own S-101 class redirect
+        // there, and CATMOR is dropped (those classes do not bind
+        // categoryOfDolphin).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(84, Attr(40, catmor)));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(expected, s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(feat.Attributes);
+        Assert.DoesNotContain("categoryOfDolphin", s101.AttributeTypeCatalogue.Values);
+    }
+
+    [Fact]
+    public void Translate_AreaMorfac_BecomesShorelineConstruction()
+    {
+        // Line/area MORFAC maps to ShorelineConstruction (S-101 portrayal wires
+        // MORFAC line/area symbols to ShorelineConstruction.lua).
+        var s101 = new S57ToS101Translator().Translate(
+            AreaFeatureWithS57Attributes(84));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("ShorelineConstruction", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+    }
+
+    [Fact]
+    public void Translate_LineMorfac_BecomesShorelineConstruction()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(84));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("ShorelineConstruction", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+    }
+
+    [Fact]
+    public void Translate_AreaMorfac_WithCatmor_DoesNotEmitCategoryOfDolphin()
+    {
+        // A CATMOR on a line/area MORFAC must not leak categoryOfDolphin onto
+        // ShorelineConstruction (which does not bind it); the geometry redirect
+        // drops CATMOR. (No such instance exists in NOAA data, but the mapping
+        // must remain conformant.)
+        var s101 = new S57ToS101Translator().Translate(
+            AreaFeatureWithS57Attributes(84, Attr(40, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("ShorelineConstruction", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.DoesNotContain("categoryOfDolphin", s101.AttributeTypeCatalogue.Values);
     }
 
     // ── CATPRA → categoryOfProductionArea / categoryOfOffshoreProductionArea ──

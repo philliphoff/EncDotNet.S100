@@ -3,6 +3,28 @@ using System.Collections.ObjectModel;
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>
+/// S-57 geometric primitive of a feature instance, used to drive
+/// geometry-conditional feature-class redirects (S-57 Appendix B.1 §3.2:
+/// point / line / area). The numeric values match the S-57 spatial
+/// primitive codes (1 = point, 2 = line/curve, 3 = area/surface).
+/// </summary>
+public enum S57GeometryPrimitive
+{
+    /// <summary>No / unknown primitive (the feature carries no geometry, or
+    /// the primitive is not relevant to the redirect).</summary>
+    None = 0,
+
+    /// <summary>Point primitive (S-57 primitive 1).</summary>
+    Point = 1,
+
+    /// <summary>Line / curve primitive (S-57 primitive 2).</summary>
+    Curve = 2,
+
+    /// <summary>Area / surface primitive (S-57 primitive 3).</summary>
+    Surface = 3,
+}
+
+/// <summary>
 /// Rule describing how an S-57 feature class (object class, OBJL) maps to one
 /// or more S-101 feature classes.
 /// </summary>
@@ -57,22 +79,30 @@ public sealed record S57FeatureRule
 }
 
 /// <summary>
-/// Conditional redirect on an <see cref="S57FeatureRule"/>: when the named
-/// S-57 attribute's value matches one of <see cref="ConditionValues"/>, the
-/// feature is mapped to <see cref="TargetS101Code"/> instead of the rule's
-/// default S-101 code.
+/// Conditional redirect on an <see cref="S57FeatureRule"/>: when the redirect's
+/// conditions are all satisfied, the feature is mapped to
+/// <see cref="TargetS101Code"/> instead of the rule's default S-101 code. A
+/// redirect may test an S-57 attribute (via <see cref="ConditionAttribute"/>),
+/// the feature's geometric primitive (via <see cref="ConditionPrimitives"/>),
+/// or both; when both are present they are combined with logical AND. At least
+/// one condition must be specified.
 /// </summary>
 public sealed record S57FeatureRedirect
 {
-    /// <summary>S-57 attribute acronym used to test the redirect condition.</summary>
-    public required string ConditionAttribute { get; init; }
+    /// <summary>
+    /// S-57 attribute acronym used to test the redirect condition, or
+    /// <c>null</c> for a purely geometry-based redirect (one that fires solely
+    /// on <see cref="ConditionPrimitives"/>).
+    /// </summary>
+    public string? ConditionAttribute { get; init; }
 
     /// <summary>
     /// S-57 attribute values that satisfy the condition. Ignored when
     /// <see cref="ConditionPresent"/> is <c>true</c>; must contain at least
-    /// one value when <see cref="ConditionPresent"/> is <c>false</c> (a
-    /// value-matching redirect with no values can never match and is rejected
-    /// when the mapping is constructed).
+    /// one value when <see cref="ConditionAttribute"/> is set and
+    /// <see cref="ConditionPresent"/> is <c>false</c> (a value-matching
+    /// redirect with no values can never match and is rejected when the
+    /// mapping is constructed).
     /// </summary>
     public IReadOnlyList<string> ConditionValues { get; init; } = [];
 
@@ -84,6 +114,16 @@ public sealed record S57FeatureRedirect
     /// mere presence of the attribute (not its value) selects the target class.
     /// </summary>
     public bool ConditionPresent { get; init; }
+
+    /// <summary>
+    /// Geometric primitives that satisfy the condition. When non-empty, the
+    /// redirect only fires for a feature whose primitive is in this set (in
+    /// addition to any attribute condition). Empty means "any primitive".
+    /// Used where a single S-57 object class splits across S-101 classes by
+    /// geometry — e.g. S-57 <c>MORFAC</c> (point) becomes <c>Dolphin</c> while
+    /// line/area <c>MORFAC</c> becomes <c>ShorelineConstruction</c>.
+    /// </summary>
+    public IReadOnlyList<S57GeometryPrimitive> ConditionPrimitives { get; init; } = [];
 
     /// <summary>Target S-101 Feature Catalogue code when the condition matches.</summary>
     public required string TargetS101Code { get; init; }
@@ -103,6 +143,16 @@ public sealed record S57FeatureRedirect
 /// </summary>
 public sealed record S57AttributeOverride
 {
+    /// <summary>
+    /// When <c>true</c>, the attribute is dropped entirely on features to which
+    /// this override applies, regardless of value. Used when a feature-class
+    /// redirect moves an S-57 attribute's owner to an S-101 class that does not
+    /// bind the attribute's default target — e.g. <c>CATMOR</c> is dropped when
+    /// <c>MORFAC</c> redirects to <c>ShorelineConstruction</c>, which has no
+    /// <c>categoryOfDolphin</c>. Takes precedence over all other members.
+    /// </summary>
+    public bool Drop { get; init; }
+
     /// <summary>
     /// Override S-101 attribute name. <c>null</c> means "keep the default
     /// attribute mapping". Set to a non-null string to redirect the attribute
