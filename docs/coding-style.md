@@ -11,11 +11,13 @@ code is migrated toward it opportunistically.
 > conventions](design/api-conventions.md). For test conventions see
 > [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
-> **Enforcement.** Where a rule below can be checked mechanically it is
-> intended to be encoded in `.editorconfig` / analyzers and enforced in CI
-> (see the tracking issue). Until that encoding lands, treat this document as
-> the source of truth. When the two disagree, the encoded rule wins and this
-> document should be corrected.
+> **Enforcement.** The mechanically-checkable rules below are encoded in the
+> repository [`.editorconfig`](../.editorconfig) and can be checked/applied with
+> `dotnet format`. CI enforcement (`dotnet format --verify-no-changes`) and
+> `EnforceCodeStyleInBuild` are deferred until the existing code is refactored
+> into compliance, so the build stays green in the interim. When this document
+> and the `.editorconfig` disagree, the encoded rule wins and this document
+> should be corrected.
 
 ## 1. Guiding principles
 
