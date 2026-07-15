@@ -48,6 +48,9 @@ public class ExchangeSetServiceLoaderTests
     private static string S411NoProductIdFixture() =>
         Path.Combine(FixturesRoot(), "Synthetic-S411NoProductId");
 
+    private static string FramedFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-Framed");
+
     private sealed class NoopLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
@@ -223,6 +226,58 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(3, progress.Reports[^1].Total);
         Assert.Equal(3, progress.Reports[^1].Completed);
         Assert.Equal(1, progress.Reports[^1].Failed);
+    }
+
+    [Fact]
+    public async Task OpenAsync_FramedFixture_InvokesOnFramingReady_WithUnionBoundingBox()
+    {
+        var (_, service) = CreateSystem();
+        using var _ = service;
+
+        EncDotNet.S100.ExchangeSets.BoundingBox? framed = null;
+        var framedBeforeReturn = false;
+
+        var result = await service.OpenAsync(
+            FramedFixture(),
+            onFramingReady: bbox =>
+            {
+                framed = bbox;
+                framedBeforeReturn = true;
+            });
+
+        // The callback fired with the union of both dataset boxes,
+        // computed up front from catalogue metadata (issue #448).
+        Assert.True(framedBeforeReturn);
+        Assert.NotNull(framed);
+        Assert.Equal(10, framed!.WestBoundLongitude);
+        Assert.Equal(14, framed.EastBoundLongitude);
+        Assert.Equal(48, framed.SouthBoundLatitude);
+        Assert.Equal(52, framed.NorthBoundLatitude);
+
+        // The same union is echoed on the result.
+        Assert.NotNull(result.UnionBoundingBox);
+        Assert.Equal(10, result.UnionBoundingBox!.WestBoundLongitude);
+        Assert.Equal(14, result.UnionBoundingBox.EastBoundLongitude);
+        Assert.Equal(48, result.UnionBoundingBox.SouthBoundLatitude);
+        Assert.Equal(52, result.UnionBoundingBox.NorthBoundLatitude);
+    }
+
+    [Fact]
+    public async Task OpenAsync_MixedFixture_DoesNotInvokeOnFramingReady_WhenNoBoundingBox()
+    {
+        var (_, service) = CreateSystem();
+        using var _ = service;
+
+        var invoked = false;
+
+        var result = await service.OpenAsync(
+            MixedFixture(),
+            onFramingReady: _ => invoked = true);
+
+        // No dataset declares a bounding box, so there is nothing to
+        // frame early; the caller falls back to its debounce path.
+        Assert.False(invoked);
+        Assert.Null(result.UnionBoundingBox);
     }
 
     [Fact]

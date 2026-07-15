@@ -1202,16 +1202,53 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
-            var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token, notification);
+            // Frame the viewport as soon as the service knows the catalogue's
+            // union bounding box — before any dataset finishes loading — so
+            // incremental per-dataset paints appear in the correctly-framed
+            // view instead of off-screen (issue #448). The service resumes on
+            // this UI thread (ConfigureAwait(true)) before invoking the
+            // callback, so we frame inline here; a Dispatcher.Post fallback
+            // covers any off-thread invocation. A flag lets us skip the
+            // redundant end-of-load reframe below.
+            var framedEarly = false;
+            void FrameEarly(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+            {
+                if (MapControl.Map?.Navigator is { } nav)
+                {
+                    ZoomToCatalogueBoundingBox(nav, bbox);
+                    framedEarly = true;
+                }
+            }
+
+            Action<EncDotNet.S100.ExchangeSets.BoundingBox> onFramingReady = bbox =>
+            {
+                if (Dispatcher.UIThread.CheckAccess())
+                {
+                    FrameEarly(bbox);
+                }
+                else
+                {
+                    Dispatcher.UIThread.Invoke(() => FrameEarly(bbox));
+                }
+            };
+
+            var result = await _exchangeSetService.OpenAsync(
+                sourcePath, progress, token, notification, onFramingReady);
             _viewModel.EndExchangeSetLoad(result);
 
-            // Frame the loaded cells. Prefer the catalogue's union bbox when
-            // available — it's ready immediately and matches producer intent.
-            // Otherwise debounce on DatasetLoaded events: zoom once no new
-            // event has arrived for QuietWindowMs. This naturally handles
-            // per-dataset load failures (which never raise the event) without
-            // waiting a fixed timeout.
-            if (result.UnionBoundingBox is { } bbox &&
+            // Frame the loaded cells. If early framing already ran, skip the
+            // reframe: the early and final union bounding boxes are computed
+            // from the same immutable catalogue metadata, so they are identical
+            // and a second zoom would only be a jarring no-op. Otherwise prefer
+            // the catalogue's union bbox when available; failing that, debounce
+            // on DatasetLoaded events (zoom once no new event has arrived for
+            // QuietWindowMs), which naturally handles per-dataset load failures
+            // (which never raise the event) without waiting a fixed timeout.
+            if (framedEarly)
+            {
+                // Already framed up front — nothing to do.
+            }
+            else if (result.UnionBoundingBox is { } bbox &&
                 MapControl.Map?.Navigator is { } nav)
             {
                 ZoomToCatalogueBoundingBox(nav, bbox);
