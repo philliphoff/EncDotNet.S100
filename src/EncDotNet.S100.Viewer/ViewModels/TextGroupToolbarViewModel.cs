@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
@@ -151,11 +152,12 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void RebuildFromLoadedSpecs()
     {
-        // Find the first loaded vector spec that has text layers
+        // Find the first loaded vector spec that has text layers. An S-57 entry
+        // is portrayed as S-101 (SpecConventions), so map before resolving.
         string? matchedSpec = null;
         foreach (var entry in _datasets.Entries)
         {
-            var spec = entry.ProductSpec;
+            var spec = SpecConventions.PortrayalSpecName(entry.ProductSpec);
             if (_catalogueManager.HasCatalogue(spec))
             {
                 try

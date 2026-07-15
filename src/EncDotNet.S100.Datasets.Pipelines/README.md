@@ -63,6 +63,21 @@ the declared edition diverges in a way that may degrade rendering,
 `VersionAssessment.IsWarning` is true and surfaces non-blockingly in
 the CLI (`s100 info` / `render`) and the viewer's dataset list.
 
+### Product identity vs. portrayal spec (issue #450)
+
+`IDatasetProcessor.Spec` is the dataset's **product identity** — what it
+*is* (labels, validation rebadging, examiner links, version assessment).
+`IDatasetProcessor.PortrayalSpec` is the specification whose Feature
+Catalogue, Portrayal Catalogue, and ECDIS display conventions actually
+process and draw it. The two coincide for every native S-100 product and
+diverge only for legacy S-57 cells, which keep identity `S-57` while
+acting as `S-101` (they are translated in-memory and portrayed through the
+S-101 catalogue). The mapping lives in one place — `SpecConventions`
+(`PortrayalSpecFor(SpecRef)` / `PortrayalSpecName(string)`), which the
+default `PortrayalSpec` member delegates to. Callers resolving a catalogue,
+keying viewing-group / display-category state, or selecting a display mode
+must key off `PortrayalSpec`; callers labelling or validating use `Spec`.
+
 ### S-101 sequential updates (S-100 Part 10a)
 
 An S-101 cell may ship as a base (`….000`) plus ordered update files
