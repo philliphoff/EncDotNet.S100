@@ -74,10 +74,13 @@ public sealed class S57TranslationDiagnostics
     /// Number of co-located S-57 sector-light (<c>LIGHTS</c> with
     /// <c>SECTR1</c>/<c>SECTR2</c>) feature records absorbed into a neighbouring
     /// sector light at the same spatial node during the sector-light merge pass.
-    /// Each absorbed record contributes its sector as an additional
-    /// <c>sectorCharacteristics</c> instance on the surviving
-    /// <c>LightSectored</c> feature rather than producing its own feature, so it
-    /// is counted here <em>instead of</em> in <see cref="FeaturesEmitted"/>.
+    /// An absorbed record produces no S-101 feature of its own, so it is counted
+    /// here <em>instead of</em> in <see cref="FeaturesEmitted"/>. It usually adds
+    /// a <c>sectorCharacteristics</c> instance to the surviving
+    /// <c>LightSectored</c> feature, but members with missing or FC-rejected
+    /// <c>LITCHR</c> contribute no instance and have their diverted sector inputs
+    /// dropped to match the single-feature path. This counter therefore reflects
+    /// records absorbed, which may exceed the instances actually added.
     /// </summary>
     public int SectorLightsMerged { get; internal set; }
 
