@@ -192,6 +192,13 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             return;
         }
 
+        // The viewport notifier fires on the UI thread; capture its
+        // synchronisation context so the debounced Evaluate() — which mutates
+        // Mapsui layers, the loader, and DatasetEntry properties (all
+        // UI-thread-affine) — is marshalled back to the UI thread rather than
+        // running on the thread-pool continuation. See issue #458.
+        var uiContext = SynchronizationContext.Current;
+
         CancellationTokenSource newCts;
         lock (_lock)
         {
@@ -210,7 +217,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 if (ReferenceEquals(_debounceCts, newCts))
                     _debounceCts = null;
             }
-            Evaluate(snapshot);
+            if (uiContext is not null)
+                uiContext.Post(_ => { if (!_disposed) Evaluate(snapshot); }, null);
+            else
+                Evaluate(snapshot);
         }, TaskScheduler.Default);
     }
 
@@ -296,16 +306,33 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private async Task PumpLoadAsync(DatasetEntry entry)
     {
         await _gate.WaitAsync().ConfigureAwait(true);
+        var aborted = false;
         try
         {
             await _loadAsync(entry, CancellationToken.None).ConfigureAwait(true);
             lock (_lock)
             {
-                _deferred.Remove(entry);
-                _loading.Remove(entry);
-                _loaded.Touch(entry);
-                _loadedEntries.Add(entry);
-                entry.IsDeferred = false;
+                // If Unregister()/Dispose() ran while this cell was loading, the
+                // entry is no longer tracked in _loading; treat the finished
+                // load as stale rather than re-adding layers for a closed
+                // exchange set (zombie layers) or resurrecting an entry the UI
+                // has already dropped. See issue #458.
+                aborted = _disposed || !_loading.Remove(entry);
+                if (!aborted)
+                {
+                    _deferred.Remove(entry);
+                    _loaded.Touch(entry);
+                    _loadedEntries.Add(entry);
+                    entry.IsDeferred = false;
+                }
+            }
+
+            if (aborted)
+            {
+                // Unwind the just-completed load so its bytes/layers do not
+                // linger after the exchange set was closed.
+                try { _unload(entry); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Lazy-load abort unload threw."); }
             }
         }
         catch (Exception ex)

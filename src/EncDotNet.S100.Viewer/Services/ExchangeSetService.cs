@@ -573,10 +573,10 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 _lazyCoordinator!.Register(entries);
 
                 var registeredMsg = string.Format(
-                    Strings.Status_ExchangeSetLoaded, dispatched,
+                    Strings.Status_ExchangeSetRegistered, dispatched,
                     Notifications.NotificationFormat.ShortenPath(folderOrCataloguePath));
                 var deferredTerminal = new ExchangeSetTerminalInfo(
-                    NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, registeredMsg);
+                    NotificationSeverity.Success, Strings.Toast_ExchangeSetRegistered, registeredMsg);
 
                 if (tracked.Header is { } deferredHeader)
                 {
@@ -592,6 +592,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 {
                     SourcePath = folderOrCataloguePath,
                     Total = cells.Count,
+                    // Deferred path: report the registered-cell count so the
+                    // open is treated as a success (no bytes are dispatched
+                    // yet). See ExchangeSetOpenResult.Loaded and issue #458.
                     Loaded = dispatched,
                     SkippedUnsupported = 0,
                     Cancelled = false,

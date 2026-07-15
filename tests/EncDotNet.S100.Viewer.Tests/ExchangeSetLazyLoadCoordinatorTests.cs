@@ -164,4 +164,42 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
 
         Assert.True(await WaitUntilAsync(() => unloaded.Count >= 1));
     }
+
+    [Fact]
+    public async Task LoadCompletingAfterUnregister_IsUnwound()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var unloaded = new ConcurrentBag<DatasetEntry>();
+
+        // A load delegate that blocks until released, so we can Unregister the
+        // cell mid-flight and prove the finished load is unwound rather than
+        // marked loaded (no zombie layers). See issue #458.
+        var release = new TaskCompletionSource();
+        var started = new TaskCompletionSource();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                started.TrySetResult();
+                await release.Task;
+                loaded.Add(entry);
+            },
+            entry => unloaded.Add(entry),
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+
+        var cell = Cell("US5ZZ", 40, -75, 41, -74);
+        coordinator.Register(new[] { cell });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        // Wait until the load is in-flight, then close the exchange set.
+        Assert.True(await WaitUntilAsync(() => started.Task.IsCompleted));
+        coordinator.Unregister(new[] { cell });
+
+        // Let the (now-stale) load finish.
+        release.SetResult();
+
+        Assert.True(await WaitUntilAsync(() => unloaded.Contains(cell)));
+        Assert.Equal(0, coordinator.LoadedCount);
+    }
 }

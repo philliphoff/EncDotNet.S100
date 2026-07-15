@@ -90,11 +90,19 @@ internal interface IDatasetLoaderService
     /// <see cref="LoadAsync"/>. See issue #458.
     /// </summary>
     /// <remarks>
-    /// Provided as a default interface member (delegates to
-    /// <see cref="RemoveEntry"/>) so existing test doubles need not
-    /// override it; the production loader keeps the entry registered.
+    /// Provided as a default interface member so existing test doubles need
+    /// not override it. A bare interface cannot preserve collection
+    /// membership, so the fallback re-marks the entry
+    /// <see cref="DatasetEntry.IsDeferred"/> (honouring that half of the
+    /// contract) and then removes its layers via <see cref="RemoveEntry"/>;
+    /// the production loader (<c>DatasetLoaderService</c>) overrides this to
+    /// keep the entry registered in the panel.
     /// </remarks>
-    void UnloadEntry(DatasetEntry entry) => RemoveEntry(entry);
+    void UnloadEntry(DatasetEntry entry)
+    {
+        entry.IsDeferred = true;
+        RemoveEntry(entry);
+    }
 
     /// <summary>
     /// Reorders the dataset layers on the map to match the supplied
