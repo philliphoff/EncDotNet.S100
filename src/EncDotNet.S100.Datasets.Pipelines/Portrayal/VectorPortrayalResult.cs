@@ -108,10 +108,11 @@ public sealed class VectorPortrayalResult
     /// <see cref="OutOfBandMinDisplayScale"/> — which is mariner-gated and
     /// applied per-feature to line-work only — this value is left ungated so
     /// the viewer can apply its own <c>IgnoreScaleMinimum</c> gate and clamp
-    /// the <em>whole</em> cell (area fills included). Null when the product
-    /// carries no cell-wide scale (e.g. S-101, which relies on the catalogue).
+    /// the <em>whole</em> cell (area fills included). S-101 populates it from
+    /// the coarsest in-file <c>DataCoverage.minimumDisplayScale</c> (FC §3.1.1);
     /// S-57 populates it from the DSPM compilation scale (CSCL, S-57
-    /// Appendix B.1 §7.3.1.1).
+    /// Appendix B.1 §7.3.1.1). Null when the dataset carries no usable cell-wide
+    /// scale (e.g. no <c>DataCoverage</c> band or no CSCL present).
     /// </summary>
     public int? CellMinimumDisplayScale { get; init; }
 
