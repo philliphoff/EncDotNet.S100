@@ -289,8 +289,8 @@ public static class ExchangeCatalogueReader
             BoundingPolygon = element.Element(xc + "boundingPolygon")?.ToString(),
             MaximumDisplayScale = int.TryParse(maxStr, CultureInfo.InvariantCulture, out var max) ? max : null,
             MinimumDisplayScale = int.TryParse(minStr, CultureInfo.InvariantCulture, out var min) ? min : null,
-            OptimumDisplayScale = int.TryParse(optStr, CultureInfo.InvariantCulture, out var opt) ? min : null,
-            ApproximateGridResolution = float.TryParse(resStr, CultureInfo.InvariantCulture, out var res) ? min : null,
+            OptimumDisplayScale = int.TryParse(optStr, CultureInfo.InvariantCulture, out var opt) ? opt : null,
+            ApproximateGridResolution = float.TryParse(resStr, CultureInfo.InvariantCulture, out var res) ? res : null,
             TemporalExtent = temporalExtent
         };
     }
