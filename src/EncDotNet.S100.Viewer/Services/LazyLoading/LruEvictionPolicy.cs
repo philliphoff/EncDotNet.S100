@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace EncDotNet.S100.Viewer.Services.LazyLoading;
 
@@ -14,8 +13,8 @@ namespace EncDotNet.S100.Viewer.Services.LazyLoading;
 /// <remarks>
 /// <para>
 /// Kept deliberately free of view-model / Mapsui types (keys are opaque) so the
-/// eviction contract is exhaustively unit-testable. The coordinator supplies
-/// <see cref="DatasetEntry"/> instances as keys at runtime. See issue #458.
+/// eviction contract is exhaustively unit-testable. The coordinator supplies its
+/// cell entries as keys at runtime. See issue #458.
 /// </para>
 /// <para>
 /// "Recently used" means "most recently confirmed in-view or loaded". A cell is

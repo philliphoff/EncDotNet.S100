@@ -178,6 +178,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 _deferred.Remove(entry);
                 _loading.Remove(entry);
                 _loaded.Remove(entry);
+                // Keep the LRU mirror in lockstep: leaving the entry in
+                // _loadedEntries would let Evaluate() re-Touch() it back into
+                // the LRU and keep acting on a closed cell. See issue #458.
+                _loadedEntries.Remove(entry);
             }
         }
     }

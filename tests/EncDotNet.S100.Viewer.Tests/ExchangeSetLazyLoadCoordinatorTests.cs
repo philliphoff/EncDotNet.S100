@@ -245,4 +245,30 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         // re-marked the closed cell loaded.
         Assert.Equal(0, coordinator.LoadedCount);
     }
+
+    [Fact]
+    public async Task UnregisterLoadedCell_IsNotReTouchedByLaterEvaluate()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var unloaded = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = Create(notifier, loaded, unloaded);
+
+        var cell = Cell("US5EE", 40, -75, 41, -74);
+        coordinator.Register(new[] { cell });
+
+        // Frame it so it loads and enters the LRU mirror.
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        Assert.True(await WaitUntilAsync(() => coordinator.LoadedCount == 1));
+
+        // Close the exchange set: the entry must be forgotten completely.
+        coordinator.Unregister(new[] { cell });
+        Assert.Equal(0, coordinator.LoadedCount);
+
+        // A later viewport tick that still intersects the (now-unregistered)
+        // footprint must not resurrect it into the LRU.
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        await Task.Delay(50);
+        Assert.Equal(0, coordinator.LoadedCount);
+    }
 }
