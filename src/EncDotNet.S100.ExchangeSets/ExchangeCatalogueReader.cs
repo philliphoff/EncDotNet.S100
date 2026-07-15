@@ -142,9 +142,9 @@ public static class ExchangeCatalogueReader
 
 
         NavigationPurpose? navigationPurpose = null;
-        string? naxPurposeStr = (string?)element.Element(xc + "navigationPurpose");
-        if (naxPurposeStr != null)
-            navigationPurpose = (NavigationPurpose)Enum.Parse(typeof(NavigationPurpose), naxPurposeStr);
+        string? navPurposeStr = (string?)element.Element(xc + "navigationPurpose");
+        if (!string.IsNullOrWhiteSpace(navPurposeStr) && Enum.TryParse<NavigationPurpose>(navPurposeStr, ignoreCase: true, out var parsedNavigationPurpose))
+            navigationPurpose = parsedNavigationPurpose;
         return new DatasetDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
