@@ -1,6 +1,8 @@
 using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Core.Gml;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -81,6 +83,34 @@ public sealed class S128Dataset
         ArgumentNullException.ThrowIfNull(stream);
         return S128DatasetReader.Read(stream);
     }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-128
+    /// dataset at <paramref name="path"/> — its declared specification and
+    /// geographic extent — for phased / deferred loading (issue #460).
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return Open(path).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-128
+    /// dataset from <paramref name="stream"/> (issue #460).
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return Open(stream).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Produces the lightweight <see cref="DatasetMetadata"/> for this parsed
+    /// dataset: declared specification and raw geographic extent (issue #460).
+    /// </summary>
+    public DatasetMetadata ReadMetadata() =>
+        GmlDatasetMetadata.Create("S-128", DeclaredEdition, Features);
 }
 
 /// <summary>

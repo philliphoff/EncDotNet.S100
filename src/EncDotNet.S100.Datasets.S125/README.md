@@ -16,7 +16,7 @@ S-125 supersedes the AtoN (Aids to Navigation) feature classes from S-57 / S-101
 
 Key types:
 
-- **`S125Dataset`** — root model containing parsed features, information types, and dataset identification.
+- **`S125Dataset`** — root model containing parsed features, information types, and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S125Feature`** — a geographic feature with type code, geometry, simple/complex attributes, and information references. Implements `IS100Feature`.
 - **`S125InformationType`** — an information type instance (e.g. `AtonStatusInformation`). Implements `IS100InformationType`.
 - **`S125InformationReference`** — a feature → information-type association captured from `xlink:href` / `informationRef` attributes.

@@ -1,6 +1,4 @@
-using EncDotNet.S100.Core;
-
-namespace EncDotNet.S100.Datasets.Pipelines;
+namespace EncDotNet.S100.Core;
 
 /// <summary>
 /// Resolves the declared product specification of an HDF5 dataset (the root

@@ -58,6 +58,11 @@ Key types:
   information types, and dataset identification. Provides
   `ResolveReferencedFeatures` / `ResolveReferencedInformationTypes`
   helpers for walking xlinks by role name.
+  `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`)
+  is the phased-loading "peek" path (issue #460): it returns a
+  `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded
+  from feature geometry (`null` when the dataset carries only geometry-less
+  container features), skipping the XSLT portrayal pipeline.
 - **`S201Feature`** — a geographic feature with type code, geometry,
   simple/complex attributes, information references, and feature
   references. Implements `IS100Feature`.
