@@ -96,13 +96,21 @@ group paths.
 
 ## Coding style
 
-- Follow existing C# conventions: `PascalCase` for types/methods/properties,
-  `camelCase` for locals and parameters, `_camelCase` for private fields.
+The normative style rules live in the
+[C# coding style guide](docs/coding-style.md) — read it before submitting
+code. In brief:
+
+- `PascalCase` for types/methods/properties, `camelCase` for locals and
+  parameters, `_camelCase` for private fields.
+- File-scoped namespaces, 4-space indents, Allman braces.
 - Nullable reference types are enabled everywhere — avoid `!` suppression;
   prefer null-checks or `ArgumentNullException.ThrowIfNull`.
 - All public APIs must carry XML doc comments (`<summary>`, `<param>`,
   `<returns>`).
 - Only comment code that genuinely needs clarification.
+
+For API-shape conventions (collection return types, `class` vs `record`,
+quantity types) see [API design conventions](docs/design/api-conventions.md).
 
 ## Documentation
 

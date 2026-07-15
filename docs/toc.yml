@@ -18,6 +18,8 @@
   href: typed-data-models.md
 - name: Observability
   href: observability.md
+- name: C# coding style
+  href: coding-style.md
 - name: MCP server
   href: mcp-server.md
 - name: What's new
