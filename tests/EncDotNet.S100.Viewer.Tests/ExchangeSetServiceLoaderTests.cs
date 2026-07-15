@@ -51,6 +51,9 @@ public class ExchangeSetServiceLoaderTests
     private static string FramedFixture() =>
         Path.Combine(FixturesRoot(), "Synthetic-Framed");
 
+    private static string S57FramedFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-S57-Framed");
+
     private sealed class NoopLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
@@ -272,6 +275,40 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(14, result.UnionBoundingBox.EastBoundLongitude);
         Assert.Equal(48, result.UnionBoundingBox.SouthBoundLatitude);
         Assert.Equal(52, result.UnionBoundingBox.NorthBoundLatitude);
+    }
+
+    [Fact]
+    public async Task OpenAsync_S57FramedFixture_InvokesOnFramingReady_WithUnionBoundingBox()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        EncDotNet.S100.ExchangeSets.BoundingBox? framed = null;
+        int? entryCountWhenFramed = null;
+
+        var result = await service.OpenAsync(
+            S57FramedFixture(),
+            onFramingReady: bbox =>
+            {
+                framed = bbox;
+                entryCountWhenFramed = datasets.Entries.Count;
+            });
+
+        Assert.NotNull(framed);
+        Assert.Equal(0, entryCountWhenFramed);
+        Assert.Equal(2, datasets.Entries.Count);
+        Assert.All(datasets.Entries, e => Assert.Equal("S-57", e.ProductSpec));
+
+        Assert.NotNull(result.UnionBoundingBox);
+        Assert.Equal(result.UnionBoundingBox!.WestBoundLongitude, framed!.WestBoundLongitude);
+        Assert.Equal(result.UnionBoundingBox.EastBoundLongitude, framed.EastBoundLongitude);
+        Assert.Equal(result.UnionBoundingBox.SouthBoundLatitude, framed.SouthBoundLatitude);
+        Assert.Equal(result.UnionBoundingBox.NorthBoundLatitude, framed.NorthBoundLatitude);
+
+        Assert.Equal(-123.0, framed.WestBoundLongitude);
+        Assert.Equal(-121.5, framed.EastBoundLongitude);
+        Assert.Equal(47.5, framed.SouthBoundLatitude);
+        Assert.Equal(49.0, framed.NorthBoundLatitude);
     }
 
     [Fact]
