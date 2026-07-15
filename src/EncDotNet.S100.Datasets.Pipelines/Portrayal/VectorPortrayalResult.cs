@@ -101,6 +101,21 @@ public sealed class VectorPortrayalResult
     public int? OutOfBandMinDisplayScale { get; init; }
 
     /// <summary>
+    /// The cell's coarsest (largest-denominator) intended display scale, used
+    /// as the whole-cell zoom-out window when no exchange-set
+    /// <c>CATALOG.XML</c> supplied one (S-101 FC §3.1.1
+    /// <c>DataCoverage.minimumDisplayScale</c>). Unlike
+    /// <see cref="OutOfBandMinDisplayScale"/> — which is mariner-gated and
+    /// applied per-feature to line-work only — this value is left ungated so
+    /// the viewer can apply its own <c>IgnoreScaleMinimum</c> gate and clamp
+    /// the <em>whole</em> cell (area fills included). Null when the product
+    /// carries no cell-wide scale (e.g. S-101, which relies on the catalogue).
+    /// S-57 populates it from the DSPM compilation scale (CSCL, S-57
+    /// Appendix B.1 §7.3.1.1).
+    /// </summary>
+    public int? CellMinimumDisplayScale { get; init; }
+
+    /// <summary>
     /// Optional pre-padded geographic extent (lat / lon) that is used
     /// <em>verbatim</em> as the dataset's extent — taking precedence over the
     /// built layers' union. Products that compute their extent from raw feature

@@ -729,9 +729,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // Mapsui renderer multiplies into a maximum visible resolution and
         // clamps onto the line-work styles. Honour the mariner's
         // IgnoreScaleMinimum override (disables the cap, consistent with SCAMIN).
+        var cellMinimumDisplayScale = ResolveOutOfBandMinDisplayScale(_featureIndex.Values);
         var outOfBandMinDisplayScale = mariner.IgnoreScaleMinimum
             ? (int?)null
-            : ResolveOutOfBandMinDisplayScale(_featureIndex.Values);
+            : cellMinimumDisplayScale;
 
         Console.WriteLine($"[S101-Lua] Prepared {areaInstructions.Count} area + {otherInstructions.Count} non-area instructions");
 
@@ -785,6 +786,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             LayerNames = new[] { "s101.areas", "s101.linework" },
             FeatureTags = featureTags,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
+            CellMinimumDisplayScale = cellMinimumDisplayScale,
         };
     }
 

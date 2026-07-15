@@ -27,6 +27,19 @@ public interface IDatasetProcessor
     SpecRef Spec { get; }
 
     /// <summary>
+    /// The specification whose Feature Catalogue, Portrayal Catalogue, and
+    /// ECDIS display conventions are actually used to process and draw this
+    /// dataset. Equal to <see cref="Spec"/> for every native S-100 product;
+    /// for a legacy S-57 cell (translated in-memory to S-101) this is
+    /// <c>"S-101"</c> while <see cref="Spec"/> stays <c>"S-57"</c>. Callers
+    /// resolving a portrayal / feature catalogue, keying viewing-group or
+    /// display-category state, or selecting a display mode must key off this
+    /// rather than <see cref="Spec"/>; callers labelling, validating, or
+    /// version-assessing the dataset use <see cref="Spec"/>.
+    /// </summary>
+    SpecRef PortrayalSpec => SpecConventions.PortrayalSpecFor(Spec);
+
+    /// <summary>
     /// How the dataset's declared product specification edition
     /// (<see cref="Spec"/>) relates to the version of the catalogue used to
     /// process it, or <c>null</c> when no catalogue self-describes its

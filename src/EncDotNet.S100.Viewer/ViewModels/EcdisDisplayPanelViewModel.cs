@@ -174,9 +174,11 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     private void RebuildSpecs()
     {
-        // Determine which vector specs are currently loaded
+        // Determine which portrayal specs are currently loaded. An S-57 entry
+        // is portrayed as S-101 (SpecConventions), so it shares the single
+        // S-101 control group — map before de-duplicating.
         var loadedSpecs = _datasets.Entries
-            .Select(e => e.ProductSpec)
+            .Select(e => SpecConventions.PortrayalSpecName(e.ProductSpec))
             .Where(s => !CoverageSpecs.Contains(s))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)

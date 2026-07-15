@@ -323,8 +323,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
 
         // S-104 ships a built-in portrayal catalogue.
-        // S-57 datasets are translated to S-101 in-memory and rendered with the S-101 portrayal catalogue.
-        var requiredCatalogue = spec == "S-57" ? "S-101" : spec;
+        // S-57 datasets are portrayed with the S-101 catalogue (see SpecConventions).
+        var requiredCatalogue = SpecConventions.PortrayalSpecName(spec);
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
             _notifications.Create(Strings.Toast_Warning)
@@ -460,7 +460,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
                 // Record the dataset's mercator extent so the panel can zoom to
                 // it (double-click reveal) and the out-of-scale extent indicator
                 // can outline it, even for exchange-set entries that opt out of
@@ -756,7 +756,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
             }
@@ -797,7 +797,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, CancellationToken.None));
 
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
                 entry.Info = result.Info;
             }
             catch (Exception ex)
@@ -1072,8 +1072,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // Thread the explicit per-spec S-100 Part 9 §11.7 display-mode
         // selection (only S-411 declares >1 mode today). Applied generically
         // via a record `with`; a null id leaves the catalogue's default mode
-        // in place (GmlDatasetProcessorBase.ApplyDisplayMode).
-        return ApplyDisplayMode(context, ecdis, processor.Spec.Name);
+        // in place (GmlDatasetProcessorBase.ApplyDisplayMode). Keyed on the
+        // portrayal spec so an S-57 dataset resolves the S-101 selection.
+        return ApplyDisplayMode(context, ecdis, processor.PortrayalSpec.Name);
     }
 
     /// <summary>
@@ -1101,7 +1102,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         DatasetEntry entry,
         IReadOnlyList<ILayer> layers,
         IReadOnlyList<string>? layerKeys,
-        IReadOnlyList<LayerStackEntry>? stackEntries)
+        IReadOnlyList<LayerStackEntry>? stackEntries,
+        int? cellMinimumDisplayScale = null)
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
 
@@ -1133,7 +1135,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // so finer nested cells drop out first as the viewport zooms out,
         // leaving the coarser cell underneath. Re-applied on every render
         // because each build produces fresh ILayer instances.
-        ApplyCellScaleWindow(entry, layers);
+        ApplyCellScaleWindow(entry, layers, cellMinimumDisplayScale);
 
         // Subscribe lazily on first ReplaceLayers so that property
         // changes raised by the UI propagate to the live ILayer
@@ -1171,14 +1173,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// cell at all zooms. Toggling the setting re-renders (which calls back
     /// into <see cref="ReplaceLayers"/>), so the window is re-evaluated.
     /// </summary>
-    private void ApplyCellScaleWindow(DatasetEntry entry, IReadOnlyList<ILayer> layers)
+    private void ApplyCellScaleWindow(
+        DatasetEntry entry,
+        IReadOnlyList<ILayer> layers,
+        int? cellMinimumDisplayScale = null)
     {
         // Default to "never disappears" until we confirm a window was applied.
         entry.ContentMaxVisibleResolution = null;
 
         if (layers.Count == 0)
             return;
-        if (entry.MinimumDisplayScale is not int minimumDisplayScale)
+        // Prefer the exchange-set catalogue value (DatasetEntry.MinimumDisplayScale);
+        // otherwise fall back to the scale the processor derived from the
+        // dataset's own content (S-101 in-file DataCoverage.minimumDisplayScale,
+        // S-57 DSPM compilation scale). This makes a standalone-loaded cell hide
+        // when zoomed out just as it would when loaded from an exchange set.
+        if ((entry.MinimumDisplayScale ?? cellMinimumDisplayScale) is not int minimumDisplayScale)
             return;
         if (_marinerSettings.Current.IgnoreScaleMinimum)
             return;
