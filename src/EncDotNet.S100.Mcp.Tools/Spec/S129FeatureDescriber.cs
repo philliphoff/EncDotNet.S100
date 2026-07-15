@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S129;
@@ -117,7 +116,7 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
             context.Dataset.Spec,
             featureTypeName,
             attributes,
-            ImmutableArray<FeatureReference>.Empty));
+            []));
 
     private static JsonElement SerializePlan(S129UkcPlanMetadata plan, S129UnderKeelClearancePlan typed)
     {
@@ -156,9 +155,9 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
             ["externalReferences"] = externalReferences,
             ["counts"] = new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                ["controlPoints"] = typed.ControlPoints.Length,
-                ["nonNavigableAreas"] = typed.NonNavigableAreas.Length,
-                ["almostNonNavigableAreas"] = typed.AlmostNonNavigableAreas.Length,
+                ["controlPoints"] = typed.ControlPoints.Count,
+                ["nonNavigableAreas"] = typed.NonNavigableAreas.Count,
+                ["almostNonNavigableAreas"] = typed.AlmostNonNavigableAreas.Count,
             },
             ["extraAttributes"] = plan.ExtraAttributes,
         };
@@ -170,10 +169,10 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
         string featureType,
         string id,
         S129GeometryKind kind,
-        ImmutableArray<GeoPosition> exterior,
-        ImmutableArray<ImmutableArray<GeoPosition>> interior,
+        IReadOnlyList<GeoPosition> exterior,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interior,
         int? scaleMinimum,
-        ImmutableDictionary<string, string> extraAttributes)
+        IReadOnlyDictionary<string, string> extraAttributes)
     {
         var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
         {

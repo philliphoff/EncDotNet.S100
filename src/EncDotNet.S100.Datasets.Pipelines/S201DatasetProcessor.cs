@@ -112,7 +112,7 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
 
     /// <inheritdoc />
     protected override string BuildInfoSuffix() =>
-        $"Information types: {_dataset.InformationTypes.Length}";
+        $"Information types: {_dataset.InformationTypes.Count}";
 
     /// <inheritdoc />
     public override ValidationReport? Validate()

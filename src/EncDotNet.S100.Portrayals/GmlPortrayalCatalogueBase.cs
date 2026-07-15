@@ -221,7 +221,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <param name="ruleName">The rule identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The compiled XSLT transform.</returns>
-    /// <exception cref="KeyNotFoundException">No such rule in the catalogue.</exception>
+    /// <exception cref="PortrayalAssetNotFoundException">No such rule in the catalogue.</exception>
     public virtual async ValueTask<XslCompiledTransform> GetCompiledRuleAsync(string ruleName, CancellationToken cancellationToken = default)
     {
         if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached))
@@ -233,7 +233,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.Xslt);
         var ruleFile = _provider.Catalogue.RuleFiles
             .FirstOrDefault(r => r.Id.Equals(ruleName, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Rule '{ruleName}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.Rule, ruleName);
 
         var transform = await LoadXsltRuleAsync(ruleFile, cancellationToken).ConfigureAwait(false);
         _cache.CompiledXslt[ruleName] = transform;
@@ -360,7 +360,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// Returns the SVG symbol with the given name, loading and caching it
     /// on first access.
     /// </summary>
-    /// <exception cref="KeyNotFoundException">No such symbol in the catalogue.</exception>
+    /// <exception cref="PortrayalAssetNotFoundException">No such symbol in the catalogue.</exception>
     public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default)
     {
         if (_cache.Symbols.TryGetValue(symbolName, out var cached))
@@ -377,7 +377,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.Svg);
         var catalogItem = _provider.Catalogue.Symbols
             .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Symbol '{symbolName}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.Symbol, symbolName);
 
         using var stream = await _provider.FetchAssetAsync(catalogItem, "Symbols", cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
@@ -399,7 +399,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// Returns the line style with the given name, loading and caching it
     /// on first access.
     /// </summary>
-    /// <exception cref="KeyNotFoundException">No such line style in the catalogue.</exception>
+    /// <exception cref="PortrayalAssetNotFoundException">No such line style in the catalogue.</exception>
     public ValueTask<LineStyle> GetLineStyleAsync(string name, CancellationToken cancellationToken = default)
     {
         if (_cache.LineStyles.TryGetValue(name, out var cached))
@@ -416,7 +416,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.LineStyle);
         var catalogItem = _provider.Catalogue.LineStyles
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Line style '{name}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.LineStyle, name);
 
         using var stream = await _provider.FetchAssetAsync(catalogItem, "LineStyles", cancellationToken).ConfigureAwait(false);
         var style = LineStyleReader.Read(stream, name);
@@ -431,7 +431,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// Returns the area fill with the given name, loading and caching it
     /// on first access.
     /// </summary>
-    /// <exception cref="KeyNotFoundException">No such area fill in the catalogue.</exception>
+    /// <exception cref="PortrayalAssetNotFoundException">No such area fill in the catalogue.</exception>
     public ValueTask<AreaFill> GetAreaFillAsync(string name, CancellationToken cancellationToken = default)
     {
         if (_cache.AreaFills.TryGetValue(name, out var cached))
@@ -448,7 +448,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.AreaFill);
         var catalogItem = _provider.Catalogue.AreaFills
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Area fill '{name}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.AreaFill, name);
 
         using var stream = await _provider.FetchAssetAsync(catalogItem, "AreaFills", cancellationToken).ConfigureAwait(false);
         var fill = AreaFillReader.Read(stream, name);

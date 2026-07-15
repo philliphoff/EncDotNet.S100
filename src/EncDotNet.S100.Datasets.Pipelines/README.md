@@ -39,7 +39,10 @@ enumerating features, and validating:
 
 `DatasetPipelineFactory` discriminates an input file by extension,
 HDF5 signature, or GML application namespace and returns the matching
-processor wrapped in an `IDatasetProcessor`. `ExchangeSetLoader`
+processor wrapped in an `IDatasetProcessor`. Its source-based GML sniff
+is also available through `DetectProductSpecFromSourceAsync(...)` for
+exchange-set callers whose catalogue metadata omits a machine-readable
+product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
@@ -59,6 +62,21 @@ targets, so the supported edition must be asserted in code). When
 the declared edition diverges in a way that may degrade rendering,
 `VersionAssessment.IsWarning` is true and surfaces non-blockingly in
 the CLI (`s100 info` / `render`) and the viewer's dataset list.
+
+### Product identity vs. portrayal spec (issue #450)
+
+`IDatasetProcessor.Spec` is the dataset's **product identity** — what it
+*is* (labels, validation rebadging, examiner links, version assessment).
+`IDatasetProcessor.PortrayalSpec` is the specification whose Feature
+Catalogue, Portrayal Catalogue, and ECDIS display conventions actually
+process and draw it. The two coincide for every native S-100 product and
+diverge only for legacy S-57 cells, which keep identity `S-57` while
+acting as `S-101` (they are translated in-memory and portrayed through the
+S-101 catalogue). The mapping lives in one place — `SpecConventions`
+(`PortrayalSpecFor(SpecRef)` / `PortrayalSpecName(string)`), which the
+default `PortrayalSpec` member delegates to. Callers resolving a catalogue,
+keying viewing-group / display-category state, or selecting a display mode
+must key off `PortrayalSpec`; callers labelling or validating use `Spec`.
 
 ### S-101 sequential updates (S-100 Part 10a)
 
@@ -228,15 +246,30 @@ needing to know the spec-specific rule namespaces.
 
 ## S-98 interoperability
 
-`Interoperability/` houses the S-98 inter-product plumbing
+`Interoperability/` houses the renderer-neutral S-98 inter-product plumbing
 (`InteroperabilityAuthority`, `LayerStackBuilder`, `S98RuleContext`,
-`S98DefaultRules`, plus the load-order `LoadOrderInteroperabilityAuthority`
-fallback). The authority assigns each layer a display plane (Under
-Radar / Standard / Over Radar / Dynamic Arrows) and a within-plane
-priority, then evaluates a set of inter-product rules (R-101-102,
-R-101-124, R-104, R-111) to drop or transform layers that other
-loaded products supersede. The viewer consumes the resulting
-ordered `LayerStackEntry` list to compose its paint stack.
+`S98DefaultRules`, `S98SuppressionPolicy`, plus the load-order
+`LoadOrderInteroperabilityAuthority` fallback). The engine operates on
+Mapsui-free `SubLayerStackItem` / `StackPayload` values: the authority assigns
+each sub-layer a display plane (Under Radar / Standard / Over Radar / Dynamic
+Arrows) and a within-plane priority, then evaluates a set of inter-product
+rules (R-101-102, R-101-124, R-104, R-111) to drop or transform sub-layers that
+other loaded products supersede. Suppression filters encoding-neutral
+`DrawingInstruction`s (matched to their `VectorFeatureTag`) rather than Mapsui
+`IFeature`s, so the *same* decision drives both renderers.
+
+Two consumers share this single source of truth:
+
+- The **Mapsui viewer** re-platforms onto it — `DatasetLoaderService` sorts and
+  suppresses `SubLayerStackItem`s, then maps the ruled items back to prebuilt
+  `ILayer`s.
+- The **headless `HeadlessCompositor`** (top-level namespace) drives the same
+  engine and lowers each ordered vector / coverage sub-layer into a Skia
+  `CompositeLayer`, painting all datasets against one shared viewport with no
+  Mapsui dependency — reproducing the viewer's cross-dataset draw order and
+  depth suppression (e.g. the S-101-under-S-102 interleave, S-98 Annex A
+  §A-6.9.1). The `EncDotNet.S100` facade's `IReadOnlyList<S100Layer>` overload
+  is the public on-ramp.
 
 See [`docs/design/s98-interoperability.md`](../../docs/design/s98-interoperability.md)
 for the full design rationale.
@@ -247,6 +280,17 @@ for the full design rationale.
   `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
   blocks for the per-processor `Render` / `GetFeatureInfo` /
   `GetCoverageInfo` paths.
+- `IceEggCode` / `IceEggCodeBuilder` — a render-ready projection of an
+  S-411 sea-ice / lake-ice feature's WMO / SIGRID-3 "egg code"
+  (S-411 Ed 1.2.1 Annex A). `IceEggCodeBuilder.Build` assembles the
+  total concentration (`iceact`), up to three in-oval ice types
+  (partial concentration `iceapc`, stage of development `icesod`, form
+  of ice `iceflz`), and the thinner fourth / fifth ice classes flanked
+  *outside* the oval (Cd/Ce, Sd/Se, Fd/Fe) plus snow depth as a caption.
+  `S411DatasetProcessor` surfaces it on `FeatureInfo.EggCode` and
+  enriches each cell with its Feature-Catalogue enumeration definition
+  (via `FeatureCatalogueDecoder.ResolveListedValueDefinition`) so the
+  pick report can show the prose meaning on hover.
 - `ExternalTextFileResolver` — resolves the textual content of external
   files named by S-100 `fileReference` attributes (S-101 FC; alias
   `TXTDSC` / `NTXTDS`, e.g. on Caution Area, Tidal Stream Panel Data)

@@ -57,12 +57,6 @@
       name / description for that spec.
     -->
     <EmbeddedResource Include="Resources\EcdisLabels\*.labels.json" />
-    <!--
-      Bundled offline basemap (issue #295): Natural Earth 1:10m land
-      polygons, simplified to ~8% so the embedded GeoJSON stays small.
-      Public domain (Natural Earth); rendered as the Offline basemap.
-    -->
-    <EmbeddedResource Include="Assets\Basemap\ne_10m_land.geojson" />
   </ItemGroup>
 
   <ItemGroup>

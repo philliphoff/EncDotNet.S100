@@ -28,11 +28,12 @@ public sealed class S57RenderingTests
         });
 
         // S-57 is translated in-memory to S-101 and rendered through the full
-        // portrayal stack. The committed baseline was baked on win-x64. Measured
-        // differences vs that baseline are confined to the anti-aliased fringe of
-        // thin vector strokes (depth-contour lines and the diagonal
-        // quality-of-data hatching) — geometry, colour, and symbology are
-        // identical, and the worst per-channel delta is a partial-coverage ~47.
+        // portrayal stack. The committed baseline is the deterministic
+        // osx-arm64 render (the only byte-identical leg; see below). It was
+        // re-baked once CATZOC began mapping to the QualityOfBathymetricData
+        // `zoneOfConfidence` complex, which replaces the earlier fallback
+        // quality-of-data hatch with the proper zone-of-confidence symbology —
+        // a legitimate portrayal improvement, not a rendering regression.
         //
         // The render is BIMODAL on every non-macOS leg. #224 (NoDependencies
         // SkiaSharp native + embedded font) put all non-macOS legs onto a native

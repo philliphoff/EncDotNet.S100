@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
@@ -13,40 +14,40 @@ public class IdentifyFeaturesToolTests
         Id = id,
         FeatureType = type,
         GeometryType = S100GeometryType.Point,
-        Points = ImmutableArray.Create((lat, lon)),
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        Points = [new GeoPosition(lat, lon)],
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
-    private static S124Feature Curve(string id, params (double Lat, double Lon)[] vertices) => new()
+    private static S124Feature Curve(string id, params GeoPosition[] vertices) => new()
     {
         Id = id,
         FeatureType = "Fairway",
         GeometryType = S100GeometryType.Curve,
-        Curves = ImmutableArray.Create(vertices.ToImmutableArray()),
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        Curves = [vertices.ToArray()],
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
-    private static S124Feature Square(string id, double half, params ImmutableArray<(double Lat, double Lon)>[] holes)
+    private static S124Feature Square(string id, double half, params IReadOnlyList<GeoPosition>[] holes)
     {
-        var ring = ImmutableArray.Create<(double, double)>(
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half));
+        IReadOnlyList<GeoPosition> ring = [
+            new GeoPosition(-half, -half), new GeoPosition(-half, half), new GeoPosition(half, half), new GeoPosition(half, -half), new GeoPosition(-half, -half)];
         return new S124Feature
         {
             Id = id,
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
             ExteriorRing = ring,
-            InteriorRings = holes.ToImmutableArray(),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            InteriorRings = holes.ToArray(),
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
-    private static ImmutableArray<(double Lat, double Lon)> Hole(double half) =>
-        ImmutableArray.Create<(double, double)>(
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half));
+    private static IReadOnlyList<GeoPosition> Hole(double half) =>
+        [
+            new GeoPosition(-half, -half), new GeoPosition(-half, half), new GeoPosition(half, half), new GeoPosition(half, -half), new GeoPosition(-half, -half)];
 
     [Fact]
     public async Task Ranks_point_before_curve_before_smaller_then_larger_area()
@@ -55,7 +56,7 @@ public class IdentifyFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(
             Square("big", 0.9),
             Square("small", 0.1),
-            Curve("curve", (0.0, 0.0), (0.0, 0.5)),
+            Curve("curve", new GeoPosition(0.0, 0.0), new GeoPosition(0.0, 0.5)),
             Point("pt", 0.0, 0.0))));
         var tool = new IdentifyFeaturesTool(catalog);
 
@@ -125,7 +126,7 @@ public class IdentifyFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc", S101Synth.DatasetWithPointFeatures(
             "enc",
             new (uint, ushort, double, double)[] { (100u, 75, 0.0, 0.0) },
-            new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToImmutableDictionary())));
+            new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToDictionary())));
         var tool = new IdentifyFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(
@@ -144,7 +145,7 @@ public class IdentifyFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc", S101Synth.DatasetWithPointFeatures(
             "enc",
             new (uint, ushort, double, double)[] { (100u, 75, 0.0, 0.0) },
-            new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToImmutableDictionary())));
+            new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToDictionary())));
         var tool = new IdentifyFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0));

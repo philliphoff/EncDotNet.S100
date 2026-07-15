@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Scripting;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
@@ -67,18 +67,18 @@ public class S101LuaDataProviderTraceTests
                 CoordinateMultiplicationFactorY = 10_000_000,
                 CoordinateMultiplicationFactorZ = 10,
             },
-            FeatureTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            AttributeTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            Points = ImmutableDictionary<uint, S101PointRecord>.Empty,
-            CurveSegments = ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
-            CompositeCurves = ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
-            Features = ImmutableArray<S101FeatureRecord>.Empty,
-            InformationTypes = ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = [],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
 
         var featureCatalogue = new FeatureCatalogue

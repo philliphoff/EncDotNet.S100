@@ -49,7 +49,7 @@ public class FindAtToolTests
         var result = await tool.InvokeAsync(new FindAtRequest(Latitude: 5.5, Longitude: 5.5));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(3, value.Datasets.Length);
+        Assert.Equal(3, value.Datasets.Count);
         Assert.Equal(new[] { "a", "b", "c" }, value.Datasets.Select(d => d.Id.Value).ToArray());
     }
 
@@ -146,7 +146,7 @@ public class FindAtToolTests
 
         var page0 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 0, PageSize: 3));
         Assert.True(page0.TryGetValue(out var v0));
-        Assert.Equal(3, v0.Datasets.Length);
+        Assert.Equal(3, v0.Datasets.Count);
         Assert.True(v0.HasMore);
         Assert.Equal(7, v0.TotalCount);
 

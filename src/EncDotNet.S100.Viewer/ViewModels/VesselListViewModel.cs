@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -346,7 +347,7 @@ internal sealed class VesselListViewModel : ViewModelBase
     {
         var features = _ais?.CurrentFeatures.ToArray() ?? Array.Empty<DynamicFeature>();
         var ownFeature = ResolveOwnShipFeature();
-        var own = ownFeature is { } f ? (f.Coordinates[0].Latitude, f.Coordinates[0].Longitude) : ((double, double)?)null;
+        var own = ownFeature is { } f ? f.Coordinates[0] : (GeoPosition?)null;
 
         // When the own-ship overlay is on it is the reference point for
         // both range/bearing and list ordering. When it is off, fall back
@@ -512,7 +513,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         item.ShipTypeClass = AisShipTypeClass.Unknown;
         item.ShipTypeText = string.Empty;
 
-        var sogKn = ownFeature.Motion?.SpeedOverGroundKn;
+        var sogKn = ownFeature.Motion?.SpeedOverGround?.TotalKnots;
         UpdateMotion(item, ownFeature, sogKn);
         UpdateOwnShipHelmLabel(item);
 
@@ -586,8 +587,8 @@ internal sealed class VesselListViewModel : ViewModelBase
         DynamicFeature feature,
         double lat,
         double lon,
-        (double Latitude, double Longitude)? own,
-        (double Latitude, double Longitude)? sortOrigin)
+        GeoPosition? own,
+        GeoPosition? sortOrigin)
     {
         item.Latitude = lat;
         item.Longitude = lon;
@@ -600,7 +601,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         item.ShipTypeText = ResolveShipType(item.ShipTypeClass);
 
         var navStatus = GetAttribute<AisNavigationStatus>(feature, "navigationStatus");
-        var sogKn = feature.Motion?.SpeedOverGroundKn;
+        var sogKn = feature.Motion?.SpeedOverGround?.TotalKnots;
         item.StateText = ResolveState(navStatus, sogKn);
         item.HeaderSubtitle = string.Format(
             CultureInfo.CurrentCulture,
@@ -639,13 +640,13 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     private static void UpdateMotion(VesselListItem item, DynamicFeature feature, double? sogKn)
     {
-        var heading = feature.Motion?.HeadingDeg;
+        var heading = feature.Motion?.Heading?.TotalDegrees;
         item.HasHeading = heading is { } h && !double.IsNaN(h);
         item.HeadingText = item.HasHeading
             ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_BearingFormat, NormaliseDegrees(heading!.Value))
             : null;
 
-        var course = feature.Motion?.CourseOverGroundDeg;
+        var course = feature.Motion?.CourseOverGround?.TotalDegrees;
         item.HasCourse = course is { } c && !double.IsNaN(c);
         item.CourseText = item.HasCourse
             ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_BearingFormat, NormaliseDegrees(course!.Value))
@@ -711,7 +712,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         VesselListItem item,
         double lat,
         double lon,
-        (double Latitude, double Longitude)? own)
+        GeoPosition? own)
     {
         if (own is { } ownPos)
         {

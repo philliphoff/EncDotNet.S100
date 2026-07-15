@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Diagnostics;
 using System.Globalization;
 using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
@@ -867,7 +868,7 @@ public sealed class MapsuiDisplayListRenderer
             : new Polygon(shell, holes.ToArray());
     }
 
-    private static LinearRing? BuildLinearRing(IReadOnlyList<(double Latitude, double Longitude)> coords)
+    private static LinearRing? BuildLinearRing(IReadOnlyList<GeoPosition> coords)
     {
         if (coords.Count < 3)
             return null;
@@ -884,7 +885,7 @@ public sealed class MapsuiDisplayListRenderer
         return new LinearRing(projected.ToArray());
     }
 
-    private static List<Coordinate> ProjectCoordinates(IReadOnlyList<(double Latitude, double Longitude)> coords)
+    private static List<Coordinate> ProjectCoordinates(IReadOnlyList<GeoPosition> coords)
     {
         var result = new List<Coordinate>(coords.Count);
         foreach (var (lat, lon) in coords)

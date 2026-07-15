@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -283,7 +282,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             extent.SouthLatitude,
             extent.NorthLatitude,
             widthPixels,
-            heightPixels);
+            heightPixels,
+            context?.Basemap ?? BasemapKind.None);
     }
 
     // ---- dcf8 station series rendering ---------------------------------
@@ -780,7 +780,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         return new ValidationReport(
-            ImmutableArray.Create(finding),
+            [finding],
             RulesEvaluated: 1,
             RulesWithFindings: 1);
     }
@@ -801,7 +801,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         return new ValidationReport(
-            ImmutableArray.Create(finding),
+            [finding],
             RulesEvaluated: 1,
             RulesWithFindings: 1);
     }
@@ -826,7 +826,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         return new ValidationReport(
-            ImmutableArray.Create(finding),
+            [finding],
             RulesEvaluated: 1,
             RulesWithFindings: 1);
     }

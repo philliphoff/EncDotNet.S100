@@ -35,6 +35,13 @@ internal sealed class PickHit
     /// </summary>
     public StationTimeSeriesViewModel? StationSeries { get; init; }
 
+    /// <summary>
+    /// WMO / SIGRID-3 ice egg-code projection for the hit when it is an S-411
+    /// sea-ice / lake-ice feature; <c>null</c> for every other feature shape.
+    /// When set, the pick panel renders an egg-code diagram section.
+    /// </summary>
+    public IceEggCode? EggCode { get; init; }
+
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];
 

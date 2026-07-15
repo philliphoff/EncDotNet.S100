@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S57.ExchangeSets;
 
@@ -35,7 +34,7 @@ public sealed class S57ExchangeSetCell
     /// normalised to the current platform's directory separator. Empty when the
     /// cell has no updates in this exchange set.
     /// </summary>
-    public required ImmutableArray<string> UpdateRelativePaths { get; init; }
+    public required IReadOnlyList<string> UpdateRelativePaths { get; init; }
 
     /// <summary>
     /// The cell's geographic extent (EPSG:4326) from the catalogue's
@@ -189,7 +188,7 @@ public static class S57ExchangeSetCatalog
             var updates = entries
                 .Where(e => e.Update > 0)
                 .Select(e => Normalise(e.Entry.FileName))
-                .ToImmutableArray();
+                .ToArray();
 
             cells.Add(new S57ExchangeSetCell
             {

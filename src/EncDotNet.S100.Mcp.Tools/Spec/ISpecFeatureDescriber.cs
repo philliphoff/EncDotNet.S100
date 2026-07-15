@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 
 namespace EncDotNet.S100.Mcp.Tools.Spec;
@@ -21,7 +20,7 @@ namespace EncDotNet.S100.Mcp.Tools.Spec;
 internal sealed record FeatureDescriberContext(
     LoadedDataset Dataset,
     string FeatureId,
-    ImmutableArray<LoadedDataset> Snapshot,
+    IReadOnlyList<LoadedDataset> Snapshot,
     AttributeUnitResolver? Units = null);
 
 /// <summary>Per-spec describer strategy.</summary>

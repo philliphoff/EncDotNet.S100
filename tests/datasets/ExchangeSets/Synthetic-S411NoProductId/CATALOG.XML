@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic exchange-set catalogue reproducing the real-world JCOMM S-411
+  (Canadian Ice Service) shape: the dataset's <productSpecification> carries
+  only a human-readable <name> ("Ice Information Product Specification
+  (JCOMM S-411)") with NO <productIdentifier> and NO number. Consequently
+  DatasetPipelineFactory.MapProductSpecificationToSpec cannot resolve the
+  spec, and the loader must fall back to content-sniffing the GML root
+  element (<ice:IceDataSet>) to recognise it as S-411.
+
+  Unlike the other fixtures in this folder, the referenced dataset file
+  (S-411/ice.gml) IS shipped, because the content-sniff fallback reads its
+  bytes during dispatch (independent of the NoopLoader used by the tests).
+-->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc/5.0"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>SYNTH_S411_NOPRODUCTID_v1</S100XC:identifier>
+    <S100XC:dateTime>2026-06-29T18:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>Synthetic Ice Service</gco:CharacterString>
+    </S100XC:organization>
+  </S100XC:contact>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-411/ice.gml</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-06-29</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>Ice Information Product Specification (JCOMM S-411)</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>1.1.0</gco:CharacterString></S100XC:version>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

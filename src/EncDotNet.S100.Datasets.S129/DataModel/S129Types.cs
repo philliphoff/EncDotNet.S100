@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S129.DataModel;
@@ -128,8 +128,8 @@ public sealed class S129UkcPlanMetadata
     public string? UnderKeelClearanceCalculationRequested { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -146,16 +146,16 @@ public sealed class S129UkcPlanArea
     public S129GeometryKind GeometryKind { get; init; }
 
     /// <summary>The exterior-ring coordinates of the plan area.</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } =
-        ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } =
+        [];
 
     /// <summary>Interior-ring coordinates (holes), if any.</summary>
-    public ImmutableArray<ImmutableArray<GeoPosition>> InteriorRings { get; init; } =
-        ImmutableArray<ImmutableArray<GeoPosition>>.Empty;
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } =
+        [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -176,16 +176,16 @@ public sealed class S129NonNavigableArea
     public S129GeometryKind GeometryKind { get; init; }
 
     /// <summary>Exterior-ring coordinates.</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } =
-        ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } =
+        [];
 
     /// <summary>Interior-ring coordinates (holes), if any.</summary>
-    public ImmutableArray<ImmutableArray<GeoPosition>> InteriorRings { get; init; } =
-        ImmutableArray<ImmutableArray<GeoPosition>>.Empty;
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } =
+        [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -205,16 +205,16 @@ public sealed class S129AlmostNonNavigableArea
     public S129GeometryKind GeometryKind { get; init; }
 
     /// <summary>Exterior-ring coordinates.</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } =
-        ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } =
+        [];
 
     /// <summary>Interior-ring coordinates (holes), if any.</summary>
-    public ImmutableArray<ImmutableArray<GeoPosition>> InteriorRings { get; init; } =
-        ImmutableArray<ImmutableArray<GeoPosition>>.Empty;
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } =
+        [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -259,6 +259,6 @@ public sealed class S129ControlPoint
     public GeoPosition? Position { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

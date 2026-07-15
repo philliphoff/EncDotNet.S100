@@ -96,9 +96,9 @@ public class AisStreamIoJsonTests
         Assert.Equal(123456789u, pr.Mmsi);
         Assert.Equal(37.81234, pr.Latitude);
         Assert.Equal(-122.4321, pr.Longitude);
-        Assert.Null(pr.CourseOverGroundDeg);
-        Assert.Null(pr.HeadingDeg);
-        Assert.Null(pr.SpeedOverGroundKn);
+        Assert.Null(pr.CourseOverGround);
+        Assert.Null(pr.Heading);
+        Assert.Null(pr.SpeedOverGround);
         Assert.Null(pr.RateOfTurnDegPerMin);
         Assert.Equal(AisNavigationStatus.Moored, pr.NavigationStatus);
     }
@@ -115,9 +115,9 @@ public class AisStreamIoJsonTests
         """;
 
         var pr = Assert.IsType<AisPositionReport>(AisStreamIoJson.ParseInbound(json));
-        Assert.Equal(90.5, pr.CourseOverGroundDeg);
-        Assert.Equal(92, pr.HeadingDeg);
-        Assert.Equal(12.3, pr.SpeedOverGroundKn);
+        Assert.Equal(90.5, pr.CourseOverGround?.TotalDegrees);
+        Assert.Equal(92.0, pr.Heading?.TotalDegrees);
+        Assert.Equal(12.3, pr.SpeedOverGround?.TotalKnots);
     }
 
     [Fact]

@@ -62,6 +62,13 @@ public static class HeadlessVectorRenderer
     /// extent. The auto-fitted viewport is computed from the filtered scene,
     /// matching what the user actually sees.
     /// </param>
+    /// <param name="basemap">
+    /// Optional basemap drawn <em>beneath</em> the dataset (issue #411). When
+    /// <see cref="BasemapKind.Offline"/>, the bundled Natural Earth land layer
+    /// (<see cref="NaturalEarthBasemap.LandScene"/>) is painted first, against
+    /// the same auto-fitted viewport, so it registers exactly with the chart.
+    /// Defaults to <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     public static SKBitmap Render(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -75,12 +82,86 @@ public static class HeadlessVectorRenderer
         int heightPixels,
         RgbaColor background,
         Func<string, AreaFill?>? areaFillProvider = null,
-        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
+        BasemapKind basemap = BasemapKind.None)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+
+        if (hiddenCategories != DrawingInstructionCategory.None)
+            instructions = FilterInstructions(instructions, hiddenCategories);
+
+        var scene = BuildScene(
+            instructions,
+            geometryProvider,
+            palette,
+            symbolProvider,
+            lineStyleProvider,
+            symbolScale,
+            textScale,
+            areaFillProvider);
+        var viewport = FitViewport(scene, widthPixels, heightPixels);
+
+        if (basemap == BasemapKind.Offline)
+        {
+            // Paint the land basemap under the dataset against the SAME fitted
+            // viewport so the two register exactly. The compositor clears the
+            // background once, then draws each transparent layer bottom-first.
+            var compositeRenderer = new HeadlessCompositeRenderer { Background = background };
+            var layers = new CompositeLayer[]
+            {
+                new VectorCompositeLayer(NaturalEarthBasemap.LandScene, honorScaleVisibility: false),
+                new VectorCompositeLayer(scene, honorScaleVisibility: false),
+            };
+            return compositeRenderer.Render(viewport, layers);
+        }
+
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = background,
+            HonorScaleVisibility = false,
+        };
+        return renderer.Render(scene, viewport);
+    }
+
+    /// <summary>
+    /// Lowers a Part 9 display list into a resolved <see cref="VectorScene"/>
+    /// (EPSG:3857 world geometry with paint state) without rasterising it. This
+    /// is the reusable lowering seam shared by the single-dataset
+    /// <see cref="Render"/> path and the multi-layer headless compositor, which
+    /// needs the scene to draw it against a <em>shared</em> viewport rather than
+    /// an auto-fitted one.
+    /// </summary>
+    /// <param name="instructions">The Part 9 display list to lower.</param>
+    /// <param name="geometryProvider">Resolves feature geometry referenced by the instructions.</param>
+    /// <param name="palette">Active colour palette for token resolution.</param>
+    /// <param name="symbolProvider">Resolves a symbol name to raw SVG content (pre-processing), or null.</param>
+    /// <param name="lineStyleProvider">Resolves a line-style name to its catalogue definition, or null.</param>
+    /// <param name="symbolScale">Global symbol scale factor.</param>
+    /// <param name="textScale">Global text scale factor.</param>
+    /// <param name="areaFillProvider">Optional resolver for area-fill catalogue entries (tiled patterns).</param>
+    /// <param name="hiddenCategories">
+    /// Drawing-instruction categories (areas, lines, points, text) to omit from
+    /// the lowered scene. Defaults to
+    /// <see cref="DrawingInstructionCategory.None"/> (lower everything). Used by
+    /// the multi-layer compositor to apply a global suppression across layers.
+    /// </param>
+    /// <returns>The resolved vector scene.</returns>
+    public static VectorScene BuildScene(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider,
+        ColorPalette palette,
+        Func<string, string?>? symbolProvider,
+        Func<string, LineStyle?>? lineStyleProvider,
+        double symbolScale,
+        double textScale,
+        Func<string, AreaFill?>? areaFillProvider = null,
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
 
         if (hiddenCategories != DrawingInstructionCategory.None)
             instructions = FilterInstructions(instructions, hiddenCategories);
@@ -97,15 +178,7 @@ public static class HeadlessVectorRenderer
             TextScale = textScale,
         };
 
-        var scene = builder.Build(instructions, geometryProvider);
-        var viewport = FitViewport(scene, widthPixels, heightPixels);
-
-        var renderer = new SkiaDisplayListRenderer
-        {
-            Background = background,
-            HonorScaleVisibility = false,
-        };
-        return renderer.Render(scene, viewport);
+        return builder.Build(instructions, geometryProvider);
     }
 
     /// <summary>
@@ -189,7 +262,7 @@ public static class HeadlessVectorRenderer
     {
         ArgumentNullException.ThrowIfNull(scene);
 
-        if (!TryGetWorldBounds(scene, out double minX, out double minY, out double maxX, out double maxY))
+        if (!TryGetSeamAwareWorldBounds(scene, out double minX, out double minY, out double maxX, out double maxY))
         {
             // No geometry — fall back to a small extent around the origin.
             minX = -1000; minY = -1000; maxX = 1000; maxY = 1000;
@@ -222,13 +295,19 @@ public static class HeadlessVectorRenderer
             minX -= grow; maxX += grow;
         }
 
-        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY);
-        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY);
+        // Lossless (unclamped) inverse for the viewport corners so the renderer
+        // reproduces these exact world bounds (a pole-overhanging edge clamped
+        // to ±85° would drift geometry poleward). See WebMercator.ToLonLat.
+        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY, clampLatitude: false);
 
         // Approximate scale denominator (used only if a caller re-enables
         // culling): mercator metres-per-pixel, corrected to ground metres by
         // cos(midLat), divided by the S-100 standard 0.00028 m/px screen pitch.
-        double midLatRad = (minLat + maxLat) * 0.5 * Math.PI / 180.0;
+        // Clamp the mid-latitude to the display limit so an overhanging edge
+        // cannot drive cos(midLat) to ~0 and blow up the denominator.
+        double midLat = Math.Clamp((minLat + maxLat) * 0.5, -WebMercator.MaxLatitude, WebMercator.MaxLatitude);
+        double midLatRad = midLat * Math.PI / 180.0;
         double groundMetresPerPixel = (maxX - minX) / widthPixels * Math.Cos(midLatRad);
         double denom = groundMetresPerPixel / ScaleVisibility.DenomToResolutionMetres;
 
@@ -245,11 +324,38 @@ public static class HeadlessVectorRenderer
     }
 
     /// <summary>
+    /// Computes a <em>seam-aware</em> EPSG:3857 bounding box for the scene: when
+    /// the geometry straddles the ±180° antimeridian the returned window is
+    /// shifted into a contiguous longitude frame (its <paramref name="maxX"/> may
+    /// exceed +½ <see cref="WebMercator.Circumference"/>), so the fitted viewport
+    /// frames the data on its true extent instead of collapsing to a near-global
+    /// span (issue #413). Delegates the detection to
+    /// <see cref="SeamAwareBoundsAccumulator"/>. Returns <see langword="false"/>
+    /// when the scene has no geometry to bound.
+    /// </summary>
+    public static bool TryGetSeamAwareWorldBounds(
+        VectorScene scene, out double minX, out double minY, out double maxX, out double maxY)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        var accumulator = new SeamAwareBoundsAccumulator();
+        accumulator.AddScene(scene);
+        return accumulator.TryResolve(out minX, out minY, out maxX, out maxY);
+    }
+
+    /// <summary>
     /// Computes the EPSG:3857 bounding box spanning every resolved paint op's
     /// world geometry. Returns <see langword="false"/> when the scene has no
-    /// geometry to bound.
+    /// geometry to bound. Exposed so the multi-layer compositor can union each
+    /// vector layer's projected extent into a shared viewport.
     /// </summary>
-    private static bool TryGetWorldBounds(
+    /// <remarks>
+    /// This is the <em>naive</em> min/max — it does not account for the ±180°
+    /// antimeridian seam. Use <see cref="TryGetSeamAwareWorldBounds"/> (or feed
+    /// the scene to a <see cref="SeamAwareBoundsAccumulator"/>) when fitting an
+    /// auto-viewport so datasets crossing the dateline are framed correctly.
+    /// </remarks>
+    public static bool TryGetWorldBounds(
         VectorScene scene, out double minX, out double minY, out double maxX, out double maxY)
     {
         double loX = double.MaxValue, loY = double.MaxValue;

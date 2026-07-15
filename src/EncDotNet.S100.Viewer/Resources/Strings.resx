@@ -186,6 +186,15 @@
   <data name="Tooltip_RemoveCatalogue" xml:space="preserve">
     <value>Remove this catalogue</value>
   </data>
+  <data name="Tooltip_OpenCatalogueInExaminer" xml:space="preserve">
+    <value>View this catalogue in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+  </data>
+  <data name="Tooltip_OpenFeatureInExaminer" xml:space="preserve">
+    <value>View this feature in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+  </data>
+  <data name="Tooltip_OpenAttributeInExaminer" xml:space="preserve">
+    <value>View this attribute in the S-100 Feature Catalogue eXaminer (opens in browser)</value>
+  </data>
   <data name="Tooltip_RemoveDataset" xml:space="preserve">
     <value>Remove this dataset</value>
   </data>
@@ -708,6 +717,54 @@
     <value>STATION ATTRIBUTES</value>
     <comment>Header for the collapsed attribute Expander shown below a station chart.</comment>
   </data>
+  <data name="Pick_EggCode_Heading" xml:space="preserve">
+    <value>EGG CODE</value>
+    <comment>Section header for the WMO/SIGRID-3 ice egg-code diagram in the S-411 pick report.</comment>
+  </data>
+  <data name="Pick_EggCode_Standard" xml:space="preserve">
+    <value>WMO / SIGRID-3</value>
+    <comment>Standard reference shown on the right of the egg-code section header.</comment>
+  </data>
+  <data name="Pick_EggCode_Description" xml:space="preserve">
+    <value>Standard ice-analysis symbol for this feature's concentration, stage of development and floe size.</value>
+    <comment>One-line description under the egg-code section header.</comment>
+  </data>
+  <data name="Pick_EggCode_OpenWater" xml:space="preserve">
+    <value>Open water / no ice</value>
+    <comment>Caption shown for an egg code with no ice (total concentration 0), where the oval is omitted.</comment>
+  </data>
+  <data name="Pick_EggCode_SnowDepth" xml:space="preserve">
+    <value>Snow {0} cm</value>
+    <comment>Snow depth reported beside the egg; {0} is the depth in centimetres.</comment>
+  </data>
+  <data name="Pick_EggCode_HoverHint" xml:space="preserve">
+    <value>Hover any value in the egg for its definition.</value>
+    <comment>Hint shown below the egg-code diagram.</comment>
+  </data>
+  <data name="Pick_EggCode_HoverLine" xml:space="preserve">
+    <value>{0} — {1}</value>
+    <comment>Hover description line below the egg; {0} is the symbol/value and {1} is its definition.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_TotalConcentration" xml:space="preserve">
+    <value>Total concentration</value>
+    <comment>Hover role label for the top row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_PartialConcentration" xml:space="preserve">
+    <value>Partial concentration</value>
+    <comment>Hover role label for the partial-concentration row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_StageOfDevelopment" xml:space="preserve">
+    <value>Stage of development</value>
+    <comment>Hover role label for the stage-of-development row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_FormOfIce" xml:space="preserve">
+    <value>Form of ice / floe size</value>
+    <comment>Hover role label for the form-of-ice row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_SnowDepth" xml:space="preserve">
+    <value>Snow depth (cm)</value>
+    <comment>Hover role label for snow depth reported beside the egg.</comment>
+  </data>
   <data name="Tooltip_Search" xml:space="preserve">
     <value>Search Features</value>
   </data>
@@ -954,6 +1011,12 @@
   <data name="Tooltip_TilePredictionEnabled" xml:space="preserve">
     <value>Speculatively rasterize tiles a pan or zoom is about to reveal, so newly exposed edges are already cached. Takes effect immediately. Recommended on.</value>
   </data>
+  <data name="Settings_TileCrossBandPrewarmEnabled" xml:space="preserve">
+    <value>Cross-band pre-warm</value>
+  </data>
+  <data name="Tooltip_TileCrossBandPrewarmEnabled" xml:space="preserve">
+    <value>When idle, speculatively rasterize the adjacent zoom levels (±1 band) covering the current view, so a subsequent zoom starts warm. Runs at the lowest priority behind on-screen work. Takes effect immediately. Recommended on.</value>
+  </data>
   <data name="Settings_TileBudgetMb" xml:space="preserve">
     <value>In-memory cache (MB)</value>
   </data>
@@ -1043,6 +1106,12 @@
   </data>
   <data name="Tooltip_BasemapEnabled" xml:space="preserve">
     <value>Choose the basemap drawn beneath the chart: None (water-coloured background), Offline (bundled Natural Earth land, no network), or Online (OpenStreetMap tiles). Offline and None work with zero network access.</value>
+  </data>
+  <data name="Settings_ShowOutOfScaleExtentIndicators" xml:space="preserve">
+    <value>Out-of-scale dataset outlines</value>
+  </data>
+  <data name="Tooltip_ShowOutOfScaleExtentIndicators" xml:space="preserve">
+    <value>When zoomed out past a dataset's display-scale minimum (so it draws nothing), outline its extent with an accent border so you can still see where the data is and zoom toward it. Has no effect when "ignore scale minima" is enabled, since datasets then never drop out on zoom-out.</value>
   </data>
   <data name="Basemap_None" xml:space="preserve">
     <value>None</value>
@@ -1138,6 +1207,14 @@
   </data>
   <data name="Status_S57ExchangeSetNoCells" xml:space="preserve">
     <value>No renderable cells found in the S-57 exchange set {0}.</value>
+  </data>
+  <data name="Status_LooseCellFolderNoCells" xml:space="preserve">
+    <value>No renderable ENC cells found in {0}.</value>
+    <comment>{0} = folder path. Shown when a catalogue-less folder of loose cells yields nothing loadable.</comment>
+  </data>
+  <data name="Status_FolderNoDatasets" xml:space="preserve">
+    <value>No S-100 exchange set or ENC cells found in {0}.</value>
+    <comment>{0} = dropped folder path. Shown when a dropped folder has no catalogue and no loose base cells.</comment>
   </data>
   <data name="Status_ExchangeSetUnsupportedSpec" xml:space="preserve">
     <value>Skipped {0}: unsupported product specification '{1}'.</value>
@@ -1495,6 +1572,56 @@
     <comment>Compact segment label for the All text viewing group.</comment>
   </data>
 
+  <!-- S-411 sea-ice display-mode selector (issue #416) -->
+  <data name="DisplayMode_SectionLabel" xml:space="preserve">
+    <value>Sea ice (S-411)</value>
+    <comment>Section label marking the S-411-specific sea-ice controls in the display-settings overlay; rendered in upper case.</comment>
+  </data>
+  <data name="DisplayMode_SectionDescription" xml:space="preserve">
+    <value>Controls how sea ice concentration, stage of development, and navigational ice are displayed for S-411 datasets.</value>
+    <comment>Explains that the ice display-mode selector is scoped to S-411 datasets only.</comment>
+  </data>
+  <data name="DisplayMode_Header" xml:space="preserve">
+    <value>Ice display mode</value>
+    <comment>Header for the S-411 sea-ice portrayal display-mode selector in the display-settings overlay.</comment>
+  </data>
+  <data name="DisplayMode_Concentration" xml:space="preserve">
+    <value>Concentration</value>
+    <comment>Label for the S-411 total ice-concentration portrayal mode.</comment>
+  </data>
+  <data name="DisplayMode_Concentration_Description" xml:space="preserve">
+    <value>Shade ice by how densely it covers the water</value>
+    <comment>One-line description shown beneath the S-411 concentration display mode.</comment>
+  </data>
+  <data name="DisplayMode_StageOfDevelopment" xml:space="preserve">
+    <value>Stage of development</value>
+    <comment>Label for the S-411 stage-of-development (ice thickness/age) portrayal mode.</comment>
+  </data>
+  <data name="DisplayMode_StageOfDevelopment_Description" xml:space="preserve">
+    <value>Shade ice by age and thickness</value>
+    <comment>One-line description shown beneath the S-411 stage-of-development display mode.</comment>
+  </data>
+  <data name="DisplayMode_Navigational" xml:space="preserve">
+    <value>Navigational ice</value>
+    <comment>Label for the provisional S-411 navigational portrayal mode; the provisional nature is conveyed in its tooltip.</comment>
+  </data>
+  <data name="DisplayMode_Navigational_Description" xml:space="preserve">
+    <value>Highlight ice that is hazardous to transit</value>
+    <comment>One-line description shown beneath the provisional S-411 navigational display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_Concentration" xml:space="preserve">
+    <value>Portray sea ice by total concentration (WMO egg-code concentration ramp).</value>
+    <comment>Tooltip for the S-411 concentration display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_StageOfDevelopment" xml:space="preserve">
+    <value>Portray sea ice by stage of development (WMO egg-code thickness/age ramp).</value>
+    <comment>Tooltip for the S-411 stage-of-development display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_Navigational" xml:space="preserve">
+    <value>Provisional navigational preview derived from total concentration. Not a POLARIS/RIO navigational-risk computation.</value>
+    <comment>Tooltip for the provisional S-411 navigational display mode.</comment>
+  </data>
+
   <!-- Toast notification titles -->
   <data name="Toast_Error" xml:space="preserve">
     <value>Error</value>
@@ -1632,6 +1759,32 @@
   <data name="Toast_McpPortReassignedBody" xml:space="preserve">
     <value>MCP server is now on port {0}. Update your MCP client configuration.</value>
     <comment>{0} = newly-assigned port.</comment>
+  </data>
+
+  <!-- S-100 Feature Catalogue eXaminer links (issue #442) -->
+  <data name="Settings_ExaminerSection" xml:space="preserve">
+    <value>S-100 Feature Catalogue eXaminer</value>
+  </data>
+  <data name="Settings_ExaminerSection_Help" xml:space="preserve">
+    <value>Show links from the Feature Catalogues and Object Information panels that open the picked feature or attribute in the S-100 Feature Catalogue eXaminer website.</value>
+  </data>
+  <data name="Settings_ExaminerEnabled" xml:space="preserve">
+    <value>Show eXaminer links</value>
+  </data>
+  <data name="Settings_ExaminerEnabledTooltip" xml:space="preserve">
+    <value>When on, feature and attribute rows offer a link that opens their definition in the S-100 Feature Catalogue eXaminer. Turn off for offline or restricted deployments.</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrl" xml:space="preserve">
+    <value>eXaminer base URL</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrlTooltip" xml:space="preserve">
+    <value>Base URL of the S-100 Feature Catalogue eXaminer. Change it to point the links at a self-hosted mirror.</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrl_Reset" xml:space="preserve">
+    <value>Reset to default</value>
+  </data>
+  <data name="Settings_ExaminerBaseUrl_ResetTooltip" xml:space="preserve">
+    <value>Restore the default S-100 Feature Catalogue eXaminer URL</value>
   </data>
 
   <!-- Load-failure toast -->

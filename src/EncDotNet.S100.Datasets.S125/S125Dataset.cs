@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S125;
@@ -31,10 +31,10 @@ public sealed class S125Dataset
     public string? DatasetIdentifier { get; init; }
 
     /// <summary>Feature instances contained in the dataset.</summary>
-    public required ImmutableArray<S125Feature> Features { get; init; }
+    public required IReadOnlyList<S125Feature> Features { get; init; }
 
     /// <summary>Information type instances contained in the dataset.</summary>
-    public required ImmutableArray<S125InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<S125InformationType> InformationTypes { get; init; }
 
     /// <summary>Opens an S-125 dataset from a file path.</summary>
     public static S125Dataset Open(string path)
@@ -72,32 +72,30 @@ public sealed class S125Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; init; }
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
-    public required ImmutableArray<S125ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<IS100ComplexAttribute> ComplexAttributes { get; init; }
 
-    /// <inheritdoc/>
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 
     /// <summary>
     /// Information-type association references (e.g. <c>AtoNStatus</c> bindings to
     /// <see cref="S125InformationType"/> instances). Preserved so XSLT portrayal
     /// rules can resolve cross-references.
     /// </summary>
-    public required ImmutableArray<S125InformationReference> InformationReferences { get; init; }
+    public required IReadOnlyList<S125InformationReference> InformationReferences { get; init; }
 
     /// <summary>
     /// Feature-to-feature association references (e.g. the <c>parent</c> role of
@@ -110,8 +108,8 @@ public sealed class S125Feature : IS100Feature
     /// §VirtualAIS, §DangerousFeatureAssociation, §RangeSystem) can resolve
     /// them at projection time.
     /// </summary>
-    public ImmutableArray<S125FeatureReference> FeatureReferences { get; init; } =
-        ImmutableArray<S125FeatureReference>.Empty;
+    public IReadOnlyList<S125FeatureReference> FeatureReferences { get; init; } =
+        [];
 }
 
 /// <summary>
@@ -127,10 +125,10 @@ public sealed class S125InformationType : IS100InformationType
     public required string TypeCode { get; init; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups.</summary>
-    public required ImmutableArray<S125ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S125ComplexAttribute> ComplexAttributes { get; init; }
 }
 
 /// <summary>
@@ -142,7 +140,7 @@ public sealed class S125ComplexAttribute : IS100ComplexAttribute
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
-    public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
 }
 
 /// <summary>

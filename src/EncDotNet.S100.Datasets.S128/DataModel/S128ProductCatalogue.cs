@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -44,23 +44,23 @@ public sealed class S128ProductCatalogue
     public string? ProductIdentifier { get; init; }
 
     /// <summary>All catalogue product entries, polymorphic over the three product subclasses.</summary>
-    public required ImmutableArray<S128CatalogueEntry> Products { get; init; }
+    public required IReadOnlyList<S128CatalogueEntry> Products { get; init; }
 
     /// <summary>Producer metadata records.</summary>
-    public ImmutableArray<S128ProducerInformation> Producers { get; init; } =
-        ImmutableArray<S128ProducerInformation>.Empty;
+    public IReadOnlyList<S128ProducerInformation> Producers { get; init; } =
+        [];
 
     /// <summary>Distributor metadata records.</summary>
-    public ImmutableArray<S128DistributorInformation> Distributors { get; init; } =
-        ImmutableArray<S128DistributorInformation>.Empty;
+    public IReadOnlyList<S128DistributorInformation> Distributors { get; init; } =
+        [];
 
     /// <summary>Contact-details metadata records.</summary>
-    public ImmutableArray<S128ContactDetails> Contacts { get; init; } =
-        ImmutableArray<S128ContactDetails>.Empty;
+    public IReadOnlyList<S128ContactDetails> Contacts { get; init; } =
+        [];
 
     /// <summary>Catalogue section header records.</summary>
-    public ImmutableArray<S128CatalogueSectionHeader> SectionHeaders { get; init; } =
-        ImmutableArray<S128CatalogueSectionHeader>.Empty;
+    public IReadOnlyList<S128CatalogueSectionHeader> SectionHeaders { get; init; } =
+        [];
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S128Dataset Source { get; init; }
@@ -81,15 +81,15 @@ public sealed class S128ProductCatalogue
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
 
         // First pass: build typed entries (without cross-references yet).
-        var productsBuilder = ImmutableArray.CreateBuilder<S128CatalogueEntry>();
-        var producersBuilder = ImmutableArray.CreateBuilder<S128ProducerInformation>();
-        var distributorsBuilder = ImmutableArray.CreateBuilder<S128DistributorInformation>();
-        var contactsBuilder = ImmutableArray.CreateBuilder<S128ContactDetails>();
-        var headersBuilder = ImmutableArray.CreateBuilder<S128CatalogueSectionHeader>();
+        var productsBuilder = new List<S128CatalogueEntry>();
+        var producersBuilder = new List<S128ProducerInformation>();
+        var distributorsBuilder = new List<S128DistributorInformation>();
+        var contactsBuilder = new List<S128ContactDetails>();
+        var headersBuilder = new List<S128CatalogueSectionHeader>();
 
         // The xlink resolver and diagnostics get filled during pass 2, so
         // build the context up front so we can hand it to the per-feature
@@ -129,13 +129,13 @@ public sealed class S128ProductCatalogue
             }
         }
 
-        var products = productsBuilder.ToImmutable();
+        var products = productsBuilder;
 
         // Second pass: build a real xlink resolver that knows about every
         // entry, then resolve theReference xlinks and populate the
         // forward Supersedes / RelatedProducts collections.
         var resolverEntries = new List<KeyValuePair<string, object>>(
-            products.Length
+            products.Count
             + producersBuilder.Count
             + distributorsBuilder.Count
             + contactsBuilder.Count
@@ -166,11 +166,11 @@ public sealed class S128ProductCatalogue
         foreach (var entry in products)
         {
             if (supersedesByReferrer.TryGetValue(entry.Id, out var supTargets))
-                entry.Supersedes = supTargets.ToImmutableArray();
+                entry.Supersedes = supTargets.ToArray();
 
             if (relatedByReferrer.TryGetValue(entry.Id, out var rel))
             {
-                entry.RelatedProducts = rel.ToImmutableArray();
+                entry.RelatedProducts = rel.ToArray();
             }
         }
 
@@ -200,19 +200,19 @@ public sealed class S128ProductCatalogue
         foreach (var entry in products)
         {
             if (supersededByMap.TryGetValue(entry.Id, out var referrers))
-                entry.SupersededBy = referrers.ToImmutableArray();
+                entry.SupersededBy = referrers.ToArray();
         }
 
-        diagnostics = ctx2.ToImmutableDiagnostics();
+        diagnostics = ctx2.ToDiagnosticsSnapshot();
         return new S128ProductCatalogue
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
             ProductIdentifier = dataset.ProductIdentifier,
             Products = products,
-            Producers = producersBuilder.ToImmutable(),
-            Distributors = distributorsBuilder.ToImmutable(),
-            Contacts = contactsBuilder.ToImmutable(),
-            SectionHeaders = headersBuilder.ToImmutable(),
+            Producers = producersBuilder,
+            Distributors = distributorsBuilder,
+            Contacts = contactsBuilder,
+            SectionHeaders = headersBuilder,
             Source = dataset,
         };
     }
@@ -230,9 +230,9 @@ public sealed class S128ProductCatalogue
         string? ProductSpecificationName,
         string? ProductSpecificationVersion,
         S128GeometryKind GeometryKind,
-        ImmutableArray<GeoPosition> Coordinates,
-        ImmutableArray<S128OnlineResource> OnlineResources,
-        ImmutableDictionary<string, string> ExtraAttributes);
+        IReadOnlyList<GeoPosition> Coordinates,
+        IReadOnlyList<S128OnlineResource> OnlineResources,
+        IReadOnlyDictionary<string, string> ExtraAttributes);
 
     private static CommonFields ExtractCommon(S128Feature f, ProjectionContext ctx)
     {
@@ -362,7 +362,7 @@ public sealed class S128ProductCatalogue
         return S128ServiceStatus.Unknown;
     }
 
-    private static ImmutableDictionary<string, string> BuildExtraAttributes(S128Feature f) =>
+    private static IReadOnlyDictionary<string, string> BuildExtraAttributes(S128Feature f) =>
         ExtraAttributes.ExcludeKnown(f.Attributes,
             "productNumber", "datasetName",
             "editionNumber", "updateNumber",
@@ -403,34 +403,34 @@ public sealed class S128ProductCatalogue
         Source = f,
     };
 
-    private static (S128GeometryKind, ImmutableArray<GeoPosition>) ProjectGeometry(S128Feature f)
+    private static (S128GeometryKind, IReadOnlyList<GeoPosition>) ProjectGeometry(S128Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                if (f.Points.IsDefaultOrEmpty) return (S128GeometryKind.Point, ImmutableArray<GeoPosition>.Empty);
+                if (f.Points.Count == 0) return (S128GeometryKind.Point, []);
                 return (S128GeometryKind.Point, f.Points
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
-                    .ToImmutableArray());
+                    .ToArray());
             case S100GeometryType.Curve:
-                if (f.Curves.IsDefaultOrEmpty) return (S128GeometryKind.Curve, ImmutableArray<GeoPosition>.Empty);
+                if (f.Curves.Count == 0) return (S128GeometryKind.Curve, []);
                 return (S128GeometryKind.Curve, f.Curves
                     .SelectMany(c => c)
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
-                    .ToImmutableArray());
+                    .ToArray());
             case S100GeometryType.Surface:
-                if (f.ExteriorRing.IsDefaultOrEmpty) return (S128GeometryKind.Surface, ImmutableArray<GeoPosition>.Empty);
+                if (f.ExteriorRing.Count == 0) return (S128GeometryKind.Surface, []);
                 return (S128GeometryKind.Surface, f.ExteriorRing
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
-                    .ToImmutableArray());
+                    .ToArray());
             default:
-                return (S128GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                return (S128GeometryKind.None, []);
         }
     }
 
-    private static ImmutableArray<S128OnlineResource> ProjectOnlineResources(S128Feature f)
+    private static IReadOnlyList<S128OnlineResource> ProjectOnlineResources(S128Feature f)
     {
-        var b = ImmutableArray.CreateBuilder<S128OnlineResource>();
+        var b = new List<S128OnlineResource>();
         foreach (var c in f.ComplexAttributes)
         {
             if (!c.Code.Equals("onlineResource", StringComparison.OrdinalIgnoreCase)) continue;
@@ -440,7 +440,7 @@ public sealed class S128ProductCatalogue
                 Linkage = c.SubAttributes.GetValueOrDefault("linkage"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
     // ── theReference resolution ────────────────────────────────────────

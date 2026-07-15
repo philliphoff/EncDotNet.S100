@@ -8,7 +8,6 @@ This library renders S-100 coverage and vector data to SkiaSharp bitmaps. It han
 
 - **`SkiaCoverageRenderer`** — `ICoverageRenderer<SKBitmap>` implementation that maps coverage grid cells to pixel colors.
 - **`SkiaSvgRasterizer`** — rasterizes SVG portrayal symbols to tiled pattern bitmaps.
-- **`SkiaColorExtensions`** — helpers for converting between `RgbaColor` and `SKColor`.
 
 ### Shared vector rendering core (now `EncDotNet.S100.Rendering.Scene`)
 
@@ -62,15 +61,84 @@ exactly one place:
 - **`ColorResolver`** — S-100 colour-token resolution (palette + inline hex).
 
 **Scope (spike):** the IR currently covers point, line, solid-area, and text
-ops. Pattern fills, antimeridian crossing, and Web-Mercator pole limits are not
-yet represented in the IR — pattern fills remain handled by the Mapsui renderer's
-dedicated pattern collection / priority-clip / insert phase.
+ops. Pattern fills and Web-Mercator pole limits are not yet represented in the
+IR — pattern fills remain handled by the Mapsui renderer's dedicated pattern
+collection / priority-clip / insert phase. Antimeridian (±180°) crossing **is**
+handled for the headless auto-fit: `SeamAwareBoundsAccumulator` (in
+`Rendering.Scene`) frames dateline-spanning datasets on their true extent and
+`WorldToScreen` wraps ops into the shifted window at draw time (issue #413).
+The seam-wrap is opt-out via `SkiaDisplayListRenderer.EnableSeamWrap` /
+`WorldToScreen.Create(viewport, allowSeamWrap)`: the Mapsui **tiled** subsystem
+disables it because it rasterises already-continuous geometry from narrow
+per-tile viewports, where wrapping would teleport off-tile vertices of large
+polygons back across the world (see the tiled renderer's `RasterizeTile`).
+
+### Headless rendering & compositing (`…Renderers.Skia.Scene`)
+
+Standalone, Mapsui-free entry points that rasterise a whole dataset (or several)
+to an `SKBitmap`:
+
+- **`HeadlessVectorRenderer`** — lowers a Part 9 display list to a `VectorScene`
+  and rasterises it, auto-fitting the viewport to the scene extent (seam-aware
+  across the ±180° antimeridian via `TryGetSeamAwareWorldBounds`). Its
+  `BuildScene(...)` and `TryGetWorldBounds(...)` seams are reused by the
+  compositor to lower a sub-layer and union its bounds against a *shared*
+  viewport.
+- **`CoverageHeadlessRenderer`** — rasterises a `StyledCoverageLayer` (S-102/104/111).
+  `Render(...)` auto-fits; `DrawOnto(canvas, sharedViewport, layer, w,e,s,n)`
+  projects the grid (and arrows) into a shared viewport's pixel space so coverage
+  registers with vector layers in a composite.
+- **`CompositeLayer`** — an ordered draw unit painted against one explicit
+  `Viewport`: `VectorCompositeLayer` (draws a `VectorScene` via
+  `SkiaDisplayListRenderer.RenderOnto`) and `CoverageCompositeLayer` (draws via
+  `CoverageHeadlessRenderer.DrawOnto`), both on a transparent background so they
+  layer.
+- **`HeadlessCompositeRenderer`** — clears the background once, then paints an
+  ordered `IReadOnlyList<CompositeLayer>` against the shared viewport. The
+  cross-dataset ordering / suppression *decision* is made upstream by the S-98
+  engine in `EncDotNet.S100.Datasets.Pipelines` (`HeadlessCompositor`); this
+  renderer only paints the resolved stack.
+- **`NaturalEarthBasemap`** — the bundled, offline, public-domain **Natural
+  Earth 1:10m land** basemap (issues #295, #411) as a single, Mapsui-free source
+  of land geometry. The embedded GeoJSON (`Assets/Basemap/ne_10m_land.geojson`)
+  is parsed once and each ring projected `lon/lat → EPSG:3857` via `WebMercator`.
+  `LandPolygons` exposes the world-metre rings; `LandScene` is a cached,
+  viewport-independent `VectorScene` of parchment-filled (`238,232,220`)
+  `AreaPaintOp`s. Both the headless render paths (`HeadlessVectorRenderer.Render`
+  and `CoverageHeadlessRenderer.Render` take a `BasemapKind`; `HeadlessCompositor`
+  prepends the land scene) and the interactive Avalonia viewer's offline basemap
+  consume this same asset, so land is never duplicated.
 
 ## Installation
 
 ```sh
 dotnet add package EncDotNet.S100.Renderers.Skia
 ```
+
+This pulls in [`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md)
+(the scene IR) transitively. Together they let you **embed just the renderer +
+IR** — build or lower a `VectorScene` and rasterise it headlessly — without the
+batteries-included `EncDotNet.S100` facade or any Mapsui/GUI dependency. See the
+[Embedding the renderer](https://github.com/philliphoff/EncDotNet.S100/blob/main/docs/embedding-the-renderer.md)
+guide for the end-to-end path.
+
+## Stability & versioning
+
+The **stable, supported surface** of this package is the headless rendering
+entry points: `SkiaDisplayListRenderer` (incl. its `RenderOnto` overloads),
+`HeadlessVectorRenderer`, `CoverageHeadlessRenderer`, `HeadlessCompositeRenderer`,
+the `CompositeLayer` family (`VectorCompositeLayer`, `CoverageCompositeLayer`),
+`OverlayDrawOptions`, `LabelDeclutterer`, `SkiaCoverageRenderer`,
+`SkiaCoverageArrowRenderer`, and `SkiaSvgRasterizer`. Types that are `internal`
+or undocumented (e.g. colour/font helpers, diagnostics) are implementation
+detail and may change at any time.
+
+All `EncDotNet.S100.*` packages share **one version**, derived from the release
+git tag (there is no per-package version). Versioning follows
+[Semantic Versioning](https://semver.org/): once past `1.0.0`, a breaking change
+to the stable surface above lands only in a **major** bump. While the version is
+below `1.0.0`, the surface is still settling — breaking changes may occur in a
+minor bump and will be called out in the release notes.
 
 ## Linux arm64 native dependency
 

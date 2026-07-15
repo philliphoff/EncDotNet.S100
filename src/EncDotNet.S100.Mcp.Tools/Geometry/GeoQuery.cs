@@ -63,9 +63,9 @@ public abstract record GeoQuery
             b.EastLongitude);
     }
 
-    private static GeoBoundingBox BoundingBoxOf(System.Collections.Immutable.ImmutableArray<GeoPoint> points)
+    private static GeoBoundingBox BoundingBoxOf(IReadOnlyList<GeoPoint> points)
     {
-        if (points.IsDefaultOrEmpty)
+        if (points.Count == 0)
         {
             return new GeoBoundingBox(0, 0, 0, 0);
         }

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -183,9 +182,9 @@ public class DescribeFeatureToolTests
     {
         var feature = S101Synth.Feature(rcid: 12345, featureTypeCode: 30,
             attributes: new[] { ((ushort)42, "5.0") });
-        var featureTypes = new Dictionary<ushort, string> { [30] = "DEPARE" }.ToImmutableDictionary();
-        var attrTypes = new Dictionary<ushort, string> { [42] = "DRVAL1" }.ToImmutableDictionary();
-        var ds = S101Synth.Dataset("enc-1", ImmutableArray.Create(feature), featureTypes, attrTypes);
+        var featureTypes = new Dictionary<ushort, string> { [30] = "DEPARE" }.ToDictionary();
+        var attrTypes = new Dictionary<ushort, string> { [42] = "DRVAL1" }.ToDictionary();
+        var ds = S101Synth.Dataset("enc-1", [feature], featureTypes, attrTypes);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc-1", ds));
@@ -206,7 +205,7 @@ public class DescribeFeatureToolTests
     public async Task S101_describes_feature_by_composite_FRID()
     {
         var feature = S101Synth.Feature(rcid: 42, featureTypeCode: 73);
-        var ds = S101Synth.Dataset("enc-2", ImmutableArray.Create(feature));
+        var ds = S101Synth.Dataset("enc-2", [feature]);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc-2", ds));
@@ -222,7 +221,7 @@ public class DescribeFeatureToolTests
     public async Task S101_returns_FeatureNotFound_for_unknown_RCID()
     {
         var feature = S101Synth.Feature(rcid: 1, featureTypeCode: 30);
-        var ds = S101Synth.Dataset("enc-3", ImmutableArray.Create(feature));
+        var ds = S101Synth.Dataset("enc-3", [feature]);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc-3", ds));
@@ -238,7 +237,7 @@ public class DescribeFeatureToolTests
     public async Task S101_returns_FeatureNotFound_for_non_S101_RCNM_composite()
     {
         var feature = S101Synth.Feature(rcid: 1, featureTypeCode: 30);
-        var ds = S101Synth.Dataset("enc-4", ImmutableArray.Create(feature));
+        var ds = S101Synth.Dataset("enc-4", [feature]);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc-4", ds));
@@ -256,7 +255,7 @@ public class DescribeFeatureToolTests
     {
         var feature = S101Synth.Feature(rcid: 7, featureTypeCode: 30,
             attributes: new[] { ((ushort)42, "5.0") });
-        var ds = S101Synth.Dataset("enc-5", ImmutableArray.Create(feature));
+        var ds = S101Synth.Dataset("enc-5", [feature]);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc-5", ds));
@@ -277,7 +276,7 @@ public class DescribeFeatureToolTests
     [Fact]
     public async Task S101_describe_feature_returns_resolved_geometry_with_bbox()
     {
-        var featureTypes = new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToImmutableDictionary();
+        var featureTypes = new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToDictionary();
         var ds = S101Synth.DatasetWithPointFeatures(
             "enc-geom",
             new (uint, ushort, double, double)[] { (4242u, 75, 50.76, -1.29) },
@@ -314,7 +313,7 @@ public class DescribeFeatureToolTests
     {
         // No matching point record → geometry cannot be resolved.
         var feature = S101Synth.Feature(rcid: 5, featureTypeCode: 30);
-        var ds = S101Synth.Dataset("enc-nogeom", ImmutableArray.Create(feature));
+        var ds = S101Synth.Dataset("enc-nogeom", [feature]);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc-nogeom", ds));

@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S57;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;
 
@@ -66,7 +66,7 @@ public class S57S101MappingTests
     public void ResolveFeature_NoRedirect_UsesDefault()
     {
         var m = S57S101Mapping.Default;
-        var resolved = m.ResolveFeature(42, ImmutableDictionary<string, string>.Empty);
+        var resolved = m.ResolveFeature(42, ReadOnlyDictionary<string, string>.Empty);
         Assert.NotNull(resolved);
         Assert.Equal("DepthArea", resolved!.S101Code);
         Assert.Empty(resolved.AttributeOverrides);
@@ -80,29 +80,24 @@ public class S57S101MappingTests
             Objl = 999,
             S57Acronym = "CTRPNT",
             DefaultS101Code = null,
-            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            Redirects = [new S57FeatureRedirect
             {
                 ConditionAttribute = "CATCTR",
-                ConditionValues = ImmutableArray.Create("1", "5"),
+                ConditionValues = ["1", "5"],
                 TargetS101Code = "Landmark",
-                AttributeOverrides = ImmutableDictionary.CreateRange(
-                    StringComparer.OrdinalIgnoreCase,
-                    new[]
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATCTR"] = new S57AttributeOverride
                     {
-                        new KeyValuePair<string, S57AttributeOverride>(
-                            "CATCTR",
-                            new S57AttributeOverride
-                            {
-                                S101Code = "categoryOfLandmark",
-                                ValueRemap = ImmutableDictionary.CreateRange(
-                                    new[]
-                                    {
-                                        new KeyValuePair<string, string?>("1", "22"),
-                                        new KeyValuePair<string, string?>("5", "23"),
-                                    }),
-                            }),
-                    }),
-            }),
+                        S101Code = "categoryOfLandmark",
+                        ValueRemap = new Dictionary<string, string?>
+                        {
+                            ["1"] = "22",
+                            ["5"] = "23",
+                        },
+                    },
+                },
+            }],
         };
 
         var ctrpntAttrRule = new S57AttributeRule
@@ -117,9 +112,10 @@ public class S57S101MappingTests
             .AddAttributeRule(ctrpntAttrRule)
             .Build();
 
-        var attrs = ImmutableDictionary.CreateRange(
-            StringComparer.OrdinalIgnoreCase,
-            new[] { new KeyValuePair<string, string>("CATCTR", "1") });
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATCTR"] = "1",
+        };
 
         var resolved = m.ResolveFeature(999, attrs);
         Assert.NotNull(resolved);
@@ -139,20 +135,222 @@ public class S57S101MappingTests
             Objl = 999,
             S57Acronym = "CTRPNT",
             DefaultS101Code = null, // drop when no redirect matches
-            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            Redirects = [new S57FeatureRedirect
             {
                 ConditionAttribute = "CATCTR",
-                ConditionValues = ImmutableArray.Create("1"),
+                ConditionValues = ["1"],
                 TargetS101Code = "Landmark",
-            }),
+            }],
         };
         var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
 
-        var attrs = ImmutableDictionary.CreateRange(
-            StringComparer.OrdinalIgnoreCase,
-            new[] { new KeyValuePair<string, string>("CATCTR", "9") });
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATCTR"] = "9",
+        };
 
         Assert.Null(m.ResolveFeature(999, attrs));
+    }
+
+    [Fact]
+    public void Build_RedirectWithoutPresenceOrValues_Throws()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "CTRPNT",
+            DefaultS101Code = "ControlPoint",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATCTR",
+                // Neither a presence test nor any values: can never match.
+                ConditionPresent = false,
+                TargetS101Code = "Landmark",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("never match", ex.Message);
+    }
+
+    [Fact]
+    public void Build_PresenceRedirectWithoutValues_Succeeds()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "LIGHTS",
+            DefaultS101Code = "LightAllAround",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "SECTR1",
+                ConditionPresent = true,
+                TargetS101Code = "LightSectored",
+            }],
+        };
+
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        Assert.NotNull(m);
+    }
+
+    // ── Geometry-conditional redirects (S57GeometryPrimitive) ──────────
+
+    [Fact]
+    public void Build_PrimitiveOnlyRedirectWithoutAttribute_Succeeds()
+    {
+        // A purely geometry-based redirect (no ConditionAttribute) is valid.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Curve, S57GeometryPrimitive.Surface],
+                TargetS101Code = "ShorelineConstruction",
+            }],
+        };
+
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        Assert.NotNull(m);
+    }
+
+    [Fact]
+    public void Build_RedirectWithNoConditionAtAll_Throws()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                // No attribute condition and no primitive condition.
+                TargetS101Code = "ShorelineConstruction",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("no condition", ex.Message);
+    }
+
+    [Fact]
+    public void Build_BrokenAttributeConditionWithPrimitive_StillThrows()
+    {
+        // ConditionAttribute set, ConditionPresent false, no values: the
+        // attribute gate can never pass, so it must throw even though a
+        // primitive condition is also present.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATMOR",
+                ConditionPresent = false,
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Bollard",
+            }],
+        };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => new S57S101Mapping.Builder().AddFeatureRule(rule).Build());
+        Assert.Contains("never match", ex.Message);
+    }
+
+    [Fact]
+    public void ResolveFeature_PrimitiveRedirect_MatchesOnlyForListedPrimitives()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Curve, S57GeometryPrimitive.Surface],
+                TargetS101Code = "ShorelineConstruction",
+            }],
+        };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+        var noAttrs = ReadOnlyDictionary<string, string>.Empty;
+
+        Assert.Equal("ShorelineConstruction",
+            m.ResolveFeature(999, noAttrs, S57GeometryPrimitive.Surface)!.S101Code);
+        Assert.Equal("ShorelineConstruction",
+            m.ResolveFeature(999, noAttrs, S57GeometryPrimitive.Curve)!.S101Code);
+        Assert.Equal("Dolphin",
+            m.ResolveFeature(999, noAttrs, S57GeometryPrimitive.Point)!.S101Code);
+        // No primitive supplied → geometry gate fails → default.
+        Assert.Equal("Dolphin", m.ResolveFeature(999, noAttrs)!.S101Code);
+    }
+
+    [Fact]
+    public void ResolveFeature_CombinedAttributeAndPrimitiveRedirect_RequiresBoth()
+    {
+        // Mirrors the MORFAC CATMOR=3 → Bollard rule: only fires for a point
+        // whose CATMOR is 3.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATMOR",
+                ConditionValues = ["3"],
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Bollard",
+            }],
+        };
+        var attrRule = new S57AttributeRule { Attl = 9004, S57Acronym = "CATMOR", DefaultS101Code = "categoryOfDolphin" };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).AddAttributeRule(attrRule).Build();
+        var catmor3 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CATMOR"] = "3" };
+
+        // Point + CATMOR 3 → Bollard.
+        Assert.Equal("Bollard",
+            m.ResolveFeature(999, catmor3, S57GeometryPrimitive.Point)!.S101Code);
+        // Wrong primitive → default Dolphin.
+        Assert.Equal("Dolphin",
+            m.ResolveFeature(999, catmor3, S57GeometryPrimitive.Surface)!.S101Code);
+        // Right primitive, wrong value → default Dolphin.
+        var catmor2 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CATMOR"] = "2" };
+        Assert.Equal("Dolphin",
+            m.ResolveFeature(999, catmor2, S57GeometryPrimitive.Point)!.S101Code);
+    }
+
+    [Fact]
+    public void ResolveAttribute_DropOverride_RemovesAttribute()
+    {
+        // A redirect that drops the condition attribute (S57AttributeOverride
+        // with Drop = true) must yield null so it is not emitted on the target.
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATMOR",
+                ConditionValues = ["3"],
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Bollard",
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATMOR"] = new S57AttributeOverride { Drop = true },
+                },
+            }],
+        };
+        var attrRule = new S57AttributeRule { Attl = 9004, S57Acronym = "CATMOR", DefaultS101Code = "categoryOfDolphin" };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).AddAttributeRule(attrRule).Build();
+        var catmor3 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CATMOR"] = "3" };
+
+        var resolved = m.ResolveFeature(999, catmor3, S57GeometryPrimitive.Point)!;
+        Assert.Equal("Bollard", resolved.S101Code);
+        Assert.Null(m.ResolveAttribute("CATMOR", "3", resolved));
     }
 
     [Fact]
@@ -163,8 +361,10 @@ public class S57S101MappingTests
             Attl = 9100,
             S57Acronym = "FOO",
             DefaultS101Code = "foo",
-            DefaultValueRemap = ImmutableDictionary.CreateRange(
-                new[] { new KeyValuePair<string, string?>("99", null) }),
+            DefaultValueRemap = new Dictionary<string, string?>
+            {
+                ["99"] = null,
+            },
         };
         var featRule = new S57FeatureRule
         {
@@ -177,7 +377,7 @@ public class S57S101MappingTests
             .AddAttributeRule(attrRule)
             .Build();
 
-        var resolved = m.ResolveFeature(9101, ImmutableDictionary<string, string>.Empty)!;
+        var resolved = m.ResolveFeature(9101, ReadOnlyDictionary<string, string>.Empty)!;
 
         Assert.Null(m.ResolveAttribute("FOO", "99", resolved));
         Assert.Equal("foo", m.ResolveAttribute("FOO", "1", resolved)!.S101Code);
@@ -245,7 +445,7 @@ public class S57S101MappingTests
     public void Ctrpnt_WithoutCatctr_IsDropped()
     {
         var m = S57S101Mapping.Default;
-        Assert.Null(m.ResolveFeature(33, ImmutableDictionary<string, string>.Empty));
+        Assert.Null(m.ResolveFeature(33, ReadOnlyDictionary<string, string>.Empty));
     }
 
     [Fact]
@@ -296,7 +496,7 @@ public class S57S101MappingTests
     public void Coalne_WithoutCatcoa_StillResolvesToCoastline()
     {
         var m = S57S101Mapping.Default;
-        var resolved = m.ResolveFeature(30, ImmutableDictionary<string, string>.Empty);
+        var resolved = m.ResolveFeature(30, ReadOnlyDictionary<string, string>.Empty);
         Assert.NotNull(resolved);
         Assert.Equal("Coastline", resolved!.S101Code);
     }
@@ -332,5 +532,125 @@ public class S57S101MappingTests
     {
         var m = S57S101Mapping.Default;
         Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
+
+    // ── Corpus-audit gap coverage: S-57 → S-101 feature aliases ─────────
+
+    [Theory]
+    [InlineData(1, "AdministrationArea")]    // ADMARE
+    [InlineData(12, "Building")]             // BUISGL
+    [InlineData(21, "CableOverhead")]        // CBLOHD
+    [InlineData(22, "CableSubmarine")]       // CBLSUB
+    [InlineData(27, "CautionArea")]          // CTNARE (ambiguous alias → CautionArea)
+    [InlineData(39, "Daymark")]              // DAYMAR
+    [InlineData(58, "FogSignal")]            // FOGSIG
+    [InlineData(81, "MagneticVariation")]    // MAGVAR
+    [InlineData(87, "OffshorePlatform")]     // OFSPLF
+    [InlineData(94, "PipelineSubmarineOnLand")] // PIPSOL
+    [InlineData(109, "RecommendedTrack")]    // RECTRC
+    [InlineData(119, "SeaAreaNamedWaterArea")] // SEAARE
+    [InlineData(121, "SeabedArea")]          // SBDARE
+    [InlineData(125, "SiloTank")]            // SILTNK
+    [InlineData(148, "TrafficSeparationSchemeLanePart")] // TSSLPT
+    [InlineData(154, "UnsurveyedArea")]      // UNSARE
+    [InlineData(155, "Vegetation")]          // VEGATN
+    [InlineData(158, "WeedKelp")]            // WEDKLP
+    public void GapFeatureClasses_MapToExpectedS101Code(ushort objl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
+
+    [Theory]
+    [InlineData(301, "QualityOfNonBathymetricData")] // M_ACCY
+    [InlineData(302, "DataCoverage")]                // M_COVR
+    [InlineData(305, "InformationArea")]             // M_NPUB
+    [InlineData(306, "NavigationalSystemOfMarks")]   // M_NSYS
+    [InlineData(308, "QualityOfBathymetricData")]    // M_QUAL
+    [InlineData(309, "SoundingDatum")]               // M_SDAT
+    [InlineData(310, "QualityOfSurvey")]             // M_SREL
+    [InlineData(312, "VerticalDatumOfData")]         // M_VDAT
+    public void GapMetaObjects_MapToExpectedS101Feature(ushort objl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
+
+    // ── Corpus-audit gap coverage: S-57 → S-101 attribute aliases ───────
+
+    [Theory]
+    [InlineData(2, "beaconShape")]               // BCNSHP
+    [InlineData(4, "buoyShape")]                 // BOYSHP
+    [InlineData(8, "categoryOfAnchorage")]       // CATACH
+    [InlineData(10, "categoryOfBuiltUpArea")]    // CATBUA
+    [InlineData(35, "categoryOfLandmark")]       // CATLMK
+    [InlineData(45, "categoryOfPile")]           // CATPLE
+    [InlineData(56, "categoryOfRestrictedArea")] // CATREA
+    [InlineData(66, "categoryOfSpecialPurposeMark")] // CATSPM
+    [InlineData(92, "exhibitionConditionOfLight")]   // EXCLIT
+    [InlineData(94, "function")]                 // FUNCTN
+    [InlineData(109, "marksNavigationalSystemOf")]   // MARSYS
+    [InlineData(117, "orientationValue")]        // ORIENT
+    [InlineData(131, "restriction")]             // RESTRN
+    [InlineData(141, "signalGroup")]             // SIGGRP
+    [InlineData(142, "signalPeriod")]            // SIGPER
+    [InlineData(156, "techniqueOfVerticalMeasurement")] // TECSOU
+    [InlineData(172, "trafficFlow")]             // TRAFIC
+    [InlineData(178, "valueOfNominalRange")]     // VALNMR
+    [InlineData(185, "verticalDatum")]           // VERDAT
+    public void GapAttributes_MapToExpectedS101Code(ushort attl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveAttributeCode(attl));
+    }
+
+    [Theory]
+    [InlineData(11, "categoryOfCable")]          // CATCBL
+    [InlineData(27, "categoryOfFogSignal")]      // CATFOG
+    [InlineData(47, "categoryOfPipelinePipe")]   // CATPIP
+    [InlineData(59, "categoryOfSeaArea")]        // CATSEA
+    [InlineData(63, "categoryOfSiloTank")]       // CATSIL
+    [InlineData(68, "categoryOfVegetation")]     // CATVEG
+    [InlineData(70, "categoryOfWeedKelp")]       // CATWED
+    [InlineData(111, "nationality")]             // NATION
+    [InlineData(176, "valueOfMagneticVariation")] // VALMAG
+    [InlineData(188, "categoryOfTidalStream")]   // CAT_TS
+    public void GapAttributesSecondWave_MapToExpectedS101Code(ushort attl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveAttributeCode(attl));
+    }
+
+    // Attributes that are sub-attributes of an S-101 *complex* attribute must
+    // stay unmapped here — a flat emission would be non-conformant. They need
+    // dedicated complex-attribute assembly (like OBJNAM → featureName).
+    // (SECTR1/SECTR2 are the exception: they carry a rule so the LightSectored
+    // feature redirect can see them, but the translator still diverts them into
+    // the sectorCharacteristics complex — see SectorLimitRedirectAttributes.)
+    [Theory]
+    [InlineData(116)] // OBJNAM → name (sub of featureName)
+    [InlineData(107)] // LITCHR → lightCharacteristic
+    [InlineData(98)]  // HORCLR → horizontalClearanceValue
+    [InlineData(85)]  // DATEND → dateEnd
+    [InlineData(86)]  // DATSTA → dateStart
+    [InlineData(114)] // NATQUA → natureOfSurfaceQualifyingTerms
+    [InlineData(147)] // SORDAT → complex sourceIndication/reportedDate
+    [InlineData(148)] // SORIND → complex sourceIndication
+    public void ComplexSubAttributes_RemainUnmapped(ushort attl)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Null(m.ResolveAttributeCode(attl));
+    }
+
+    // SECTR1/SECTR2 carry a rule (mapping to sectorBearing) solely so the
+    // sectored-light feature redirect can detect them in the acronym view; the
+    // translator diverts them into the sectorCharacteristics complex.
+    [Theory]
+    [InlineData(136)] // SECTR1
+    [InlineData(137)] // SECTR2
+    public void SectorLimitRedirectAttributes_MapToSectorBearing(ushort attl)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal("sectorBearing", m.ResolveAttributeCode(attl));
     }
 }

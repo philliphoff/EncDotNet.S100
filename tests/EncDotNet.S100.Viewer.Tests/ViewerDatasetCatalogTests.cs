@@ -9,6 +9,7 @@ using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -107,18 +108,18 @@ public class ViewerDatasetCatalogTests
                 ProductSpecificationEdition = productSpecificationEdition,
             },
             StructureInfo = new S101DatasetStructureInfo(),
-            FeatureTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            AttributeTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            Points = System.Collections.Immutable.ImmutableDictionary<uint, S101PointRecord>.Empty,
-            CurveSegments = System.Collections.Immutable.ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
-            CompositeCurves = System.Collections.Immutable.ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = System.Collections.Immutable.ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
-            Features = System.Collections.Immutable.ImmutableArray<S101FeatureRecord>.Empty,
-            InformationTypes = System.Collections.Immutable.ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = [],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
 
     [SkippableFact]
@@ -278,8 +279,7 @@ public class ViewerDatasetCatalogTests
         params (uint Rcid, double Lat, double Lon)[] points)
     {
         const int cmf = 10_000_000;
-        var pointRecords = System.Collections.Immutable.ImmutableDictionary
-            .CreateBuilder<uint, S101PointRecord>();
+        var pointRecords = new Dictionary<uint, S101PointRecord>();
         foreach (var (rcid, lat, lon) in points)
         {
             pointRecords[rcid] = new S101PointRecord
@@ -299,19 +299,19 @@ public class ViewerDatasetCatalogTests
                 CoordinateMultiplicationFactorY = cmf,
                 CoordinateMultiplicationFactorZ = 10,
             },
-            FeatureTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            AttributeTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            Points = pointRecords.ToImmutable(),
-            MultiPoints = System.Collections.Immutable.ImmutableDictionary<uint, S101MultiPointRecord>.Empty,
-            CurveSegments = System.Collections.Immutable.ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
-            CompositeCurves = System.Collections.Immutable.ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = System.Collections.Immutable.ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
-            Features = System.Collections.Immutable.ImmutableArray<S101FeatureRecord>.Empty,
-            InformationTypes = System.Collections.Immutable.ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = pointRecords,
+            MultiPoints = ReadOnlyDictionary<uint, S101MultiPointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = [],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
         return S101Dataset.FromDocument(document);
     }

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Geodesy;
 using Xunit;
 
@@ -70,7 +71,7 @@ public class MarineGeodesyTests
     [Fact]
     public void SplitAtAntimeridian_NoCrossing_ReturnsSinglePath()
     {
-        var input = new[] { (0.0, 10.0), (5.0, 20.0), (10.0, 30.0) };
+        var input = new[] { new GeoPosition(0.0, 10.0), new GeoPosition(5.0, 20.0), new GeoPosition(10.0, 30.0) };
         var split = MarineGeodesy.SplitAtAntimeridian(input);
         Assert.Single(split);
         Assert.Equal(3, split[0].Count);
@@ -81,7 +82,7 @@ public class MarineGeodesyTests
     {
         // 179°E → -179°E (i.e., 181°E) crosses the antimeridian going east.
         // The renderer should treat this as two sub-paths.
-        var input = new[] { (0.0, 179.0), (0.0, -179.0) };
+        var input = new[] { new GeoPosition(0.0, 179.0), new GeoPosition(0.0, -179.0) };
         var split = MarineGeodesy.SplitAtAntimeridian(input);
         Assert.Equal(2, split.Count);
         Assert.Single(split[0]);
@@ -91,7 +92,7 @@ public class MarineGeodesyTests
     [Fact]
     public void SplitAtAntimeridian_EmptyInput_ReturnsEmptyList()
     {
-        var split = MarineGeodesy.SplitAtAntimeridian(System.Array.Empty<(double, double)>());
+        var split = MarineGeodesy.SplitAtAntimeridian(System.Array.Empty<GeoPosition>());
         Assert.Empty(split);
     }
 
@@ -141,10 +142,10 @@ public class MarineGeodesyTests
     {
         var pts = MarineGeodesy.GreatCircleIntermediatePoints(0.0, 0.0, 0.0, 30.0, 6);
         Assert.Equal(7, pts.Count);
-        Assert.Equal(0.0, pts[0].Lat, 6);
-        Assert.Equal(0.0, pts[0].Lon, 6);
-        Assert.Equal(0.0, pts[^1].Lat, 6);
-        Assert.Equal(30.0, pts[^1].Lon, 6);
+        Assert.Equal(0.0, pts[0].Latitude, 6);
+        Assert.Equal(0.0, pts[0].Longitude, 6);
+        Assert.Equal(0.0, pts[^1].Latitude, 6);
+        Assert.Equal(30.0, pts[^1].Longitude, 6);
     }
 
     [Fact]
@@ -162,7 +163,7 @@ public class MarineGeodesyTests
         // straight rhumb (constant-latitude) line.
         var pts = MarineGeodesy.GreatCircleIntermediatePoints(60.0, -30.0, 60.0, 30.0, 10);
         var mid = pts[pts.Count / 2];
-        Assert.True(mid.Lat > 60.0);
+        Assert.True(mid.Latitude > 60.0);
     }
 
     [Fact]

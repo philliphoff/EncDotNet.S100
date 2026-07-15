@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
@@ -30,21 +31,21 @@ public sealed class HeadlessVectorRendererFilterTests
                 Type = GeometryType.Surface,
                 Coordinates =
                 [
-                    (0.001, 0.001),
-                    (0.001, 0.009),
-                    (0.009, 0.009),
-                    (0.009, 0.001),
+                    new GeoPosition(0.001, 0.001),
+                    new GeoPosition(0.001, 0.009),
+                    new GeoPosition(0.009, 0.009),
+                    new GeoPosition(0.009, 0.001),
                 ],
             },
             "line" => new FeatureGeometry
             {
                 Type = GeometryType.Curve,
-                Coordinates = [(0.005, 0.001), (0.005, 0.009)],
+                Coordinates = [new GeoPosition(0.005, 0.001), new GeoPosition(0.005, 0.009)],
             },
             "point" or "text" => new FeatureGeometry
             {
                 Type = GeometryType.Point,
-                Coordinates = [(0.005, 0.005)],
+                Coordinates = [new GeoPosition(0.005, 0.005)],
             },
             _ => null,
         };

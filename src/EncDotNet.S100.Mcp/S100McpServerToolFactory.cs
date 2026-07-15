@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -603,9 +602,9 @@ internal static class S100McpServerToolFactory
     private static TimeQuery? ParseTimeQuery(string? timesJson)
         => string.IsNullOrWhiteSpace(timesJson) ? null : TimeQueryJsonReader.Parse(timesJson);
 
-    private static ImmutableArray<AttributePredicate> ParseAttributePredicates(string? attributesJson)
+    private static IReadOnlyList<AttributePredicate> ParseAttributePredicates(string? attributesJson)
         => string.IsNullOrWhiteSpace(attributesJson)
-            ? ImmutableArray<AttributePredicate>.Empty
+            ? []
             : AttributePredicateJsonReader.Parse(attributesJson);
 
     private static GeoPolyline ParsePolyline(string polylineJson)

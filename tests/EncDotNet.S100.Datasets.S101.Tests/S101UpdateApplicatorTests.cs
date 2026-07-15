@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using System.Linq;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
@@ -26,7 +26,7 @@ public class S101UpdateApplicatorTests
 
         Assert.Equal(2, result.Points.Count);
         Assert.True(result.Points.ContainsKey(2));
-        Assert.Equal(2, result.Features.Length);
+        Assert.Equal(2, result.Features.Count);
         Assert.Contains(result.Features, f => f.RecordId == 11);
         Assert.Equal(1, result.Identification.UpdateNumber);
     }
@@ -98,7 +98,7 @@ public class S101UpdateApplicatorTests
             .ApplyChanges(Doc(1, "2", features: new[] { update }));
 
         var merged = Assert.Single(result.Features);
-        Assert.Equal(2, merged.SpatialAssociations.Length);
+        Assert.Equal(2, merged.SpatialAssociations.Count);
         Assert.Contains(merged.SpatialAssociations, s => s.RecordId == 100);
         Assert.Contains(merged.SpatialAssociations, s => s.RecordId == 102);
         Assert.DoesNotContain(merged.SpatialAssociations, s => s.RecordId == 101);
@@ -131,7 +131,7 @@ public class S101UpdateApplicatorTests
 
         var result = S101UpdateApplicator.Apply(baseDoc, new[] { u1, u3 }, out var report);
 
-        Assert.Equal(2, result.Features.Length); // base + u1 only
+        Assert.Equal(2, result.Features.Count); // base + u1 only
         Assert.Equal(1, report.AppliedThroughUpdateNumber);
         Assert.False(report.Success);
         Assert.Contains(report.Messages, m => m.Severity == S101UpdateSeverity.Warning && m.UpdateNumber == 3);
@@ -163,10 +163,10 @@ public class S101UpdateApplicatorTests
         {
             RecordId = id,
             FeatureTypeCode = 1,
-            Attributes = (attributes ?? Enumerable.Empty<S101Attribute>()).ToImmutableArray(),
-            SpatialAssociations = (spatials ?? Enumerable.Empty<S101SpatialAssociation>()).ToImmutableArray(),
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            Attributes = (attributes ?? Enumerable.Empty<S101Attribute>()).ToArray(),
+            SpatialAssociations = (spatials ?? Enumerable.Empty<S101SpatialAssociation>()).ToArray(),
+            FeatureAssociations = [],
+            InformationAssociations = [],
             RecordVersion = 1,
             UpdateInstruction = instruction,
         };
@@ -190,17 +190,17 @@ public class S101UpdateApplicatorTests
                 CoordinateMultiplicationFactorY = 1,
                 CoordinateMultiplicationFactorZ = 1,
             },
-            FeatureTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            AttributeTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            Points = (points ?? Enumerable.Empty<S101PointRecord>()).ToImmutableDictionary(p => p.RecordId),
-            CurveSegments = ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
-            CompositeCurves = ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
-            Features = (features ?? Enumerable.Empty<S101FeatureRecord>()).ToImmutableArray(),
-            InformationTypes = ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = (points ?? Enumerable.Empty<S101PointRecord>()).ToDictionary(p => p.RecordId),
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = (features ?? Enumerable.Empty<S101FeatureRecord>()).ToArray(),
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
 }

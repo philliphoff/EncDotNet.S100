@@ -35,7 +35,7 @@ public class S128DatasetReaderTests
         // 1× DistributorInformation, 1× CatalogueSectionHeader,
         // 1× ContactDetails, 1× ProducerInformation.
         var ds = LoadSample();
-        Assert.Equal(9, ds.Features.Length);
+        Assert.Equal(9, ds.Features.Count);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class S128DatasetReaderTests
 
         Assert.Equal("ElectronicProduct", f.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f.GeometryType);
-        Assert.True(f.ExteriorRing.Length > 2);
+        Assert.True(f.ExteriorRing.Count > 2);
         // S-100 Part 10b convention: lat lon for EPSG:4326. Sample is Korean
         // waters, so latitude ≈ 32–40°, longitude ≈ 122–135°.
         Assert.All(f.ExteriorRing, p =>
@@ -77,7 +77,7 @@ public class S128DatasetReaderTests
 
         Assert.Equal("DistributorInformation", f.FeatureType);
         Assert.Equal(S100GeometryType.None, f.GeometryType);
-        Assert.True(f.ExteriorRing.IsDefaultOrEmpty);
+        Assert.True(f.ExteriorRing.Count == 0);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class S128DatasetReaderTests
         // elementContainer via xlink:href.
         var ds = LoadSample();
         var f = ds.Features.First(x => x.Id == "ID0002");
-        Assert.True(f.References.Length >= 1);
+        Assert.True(f.References.Count >= 1);
         Assert.All(f.References, r => Assert.False(string.IsNullOrEmpty(r.Href)));
     }
 
@@ -209,7 +209,7 @@ public class S128DatasetReaderTests
         var ds = S128Dataset.Open(stream);
 
         var ring = ds.Features.Single().ExteriorRing;
-        Assert.Equal(5, ring.Length);
+        Assert.Equal(5, ring.Count);
         Assert.All(ring, p =>
         {
             Assert.InRange(p.Latitude, 50.0, 51.0);
@@ -285,7 +285,7 @@ public class S128DatasetReaderTests
         Assert.Equal("ElectronicChart", f.FeatureType);
         Assert.Equal("GST.ElectronicChart.DK1", f.Id);
         Assert.Equal(S100GeometryType.Surface, f.GeometryType);
-        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.Equal(5, f.ExteriorRing.Count);
         Assert.All(f.ExteriorRing, p =>
         {
             Assert.InRange(p.Latitude, 50.0, 51.0);
@@ -343,7 +343,7 @@ public class S128DatasetReaderTests
 
         var f = ds.Features.Single();
         Assert.Equal(S100GeometryType.Surface, f.GeometryType);
-        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.Equal(5, f.ExteriorRing.Count);
         Assert.All(f.ExteriorRing, p =>
         {
             Assert.InRange(p.Latitude, 40.0, 42.0);

@@ -51,4 +51,17 @@ public sealed class DatasetResult
     /// across products (S-98 Annex A §4.4.1; S-98 Main §9.2.1).
     /// </summary>
     public IReadOnlyList<LayerStackEntry>? StackEntries { get; init; }
+
+    /// <summary>
+    /// The rendered dataset's coarsest intended display-scale denominator when
+    /// derived from the dataset's own content rather than an exchange-set
+    /// <c>CATALOG.XML</c> (S-101 in-file <c>DataCoverage.minimumDisplayScale</c>,
+    /// FC §3.1.1; S-57 DSPM compilation scale, Appendix B.1 §7.3.1.1). The
+    /// viewer's dataset loader uses this as the whole-cell zoom-out window
+    /// (<c>ApplyCellScaleWindow</c>) when no catalogue value is available, so a
+    /// standalone-loaded cell hides — with its extent border — when zoomed out
+    /// past its scale band, matching the exchange-set behaviour. Null when the
+    /// product carries no cell-wide scale.
+    /// </summary>
+    public int? CellMinimumDisplayScale { get; init; }
 }

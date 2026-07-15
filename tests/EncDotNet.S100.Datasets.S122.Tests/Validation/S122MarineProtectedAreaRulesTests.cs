@@ -1,9 +1,9 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S122.DataModel;
 using EncDotNet.S100.Datasets.S122.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S122.Tests.Validation;
 
@@ -19,52 +19,52 @@ public class S122MarineProtectedAreaRulesTests
 
     private static S122Dataset EmptySource() => new()
     {
-        Features = ImmutableArray<S122Feature>.Empty,
-        InformationTypes = ImmutableArray<S122InformationType>.Empty,
+        Features = [],
+        InformationTypes = [],
     };
 
     private static S122MarineProtectedArea Mpa(
         string id,
         S122GeometryKind kind = S122GeometryKind.Surface,
-        ImmutableArray<GeoPosition>? coords = null,
+        IReadOnlyList<GeoPosition>? coords = null,
         int? scaleMinimum = null)
         => new()
         {
             Id = id,
             GeometryKind = kind,
-            Coordinates = coords ?? ImmutableArray<GeoPosition>.Empty,
+            Coordinates = coords ?? [],
             ScaleMinimum = scaleMinimum,
-            References = ImmutableArray<GmlReference>.Empty,
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            References = [],
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
 
     private static S122RestrictedArea Restricted(
         string id,
         S122GeometryKind kind = S122GeometryKind.Surface,
-        ImmutableArray<GeoPosition>? coords = null)
+        IReadOnlyList<GeoPosition>? coords = null)
         => new()
         {
             Id = id,
             GeometryKind = kind,
-            Coordinates = coords ?? ImmutableArray<GeoPosition>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            Coordinates = coords ?? [],
+            References = [],
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
 
     private static S122Authority Authority(string id) => new()
     {
         Id = id,
-        References = ImmutableArray<GmlReference>.Empty,
-        ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+        References = [],
+        ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
     };
 
-    private static ImmutableArray<GeoPosition> ClosedSquare(double lat, double lon, double size = 0.1)
-        => ImmutableArray.Create(
+    private static IReadOnlyList<GeoPosition> ClosedSquare(double lat, double lon, double size = 0.1)
+        => [
             new GeoPosition(lat, lon),
             new GeoPosition(lat + size, lon),
             new GeoPosition(lat + size, lon + size),
             new GeoPosition(lat, lon + size),
-            new GeoPosition(lat, lon));
+            new GeoPosition(lat, lon)];
 
     private static S122MarineProtectedAreaDataset Dataset(
         IEnumerable<IS122Feature>? features = null,
@@ -73,8 +73,8 @@ public class S122MarineProtectedAreaRulesTests
         string? datasetIdentifier = "DS-1")
         => new()
         {
-            Features = (features ?? Array.Empty<IS122Feature>()).ToImmutableArray(),
-            InformationTypes = (infoTypes ?? Array.Empty<IS122InformationType>()).ToImmutableArray(),
+            Features = (features ?? Array.Empty<IS122Feature>()).ToArray(),
+            InformationTypes = (infoTypes ?? Array.Empty<IS122InformationType>()).ToArray(),
             ProductIdentifier = productIdentifier,
             DatasetIdentifier = datasetIdentifier,
             Source = EmptySource(),
@@ -102,7 +102,7 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void GeometryPresentWhenKindSet_Fails_WhenSurfaceMissingCoords()
     {
-        var ds = Dataset(features: new[] { Mpa("BAD", S122GeometryKind.Surface, ImmutableArray<GeoPosition>.Empty) });
+        var ds = Dataset(features: new[] { Mpa("BAD", S122GeometryKind.Surface, []) });
         var findings = S122MarineProtectedAreaRules.GeometryPresentWhenKindSet
             .Evaluate(ds, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -114,7 +114,7 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void GeometryPresentWhenKindSet_Fails_WhenPointMissingCoords()
     {
-        var ds = Dataset(features: new[] { Mpa("P1", S122GeometryKind.Point, ImmutableArray<GeoPosition>.Empty) });
+        var ds = Dataset(features: new[] { Mpa("P1", S122GeometryKind.Point, []) });
         var findings = S122MarineProtectedAreaRules.GeometryPresentWhenKindSet
             .Evaluate(ds, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -135,9 +135,9 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void CoordinatesWithinWgs84Range_Fails_OnOutOfRangeLatitude()
     {
-        var bad = ImmutableArray.Create(
+        GeoPosition[] bad = [
             new GeoPosition(95.0, 0.0),
-            new GeoPosition(0.0, 0.0));
+            new GeoPosition(0.0, 0.0)];
         var ds = Dataset(features: new[] { Mpa("F1", S122GeometryKind.Curve, bad) });
         var findings = S122MarineProtectedAreaRules.CoordinatesWithinWgs84Range
             .Evaluate(ds, ValidationContext.Default).ToList();
@@ -152,7 +152,7 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void CoordinatesWithinWgs84Range_Fails_OnOutOfRangeLongitude()
     {
-        var bad = ImmutableArray.Create(new GeoPosition(0.0, 200.0));
+        GeoPosition[] bad = [new GeoPosition(0.0, 200.0)];
         var ds = Dataset(features: new[] { Mpa("F1", S122GeometryKind.Point, bad) });
         var findings = S122MarineProtectedAreaRules.CoordinatesWithinWgs84Range
             .Evaluate(ds, ValidationContext.Default).ToList();
@@ -163,8 +163,8 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void CoordinatesWithinWgs84Range_ReportsMultipleFindingsAcrossFeatures()
     {
-        var bad1 = ImmutableArray.Create(new GeoPosition(0, 200));
-        var bad2 = ImmutableArray.Create(new GeoPosition(-100, 0));
+        GeoPosition[] bad1 = [new GeoPosition(0, 200)];
+        GeoPosition[] bad2 = [new GeoPosition(-100, 0)];
         var ds = Dataset(features: new IS122Feature[]
         {
             Mpa("A", S122GeometryKind.Point, bad1),
@@ -192,8 +192,8 @@ public class S122MarineProtectedAreaRulesTests
     public void SurfaceRingClosure_Passes_OnNonSurfaceFeature()
     {
         // A curve with 3 points and unequal endpoints — non-surface, rule doesn't apply.
-        var curve = ImmutableArray.Create(
-            new GeoPosition(0, 0), new GeoPosition(1, 1), new GeoPosition(2, 2));
+        GeoPosition[] curve = [
+            new GeoPosition(0, 0), new GeoPosition(1, 1), new GeoPosition(2, 2)];
         var ds = Dataset(features: new[] { Mpa("C1", S122GeometryKind.Curve, curve) });
         Assert.Empty(S122MarineProtectedAreaRules.SurfaceRingClosure
             .Evaluate(ds, ValidationContext.Default));
@@ -202,8 +202,8 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void SurfaceRingClosure_Fails_OnTooFewCoordinates()
     {
-        var ring = ImmutableArray.Create(
-            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(0, 0));
+        GeoPosition[] ring = [
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(0, 0)];
         var ds = Dataset(features: new[] { Mpa("SHORT", S122GeometryKind.Surface, ring) });
         var findings = S122MarineProtectedAreaRules.SurfaceRingClosure
             .Evaluate(ds, ValidationContext.Default).ToList();
@@ -217,11 +217,11 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void SurfaceRingClosure_Fails_WhenRingNotClosed()
     {
-        var ring = ImmutableArray.Create(
+        GeoPosition[] ring = [
             new GeoPosition(0, 0),
             new GeoPosition(0, 1),
             new GeoPosition(1, 1),
-            new GeoPosition(1, 0));
+            new GeoPosition(1, 0)];
         var ds = Dataset(features: new[] { Mpa("OPEN", S122GeometryKind.Surface, ring) });
         var findings = S122MarineProtectedAreaRules.SurfaceRingClosure
             .Evaluate(ds, ValidationContext.Default).ToList();
@@ -362,7 +362,7 @@ public class S122MarineProtectedAreaRulesTests
     [Fact]
     public void Default_ContainsAllSevenRules()
     {
-        Assert.Equal(7, S122MarineProtectedAreaRules.Default.Rules.Length);
+        Assert.Equal(7, S122MarineProtectedAreaRules.Default.Rules.Count);
         var ids = S122MarineProtectedAreaRules.Default.Rules.Select(r => r.RuleId).ToHashSet();
         Assert.Contains("S122-R-3.1", ids);
         Assert.Contains("S122-R-4.1", ids);
@@ -399,8 +399,8 @@ public class S122MarineProtectedAreaRulesTests
         var ds = Dataset(
             features: new IS122Feature[]
             {
-                Mpa("EMPTY", S122GeometryKind.Surface, ImmutableArray<GeoPosition>.Empty),
-                Mpa("BADLL", S122GeometryKind.Point, ImmutableArray.Create(new GeoPosition(95, 0)), scaleMinimum: 0),
+                Mpa("EMPTY", S122GeometryKind.Surface, []),
+                Mpa("BADLL", S122GeometryKind.Point, [new GeoPosition(95, 0)], scaleMinimum: 0),
                 Restricted("DUP", S122GeometryKind.Surface, ClosedSquare(0, 0)),
                 Restricted("DUP", S122GeometryKind.Surface, ClosedSquare(1, 1)),
             },

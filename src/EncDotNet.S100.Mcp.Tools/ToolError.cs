@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -89,14 +88,14 @@ public sealed record SpecNotSupportedForTool(
 [Description("Raised when no bundled Feature Catalogue is available for the requested spec.")]
 public sealed record FeatureCatalogueNotAvailable(
     [property: Description("The product specification whose Feature Catalogue could not be loaded.")] SpecRef Spec,
-    [property: Description("Canonical spec names that have a bundled Feature Catalogue; pass one of these (the edition suffix is optional and ignored).")] ImmutableArray<string> AcceptedSpecs) : ToolError(
+    [property: Description("Canonical spec names that have a bundled Feature Catalogue; pass one of these (the edition suffix is optional and ignored).")] IReadOnlyList<string> AcceptedSpecs) : ToolError(
     "feature_catalogue_not_available",
     BuildMessage(Spec, AcceptedSpecs))
 {
-    private static string BuildMessage(SpecRef spec, ImmutableArray<string> acceptedSpecs)
+    private static string BuildMessage(SpecRef spec, IReadOnlyList<string> acceptedSpecs)
     {
         var message = $"No bundled Feature Catalogue is available for spec '{spec.Name}'.";
-        if (!acceptedSpecs.IsDefaultOrEmpty)
+        if (acceptedSpecs.Count > 0)
         {
             message += $" Specs with a bundled Feature Catalogue: {string.Join(", ", acceptedSpecs)} (the edition suffix is optional and ignored).";
         }

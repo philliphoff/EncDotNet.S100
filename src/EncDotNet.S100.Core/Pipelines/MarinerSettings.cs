@@ -1,5 +1,7 @@
 namespace EncDotNet.S100.Pipelines;
 
+using EncDotNet.S100.Quantities;
+
 /// <summary>
 /// Mariner-configurable display preferences used by S-100 portrayal rules
 /// (S-100 Part 9 §4.2 — "Mariner Selections"). These values are independent
@@ -7,25 +9,26 @@ namespace EncDotNet.S100.Pipelines;
 /// sessions per user preference.
 /// </summary>
 /// <remarks>
-/// All depth fields are stored in metres regardless of <see cref="DepthUnit"/>;
-/// the unit only affects how depth values are presented to the mariner in
-/// the viewer (Pick panel, legend, status bar, settings inputs). Default
-/// values for the boolean toggles match the defaults declared by the bundled
-/// S-101 portrayal catalogue (<c>portrayal_catalogue.xml</c> §<c>context</c>).
+/// Depth fields are strongly typed as <see cref="Depth"/> (canonically metres);
+/// the <see cref="DepthUnit"/> only affects how depth values are presented to
+/// the mariner in the viewer (Pick panel, legend, status bar, settings inputs).
+/// Default values for the boolean toggles match the defaults declared by the
+/// bundled S-101 portrayal catalogue (<c>portrayal_catalogue.xml</c>
+/// §<c>context</c>).
 /// </remarks>
 public sealed record MarinerSettings
 {
-    /// <summary>Safety contour depth in metres (S-101 PC parameter <c>SafetyContour</c>).</summary>
-    public double SafetyContour { get; init; } = 30.0;
+    /// <summary>Safety contour depth (S-101 PC parameter <c>SafetyContour</c>).</summary>
+    public Depth SafetyContour { get; init; } = Depth.FromMetres(30.0);
 
-    /// <summary>Safety depth in metres for sounding selection (S-101 PC parameter <c>SafetyDepth</c>).</summary>
-    public double SafetyDepth { get; init; } = 30.0;
+    /// <summary>Safety depth for sounding selection (S-101 PC parameter <c>SafetyDepth</c>).</summary>
+    public Depth SafetyDepth { get; init; } = Depth.FromMetres(30.0);
 
-    /// <summary>Shallow contour depth in metres (S-101 PC parameter <c>ShallowContour</c>).</summary>
-    public double ShallowContour { get; init; } = 2.0;
+    /// <summary>Shallow contour depth (S-101 PC parameter <c>ShallowContour</c>).</summary>
+    public Depth ShallowContour { get; init; } = Depth.FromMetres(2.0);
 
-    /// <summary>Deep contour depth in metres (S-101 PC parameter <c>DeepContour</c>).</summary>
-    public double DeepContour { get; init; } = 30.0;
+    /// <summary>Deep contour depth (S-101 PC parameter <c>DeepContour</c>).</summary>
+    public Depth DeepContour { get; init; } = Depth.FromMetres(30.0);
 
     /// <summary>
     /// Display unit used by the viewer when presenting depth values to the

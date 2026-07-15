@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text;
 using EncDotNet.S100.Core;
 
@@ -107,7 +106,7 @@ public class DescribeFeatureTypeToolTests
         Assert.Equal("Synthetic FC", value.CatalogueName);
         Assert.Equal("1.0.0", value.CatalogueVersion);
         Assert.Equal(2, value.TotalFeatureTypeCount);
-        Assert.Equal(2, value.FeatureTypes.Length);
+        Assert.Equal(2, value.FeatureTypes.Count);
 
         // Ordered by code ordinal: AbstractThing before TestBuoy.
         Assert.Equal("AbstractThing", value.FeatureTypes[0].Code);
@@ -131,7 +130,7 @@ public class DescribeFeatureTypeToolTests
         Assert.Equal("AbstractThing", ft.SuperType);
         Assert.False(ft.IsAbstract);
         Assert.Equal(new[] { "point" }, ft.PermittedPrimitives);
-        Assert.Equal(3, ft.Attributes.Length);
+        Assert.Equal(3, ft.Attributes.Count);
 
         var category = ft.Attributes.Single(a => a.Code == "categoryOfThing");
         Assert.Equal("Category Of Thing", category.Name);
@@ -139,7 +138,7 @@ public class DescribeFeatureTypeToolTests
         Assert.True(category.Mandatory);
         Assert.False(category.Repeatable);
         Assert.False(category.IsComplex);
-        Assert.Equal(2, category.ListedValues.Length);
+        Assert.Equal(2, category.ListedValues.Count);
         Assert.Contains(category.ListedValues, v => v.Code == "1" && v.Label == "alpha");
         Assert.Equal(new[] { "1" }, category.PermittedValues);
 

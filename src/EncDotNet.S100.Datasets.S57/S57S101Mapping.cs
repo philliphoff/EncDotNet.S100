@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>
@@ -23,25 +21,67 @@ namespace EncDotNet.S100.Datasets.S57;
 /// </remarks>
 public sealed class S57S101Mapping
 {
-    private readonly ImmutableDictionary<string, ushort> _attlByAcronym;
+    private readonly IReadOnlyDictionary<string, ushort> _attlByAcronym;
 
     /// <summary>Feature-class rules keyed by S-57 OBJL.</summary>
-    public ImmutableDictionary<ushort, S57FeatureRule> FeatureRules { get; }
+    public IReadOnlyDictionary<ushort, S57FeatureRule> FeatureRules { get; }
 
     /// <summary>Attribute rules keyed by S-57 ATTL.</summary>
-    public ImmutableDictionary<ushort, S57AttributeRule> AttributeRules { get; }
+    public IReadOnlyDictionary<ushort, S57AttributeRule> AttributeRules { get; }
 
     private S57S101Mapping(
-        ImmutableDictionary<ushort, S57FeatureRule> featureRules,
-        ImmutableDictionary<ushort, S57AttributeRule> attributeRules)
+        IReadOnlyDictionary<ushort, S57FeatureRule> featureRules,
+        IReadOnlyDictionary<ushort, S57AttributeRule> attributeRules)
     {
         FeatureRules = featureRules;
         AttributeRules = attributeRules;
 
-        var byAcronym = ImmutableDictionary.CreateBuilder<string, ushort>(StringComparer.OrdinalIgnoreCase);
+        // Fail fast on redirects that can never match: a value-matching
+        // redirect (ConditionPresent == false) with no ConditionValues would
+        // silently never fire, masking a mapping-rule authoring mistake.
+        foreach (var (objl, rule) in featureRules)
+        {
+            foreach (var redirect in rule.Redirects)
+            {
+                var hasAttrCondition = redirect.ConditionAttribute is not null;
+                var hasPrimitiveCondition = redirect.ConditionPrimitives.Count > 0;
+
+                // A redirect must constrain on something; one with neither an
+                // attribute nor a primitive condition would fire unconditionally
+                // and shadow the rule default (and any later redirects).
+                if (!hasAttrCondition && !hasPrimitiveCondition)
+                {
+                    throw new ArgumentException(
+                        $"S-57 feature redirect on OBJL {objl} (target " +
+                        $"'{redirect.TargetS101Code}') specifies no condition. Provide a " +
+                        "ConditionAttribute (with ConditionPresent or ConditionValues) " +
+                        "and/or a ConditionPrimitives constraint.",
+                        nameof(featureRules));
+                }
+
+                // A value-matching attribute condition (ConditionAttribute set,
+                // ConditionPresent false) needs at least one value, else the
+                // attribute gate can never pass — masking an authoring mistake
+                // even if a primitive condition is also present.
+                if (hasAttrCondition
+                    && !redirect.ConditionPresent
+                    && redirect.ConditionValues.Count == 0)
+                {
+                    throw new ArgumentException(
+                        $"S-57 feature redirect on OBJL {objl} (condition attribute " +
+                        $"'{redirect.ConditionAttribute}', target '{redirect.TargetS101Code}') " +
+                        "has ConditionPresent == false and no ConditionValues, so it can " +
+                        "never match. Set ConditionPresent = true for a presence test, or " +
+                        "provide at least one entry in ConditionValues.",
+                        nameof(featureRules));
+                }
+            }
+        }
+
+        var byAcronym = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         foreach (var (attl, rule) in attributeRules)
             byAcronym[rule.S57Acronym] = attl;
-        _attlByAcronym = byAcronym.ToImmutable();
+        _attlByAcronym = byAcronym;
     }
 
     /// <summary>
@@ -79,6 +119,15 @@ public sealed class S57S101Mapping
     // ── Rule-aware resolution ───────────────────────────────────────────
 
     /// <summary>
+    /// Resolves an S-57 feature instance without considering geometry; equivalent
+    /// to passing <see cref="S57GeometryPrimitive.None"/>.
+    /// </summary>
+    public ResolvedFeature? ResolveFeature(
+        ushort objl,
+        IReadOnlyDictionary<string, string> s57AttributesByAcronym)
+        => ResolveFeature(objl, s57AttributesByAcronym, S57GeometryPrimitive.None);
+
+    /// <summary>
     /// Resolves an S-57 feature instance to the S-101 feature class it should
     /// map to, evaluating any conditional redirects defined for the OBJL
     /// against the supplied S-57 attribute values.
@@ -89,18 +138,41 @@ public sealed class S57S101Mapping
     /// <see cref="BuildAcronymView"/> to construct this view from a feature's
     /// raw attribute records.
     /// </param>
+    /// <param name="primitive">
+    /// The feature's geometric primitive, used to evaluate geometry-conditional
+    /// redirects (<see cref="S57FeatureRedirect.ConditionPrimitives"/>). Pass
+    /// <see cref="S57GeometryPrimitive.None"/> when geometry is irrelevant.
+    /// </param>
     /// <returns>
     /// A <see cref="ResolvedFeature"/>, or <c>null</c> if the OBJL has no
     /// rule or all matching rules drop the feature.
     /// </returns>
-    public ResolvedFeature? ResolveFeature(ushort objl, IReadOnlyDictionary<string, string> s57AttributesByAcronym)
+    public ResolvedFeature? ResolveFeature(
+        ushort objl,
+        IReadOnlyDictionary<string, string> s57AttributesByAcronym,
+        S57GeometryPrimitive primitive)
     {
         if (!FeatureRules.TryGetValue(objl, out var rule)) return null;
 
         foreach (var redirect in rule.Redirects)
         {
-            if (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
-                && redirect.ConditionValues.Contains(v, StringComparer.Ordinal))
+            // Geometry gate: a redirect constrained to specific primitives only
+            // fires when the feature's primitive is among them.
+            if (redirect.ConditionPrimitives.Count > 0
+                && !redirect.ConditionPrimitives.Contains(primitive))
+            {
+                continue;
+            }
+
+            // Attribute gate: a redirect with no ConditionAttribute is purely
+            // geometry-based and passes the attribute gate unconditionally.
+            var attributeMatches = redirect.ConditionAttribute is null
+                || (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
+                    && (redirect.ConditionPresent
+                        ? !string.IsNullOrEmpty(v)
+                        : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)));
+
+            if (attributeMatches)
             {
                 var combined = MergeOverrides(rule.AttributeOverrides, redirect.AttributeOverrides);
                 return new ResolvedFeature(redirect.TargetS101Code, combined);
@@ -139,6 +211,9 @@ public sealed class S57S101Mapping
 
         if (feature.AttributeOverrides.TryGetValue(s57Acronym, out var ov))
         {
+            // A feature-scoped drop removes the attribute entirely (e.g. CATMOR
+            // on a MORFAC that redirected to ShorelineConstruction).
+            if (ov.Drop) return null;
             if (ov.S101Code is not null) s101Code = ov.S101Code;
             // Per-value code override wins over both rule default and the
             // override's S101Code.
@@ -164,16 +239,16 @@ public sealed class S57S101Mapping
     /// suitable for passing to <see cref="ResolveFeature"/>. Values for
     /// attributes whose ATTL is unknown to this mapping are omitted.
     /// </summary>
-    public ImmutableDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)
+    public IReadOnlyDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)
     {
         ArgumentNullException.ThrowIfNull(attributes);
-        var b = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        var b = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in attributes)
         {
             if (AttributeRules.TryGetValue((ushort)a.AttributeCode, out var rule))
                 b[rule.S57Acronym] = a.Value;
         }
-        return b.ToImmutable();
+        return b;
     }
 
     /// <summary>
@@ -182,30 +257,30 @@ public sealed class S57S101Mapping
     public bool TryGetAttl(string s57Acronym, out ushort attl)
         => _attlByAcronym.TryGetValue(s57Acronym, out attl);
 
-    private static ImmutableDictionary<string, S57AttributeOverride> MergeOverrides(
-        ImmutableDictionary<string, S57AttributeOverride> ruleLevel,
-        ImmutableDictionary<string, S57AttributeOverride> redirectLevel)
+    private static IReadOnlyDictionary<string, S57AttributeOverride> MergeOverrides(
+        IReadOnlyDictionary<string, S57AttributeOverride> ruleLevel,
+        IReadOnlyDictionary<string, S57AttributeOverride> redirectLevel)
     {
-        if (redirectLevel.IsEmpty) return ruleLevel;
-        if (ruleLevel.IsEmpty) return redirectLevel;
+        if (redirectLevel.Count == 0) return ruleLevel;
+        if (ruleLevel.Count == 0) return redirectLevel;
 
-        var b = ruleLevel.ToBuilder();
+        var b = new Dictionary<string, S57AttributeOverride>(ruleLevel, StringComparer.OrdinalIgnoreCase);
         foreach (var kv in redirectLevel)
             b[kv.Key] = kv.Value; // redirect-level wins
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableDictionary<string, string?> MergeValueRemap(
-        ImmutableDictionary<string, string?> defaultRemap,
-        ImmutableDictionary<string, string?> overrideRemap)
+    private static IReadOnlyDictionary<string, string?> MergeValueRemap(
+        IReadOnlyDictionary<string, string?> defaultRemap,
+        IReadOnlyDictionary<string, string?> overrideRemap)
     {
-        if (overrideRemap.IsEmpty) return defaultRemap;
-        if (defaultRemap.IsEmpty) return overrideRemap;
+        if (overrideRemap.Count == 0) return defaultRemap;
+        if (defaultRemap.Count == 0) return overrideRemap;
 
-        var b = defaultRemap.ToBuilder();
+        var b = new Dictionary<string, string?>(defaultRemap);
         foreach (var kv in overrideRemap)
             b[kv.Key] = kv.Value;
-        return b.ToImmutable();
+        return b;
     }
 
     // ── Builder ─────────────────────────────────────────────────────────
@@ -213,10 +288,8 @@ public sealed class S57S101Mapping
     /// <summary>Builder for composing custom mapping tables.</summary>
     public sealed class Builder
     {
-        private readonly ImmutableDictionary<ushort, S57FeatureRule>.Builder _features
-            = ImmutableDictionary.CreateBuilder<ushort, S57FeatureRule>();
-        private readonly ImmutableDictionary<ushort, S57AttributeRule>.Builder _attributes
-            = ImmutableDictionary.CreateBuilder<ushort, S57AttributeRule>();
+        private readonly Dictionary<ushort, S57FeatureRule> _features = new();
+        private readonly Dictionary<ushort, S57AttributeRule> _attributes = new();
 
         /// <summary>Adds or replaces a feature-class rule.</summary>
         public Builder AddFeatureRule(S57FeatureRule rule)
@@ -292,21 +365,21 @@ public sealed class S57S101Mapping
 
         /// <summary>Builds an immutable mapping.</summary>
         public S57S101Mapping Build()
-            => new(_features.ToImmutable(), _attributes.ToImmutable());
+            => new(new Dictionary<ushort, S57FeatureRule>(_features), new Dictionary<ushort, S57AttributeRule>(_attributes));
     }
 
     // ── Default rule data (compiled-in) ─────────────────────────────────
 
     private static S57S101Mapping BuildDefault()
     {
-        var features = ImmutableDictionary.CreateBuilder<ushort, S57FeatureRule>();
+        var features = new Dictionary<ushort, S57FeatureRule>();
         foreach (var rule in DefaultRules.FeatureRules())
             features[rule.Objl] = rule;
 
-        var attributes = ImmutableDictionary.CreateBuilder<ushort, S57AttributeRule>();
+        var attributes = new Dictionary<ushort, S57AttributeRule>();
         foreach (var rule in DefaultRules.AttributeRules())
             attributes[rule.Attl] = rule;
 
-        return new S57S101Mapping(features.ToImmutable(), attributes.ToImmutable());
+        return new S57S101Mapping(features, attributes);
     }
 }

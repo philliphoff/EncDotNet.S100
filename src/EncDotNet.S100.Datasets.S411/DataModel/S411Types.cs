@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S411.DataModel;
@@ -122,10 +121,10 @@ public interface IS411IceFeature
     S411GeometryKind GeometryKind { get; }
 
     /// <summary>Coordinates whose semantics depend on <see cref="GeometryKind"/>.</summary>
-    ImmutableArray<GeoPosition> Coordinates { get; }
+    IReadOnlyList<GeoPosition> Coordinates { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 
     /// <summary>The originating raw feature.</summary>
     S411Feature Source { get; }

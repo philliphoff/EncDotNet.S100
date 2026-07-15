@@ -41,7 +41,8 @@
     "resource": [
       {
         "files": [
-          "images/**"
+          "images/**",
+          "styles/**"
         ]
       }
     ],
@@ -52,7 +53,8 @@
     ],
     "globalMetadata": {
       "_appLogoPath": "docs/images/logo.svg",
-      "_appFaviconPath": "docs/images/logo.svg"
+      "_appFaviconPath": "docs/images/logo.svg",
+      "_appTitle": "EncDotNet.S100 Docs"
     }
   }
 }

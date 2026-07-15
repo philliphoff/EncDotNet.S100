@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S127.DataModel;
 
@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.S127.DataModel;
 /// The geometry primitive kind of an S-127 feature when surfaced through
 /// the typed projection. Mirrors the S-124 / S-125 / S-201 typed-model
 /// shape: callers get a discriminator plus a single
-/// <see cref="ImmutableArray{T}"/> of <see cref="GeoPosition"/>s whose
+/// <see cref="IReadOnlyList{T}"/> of <see cref="GeoPosition"/>s whose
 /// semantics depend on the kind.
 /// </summary>
 public enum S127GeometryKind
@@ -110,13 +110,13 @@ public interface IS127Feature
     /// geometry is flattened in source order — full structure is
     /// available on <see cref="Source"/>.
     /// </summary>
-    ImmutableArray<GeoPosition> Coordinates { get; }
+    IReadOnlyList<GeoPosition> Coordinates { get; }
 
     /// <summary>The originating feature record from the feature-bag dataset.</summary>
     S127Feature Source { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 }
 
 /// <summary>
@@ -145,12 +145,12 @@ public sealed class S127OtherFeature : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

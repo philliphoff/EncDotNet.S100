@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Pipelines.Vector;
@@ -42,11 +43,11 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
 
     private static FeatureGeometry? BuildGeometry(TFeature feature)
     {
-        if (!feature.ExteriorRing.IsDefaultOrEmpty)
+        if (feature.ExteriorRing.Count > 0)
         {
-            var holes = feature.InteriorRings.IsDefaultOrEmpty
-                ? Array.Empty<IReadOnlyList<(double Latitude, double Longitude)>>()
-                : feature.InteriorRings.Select(r => (IReadOnlyList<(double, double)>)r.ToArray()).ToArray();
+            var holes = feature.InteriorRings.Count == 0
+                ? Array.Empty<IReadOnlyList<GeoPosition>>()
+                : feature.InteriorRings.Select(r => (IReadOnlyList<GeoPosition>)r.ToArray()).ToArray();
 
             return new FeatureGeometry
             {
@@ -56,9 +57,9 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
             };
         }
 
-        if (!feature.Curves.IsDefaultOrEmpty && feature.Curves.Length > 0)
+        if (feature.Curves.Count > 0)
         {
-            var coords = new List<(double Latitude, double Longitude)>();
+            var coords = new List<GeoPosition>();
             foreach (var curve in feature.Curves)
                 coords.AddRange(curve);
             return new FeatureGeometry
@@ -68,7 +69,7 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
             };
         }
 
-        if (!feature.Points.IsDefaultOrEmpty)
+        if (feature.Points.Count > 0)
         {
             return new FeatureGeometry
             {

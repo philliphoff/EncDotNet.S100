@@ -322,6 +322,7 @@ internal sealed class PickService : IPickService
             References = info.References,
             OwningProcessor = processor,
             StationSeries = BuildStationSeriesViewModel(info, processor),
+            EggCode = info.EggCode,
         };
     }
 

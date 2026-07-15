@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Validation;
@@ -80,7 +79,7 @@ public class ValidationRuleSetTests
 
         Assert.Equal(2, report.RulesEvaluated);
         Assert.Equal(2, report.RulesWithFindings);
-        Assert.Equal(2, report.Findings.Length);
+        Assert.Equal(2, report.Findings.Count);
         Assert.True(report.HasErrors);
         Assert.True(report.HasWarnings);
     }
@@ -153,7 +152,7 @@ public class ValidationRuleSetTests
 
         var set = new ValidationRuleSet<Model>(r1).Add(r2);
 
-        Assert.Equal(2, set.Rules.Length);
+        Assert.Equal(2, set.Rules.Count);
         Assert.Equal("r1", set.Rules[0].RuleId);
         Assert.Equal("r2", set.Rules[1].RuleId);
     }
@@ -175,10 +174,10 @@ public class ValidationRuleSetTests
     [Fact]
     public void FindingsOfSeverity_FiltersCorrectly()
     {
-        var findings = ImmutableArray.Create(
+        ValidationFinding[] findings = [
             new ValidationFinding { RuleId = "a", Severity = ValidationSeverity.Error, Message = "e" },
             new ValidationFinding { RuleId = "b", Severity = ValidationSeverity.Warning, Message = "w" },
-            new ValidationFinding { RuleId = "c", Severity = ValidationSeverity.Info, Message = "i" });
+            new ValidationFinding { RuleId = "c", Severity = ValidationSeverity.Info, Message = "i" }];
         var report = new ValidationReport(findings, RulesEvaluated: 3, RulesWithFindings: 3);
 
         Assert.Single(report.FindingsOfSeverity(ValidationSeverity.Error));

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S111;
@@ -61,7 +60,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
                 context.Dataset.Spec,
                 InstanceFeatureType,
                 SerializeGriddedInstance(dataset),
-                ImmutableArray<FeatureReference>.Empty));
+                []));
         }
 
         var idx = groupIndex.Value - 1;
@@ -75,7 +74,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             context.Dataset.Spec,
             InstanceFeatureType,
             SerializeGriddedGroup(dataset, groupIndex.Value, dataset.Coverages[idx]),
-            ImmutableArray<FeatureReference>.Empty));
+            []));
     }
 
     private static ToolResult<DescribeFeatureResult> DescribeStations(
@@ -92,7 +91,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
                     context.Dataset.Spec,
                     InstanceFeatureType,
                     SerializeStationInstance(dataset),
-                    ImmutableArray<FeatureReference>.Empty));
+                    []));
             }
 
             var idx = groupIndex.Value - 1;
@@ -106,7 +105,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
                 context.Dataset.Spec,
                 StationFeatureType,
                 SerializeStation(dataset.Stations[idx]),
-                ImmutableArray<FeatureReference>.Empty));
+                []));
         }
 
         foreach (var station in dataset.Stations)
@@ -117,7 +116,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
                     context.Dataset.Spec,
                     StationFeatureType,
                     SerializeStation(station),
-                    ImmutableArray<FeatureReference>.Empty));
+                    []));
             }
         }
 

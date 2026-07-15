@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S101.Validation;
@@ -36,9 +35,9 @@ public sealed class S101DatasetView
 
     private S101DatasetView(
         S101Document raw,
-        ImmutableArray<S101FeatureView> features,
-        ImmutableArray<S101FeatureView> unresolvedFeatures,
-        ImmutableArray<S101DiagnosticView> diagnostics,
+        IReadOnlyList<S101FeatureView> features,
+        IReadOnlyList<S101FeatureView> unresolvedFeatures,
+        IReadOnlyList<S101DiagnosticView> diagnostics,
         FeatureCatalogueDecoder? decoder)
     {
         Raw = raw;
@@ -77,7 +76,7 @@ public sealed class S101DatasetView
     /// did not resolve. Use <see cref="UnresolvedFeatures"/> to
     /// enumerate only the unresolved subset.
     /// </summary>
-    public ImmutableArray<S101FeatureView> Features { get; }
+    public IReadOnlyList<S101FeatureView> Features { get; }
 
     /// <summary>
     /// Sidecar view of every feature in the document whose feature
@@ -85,7 +84,7 @@ public sealed class S101DatasetView
     /// <see cref="S101Document.FeatureTypeCatalogue"/>. Used by
     /// <c>S101-R-1.1</c>.
     /// </summary>
-    public ImmutableArray<S101FeatureView> UnresolvedFeatures { get; }
+    public IReadOnlyList<S101FeatureView> UnresolvedFeatures { get; }
 
     /// <summary>
     /// Parse-time diagnostics surfaced by <see cref="S101DocumentReader"/>.
@@ -204,15 +203,15 @@ public sealed class S101DatasetView
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var featuresBuilder = ImmutableArray.CreateBuilder<S101FeatureView>(document.Features.Length);
-        var unresolvedBuilder = ImmutableArray.CreateBuilder<S101FeatureView>();
+        var featuresBuilder = new List<S101FeatureView>(document.Features.Count);
+        var unresolvedBuilder = new List<S101FeatureView>();
         var attrCatalogue = document.AttributeTypeCatalogue;
 
         foreach (var record in document.Features)
         {
             document.FeatureTypeCatalogue.TryGetValue(record.FeatureTypeCode, out var typeAcronym);
 
-            var attributeBuilder = ImmutableArray.CreateBuilder<S101AttributeView>(record.Attributes.Length);
+            var attributeBuilder = new List<S101AttributeView>(record.Attributes.Count);
             foreach (var attr in record.Attributes)
             {
                 attrCatalogue.TryGetValue(attr.NumericCode, out var acronym);
@@ -225,7 +224,7 @@ public sealed class S101DatasetView
                 });
             }
 
-            var view = new S101FeatureView(record, typeAcronym, attributeBuilder.ToImmutable(), attrCatalogue);
+            var view = new S101FeatureView(record, typeAcronym, attributeBuilder, attrCatalogue);
             featuresBuilder.Add(view);
             if (typeAcronym is null)
                 unresolvedBuilder.Add(view);
@@ -233,9 +232,9 @@ public sealed class S101DatasetView
 
         return new S101DatasetView(
             document,
-            featuresBuilder.MoveToImmutable(),
-            unresolvedBuilder.ToImmutable(),
-            ImmutableArray<S101DiagnosticView>.Empty,
+            featuresBuilder,
+            unresolvedBuilder,
+            [],
             decoder);
     }
 }

@@ -149,9 +149,12 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `set_time_step {index|timestamp}` | S-104 / S-111 / S-411 time-aware datasets. |
 | `set_own_ship {lat,lon,cog,sog,heading,hold}` | Position/steer simulated own-ship. |
 | `await_render_idle {quietPeriodMs,timeoutMs}` | Block until the live map settles — the harness clock. |
-| `render_to_image` | Capture the framebuffer (PNG `ImageContentBlock`) for visual eval / diffing. |
+| `render_to_image` | Capture the framebuffer (PNG `ImageContentBlock`) for visual eval / diffing. Map surface only. |
+| `capture_app_screenshot` | Capture the **whole app window** (chart + docks/panels/timeline/status bar) as a PNG. Use to *see* non-render UX, e.g. verify `set_panel` opened a panel. |
 | `get_render_stats` | Last on-screen paint: `frameDurationMs`, draw calls, per-style breakdown. |
 | `close_dataset {id}` / `close_all_datasets` | Unload (retention loops without restarting). |
+| `list_panels` | Read-only — enumerate activity panels (left/right/bottom dock tabs) + `available`/`selected`/`dockOpen`/`showing` state. |
+| `set_panel {panel, visible?}` | Show/hide a panel by id (`Datasets`, `LayerStack`, `PickReport`, `Timeline`, …) to drive & verify non-render UX. |
 
 **Canonical visual-eval loop:**
 `open_dataset` → `set_viewport` → `await_render_idle` →

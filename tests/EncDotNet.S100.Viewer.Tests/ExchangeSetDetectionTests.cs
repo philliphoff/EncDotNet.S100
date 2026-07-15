@@ -62,6 +62,57 @@ public sealed class ExchangeSetDetectionTests : IDisposable
     }
 
     [Fact]
+    public void LooksLikeExchangeSetFolder_AcceptsS411CatalogueSpelling()
+    {
+        // JCOMM/IHO S-411 sample sets name the catalogue "catalogue.xml"
+        // rather than the canonical CATALOG.XML; the folder must still
+        // route to the exchange-set loader.
+        var folder = Path.Combine(_tempRoot, "s411");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "catalogue.xml"), "<root/>");
+
+        Assert.True(ExchangeSetDetection.LooksLikeExchangeSetFolder(folder));
+        Assert.Equal(
+            "catalogue.xml",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
+    public void ResolveFolderCatalogueName_PreservesCanonicalName()
+    {
+        var folder = Path.Combine(_tempRoot, "canon");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
+    public void ResolveFolderCatalogueName_PrefersCanonicalName()
+    {
+        var folder = Path.Combine(_tempRoot, "canon-preferred");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "catalogue.xml"), "<root/>");
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
+    public void ResolveFolderCatalogueName_NullWhenAbsent()
+    {
+        var folder = Path.Combine(_tempRoot, "none");
+        Directory.CreateDirectory(folder);
+        Assert.Null(ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+        Assert.Null(ExchangeSetDetection.ResolveFolderCatalogueName(
+            Path.Combine(_tempRoot, "ghost")));
+    }
+
+    [Fact]
     public void LooksLikeExchangeSetFolder_FalseWhenCatalogOnlyInSubfolder()
     {
         // A nested CATALOG.XML doesn't constitute an exchange set
@@ -96,6 +147,38 @@ public sealed class ExchangeSetDetectionTests : IDisposable
         }
 
         Assert.True(ExchangeSetDetection.LooksLikeExchangeSetZip(zip));
+    }
+
+    [Fact]
+    public void LooksLikeExchangeSetZip_AcceptsS411CatalogueSpelling()
+    {
+        var zip = Path.Combine(_tempRoot, "s411.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("catalogue.xml");
+            archive.CreateEntry("data/S411.gml");
+        }
+
+        Assert.True(ExchangeSetDetection.LooksLikeExchangeSetZip(zip));
+        Assert.Equal(
+            "catalogue.xml",
+            ExchangeSetDetection.ResolveZipCatalogueEntry(zip));
+    }
+
+    [Fact]
+    public void ResolveZipCatalogueEntry_PrefersCanonicalName()
+    {
+        var zip = Path.Combine(_tempRoot, "canon-preferred.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("catalogue.xml");
+            archive.CreateEntry("CATALOG.XML");
+            archive.CreateEntry("data/S411.gml");
+        }
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveZipCatalogueEntry(zip));
     }
 
     [Fact]
@@ -222,5 +305,99 @@ public sealed class ExchangeSetDetectionTests : IDisposable
         Assert.Throws<FileNotFoundException>(
             () => ExchangeSetDetection.ResolveS57Root(
                 Path.Combine(_tempRoot, "nope.000")));
+    }
+
+    // ── Loose-cell folder detection (issue #449) ──────────────────────
+
+    [Fact]
+    public void EnumerateLooseBaseCells_ReturnsTopLevelBaseCells()
+    {
+        var folder = Path.Combine(_tempRoot, "loose");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.000"), "base");
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.001"), "update");
+        File.WriteAllText(Path.Combine(folder, "US5WA02M.000"), "base2");
+        File.WriteAllText(Path.Combine(folder, "notes.txt"), "ignore");
+
+        var cells = ExchangeSetDetection.EnumerateLooseBaseCells(folder);
+
+        Assert.Equal(2, cells.Count);
+        Assert.Contains(cells, c => Path.GetFileName(c) == "US5WA01M.000");
+        Assert.Contains(cells, c => Path.GetFileName(c) == "US5WA02M.000");
+        Assert.DoesNotContain(cells, c => Path.GetFileName(c) == "US5WA01M.001");
+    }
+
+    [Fact]
+    public void EnumerateLooseBaseCells_CaseInsensitiveExtension()
+    {
+        var folder = Path.Combine(_tempRoot, "loose-ci");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "CELL.000"), "base");
+
+        Assert.Single(ExchangeSetDetection.EnumerateLooseBaseCells(folder));
+    }
+
+    [Fact]
+    public void EnumerateLooseBaseCells_EmptyForMissingFolder()
+    {
+        Assert.Empty(ExchangeSetDetection.EnumerateLooseBaseCells(
+            Path.Combine(_tempRoot, "missing")));
+        Assert.Empty(ExchangeSetDetection.EnumerateLooseBaseCells(""));
+    }
+
+    [Fact]
+    public void LooksLikeLooseCellFolder_TrueForCatalogueLessCellFolder()
+    {
+        var folder = Path.Combine(_tempRoot, "cells");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.000"), "base");
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.001"), "update");
+
+        Assert.True(ExchangeSetDetection.LooksLikeLooseCellFolder(folder));
+    }
+
+    [Fact]
+    public void LooksLikeLooseCellFolder_FalseWhenS100CataloguePresent()
+    {
+        var folder = Path.Combine(_tempRoot, "cells-with-s100");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.000"), "base");
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        // A catalogue is present, so this must route to the exchange-set
+        // loader, not the loose-cell path.
+        Assert.False(ExchangeSetDetection.LooksLikeLooseCellFolder(folder));
+        Assert.True(ExchangeSetDetection.LooksLikeExchangeSetFolder(folder));
+    }
+
+    [Fact]
+    public void LooksLikeLooseCellFolder_FalseWhenS57CataloguePresent()
+    {
+        var folder = Path.Combine(_tempRoot, "cells-with-s57");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.000"), "base");
+        File.WriteAllText(Path.Combine(folder, "CATALOG.031"), "binary");
+
+        Assert.False(ExchangeSetDetection.LooksLikeLooseCellFolder(folder));
+        Assert.True(ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(folder));
+    }
+
+    [Fact]
+    public void LooksLikeLooseCellFolder_FalseForFolderWithoutBaseCells()
+    {
+        var folder = Path.Combine(_tempRoot, "no-cells");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "readme.txt"), "text");
+        File.WriteAllText(Path.Combine(folder, "US5WA01M.001"), "orphan update");
+
+        Assert.False(ExchangeSetDetection.LooksLikeLooseCellFolder(folder));
+    }
+
+    [Fact]
+    public void LooksLikeLooseCellFolder_FalseForMissingOrEmptyPath()
+    {
+        Assert.False(ExchangeSetDetection.LooksLikeLooseCellFolder(
+            Path.Combine(_tempRoot, "missing")));
+        Assert.False(ExchangeSetDetection.LooksLikeLooseCellFolder(""));
     }
 }

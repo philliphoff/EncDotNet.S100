@@ -223,6 +223,12 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
                 args.AddParam("displayScale", string.Empty, viewport.ScaleDenominator);
             }
 
+            // Pass the active S-100 Part 9 §11.7 display-mode id (empty when
+            // none is active). Rules that don't declare a `displayMode` param
+            // ignore it, so this is harmless across every spec; the S-411
+            // adapter branches its colour ramp on it.
+            args.AddParam("displayMode", string.Empty, catalogue.DisplayModes.ActiveDisplayModeId ?? string.Empty);
+
             var transform = await catalogue.GetCompiledRuleAsync(rule.Name, cancellationToken).ConfigureAwait(false);
             var resultFragment = new XDocument();
 

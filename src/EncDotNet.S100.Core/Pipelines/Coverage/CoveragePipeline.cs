@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Diagnostics;
 
 namespace EncDotNet.S100.Pipelines.Coverage;
@@ -281,10 +282,10 @@ public class SampledCoverage
     }
 
     // Geolocate a grid cell within the sampled region
-    public (double Longitude, double Latitude) GetPosition(int row, int col)
+    public GeoPosition GetPosition(int row, int col)
     {
         double lat = Metadata.OriginLatitude + row * Metadata.SpacingLatitudinal;
         double lon = Metadata.OriginLongitude + col * Metadata.SpacingLongitudinal;
-        return (lon, lat);
+        return new GeoPosition(lat, lon);
     }
 }

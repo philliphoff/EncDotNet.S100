@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 using EncDotNet.S100.Viewer.ViewModels;
 using Xunit;
@@ -47,7 +48,8 @@ public sealed class HelmViewModelTests
 
     private static OwnShipPosition Fix(
         double lat = 50.0, double lon = -1.0, double cog = 90.0, double sogMs = 5.0, double? heading = null)
-        => new(lat, lon, cog, sogMs, DateTimeOffset.UnixEpoch, heading);
+        => new(lat, lon, Angle.FromDegrees(cog), Speed.FromMetresPerSecond(sogMs), DateTimeOffset.UnixEpoch,
+            heading is { } h ? Angle.FromDegrees(h) : null);
 
     [Fact]
     public void Constructor_SeedsFromCurrentFix()

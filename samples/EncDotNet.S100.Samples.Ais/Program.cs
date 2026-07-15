@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 // PR-D3 sample app: connects to aisstream.io, prints decoded AIS
 // messages projected through AisDynamicFeatureSource. Demonstrates
 // the three-layer split (driver → IAisMessageSource → dynamic
@@ -104,9 +105,9 @@ return 0;
 
 static string Format(DynamicFeature f)
 {
-    var (lat, lon) = f.Coordinates.Count > 0 ? f.Coordinates[0] : (0.0, 0.0);
-    var sog = f.Motion?.SpeedOverGroundKn?.ToString("0.0") ?? "?";
-    var cog = f.Motion?.CourseOverGroundDeg?.ToString("0") ?? "?";
+    var (lat, lon) = f.Coordinates.Count > 0 ? f.Coordinates[0] : new GeoPosition(0.0, 0.0);
+    var sog = f.Motion?.SpeedOverGround?.TotalKnots.ToString("0.0") ?? "?";
+    var cog = f.Motion?.CourseOverGround?.TotalDegrees.ToString("0") ?? "?";
     var kind = f.Kind ?? "?";
     return $"{f.Id,-16} {kind,-22} {lat,8:F4},{lon,9:F4} SOG={sog,5}kn COG={cog,3}°";
 }

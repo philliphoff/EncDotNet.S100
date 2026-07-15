@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S127.DataModel;
 
@@ -21,7 +21,7 @@ public sealed class S127PilotBoardingPlace : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
@@ -37,8 +37,8 @@ public sealed class S127PilotBoardingPlace : IS127Feature
     public IS127Feature? Authority { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -59,14 +59,14 @@ public sealed class S127RouteingMeasure : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -86,7 +86,7 @@ public sealed class S127VesselTrafficServiceArea : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
@@ -95,8 +95,8 @@ public sealed class S127VesselTrafficServiceArea : IS127Feature
     public IS127Feature? Authority { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -116,7 +116,7 @@ public sealed class S127ShipReportingService : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
@@ -125,8 +125,8 @@ public sealed class S127ShipReportingService : IS127Feature
     public IS127Feature? Authority { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -151,7 +151,7 @@ public sealed class S127SignalStation : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
@@ -160,8 +160,8 @@ public sealed class S127SignalStation : IS127Feature
     public IS127Feature? Authority { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -191,7 +191,7 @@ public sealed class S127RegulatedArea : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
@@ -208,8 +208,8 @@ public sealed class S127RegulatedArea : IS127Feature
     public IS127Feature? Authority { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -230,7 +230,7 @@ public sealed class S127Authority : IS127Feature
     public S127GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
     public required S127Feature Source { get; init; }
@@ -239,6 +239,6 @@ public sealed class S127Authority : IS127Feature
     public string? AuthorityName { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

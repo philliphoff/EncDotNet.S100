@@ -1,9 +1,9 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Datasets.S421.Validation;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S421.Tests.Validation;
 
@@ -21,33 +21,33 @@ public class S421RoutePlanRulesTests
     {
         Id = id,
         Position = new GeoPosition(lat, lon),
-        ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+        ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
     };
 
     private static S421Leg Leg(string id, double? sogMin = null, double? sogMax = null) => new()
     {
         Id = id,
-        Coordinates = ImmutableArray<GeoPosition>.Empty,
+        Coordinates = [],
         SpeedOverGroundMin = sogMin,
         SpeedOverGroundMax = sogMax,
-        ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+        ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
     };
 
     private static S421ActionPoint ActionPoint(
         string id,
-        ImmutableArray<GeoPosition> coords,
+        IReadOnlyList<GeoPosition> coords,
         S421ActionPointGeometryKind kind = S421ActionPointGeometryKind.Point) => new()
     {
         Id = id,
         GeometryKind = kind,
         Coordinates = coords,
-        ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+        ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
     };
 
     private static S421RoutePlan Plan(
-        ImmutableArray<S421Waypoint>? waypoints = null,
-        ImmutableArray<S421Leg>? legs = null,
-        ImmutableArray<S421ActionPoint>? actionPoints = null,
+        IReadOnlyList<S421Waypoint>? waypoints = null,
+        IReadOnlyList<S421Leg>? legs = null,
+        IReadOnlyList<S421ActionPoint>? actionPoints = null,
         int? editionNumber = null,
         string routeId = "ROUTE-1")
     {
@@ -55,17 +55,17 @@ public class S421RoutePlanRulesTests
         {
             Id = routeId,
             EditionNumber = editionNumber,
-            Waypoints = waypoints ?? ImmutableArray<S421Waypoint>.Empty,
-            Legs = legs ?? ImmutableArray<S421Leg>.Empty,
-            ActionPoints = actionPoints ?? ImmutableArray<S421ActionPoint>.Empty,
-            Schedules = ImmutableArray<S421Schedule>.Empty,
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            Waypoints = waypoints ?? [],
+            Legs = legs ?? [],
+            ActionPoints = actionPoints ?? [],
+            Schedules = [],
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
 
         var dataset = new S421Dataset
         {
-            Features = ImmutableArray<S421Feature>.Empty,
-            InformationTypes = ImmutableArray<S421InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
 
         return new S421RoutePlan { Route = route, Source = dataset };
@@ -77,7 +77,7 @@ public class S421RoutePlanRulesTests
     public void MinimumWaypointCount_Passes_WhenTwoOrMore()
     {
         var plan = Plan(waypoints:
-            ImmutableArray.Create(Waypoint("W1", 0, 0), Waypoint("W2", 0, 1)));
+            [Waypoint("W1", 0, 0), Waypoint("W2", 0, 1)]);
         var findings = S421RoutePlanRules.MinimumWaypointCount.Evaluate(plan, ValidationContext.Default);
         Assert.Empty(findings);
     }
@@ -87,7 +87,7 @@ public class S421RoutePlanRulesTests
     [InlineData(1)]
     public void MinimumWaypointCount_Fails_WhenFewerThanTwo(int count)
     {
-        var wpts = Enumerable.Range(1, count).Select(i => Waypoint($"W{i}", 0, i)).ToImmutableArray();
+        var wpts = Enumerable.Range(1, count).Select(i => Waypoint($"W{i}", 0, i)).ToArray();
         var plan = Plan(waypoints: wpts);
         var findings = S421RoutePlanRules.MinimumWaypointCount.Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -101,8 +101,8 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void NoCoincidentConsecutiveWaypoints_Passes_WhenDistinct()
     {
-        var plan = Plan(waypoints: ImmutableArray.Create(
-            Waypoint("W1", 0, 0), Waypoint("W2", 0, 1), Waypoint("W3", 1, 1)));
+        var plan = Plan(waypoints: [
+            Waypoint("W1", 0, 0), Waypoint("W2", 0, 1), Waypoint("W3", 1, 1)]);
         var findings = S421RoutePlanRules.NoCoincidentConsecutiveWaypoints
             .Evaluate(plan, ValidationContext.Default);
         Assert.Empty(findings);
@@ -111,10 +111,10 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void NoCoincidentConsecutiveWaypoints_Fails_OnCoincidentPair()
     {
-        var plan = Plan(waypoints: ImmutableArray.Create(
+        var plan = Plan(waypoints: [
             Waypoint("W1", 10.0, 20.0),
             Waypoint("W2", 10.0, 20.0),
-            Waypoint("W3", 11.0, 21.0)));
+            Waypoint("W3", 11.0, 21.0)]);
         var findings = S421RoutePlanRules.NoCoincidentConsecutiveWaypoints
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -127,9 +127,9 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void NoCoincidentConsecutiveWaypoints_Tolerance_AllowsFloatingPointDrift()
     {
-        var plan = Plan(waypoints: ImmutableArray.Create(
+        var plan = Plan(waypoints: [
             Waypoint("W1", 10.0, 20.0),
-            Waypoint("W2", 10.0 + 1e-7, 20.0)));
+            Waypoint("W2", 10.0 + 1e-7, 20.0)]);
         var findings = S421RoutePlanRules.NoCoincidentConsecutiveWaypoints
             .Evaluate(plan, ValidationContext.Default);
         Assert.Empty(findings);
@@ -140,8 +140,8 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void WaypointLatLonInRange_Passes_OnValidCoordinates()
     {
-        var plan = Plan(waypoints: ImmutableArray.Create(
-            Waypoint("W1", -89.9, -179.9), Waypoint("W2", 89.9, 179.9)));
+        var plan = Plan(waypoints: [
+            Waypoint("W1", -89.9, -179.9), Waypoint("W2", 89.9, 179.9)]);
         var findings = S421RoutePlanRules.WaypointLatLonInRange.Evaluate(plan, ValidationContext.Default);
         Assert.Empty(findings);
     }
@@ -149,8 +149,8 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void WaypointLatLonInRange_Fails_OnOutOfRangeLatitude()
     {
-        var plan = Plan(waypoints: ImmutableArray.Create(
-            Waypoint("W1", 0, 0), Waypoint("BAD", 95.0, 0)));
+        var plan = Plan(waypoints: [
+            Waypoint("W1", 0, 0), Waypoint("BAD", 95.0, 0)]);
         var findings = S421RoutePlanRules.WaypointLatLonInRange
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -162,8 +162,8 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void WaypointLatLonInRange_Fails_OnOutOfRangeLongitude()
     {
-        var plan = Plan(waypoints: ImmutableArray.Create(
-            Waypoint("W1", 0, 0), Waypoint("BAD", 0, 181.0)));
+        var plan = Plan(waypoints: [
+            Waypoint("W1", 0, 0), Waypoint("BAD", 0, 181.0)]);
         var findings = S421RoutePlanRules.WaypointLatLonInRange
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -175,10 +175,10 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void LegSpeedOverGroundSane_Passes_WhenAbsentOrValid()
     {
-        var plan = Plan(legs: ImmutableArray.Create(
+        var plan = Plan(legs: [
             Leg("L1"),
             Leg("L2", sogMin: 5.0, sogMax: 12.0),
-            Leg("L3", sogMax: 10.0)));
+            Leg("L3", sogMax: 10.0)]);
         var findings = S421RoutePlanRules.LegSpeedOverGroundSane
             .Evaluate(plan, ValidationContext.Default);
         Assert.Empty(findings);
@@ -187,7 +187,7 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void LegSpeedOverGroundSane_Fails_OnNegativeMin()
     {
-        var plan = Plan(legs: ImmutableArray.Create(Leg("L1", sogMin: -1.0)));
+        var plan = Plan(legs: [Leg("L1", sogMin: -1.0)]);
         var findings = S421RoutePlanRules.LegSpeedOverGroundSane
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -198,7 +198,7 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void LegSpeedOverGroundSane_Fails_WhenMinGreaterThanMax()
     {
-        var plan = Plan(legs: ImmutableArray.Create(Leg("L1", sogMin: 15.0, sogMax: 10.0)));
+        var plan = Plan(legs: [Leg("L1", sogMin: 15.0, sogMax: 10.0)]);
         var findings = S421RoutePlanRules.LegSpeedOverGroundSane
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -242,8 +242,8 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void ActionPointGeometryPopulated_Passes_WhenCoordinatesPresent()
     {
-        var ap = ActionPoint("AP1", ImmutableArray.Create(new GeoPosition(0, 0)));
-        var plan = Plan(actionPoints: ImmutableArray.Create(ap));
+        var ap = ActionPoint("AP1", [new GeoPosition(0, 0)]);
+        var plan = Plan(actionPoints: [ap]);
         Assert.Empty(S421RoutePlanRules.ActionPointGeometryPopulated
             .Evaluate(plan, ValidationContext.Default));
     }
@@ -251,8 +251,8 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void ActionPointGeometryPopulated_Fails_OnEmptyCoordinates()
     {
-        var ap = ActionPoint("AP_EMPTY", ImmutableArray<GeoPosition>.Empty);
-        var plan = Plan(actionPoints: ImmutableArray.Create(ap));
+        var ap = ActionPoint("AP_EMPTY", []);
+        var plan = Plan(actionPoints: [ap]);
         var findings = S421RoutePlanRules.ActionPointGeometryPopulated
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -265,7 +265,7 @@ public class S421RoutePlanRulesTests
     [Fact]
     public void Default_ContainsAllSixRules()
     {
-        Assert.Equal(6, S421RoutePlanRules.Default.Rules.Length);
+        Assert.Equal(6, S421RoutePlanRules.Default.Rules.Count);
         var ids = S421RoutePlanRules.Default.Rules.Select(r => r.RuleId).ToHashSet();
         Assert.Contains("S421-R-3.1", ids);
         Assert.Contains("S421-R-3.2", ids);
@@ -279,9 +279,9 @@ public class S421RoutePlanRulesTests
     public void Validate_OnValidPlan_ProducesNoFindings()
     {
         var plan = Plan(
-            waypoints: ImmutableArray.Create(
-                Waypoint("W1", 10, 20), Waypoint("W2", 11, 21)),
-            legs: ImmutableArray.Create(Leg("L1", sogMin: 5.0, sogMax: 12.0)),
+            waypoints: [
+                Waypoint("W1", 10, 20), Waypoint("W2", 11, 21)],
+            legs: [Leg("L1", sogMin: 5.0, sogMax: 12.0)],
             editionNumber: 1);
         var report = S421RoutePlanRules.Validate(plan);
         Assert.True(report.IsValid);
@@ -295,8 +295,8 @@ public class S421RoutePlanRulesTests
         // Only one waypoint (3.1 fires), out-of-range lon (4.1 fires),
         // negative SOG (5.1 fires), zero edition (6.1 fires).
         var plan = Plan(
-            waypoints: ImmutableArray.Create(Waypoint("W1", 0, 200)),
-            legs: ImmutableArray.Create(Leg("L1", sogMin: -1.0)),
+            waypoints: [Waypoint("W1", 0, 200)],
+            legs: [Leg("L1", sogMin: -1.0)],
             editionNumber: 0);
 
         var report = S421RoutePlanRules.Validate(plan);

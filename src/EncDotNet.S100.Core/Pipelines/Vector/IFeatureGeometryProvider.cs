@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
@@ -31,11 +32,11 @@ public sealed class FeatureGeometry
     /// Points: a single coordinate. Curves: an ordered polyline.
     /// Surfaces: the exterior ring (CCW recommended).
     /// </summary>
-    public required IReadOnlyList<(double Latitude, double Longitude)> Coordinates { get; init; }
+    public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>
     /// Optional interior (hole) rings for surface geometries.
     /// Empty for non-surface geometries.
     /// </summary>
-    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 }

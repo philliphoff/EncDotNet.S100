@@ -159,13 +159,12 @@ public class DataModelTests
     [Fact]
     public void ExtraAttributes_ExcludeKnown_RemovesKnownKeysCaseInsensitive()
     {
-        var attrs = System.Collections.Immutable.ImmutableDictionary
-            .CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         attrs["foo"] = "1";
         attrs["bar"] = "2";
         attrs["baz"] = "3";
 
-        var extras = ExtraAttributes.ExcludeKnown(attrs.ToImmutable(), "FOO", "BAR");
+        var extras = ExtraAttributes.ExcludeKnown(attrs, "FOO", "BAR");
         Assert.Single(extras);
         Assert.Equal("3", extras["baz"]);
     }

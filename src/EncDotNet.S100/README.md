@@ -105,9 +105,31 @@ catalogue for the dataset's product specification is used.
 
 `S100Layer` is the composable unit, so growing from a single chart to a stacked
 view (e.g. an S-101 chart under S-102 bathymetry and S-411 sea ice) is "add more
-layers." The single-layer render path ships today; an additive multi-layer
-composite overload (shared viewport + S-98 paint ordering) is a planned
-fast-follow and does not change this API shape.
+layers." Both paths ship today:
+
+```csharp
+using var renderer = new PngS100DatasetRenderer();
+
+// Single layer:
+byte[] one = await renderer.RenderAsync(dataset);
+
+// Composite — an ordered list, bottom-most first:
+byte[] many = await renderer.RenderAsync(
+    new[]
+    {
+        new S100Layer { Dataset = enc },    // S-101
+        new S100Layer { Dataset = bathy },  // S-102
+    },
+    new S100CompositeOptions { Width = 2048, Height = 1536 });
+```
+
+The composite overload (`IS100CompositeRenderer<byte[]>`) drives the
+renderer-neutral **S-98 interoperability engine** for cross-dataset paint
+ordering and depth suppression (e.g. the S-101-under-S-102 interleave and the
+R-101-102-B depth-shading suppression, S-98 Annex A §A-6.9.1), then paints all
+layers against one shared viewport. Supply `S100CompositeOptions.Viewport` to
+pin the framing, or leave it null to fit the **union** extent of all active
+layers. The whole path is Mapsui-free.
 
 ## Renderers are generic in their result
 

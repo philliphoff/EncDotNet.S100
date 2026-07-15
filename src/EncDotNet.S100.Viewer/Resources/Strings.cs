@@ -137,6 +137,9 @@ internal static class Strings
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
     public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
+    public static string Tooltip_OpenCatalogueInExaminer => Get(nameof(Tooltip_OpenCatalogueInExaminer));
+    public static string Tooltip_OpenFeatureInExaminer => Get(nameof(Tooltip_OpenFeatureInExaminer));
+    public static string Tooltip_OpenAttributeInExaminer => Get(nameof(Tooltip_OpenAttributeInExaminer));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_ToggleDatasetVisibility => Get(nameof(Tooltip_ToggleDatasetVisibility));
     public static string Tooltip_DatasetOpacity => Get(nameof(Tooltip_DatasetOpacity));
@@ -310,6 +313,21 @@ internal static class Strings
     public static string Pick_Chart_NoSamples => Get(nameof(Pick_Chart_NoSamples));
     public static string Pick_Chart_StationAttributes => Get(nameof(Pick_Chart_StationAttributes));
 
+    // Pick panel: WMO / SIGRID-3 ice egg code (S-411)
+    public static string Pick_EggCode_Heading => Get(nameof(Pick_EggCode_Heading));
+    public static string Pick_EggCode_Standard => Get(nameof(Pick_EggCode_Standard));
+    public static string Pick_EggCode_Description => Get(nameof(Pick_EggCode_Description));
+    public static string Pick_EggCode_OpenWater => Get(nameof(Pick_EggCode_OpenWater));
+    public static string Pick_EggCode_SnowDepth => Get(nameof(Pick_EggCode_SnowDepth));
+    public static string Pick_EggCode_HoverHint => Get(nameof(Pick_EggCode_HoverHint));
+    /// <summary>Format for the hovered egg-code value description line.</summary>
+    public static string Pick_EggCode_HoverLine => Get(nameof(Pick_EggCode_HoverLine));
+    public static string Pick_EggCode_Role_TotalConcentration => Get(nameof(Pick_EggCode_Role_TotalConcentration));
+    public static string Pick_EggCode_Role_PartialConcentration => Get(nameof(Pick_EggCode_Role_PartialConcentration));
+    public static string Pick_EggCode_Role_StageOfDevelopment => Get(nameof(Pick_EggCode_Role_StageOfDevelopment));
+    public static string Pick_EggCode_Role_FormOfIce => Get(nameof(Pick_EggCode_Role_FormOfIce));
+    public static string Pick_EggCode_Role_SnowDepth => Get(nameof(Pick_EggCode_Role_SnowDepth));
+
     // Settings
     public static string Settings_Heading => Get(nameof(Settings_Heading));
     public static string Settings_AccentColor => Get(nameof(Settings_AccentColor));
@@ -390,6 +408,8 @@ internal static class Strings
     public static string Tooltip_TileGutterDip => Get(nameof(Tooltip_TileGutterDip));
     public static string Settings_TilePredictionEnabled => Get(nameof(Settings_TilePredictionEnabled));
     public static string Tooltip_TilePredictionEnabled => Get(nameof(Tooltip_TilePredictionEnabled));
+    public static string Settings_TileCrossBandPrewarmEnabled => Get(nameof(Settings_TileCrossBandPrewarmEnabled));
+    public static string Tooltip_TileCrossBandPrewarmEnabled => Get(nameof(Tooltip_TileCrossBandPrewarmEnabled));
     public static string Settings_TileBudgetMb => Get(nameof(Settings_TileBudgetMb));
     public static string Tooltip_TileBudgetMb => Get(nameof(Tooltip_TileBudgetMb));
     public static string Settings_PerformanceProfile => Get(nameof(Settings_PerformanceProfile));
@@ -420,6 +440,8 @@ internal static class Strings
     public static string Settings_Cancel => Get(nameof(Settings_Cancel));
     public static string Settings_BasemapEnabled => Get(nameof(Settings_BasemapEnabled));
     public static string Tooltip_BasemapEnabled => Get(nameof(Tooltip_BasemapEnabled));
+    public static string Settings_ShowOutOfScaleExtentIndicators => Get(nameof(Settings_ShowOutOfScaleExtentIndicators));
+    public static string Tooltip_ShowOutOfScaleExtentIndicators => Get(nameof(Tooltip_ShowOutOfScaleExtentIndicators));
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
@@ -454,6 +476,8 @@ internal static class Strings
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
     public static string Status_S57ExchangeSetNoCells => Get(nameof(Status_S57ExchangeSetNoCells));
+    public static string Status_LooseCellFolderNoCells => Get(nameof(Status_LooseCellFolderNoCells));
+    public static string Status_FolderNoDatasets => Get(nameof(Status_FolderNoDatasets));
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
     public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));
@@ -579,6 +603,20 @@ internal static class Strings
     public static string Segment_TextOther => Get(nameof(Segment_TextOther));
     public static string Segment_TextAll => Get(nameof(Segment_TextAll));
 
+    // S-411 sea-ice display-mode selector (issue #416)
+    public static string DisplayMode_SectionLabel => Get(nameof(DisplayMode_SectionLabel));
+    public static string DisplayMode_SectionDescription => Get(nameof(DisplayMode_SectionDescription));
+    public static string DisplayMode_Header => Get(nameof(DisplayMode_Header));
+    public static string DisplayMode_Concentration => Get(nameof(DisplayMode_Concentration));
+    public static string DisplayMode_Concentration_Description => Get(nameof(DisplayMode_Concentration_Description));
+    public static string DisplayMode_StageOfDevelopment => Get(nameof(DisplayMode_StageOfDevelopment));
+    public static string DisplayMode_StageOfDevelopment_Description => Get(nameof(DisplayMode_StageOfDevelopment_Description));
+    public static string DisplayMode_Navigational => Get(nameof(DisplayMode_Navigational));
+    public static string DisplayMode_Navigational_Description => Get(nameof(DisplayMode_Navigational_Description));
+    public static string Tooltip_DisplayMode_Concentration => Get(nameof(Tooltip_DisplayMode_Concentration));
+    public static string Tooltip_DisplayMode_StageOfDevelopment => Get(nameof(Tooltip_DisplayMode_StageOfDevelopment));
+    public static string Tooltip_DisplayMode_Navigational => Get(nameof(Tooltip_DisplayMode_Navigational));
+
     // Toast notification titles
     public static string Toast_Error => Get(nameof(Toast_Error));
     public static string Toast_Warning => Get(nameof(Toast_Warning));
@@ -627,6 +665,16 @@ internal static class Strings
     public static string Toast_McpPortFindAnother => Get(nameof(Toast_McpPortFindAnother));
     public static string Toast_McpPortReassignedTitle => Get(nameof(Toast_McpPortReassignedTitle));
     public static string Toast_McpPortReassignedBody => Get(nameof(Toast_McpPortReassignedBody));
+
+    // S-100 Feature Catalogue eXaminer links (issue #442)
+    public static string Settings_ExaminerSection => Get(nameof(Settings_ExaminerSection));
+    public static string Settings_ExaminerSection_Help => Get(nameof(Settings_ExaminerSection_Help));
+    public static string Settings_ExaminerEnabled => Get(nameof(Settings_ExaminerEnabled));
+    public static string Settings_ExaminerEnabledTooltip => Get(nameof(Settings_ExaminerEnabledTooltip));
+    public static string Settings_ExaminerBaseUrl => Get(nameof(Settings_ExaminerBaseUrl));
+    public static string Settings_ExaminerBaseUrlTooltip => Get(nameof(Settings_ExaminerBaseUrlTooltip));
+    public static string Settings_ExaminerBaseUrl_Reset => Get(nameof(Settings_ExaminerBaseUrl_Reset));
+    public static string Settings_ExaminerBaseUrl_ResetTooltip => Get(nameof(Settings_ExaminerBaseUrl_ResetTooltip));
 
     // Load-failure toast
     public static string Toast_DatasetErrorTitle => Get(nameof(Toast_DatasetErrorTitle));

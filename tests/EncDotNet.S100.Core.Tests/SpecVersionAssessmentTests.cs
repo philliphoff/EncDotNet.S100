@@ -14,13 +14,13 @@ public class SpecVersionAssessmentTests
     [Fact]
     public void Create_ReturnsNull_WhenNoSupportedEditions()
     {
-        Assert.Null(SpecVersionAssessment.Create(Spec(1, 0), []));
+        Assert.Null(SpecVersionAssessment.TryCreate(Spec(1, 0), []));
     }
 
     [Fact]
     public void Create_Exact_WhenDeclaredMatchesImplemented()
     {
-        var a = SpecVersionAssessment.Create(Spec(2, 0, 0), [new SpecVersion(2, 0, 0)]);
+        var a = SpecVersionAssessment.TryCreate(Spec(2, 0, 0), [new SpecVersion(2, 0, 0)]);
 
         Assert.NotNull(a);
         Assert.Equal(SpecMatchKind.Exact, a!.Kind);
@@ -33,7 +33,7 @@ public class SpecVersionAssessmentTests
     public void Create_Warns_WhenBuildImplementsOlderMinorSameMajor()
     {
         // Declared 1.2 but build implements only 1.0 → CatalogueOlder → warn.
-        var a = SpecVersionAssessment.Create(Spec(1, 2, 0), [new SpecVersion(1, 0, 0)]);
+        var a = SpecVersionAssessment.TryCreate(Spec(1, 2, 0), [new SpecVersion(1, 0, 0)]);
 
         Assert.NotNull(a);
         Assert.Equal(SpecMatchKind.CatalogueOlder, a!.Kind);
@@ -45,7 +45,7 @@ public class SpecVersionAssessmentTests
     public void Create_Warns_OnMajorDivergence()
     {
         // Declared draft 0.8 with build implementing 2.0.0 → no same-major → warn.
-        var a = SpecVersionAssessment.Create(Spec(0, 8, 0), [new SpecVersion(2, 0, 0)]);
+        var a = SpecVersionAssessment.TryCreate(Spec(0, 8, 0), [new SpecVersion(2, 0, 0)]);
 
         Assert.NotNull(a);
         Assert.Equal(SpecMatchKind.MajorDivergence, a!.Kind);
@@ -59,7 +59,7 @@ public class SpecVersionAssessmentTests
     public void Create_DoesNotWarn_WhenBuildImplementsNewerBackwardCompatibleEdition()
     {
         // Declared 1.0 but build implements 1.2 on same major → info only.
-        var a = SpecVersionAssessment.Create(Spec(1, 0, 0), [new SpecVersion(1, 2, 0)]);
+        var a = SpecVersionAssessment.TryCreate(Spec(1, 0, 0), [new SpecVersion(1, 2, 0)]);
 
         Assert.NotNull(a);
         Assert.Equal(SpecMatchKind.CatalogueNewerCompatible, a!.Kind);
@@ -73,7 +73,7 @@ public class SpecVersionAssessmentTests
     {
         // S-102-style multi-edition build {2.1, 3.0}; declaring 2.1 must not
         // flag against 3.0.
-        var a = SpecVersionAssessment.Create(
+        var a = SpecVersionAssessment.TryCreate(
             new SpecRef("S-102", new SpecVersion(2, 1, 0)),
             [new SpecVersion(2, 1, 0), new SpecVersion(3, 0, 0)]);
 
@@ -86,7 +86,7 @@ public class SpecVersionAssessmentTests
     [Fact]
     public void Create_Unknown_WhenDeclaredEditionMissing()
     {
-        var a = SpecVersionAssessment.Create(SpecNoEdition(), [new SpecVersion(2, 0, 0)]);
+        var a = SpecVersionAssessment.TryCreate(SpecNoEdition(), [new SpecVersion(2, 0, 0)]);
 
         Assert.NotNull(a);
         Assert.Equal(SpecMatchKind.Unknown, a!.Kind);
@@ -101,7 +101,7 @@ public class SpecVersionAssessmentTests
     public void Create_PreservesCatalogueForDisplay()
     {
         var cat = new CatalogueRef("S-111", new SpecVersion(1, 5, 0));
-        var a = SpecVersionAssessment.Create(Spec(2, 0, 0), [new SpecVersion(2, 0, 0)], cat);
+        var a = SpecVersionAssessment.TryCreate(Spec(2, 0, 0), [new SpecVersion(2, 0, 0)], cat);
 
         Assert.NotNull(a);
         Assert.Equal(cat, a!.Catalogue);

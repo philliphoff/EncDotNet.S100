@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S125.DataModel;
 
@@ -38,7 +38,7 @@ public interface IS125Aid
     IS125Aid? HostStructure { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 }
 
 /// <summary>The flavour of an S-125 buoy.</summary>
@@ -170,8 +170,8 @@ public sealed class S125Buoy : IS125Aid
     /// <inheritdoc/>
     public IS125Aid? HostStructure { get; init; }
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -193,8 +193,8 @@ public sealed class S125Beacon : IS125Aid
     /// <inheritdoc/>
     public IS125Aid? HostStructure { get; init; }
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -216,8 +216,8 @@ public sealed class S125Light : IS125Aid
     /// <inheritdoc/>
     public IS125Aid? HostStructure { get; init; }
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -249,8 +249,8 @@ public sealed class S125AisAton : IS125Aid
     /// <inheritdoc/>
     public IS125Aid? HostStructure { get; init; }
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -273,8 +273,8 @@ public sealed class S125Structure : IS125Aid
     /// <inheritdoc/>
     public IS125Aid? HostStructure { get; init; }
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -298,6 +298,6 @@ public sealed class S125Equipment : IS125Aid
     /// <inheritdoc/>
     public IS125Aid? HostStructure { get; init; }
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

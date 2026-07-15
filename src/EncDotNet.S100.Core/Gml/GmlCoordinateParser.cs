@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Xml.Linq;
 
@@ -12,23 +12,38 @@ namespace EncDotNet.S100.Features;
 /// longitude second) as required by S-100 Part 10b §6.2. Separator handling
 /// tolerates both standard whitespace and comma-separated tokens (a
 /// producer-bug compensation seen in some real-world S-122 and S-128 datasets).
+/// A second producer-bug compensation auto-corrects longitude-first axis order
+/// (seen in the US NWS S-411 sea-ice product) using the physical latitude bound
+/// of ±90° — see <see cref="NormalizeAxisOrder"/>.
 /// </remarks>
 public static class GmlCoordinateParser
 {
     private static readonly char[] Separators = [' ', '\t', '\n', '\r', ','];
 
     /// <summary>
+    /// Corrects a parsed ordinate pair for producer axis-order violations.
+    /// S-100 Part 10b §6.2 mandates latitude-first for <c>EPSG:4326</c>, but some
+    /// real-world datasets (e.g. the US NWS S-411 sea-ice product) encode
+    /// longitude first. Latitude is physically bounded to ±90°, so when the
+    /// first ordinate's magnitude exceeds 90° while the second's does not, the
+    /// pair is unambiguously longitude-first and is swapped. This is a strict
+    /// no-op for all conformant latitude-first data (which never has |lat| &gt; 90°).
+    /// </summary>
+    private static GeoPosition NormalizeAxisOrder(double first, double second)
+        => Math.Abs(first) > 90.0 && Math.Abs(second) <= 90.0 ? new GeoPosition(second, first) : new GeoPosition(first, second);
+
+    /// <summary>
     /// Parses a <c>gml:pos</c> value into a single coordinate pair.
     /// </summary>
     /// <returns>The parsed (latitude, longitude) pair, or <c>null</c> if parsing fails.</returns>
-    public static (double Latitude, double Longitude)? ParsePos(string posValue)
+    public static GeoPosition? ParsePos(string posValue)
     {
         var parts = posValue.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length >= 2 &&
-            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var lat) &&
-            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var lon))
+            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var first) &&
+            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var second))
         {
-            return (lat, lon);
+            return NormalizeAxisOrder(first, second);
         }
         return null;
     }
@@ -36,28 +51,28 @@ public static class GmlCoordinateParser
     /// <summary>
     /// Parses a <c>gml:posList</c> value into a sequence of coordinate pairs.
     /// </summary>
-    public static ImmutableArray<(double Latitude, double Longitude)> ParsePosList(string posListValue)
+    public static IReadOnlyList<GeoPosition> ParsePosList(string posListValue)
     {
         var parts = posListValue.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
+        var coords = new List<GeoPosition>();
 
         for (int i = 0; i + 1 < parts.Length; i += 2)
         {
-            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var lat) &&
-                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var lon))
+            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var first) &&
+                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var second))
             {
-                coords.Add((lat, lon));
+                coords.Add(NormalizeAxisOrder(first, second));
             }
         }
 
-        return coords.ToImmutable();
+        return coords;
     }
 
     /// <summary>
     /// Extracts a point coordinate from a GML point property element by
     /// searching for <c>gml:pos</c> across common nesting patterns.
     /// </summary>
-    public static (double Latitude, double Longitude)? ParsePointElement(XElement element, XNamespace? s100Ns = null)
+    public static GeoPosition? ParsePointElement(XElement element, XNamespace? s100Ns = null)
     {
         var gmlNs = element.GetNamespaceOfPrefix("gml") ?? GmlNamespaces.Gml;
 
@@ -89,10 +104,10 @@ public static class GmlCoordinateParser
     /// Parses curve coordinates from a GML curve property element by
     /// extracting <c>gml:posList</c> and <c>gml:pos</c> children.
     /// </summary>
-    public static ImmutableArray<(double Latitude, double Longitude)> ParseCurveCoordinates(XElement curveContainer)
+    public static IReadOnlyList<GeoPosition> ParseCurveCoordinates(XElement curveContainer)
     {
         var gmlNs = curveContainer.GetNamespaceOfPrefix("gml") ?? GmlNamespaces.Gml;
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
+        var coords = new List<GeoPosition>();
 
         foreach (var posList in curveContainer.Descendants(gmlNs + "posList"))
         {
@@ -108,21 +123,21 @@ public static class GmlCoordinateParser
             }
         }
 
-        return coords.ToImmutable();
+        return coords;
     }
 
     /// <summary>
     /// Parses surface coordinates (exterior ring and optional interior rings)
     /// from a GML surface property element.
     /// </summary>
-    public static (ImmutableArray<(double Latitude, double Longitude)> ExteriorRing,
-                    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings)
+    public static (IReadOnlyList<GeoPosition> ExteriorRing,
+                    IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings)
         ParseSurfaceCoordinates(XElement surfaceContainer)
     {
         var gmlNs = surfaceContainer.GetNamespaceOfPrefix("gml") ?? GmlNamespaces.Gml;
 
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>();
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        var interiorRings = new List<IReadOnlyList<GeoPosition>>();
 
         var exterior = surfaceContainer.Descendants(gmlNs + "exterior").FirstOrDefault();
         if (exterior is not null)
@@ -135,7 +150,7 @@ public static class GmlCoordinateParser
         // IC-ENC/DK catalogues) emit <gml:Polygon><gml:posList> directly,
         // omitting the <gml:exterior>/<gml:LinearRing> wrapper. Conformant
         // surfaces never reach this branch.
-        if (exteriorRing.IsDefaultOrEmpty)
+        if (exteriorRing.Count == 0)
         {
             exteriorRing = ParseRingCoordinates(surfaceContainer, gmlNs);
         }
@@ -145,10 +160,10 @@ public static class GmlCoordinateParser
             interiorRings.Add(ParseRingCoordinates(interior, gmlNs));
         }
 
-        return (exteriorRing, interiorRings.ToImmutable());
+        return (exteriorRing, interiorRings);
     }
 
-    private static ImmutableArray<(double, double)> ParseRingCoordinates(XElement ringContainer, XNamespace gmlNs)
+    private static IReadOnlyList<GeoPosition> ParseRingCoordinates(XElement ringContainer, XNamespace gmlNs)
     {
         var posList = ringContainer.Descendants(gmlNs + "posList").FirstOrDefault();
         if (posList is not null)
@@ -169,22 +184,22 @@ public static class GmlCoordinateParser
     /// across consecutive single-value <c>gml:pos</c> elements, so the
     /// ordinates are flattened and paired up (lat, lon).
     /// </remarks>
-    private static ImmutableArray<(double, double)> ParsePosSequence(IEnumerable<XElement> posElements)
+    private static IReadOnlyList<GeoPosition> ParsePosSequence(IEnumerable<XElement> posElements)
     {
         var elements = posElements as IReadOnlyList<XElement> ?? posElements.ToArray();
         if (elements.Count == 0)
-            return ImmutableArray<(double, double)>.Empty;
+            return [];
 
         // Standard path (unchanged for conformant data): each gml:pos is a
         // full position.
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
+        var coords = new List<GeoPosition>();
         foreach (var pos in elements)
         {
             var coord = ParsePos(pos.Value);
             if (coord is not null) coords.Add(coord.Value);
         }
         if (coords.Count > 0)
-            return coords.ToImmutable();
+            return coords;
 
         // Additive fallback: the standard parse produced no vertices. If every
         // gml:pos holds exactly one ordinate, re-interpret them as a flat
@@ -197,6 +212,6 @@ public static class GmlCoordinateParser
             return ParsePosList(flattened);
         }
 
-        return ImmutableArray<(double, double)>.Empty;
+        return [];
     }
 }

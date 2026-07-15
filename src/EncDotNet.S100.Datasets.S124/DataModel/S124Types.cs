@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S124.DataModel;
 
@@ -57,8 +57,8 @@ public sealed class S124NavwarnPreamble
     public string? PromulgatingAuthority { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -81,20 +81,20 @@ public sealed class S124NavwarnPart
     public int? Category { get; init; }
 
     /// <summary>Affected areas referenced via the <c>areaAffected</c> association.</summary>
-    public ImmutableArray<S124AffectedArea> AffectedAreas { get; init; } = ImmutableArray<S124AffectedArea>.Empty;
+    public IReadOnlyList<S124AffectedArea> AffectedAreas { get; init; } = [];
 
     /// <summary>Text placements referenced via the <c>TextAssociation</c> association.</summary>
-    public ImmutableArray<S124TextPlacement> TextPlacements { get; init; } = ImmutableArray<S124TextPlacement>.Empty;
+    public IReadOnlyList<S124TextPlacement> TextPlacements { get; init; } = [];
 
     /// <summary>The geometry primitive kind of the source feature.</summary>
     public S124GeometryKind GeometryKind { get; init; }
 
     /// <summary>The coordinates of the source feature (semantics depend on <see cref="GeometryKind"/>).</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -112,11 +112,11 @@ public sealed class S124AffectedArea
     public S124GeometryKind GeometryKind { get; init; }
 
     /// <summary>Coordinates whose semantics depend on <see cref="GeometryKind"/>.</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -134,8 +134,8 @@ public sealed class S124TextPlacement
     public string? Text { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -154,8 +154,8 @@ public sealed class S124WarningReference
     public string? MessageReference { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -171,8 +171,8 @@ public sealed class S124SpatialQuality
     public int? QualityOfPosition { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>

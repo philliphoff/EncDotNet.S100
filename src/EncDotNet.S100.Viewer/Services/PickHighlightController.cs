@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -128,8 +129,8 @@ internal sealed class PickHighlightController : IDisposable
     {
         if (_disposed) return;
 
-        (double Lat, double Lon)? location =
-            _pickReport.Location is { } loc ? (loc.Latitude, loc.Longitude) : null;
+        GeoPosition? location =
+            _pickReport.Location is { } loc ? new GeoPosition(loc.Latitude, loc.Longitude) : null;
 
         PickHighlightGeometry? geometry =
             _pickReport.SelectedHit is { } hit ? TryResolveGeometry(hit) : null;
@@ -201,20 +202,20 @@ internal sealed class PickHighlightController : IDisposable
             Points: ToList(feature.Points));
     }
 
-    private static IReadOnlyList<(double Lat, double Lon)> ToList(
-        System.Collections.Immutable.ImmutableArray<(double Latitude, double Longitude)> source)
+    private static IReadOnlyList<GeoPosition> ToList(
+        IReadOnlyList<GeoPosition> source)
     {
-        if (source.IsDefaultOrEmpty) return Array.Empty<(double, double)>();
-        var list = new List<(double Lat, double Lon)>(source.Length);
-        foreach (var (lat, lon) in source) list.Add((lat, lon));
+        if (source.Count == 0) return Array.Empty<GeoPosition>();
+        var list = new List<GeoPosition>(source.Count);
+        foreach (var (lat, lon) in source) list.Add(new GeoPosition(lat, lon));
         return list;
     }
 
-    private static IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>> ToRings(
-        System.Collections.Immutable.ImmutableArray<System.Collections.Immutable.ImmutableArray<(double Latitude, double Longitude)>> source)
+    private static IReadOnlyList<IReadOnlyList<GeoPosition>> ToRings(
+        IReadOnlyList<IReadOnlyList<GeoPosition>> source)
     {
-        if (source.IsDefaultOrEmpty) return Array.Empty<IReadOnlyList<(double, double)>>();
-        var list = new List<IReadOnlyList<(double Lat, double Lon)>>(source.Length);
+        if (source.Count == 0) return Array.Empty<IReadOnlyList<GeoPosition>>();
+        var list = new List<IReadOnlyList<GeoPosition>>(source.Count);
         foreach (var ring in source) list.Add(ToList(ring));
         return list;
     }

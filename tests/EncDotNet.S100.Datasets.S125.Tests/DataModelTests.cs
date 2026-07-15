@@ -1,6 +1,7 @@
 using System.Linq;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S125.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S125.Tests;
 
@@ -17,7 +18,7 @@ public class DataModelTests
         var typed = S125AtonDataset.From(dataset, out var diagnostics);
 
         Assert.Equal("S-125", typed.ProductIdentifier);
-        Assert.Equal(2, typed.Aids.Length);
+        Assert.Equal(2, typed.Aids.Count);
         Assert.Single(typed.StatusInformation);
         Assert.Empty(diagnostics);
 
@@ -103,7 +104,7 @@ public class DataModelTests
 
         var agg = typed.Aggregations.Single();
         Assert.Equal(S125AggregationKind.Aggregation, agg.Kind);
-        Assert.Equal(3, agg.Members.Length);
+        Assert.Equal(3, agg.Members.Count);
         Assert.Contains(agg.Members, m => m.Id == "beacon1");
         Assert.Contains(agg.Members, m => m.Id == "light1");
         Assert.Contains(agg.Members, m => m.Id == "vais1");
@@ -129,17 +130,17 @@ public class DataModelTests
         {
             ProductIdentifier = "S-125",
             DatasetIdentifier = "dangling",
-            Features = System.Collections.Immutable.ImmutableArray.Create(new S125Feature
+            Features = [new S125Feature
             {
                 Id = "buoyX",
                 FeatureType = "LateralBuoy",
                 GeometryType = EncDotNet.S100.Features.S100GeometryType.None,
-                Attributes = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty,
-                ComplexAttributes = System.Collections.Immutable.ImmutableArray<S125ComplexAttribute>.Empty,
-                InformationReferences = System.Collections.Immutable.ImmutableArray.Create(
-                    new S125InformationReference { Role = "AtoNStatus", InformationRef = "missing" }),
-            }),
-            InformationTypes = System.Collections.Immutable.ImmutableArray<S125InformationType>.Empty,
+                Attributes = ReadOnlyDictionary<string, string>.Empty,
+                ComplexAttributes = [],
+                InformationReferences = [
+                    new S125InformationReference { Role = "AtoNStatus", InformationRef = "missing" }],
+            }],
+            InformationTypes = [],
         };
 
         var typed = S125AtonDataset.From(dataset, out var diagnostics);
@@ -155,8 +156,8 @@ public class DataModelTests
         var empty = new S125Dataset
         {
             ProductIdentifier = "S-125",
-            Features = System.Collections.Immutable.ImmutableArray<S125Feature>.Empty,
-            InformationTypes = System.Collections.Immutable.ImmutableArray<S125InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
 
         Assert.Throws<InvalidOperationException>(() => S125AtonDataset.From(empty, out _));

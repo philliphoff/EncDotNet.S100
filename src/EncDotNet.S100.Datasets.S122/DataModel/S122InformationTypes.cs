@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S122.DataModel;
@@ -33,15 +33,15 @@ public abstract class S122InformationTypeBase : IS122InformationType
     public string? SourceIndication { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
+    public IReadOnlyList<GmlReference> References { get; init; } = [];
 
     /// <inheritdoc/>
-    public ImmutableArray<S122InformationReference> InformationReferences { get; internal set; } =
-        ImmutableArray<S122InformationReference>.Empty;
+    public IReadOnlyList<S122InformationReference> InformationReferences { get; internal set; } =
+        [];
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>

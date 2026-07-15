@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S102;
@@ -56,7 +55,7 @@ internal sealed class S102FeatureDescriber : ISpecFeatureDescriber
             context.Dataset.Spec,
             FeatureType,
             attributes,
-            ImmutableArray<FeatureReference>.Empty));
+            []));
     }
 
     /// <summary>

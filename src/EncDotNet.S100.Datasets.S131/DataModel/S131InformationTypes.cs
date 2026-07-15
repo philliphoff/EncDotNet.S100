@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S131.DataModel;
@@ -24,10 +24,10 @@ public interface IS131InformationType
     /// information types do not declare outgoing references, but the
     /// surface is preserved for forward compatibility.
     /// </summary>
-    ImmutableArray<S131ResolvedReference> ResolvedReferences { get; }
+    IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 
     /// <summary>The originating raw GML information type instance.</summary>
     S131InformationType Source { get; }
@@ -59,11 +59,11 @@ public sealed class S131Authority : IS131InformationType
     public S131Applicability? Applicability { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -79,11 +79,11 @@ public sealed class S131ContactDetails : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "ContactDetails";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -99,11 +99,11 @@ public sealed class S131Applicability : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "Applicability";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -119,11 +119,11 @@ public sealed class S131AvailablePortServices : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "AvailablePortServices";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -139,11 +139,11 @@ public sealed class S131Entrance : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "Entrance";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -159,11 +159,11 @@ public sealed class S131ServiceHours : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "ServiceHours";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -179,11 +179,11 @@ public sealed class S131NonStandardWorkingDay : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "NonStandardWorkingDay";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -206,11 +206,11 @@ public sealed class S131RxNInformation : IS131InformationType
     /// <summary>The concrete kind, decoded from <see cref="TypeCode"/>.</summary>
     public required S131RxNKind Kind { get; init; }
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -226,11 +226,11 @@ public sealed class S131SpatialQuality : IS131InformationType
     /// <inheritdoc/>
     public string TypeCode => "SpatialQuality";
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }
@@ -248,11 +248,11 @@ public sealed class S131OtherInformationType : IS131InformationType
     /// <inheritdoc/>
     public required string TypeCode { get; init; }
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131InformationType Source { get; init; }
 }

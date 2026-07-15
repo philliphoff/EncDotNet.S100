@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Datasets.S421.DataModel;
 
@@ -20,4 +19,4 @@ namespace EncDotNet.S100.Datasets.S129.Fusion.Routing;
 public sealed record S129RouteBinding(
     S129UnderKeelClearancePlan Plan,
     S421Route Route,
-    ImmutableArray<(S129ControlPoint ControlPoint, S129ControlPointRouteMapping Mapping)> Mappings);
+    IReadOnlyList<(S129ControlPoint ControlPoint, S129ControlPointRouteMapping Mapping)> Mappings);

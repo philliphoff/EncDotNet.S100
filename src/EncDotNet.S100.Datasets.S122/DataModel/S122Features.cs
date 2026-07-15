@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -22,7 +22,7 @@ public abstract class S122FeatureBase : IS122Feature
     public S122GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <summary>The interoperability identifier (S-122 FC §interoperabilityIdentifier), when present.</summary>
     public string? InteroperabilityIdentifier { get; init; }
@@ -49,19 +49,19 @@ public abstract class S122FeatureBase : IS122Feature
     public string? PeriodicDateRange { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
+    public IReadOnlyList<GmlReference> References { get; init; } = [];
 
     /// <inheritdoc/>
-    public ImmutableArray<S122InformationReference> InformationReferences { get; internal set; } =
-        ImmutableArray<S122InformationReference>.Empty;
+    public IReadOnlyList<S122InformationReference> InformationReferences { get; internal set; } =
+        [];
 
     /// <inheritdoc/>
-    public ImmutableArray<S122FeatureReference> FeatureReferences { get; internal set; } =
-        ImmutableArray<S122FeatureReference>.Empty;
+    public IReadOnlyList<S122FeatureReference> FeatureReferences { get; internal set; } =
+        [];
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>

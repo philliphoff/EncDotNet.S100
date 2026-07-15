@@ -29,6 +29,12 @@ public sealed class FeatureCatalogueDecoder
     /// </summary>
     private readonly Dictionary<string, string> _listedValueLabels;
 
+    /// <summary>
+    /// Maps "<simpleAttributeCode>|<listedValueCode>" → definition so the
+    /// richer prose meaning of an enumerated value can be resolved in O(1).
+    /// </summary>
+    private readonly Dictionary<string, string> _listedValueDefinitions;
+
     public FeatureCatalogueDecoder(FeatureCatalogue catalogue)
     {
         if (catalogue is null) throw new System.ArgumentNullException(nameof(catalogue));
@@ -36,12 +42,15 @@ public sealed class FeatureCatalogueDecoder
 
         _simpleAttributesByCode = new(catalogue.SimpleAttributes.Count, System.StringComparer.OrdinalIgnoreCase);
         _listedValueLabels = new(System.StringComparer.OrdinalIgnoreCase);
+        _listedValueDefinitions = new(System.StringComparer.OrdinalIgnoreCase);
         foreach (var sa in catalogue.SimpleAttributes)
         {
             _simpleAttributesByCode[sa.Code] = sa;
             foreach (var lv in sa.ListedValues)
             {
                 _listedValueLabels[$"{sa.Code}|{lv.Code}"] = lv.Label;
+                if (!string.IsNullOrWhiteSpace(lv.Definition))
+                    _listedValueDefinitions[$"{sa.Code}|{lv.Code}"] = lv.Definition;
             }
         }
 
@@ -87,6 +96,24 @@ public sealed class FeatureCatalogueDecoder
             return null;
         return _listedValueLabels.TryGetValue($"{attributeCode}|{rawValue}", out var label)
             ? label
+            : null;
+    }
+
+    /// <summary>
+    /// Resolves a listed-value (enumeration) code for the given simple
+    /// attribute to its prose definition (the human-readable meaning, e.g.
+    /// <c>"Grey Ice"</c>). Returns <c>null</c> when the attribute is not
+    /// enumerated, the value is not a listed value, the listed value carried
+    /// no definition, or either is unknown to the catalogue.
+    /// </summary>
+    /// <param name="attributeCode">The simple attribute's code (e.g. <c>"iceStageofDevelopment"</c>).</param>
+    /// <param name="rawValue">The raw value from the dataset (typically a numeric code).</param>
+    public string? ResolveListedValueDefinition(string attributeCode, string? rawValue)
+    {
+        if (string.IsNullOrEmpty(attributeCode) || string.IsNullOrEmpty(rawValue))
+            return null;
+        return _listedValueDefinitions.TryGetValue($"{attributeCode}|{rawValue}", out var definition)
+            ? definition
             : null;
     }
 

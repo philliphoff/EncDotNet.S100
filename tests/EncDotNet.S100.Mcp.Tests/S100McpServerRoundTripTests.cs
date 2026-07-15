@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
@@ -203,13 +204,13 @@ public class S100McpServerRoundTripTests
             Id = "feat-1",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(feature);
         var catalog = McpTestHelpers.NewCatalog(
@@ -239,21 +240,21 @@ public class S100McpServerRoundTripTests
             Id = "area-1",
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
-            ExteriorRing = ImmutableArray.Create<(double, double)>(
-                (4.0, 4.0), (4.0, 6.0), (6.0, 6.0), (6.0, 4.0), (4.0, 4.0)),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            ExteriorRing = [
+                new GeoPosition(4.0, 4.0), new GeoPosition(4.0, 6.0), new GeoPosition(6.0, 6.0), new GeoPosition(6.0, 4.0), new GeoPosition(4.0, 4.0)],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
         var point = new S124Feature
         {
             Id = "light-1",
             FeatureType = "Light",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(area, point);
         var catalog = McpTestHelpers.NewCatalog(
@@ -288,20 +289,20 @@ public class S100McpServerRoundTripTests
             Id = "near-1",
             FeatureType = "Light",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.1)),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.1)],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
         var far = new S124Feature
         {
             Id = "far-1",
             FeatureType = "Light",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 6.0)),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 6.0)],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(far, near);
         var catalog = McpTestHelpers.NewCatalog(
@@ -354,11 +355,11 @@ public class S100McpServerRoundTripTests
             Id = "tri-1",
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
-            ExteriorRing = ImmutableArray.Create<(double, double)>(
-                (0, 0), (2, 0), (0, 2), (0, 0)),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            ExteriorRing = [
+                new GeoPosition(0, 0), new GeoPosition(2, 0), new GeoPosition(0, 2), new GeoPosition(0, 0)],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(triangle);
         var catalog = McpTestHelpers.NewCatalog(
@@ -467,13 +468,13 @@ public class S100McpServerRoundTripTests
             Id = "feat-1",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("warningInformation", "Test warning text."),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["warningInformation"] = "Test warning text." },
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(feature);
         var catalog = McpTestHelpers.NewCatalog(
@@ -508,26 +509,26 @@ public class S100McpServerRoundTripTests
             Id = "match",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("navwarnTypeGeneral", "1"),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["navwarnTypeGeneral"] = "1" },
+            ComplexAttributes = [],
+            References = [],
         };
         var other = new S124Feature
         {
             Id = "other",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((6.0, 6.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("navwarnTypeGeneral", "2"),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(6.0, 6.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["navwarnTypeGeneral"] = "2" },
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(matching, other);
         var catalog = McpTestHelpers.NewCatalog(
@@ -557,26 +558,26 @@ public class S100McpServerRoundTripTests
             Id = "deep",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("valueOfDepth", "20"),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["valueOfDepth"] = "20" },
+            ComplexAttributes = [],
+            References = [],
         };
         var shallow = new S124Feature
         {
             Id = "shallow",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((6.0, 6.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("valueOfDepth", "5"),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(6.0, 6.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["valueOfDepth"] = "5" },
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(deep, shallow);
         var catalog = McpTestHelpers.NewCatalog(
@@ -606,26 +607,26 @@ public class S100McpServerRoundTripTests
             Id = "warn-named",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Nab Tower Light"),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["objectName"] = "Nab Tower Light" },
+            ComplexAttributes = [],
+            References = [],
         };
         var other = new S124Feature
         {
             Id = "warn-other",
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((6.0, 6.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Spit Sand Fort"),
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(6.0, 6.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["objectName"] = "Spit Sand Fort" },
+            ComplexAttributes = [],
+            References = [],
         };
         var dataset = S124Synth.Dataset(named, other);
         var catalog = McpTestHelpers.NewCatalog(
@@ -692,8 +693,8 @@ public class S100McpServerRoundTripTests
         var outOfWindow = MakeS122WithFixedRange("out", "2030-01-01", "2030-12-31");
         var s122 = new S122Dataset
         {
-            Features = ImmutableArray.Create(inWindow, outOfWindow),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = [inWindow, outOfWindow],
+            InformationTypes = [],
         };
         var loaded = new LoadedDataset(
             new DatasetId("mpa-1"),
@@ -721,24 +722,22 @@ public class S100McpServerRoundTripTests
 
     private static S122Feature MakeS122WithFixedRange(string id, string start, string end)
     {
-        var sub = ImmutableDictionary<string, string>.Empty
-            .Add("dateStart", start)
-            .Add("dateEnd", end);
+        var sub = new Dictionary<string, string> { ["dateStart"] = start, ["dateEnd"] = end };
         return new S122Feature
         {
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray.Create(new S122ComplexAttribute
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [new S122ComplexAttribute
             {
                 Code = "fixedDateRange",
                 SubAttributes = sub,
-            }),
+            }],
         };
     }
 
@@ -974,13 +973,13 @@ public class S100McpServerRoundTripTests
             Id = id,
             FeatureType = "NavwarnPart",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((lat, lon)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
-            References = ImmutableArray<GmlReference>.Empty,
+            Points = [new GeoPosition(lat, lon)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
 
     private static JsonObject ParseSingleJson(CallToolResult result)

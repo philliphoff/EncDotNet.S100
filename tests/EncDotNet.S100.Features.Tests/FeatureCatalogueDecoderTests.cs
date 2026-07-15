@@ -53,6 +53,30 @@ public class FeatureCatalogueDecoderTests
     }
 
     [Fact]
+    public void ResolveListedValueDefinition_OnEnumeratedAttribute_ReturnsDefinition()
+    {
+        var decoder = LoadS101Decoder();
+        var fc = decoder.Catalogue;
+
+        var enumerated = fc.SimpleAttributes
+            .FirstOrDefault(sa => sa.ListedValues.Any(lv => !string.IsNullOrWhiteSpace(lv.Definition)));
+        Assert.NotNull(enumerated);
+        var lv = enumerated!.ListedValues.First(v => !string.IsNullOrWhiteSpace(v.Definition));
+
+        Assert.Equal(lv.Definition, decoder.ResolveListedValueDefinition(enumerated.Code, lv.Code));
+    }
+
+    [Fact]
+    public void ResolveListedValueDefinition_UnknownOrEmpty_ReturnsNull()
+    {
+        var decoder = LoadS101Decoder();
+
+        Assert.Null(decoder.ResolveListedValueDefinition("OBJNAM", "9999999"));
+        Assert.Null(decoder.ResolveListedValueDefinition("OBJNAM", null));
+        Assert.Null(decoder.ResolveListedValueDefinition("", "1"));
+    }
+
+    [Fact]
     public void ResolveListedValue_NonEnumeratedAttribute_ReturnsNull()
     {
         var decoder = LoadS101Decoder();

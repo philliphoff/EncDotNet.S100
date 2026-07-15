@@ -386,7 +386,10 @@ the exact band lands. Accepted.
   drains the visible-miss queue in parallel, with a process-wide cap of the
   logical-core count so multi-cell exchange sets don't oversubscribe; measured to
   cut single-cell cold-tile latency ≈3× on a 16-core host. `LowEnd` keeps one
-  worker.
+  worker. The per-layer size is a floor, not a ceiling: a busy layer borrows idle
+  global capacity toward the process-wide cap for visible work, with a fairness
+  floor reserving each other active-visible layer its share (issue #432; design
+  §D.2).
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply and
   are unchanged by tiling.
 
@@ -416,17 +419,54 @@ hysteresis comes from the velocity EMA, not from retaining stale predictions.
 
 ### D.2 Scheduling
 
-Pending work is split into two queues: `PendingVisible` (on-screen exact-band
-misses, high priority) and `PendingPredicted` (the warm set, low priority). The
-pool of coalescing workers drains visible-first, so prediction always yields to
-tiles the user is actually looking at and never delays an on-screen fill. The
-pool size is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
+Pending work is split into three queues drained in strict priority order:
+`PendingVisible` (on-screen exact-band misses, high priority), `PendingPredicted`
+(the same-band warm set, low priority), and `PendingCrossBand` (the idle
+cross-band ±1 pre-warm set, lowest priority — see D.5). The pool of coalescing
+workers drains visible-first, so prediction always yields to tiles the user is
+actually looking at and never delays an on-screen fill; same-band prediction in
+turn drains before cross-band pre-warm, so warming an adjacent band never delays
+either higher tier. Within each tier a worker dequeues **centre-first**
+(`TakeNearest`): the pending tile whose world centre is nearest the current
+viewport centre rasterises before the perimeter, cutting time-to-centre-fill on a
+cold pan/zoom. Equal-distance ties break deterministically on `(band, y, x)`, so
+the drain order never depends on the pending set's hash iteration order. The pool
+size floor is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
 `ActiveWorkers` count plus a process-wide `s_activeWorkerTotal` cap (core count)
 bound how many run at once.
 
-Speculatively-rasterised keys are tracked in `PredictedInCache`; when a later
-frame finds such a key in the visible set it counts a **prediction hit** and
-drops it from the set (bounded-pruned against the cache to stay small).
+**Elastic borrowing (issue #432).** The per-layer count is a *floor*
+(reservation), not a hard ceiling. When a layer has a visible cold backlog and
+global room exists, it may start workers above its floor toward `s_maxTotalWorkers`
+so idle cores drain a single busy layer's cold-miss queue instead of sitting
+unused (the common one-busy-layer / idle-siblings shape of a cold pan). Three
+invariants keep this safe. **(1) Visible-only:** the elastic ceiling is gated to
+the *visible* pending count — predicted/speculative tiles (including the
+cross-band pre-warm set) never justify borrowing, so a busy layer's off-screen
+prewarm can't occupy borrowed cores a sibling wants for on-screen work.
+`ComputeWorkersToStart` encodes the cap arithmetic (the predicted and cross-band
+sets are summed into its speculative term, so both are served only by the floor).
+**(2) Prompt give-back:** a borrowed (above-floor) worker sheds itself at the
+visible→speculative boundary — `ShouldWorkerExit` returns true once no visible work
+remains and `ActiveWorkers > TileWorkerCount` — releasing its slot under
+`state.Sync` so a cascade of sheds converges on the floor without over-shedding.
+A *baseline* worker instead stays alive while any predicted **or** cross-band work
+remains, so the speculative tiers still drain. Tile rasters are short and
+non-preemptible, so capacity returns within roughly one tile's raster time; no
+preemption machinery is needed. **(3) Fairness floor:** before lending, each
+*other* layer that currently has visible cold work (tracked in a time-windowed
+active-visible-layer registry, keyed by `TileState`) keeps its `TileWorkerCount`
+reservation, so a dense bottom-of-z-order layer painting first cannot borrow the
+whole budget and starve later-painting siblings — it can only lend *leftover*
+room. On a `LowEnd` (single-worker) host the elastic ceiling collapses to the
+floor and the whole path no-ops.
+
+Speculatively-rasterised keys (both same-band predicted and cross-band pre-warm)
+are tracked in `PredictedInCache`; when a later frame finds such a key in the
+visible set it counts a **prediction hit** and drops it from the set
+(bounded-pruned against the cache to stay small). Because `TileKey` carries the
+band, a cross-band pre-warm tile scores its hit when a zoom later makes that band
+visible.
 
 ### D.3 Telemetry
 
@@ -465,7 +505,75 @@ zero-cold, meeting the exit criterion. Pan frame time stays well within budget
 in both arms — the extra ~4 ms p90 with prediction on is the low-priority
 warm-set rasterisation, which never blocks an on-screen fill.
 
-### D.5 Open follow-ups (Phase 4+)
+### D.5 Idle cross-band pre-warm (issue #428)
+
+Same-band prediction (D.1) biases only the two band ± 1 **centre** tiles, so a
+zoom that crosses a band boundary still pays near-full cold latency at the new
+band. Cross-band pre-warm closes that gap: when a layer is otherwise idle the
+renderer warms the whole viewport footprint of both adjacent bands, so a
+subsequent zoom-in or zoom-out starts warm.
+
+- **Warm set** — `TileGrid.CrossBandPrewarmTiles` returns the band ± 1 tiles
+  covering the current viewport (selected against the same world viewport at the
+  same live resolution; only the tile size differs by band). Out-of-range
+  neighbour bands are skipped. The set is **centre-first** and truncated to
+  `CrossBandPrewarmMaxTiles` (24), so the most-central — most-likely-next-zoom —
+  tiles win under the cap (the band + 1 footprint alone is ~4× the visible tile
+  count).
+- **Idle gate** — populated only on a frame with **no cold visible misses**
+  (`coldExposure == 0` — no cold visible tile this frame, whether still pending
+  *or* already handed to a worker), so it never competes with an on-screen fill.
+  This is deliberately stricter than a `PendingVisible` empty test: `PendingVisible`
+  excludes cold tiles already in flight, so gating on it would let pre-warm start
+  while the viewport still had cold holes mid-raster and steal a worker from the
+  fill. Also gated on the hot cache being below `CrossBandPrewarmHeadroomFraction`
+  (0.75) of its byte budget, so its speculative inserts cannot evict the current
+  working set. Visible target-band tiles are additionally pinned
+  (`TileCache.Protect`) so they are never evicted regardless; the headroom guard
+  protects the same-band predicted and fallback tiles.
+- **Priority** — drained at the lowest worker tier, strictly behind
+  `PendingVisible` and `PendingPredicted` (D.2). Even though it is enqueued in the
+  same frame as the same-band warm set, it only rasterises once that has drained.
+- **Redraw-safe** — its tiles are treated as predictions: they never trigger a
+  redraw (so a published adjacent-band tile cannot start a repaint loop) and are
+  cancelled (rebuilt) every frame. A later zoom that makes one visible scores an
+  ordinary prediction hit.
+
+Cross-band pre-warm is a first-class A/B knob (`S100_VECTOR_TILE_XBAND`,
+`CrossBandPrewarmEnabled`), default on except off by default on the `LowEnd` tier
+(an explicit opt-in is still honoured there). Its
+tiles flow through the existing prediction telemetry
+(`s100.render.tile.prediction.rasterized` / `.hits`), so a zoom-transition A/B
+reads time-to-fill at the new band from the cold-latency histogram and the
+prediction-hit counter.
+
+**A/B result (reference cell `101GB00510210.000`, UKHO S-101 trial set, Apple
+Silicon).** Scripted per-transition harness: fresh dataset load (hot cache
+empty, warm disk cache disabled to remove the cross-run confound), settle at the
+source band, dwell idle ~6 s so the pre-warm workers can drain, then zoom one
+band and measure time-to-idle (`await_render_idle` `waitedMs`, 150 ms quiet
+period) at the new band. `S100_VECTOR_TILE_XBAND=0` (OFF) vs `=1` (ON):
+
+| Zoom transition | OFF `waitedMs` | ON `waitedMs` | Δ |
+|---|---|---|---|
+| 15 → 16 | 729 | 345 | **−53 %** |
+| 15 → 16 (repeat) | 716 | 370 | **−48 %** |
+| 16 → 17 | 641 | 611 | −5 % |
+| 16 → 17 (repeat) | 638 | 601 | −6 % |
+| 17 → 18 | 766 | 749 | −2 % |
+| 17 → 18 (repeat) | 754 | 427 | **−43 %** |
+| **Total** | **4245** | **3102** | **−27 %** |
+
+The largest, most reliable win is the fully-warmed transition (15 → 16: ~52 %
+faster time-to-fill, reproducible). Heavier band + 1 footprints (17 → 18) need a
+longer idle dwell to fully warm under the 24-tile cap + lowest-priority drain —
+the first 17 → 18 trial had only started warming (−2 %), the repeat with more
+accrued idle time reached −43 %. **No transition regressed** in either arm
+(every Δ ≤ 0), confirming the idle gate keeps pre-warm off the on-screen fill
+path. Pre-warm cannot alter draw output — it only pre-rasterises tiles that a
+later zoom would draw identically — so visual parity is exact.
+
+### D.6 Open follow-ups (Phase 4+)
 
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply.
 - A disk-backed tile cache + `styleStateHash` invalidation (palette/settings)

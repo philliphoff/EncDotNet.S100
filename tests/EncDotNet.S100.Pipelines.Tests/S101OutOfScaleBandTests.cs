@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -29,7 +30,7 @@ public class S101OutOfScaleBandTests
             FeatureType = featureType,
             Id = id,
             GeometryType = GeometryType.Surface,
-            Coordinates = new (double, double)[] { (0, 0) },
+            Coordinates = new[] { new GeoPosition(0, 0) },
             Attributes = attrs,
         };
     }

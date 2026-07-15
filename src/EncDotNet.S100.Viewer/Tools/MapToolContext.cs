@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using Avalonia;
 using Mapsui.Layers;
@@ -16,8 +17,8 @@ internal sealed class MapToolContext
     private readonly Action<ILayer> _removeLayer;
     private readonly Action<string?> _setStatusSummary;
     private readonly Action _refreshGraphics;
-    private readonly Func<Point, (double Lat, double Lon)?> _screenToLatLon;
-    private readonly Func<(double Lat, double Lon), Point?> _latLonToScreen;
+    private readonly Func<Point, GeoPosition?> _screenToLatLon;
+    private readonly Func<GeoPosition, Point?> _latLonToScreen;
 
     public MapToolContext(
         MapControl mapControl,
@@ -25,8 +26,8 @@ internal sealed class MapToolContext
         Action<ILayer> removeLayer,
         Action<string?> setStatusSummary,
         Action refreshGraphics,
-        Func<Point, (double Lat, double Lon)?> screenToLatLon,
-        Func<(double Lat, double Lon), Point?> latLonToScreen)
+        Func<Point, GeoPosition?> screenToLatLon,
+        Func<GeoPosition, Point?> latLonToScreen)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(addLayer);
@@ -76,7 +77,7 @@ internal sealed class MapToolContext
     /// is outside the map or projects to an invalid location (e.g. above
     /// the Mercator pole limit).
     /// </summary>
-    public (double Lat, double Lon)? ScreenToLatLon(Point screen) => _screenToLatLon(screen);
+    public GeoPosition? ScreenToLatLon(Point screen) => _screenToLatLon(screen);
 
     /// <summary>
     /// Converts a WGS-84 lat/lon to a pointer position in
@@ -84,5 +85,5 @@ internal sealed class MapToolContext
     /// viewport is available. Used by editing tools for hit-testing screen
     /// gestures against world-space features (e.g. grabbing a waypoint).
     /// </summary>
-    public Point? LatLonToScreen((double Lat, double Lon) world) => _latLonToScreen(world);
+    public Point? LatLonToScreen(GeoPosition world) => _latLonToScreen(world);
 }

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S125.DataModel;
 using EncDotNet.S100.Validation;
@@ -290,7 +289,7 @@ public static class S125AtonRules
                 var findings = new List<ValidationFinding>();
                 foreach (var agg in dataset.Aggregations)
                 {
-                    if (!agg.Members.IsDefaultOrEmpty && agg.Members.Length > 0) continue;
+                    if (agg.Members.Count > 0) continue;
                     findings.Add(new ValidationFinding
                     {
                         RuleId = "S125-R-4.1",

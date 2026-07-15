@@ -13,6 +13,7 @@ using ExchangeSetProgress = EncDotNet.S100.Viewer.Services.ExchangeSetProgress;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -43,6 +44,15 @@ public class ExchangeSetServiceLoaderTests
 
     private static string S101OrphanFixture() =>
         Path.Combine(FixturesRoot(), "Synthetic-S101Orphan");
+
+    private static string S411NoProductIdFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-S411NoProductId");
+
+    private static string FramedFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-Framed");
+
+    private static string S57FramedFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-S57-Framed");
 
     private sealed class NoopLoader : IDatasetLoaderService
     {
@@ -171,6 +181,34 @@ public class ExchangeSetServiceLoaderTests
         Assert.Empty(datasets.ExchangeSetHeaders);
     }
 
+    /// <summary>
+    /// Reproduces the real-world JCOMM S-411 (Canadian Ice Service) exchange
+    /// set whose <c>productSpecification</c> declares only a human-readable
+    /// <c>name</c> ("Ice Information Product Specification (JCOMM S-411)") with
+    /// no <c>productIdentifier</c> or number. The declared spec cannot be
+    /// mapped, so the loader must content-sniff the GML root element
+    /// (<c>ice:IceDataSet</c>) and still dispatch the dataset as S-411 rather
+    /// than skipping it as unsupported.
+    /// </summary>
+    [Fact]
+    public async Task OpenAsync_S411NoProductId_ContentSniffsAndLoadsAsS411()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        var result = await service.OpenAsync(S411NoProductIdFixture());
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(1, result.Loaded);
+        Assert.Equal(0, result.SkippedUnsupported);
+        Assert.False(result.Cancelled);
+        Assert.Empty(result.SkipMessages);
+
+        var entry = Assert.Single(datasets.Entries);
+        Assert.Equal("S-411", entry.ProductSpec);
+        Assert.Equal("S-411/ice.gml", entry.RelativePath);
+    }
+
     private sealed class SynchronousProgress<T> : IProgress<T>
     {
         public List<T> Reports { get; } = new();
@@ -191,6 +229,104 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(3, progress.Reports[^1].Total);
         Assert.Equal(3, progress.Reports[^1].Completed);
         Assert.Equal(1, progress.Reports[^1].Failed);
+    }
+
+    [Fact]
+    public async Task OpenAsync_FramedFixture_InvokesOnFramingReady_WithUnionBoundingBox()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        EncDotNet.S100.ExchangeSets.BoundingBox? framed = null;
+        var framedBeforeReturn = false;
+        int? entryCountWhenFramed = null;
+
+        var result = await service.OpenAsync(
+            FramedFixture(),
+            onFramingReady: bbox =>
+            {
+                framed = bbox;
+                framedBeforeReturn = true;
+                // Capture how many datasets have been dispatched at the
+                // instant framing is emitted — it must be zero.
+                entryCountWhenFramed = datasets.Entries.Count;
+            });
+
+        // The callback fired with the union of both dataset boxes,
+        // computed up front from catalogue metadata (issue #448).
+        Assert.True(framedBeforeReturn);
+        Assert.NotNull(framed);
+        Assert.Equal(10, framed!.WestBoundLongitude);
+        Assert.Equal(14, framed.EastBoundLongitude);
+        Assert.Equal(48, framed.SouthBoundLatitude);
+        Assert.Equal(52, framed.NorthBoundLatitude);
+
+        // Timing guarantee: framing must be emitted *before* any dataset
+        // is dispatched, so early per-dataset paints land in the framed
+        // viewport (issue #448). This fails if framing is moved after the
+        // dispatch loop. The fixture declares two datasets that are both
+        // surfaced as entries by the end of the open.
+        Assert.Equal(0, entryCountWhenFramed);
+        Assert.Equal(2, datasets.Entries.Count);
+
+        // The same union is echoed on the result.
+        Assert.NotNull(result.UnionBoundingBox);
+        Assert.Equal(10, result.UnionBoundingBox!.WestBoundLongitude);
+        Assert.Equal(14, result.UnionBoundingBox.EastBoundLongitude);
+        Assert.Equal(48, result.UnionBoundingBox.SouthBoundLatitude);
+        Assert.Equal(52, result.UnionBoundingBox.NorthBoundLatitude);
+    }
+
+    [Fact]
+    public async Task OpenAsync_S57FramedFixture_InvokesOnFramingReady_WithUnionBoundingBox()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        EncDotNet.S100.ExchangeSets.BoundingBox? framed = null;
+        int? entryCountWhenFramed = null;
+
+        var result = await service.OpenAsync(
+            S57FramedFixture(),
+            onFramingReady: bbox =>
+            {
+                framed = bbox;
+                entryCountWhenFramed = datasets.Entries.Count;
+            });
+
+        Assert.NotNull(framed);
+        Assert.Equal(0, entryCountWhenFramed);
+        Assert.Equal(2, datasets.Entries.Count);
+        Assert.All(datasets.Entries, e => Assert.Equal("S-57", e.ProductSpec));
+
+        Assert.NotNull(result.UnionBoundingBox);
+        Assert.Equal(result.UnionBoundingBox!.WestBoundLongitude, framed!.WestBoundLongitude);
+        Assert.Equal(result.UnionBoundingBox.EastBoundLongitude, framed.EastBoundLongitude);
+        Assert.Equal(result.UnionBoundingBox.SouthBoundLatitude, framed.SouthBoundLatitude);
+        Assert.Equal(result.UnionBoundingBox.NorthBoundLatitude, framed.NorthBoundLatitude);
+
+        Assert.Equal(-123.0, framed.WestBoundLongitude);
+        Assert.Equal(-121.5, framed.EastBoundLongitude);
+        Assert.Equal(47.5, framed.SouthBoundLatitude);
+        Assert.Equal(49.0, framed.NorthBoundLatitude);
+    }
+
+    [Fact]
+    public async Task OpenAsync_MixedFixture_DoesNotInvokeOnFramingReady_WhenNoBoundingBox()
+    {
+        var (_, service) = CreateSystem();
+        using var _ = service;
+
+        var invoked = false;
+
+        var result = await service.OpenAsync(
+            MixedFixture(),
+            onFramingReady: _ => invoked = true);
+
+        // No dataset declares a bounding box, so there is nothing to
+        // frame early; the caller falls back to its debounce path.
+        Assert.False(invoked);
+        Assert.Null(result.UnionBoundingBox);
     }
 
     [Fact]
@@ -282,5 +418,110 @@ public class ExchangeSetServiceLoaderTests
         var header = Assert.Single(datasets.ExchangeSetHeaders);
         Assert.Equal(ExchangeSetDetection.ResolveS57Root(root!), header.SourcePath);
         Assert.Equal(result.Loaded, header.LoadedCount);
+    }
+
+    // ── Catalogue-less loose-cell folders (issue #449) ────────────────
+
+    private static string MakeLooseCellFolder(string name, params string[] files)
+    {
+        var folder = Path.Combine(
+            Path.GetTempPath(), $"loose-{name}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        foreach (var file in files)
+            File.WriteAllText(Path.Combine(folder, file), "synthetic");
+        return folder;
+    }
+
+    [Fact]
+    public async Task OpenAsync_LooseCellFolder_LoadsBaseWithFilesystemUpdates()
+    {
+        // A catalogue-less folder: a base cell plus its two sequential
+        // updates, no CATALOG.XML / CATALOG.031. The fake ENC bytes fail
+        // the S-57 DSPM sniff, so the cell is dispatched as S-101 (the
+        // NoopLoader never parses it).
+        var folder = MakeLooseCellFolder(
+            "updates", "US5WA01M.000", "US5WA01M.001", "US5WA01M.002");
+        try
+        {
+            var (datasets, service) = CreateSystem();
+            using var _ = service;
+
+            var result = await service.OpenAsync(folder);
+
+            Assert.Equal(1, result.Total);
+            Assert.Equal(1, result.Loaded);
+            Assert.Equal(0, result.SkippedUnsupported);
+            Assert.False(result.Cancelled);
+            Assert.Null(result.UnionBoundingBox);
+
+            var entry = Assert.Single(datasets.Entries);
+            Assert.Equal("S-101", entry.ProductSpec);
+            Assert.Equal("US5WA01M.000", entry.RelativePath);
+            Assert.True(entry.IsFromExchangeSet);
+            Assert.True(entry.HasUpdates);
+            Assert.Equal(
+                new[] { "US5WA01M.001", "US5WA01M.002" },
+                entry.UpdateRelativePaths);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task OpenAsync_LooseCellFolder_LoadsEveryBaseCell()
+    {
+        var folder = MakeLooseCellFolder(
+            "multi", "US5WA01M.000", "US5WA02M.000", "US5WA02M.001");
+        try
+        {
+            var (datasets, service) = CreateSystem();
+            using var _ = service;
+
+            var result = await service.OpenAsync(folder);
+
+            Assert.Equal(2, result.Total);
+            Assert.Equal(2, result.Loaded);
+            Assert.Equal(2, datasets.Entries.Count);
+
+            // The second cell carries its update; the first has none.
+            var cell2 = Assert.Single(
+                datasets.Entries, e => e.RelativePath == "US5WA02M.000");
+            Assert.Equal(new[] { "US5WA02M.001" }, cell2.UpdateRelativePaths);
+            var cell1 = Assert.Single(
+                datasets.Entries, e => e.RelativePath == "US5WA01M.000");
+            Assert.False(cell1.HasUpdates);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task OpenAsync_LooseCellFolder_RegistersHeaderAndClosesCleanly()
+    {
+        var folder = MakeLooseCellFolder("header", "US5WA01M.000");
+        try
+        {
+            var (datasets, service) = CreateSystem();
+            using var _ = service;
+
+            await service.OpenAsync(folder);
+
+            var header = Assert.Single(datasets.ExchangeSetHeaders);
+            Assert.Equal(folder, header.SourcePath);
+            Assert.Equal(1, header.LoadedCount);
+
+            header.CloseCommand.Execute(null);
+
+            Assert.Empty(datasets.Entries);
+            Assert.Empty(datasets.ExchangeSetHeaders);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 }

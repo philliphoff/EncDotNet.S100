@@ -15,6 +15,7 @@ namespace EncDotNet.S100.Datasets.S411;
 public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
     private const string DefaultTopLevelRuleId = "mainRule";
+
     private bool _adapterLoaded;
 
     public S411PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
@@ -96,6 +97,13 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
         return base.GetCompiledRuleAsync(ruleName, cancellationToken);
     }
 
+    /// <summary>
+    /// Compiles the embedded adapter stylesheet. The WMO concentration/SoD
+    /// colour tables are held inline in the adapter (issue #416) — mirrored
+    /// from the bundled upstream <c>pc/Rules/seaice_wmo_*.xsl</c> files and
+    /// guarded by the S411 parity xunit test — so no runtime <c>document()</c>
+    /// resolution is required.
+    /// </summary>
     private static XslCompiledTransform LoadAdapterRule()
     {
         var asm = typeof(S411PortrayalCatalogue).Assembly;

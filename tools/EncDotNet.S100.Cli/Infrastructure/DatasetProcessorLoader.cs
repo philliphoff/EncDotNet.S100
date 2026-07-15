@@ -28,22 +28,40 @@ internal static class DatasetProcessorLoader
         string spec,
         DatasetCommandSettings settings)
     {
-        ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(settings);
+        return Create(factory, spec, settings.DatasetPath, settings.NoUpdates);
+    }
 
-        if (spec == "S-101" && !settings.NoUpdates)
+    /// <summary>
+    /// Creates a processor for <paramref name="datasetPath"/>, applying discovered
+    /// S-101 updates unless <paramref name="noUpdates"/> is set.
+    /// </summary>
+    /// <param name="factory">The configured pipeline factory.</param>
+    /// <param name="spec">The detected product specification (e.g. <c>"S-101"</c>).</param>
+    /// <param name="datasetPath">Path to the dataset file.</param>
+    /// <param name="noUpdates">When <see langword="true"/>, sibling S-101 updates are not applied.</param>
+    public static IDatasetProcessor Create(
+        DatasetPipelineFactory factory,
+        string spec,
+        string datasetPath,
+        bool noUpdates)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        ArgumentException.ThrowIfNullOrEmpty(datasetPath);
+
+        if (spec == "S-101" && !noUpdates)
         {
-            var updates = S101FilesystemUpdateDiscovery.FindSequentialUpdates(settings.DatasetPath);
+            var updates = S101FilesystemUpdateDiscovery.FindSequentialUpdates(datasetPath);
             if (updates.Count > 0)
             {
-                var processor = factory.CreateS101ProcessorWithUpdates(settings.DatasetPath, updates);
+                var processor = factory.CreateS101ProcessorWithUpdates(datasetPath, updates);
                 if (processor is S101DatasetProcessor { UpdateReport: { } report })
                     ReportUpdateOutcome(report);
                 return processor;
             }
         }
 
-        return factory.CreateProcessor(settings.DatasetPath);
+        return factory.CreateProcessor(datasetPath);
     }
 
     private static void ReportUpdateOutcome(S101UpdateReport report)

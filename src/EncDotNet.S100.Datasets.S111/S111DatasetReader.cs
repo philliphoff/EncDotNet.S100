@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
 using S100Diag = EncDotNet.S100.Datasets.S111.Diagnostics;
 
@@ -513,7 +514,7 @@ public static class S111DatasetReader
     /// a specific <c>SurfaceCurrent.NN</c> instance group (DCF 3 layout;
     /// S-100 Part 10c §10.2.1).
     /// </summary>
-    private static List<(double Lat, double Lon)> ReadInstancePositions(IHdf5Group instance, string instancePath)
+    private static List<GeoPosition> ReadInstancePositions(IHdf5Group instance, string instancePath)
     {
         if (!instance.GroupNames.Contains("Positioning"))
         {
@@ -571,14 +572,14 @@ public static class S111DatasetReader
                     "S-111", null, $"{instancePath}/Positioning/geometryValues", "longitude",
                     "S-100 Part 10c §10.2.1"));
 
-        var positions = new List<(double Lat, double Lon)>(raw.RecordCount);
+        var positions = new List<GeoPosition>(raw.RecordCount);
         var span = raw.Data.AsSpan();
         for (int i = 0; i < raw.RecordCount; i++)
         {
             var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
             double lat = ReadFloatingPointMember(record, latMember);
             double lon = ReadFloatingPointMember(record, lonMember);
-            positions.Add((lat, lon));
+            positions.Add(new GeoPosition(lat, lon));
         }
         return positions;
     }
@@ -619,7 +620,7 @@ public static class S111DatasetReader
         return stations;
     }
 
-    private static List<(double Lat, double Lon)> ReadStationPositions(IHdf5Group root)
+    private static List<GeoPosition> ReadStationPositions(IHdf5Group root)
     {
         // S-111 Edition 2.0.0 §10.2.3 — station positions live in a
         // /Positioning group containing a compound 'geometryValues'
@@ -700,14 +701,14 @@ public static class S111DatasetReader
                     "S-111", null, "/Positioning/geometryValues", "longitude",
                     "S-111 Edition 2.0.0 §10.2.3"));
 
-        var positions = new List<(double Lat, double Lon)>(raw.RecordCount);
+        var positions = new List<GeoPosition>(raw.RecordCount);
         var span = raw.Data.AsSpan();
         for (int i = 0; i < raw.RecordCount; i++)
         {
             var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
             double lat = ReadFloatingPointMember(record, latMember);
             double lon = ReadFloatingPointMember(record, lonMember);
-            positions.Add((lat, lon));
+            positions.Add(new GeoPosition(lat, lon));
         }
         return positions;
     }
@@ -726,7 +727,7 @@ public static class S111DatasetReader
     private static void ReadStationInstance(
         IHdf5Group instance,
         string instancePath,
-        IReadOnlyList<(double Lat, double Lon)> positions,
+        IReadOnlyList<GeoPosition> positions,
         List<SurfaceCurrentStation> stations)
     {
         const string Spec = "S-111 Edition 2.0.0 §10.2.7";

@@ -227,6 +227,16 @@ public partial class App : Application
                     LogCrash("McpServerHost", t.Exception.GetBaseException().ToString());
             }, TaskScheduler.Default);
         };
+
+        // Live-refresh the examiner affordances in the FC and pick panels when
+        // the user toggles the integration or edits the base URL (issue #442),
+        // so the buttons appear/disappear without a catalogue reload or a new
+        // pick.
+        settingsVm.ExaminerSettingsChanged += () =>
+        {
+            s_services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
+            s_services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
+        };
         _ = mcpHost.Apply().ContinueWith(t =>
         {
             if (t.Exception is not null)
@@ -495,7 +505,15 @@ public partial class App : Application
                 if (Enum.TryParse<EncDotNet.S100.Pipelines.Vector.DisplayPlane>(token, ignoreCase: true, out var plane))
                     hiddenPlanes.Add(plane);
             }
-            state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null);
+            // Hydrate explicit per-spec display-mode selections (§11.7).
+            var displayModes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in settings.EcdisActiveDisplayModes)
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Value))
+                    displayModes[kv.Key] = kv.Value;
+            }
+            state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null,
+                displayModes.Count > 0 ? displayModes : null);
 
             // Persist on every change so a crash doesn't lose the user's
             // ECDIS preferences. Cheap because settings.json is small.
@@ -511,6 +529,12 @@ public partial class App : Application
                 }
                 settings.EcdisHiddenDisplayPlanes =
                     string.Join(",", snap.HiddenDisplayPlanes.OrderBy(p => p));
+                settings.EcdisActiveDisplayModes.Clear();
+                foreach (var kv in snap.ActiveDisplayModes)
+                {
+                    if (!string.IsNullOrEmpty(kv.Value))
+                        settings.EcdisActiveDisplayModes[kv.Key] = kv.Value;
+                }
                 try { settings.Save(); } catch { /* best-effort */ }
             };
             return state;
@@ -535,6 +559,9 @@ public partial class App : Application
         // About dialog + GitHub-release update check (issue #379).
         services.AddSingleton<IUrlOpener>(sp =>
             new ProcessUrlOpener(sp.GetService<ILogger<ProcessUrlOpener>>()));
+        // S-100 Feature Catalogue eXaminer deep-links (issue #442).
+        services.AddSingleton<IS100ExaminerLinkBuilder>(
+            sp => new S100ExaminerLinkBuilder(sp.GetRequiredService<ViewerSettings>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(
             _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(sp =>
@@ -575,8 +602,8 @@ public partial class App : Application
                 start: new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipPosition(
                     Latitude: 50.8,
                     Longitude: -1.3,
-                    CourseOverGroundDeg: 90.0,
-                    SpeedOverGroundMs: 5.0,
+                    CourseOverGround: EncDotNet.S100.Quantities.Angle.FromDegrees(90.0),
+                    SpeedOverGround: EncDotNet.S100.Quantities.Speed.FromMetresPerSecond(5.0),
                     Timestamp: DateTimeOffset.UtcNow),
                 cadence: TimeSpan.FromSeconds(1)));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(sp =>
@@ -666,6 +693,7 @@ public partial class App : Application
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
+        services.AddSingleton<IViewerUiControllerAccessor, ViewerUiControllerAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
         services.AddSingleton<IRenderActivityMonitor>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>());
@@ -688,10 +716,15 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoadGateway>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
-            sp.GetRequiredService<IGeographicPickPresenter>()));
+            sp.GetRequiredService<IGeographicPickPresenter>(),
+            sp.GetRequiredService<IViewerUiControllerAccessor>(),
+            sp.GetRequiredService<IAppScreenshotProvider>()));
 
         // View models
-        services.AddSingleton<FeatureCataloguesViewModel>();
+        services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
+            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetService<IS100ExaminerLinkBuilder>(),
+            sp.GetService<IUrlOpener>()));
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton<CatalogPanelViewModel>();
@@ -705,10 +738,15 @@ public partial class App : Application
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
-        services.AddSingleton<PickReportViewModel>();
+        services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
+            sp.GetService<ITimeFormatProvider>(),
+            sp.GetService<IMarinerSettingsProvider>(),
+            sp.GetService<IUrlOpener>(),
+            sp.GetService<IS100ExaminerLinkBuilder>()));
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();
+        services.AddSingleton<DisplayModeToolbarViewModel>();
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();

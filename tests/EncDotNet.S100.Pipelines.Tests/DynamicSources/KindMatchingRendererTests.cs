@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
@@ -20,7 +21,7 @@ public class KindMatchingRendererTests
         Id = "f",
         Kind = kind,
         GeometryType = GeometryType.Point,
-        Coordinates = new[] { (0.0, 0.0) },
+        Coordinates = new[] { new GeoPosition(0.0, 0.0) },
         LastUpdated = DateTimeOffset.UtcNow,
     };
 

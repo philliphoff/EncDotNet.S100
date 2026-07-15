@@ -54,6 +54,73 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when this entry has in-set S-101 updates to apply.</summary>
     public bool HasUpdates => UpdateRelativePaths.Count > 0;
 
+    /// <summary>
+    /// The coarsest scale denominator (largest value) at which this cell is
+    /// intended to display, from the exchange-set catalogue's
+    /// <c>dataCoverage/minimumDisplayScale</c> (S-100 Part 17;
+    /// S-101 FC §3.1.1 <c>DataCoverage</c>). <see langword="null"/> for plain
+    /// file loads and exchange sets that omit the metadata (e.g. S-57).
+    /// </summary>
+    /// <remarks>
+    /// Drives the hole-safe per-cell zoom-out visibility window (issue #438
+    /// Phase 1): a cell stops drawing once the viewport is zoomed out beyond
+    /// this denominator, so finer nested cells (smaller
+    /// <see cref="MinimumDisplayScale"/>) drop out first and the coarser cell
+    /// underneath remains — removing the redundant overlapping stack without
+    /// leaving gaps.
+    /// </remarks>
+    public int? MinimumDisplayScale { get; }
+
+    /// <summary>
+    /// The finest scale denominator (smallest value) at which this cell is
+    /// intended to display, from the exchange-set catalogue's
+    /// <c>dataCoverage/maximumDisplayScale</c> (S-100 Part 17;
+    /// S-101 FC §3.1.1 <c>DataCoverage</c>). <see langword="null"/> when the
+    /// metadata is absent.
+    /// </summary>
+    /// <remarks>
+    /// Carried for completeness / future use. The zoom-in (under-scale) cutoff
+    /// it would drive is <em>not</em> applied in Phase 1 because hiding a
+    /// coarser cell where a finer cell covers only part of its footprint would
+    /// leave holes; that suppression is deferred to the coverage-clipping work
+    /// (issue #438 Phase 2).
+    /// </remarks>
+    public int? MaximumDisplayScale { get; }
+
+    private Mapsui.MRect? _mercatorExtent;
+    /// <summary>
+    /// The dataset's EPSG:3857 (web-mercator) extent, captured from the
+    /// renderer's <c>DatasetResult.Extent</c> the first time the dataset is
+    /// rendered. <see langword="null"/> until the dataset has been loaded (and
+    /// for out-of-range time-gated entries that produced no layers). Used to
+    /// zoom/pan the map to this dataset (double-click reveal) and to draw the
+    /// out-of-scale extent indicator (issue #446).
+    /// </summary>
+    public Mapsui.MRect? MercatorExtent
+    {
+        get => _mercatorExtent;
+        set => SetProperty(ref _mercatorExtent, value);
+    }
+
+    private double? _contentMaxVisibleResolution;
+    /// <summary>
+    /// The coarsest EPSG:3857 resolution (metres per pixel) at which this
+    /// dataset's content still draws, i.e. the whole-cell zoom-out cutoff that
+    /// <see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer.ApplyCellScaleWindow"/>
+    /// imposed from <see cref="MinimumDisplayScale"/> (issue #438 Phase 1).
+    /// Once the viewport resolution exceeds this value the dataset renders
+    /// nothing; the out-of-scale extent indicator (issue #446) uses it as its
+    /// <c>MinVisible</c> so the accent border appears exactly when the content
+    /// drops out. <see langword="null"/> when no scale window was applied (no
+    /// <see cref="MinimumDisplayScale"/>, or the mariner opted to ignore scale
+    /// minima), meaning the dataset never disappears on zoom-out.
+    /// </summary>
+    public double? ContentMaxVisibleResolution
+    {
+        get => _contentMaxVisibleResolution;
+        set => SetProperty(ref _contentMaxVisibleResolution, value);
+    }
+
     private bool _isLoaded;
     public bool IsLoaded
     {
@@ -260,23 +327,23 @@ internal sealed class DatasetEntry : ViewModelBase
 
     /// <summary>Total findings across all severities.</summary>
     public int ValidationFindingCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false ? _validation.Findings.Length : 0;
+        _validation?.Findings.Count > 0 ? _validation.Findings.Count : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Error"/> findings.</summary>
     public int ValidationErrorCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false
+        _validation?.Findings.Count > 0
             ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Error)
             : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Warning"/> findings.</summary>
     public int ValidationWarningCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false
+        _validation?.Findings.Count > 0
             ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Warning)
             : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Info"/> findings.</summary>
     public int ValidationInfoCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false
+        _validation?.Findings.Count > 0
             ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Info)
             : 0;
 
@@ -354,7 +421,7 @@ internal sealed class DatasetEntry : ViewModelBase
     public void SetValidationReport(ValidationReport? report)
     {
         _validation = report;
-        Findings = report is null || report.Findings.IsDefaultOrEmpty
+        Findings = report is null || report.Findings.Count == 0
             ? Array.Empty<ValidationFindingViewModel>()
             : report.Findings.Select(f => new ValidationFindingViewModel(f, ZoomDispatcher)).ToArray();
 
@@ -391,13 +458,17 @@ internal sealed class DatasetEntry : ViewModelBase
         IAssetSource? source,
         string? relativePath,
         string? displayName,
-        IReadOnlyList<string>? updateRelativePaths = null)
+        IReadOnlyList<string>? updateRelativePaths = null,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
         Source = source;
         RelativePath = relativePath;
         UpdateRelativePaths = updateRelativePaths ?? Array.Empty<string>();
+        MinimumDisplayScale = minimumDisplayScale;
+        MaximumDisplayScale = maximumDisplayScale;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
@@ -824,7 +895,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
         string relativePath,
         string productSpec,
         string? displayName = null,
-        IReadOnlyList<string>? updateRelativePaths = null)
+        IReadOnlyList<string>? updateRelativePaths = null,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -840,7 +913,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
             source: source,
             relativePath: relativePath,
             displayName: displayName,
-            updateRelativePaths: updateRelativePaths);
+            updateRelativePaths: updateRelativePaths,
+            minimumDisplayScale: minimumDisplayScale,
+            maximumDisplayScale: maximumDisplayScale);
         Entries.Insert(0, entry);
         return entry;
     }
@@ -939,6 +1014,31 @@ internal sealed class DatasetsViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(entry);
         return _loader.LoadAsync(entry);
+    }
+
+    /// <summary>
+    /// "Reveals" a dataset in response to an explicit user gesture
+    /// (double-clicking its row): ensures the dataset is loaded, then frames
+    /// the map on its extent via <see cref="ZoomDispatcher"/>. Unlike a plain
+    /// <see cref="RequestLoad"/>, this also re-centres an <em>already-loaded</em>
+    /// dataset — including exchange-set members, which opt out of the loader's
+    /// per-dataset auto-zoom — so the user can jump to a far-away cell that has
+    /// zoomed out of view. Load failures are surfaced by the loader's own
+    /// notifications rather than thrown to the caller; callers may await the
+    /// returned task to observe completion. No-op framing when the dataset
+    /// produced no geometry (e.g. an out-of-range time-gated entry). See issue #446.
+    /// </summary>
+    /// <param name="entry">The dataset entry to reveal.</param>
+    /// <returns>A task that completes once the reveal (load + zoom) is done.</returns>
+    public async Task RevealDatasetAsync(DatasetEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (!entry.IsLoaded)
+            await RequestLoadAsync(entry).ConfigureAwait(true);
+
+        if (entry.MercatorExtent is { } extent)
+            _zoomDispatcher?.Invoke(extent);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -47,7 +47,7 @@ public sealed class S101UpdateReport
     public int Modified { get; init; }
 
     /// <summary>Diagnostics gathered during application.</summary>
-    public ImmutableArray<S101UpdateMessage> Messages { get; init; } = ImmutableArray<S101UpdateMessage>.Empty;
+    public IReadOnlyList<S101UpdateMessage> Messages { get; init; } = [];
 
     /// <summary><see langword="true"/> when no <see cref="S101UpdateSeverity.Error"/> or warning was recorded.</summary>
     public bool Success => !Messages.Any(m => m.Severity >= S101UpdateSeverity.Warning);
@@ -147,7 +147,7 @@ public static class S101UpdateApplicator
             Inserted = counts.Inserted,
             Deleted = counts.Deleted,
             Modified = counts.Modified,
-            Messages = messages.ToImmutableArray(),
+            Messages = messages.ToArray(),
         };
 
         return current;
@@ -165,12 +165,12 @@ public static class S101UpdateApplicator
         ICollection<S101UpdateMessage>? messages,
         ApplyCounts counts)
     {
-        var points = baseDocument.Points.ToBuilder();
-        var multiPoints = baseDocument.MultiPoints.ToBuilder();
-        var curves = baseDocument.CurveSegments.ToBuilder();
-        var compositeCurves = baseDocument.CompositeCurves.ToBuilder();
-        var surfaces = baseDocument.Surfaces.ToBuilder();
-        var informationTypes = baseDocument.InformationTypes.ToBuilder();
+        var points = new Dictionary<uint, S101PointRecord>(baseDocument.Points);
+        var multiPoints = new Dictionary<uint, S101MultiPointRecord>(baseDocument.MultiPoints);
+        var curves = new Dictionary<uint, S101CurveSegmentRecord>(baseDocument.CurveSegments);
+        var compositeCurves = new Dictionary<uint, S101CompositeCurveRecord>(baseDocument.CompositeCurves);
+        var surfaces = new Dictionary<uint, S101SurfaceRecord>(baseDocument.Surfaces);
+        var informationTypes = new Dictionary<uint, S101InformationRecord>(baseDocument.InformationTypes);
 
         ApplySpatial(points, update.Points, counts, messages);
         ApplySpatial(multiPoints, update.MultiPoints, counts, messages);
@@ -192,13 +192,13 @@ public static class S101UpdateApplicator
             StructureInfo = baseDocument.StructureInfo,
             FeatureTypeCatalogue = baseDocument.FeatureTypeCatalogue,
             AttributeTypeCatalogue = baseDocument.AttributeTypeCatalogue,
-            Points = points.ToImmutable(),
-            MultiPoints = multiPoints.ToImmutable(),
-            CurveSegments = curves.ToImmutable(),
-            CompositeCurves = compositeCurves.ToImmutable(),
-            Surfaces = surfaces.ToImmutable(),
+            Points = points,
+            MultiPoints = multiPoints,
+            CurveSegments = curves,
+            CompositeCurves = compositeCurves,
+            Surfaces = surfaces,
             Features = features,
-            InformationTypes = informationTypes.ToImmutable(),
+            InformationTypes = informationTypes,
             InformationTypeCatalogue = baseDocument.InformationTypeCatalogue,
             InformationAssociationCatalogue = baseDocument.InformationAssociationCatalogue,
             FeatureAssociationCatalogue = baseDocument.FeatureAssociationCatalogue,
@@ -207,8 +207,8 @@ public static class S101UpdateApplicator
     }
 
     private static void ApplySpatial<T>(
-        ImmutableDictionary<uint, T>.Builder target,
-        ImmutableDictionary<uint, T> updates,
+        Dictionary<uint, T> target,
+        IReadOnlyDictionary<uint, T> updates,
         ApplyCounts counts,
         ICollection<S101UpdateMessage>? messages)
         where T : class
@@ -240,8 +240,8 @@ public static class S101UpdateApplicator
     }
 
     private static void ApplyInformationRecords(
-        ImmutableDictionary<uint, S101InformationRecord>.Builder target,
-        ImmutableDictionary<uint, S101InformationRecord> updates,
+        Dictionary<uint, S101InformationRecord> target,
+        IReadOnlyDictionary<uint, S101InformationRecord> updates,
         ApplyCounts counts,
         ICollection<S101UpdateMessage>? messages)
     {
@@ -276,15 +276,15 @@ public static class S101UpdateApplicator
         }
     }
 
-    private static ImmutableArray<S101FeatureRecord> ApplyFeatures(
-        ImmutableArray<S101FeatureRecord> baseFeatures,
-        ImmutableArray<S101FeatureRecord> updateFeatures,
+    private static IReadOnlyList<S101FeatureRecord> ApplyFeatures(
+        IReadOnlyList<S101FeatureRecord> baseFeatures,
+        IReadOnlyList<S101FeatureRecord> updateFeatures,
         ApplyCounts counts,
         ICollection<S101UpdateMessage>? messages)
     {
         // Preserve dataset order while allowing keyed insert/delete/modify by RCID.
-        var order = new List<uint>(baseFeatures.Length);
-        var byId = new Dictionary<uint, S101FeatureRecord>(baseFeatures.Length);
+        var order = new List<uint>(baseFeatures.Count);
+        var byId = new Dictionary<uint, S101FeatureRecord>(baseFeatures.Count);
         foreach (var f in baseFeatures)
         {
             if (!byId.ContainsKey(f.RecordId)) order.Add(f.RecordId);
@@ -324,10 +324,10 @@ public static class S101UpdateApplicator
             }
         }
 
-        var result = ImmutableArray.CreateBuilder<S101FeatureRecord>(order.Count);
+        var result = new List<S101FeatureRecord>(order.Count);
         foreach (var id in order)
             result.Add(byId[id]);
-        return result.ToImmutable();
+        return result;
     }
 
     private static S101FeatureRecord MergeFeature(S101FeatureRecord existing, S101FeatureRecord update) =>
@@ -350,14 +350,14 @@ public static class S101UpdateApplicator
             UpdateInstruction = S101UpdateInstruction.None,
         };
 
-    private static ImmutableArray<S101Attribute> MergeAttributes(
-        ImmutableArray<S101Attribute> existing,
-        ImmutableArray<S101Attribute> updates)
+    private static IReadOnlyList<S101Attribute> MergeAttributes(
+        IReadOnlyList<S101Attribute> existing,
+        IReadOnlyList<S101Attribute> updates)
     {
-        if (updates.IsDefaultOrEmpty)
+        if (updates.Count == 0)
             return existing;
 
-        var list = existing.IsDefault ? new List<S101Attribute>() : new List<S101Attribute>(existing);
+        var list = existing.Count == 0 ? new List<S101Attribute>() : new List<S101Attribute>(existing);
 
         foreach (var u in updates)
         {
@@ -376,17 +376,17 @@ public static class S101UpdateApplicator
             }
         }
 
-        return list.ToImmutableArray();
+        return list.ToArray();
     }
 
-    private static ImmutableArray<S101SpatialAssociation> MergeSpatialAssociations(
-        ImmutableArray<S101SpatialAssociation> existing,
-        ImmutableArray<S101SpatialAssociation> updates)
+    private static IReadOnlyList<S101SpatialAssociation> MergeSpatialAssociations(
+        IReadOnlyList<S101SpatialAssociation> existing,
+        IReadOnlyList<S101SpatialAssociation> updates)
     {
-        if (updates.IsDefaultOrEmpty)
+        if (updates.Count == 0)
             return existing;
 
-        var list = existing.IsDefault ? new List<S101SpatialAssociation>() : new List<S101SpatialAssociation>(existing);
+        var list = existing.Count == 0 ? new List<S101SpatialAssociation>() : new List<S101SpatialAssociation>(existing);
 
         foreach (var u in updates)
         {
@@ -405,17 +405,17 @@ public static class S101UpdateApplicator
             }
         }
 
-        return list.ToImmutableArray();
+        return list.ToArray();
     }
 
-    private static ImmutableArray<S101FeatureAssociation> MergeFeatureAssociations(
-        ImmutableArray<S101FeatureAssociation> existing,
-        ImmutableArray<S101FeatureAssociation> updates)
+    private static IReadOnlyList<S101FeatureAssociation> MergeFeatureAssociations(
+        IReadOnlyList<S101FeatureAssociation> existing,
+        IReadOnlyList<S101FeatureAssociation> updates)
     {
-        if (updates.IsDefaultOrEmpty)
+        if (updates.Count == 0)
             return existing;
 
-        var list = existing.IsDefault ? new List<S101FeatureAssociation>() : new List<S101FeatureAssociation>(existing);
+        var list = existing.Count == 0 ? new List<S101FeatureAssociation>() : new List<S101FeatureAssociation>(existing);
 
         foreach (var u in updates)
         {
@@ -434,17 +434,17 @@ public static class S101UpdateApplicator
             }
         }
 
-        return list.ToImmutableArray();
+        return list.ToArray();
     }
 
-    private static ImmutableArray<S101InformationAssociation> MergeInformationAssociations(
-        ImmutableArray<S101InformationAssociation> existing,
-        ImmutableArray<S101InformationAssociation> updates)
+    private static IReadOnlyList<S101InformationAssociation> MergeInformationAssociations(
+        IReadOnlyList<S101InformationAssociation> existing,
+        IReadOnlyList<S101InformationAssociation> updates)
     {
-        if (updates.IsDefaultOrEmpty)
+        if (updates.Count == 0)
             return existing;
 
-        var list = existing.IsDefault ? new List<S101InformationAssociation>() : new List<S101InformationAssociation>(existing);
+        var list = existing.Count == 0 ? new List<S101InformationAssociation>() : new List<S101InformationAssociation>(existing);
 
         foreach (var u in updates)
         {
@@ -463,7 +463,7 @@ public static class S101UpdateApplicator
             }
         }
 
-        return list.ToImmutableArray();
+        return list.ToArray();
     }
 
     private static S101UpdateInstruction GetInstruction<T>(T record) where T : class => record switch

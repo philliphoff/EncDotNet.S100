@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -36,15 +35,15 @@ public sealed class S124NavigationalWarning
     public S124NavwarnPreamble? Preamble { get; init; }
 
     /// <summary>The parts that make up this warning.</summary>
-    public required ImmutableArray<S124NavwarnPart> Parts { get; init; }
+    public required IReadOnlyList<S124NavwarnPart> Parts { get; init; }
 
     /// <summary>References to other warnings (cancellations, supersessions, ...).</summary>
-    public ImmutableArray<S124WarningReference> References { get; init; } =
-        ImmutableArray<S124WarningReference>.Empty;
+    public IReadOnlyList<S124WarningReference> References { get; init; } =
+        [];
 
     /// <summary>Spatial quality records.</summary>
-    public ImmutableArray<S124SpatialQuality> SpatialQualities { get; init; } =
-        ImmutableArray<S124SpatialQuality>.Empty;
+    public IReadOnlyList<S124SpatialQuality> SpatialQualities { get; init; } =
+        [];
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S124Dataset Source { get; init; }
@@ -63,7 +62,7 @@ public sealed class S124NavigationalWarning
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
 
         var ctx = new ProjectionContext(BuildXlinkResolver(dataset));
@@ -75,12 +74,12 @@ public sealed class S124NavigationalWarning
         // Index features for xlink-driven resolution.
         var areaFeatures = dataset.Features
             .Where(f => string.Equals(f.FeatureType, "NavwarnAreaAffected", StringComparison.OrdinalIgnoreCase))
-            .ToImmutableDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
         var textFeatures = dataset.Features
             .Where(f => string.Equals(f.FeatureType, "TextPlacement", StringComparison.OrdinalIgnoreCase))
-            .ToImmutableDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
 
-        var parts = ImmutableArray.CreateBuilder<S124NavwarnPart>();
+        var parts = new List<S124NavwarnPart>();
         foreach (var f in dataset.Features)
         {
             if (!string.Equals(f.FeatureType, "NavwarnPart", StringComparison.OrdinalIgnoreCase))
@@ -88,13 +87,13 @@ public sealed class S124NavigationalWarning
             parts.Add(ProjectPart(f, ctx));
         }
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S124NavigationalWarning
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
             ProductIdentifier = dataset.ProductIdentifier,
             Preamble = preamble,
-            Parts = parts.ToImmutable(),
+            Parts = parts,
             References = references,
             SpatialQualities = spatialQualities,
             Source = dataset,
@@ -168,9 +167,9 @@ public sealed class S124NavigationalWarning
         };
     }
 
-    private static ImmutableArray<S124WarningReference> ResolveReferences(S124Dataset dataset, ProjectionContext ctx)
+    private static IReadOnlyList<S124WarningReference> ResolveReferences(S124Dataset dataset, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S124WarningReference>();
+        var b = new List<S124WarningReference>();
         foreach (var i in dataset.InformationTypes)
         {
             if (!string.Equals(i.TypeCode, "References", StringComparison.OrdinalIgnoreCase))
@@ -185,12 +184,12 @@ public sealed class S124NavigationalWarning
                     "referenceCategory", "messageReference"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S124SpatialQuality> ResolveSpatialQualities(S124Dataset dataset, ProjectionContext ctx)
+    private static IReadOnlyList<S124SpatialQuality> ResolveSpatialQualities(S124Dataset dataset, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S124SpatialQuality>();
+        var b = new List<S124SpatialQuality>();
         foreach (var i in dataset.InformationTypes)
         {
             if (!string.Equals(i.TypeCode, "SpatialQuality", StringComparison.OrdinalIgnoreCase))
@@ -203,7 +202,7 @@ public sealed class S124NavigationalWarning
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes, "qualityOfPosition"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
     private static S124NavwarnPart ProjectPart(S124Feature f, ProjectionContext ctx)
@@ -218,8 +217,8 @@ public sealed class S124NavigationalWarning
         var (kind, coords) = ProjectGeometry(f);
 
         // Resolve associated areas and text placements via xlinks.
-        var areas = ImmutableArray.CreateBuilder<S124AffectedArea>();
-        var texts = ImmutableArray.CreateBuilder<S124TextPlacement>();
+        var areas = new List<S124AffectedArea>();
+        var texts = new List<S124TextPlacement>();
         foreach (var r in f.References)
         {
             // Roles surfaced by S-124 FC associations: areaAffected, theCartographicText, etc.
@@ -242,8 +241,8 @@ public sealed class S124NavigationalWarning
             Restriction = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("restriction"), ctx, f.Id, "restriction"),
             Category = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("category"), ctx, f.Id, "category"),
             WarningInformation = warningText,
-            AffectedAreas = areas.ToImmutable(),
-            TextPlacements = texts.ToImmutable(),
+            AffectedAreas = areas,
+            TextPlacements = texts,
             GeometryKind = kind,
             Coordinates = coords,
             ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes, "restriction", "category"),
@@ -266,7 +265,7 @@ public sealed class S124NavigationalWarning
     private static S124TextPlacement ProjectTextPlacement(S124Feature f, ProjectionContext ctx)
     {
         GeoPosition? position = null;
-        if (!f.Points.IsDefaultOrEmpty)
+        if (f.Points.Count > 0)
         {
             var (lat, lon) = f.Points[0];
             position = new GeoPosition(lat, lon);
@@ -293,24 +292,24 @@ public sealed class S124NavigationalWarning
         };
     }
 
-    private static (S124GeometryKind, ImmutableArray<GeoPosition>) ProjectGeometry(S124Feature f)
+    private static (S124GeometryKind, IReadOnlyList<GeoPosition>) ProjectGeometry(S124Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                return (S124GeometryKind.Point, f.Points.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S124GeometryKind.Point, f.Points.Count == 0
+                    ? []
+                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Curve:
-                return (S124GeometryKind.Curve, f.Curves.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S124GeometryKind.Curve, f.Curves.Count == 0
+                    ? []
+                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Surface:
-                return (S124GeometryKind.Surface, f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S124GeometryKind.Surface, f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             default:
-                return (S124GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                return (S124GeometryKind.None, []);
         }
     }
 }

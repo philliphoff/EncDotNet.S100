@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -15,8 +16,8 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// </summary>
 internal sealed class MeasurePathState
 {
-    private readonly List<(double Lat, double Lon)> _waypoints = new();
-    private (double Lat, double Lon)? _rubberBand;
+    private readonly List<GeoPosition> _waypoints = new();
+    private GeoPosition? _rubberBand;
     private MeasurePhase _phase = MeasurePhase.Idle;
 
     /// <summary>Lifecycle of the current measurement.</summary>
@@ -35,7 +36,7 @@ internal sealed class MeasurePathState
     public MeasurePhase Phase => _phase;
 
     /// <summary>The placed waypoints, in click order.</summary>
-    public IReadOnlyList<(double Lat, double Lon)> Waypoints => _waypoints;
+    public IReadOnlyList<GeoPosition> Waypoints => _waypoints;
 
     /// <summary>
     /// While <see cref="Phase"/> is <see cref="MeasurePhase.Drawing"/>,
@@ -43,7 +44,7 @@ internal sealed class MeasurePathState
     /// is off-map). Renderers use this to draw the dashed rubber-band
     /// segment from the last waypoint to the cursor.
     /// </summary>
-    public (double Lat, double Lon)? RubberBand => _rubberBand;
+    public GeoPosition? RubberBand => _rubberBand;
 
     /// <summary>
     /// Records a click at <paramref name="lat"/>/<paramref name="lon"/>.
@@ -58,17 +59,17 @@ internal sealed class MeasurePathState
             case MeasurePhase.Finalised:
                 _waypoints.Clear();
                 _rubberBand = null;
-                _waypoints.Add((lat, lon));
+                _waypoints.Add(new GeoPosition(lat, lon));
                 _phase = MeasurePhase.Drawing;
                 return true;
 
             case MeasurePhase.Idle:
-                _waypoints.Add((lat, lon));
+                _waypoints.Add(new GeoPosition(lat, lon));
                 _phase = MeasurePhase.Drawing;
                 return true;
 
             case MeasurePhase.Drawing:
-                _waypoints.Add((lat, lon));
+                _waypoints.Add(new GeoPosition(lat, lon));
                 return true;
         }
         return false;
@@ -79,7 +80,7 @@ internal sealed class MeasurePathState
     /// cursor leaves the map. Outside of <see cref="MeasurePhase.Drawing"/>
     /// this is a no-op so the finalised path doesn't grow a tail.
     /// </summary>
-    public bool Hover((double Lat, double Lon)? cursor)
+    public bool Hover(GeoPosition? cursor)
     {
         if (_phase != MeasurePhase.Drawing)
         {
@@ -165,10 +166,10 @@ internal sealed class MeasurePathState
             result.Add(new MeasureLeg(
                 Index: i,
                 IsRubberBand: false,
-                FromLat: a.Lat, FromLon: a.Lon,
-                ToLat: b.Lat, ToLon: b.Lon,
-                DistanceNm: MarineGeodesy.RhumbDistanceNm(a.Lat, a.Lon, b.Lat, b.Lon),
-                BearingDeg: MarineGeodesy.RhumbBearingDegrees(a.Lat, a.Lon, b.Lat, b.Lon)));
+                FromLat: a.Latitude, FromLon: a.Longitude,
+                ToLat: b.Latitude, ToLon: b.Longitude,
+                DistanceNm: MarineGeodesy.RhumbDistanceNm(a.Latitude, a.Longitude, b.Latitude, b.Longitude),
+                BearingDeg: MarineGeodesy.RhumbBearingDegrees(a.Latitude, a.Longitude, b.Latitude, b.Longitude)));
         }
 
         if (_phase == MeasurePhase.Drawing && _rubberBand is { } rb && _waypoints.Count > 0)
@@ -177,10 +178,10 @@ internal sealed class MeasurePathState
             result.Add(new MeasureLeg(
                 Index: _waypoints.Count,
                 IsRubberBand: true,
-                FromLat: a.Lat, FromLon: a.Lon,
-                ToLat: rb.Lat, ToLon: rb.Lon,
-                DistanceNm: MarineGeodesy.RhumbDistanceNm(a.Lat, a.Lon, rb.Lat, rb.Lon),
-                BearingDeg: MarineGeodesy.RhumbBearingDegrees(a.Lat, a.Lon, rb.Lat, rb.Lon)));
+                FromLat: a.Latitude, FromLon: a.Longitude,
+                ToLat: rb.Latitude, ToLon: rb.Longitude,
+                DistanceNm: MarineGeodesy.RhumbDistanceNm(a.Latitude, a.Longitude, rb.Latitude, rb.Longitude),
+                BearingDeg: MarineGeodesy.RhumbBearingDegrees(a.Latitude, a.Longitude, rb.Latitude, rb.Longitude)));
         }
 
         return result;

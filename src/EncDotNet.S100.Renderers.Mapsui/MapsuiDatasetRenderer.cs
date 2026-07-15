@@ -183,11 +183,13 @@ public sealed class MapsuiDatasetRenderer
 
             layers.Add(layer);
             stackEntries.Add(new LayerStackEntry(
-                Layer: layer,
-                Plane: sub.Plane,
-                WithinPlanePriority: sub.WithinPlanePriority,
-                SourceDatasetId: result.SourceDatasetId,
-                SourceFeatureType: sub.SourceFeatureType));
+                layer,
+                new SubLayerStackItem(
+                    new VectorStackPayload(result, sub),
+                    sub.Plane,
+                    sub.WithinPlanePriority,
+                    result.SourceDatasetId,
+                    sub.SourceFeatureType)));
 
             union = Union(union, layer.Extent);
         }
@@ -211,6 +213,7 @@ public sealed class MapsuiDatasetRenderer
             Spec = result.Spec,
             LayerNames = result.LayerNames,
             StackEntries = stackEntries,
+            CellMinimumDisplayScale = result.CellMinimumDisplayScale,
         };
     }
 
@@ -266,11 +269,13 @@ public sealed class MapsuiDatasetRenderer
             layers.Add(layer);
             layerNames.Add(sub.LayerKey);
             stackEntries.Add(new LayerStackEntry(
-                Layer: layer,
-                Plane: sub.Plane,
-                WithinPlanePriority: sub.WithinPlanePriority,
-                SourceDatasetId: result.SourceDatasetId,
-                SourceFeatureType: sub.SourceFeatureType));
+                layer,
+                new SubLayerStackItem(
+                    new CoverageStackPayload(result, sub),
+                    sub.Plane,
+                    sub.WithinPlanePriority,
+                    result.SourceDatasetId,
+                    sub.SourceFeatureType)));
 
             union = Union(union, layer.Extent);
         }
@@ -408,6 +413,58 @@ public sealed class MapsuiDatasetRenderer
                 if (style.MaxVisible > 0)
                     style.MaxVisible = Math.Min(style.MaxVisible, maxResolution);
             }
+        }
+    }
+
+    /// <summary>
+    /// Applies the hole-safe per-cell zoom-out visibility window (issue #438
+    /// Phase 1) to a cell's built Mapsui layers: each layer stops drawing once
+    /// the viewport is zoomed out beyond <paramref name="minimumDisplayScale"/>
+    /// (the coarsest denominator in the cell's intended band, S-100 Part 17 /
+    /// S-101 FC §3.1.1 <c>DataCoverage.minimumDisplayScale</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The denominator is converted to a Mapsui EPSG:3857 resolution at each
+    /// layer's own extent-centre latitude (undoing web-mercator <c>1/cos φ</c>
+    /// distortion, matching <see cref="ApplyOutOfScaleBandCap"/>) and clamped
+    /// onto the layer's <c>MaxVisible</c>. The clamp only ever tightens, so an
+    /// existing (smaller) cap is preserved.
+    /// </para>
+    /// <para>
+    /// This is hole-safe: finer nested cells carry a smaller
+    /// <paramref name="minimumDisplayScale"/> and therefore drop out first as
+    /// the viewport zooms out, leaving the coarser cell underneath visible.
+    /// Only the zoom-out edge is enforced — the zoom-in edge
+    /// (<c>maximumDisplayScale</c> → <c>MinVisible</c>) is deliberately not
+    /// applied here because a whole-cell zoom-in cutoff would blank areas a
+    /// finer cell does not fully cover; that suppression is deferred to the
+    /// coverage-clipping work (issue #438 Phase 2).
+    /// </para>
+    /// </remarks>
+    /// <param name="layers">The cell's built layers.</param>
+    /// <param name="minimumDisplayScale">
+    /// The coarsest display-scale denominator of the cell's band (must be
+    /// positive; non-positive values are ignored).
+    /// </param>
+    public static void ApplyCellScaleWindow(IEnumerable<ILayer> layers, int minimumDisplayScale)
+    {
+        ArgumentNullException.ThrowIfNull(layers);
+        if (minimumDisplayScale <= 0)
+            return;
+
+        foreach (var layer in layers)
+        {
+            if (layer is not BaseLayer baseLayer)
+                continue;
+
+            var extent = layer.Extent;
+            var latitudeRadians = extent is null
+                ? 0.0
+                : MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians((extent.MinY + extent.MaxY) / 2.0);
+            var maxResolution = MapsuiDisplayListRenderer.DenominatorToResolution(minimumDisplayScale, latitudeRadians);
+
+            baseLayer.MaxVisible = Math.Min(baseLayer.MaxVisible, maxResolution);
         }
     }
 

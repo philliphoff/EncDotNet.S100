@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S131.Diagnostics;
@@ -67,8 +67,8 @@ internal static class S131DatasetReader
         string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         string? productId = ReadProductIdentifier(root);
 
-        var features = ImmutableArray.CreateBuilder<S131Feature>();
-        var informationTypes = ImmutableArray.CreateBuilder<S131InformationType>();
+        var features = new List<S131Feature>();
+        var informationTypes = new List<S131InformationType>();
 
         // S-131 uses a single <S131:members> container (not individual <member> elements).
         // Fall back to root-level children for compatibility with other envelope shapes.
@@ -104,8 +104,8 @@ internal static class S131DatasetReader
             ProductIdentifier = productId ?? "S-131",
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
-            Features = features.ToImmutable(),
-            InformationTypes = informationTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = informationTypes,
         };
     }
 
@@ -166,12 +166,12 @@ internal static class S131DatasetReader
 
     // ── Geometry ───────────────────────────────────────────────────────
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -198,7 +198,7 @@ internal static class S131DatasetReader
         {
             geometryType = S100GeometryType.Curve;
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            if (coords.Length > 0)
+            if (coords.Count > 0)
             {
                 curves = [coords];
             }
@@ -229,11 +229,11 @@ internal static class S131DatasetReader
 
     // ── Attributes ─────────────────────────────────────────────────────
 
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S131ComplexAttribute>, ImmutableArray<S131Reference>) ParseAttributes(XElement element)
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S131ComplexAttribute>, IReadOnlyList<S131Reference>) ParseAttributes(XElement element)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S131ComplexAttribute>();
-        var refs = ImmutableArray.CreateBuilder<S131Reference>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S131ComplexAttribute>();
+        var refs = new List<S131Reference>();
 
         foreach (var child in element.Elements())
         {
@@ -260,7 +260,7 @@ internal static class S131DatasetReader
 
             if (child.HasElements)
             {
-                var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
+                var subAttrs = new Dictionary<string, string>();
                 foreach (var sub in child.Elements())
                 {
                     if (!sub.HasElements)
@@ -271,7 +271,7 @@ internal static class S131DatasetReader
                     complex.Add(new S131ComplexAttribute
                     {
                         Code = localName,
-                        SubAttributes = subAttrs.ToImmutable(),
+                        SubAttributes = subAttrs,
                     });
                 }
             }
@@ -281,7 +281,7 @@ internal static class S131DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable(), refs.ToImmutable());
+        return (simple, complex, refs);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

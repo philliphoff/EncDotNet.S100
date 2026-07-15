@@ -19,18 +19,18 @@ public class S129DatasetReaderTests
         var dataset = S129Dataset.Open(path);
 
         Assert.Equal("S-129", dataset.ProductIdentifier);
-        Assert.False(dataset.Features.IsDefaultOrEmpty);
+        Assert.False(dataset.Features.Count == 0);
 
         // The two bundled fixtures both carry exactly one plan and one
         // plan-area feature plus many areas and control points.
-        Assert.Single(dataset.Features.Where(f =>
-            string.Equals(f.FeatureType, "UnderKeelClearancePlan", StringComparison.OrdinalIgnoreCase)));
-        Assert.Single(dataset.Features.Where(f =>
-            string.Equals(f.FeatureType, "UnderKeelClearancePlanArea", StringComparison.OrdinalIgnoreCase)));
-        Assert.NotEmpty(dataset.Features.Where(f =>
-            string.Equals(f.FeatureType, "UnderKeelClearanceNonNavigableArea", StringComparison.OrdinalIgnoreCase)));
-        Assert.NotEmpty(dataset.Features.Where(f =>
-            string.Equals(f.FeatureType, "UnderKeelClearanceControlPoint", StringComparison.OrdinalIgnoreCase)));
+        Assert.Single(dataset.Features, f =>
+            string.Equals(f.FeatureType, "UnderKeelClearancePlan", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(dataset.Features, f =>
+            string.Equals(f.FeatureType, "UnderKeelClearancePlanArea", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(dataset.Features, f =>
+            string.Equals(f.FeatureType, "UnderKeelClearanceNonNavigableArea", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(dataset.Features, f =>
+            string.Equals(f.FeatureType, "UnderKeelClearanceControlPoint", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -59,8 +59,8 @@ public class S129DatasetReaderTests
             string.Equals(f.FeatureType, "UnderKeelClearancePlanArea", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal(S100GeometryType.Surface, planArea.GeometryType);
-        Assert.False(planArea.ExteriorRing.IsDefaultOrEmpty);
-        Assert.True(planArea.ExteriorRing.Length >= 4);
+        Assert.False(planArea.ExteriorRing.Count == 0);
+        Assert.True(planArea.ExteriorRing.Count >= 4);
         // Ring closure: first ≡ last coordinate.
         Assert.Equal(planArea.ExteriorRing[0], planArea.ExteriorRing[^1]);
     }

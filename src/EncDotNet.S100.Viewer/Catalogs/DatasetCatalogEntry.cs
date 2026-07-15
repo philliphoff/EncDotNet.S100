@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Catalogs;
 
@@ -81,6 +81,6 @@ internal sealed record DatasetCatalogEntry
     /// Source-specific properties that do not map onto the neutral fields.
     /// The panel may render these in a generic key/value details view.
     /// </summary>
-    public ImmutableDictionary<string, string> ExtendedProperties { get; init; }
-        = ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtendedProperties { get; init; }
+        = ReadOnlyDictionary<string, string>.Empty;
 }

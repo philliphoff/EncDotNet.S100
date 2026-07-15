@@ -1,5 +1,7 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -58,12 +60,12 @@ public class DynamicSourcePickServiceTests
                 Id = "367123456",
                 Kind = "vessel.ais.cargo",
                 GeometryType = GeometryType.Point,
-                Coordinates = new[] { (Lat, Lon) },
+                Coordinates = new[] { new GeoPosition(Lat, Lon) },
                 Motion = new DynamicMotion
                 {
-                    CourseOverGroundDeg = 270.0,
-                    HeadingDeg = 268.5,
-                    SpeedOverGroundKn = 12.3,
+                    CourseOverGround = Angle.FromDegrees(270.0),
+                    Heading = Angle.FromDegrees(268.5),
+                    SpeedOverGround = Speed.FromKnots(12.3),
                 },
                 Attributes = new Dictionary<string, object?>
                 {
@@ -88,7 +90,7 @@ public class DynamicSourcePickServiceTests
         Assert.Equal(Lat, hit.Latitude);
         Assert.Equal(Lon, hit.Longitude);
         Assert.NotNull(hit.Motion);
-        Assert.Equal(270.0, hit.Motion!.CourseOverGroundDeg);
+        Assert.Equal(270.0, hit.Motion!.CourseOverGround?.TotalDegrees);
 
         // Attribute rows include Position, COG, Heading, SOG, then declared attributes.
         Assert.Contains(hit.Attributes, r => r.Label == "Position");
@@ -111,7 +113,7 @@ public class DynamicSourcePickServiceTests
                 Id = "ownship",
                 Kind = "ownship",
                 GeometryType = GeometryType.Point,
-                Coordinates = new[] { (Lat, Lon) },
+                Coordinates = new[] { new GeoPosition(Lat, Lon) },
                 LastUpdated = DateTimeOffset.UtcNow,
             },
         });

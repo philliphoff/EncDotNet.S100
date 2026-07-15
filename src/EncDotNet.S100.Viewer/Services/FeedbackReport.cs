@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Immutable snapshot of the diagnostic data the feedback reporter
+/// Read-only snapshot of the diagnostic data the feedback reporter
 /// collects automatically. Everything shown to the user in the dialog's
 /// "raw data" section, and everything written to the feedback bundle,
 /// comes from this record — there is no hidden collection.

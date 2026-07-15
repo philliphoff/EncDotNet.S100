@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic, fully renderable exchange-set catalogue used by
+  RenderExchangeSetCommandTests to exercise the s100 render exchange-set
+  compositing (issue #407).
+
+  Unlike the sibling Synthetic-Mixed/ fixture, the dataset files referenced
+  here ARE shipped and are real (tiny) synthetic S-124 and S-125 GML
+  datasets copied from tests/datasets/S124 and tests/datasets/S125 (the
+  same fixtures the layer-composite CLI tests use), so the CLI can
+  discover, open, and composite them into a PNG.
+
+  Entries:
+    S124/navwarn_surface.gml      supported (S-124)
+    S125/aton_point.gml           supported (S-125)
+    Unsupported/placeholder.dat   unsupported product spec and unknown
+                                  extension; the resolver skips it with a
+                                  warning (partial-set behaviour).
+-->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc/5.0"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>SYNTH_RENDERABLE_v1</S100XC:identifier>
+    <S100XC:dateTime>2026-01-15T00:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>Synthetic Hydrographic Office</gco:CharacterString>
+    </S100XC:organization>
+  </S100XC:contact>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S124/navwarn_surface.gml</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-10</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-124</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>1.5.0</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-124</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S125/aton_point.gml</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-12</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-125</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>1.0.0</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-125</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>Unsupported/placeholder.dat</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-08</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-999</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>0.0.1</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-999</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

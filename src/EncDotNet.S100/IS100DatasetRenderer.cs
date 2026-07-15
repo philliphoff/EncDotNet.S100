@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,6 +25,30 @@ public interface IS100DatasetRenderer<TResult>
     Task<TResult> RenderAsync(
         S100Layer layer,
         S100RendererOptions? options = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Renders an ordered stack of <see cref="S100Layer"/> values into a single
+/// composited result of type <typeparamref name="TResult"/>. The stack is
+/// ordered / suppressed by the renderer-neutral S-98 interoperability engine
+/// (e.g. an S-101 chart beneath an S-102 bathymetry surface, S-98 Annex A
+/// §A-6.9.1), then painted against one shared viewport.
+/// </summary>
+/// <typeparam name="TResult">The rendered result type (e.g. <c>byte[]</c> of PNG data).</typeparam>
+public interface IS100CompositeRenderer<TResult>
+{
+    /// <summary>Renders an ordered layer stack (bottom-most first) into one image.</summary>
+    /// <param name="layers">The layers to composite, in draw order (bottom-most first).</param>
+    /// <param name="options">Composite render options, or <c>null</c> for defaults.</param>
+    /// <param name="cancellationToken">Cancellation token observed cooperatively.</param>
+    /// <returns>The composited result.</returns>
+    /// <exception cref="System.NotSupportedException">
+    /// A layer's dataset shape cannot participate in a headless composite.
+    /// </exception>
+    Task<TResult> RenderAsync(
+        IReadOnlyList<S100Layer> layers,
+        S100CompositeOptions? options = null,
         CancellationToken cancellationToken = default);
 }
 

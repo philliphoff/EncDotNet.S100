@@ -142,8 +142,30 @@ public sealed class DatasetPipelineFactory
             // Some GML files have leading whitespace before the XML declaration;
             // read as text, trim, and parse via a StringReader to tolerate this.
             var xml = File.ReadAllText(path).TrimStart();
+            return DetectGmlProductSpecFromXml(xml);
+        }
+        catch
+        {
+            // Unable to parse – unknown
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Inspects the root element / declared namespaces / <c>productIdentifier</c>
+    /// of an already-loaded GML document body to determine its S-100 product
+    /// specification (e.g. <c>"S-411"</c>). Shared by the file-path and
+    /// asset-source detection paths so exchange-set datasets whose catalogue
+    /// omits a machine-readable <c>productIdentifier</c> (common for JCOMM S-411
+    /// sets) are still routed correctly. Returns <c>null</c> when unrecognized.
+    /// </summary>
+    private static string? DetectGmlProductSpecFromXml(string xml)
+    {
+        try
+        {
             using var stringReader = new StringReader(xml);
-            using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit });
+            using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null });
             while (reader.Read())
             {
                 if (reader.NodeType == System.Xml.XmlNodeType.Element)
@@ -411,6 +433,7 @@ public sealed class DatasetPipelineFactory
 
         var spec = MapProductIdentifierToSpec(declaredProductSpec)
             ?? DetectProductSpecByExtension(relativePath)
+            ?? DetectProductSpecFromSource(source, relativePath)
             ?? throw new NotSupportedException(
                 $"Unable to determine product specification for '{relativePath}' " +
                 $"(declared='{declaredProductSpec ?? "<none>"}').");
@@ -535,6 +558,46 @@ public sealed class DatasetPipelineFactory
     }
 
     /// <summary>
+    /// Creates a processor for the base cell file at
+    /// <paramref name="baseFilePath"/>, discovering and applying any sibling
+    /// sequential update files (<c>….001</c>, <c>….002</c>, …) that live in the
+    /// same directory. This gives a single dropped <c>.000</c> cell the same
+    /// up-to-date rendering as one loaded from an exchange set. S-57 and S-101
+    /// cells (told apart by the <c>DSPM</c> content sniff in
+    /// <see cref="DetectProductSpec"/>) both apply updates via their respective
+    /// <c>*WithUpdates</c> path; any other product, or a base cell with no
+    /// updates on disk, falls back to <see cref="CreateProcessor(string)"/>.
+    /// S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+    /// </summary>
+    /// <param name="baseFilePath">Path to the base cell file (<c>….000</c>).</param>
+    public IDatasetProcessor CreateProcessorWithFilesystemUpdates(string baseFilePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(baseFilePath);
+
+        var updates = S101FilesystemUpdateDiscovery.FindSequentialUpdates(baseFilePath);
+        if (updates.Count == 0)
+            return CreateProcessor(baseFilePath);
+
+        var spec = DetectProductSpec(baseFilePath);
+        switch (spec)
+        {
+            case "S-101":
+                return CreateS101ProcessorWithUpdates(baseFilePath, updates);
+            case "S-57":
+                var directory = Path.GetDirectoryName(Path.GetFullPath(baseFilePath))
+                    ?? throw new ArgumentException(
+                        "Base cell path must include a directory.", nameof(baseFilePath));
+                var source = FileSystemAssetSource.Create(directory);
+                var updateNames = updates.Select(Path.GetFileName).OfType<string>().ToList();
+                return CreateS57ProcessorWithUpdates(
+                    source, Path.GetFileName(baseFilePath), updateNames);
+            default:
+                // Non-ENC products never carry .000 sequential updates.
+                return CreateProcessor(baseFilePath);
+        }
+    }
+
+    /// <summary>
     /// Normalizes an exchange-set product identifier (e.g. <c>"S-101"</c>,
     /// <c>"S101"</c>, <c>"s-101"</c>) to the canonical spec strings used
     /// by <see cref="CreateProcessor(string)"/>'s switch (<c>"S-101"</c>, etc.).
@@ -597,5 +660,87 @@ public sealed class DatasetPipelineFactory
             return null;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Content-sniffs a GML dataset stored inside <paramref name="source"/> to
+    /// determine its S-100 product specification when the exchange-set catalogue
+    /// omits a machine-readable <c>productIdentifier</c>. Real-world JCOMM S-411
+    /// exchange sets declare only a human-readable product-specification
+    /// <c>name</c> (e.g. "Ice Information Product Specification (JCOMM S-411)")
+    /// with no identifier or number, so the declared spec cannot be mapped and
+    /// the dataset must be recognized from its GML root element / namespaces.
+    /// This synchronous wrapper exists for synchronous processor creation; async
+    /// callers should use <see cref="DetectProductSpecFromSourceAsync"/>.
+    /// </summary>
+    /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
+    /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
+    public static string? DetectProductSpecFromSource(IAssetSource source, string relativePath)
+    {
+        return DetectProductSpecFromSourceAsync(source, relativePath)
+            .ConfigureAwait(false)
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    /// <summary>
+    /// Asynchronously content-sniffs a GML dataset stored inside
+    /// <paramref name="source"/> to determine its S-100 product specification
+    /// when the exchange-set catalogue omits a machine-readable
+    /// <c>productIdentifier</c>. Real-world JCOMM S-411 exchange sets declare
+    /// only a human-readable product-specification <c>name</c> (e.g. "Ice
+    /// Information Product Specification (JCOMM S-411)") with no identifier or
+    /// number, so the declared spec cannot be mapped and the dataset must be
+    /// recognized from its GML root element / namespaces. Reads only a bounded,
+    /// BOM-aware prefix of the dataset. Only <c>.gml</c>/<c>.xml</c> datasets
+    /// are sniffed; returns <c>null</c> when the file cannot be read or is
+    /// unrecognized. Returns the canonical spec string (e.g. <c>"S-411"</c>)
+    /// understood by
+    /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
+    /// </summary>
+    /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
+    /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
+    /// <param name="cancellationToken">Cancellation token for reading dataset bytes.</param>
+    /// <returns>The canonical product-specification string, or <c>null</c> when not recognized.</returns>
+    public static async Task<string?> DetectProductSpecFromSourceAsync(
+        IAssetSource source,
+        string relativePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(relativePath);
+
+        var ext = Path.GetExtension(relativePath);
+        if (!string.Equals(ext, ".gml", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(ext, ".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var stream = await source.OpenAsync(relativePath, cancellationToken)
+                .ConfigureAwait(false);
+            using var streamReader = new StreamReader(
+                stream,
+                System.Text.Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true);
+            const int MaxSniffPrefixChars = 64 * 1024;
+            var buffer = new char[MaxSniffPrefixChars];
+            int read = await streamReader.ReadBlockAsync(
+                    buffer.AsMemory(0, MaxSniffPrefixChars),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            var xml = new string(buffer, 0, read).TrimStart();
+            return DetectGmlProductSpecFromXml(xml);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

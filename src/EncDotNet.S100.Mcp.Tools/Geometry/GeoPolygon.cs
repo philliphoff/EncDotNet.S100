@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
 
@@ -19,4 +18,4 @@ namespace EncDotNet.S100.Mcp.Tools.Geometry;
 /// Polygons that span large arcs of latitude or cross the antimeridian
 /// are not supported.
 /// </remarks>
-public sealed record GeoPolygon(ImmutableArray<GeoPoint> Ring);
+public sealed record GeoPolygon(IReadOnlyList<GeoPoint> Ring);

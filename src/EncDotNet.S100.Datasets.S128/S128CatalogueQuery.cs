@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -35,7 +34,7 @@ public static class S128CatalogueQuery
         foreach (var entry in entries)
         {
             var ring = entry.CoverageRing;
-            if (ring.IsDefaultOrEmpty) continue;
+            if (ring.Count == 0) continue;
 
             double rMinLat = double.MaxValue, rMaxLat = double.MinValue;
             double rMinLon = double.MaxValue, rMaxLon = double.MinValue;

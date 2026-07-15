@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -48,7 +49,7 @@ public class MapsuiSoundingHitRectTests
             return new FeatureGeometry
             {
                 Type = GeometryType.Point,
-                Coordinates = new[] { (Latitude: 10.0, Longitude: lon) },
+                Coordinates = new[] { new GeoPosition(10.0, lon) },
             };
         }
     }

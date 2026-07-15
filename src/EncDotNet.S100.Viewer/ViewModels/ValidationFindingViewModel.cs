@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
 /// Display-ready wrapper around a single <see cref="ValidationFinding"/>
-/// surfaced in the dataset properties panel's Validation tab. Immutable —
+/// surfaced in the dataset properties panel's Validation tab. Read-only —
 /// findings never mutate after a dataset finishes loading.
 /// </summary>
 internal sealed class ValidationFindingViewModel

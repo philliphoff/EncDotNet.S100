@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -34,7 +33,7 @@ public sealed class S101Dataset
     public uint CoordinateMultiplicationFactorY => Document.StructureInfo.CoordinateMultiplicationFactorY;
 
     /// <summary>Number of feature records in the dataset.</summary>
-    public int FeatureCount => Document.Features.Length;
+    public int FeatureCount => Document.Features.Count;
 
     /// <summary>Opens an S-101 dataset from a file path.</summary>
     public static S101Dataset Open(string path)
@@ -103,7 +102,7 @@ public sealed class S101Dataset
                 Inserted = report.Inserted,
                 Deleted = report.Deleted,
                 Modified = report.Modified,
-                Messages = readMessages.Concat(report.Messages).ToImmutableArray(),
+                Messages = readMessages.Concat(report.Messages).ToArray(),
             };
         }
 

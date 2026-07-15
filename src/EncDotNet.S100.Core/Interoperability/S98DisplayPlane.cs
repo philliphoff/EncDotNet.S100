@@ -13,10 +13,9 @@ namespace EncDotNet.S100.Interoperability;
 /// catalogue-declarable additional planes (S-98 Annex A §A-3.2.1.1).
 /// For the v1 plumbing PR (PR-L1) we hard-wire the nine canonical
 /// planes derived from MSC.530(106)/Rev.1 §Appendix 2 "priority of
-/// information" via S-98 Main §9.2.1; an
-/// <see cref="LayerStackEntry.ExtensionId"/> escape hatch on
-/// <c>LayerStackEntry</c> carries IC-declared non-canonical plane ids
-/// for the future PR-L2 rule evaluator.
+/// information" via S-98 Main §9.2.1; a <c>SubLayerStackItem.ExtensionId</c>
+/// escape hatch on <c>SubLayerStackItem</c> carries IC-declared non-canonical
+/// plane ids for the future PR-L2 rule evaluator.
 /// </para>
 /// <para>
 /// The numeric ordering is informative — lower values draw earlier

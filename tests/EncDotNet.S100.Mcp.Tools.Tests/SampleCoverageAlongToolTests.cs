@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -21,16 +20,16 @@ public class SampleCoverageAlongToolTests
             source: new S102CoverageSource(dataset)));
         var tool = new SampleCoverageAlongTool(catalog);
 
-        var polyline = new GeoPolyline(ImmutableArray.Create(
+        var polyline = new GeoPolyline([
             new GeoPoint(0.01, 0.01),
             new GeoPoint(0.02, 0.02),
-            new GeoPoint(0.03, 0.03)));
+            new GeoPoint(0.03, 0.03)]);
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             LoadedDatasetFactory.S102Spec, polyline));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(3, value.Samples.Length);
+        Assert.Equal(3, value.Samples.Count);
         for (var i = 0; i < 3; i++)
         {
             Assert.Equal(i, value.Samples[i].VertexIndex);
@@ -52,16 +51,16 @@ public class SampleCoverageAlongToolTests
             source: new S102CoverageSource(dataset)));
         var tool = new SampleCoverageAlongTool(catalog);
 
-        var polyline = new GeoPolyline(ImmutableArray.Create(
+        var polyline = new GeoPolyline([
             new GeoPoint(0.02, 0.02),       // inside
             new GeoPoint(50, 50),           // outside — NoDatasetCoversPoint
-            new GeoPoint(0.03, 0.03)));     // inside
+            new GeoPoint(0.03, 0.03)]);     // inside
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             LoadedDatasetFactory.S102Spec, polyline));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(3, value.Samples.Length);
+        Assert.Equal(3, value.Samples.Count);
         Assert.NotNull(value.Samples[0].Result);
         Assert.Null(value.Samples[1].Result);
         Assert.NotNull(value.Samples[2].Result);
@@ -73,9 +72,9 @@ public class SampleCoverageAlongToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new SampleCoverageAlongTool(catalog);
 
-        var polyline = new GeoPolyline(ImmutableArray.Create(
+        var polyline = new GeoPolyline([
             new GeoPoint(0, 0),
-            new GeoPoint(1, 1)));
+            new GeoPoint(1, 1)]);
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             new SpecRef("S-101", new SpecVersion(1, 0, 0)),
@@ -92,7 +91,7 @@ public class SampleCoverageAlongToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new SampleCoverageAlongTool(catalog);
 
-        var polyline = new GeoPolyline(ImmutableArray<GeoPoint>.Empty);
+        var polyline = new GeoPolyline([]);
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             LoadedDatasetFactory.S102Spec, polyline));

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -132,7 +133,7 @@ internal interface IMapHost
     /// The viewport-centre latitude/longitude in WGS-84 degrees, or
     /// <see langword="null"/> when no laid-out viewport exists.
     /// </returns>
-    (double Latitude, double Longitude)? TryGetViewportCenterWgs84();
+    GeoPosition? TryGetViewportCenterWgs84();
 
     /// <summary>
     /// Returns the current on-screen viewport size in device-independent
@@ -155,7 +156,7 @@ internal interface IMapHost
     /// </summary>
     /// <param name="xPx">Screen X in device-independent pixels from the viewport's left edge.</param>
     /// <param name="yPx">Screen Y in device-independent pixels from the viewport's top edge.</param>
-    (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx);
+    GeoPosition? TryScreenToWgs84(double xPx, double yPx);
 
     /// <summary>
     /// Converts a pixel from a <c>render_to_image</c> capture back to a
@@ -177,7 +178,7 @@ internal interface IMapHost
     /// out, the image dimensions are non-positive, or the point projects
     /// outside the valid Mercator domain.
     /// </returns>
-    (double Latitude, double Longitude)? TryImagePixelToWgs84(
+    GeoPosition? TryImagePixelToWgs84(
         double xPx, double yPx, int imageWidthPx, int imageHeightPx);
 
     /// <summary>

@@ -323,8 +323,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
 
         // S-104 ships a built-in portrayal catalogue.
-        // S-57 datasets are translated to S-101 in-memory and rendered with the S-101 portrayal catalogue.
-        var requiredCatalogue = spec == "S-57" ? "S-101" : spec;
+        // S-57 datasets are portrayed with the S-101 catalogue (see SpecConventions).
+        var requiredCatalogue = SpecConventions.PortrayalSpecName(spec);
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
             _notifications.Create(Strings.Toast_Warning)
@@ -357,7 +357,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var processor = await Task.Run(() =>
             {
                 if (!fromExchangeSet)
-                    return _pipelineFactory.CreateProcessor(entry.FilePath);
+                    return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
 
                 // Collapse a base cell and its in-set sequential updates into a
                 // single up-to-date dataset. S-101 / S-57 / S-100 Part 10a;
@@ -460,7 +460,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
+                // Record the dataset's mercator extent so the panel can zoom to
+                // it (double-click reveal) and the out-of-scale extent indicator
+                // can outline it, even for exchange-set entries that opt out of
+                // the auto-zoom below (issue #446).
+                entry.MercatorExtent = result.Extent;
                 // Exchange-set entries opt out of the per-dataset auto-zoom so
                 // the union-extent zoom from `IExchangeSetService` (or the
                 // user's manual Zoom-to-Extent toolbar action) wins. Without
@@ -751,7 +756,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
             }
@@ -792,7 +797,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, CancellationToken.None));
 
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
                 entry.Info = result.Info;
             }
             catch (Exception ex)
@@ -866,13 +871,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // top), preserving the prior behaviour for single-plane
         // dataset stacks.
         //
+        // Issue #398: the S-98 engine now operates on renderer-neutral
+        // SubLayerStackItem values (in the Mapsui-free Datasets.Pipelines
+        // assembly). We feed it each dataset's items, then project the
+        // ordered / suppressed result back onto the prebuilt Mapsui
+        // layers via LayerStackProjector (reusing cached ILayers and
+        // filtering only suppressed features — no re-rasterisation).
+        //
         // PR-L3: we keep building the FULL plane-sorted list of
         // entries (including inactive datasets) so the Layer Stack
         // panel can still show their rows and let the user re-enable
         // them. Only the rendered layer list (returned to the map
         // host) is filtered to active entries; the snapshot stored
         // in <see cref="_currentStackEntries"/> retains every entry.
-        var perDataset = new List<IReadOnlyList<LayerStackEntry>>(_entryOrder.Count);
+        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(_entryOrder.Count);
+        var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
         for (int i = 0; i < _entryOrder.Count; i++)
         {
             var entry = _entryOrder[i];
@@ -882,7 +895,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
             {
-                perDataset.Add(stack);
+                var items = new List<SubLayerStackItem>(stack.Count);
+                foreach (var se in stack)
+                {
+                    items.Add(se.Item);
+                    prebuilt[LayerStackProjector.KeyOf(se.Item)] = se;
+                }
+                perDataset.Add(items);
             }
             else
             {
@@ -893,14 +912,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                     ? proc.Spec.Name
                     : "unknown";
                 var plane = _authorityProvider.Current.GetDefaultPlane(specName);
-                var synth = new List<LayerStackEntry>(layers.Count);
-                foreach (var l in layers)
+                var synth = new List<SubLayerStackItem>(layers.Count);
+                for (int li = 0; li < layers.Count; li++)
                 {
-                    synth.Add(new LayerStackEntry(
-                        Layer: l,
-                        Plane: plane,
+                    // Synthesise a stable key so the projector can recover the
+                    // layer; there is no portrayal payload for these legacy
+                    // fallbacks so we key by dataset + ordinal.
+                    var layerKey = string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"__synth__{li}");
+                    var item = new SubLayerStackItem(
+                        new SyntheticStackPayload(layerKey),
+                        plane,
                         WithinPlanePriority: 0,
-                        SourceDatasetId: datasetId));
+                        SourceDatasetId: datasetId);
+                    synth.Add(item);
+                    prebuilt[(datasetId, layerKey)] = new LayerStackEntry(layers[li], item);
                 }
                 perDataset.Add(synth);
             }
@@ -919,22 +946,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var loaded = BuildLoadedDatasetInfos();
         var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
 
-        // Cache the FULL ruled list (including inactive datasets) for
-        // the Layer Stack panel.
-        _currentStackEntries = ruled;
+        // Project the ordered / suppressed neutral items back onto the
+        // prebuilt Mapsui layers (reusing cached ILayers; filtering only
+        // suppressed features). Cache the FULL projected list (including
+        // inactive datasets) for the Layer Stack panel.
+        var projected = LayerStackProjector.Project(ruled, prebuilt);
+        _currentStackEntries = projected;
 
         // PR-L3: filter inactive datasets out of the rendered layer
         // list handed back to the map host. The active flag is the
         // single source of truth: inactive entries don't paint and
         // don't influence pick.
-        var renderEntries = new List<LayerStackEntry>(ruled.Count);
-        foreach (var e in ruled)
+        var renderEntries = new List<LayerStackEntry>(projected.Count);
+        foreach (var e in projected)
         {
             if (!GetActive(e.SourceDatasetId)) continue;
             renderEntries.Add(e);
         }
 
-        var list = LayerStackBuilder.ToLayerList(renderEntries);
+        var list = LayerStackProjector.ToLayerList(renderEntries);
         _currentStackedLayers = list;
         LayerStackChanged?.Invoke();
         return list;
@@ -1006,7 +1036,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var ecdis = _ecdisDisplay.Snapshot();
         var mariner = _marinerSettings.Current;
 
-        return processor switch
+        RenderContext context = processor switch
         {
             S104DatasetProcessor when timeStep is not null
                 => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
@@ -1038,13 +1068,42 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
         };
+
+        // Thread the explicit per-spec S-100 Part 9 §11.7 display-mode
+        // selection (only S-411 declares >1 mode today). Applied generically
+        // via a record `with`; a null id leaves the catalogue's default mode
+        // in place (GmlDatasetProcessorBase.ApplyDisplayMode). Keyed on the
+        // portrayal spec so an S-57 dataset resolves the S-101 selection.
+        return ApplyDisplayMode(context, ecdis, processor.PortrayalSpec.Name);
+    }
+
+    /// <summary>
+    /// Copies <paramref name="context"/> with the explicit S-100 Part 9
+    /// §11.7 display-mode id selected for <paramref name="specName"/> in
+    /// <paramref name="ecdis"/>, or returns it unchanged when the spec has no
+    /// explicit selection (so the catalogue's default mode stands). Extracted
+    /// as a pure helper so the threading contract is unit-testable without
+    /// constructing the full loader.
+    /// </summary>
+    internal static RenderContext ApplyDisplayMode(
+        RenderContext context, EcdisDisplaySettings ecdis, string specName)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(ecdis);
+        ArgumentNullException.ThrowIfNull(specName);
+
+        var displayModeId = ecdis.ActiveDisplayModes.GetValueOrDefault(specName);
+        return string.IsNullOrEmpty(displayModeId)
+            ? context
+            : context with { DisplayModeId = displayModeId };
     }
 
     private void ReplaceLayers(
         DatasetEntry entry,
         IReadOnlyList<ILayer> layers,
         IReadOnlyList<string>? layerKeys,
-        IReadOnlyList<LayerStackEntry>? stackEntries)
+        IReadOnlyList<LayerStackEntry>? stackEntries,
+        int? cellMinimumDisplayScale = null)
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
 
@@ -1071,6 +1130,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // — without this step those defaults silently win.
         ApplyDisplayState(entry);
 
+        // Hole-safe per-cell zoom-out visibility window (issue #438 Phase 1):
+        // clamp each layer's MaxVisible to the cell's coarsest intended scale
+        // so finer nested cells drop out first as the viewport zooms out,
+        // leaving the coarser cell underneath. Re-applied on every render
+        // because each build produces fresh ILayer instances.
+        ApplyCellScaleWindow(entry, layers, cellMinimumDisplayScale);
+
         // Subscribe lazily on first ReplaceLayers so that property
         // changes raised by the UI propagate to the live ILayer
         // instances. The subscription persists across re-renders.
@@ -1095,6 +1161,53 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             _entryOrder.Insert(0, entry);
         }
         _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
+    }
+
+    /// <summary>
+    /// Applies the hole-safe per-cell zoom-out visibility window (issue #438
+    /// Phase 1) to <paramref name="entry"/>'s freshly-built layers when the
+    /// exchange-set catalogue supplied a coarsest display scale
+    /// (<see cref="DatasetEntry.MinimumDisplayScale"/>). Skipped when the
+    /// mariner has opted to ignore scale minima (consistent with the S-101
+    /// in-file out-of-scale-band cap), so a mariner override still shows every
+    /// cell at all zooms. Toggling the setting re-renders (which calls back
+    /// into <see cref="ReplaceLayers"/>), so the window is re-evaluated.
+    /// </summary>
+    private void ApplyCellScaleWindow(
+        DatasetEntry entry,
+        IReadOnlyList<ILayer> layers,
+        int? cellMinimumDisplayScale = null)
+    {
+        // Default to "never disappears" until we confirm a window was applied.
+        entry.ContentMaxVisibleResolution = null;
+
+        if (layers.Count == 0)
+            return;
+        // Prefer the exchange-set catalogue value (DatasetEntry.MinimumDisplayScale);
+        // otherwise fall back to the scale the processor derived from the
+        // dataset's own content (S-101 in-file DataCoverage.minimumDisplayScale,
+        // S-57 DSPM compilation scale). This makes a standalone-loaded cell hide
+        // when zoomed out just as it would when loaded from an exchange set.
+        if ((entry.MinimumDisplayScale ?? cellMinimumDisplayScale) is not int minimumDisplayScale)
+            return;
+        if (_marinerSettings.Current.IgnoreScaleMinimum)
+            return;
+
+        MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale);
+
+        // Record the whole-cell zoom-out cutoff so the out-of-scale extent
+        // indicator (issue #446) knows the resolution at which this dataset
+        // fully drops out. A dataset is visible while at least one layer draws
+        // (resolution <= its MaxVisible), so the cutoff is the largest finite
+        // MaxVisible across the clamped layers — the last layer to vanish.
+        double cutoff = 0.0;
+        foreach (var layer in layers)
+        {
+            if (layer is BaseLayer baseLayer && baseLayer.MaxVisible < double.MaxValue)
+                cutoff = Math.Max(cutoff, baseLayer.MaxVisible);
+        }
+
+        entry.ContentMaxVisibleResolution = cutoff > 0.0 ? cutoff : null;
     }
 
     /// <summary>
