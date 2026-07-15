@@ -305,8 +305,21 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
     private async Task PumpLoadAsync(DatasetEntry entry)
     {
-        await _gate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await _gate.WaitAsync().ConfigureAwait(true);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Dispose() disposed the gate while this load was queued. Tracking
+            // is already cleared, so there is nothing to unwind — just abandon
+            // the fire-and-forget task rather than surface an unobserved
+            // exception. See issue #458.
+            return;
+        }
+
         var aborted = false;
+        var disposed = false;
         try
         {
             await _loadAsync(entry, CancellationToken.None).ConfigureAwait(true);
@@ -317,7 +330,8 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 // load as stale rather than re-adding layers for a closed
                 // exchange set (zombie layers) or resurrecting an entry the UI
                 // has already dropped. See issue #458.
-                aborted = _disposed || !_loading.Remove(entry);
+                disposed = _disposed;
+                aborted = disposed || !_loading.Remove(entry);
                 if (!aborted)
                 {
                     _deferred.Remove(entry);
@@ -327,10 +341,12 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 }
             }
 
-            if (aborted)
+            // Unwind a load the viewport still wanted but whose exchange set was
+            // closed mid-flight. When the whole coordinator is disposing, skip
+            // the unload — teardown removes the layers wholesale and we must not
+            // touch the map during shutdown.
+            if (aborted && !disposed)
             {
-                // Unwind the just-completed load so its bytes/layers do not
-                // linger after the exchange set was closed.
                 try { _unload(entry); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Lazy-load abort unload threw."); }
             }
@@ -342,7 +358,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         }
         finally
         {
-            _gate.Release();
+            // The gate may have been disposed by Dispose() while the load ran;
+            // a fire-and-forget Release() must not surface an unobserved
+            // ObjectDisposedException during teardown.
+            try { _gate.Release(); }
+            catch (ObjectDisposedException) { }
         }
     }
 

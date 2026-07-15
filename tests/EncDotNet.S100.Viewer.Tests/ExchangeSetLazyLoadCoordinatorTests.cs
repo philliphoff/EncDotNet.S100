@@ -202,4 +202,47 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         Assert.True(await WaitUntilAsync(() => unloaded.Contains(cell)));
         Assert.Equal(0, coordinator.LoadedCount);
     }
+
+    [Fact]
+    public async Task DisposeDuringInFlightLoad_DoesNotThrow()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var unloaded = new ConcurrentBag<DatasetEntry>();
+
+        var release = new TaskCompletionSource();
+        var started = new TaskCompletionSource();
+        var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                started.TrySetResult();
+                await release.Task;
+                loaded.Add(entry);
+            },
+            entry => unloaded.Add(entry),
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+
+        var cell = Cell("US5DD", 40, -75, 41, -74);
+        coordinator.Register(new[] { cell });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => started.Task.IsCompleted));
+
+        // Dispose (which disposes the internal semaphore) while the load is
+        // in-flight, then let it finish; the fire-and-forget pump must not
+        // surface an unobserved ObjectDisposedException on WaitAsync/Release.
+        coordinator.Dispose();
+        release.SetResult();
+
+        // Give the pump time to run its finally block, then flush finalizers to
+        // surface any unobserved task exception.
+        await Task.Delay(100);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        // A disposed coordinator that swallowed the teardown race must not have
+        // re-marked the closed cell loaded.
+        Assert.Equal(0, coordinator.LoadedCount);
+    }
 }

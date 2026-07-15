@@ -24,12 +24,18 @@ namespace EncDotNet.S100.Viewer.Services.LazyLoading;
 /// the cold end.
 /// </para>
 /// </remarks>
-/// <typeparam name="TKey">The loaded-cell key type (reference equality).</typeparam>
-internal sealed class LruEvictionPolicy<TKey> where TKey : notnull
+/// <typeparam name="TKey">
+/// The loaded-cell key type. Constrained to a reference type and keyed by
+/// <see cref="ReferenceEqualityComparer"/> so tracking is by object identity
+/// regardless of whether <typeparamref name="TKey"/> overrides equality — the
+/// coordinator distinguishes cells by reference, never by value.
+/// </typeparam>
+internal sealed class LruEvictionPolicy<TKey> where TKey : class
 {
     // Head (index 0) = coldest (least-recently used); tail = warmest.
     private readonly LinkedList<TKey> _order = new();
-    private readonly Dictionary<TKey, LinkedListNode<TKey>> _nodes = new();
+    private readonly Dictionary<TKey, LinkedListNode<TKey>> _nodes =
+        new(ReferenceEqualityComparer.Instance);
 
     /// <summary>The number of loaded keys currently tracked.</summary>
     public int Count => _nodes.Count;
