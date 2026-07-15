@@ -871,7 +871,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             disposableProcessor.Dispose();
         }
         _entryOrder.Remove(entry);
-        _activeFlags.Remove(EntryId(entry));
+        // NB: unlike RemoveEntry, do NOT clear _activeFlags here. Eviction
+        // keeps the DatasetEntry registered, so its user-set active/inactive
+        // state must survive the unload → reload cycle; dropping the flag would
+        // silently reset an inactive cell back to active (the GetActive
+        // default) when it next loads. See issue #458.
         _globalTime.Unregister(entry);
         entry.IsDeferred = true;
         if (_mapHost is not null)
