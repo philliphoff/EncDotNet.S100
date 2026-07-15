@@ -1,6 +1,6 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -26,7 +26,7 @@ public class PickFeaturesToolTests
 
     private sealed class FakeCatalog : IDatasetCatalog
     {
-        public ImmutableArray<LoadedDataset> Datasets { get; set; } = ImmutableArray<LoadedDataset>.Empty;
+        public IReadOnlyList<LoadedDataset> Datasets { get; set; } = [];
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed;
         public void Raise() => Changed?.Invoke(this, null!);
     }
@@ -45,7 +45,7 @@ public class PickFeaturesToolTests
     {
         var (tool, host, _) = Make();
         host.ViewportSizePx = (800, 600);
-        host.ScreenToWgs84 = (x, y) => (47.6, -122.3);
+        host.ScreenToWgs84 = (x, y) => new GeoPosition(47.6, -122.3);
 
         var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 400, Y: 300));
 
@@ -75,7 +75,7 @@ public class PickFeaturesToolTests
     {
         var (tool, host, _) = Make();
         host.ViewportSizePx = (800, 600);
-        host.ScreenToWgs84 = (_, _) => (1, 2);
+        host.ScreenToWgs84 = (_, _) => new GeoPosition(1, 2);
 
         var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 1, Y: 2, Latitude: 3, Longitude: 4));
 
@@ -123,7 +123,7 @@ public class PickFeaturesToolTests
     {
         var (tool, host, _) = Make();
         host.ViewportSizePx = (800, 600);
-        host.ScreenToWgs84 = (_, _) => (1, 2);
+        host.ScreenToWgs84 = (_, _) => new GeoPosition(1, 2);
 
         var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 900, Y: 300));
 
@@ -175,14 +175,14 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
         // Live ScreenToWgs84 would give a different answer; the image-fit
         // path must use the image projection instead.
-        host.ScreenToWgs84 = (_, _) => (10, 20);
+        host.ScreenToWgs84 = (_, _) => new GeoPosition(10, 20);
         host.ImagePixelToWgs84 = (x, y, w, h) =>
         {
             Assert.Equal(512, x);
             Assert.Equal(384, y);
             Assert.Equal(1024, w);
             Assert.Equal(768, h);
-            return (47.6, -122.3);
+            return new GeoPosition(47.6, -122.3);
         };
 
         var result = await tool.InvokeAsync(
@@ -212,7 +212,7 @@ public class PickFeaturesToolTests
     {
         var (tool, host, _) = Make();
         host.ViewportSizePx = (800, 600);
-        host.ImagePixelToWgs84 = (_, _, _, _) => (1, 2);
+        host.ImagePixelToWgs84 = (_, _, _, _) => new GeoPosition(1, 2);
 
         var result = await tool.InvokeAsync(
             new PickFeaturesRequest(X: 2000, Y: 100, ImageWidth: 1024, ImageHeight: 768));
@@ -226,7 +226,7 @@ public class PickFeaturesToolTests
     {
         var (tool, host, _) = Make();
         host.ViewportSizePx = null;
-        host.ImagePixelToWgs84 = (_, _, _, _) => (1, 2);
+        host.ImagePixelToWgs84 = (_, _, _, _) => new GeoPosition(1, 2);
 
         var result = await tool.InvokeAsync(
             new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768));
@@ -276,7 +276,7 @@ public class PickFeaturesToolTests
     public void Adapter_translates_success_to_non_error_content()
     {
         var value = new PickFeaturesResult(
-            "geo", 47.6, -122.3, ImmutableArray<IdentifyMatch>.Empty, 0, false);
+            "geo", 47.6, -122.3, [], 0, false);
 
         var translated = PickFeaturesMcpAdapter.TranslateResult(ToolResult<PickFeaturesResult>.Ok(value));
 

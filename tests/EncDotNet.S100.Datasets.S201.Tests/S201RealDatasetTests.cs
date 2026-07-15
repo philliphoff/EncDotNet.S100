@@ -35,7 +35,7 @@ public class S201RealDatasetTests
             if (name.StartsWith("._", StringComparison.Ordinal)) continue;
 
             var dataset = S201Dataset.Open(file);
-            totalFeatures += dataset.Features.Length;
+            totalFeatures += dataset.Features.Count;
             parsedFiles++;
         }
 

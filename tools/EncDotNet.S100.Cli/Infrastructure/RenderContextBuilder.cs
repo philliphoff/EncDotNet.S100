@@ -19,11 +19,13 @@ internal static class RenderContextBuilder
         double symbolScale,
         double textScale,
         int timeStepIndex,
-        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
+        BasemapKind basemap = BasemapKind.None,
+        string? displayModeId = null)
     {
         DateTime? timeStep = ResolveTimeStep(processor, timeStepIndex);
 
-        return processor.Spec.Name switch
+        RenderContext context = processor.Spec.Name switch
         {
             "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
             "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
@@ -38,6 +40,8 @@ internal static class RenderContextBuilder
             "S-411" => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
             _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
         };
+
+        return context with { Basemap = basemap, DisplayModeId = displayModeId };
     }
 
     private static DateTime? ResolveTimeStep(IDatasetProcessor processor, int timeStepIndex)

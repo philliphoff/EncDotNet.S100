@@ -4,10 +4,9 @@
   <PropertyGroup>
     <TargetFramework />
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-  </PropertyGroup>
-  <PropertyGroup>
-    <TargetFramework />
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>Headless SkiaSharp rasteriser for the IHO S-100 portrayal pipeline. Renders the backend-neutral scene IR from EncDotNet.S100.Rendering.Scene (VectorScene / PaintOp) to an image with no GUI or map framework: SkiaDisplayListRenderer.RenderOnto, HeadlessVectorRenderer, CoverageHeadlessRenderer, and the multi-layer HeadlessCompositeRenderer. Lets a consumer embed just the renderer + IR without the EncDotNet.S100 facade or Mapsui.</Description>
+    <PackageTags>S-100;rendering;SkiaSharp;headless;rasteriser;portrayal;IHO;hydrography;ECDIS</PackageTags>
     <!-- Ship the self-contained SkiaSharp Linux native so the headless render
          path works on arm64 and on hosts without fontconfig (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
@@ -31,6 +30,15 @@
     <None Include="Assets/Fonts/README.md" />
     <!-- Ship Open Sans' Apache-2.0 license/attribution alongside the font in the package. -->
     <None Include="Assets/Fonts/LICENSE-OpenSans.txt" Pack="true" PackagePath="Assets/Fonts/" />
+    <!--
+      Bundled offline basemap (issues #295, #411): Natural Earth 1:10m land
+      polygons, simplified so the embedded GeoJSON stays small. Public domain
+      (Natural Earth). Shared by the headless NaturalEarthBasemap land layer and
+      the interactive viewer's Mapsui Offline basemap (single embedded copy).
+    -->
+    <EmbeddedResource Include="Assets/Basemap/ne_10m_land.geojson">
+      <LogicalName>EncDotNet.S100.Renderers.Skia.Assets.Basemap.ne_10m_land.geojson</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

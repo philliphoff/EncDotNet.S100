@@ -1,3 +1,4 @@
+namespace EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.ExchangeSets
 {
@@ -8,12 +9,11 @@ namespace EncDotNet.S100.ExchangeSets
         Irregular = 2
     };
 
-    public class MaintenanceInformation
-    {
-        public MaintenanceFrequencyCode? MaintenanceAndUpdateFrequency { get; init; }
+public sealed class MaintenanceInformation
+{
+    public MaintenanceFrequencyCode? MaintenanceAndUpdateFrequency { get; init; }
 
-        public DateOnly? MaintenanceDate { get; init; }
+    public DateOnly? MaintenanceDate { get; init; }
 
-        public string? UserDefinedMaintenanceFrequency { get; init; }
-    }
+    public string? UserDefinedMaintenanceFrequency { get; init; }
 }

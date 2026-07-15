@@ -30,6 +30,7 @@
 
     <shadui:Window.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
+        <SolidColorBrush x:Key="AccentSubtleBrush" Color="#33007ACC" />
     </shadui:Window.Resources>
 
     <shadui:Window.DataTemplates>
@@ -693,6 +694,17 @@
                                             </UniformGrid>
                                         </Border>
                                     </StackPanel>
+
+                                    <!--
+                                      S-411 sea-ice display mode (issue #416) —
+                                      a SEPARATE axis from the ECDIS display base
+                                      above, placed last. The reusable selector
+                                      is shared (same view model instance) with
+                                      the docked ECDIS Display Controls panel and
+                                      self-hides unless a loaded dataset declares
+                                      more than one mode (S-411 today).
+                                    -->
+                                    <views:DisplayModeSelectorView DataContext="{Binding DisplayModeToolbar}" />
                                 </StackPanel>
                                 </Border>
                             </Flyout>

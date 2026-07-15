@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
@@ -12,7 +13,11 @@ public sealed class OwnShipSourceTests
     private static OwnShipPosition Fix(
         double lat = 50.8, double lon = -1.3,
         double? cog = 90.0, double? sogMs = 5.0, double? heading = null)
-        => new(lat, lon, cog, sogMs, DateTimeOffset.UnixEpoch, heading);
+        => new(lat, lon,
+            cog is { } c ? Angle.FromDegrees(c) : null,
+            sogMs is { } s ? Speed.FromMetresPerSecond(s) : null,
+            DateTimeOffset.UnixEpoch,
+            heading is { } h ? Angle.FromDegrees(h) : null);
 
     [Fact]
     public void Project_MirrorsCourseToHeading_WhenHeadingNull()
@@ -24,8 +29,8 @@ public sealed class OwnShipSourceTests
 
         var motion = src.CurrentFeatures[0].Motion;
         Assert.NotNull(motion);
-        Assert.Equal(90.0, motion!.CourseOverGroundDeg);
-        Assert.Equal(90.0, motion.HeadingDeg);
+        Assert.Equal(90.0, motion!.CourseOverGround?.TotalDegrees);
+        Assert.Equal(90.0, motion.Heading?.TotalDegrees);
     }
 
     [Fact]
@@ -38,8 +43,8 @@ public sealed class OwnShipSourceTests
 
         var motion = src.CurrentFeatures[0].Motion;
         Assert.NotNull(motion);
-        Assert.Equal(90.0, motion!.CourseOverGroundDeg);
-        Assert.Equal(75.0, motion.HeadingDeg);
+        Assert.Equal(90.0, motion!.CourseOverGround?.TotalDegrees);
+        Assert.Equal(75.0, motion.Heading?.TotalDegrees);
     }
 
     [Fact]
@@ -112,10 +117,10 @@ public sealed class OwnShipSourceTests
         Assert.Equal(50.5, pt.Latitude, 6);
         Assert.Equal(-1.0, pt.Longitude, 6);
         Assert.NotNull(f.Motion);
-        Assert.Equal(123.4, f.Motion!.CourseOverGroundDeg);
-        Assert.Equal(123.4, f.Motion.HeadingDeg);
-        Assert.NotNull(f.Motion.SpeedOverGroundKn);
-        Assert.InRange(f.Motion.SpeedOverGroundKn!.Value, 9.99, 10.01);
+        Assert.Equal(123.4, f.Motion!.CourseOverGround?.TotalDegrees);
+        Assert.Equal(123.4, f.Motion.Heading?.TotalDegrees);
+        Assert.NotNull(f.Motion.SpeedOverGround);
+        Assert.InRange(f.Motion.SpeedOverGround!.Value.TotalKnots, 9.99, 10.01);
     }
 
     [Fact]
@@ -219,12 +224,4 @@ public sealed class OwnShipSourceTests
         Assert.Equal("ownship", src.Id);
     }
 
-    [Theory]
-    [InlineData(0.0, 0.0)]
-    [InlineData(1.0, 1.9438444924406)]
-    [InlineData(10.0, 19.438444924406)]
-    public void MetresPerSecondToKnots_MatchesMaritimeFactor(double ms, double expectedKn)
-    {
-        Assert.Equal(expectedKn, ms * OwnShipSource.MetresPerSecondToKnots, 4);
-    }
 }

@@ -7,6 +7,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -45,7 +46,7 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     }
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries) { }
 
-    public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; } =
+    public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; set; } =
         new Dictionary<DatasetEntry, IDatasetProcessor>();
 
     public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; } =

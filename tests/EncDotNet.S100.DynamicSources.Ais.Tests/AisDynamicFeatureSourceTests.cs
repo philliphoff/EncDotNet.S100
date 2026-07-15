@@ -2,6 +2,7 @@ using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.DynamicSources.Ais.Tests;
 
@@ -17,9 +18,9 @@ public class AisDynamicFeatureSourceTests
             Timestamp = timestamp ?? DateTimeOffset.UnixEpoch,
             Latitude = lat,
             Longitude = lon,
-            CourseOverGroundDeg = cog,
-            HeadingDeg = hdg,
-            SpeedOverGroundKn = sog,
+            CourseOverGround = cog is { } c ? Angle.FromDegrees(c) : null,
+            Heading = hdg is { } h ? Angle.FromDegrees(h) : null,
+            SpeedOverGround = sog is { } s ? Speed.FromKnots(s) : null,
             NavigationStatus = nav,
         };
 
@@ -65,8 +66,8 @@ public class AisDynamicFeatureSourceTests
         Assert.Equal(GeometryType.Point, feature.GeometryType);
         Assert.Equal(47.6, feature.Coordinates[0].Latitude);
         Assert.Equal(-122.3, feature.Coordinates[0].Longitude);
-        Assert.Equal(90, feature.Motion?.CourseOverGroundDeg);
-        Assert.Equal(12, feature.Motion?.SpeedOverGroundKn);
+        Assert.Equal(90.0, feature.Motion?.CourseOverGround?.TotalDegrees);
+        Assert.Equal(12.0, feature.Motion?.SpeedOverGround?.TotalKnots);
         Assert.Null(feature.VesselGeometry);
         Assert.Equal(123u, feature.Attributes["mmsi"]);
         var change = Assert.Single(changes);
@@ -123,9 +124,9 @@ public class AisDynamicFeatureSourceTests
         Assert.NotNull(after.VesselGeometry);
         // Position / motion preserved across re-projection.
         Assert.Equal(1, after.Coordinates[0].Latitude);
-        Assert.Equal(45, after.Motion?.CourseOverGroundDeg);
-        Assert.Equal(50, after.Motion?.HeadingDeg);
-        Assert.Equal(5, after.Motion?.SpeedOverGroundKn);
+        Assert.Equal(45.0, after.Motion?.CourseOverGround?.TotalDegrees);
+        Assert.Equal(50.0, after.Motion?.Heading?.TotalDegrees);
+        Assert.Equal(5.0, after.Motion?.SpeedOverGround?.TotalKnots);
     }
 
     [Fact]
@@ -152,9 +153,9 @@ public class AisDynamicFeatureSourceTests
             cog: null, hdg: null, sog: null));
 
         var feature = Assert.Single(source.Inner.CurrentFeatures);
-        Assert.Null(feature.Motion?.CourseOverGroundDeg);
-        Assert.Null(feature.Motion?.HeadingDeg);
-        Assert.Null(feature.Motion?.SpeedOverGroundKn);
+        Assert.Null(feature.Motion?.CourseOverGround);
+        Assert.Null(feature.Motion?.Heading);
+        Assert.Null(feature.Motion?.SpeedOverGround);
     }
 
     [Fact]

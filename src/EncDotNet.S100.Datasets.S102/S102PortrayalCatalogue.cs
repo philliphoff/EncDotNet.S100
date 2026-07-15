@@ -139,7 +139,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
             ["SafetyContour"] = safetyContour,
             ["ShallowContour"] = shallowContour,
             ["DeepContour"] = deepContour,
-            ["SafetyDepth"] = settings.SafetyDepth,
+            ["SafetyDepth"] = settings.SafetyDepth.TotalMetres,
         };
         lua.SetGlobal("contextParameters", contextParams);
 
@@ -298,9 +298,9 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// </summary>
     private static (bool FourShades, double Safety, double Shallow, double Deep) ClampParameters(MarinerSettings settings)
     {
-        double safety = settings.SafetyContour;
-        double shallow = settings.ShallowContour;
-        double deep = settings.DeepContour;
+        double safety = settings.SafetyContour.TotalMetres;
+        double shallow = settings.ShallowContour.TotalMetres;
+        double deep = settings.DeepContour.TotalMetres;
 
         bool clamped = false;
         if (shallow > safety)
@@ -318,8 +318,8 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         {
             System.Diagnostics.Debug.WriteLine(
                 $"[S-102 portrayal] Invariant Shallow ≤ Safety ≤ Deep violated " +
-                $"(Shallow={settings.ShallowContour}, Safety={settings.SafetyContour}, " +
-                $"Deep={settings.DeepContour}); clamped to ({shallow}, {safety}, {deep}).");
+                $"(Shallow={settings.ShallowContour.TotalMetres}, Safety={settings.SafetyContour.TotalMetres}, " +
+                $"Deep={settings.DeepContour.TotalMetres}); clamped to ({shallow}, {safety}, {deep}).");
         }
 
         return (settings.FourShades, safety, shallow, deep);

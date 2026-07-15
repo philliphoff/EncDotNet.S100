@@ -98,7 +98,7 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
                 new XAttribute(TypeAttrName, featureType));
 
             // Geometry
-            if (feat.SpatialAssociations.Length > 0)
+            if (feat.SpatialAssociations.Count > 0)
             {
                 var first = feat.SpatialAssociations[0];
                 var geom = first.RecordName switch

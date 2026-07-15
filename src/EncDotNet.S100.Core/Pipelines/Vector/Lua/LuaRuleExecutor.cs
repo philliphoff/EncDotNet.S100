@@ -257,7 +257,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         var counts = new Dictionary<string, long>(StringComparer.Ordinal);
         foreach (var e in emitted)
         {
-            var code = provider.TryGetFeatureTypeCode(e.FeatureRef) ?? "(unknown)";
+            var code = provider.GetFeatureTypeCode(e.FeatureRef) ?? "(unknown)";
             counts.TryGetValue(code, out var existing);
             counts[code] = existing + 1;
         }

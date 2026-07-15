@@ -1,6 +1,28 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S57;
+
+/// <summary>
+/// S-57 geometric primitive of a feature instance, used to drive
+/// geometry-conditional feature-class redirects (S-57 Appendix B.1 §3.2:
+/// point / line / area). The numeric values match the S-57 spatial
+/// primitive codes (1 = point, 2 = line/curve, 3 = area/surface).
+/// </summary>
+public enum S57GeometryPrimitive
+{
+    /// <summary>No / unknown primitive (the feature carries no geometry, or
+    /// the primitive is not relevant to the redirect).</summary>
+    None = 0,
+
+    /// <summary>Point primitive (S-57 primitive 1).</summary>
+    Point = 1,
+
+    /// <summary>Line / curve primitive (S-57 primitive 2).</summary>
+    Curve = 2,
+
+    /// <summary>Area / surface primitive (S-57 primitive 3).</summary>
+    Surface = 3,
+}
 
 /// <summary>
 /// Rule describing how an S-57 feature class (object class, OBJL) maps to one
@@ -46,29 +68,62 @@ public sealed record S57FeatureRule
     /// Conditional cross-class redirects evaluated in order; the first match
     /// wins.
     /// </summary>
-    public ImmutableArray<S57FeatureRedirect> Redirects { get; init; } = ImmutableArray<S57FeatureRedirect>.Empty;
+    public IReadOnlyList<S57FeatureRedirect> Redirects { get; init; } = [];
 
     /// <summary>
     /// Attribute overrides applied whenever this rule is selected (default or
     /// redirect path). Keyed by S-57 attribute acronym.
     /// </summary>
-    public ImmutableDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
-        = ImmutableDictionary<string, S57AttributeOverride>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
+        = ReadOnlyDictionary<string, S57AttributeOverride>.Empty;
 }
 
 /// <summary>
-/// Conditional redirect on an <see cref="S57FeatureRule"/>: when the named
-/// S-57 attribute's value matches one of <see cref="ConditionValues"/>, the
-/// feature is mapped to <see cref="TargetS101Code"/> instead of the rule's
-/// default S-101 code.
+/// Conditional redirect on an <see cref="S57FeatureRule"/>: when the redirect's
+/// conditions are all satisfied, the feature is mapped to
+/// <see cref="TargetS101Code"/> instead of the rule's default S-101 code. A
+/// redirect may test an S-57 attribute (via <see cref="ConditionAttribute"/>),
+/// the feature's geometric primitive (via <see cref="ConditionPrimitives"/>),
+/// or both; when both are present they are combined with logical AND. At least
+/// one condition must be specified.
 /// </summary>
 public sealed record S57FeatureRedirect
 {
-    /// <summary>S-57 attribute acronym used to test the redirect condition.</summary>
-    public required string ConditionAttribute { get; init; }
+    /// <summary>
+    /// S-57 attribute acronym used to test the redirect condition, or
+    /// <c>null</c> for a purely geometry-based redirect (one that fires solely
+    /// on <see cref="ConditionPrimitives"/>).
+    /// </summary>
+    public string? ConditionAttribute { get; init; }
 
-    /// <summary>S-57 attribute values that satisfy the condition.</summary>
-    public required ImmutableArray<string> ConditionValues { get; init; }
+    /// <summary>
+    /// S-57 attribute values that satisfy the condition. Ignored when
+    /// <see cref="ConditionPresent"/> is <c>true</c>; must contain at least
+    /// one value when <see cref="ConditionAttribute"/> is set and
+    /// <see cref="ConditionPresent"/> is <c>false</c> (a value-matching
+    /// redirect with no values can never match and is rejected when the
+    /// mapping is constructed).
+    /// </summary>
+    public IReadOnlyList<string> ConditionValues { get; init; } = [];
+
+    /// <summary>
+    /// When <c>true</c>, the redirect fires whenever <see cref="ConditionAttribute"/>
+    /// is present with any non-empty value, rather than matching a specific
+    /// value in <see cref="ConditionValues"/>. Used for continuous-valued
+    /// discriminators such as a sector light's <c>SECTR1</c> bearing, where the
+    /// mere presence of the attribute (not its value) selects the target class.
+    /// </summary>
+    public bool ConditionPresent { get; init; }
+
+    /// <summary>
+    /// Geometric primitives that satisfy the condition. When non-empty, the
+    /// redirect only fires for a feature whose primitive is in this set (in
+    /// addition to any attribute condition). Empty means "any primitive".
+    /// Used where a single S-57 object class splits across S-101 classes by
+    /// geometry — e.g. S-57 <c>MORFAC</c> (point) becomes <c>Dolphin</c> while
+    /// line/area <c>MORFAC</c> becomes <c>ShorelineConstruction</c>.
+    /// </summary>
+    public IReadOnlyList<S57GeometryPrimitive> ConditionPrimitives { get; init; } = [];
 
     /// <summary>Target S-101 Feature Catalogue code when the condition matches.</summary>
     public required string TargetS101Code { get; init; }
@@ -78,8 +133,8 @@ public sealed record S57FeatureRedirect
     /// Layered on top of the rule's <see cref="S57FeatureRule.AttributeOverrides"/>.
     /// Keyed by S-57 attribute acronym.
     /// </summary>
-    public ImmutableDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
-        = ImmutableDictionary<string, S57AttributeOverride>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
+        = ReadOnlyDictionary<string, S57AttributeOverride>.Empty;
 }
 
 /// <summary>
@@ -88,6 +143,16 @@ public sealed record S57FeatureRedirect
 /// </summary>
 public sealed record S57AttributeOverride
 {
+    /// <summary>
+    /// When <c>true</c>, the attribute is dropped entirely on features to which
+    /// this override applies, regardless of value. Used when a feature-class
+    /// redirect moves an S-57 attribute's owner to an S-101 class that does not
+    /// bind the attribute's default target — e.g. <c>CATMOR</c> is dropped when
+    /// <c>MORFAC</c> redirects to <c>ShorelineConstruction</c>, which has no
+    /// <c>categoryOfDolphin</c>. Takes precedence over all other members.
+    /// </summary>
+    public bool Drop { get; init; }
+
     /// <summary>
     /// Override S-101 attribute name. <c>null</c> means "keep the default
     /// attribute mapping". Set to a non-null string to redirect the attribute
@@ -104,16 +169,16 @@ public sealed record S57AttributeOverride
     /// <c>COALNE/CATCOA</c> selectively redirecting to <c>natureOfSurface</c>
     /// (IHO Conversion Guidance § 4.5.1).
     /// </summary>
-    public ImmutableDictionary<string, string> S101CodeByValue { get; init; }
-        = ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> S101CodeByValue { get; init; }
+        = ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>
     /// Per-value remap. A key with a non-null value rewrites the S-57 value
     /// to the given S-101 value. A key with a <c>null</c> value drops the
     /// attribute entirely. Missing keys leave the value unchanged.
     /// </summary>
-    public ImmutableDictionary<string, string?> ValueRemap { get; init; }
-        = ImmutableDictionary<string, string?>.Empty;
+    public IReadOnlyDictionary<string, string?> ValueRemap { get; init; }
+        = ReadOnlyDictionary<string, string?>.Empty;
 }
 
 /// <summary>
@@ -139,8 +204,8 @@ public sealed record S57AttributeRule
     /// override. A key with a non-null value rewrites the value; a key with
     /// a <c>null</c> value drops the attribute. Missing keys pass through.
     /// </summary>
-    public ImmutableDictionary<string, string?> DefaultValueRemap { get; init; }
-        = ImmutableDictionary<string, string?>.Empty;
+    public IReadOnlyDictionary<string, string?> DefaultValueRemap { get; init; }
+        = ReadOnlyDictionary<string, string?>.Empty;
 }
 
 /// <summary>
@@ -156,7 +221,7 @@ public sealed record S57AttributeRule
 /// </param>
 public sealed record ResolvedFeature(
     string S101Code,
-    ImmutableDictionary<string, S57AttributeOverride> AttributeOverrides);
+    IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides);
 
 /// <summary>
 /// Result of resolving an S-57 attribute in the context of a

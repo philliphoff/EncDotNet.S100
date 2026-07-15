@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -54,48 +54,48 @@ public sealed class S101Document
     public required S101DatasetStructureInfo StructureInfo { get; init; }
 
     /// <summary>Maps numeric feature type codes to their feature catalogue acronyms (e.g. <c>DepthArea</c>).</summary>
-    public required ImmutableDictionary<ushort, string> FeatureTypeCatalogue { get; init; }
+    public required IReadOnlyDictionary<ushort, string> FeatureTypeCatalogue { get; init; }
 
     /// <summary>Maps numeric attribute codes to their feature catalogue acronyms.</summary>
-    public required ImmutableDictionary<ushort, string> AttributeTypeCatalogue { get; init; }
+    public required IReadOnlyDictionary<ushort, string> AttributeTypeCatalogue { get; init; }
 
     /// <summary>Point spatial records keyed by record id (RCNM = 110).</summary>
-    public required ImmutableDictionary<uint, S101PointRecord> Points { get; init; }
+    public required IReadOnlyDictionary<uint, S101PointRecord> Points { get; init; }
 
     /// <summary>
     /// Multi-point spatial records keyed by record id (RCNM = 115). Used by features
     /// such as <c>Sounding</c> whose portrayal expects a single feature with many
     /// 3D points.
     /// </summary>
-    public ImmutableDictionary<uint, S101MultiPointRecord> MultiPoints { get; init; }
-        = ImmutableDictionary<uint, S101MultiPointRecord>.Empty;
+    public IReadOnlyDictionary<uint, S101MultiPointRecord> MultiPoints { get; init; }
+        = ReadOnlyDictionary<uint, S101MultiPointRecord>.Empty;
 
     /// <summary>Curve segment records keyed by record id (RCNM = 120).</summary>
-    public required ImmutableDictionary<uint, S101CurveSegmentRecord> CurveSegments { get; init; }
+    public required IReadOnlyDictionary<uint, S101CurveSegmentRecord> CurveSegments { get; init; }
 
     /// <summary>Composite curve records keyed by record id (RCNM = 125).</summary>
-    public required ImmutableDictionary<uint, S101CompositeCurveRecord> CompositeCurves { get; init; }
+    public required IReadOnlyDictionary<uint, S101CompositeCurveRecord> CompositeCurves { get; init; }
 
     /// <summary>Surface records keyed by record id (RCNM = 130).</summary>
-    public required ImmutableDictionary<uint, S101SurfaceRecord> Surfaces { get; init; }
+    public required IReadOnlyDictionary<uint, S101SurfaceRecord> Surfaces { get; init; }
 
     /// <summary>Feature records in dataset order.</summary>
-    public required ImmutableArray<S101FeatureRecord> Features { get; init; }
+    public required IReadOnlyList<S101FeatureRecord> Features { get; init; }
 
     /// <summary>Information type records keyed by record id.</summary>
-    public required ImmutableDictionary<uint, S101InformationRecord> InformationTypes { get; init; }
+    public required IReadOnlyDictionary<uint, S101InformationRecord> InformationTypes { get; init; }
 
     /// <summary>Maps numeric information type codes to their feature catalogue acronyms.</summary>
-    public required ImmutableDictionary<ushort, string> InformationTypeCatalogue { get; init; }
+    public required IReadOnlyDictionary<ushort, string> InformationTypeCatalogue { get; init; }
 
     /// <summary>Maps numeric information association codes to their feature catalogue acronyms.</summary>
-    public required ImmutableDictionary<ushort, string> InformationAssociationCatalogue { get; init; }
+    public required IReadOnlyDictionary<ushort, string> InformationAssociationCatalogue { get; init; }
 
     /// <summary>Maps numeric feature association codes to their feature catalogue acronyms.</summary>
-    public required ImmutableDictionary<ushort, string> FeatureAssociationCatalogue { get; init; }
+    public required IReadOnlyDictionary<ushort, string> FeatureAssociationCatalogue { get; init; }
 
     /// <summary>Maps numeric role codes to their feature catalogue acronyms.</summary>
-    public required ImmutableDictionary<ushort, string> RoleCatalogue { get; init; }
+    public required IReadOnlyDictionary<ushort, string> RoleCatalogue { get; init; }
 
     /// <summary>
     /// Applies a single sequential update document onto this document and returns
@@ -236,8 +236,8 @@ public sealed class S101MultiPointRecord
     public uint RecordId { get; init; }
 
     /// <summary>3D coordinates: Y (× CMFY), X (× CMFX), Z (× CMFZ) — typically depth.</summary>
-    public ImmutableArray<(int Y, int X, int Z)> Points { get; init; }
-        = ImmutableArray<(int, int, int)>.Empty;
+    public IReadOnlyList<(int Y, int X, int Z)> Points { get; init; }
+        = [];
 
     /// <summary>Record version (RVER); increments as the record is updated. S-100 Part 10a.</summary>
     public int RecordVersion { get; init; }
@@ -253,10 +253,10 @@ public sealed class S101CurveSegmentRecord
     public uint RecordId { get; init; }
 
     /// <summary>Begin and end point associations (PTAS field). Topology = 1 marks begin, 2 marks end.</summary>
-    public ImmutableArray<S101PointAssociation> PointAssociations { get; init; }
+    public IReadOnlyList<S101PointAssociation> PointAssociations { get; init; } = [];
 
     /// <summary>Intermediate coordinates between begin and end points, in (Y, X) order.</summary>
-    public ImmutableArray<(int Y, int X)> IntermediateCoordinates { get; init; }
+    public IReadOnlyList<(int Y, int X)> IntermediateCoordinates { get; init; } = [];
 
     /// <summary>Record version (RVER); increments as the record is updated. S-100 Part 10a.</summary>
     public int RecordVersion { get; init; }
@@ -278,7 +278,7 @@ public sealed class S101CompositeCurveRecord
     public uint RecordId { get; init; }
 
     /// <summary>Curve component associations in traversal order.</summary>
-    public ImmutableArray<S101CurveUsage> CurveComponents { get; init; }
+    public IReadOnlyList<S101CurveUsage> CurveComponents { get; init; } = [];
 
     /// <summary>Record version (RVER); increments as the record is updated. S-100 Part 10a.</summary>
     public int RecordVersion { get; init; }
@@ -300,7 +300,7 @@ public sealed class S101SurfaceRecord
     public uint RecordId { get; init; }
 
     /// <summary>Ring associations: exterior (USAG = 1) or interior (USAG = 2) rings of curves.</summary>
-    public ImmutableArray<S101RingAssociation> RingAssociations { get; init; }
+    public IReadOnlyList<S101RingAssociation> RingAssociations { get; init; } = [];
 
     /// <summary>Record version (RVER); increments as the record is updated. S-100 Part 10a.</summary>
     public int RecordVersion { get; init; }
@@ -335,16 +335,16 @@ public sealed class S101FeatureRecord
     public ushort FeatureIdentificationSubdivision { get; init; }
 
     /// <summary>Flat list of attributes; complex attributes are represented as a marker row followed by their sub-rows.</summary>
-    public ImmutableArray<S101Attribute> Attributes { get; init; }
+    public IReadOnlyList<S101Attribute> Attributes { get; init; } = [];
 
     /// <summary>Spatial associations linking the feature to point/curve/composite-curve/surface records.</summary>
-    public ImmutableArray<S101SpatialAssociation> SpatialAssociations { get; init; }
+    public IReadOnlyList<S101SpatialAssociation> SpatialAssociations { get; init; } = [];
 
     /// <summary>Associations to other feature records.</summary>
-    public ImmutableArray<S101FeatureAssociation> FeatureAssociations { get; init; }
+    public IReadOnlyList<S101FeatureAssociation> FeatureAssociations { get; init; } = [];
 
     /// <summary>Associations to information type records.</summary>
-    public ImmutableArray<S101InformationAssociation> InformationAssociations { get; init; }
+    public IReadOnlyList<S101InformationAssociation> InformationAssociations { get; init; } = [];
 
     /// <summary>Record version (RVER); increments as the record is updated. S-100 Part 10a.</summary>
     public int RecordVersion { get; init; }
@@ -363,7 +363,7 @@ public sealed class S101InformationRecord
     public ushort InformationTypeCode { get; init; }
 
     /// <summary>Flat list of attributes; complex attributes use the same marker convention as feature records.</summary>
-    public ImmutableArray<S101Attribute> Attributes { get; init; }
+    public IReadOnlyList<S101Attribute> Attributes { get; init; } = [];
 
     /// <summary>Record version (RVER); increments as the record is updated. S-100 Part 10a.</summary>
     public int RecordVersion { get; init; }

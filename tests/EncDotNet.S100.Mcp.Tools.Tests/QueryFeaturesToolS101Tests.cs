@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -14,7 +13,7 @@ public class QueryFeaturesToolS101Tests
         {
             [75] = "LIGHTS",
             [17] = "BOYLAT",
-        }.ToImmutableDictionary();
+        }.ToDictionary();
 
         var ds = S101Synth.DatasetWithPointFeatures(
             id,
@@ -101,9 +100,9 @@ public class QueryFeaturesToolS101Tests
     {
         // A feature whose spatial point record is absent resolves to no
         // coordinates and must not appear in results.
-        var featureTypes = new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToImmutableDictionary();
+        var featureTypes = new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToDictionary();
         var orphan = S101Synth.Feature(rcid: 999, featureTypeCode: 75, spatialRcnm: 110);
-        var ds = S101Synth.Dataset("enc", ImmutableArray.Create(orphan), featureTypes);
+        var ds = S101Synth.Dataset("enc", [orphan], featureTypes);
 
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S101("enc", ds));
@@ -125,7 +124,7 @@ public class QueryFeaturesToolS101Tests
         {
             [75] = "LIGHTS",
             [17] = "BOYLAT",
-        }.ToImmutableDictionary();
+        }.ToDictionary();
 
         var ds = S101Synth.DatasetWithPointFeatures(
             "enc",
@@ -150,7 +149,7 @@ public class QueryFeaturesToolS101Tests
         Assert.Equal(4, value.TotalCount);
         Assert.True(value.HasMore);
 
-        Assert.Equal(2, value.TypeBreakdown.Length);
+        Assert.Equal(2, value.TypeBreakdown.Count);
         Assert.Equal("LIGHTS", value.TypeBreakdown[0].FeatureType);
         Assert.Equal(3, value.TypeBreakdown[0].Count);
         Assert.Equal("BOYLAT", value.TypeBreakdown[1].FeatureType);

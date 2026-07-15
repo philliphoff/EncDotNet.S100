@@ -3,9 +3,11 @@ using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -126,5 +128,71 @@ public class EcdisDisplayPanelViewModelTests
 
         vm.SetAllCommand.Execute(null);
         Assert.Equal(EcdisDisplayCategory.All, state.Category);
+    }
+
+    [Fact]
+    public void DisplayModeToolbar_IsNull_WhenNotInjected()
+    {
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+
+        Assert.Null(vm.DisplayModeToolbar);
+    }
+
+    [Fact]
+    public void DisplayModeToolbar_ReturnsInjectedInstance()
+    {
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        var loader = new StubDatasetLoaderService();
+        var datasets = new DatasetsViewModel(loader);
+        using var toolbar = new DisplayModeToolbarViewModel(state, loader);
+
+        using var vm = new EcdisDisplayPanelViewModel(
+            state,
+            catalogues,
+            datasets,
+            labelOverrides: null,
+            displayModeToolbar: toolbar);
+
+        Assert.Same(toolbar, vm.DisplayModeToolbar);
+    }
+
+    [Fact]
+    public void RebuildSpecs_S57Entry_BuildsS101ControlGroup()
+    {
+        // S-57 datasets are portrayed with the S-101 catalogue, so the ECDIS
+        // panel must expose the S-101 controls for them (issue #450).
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        datasets.Add("US5MA1BO.000", "S-57");
+
+        var spec = Assert.Single(vm.Specs);
+        Assert.Equal("S-101", spec.SpecCode);
+    }
+
+    [Fact]
+    public void RebuildSpecs_S57AndNativeS101_ShareSingleS101ControlGroup()
+    {
+        // An S-57 entry and a native S-101 entry both portray as S-101 and must
+        // collapse into one control group rather than two (issue #450 dedup).
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        datasets.Add("US5MA1BO.000", "S-57");
+        datasets.Add("101AA00DS0008.000", "S-101");
+
+        var spec = Assert.Single(vm.Specs);
+        Assert.Equal("S-101", spec.SpecCode);
     }
 }

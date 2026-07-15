@@ -16,6 +16,24 @@ If you just want to see it run, the
 console sample does the library path end-to-end against a bundled synthetic
 fixture — clone the repo and `dotnet run` it.
 
+## Why it matters
+
+This page is optimized for a first successful run, then gives paths for deeper
+integration and automation.
+
+## Quick win
+
+Copy/paste this for a first output image:
+
+```bash
+s100 render dataset.h5 out.png
+```
+
+Expected result: `out.png` appears in your working directory.
+
+> [!TIP]
+> If you prefer no install/setup, use the standalone release binaries for the viewer or `s100` CLI.
+
 ## Desktop app
 
 The **S-100 Viewer** is a cross-platform desktop application that loads any
@@ -139,6 +157,33 @@ Not every dataset shape can be rasterised headlessly (for example, fixed-station
 time series). Guard with `dataset.CanRenderHeadless` before rendering, and use
 `dataset.AvailableTimes` to discover the time steps of S-104 / S-111 products.
 
+### 4. Composite multiple datasets
+
+Pass an ordered list of layers (bottom-most first) to render several datasets
+into a single image. The facade drives the renderer-neutral **S-98
+interoperability engine** — the same cross-dataset ordering and depth
+suppression the interactive viewer applies (S-98 Annex A §A-6.9.1) — so an
+S-101 ENC and an S-102 bathymetric surface interleave correctly and the S-101
+depth shading is suppressed where S-102 supersedes it (R-101-102-B).
+
+```csharp
+using var enc = S100Dataset.Open("enc-cell.000");   // S-101
+using var bathy = S100Dataset.Open("bathy.h5");      // S-102
+
+byte[] png = await renderer.RenderAsync(
+    new[]
+    {
+        new S100Layer { Dataset = enc },
+        new S100Layer { Dataset = bathy },
+    },
+    new S100CompositeOptions { Width = 2048, Height = 1536 });
+```
+
+When no `Viewport` is supplied the compositor fits a shared viewport to the
+**union** extent of all active layers; pass an explicit `S100CompositeOptions.Viewport`
+to pin the framing. This path is entirely Mapsui-free — see the
+[headless compositing design note](design/s98-interoperability.md).
+
 For custom catalogues and the full API, see the
 [`EncDotNet.S100` README](../src/EncDotNet.S100/README.md).
 
@@ -198,8 +243,22 @@ the freely available official sample sets:
 The quickstart sample reuses one of these synthetic S-124 fixtures so it runs
 with no downloads at all.
 
+## Troubleshooting
+
+> [!IMPORTANT]
+> Format mismatch is the most common issue: `.000` (ISO 8211), `.h5` (HDF5), and
+> `.gml` (GML) use different readers and portrayal paths.
+
+> [!WARNING]
+> For GML in EPSG:4326, S-100 Part 10b coordinate ordering is `lat lon`, not
+> `lon lat`.
+
 ## Next steps
 
+- [Start here](start-here.md) — audience-based pathways.
+- [Scenario: Render S-102 to PNG](scenarios/render-s102-to-png.md)
+- [Scenario: Inspect S-124 warnings](scenarios/inspect-s124-warnings.md)
+- [Scenario: Compose S-101 + S-102](scenarios/compose-s101-s102.md)
 - [Viewer guide](../src/EncDotNet.S100.Viewer/README.md) — the desktop app's
   full feature tour.
 - [Command-line rendering](cli.md) — the full `s100` reference.

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -13,7 +14,7 @@ public class DynamicFeatureRecordTests
         {
             Id = "ownship",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (47.6, -122.3) },
+            Coordinates = new[] { new GeoPosition(47.6, -122.3) },
             LastUpdated = t,
         };
 

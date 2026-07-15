@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.DataModel;
@@ -46,12 +45,12 @@ public sealed class ProjectionContext
     public IReadOnlyList<ProjectionDiagnostic> Diagnostics => _diagnostics;
 
     /// <summary>
-    /// Returns the accumulated diagnostics as an immutable snapshot suitable
+    /// Returns the accumulated diagnostics as a snapshot copy suitable
     /// for the <c>out IReadOnlyList&lt;ProjectionDiagnostic&gt;</c> parameter
     /// of a projection's <c>From(...)</c> factory.
     /// </summary>
-    public IReadOnlyList<ProjectionDiagnostic> ToImmutableDiagnostics() =>
-        _diagnostics.ToImmutableArray();
+    public IReadOnlyList<ProjectionDiagnostic> ToDiagnosticsSnapshot() =>
+        _diagnostics.ToArray();
 
     /// <summary>Adds a diagnostic to the context.</summary>
     /// <param name="diagnostic">The diagnostic to record.</param>

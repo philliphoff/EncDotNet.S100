@@ -128,4 +128,8 @@ public sealed class DecryptingAssetSource : IAssetSource
             _inner.Dispose();
         }
     }
+
+    /// <inheritdoc />
+    public ValueTask DisposeAsync() =>
+        _ownsInner ? _inner.DisposeAsync() : ValueTask.CompletedTask;
 }

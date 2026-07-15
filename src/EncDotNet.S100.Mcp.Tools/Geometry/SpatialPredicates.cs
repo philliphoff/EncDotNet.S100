@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
@@ -48,11 +47,11 @@ public static class SpatialPredicates
     /// the polygon <paramref name="ring"/>, using a planar ray-casting
     /// test. Points on the ring boundary are reported as inside.
     /// </summary>
-    public static bool ContainsPoint(ImmutableArray<GeoPoint> ring, GeoPoint point)
+    public static bool ContainsPoint(IReadOnlyList<GeoPoint> ring, GeoPoint point)
     {
         ArgumentNullException.ThrowIfNull(point);
 
-        if (ring.IsDefaultOrEmpty || ring.Length < 4)
+        if (ring.Count == 0 || ring.Count < 4)
         {
             return false;
         }
@@ -61,7 +60,7 @@ public static class SpatialPredicates
         var y = point.Latitude;
         var inside = false;
 
-        for (int i = 0, j = ring.Length - 2; i < ring.Length - 1; j = i++)
+        for (int i = 0, j = ring.Count - 2; i < ring.Count - 1; j = i++)
         {
             var xi = ring[i].Longitude;
             var yi = ring[i].Latitude;

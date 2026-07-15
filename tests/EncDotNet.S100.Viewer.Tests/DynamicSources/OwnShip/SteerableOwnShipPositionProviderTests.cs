@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 using Xunit;
 
@@ -11,8 +12,8 @@ public sealed class SteerableOwnShipPositionProviderTests
         double cog = 90.0, double sogMs = 1.0,
         double lat = 0.0, double lon = 0.0, double? heading = null)
         => new(Latitude: lat, Longitude: lon,
-            CourseOverGroundDeg: cog, SpeedOverGroundMs: sogMs,
-            Timestamp: DateTimeOffset.UnixEpoch, HeadingDeg: heading);
+            CourseOverGround: Angle.FromDegrees(cog), SpeedOverGround: Speed.FromMetresPerSecond(sogMs),
+            Timestamp: DateTimeOffset.UnixEpoch, Heading: heading is { } h ? Angle.FromDegrees(h) : null);
 
     // ---- Parity with the previous synthetic driver --------------------
 
@@ -68,8 +69,8 @@ public sealed class SteerableOwnShipPositionProviderTests
         provider.Tick(TimeSpan.FromMinutes(5));
 
         var c = provider.Current!;
-        Assert.Equal(45.0, c.CourseOverGroundDeg);
-        Assert.Equal(7.5, c.SpeedOverGroundMs);
+        Assert.Equal(45.0, c.CourseOverGround?.TotalDegrees);
+        Assert.Equal(7.5, c.SpeedOverGround?.TotalMetresPerSecond);
     }
 
     // ---- Construction tolerates a motion-less seed --------------------
@@ -81,8 +82,8 @@ public sealed class SteerableOwnShipPositionProviderTests
         using var provider = SteerableOwnShipPositionProvider.CreateManual(start);
 
         var c = provider.Current!;
-        Assert.Equal(0.0, c.CourseOverGroundDeg);
-        Assert.Equal(0.0, c.SpeedOverGroundMs);
+        Assert.Equal(0.0, c.CourseOverGround?.TotalDegrees);
+        Assert.Equal(0.0, c.SpeedOverGround?.TotalMetresPerSecond);
         Assert.Equal(10, c.Latitude);
         Assert.Equal(20, c.Longitude);
     }
@@ -114,9 +115,9 @@ public sealed class SteerableOwnShipPositionProviderTests
         var c = provider.Current!;
         Assert.Equal(47.6, c.Latitude);
         Assert.Equal(-122.3, c.Longitude);
-        Assert.Equal(180.0, c.CourseOverGroundDeg);
-        Assert.Equal(3.0, c.SpeedOverGroundMs);
-        Assert.Equal(175.0, c.HeadingDeg);
+        Assert.Equal(180.0, c.CourseOverGround?.TotalDegrees);
+        Assert.Equal(3.0, c.SpeedOverGround?.TotalMetresPerSecond);
+        Assert.Equal(175.0, c.Heading?.TotalDegrees);
     }
 
     [Fact]
@@ -130,8 +131,8 @@ public sealed class SteerableOwnShipPositionProviderTests
         var c = provider.Current!;
         Assert.Equal(1.0, c.Latitude);
         Assert.Equal(2.0, c.Longitude);
-        Assert.Equal(90.0, c.CourseOverGroundDeg);
-        Assert.Equal(5.0, c.SpeedOverGroundMs);
+        Assert.Equal(90.0, c.CourseOverGround?.TotalDegrees);
+        Assert.Equal(5.0, c.SpeedOverGround?.TotalMetresPerSecond);
     }
 
     [Fact]
@@ -155,10 +156,10 @@ public sealed class SteerableOwnShipPositionProviderTests
             Start(cog: 10.0, sogMs: 1.0));
 
         provider.SetCourse(370.0);
-        Assert.Equal(10.0, provider.Current!.CourseOverGroundDeg!.Value, 1e-9);
+        Assert.Equal(10.0, provider.Current!.CourseOverGround!.Value.TotalDegrees, 1e-9);
 
         provider.NudgeCourse(-20.0);
-        Assert.Equal(350.0, provider.Current!.CourseOverGroundDeg!.Value, 1e-9);
+        Assert.Equal(350.0, provider.Current!.CourseOverGround!.Value.TotalDegrees, 1e-9);
     }
 
     [Fact]
@@ -168,13 +169,13 @@ public sealed class SteerableOwnShipPositionProviderTests
             Start(cog: 90.0, sogMs: 5.0));
 
         provider.SetSpeed(-3.0);
-        Assert.Equal(0.0, provider.Current!.SpeedOverGroundMs);
+        Assert.Equal(0.0, provider.Current!.SpeedOverGround?.TotalMetresPerSecond);
 
         provider.NudgeSpeed(2.5);
-        Assert.Equal(2.5, provider.Current!.SpeedOverGroundMs);
+        Assert.Equal(2.5, provider.Current!.SpeedOverGround?.TotalMetresPerSecond);
 
         provider.NudgeSpeed(-10.0);
-        Assert.Equal(0.0, provider.Current!.SpeedOverGroundMs);
+        Assert.Equal(0.0, provider.Current!.SpeedOverGround?.TotalMetresPerSecond);
     }
 
     [Fact]
@@ -184,10 +185,10 @@ public sealed class SteerableOwnShipPositionProviderTests
             Start(cog: 90.0, sogMs: 6.0));
 
         provider.Hold();
-        Assert.Equal(0.0, provider.Current!.SpeedOverGroundMs);
+        Assert.Equal(0.0, provider.Current!.SpeedOverGround?.TotalMetresPerSecond);
 
         provider.Resume();
-        Assert.Equal(6.0, provider.Current!.SpeedOverGroundMs);
+        Assert.Equal(6.0, provider.Current!.SpeedOverGround?.TotalMetresPerSecond);
     }
 
     [Fact]
@@ -197,7 +198,7 @@ public sealed class SteerableOwnShipPositionProviderTests
             Start(cog: 90.0, sogMs: 6.0));
 
         provider.Resume();
-        Assert.Equal(6.0, provider.Current!.SpeedOverGroundMs);
+        Assert.Equal(6.0, provider.Current!.SpeedOverGround?.TotalMetresPerSecond);
     }
 
     // ---- Helm-state readback (IOwnShipHelmState) ----------------------
@@ -251,11 +252,11 @@ public sealed class SteerableOwnShipPositionProviderTests
 
         // A point due east on the equator → bearing 90°.
         provider.SteerToward(latitude: 0.0, longitude: 10.0);
-        Assert.Equal(90.0, provider.Current!.CourseOverGroundDeg!.Value, 1e-3);
+        Assert.Equal(90.0, provider.Current!.CourseOverGround!.Value.TotalDegrees, 1e-3);
 
         // A point due north → bearing 0°.
         provider.SteerToward(latitude: 10.0, longitude: 0.0);
-        Assert.Equal(0.0, provider.Current!.CourseOverGroundDeg!.Value, 1e-3);
+        Assert.Equal(0.0, provider.Current!.CourseOverGround!.Value.TotalDegrees, 1e-3);
     }
 
     // ---- Turn rate ----------------------------------------------------
@@ -269,7 +270,7 @@ public sealed class SteerableOwnShipPositionProviderTests
         provider.SetTurnRate(3.0); // 3°/s
         provider.Tick(TimeSpan.FromSeconds(10));
 
-        Assert.Equal(30.0, provider.Current!.CourseOverGroundDeg!.Value, 1e-6);
+        Assert.Equal(30.0, provider.Current!.CourseOverGround!.Value.TotalDegrees, 1e-6);
     }
 
     [Fact]
@@ -281,7 +282,7 @@ public sealed class SteerableOwnShipPositionProviderTests
         provider.SetTurnRate(2.0);
         provider.Tick(TimeSpan.FromSeconds(10)); // +20° → 370° → 10°
 
-        Assert.Equal(10.0, provider.Current!.CourseOverGroundDeg!.Value, 1e-6);
+        Assert.Equal(10.0, provider.Current!.CourseOverGround!.Value.TotalDegrees, 1e-6);
     }
 
     // ---- Heading passthrough ------------------------------------------
@@ -292,7 +293,7 @@ public sealed class SteerableOwnShipPositionProviderTests
         using var provider = SteerableOwnShipPositionProvider.CreateManual(
             Start(cog: 90.0, sogMs: 1.0, heading: null));
 
-        Assert.Null(provider.Current!.HeadingDeg);
+        Assert.Null(provider.Current!.Heading);
     }
 
     // ---- Lifecycle ----------------------------------------------------

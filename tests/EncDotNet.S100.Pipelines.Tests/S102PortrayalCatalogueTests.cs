@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
@@ -89,7 +90,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     public void TwoShade_ProducesThreeBands_AndUsesDayPalette()
     {
         var catalogue = CreateCatalogue();
-        var mariner = new MarinerSettings { FourShades = false, SafetyContour = 30.0 };
+        var mariner = new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) };
 
         var scheme = catalogue.ResolveColorScheme(mariner);
 
@@ -109,9 +110,9 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         var mariner = new MarinerSettings
         {
             FourShades = true,
-            ShallowContour = 2.0,
-            SafetyContour = 30.0,
-            DeepContour = 50.0,
+            ShallowContour = Depth.FromMetres(2.0),
+            SafetyContour = Depth.FromMetres(30.0),
+            DeepContour = Depth.FromMetres(50.0),
         };
 
         var scheme = catalogue.ResolveColorScheme(mariner);
@@ -131,7 +132,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         // equals the SafetyContour belongs to the deep band, never the
         // shallow band.
         var catalogue = CreateCatalogue();
-        var mariner = new MarinerSettings { FourShades = false, SafetyContour = 30.0 };
+        var mariner = new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) };
 
         var scheme = catalogue.ResolveColorScheme(mariner);
 
@@ -144,7 +145,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         var catalogue = CreateCatalogue();
         await catalogue.SwitchPaletteAsync(PaletteType.Night);
 
-        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
+        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) });
 
         Assert.Equal(NightDEPVS, scheme.Resolve(5f), StringComparer.OrdinalIgnoreCase);
     }
@@ -155,7 +156,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         var catalogue = CreateCatalogue();
         await catalogue.SwitchPaletteAsync(PaletteType.Day);
 
-        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
+        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) });
 
         Assert.False(string.IsNullOrEmpty(scheme.NoDataColor));
         Assert.True(catalogue.ActivePalette.TryResolve("NODTA", out var nodta));
@@ -168,7 +169,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         var catalogue = new S102PortrayalCatalogue(_engine, _provider) { RenderNoDataFill = false };
         await catalogue.SwitchPaletteAsync(PaletteType.Day);
 
-        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
+        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) });
 
         // With NODATA fill disabled (layered/overlay rendering) the renderer
         // must leave fill cells transparent so the underlying layer shows.
@@ -187,9 +188,9 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         var mariner = new MarinerSettings
         {
             FourShades = true,
-            ShallowContour = 50.0,
-            SafetyContour = 30.0,
-            DeepContour = 20.0,
+            ShallowContour = Depth.FromMetres(50.0),
+            SafetyContour = Depth.FromMetres(30.0),
+            DeepContour = Depth.FromMetres(20.0),
         };
 
         var scheme = catalogue.ResolveColorScheme(mariner);
@@ -219,15 +220,15 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
         var twoShade = catalogue.ResolveColorScheme(new MarinerSettings
         {
             FourShades = false,
-            SafetyContour = 30.0,
+            SafetyContour = Depth.FromMetres(30.0),
         });
 
         var fourShade = catalogue.ResolveColorScheme(new MarinerSettings
         {
             FourShades = true,
-            ShallowContour = 2.0,
-            SafetyContour = 30.0,
-            DeepContour = 50.0,
+            ShallowContour = Depth.FromMetres(2.0),
+            SafetyContour = Depth.FromMetres(30.0),
+            DeepContour = Depth.FromMetres(50.0),
         });
 
         Assert.Equal(3, twoShade.Bands.Count);

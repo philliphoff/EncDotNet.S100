@@ -17,7 +17,8 @@ public class DatasetLoadGatewayTests
         public Task<ExchangeSetOpenResult> OpenAsync(
             string folderOrZipPath, IProgress<ExchangeSetProgress>? progress = null,
             CancellationToken cancellationToken = default,
-            Services.Notifications.INotificationHandle? notification = null)
+            Services.Notifications.INotificationHandle? notification = null,
+            Action<EncDotNet.S100.ExchangeSets.BoundingBox>? onFramingReady = null)
             => Task.FromResult(new ExchangeSetOpenResult { SourcePath = folderOrZipPath });
     }
 
@@ -55,6 +56,38 @@ public class DatasetLoadGatewayTests
         {
             var gateway = Make(out _, out _);
             Assert.Equal(DatasetPathKind.ExchangeSet, gateway.Classify(dir));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void Classify_returns_exchange_set_for_catalogue_less_loose_cell_folder()
+    {
+        // A folder of loose cells (base ….000 + updates, no catalogue)
+        // routes to the exchange-set path so its base cells load with
+        // their sequential updates applied (issue #449).
+        var dir = Path.Combine(Path.GetTempPath(), $"gw-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "CELL.000"), "base");
+        File.WriteAllText(Path.Combine(dir, "CELL.001"), "update");
+        try
+        {
+            var gateway = Make(out _, out _);
+            Assert.Equal(DatasetPathKind.ExchangeSet, gateway.Classify(dir));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void Classify_returns_file_for_folder_without_cells_or_catalogue()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"gw-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "readme.txt"), "text");
+        try
+        {
+            var gateway = Make(out _, out _);
+            Assert.Equal(DatasetPathKind.File, gateway.Classify(dir));
         }
         finally { Directory.Delete(dir, recursive: true); }
     }

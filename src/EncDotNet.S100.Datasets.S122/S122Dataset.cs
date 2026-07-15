@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S122;
@@ -23,10 +24,10 @@ public sealed class S122Dataset
     public string? DatasetIdentifier { get; init; }
 
     /// <summary>Feature instances contained in the dataset.</summary>
-    public required ImmutableArray<S122Feature> Features { get; init; }
+    public required IReadOnlyList<S122Feature> Features { get; init; }
 
     /// <summary>Information type instances contained in the dataset.</summary>
-    public required ImmutableArray<S122InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<S122InformationType> InformationTypes { get; init; }
 
     /// <summary>Opens an S-122 dataset from a file path.</summary>
     public static S122Dataset Open(string path)
@@ -59,22 +60,22 @@ public sealed class S122Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; init; }
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
-    public required ImmutableArray<S122ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S122ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <summary>
     /// References to other features and information types resolved via
@@ -83,10 +84,10 @@ public sealed class S122Feature : IS100Feature
     /// (e.g. <c>theAuthority</c>, <c>theContactDetails</c>,
     /// <c>theCartographicText</c>; see S-122 FC 2.0.0 §Roles).
     /// </summary>
-    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
+    public IReadOnlyList<GmlReference> References { get; init; } = [];
 
     /// <inheritdoc/>
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes;
 }
 
 /// <summary>
@@ -101,10 +102,10 @@ public sealed class S122InformationType : IS100InformationType
     public required string TypeCode { get; init; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups.</summary>
-    public required ImmutableArray<S122ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S122ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <summary>
     /// References to other features and information types resolved via
@@ -113,7 +114,7 @@ public sealed class S122InformationType : IS100InformationType
     /// (e.g. <c>theAuthority</c>, <c>theContactDetails</c>; see S-122 FC
     /// 2.0.0 §Roles).
     /// </summary>
-    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
+    public IReadOnlyList<GmlReference> References { get; init; } = [];
 }
 
 /// <summary>
@@ -125,7 +126,5 @@ public sealed class S122ComplexAttribute : IS100ComplexAttribute
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
-    public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
 }
-
-

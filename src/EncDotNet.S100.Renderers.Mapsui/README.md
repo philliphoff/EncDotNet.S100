@@ -42,6 +42,7 @@ collection / priority-clip / insert phase here.
 - Text alignment, mm offsets, and `textLine` start/end offsets (Relative or Absolute) are honoured per S-100 Part 9 §11.4.
 - `LineStyleProvider`, `SymbolProvider`, and `AreaFillProvider` callbacks let the host project plug in a portrayal catalogue without coupling the renderer to a specific dataset library.
 - **Scale-visibility limits are latitude-corrected.** S-100 Part 9 §11.1 scale denominators (per-feature `ScaleMinimum`/`ScaleMaximum`, and the cell-wide out-of-band cap derived from `DataCoverage.minimumDisplayScale`) are *true-scale* values, whereas a Mapsui `resolution` is metres/pixel at the EPSG:3857 equator. Because web-mercator inflates ground distance by `1/cos φ`, the equator-referenced resolution for a denominator is `denom × 0.00028 / cos φ` (`MapsuiDisplayListRenderer.DenominatorToResolution`). Per-feature limits convert at the feature's extent-centre latitude; the cell-wide cap converts at the layer's extent-centre latitude. Omitting the `cos φ` term (the prior behaviour) was only correct on the equator and suppressed detail roughly `1/cos φ` zoom levels too early — at φ ≈ 50.8° (≈ 1.58×) a cell's linework vanished about two-thirds of a zoom level before it should. This now matches the Skia headless backend, which already applies `cos(midLat)`.
+- **Cell-wide zoom-out window from the exchange-set catalogue (`ApplyCellScaleWindow`).** Independent of the in-file per-feature cap above, `MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale)` clamps every layer's `MaxVisible` to `DenominatorToResolution(minimumDisplayScale, φ)` at the layer's extent-centre latitude, where `minimumDisplayScale` is the *coarsest permitted* denominator resolved from the cell's `CATALOG.XML` `DataCoverage` entries (max of the per-coverage `minimumDisplayScale` values). It only ever **tightens** an existing `MaxVisible`. Unlike the M_COVR-derived per-feature cap (which applies to the linework sub-layer only), this window suppresses the **whole cell — area fills included** — once you zoom out past the cell's smallest-scale edge, so a finer cell drops out entirely and the coarser cell nested beneath it shows through. This is *hole-safe*: as you zoom out, finer cells (smaller `minimumDisplayScale`) drop first, always leaving a coarser cell underneath (issue #438, Phase 1). The zoom-*in* overlap edge (`maximumDisplayScale`) is **not** wired here because a finer cell usually covers only part of a coarser footprint; suppressing the coarser cell on zoom-in would leave open water blank between finer cells, so that is deferred to a coverage-polygon-clipping phase. The caller (`DatasetLoaderService`) gates this on the mariner `IgnoreScaleMinimum` setting and re-applies it on every re-render. For a **standalone-loaded cell** (no `CATALOG.XML`), the caller falls back to a `minimumDisplayScale` the processor derives from the dataset's own content (`DatasetResult.CellMinimumDisplayScale` — S-101 in-file `DataCoverage.minimumDisplayScale`, or the S-57 DSPM compilation scale), so an individually opened `.000` cell hides — with its out-of-scale extent border (issue #446) — exactly as it would inside an exchange set (issue #450 follow-up).
 
 ### Sharing processed-SVG and pattern-tile work across renders
 
@@ -571,6 +572,19 @@ origin (not the viewport), a constant-zoom pan re-uses every interior tile and
 only the newly-exposed perimeter rasterises — pan cost scales with *perimeter,
 not area*.
 
+**Antimeridian / continuous-longitude datasets.** The grid is world-anchored at
+`[-Extent, +Extent]` (±180°), but the tile enumeration keeps a **continuous** X
+frame: `TileGrid.VisibleTileRange` / `PredictedTiles` clamp only the **Y**
+(latitude) index at the poles and leave the **X** (longitude) index unclamped
+(an absolute guard of 4096 columns prevents runaway allocation at pathological zoom-out, but the span is otherwise unclamped so every visible column is enumerated).
+An antimeridian-spanning dataset kept in a continuous frame (e.g. the US NWS
+S-411 sea-ice product, ~175°E → ~225°E) therefore tiles into columns at index
+`>= perAxis`, whose `TileWorldBounds` map back to the correct world-X east of
++180°. Correspondingly, `RasterizeTile` sets `EnableSeamWrap = false` on its
+`SkiaDisplayListRenderer` so the headless seam-wrap does not teleport the
+off-tile vertices of large continuous polygons across the world (which
+previously collapsed such datasets into a thin ±180° sliver).
+
 Each frame the UI thread snaps the live resolution to the nearest band, blits
 the **best available** tile for every visible slot, each hard-clipped to its
 core over a rendered **gutter** (`S100_VECTOR_TILE_GUTTER`, default 64 DIP) so
@@ -586,11 +600,19 @@ native memory; visible tiles are kept most-recently-used so they are never
 evicted mid-frame. A tier-sized pool of coalescing workers per layer drains the
 visible-miss set (replaced every frame), and all cache access is serialised
 through the layer lock so a worker cannot dispose an image the compositor is
-blitting. The pool size is `S100_VECTOR_TILE_WORKERS` (default sized by the
+blitting. The pool size floor is `S100_VECTOR_TILE_WORKERS` (default sized by the
 performance profile — one on low-end hosts, scaling with cores on high-end), so a
 cold pan's visible misses rasterise in parallel instead of one at a time; a
 process-wide cap (logical-core count) stops *N* layers × *N* workers from
-oversubscribing the cores and starving the UI thread on a big exchange set.
+oversubscribing the cores and starving the UI thread on a big exchange set. That
+per-layer size is a **floor, not a ceiling**: a layer with a visible cold backlog
+may borrow idle global capacity toward the process-wide cap (issue #432), but only
+for *visible* work — speculative prewarm never borrows, and a borrowed worker sheds
+itself the moment visible work drains (returning capacity within ~one tile raster)
+rather than falling through to prediction. Before lending, each other layer that
+also has visible work keeps its own floor reserved, so a dense bottom-of-z-order
+layer cannot starve later-painting siblings; on a `LowEnd` (single-worker) host the
+elastic ceiling collapses to the floor and the behaviour is unchanged.
 Telemetry histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration`
 (UI composite pass) attribute the two halves, while `TileColdLatency` measures the
 end-to-end queue-wait-plus-rasterise a cold tile takes to appear. A rotated
@@ -707,6 +729,35 @@ Prediction is on by default and is a first-class A/B knob:
 **Measured (PDB01, 20-step pan, OFF vs ON):** frames with cold-tile exposure
 fell from **58 % → 16 %** (the residual is the cold start, not the pan), at a
 ~32 % prediction hit-rate; the steady-pan window itself was entirely zero-cold.
+
+### Idle cross-band pre-warm (issue #428)
+
+Same-band prediction warms only the two z±1 *centre* tiles, so a zoom that
+crosses a band boundary still pays near-full cold latency at the new band. Idle
+cross-band pre-warm closes that gap: when a layer is otherwise idle the renderer
+warms the whole viewport footprint of both adjacent bands
+(`TileGrid.CrossBandPrewarmTiles`), so a subsequent zoom-in or zoom-out starts
+warm.
+
+It runs as a **third, lowest-priority queue** (`PendingCrossBand`), drained
+strictly behind `PendingVisible` and `PendingPredicted`, so warming an adjacent
+band never delays visible or same-band work. It is enqueued only on a frame with
+**no cold visible misses** and only while the hot cache is below 75 % of its byte
+budget, so its speculative inserts never evict the current working set (visible
+target-band tiles are additionally pinned via `TileCache.Protect`). The set is
+centre-first and capped at 24 tiles per frame — the band+1 footprint alone is
+~4× the visible count — so the cap keeps the most-central, most-likely-next-zoom
+tiles. Like same-band prediction its tiles never request a repaint and are
+rebuilt (cancelled) every frame; a later zoom that reveals one scores an ordinary
+prediction hit (`TileKey` carries the band).
+
+Cross-band pre-warm is on by default (off by default on the `LowEnd` performance
+tier, though an explicit opt-in via the env var or settings toggle is still
+honoured) and is a first-class A/B knob: `S100_VECTOR_TILE_XBAND=0`
+(`CrossBandPrewarmEnabled`) disables it, leaving the same-band warm set intact.
+Its tiles flow through the existing prediction telemetry, so a zoom-transition
+A/B reads time-to-fill at the new band from `s100.render.tile.cold.latency` and
+the `s100.render.tile.prediction.hits` counter.
 
 ### Persistent warm disk cache + `styleStateHash` (Phase 4)
 

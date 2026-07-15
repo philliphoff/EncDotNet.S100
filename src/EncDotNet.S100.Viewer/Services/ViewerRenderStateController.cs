@@ -69,4 +69,14 @@ internal sealed class ViewerRenderStateController : IRenderStateController
         if (_settings.SelectedRenderSubsystem == subsystem) return;
         await Dispatcher.UIThread.InvokeAsync(() => _settings.SelectedRenderSubsystem = subsystem);
     }
+
+    public string? GetDisplayMode(string spec) => _ecdis.GetDisplayMode(spec);
+
+    public async Task SetDisplayModeAsync(string spec, string? modeId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(spec);
+        ct.ThrowIfCancellationRequested();
+        if (string.Equals(_ecdis.GetDisplayMode(spec), modeId, StringComparison.Ordinal)) return;
+        await Dispatcher.UIThread.InvokeAsync(() => _ecdis.SetDisplayMode(spec, modeId));
+    }
 }

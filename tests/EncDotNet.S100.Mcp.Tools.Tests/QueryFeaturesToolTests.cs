@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
@@ -23,12 +24,12 @@ public class QueryFeaturesToolTests
             Id = id,
             FeatureType = featureType,
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((lat, lon)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            Points = [new GeoPosition(lat, lon)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -39,12 +40,12 @@ public class QueryFeaturesToolTests
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((lat, lon)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S122ComplexAttribute>.Empty,
+            Points = [new GeoPosition(lat, lon)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -55,13 +56,13 @@ public class QueryFeaturesToolTests
             Id = id,
             FeatureType = featureType,
             GeometryType = S100GeometryType.None,
-            Points = default,
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S131ComplexAttribute>.Empty,
-            References = ImmutableArray<S131Reference>.Empty,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
     }
 
@@ -120,8 +121,8 @@ public class QueryFeaturesToolTests
 
         var s122 = new S122Dataset
         {
-            Features = ImmutableArray.Create(s122Inside),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = [s122Inside],
+            InformationTypes = [],
         };
         catalog.Add(new LoadedDataset(
             new DatasetId("mpa"),
@@ -147,8 +148,8 @@ public class QueryFeaturesToolTests
         var authority = S131GeometrylessFeature("auth-1", "Authority");
         var s131 = new S131Dataset
         {
-            Features = ImmutableArray.Create(authority),
-            InformationTypes = ImmutableArray<S131InformationType>.Empty,
+            Features = [authority],
+            InformationTypes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(new LoadedDataset(
@@ -177,8 +178,8 @@ public class QueryFeaturesToolTests
 
         var s122 = new S122Dataset
         {
-            Features = ImmutableArray.Create(S122PointFeature("m1", 6, 6)),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = [S122PointFeature("m1", 6, 6)],
+            InformationTypes = [],
         };
         catalog.Add(new LoadedDataset(
             new DatasetId("mpa"),
@@ -241,7 +242,7 @@ public class QueryFeaturesToolTests
             PageSize: 2));
         Assert.True(page0.TryGetValue(out var p0));
         Assert.Equal(5, p0.TotalCount);
-        Assert.Equal(2, p0.Features.Length);
+        Assert.Equal(2, p0.Features.Count);
         Assert.True(p0.HasMore);
 
         var page2 = await tool.InvokeAsync(new QueryFeaturesRequest(
@@ -260,10 +261,10 @@ public class QueryFeaturesToolTests
         var tool = new QueryFeaturesTool(catalog);
 
         // Polygon must close on itself; an open ring is invalid.
-        var open = new GeoPolygon(ImmutableArray.Create(
+        var open = new GeoPolygon([
             new GeoPoint(0, 0),
             new GeoPoint(0, 1),
-            new GeoPoint(1, 1)));
+            new GeoPoint(1, 1)]);
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Polygon(open)));
@@ -297,11 +298,11 @@ public class QueryFeaturesToolTests
             Id = "tri",
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
-            ExteriorRing = ImmutableArray.Create<(double, double)>(
-                (0, 0), (2, 0), (0, 2), (0, 0)),
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            ExteriorRing = [
+                new GeoPosition(0, 0), new GeoPosition(2, 0), new GeoPosition(0, 2), new GeoPosition(0, 0)],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(triangle),
@@ -327,19 +328,19 @@ public class QueryFeaturesToolTests
             Id = "area",
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
-            ExteriorRing = ImmutableArray.Create<(double, double)>(
-                (-1, -1), (-1, 1), (1, 1), (1, -1), (-1, -1)),
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            ExteriorRing = [
+                new GeoPosition(-1, -1), new GeoPosition(-1, 1), new GeoPosition(1, 1), new GeoPosition(1, -1), new GeoPosition(-1, -1)],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(area),
             bounds: LoadedDatasetFactory.Box(-5, -5, 5, 5)));
         var tool = new QueryFeaturesTool(catalog);
 
-        var leg = new GeoQuery.Polyline(new GeoPolyline(ImmutableArray.Create(
-            new GeoPoint(0, -5), new GeoPoint(0, 5))));
+        var leg = new GeoQuery.Polyline(new GeoPolyline([
+            new GeoPoint(0, -5), new GeoPoint(0, 5)]));
 
         var precise = await tool.InvokeAsync(new QueryFeaturesRequest(leg, Precise: true));
         Assert.True(precise.TryGetValue(out var value));

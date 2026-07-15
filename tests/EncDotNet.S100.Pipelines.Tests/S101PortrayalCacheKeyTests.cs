@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -54,7 +55,7 @@ public class S101PortrayalCacheKeyTests
     {
         var baseline = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
         var changed = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default with { SafetyContour = 10.0 }, Ecdis());
+            MarinerSettings.Default with { SafetyContour = Depth.FromMetres(10.0) }, Ecdis());
 
         Assert.NotEqual(baseline, changed);
     }

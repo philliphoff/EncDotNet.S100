@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -62,7 +61,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     private readonly IDatasetLoaderService _loader;
     private readonly Dictionary<DatasetEntry, LoadedDataset> _cache = new();
     private readonly object _gate = new();
-    private ImmutableArray<LoadedDataset> _snapshot = ImmutableArray<LoadedDataset>.Empty;
+    private IReadOnlyList<LoadedDataset> _snapshot = [];
     private bool _disposed;
 
     public ViewerDatasetCatalog(IDatasetLoaderService loader)
@@ -74,7 +73,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     }
 
     /// <inheritdoc />
-    public ImmutableArray<LoadedDataset> Datasets => _snapshot;
+    public IReadOnlyList<LoadedDataset> Datasets => _snapshot;
 
     /// <inheritdoc />
     public event EventHandler<DatasetCatalogChangedEventArgs>? Changed;
@@ -115,11 +114,11 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
 
         if (projected is null) return;
 
-        ImmutableArray<LoadedDataset> next;
+        IReadOnlyList<LoadedDataset> next;
         lock (_gate)
         {
             _cache[entry] = projected;
-            next = ImmutableArray.CreateRange(_cache.Values);
+            next = _cache.Values.ToArray();
             _snapshot = next;
         }
         Changed?.Invoke(this, new DatasetCatalogChangedEventArgs
@@ -139,7 +138,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             if (!_cache.TryGetValue(entry, out var prev)) return;
             removedId = prev.Id;
             _cache.Remove(entry);
-            _snapshot = ImmutableArray.CreateRange(_cache.Values);
+            _snapshot = _cache.Values.ToArray();
         }
         Changed?.Invoke(this, new DatasetCatalogChangedEventArgs
         {
@@ -533,19 +532,19 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         foreach (var feature in features)
         {
             if (feature is null) continue;
-            if (!feature.Points.IsDefaultOrEmpty)
+            if (feature.Points.Count > 0)
             {
                 foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
             }
-            if (!feature.Curves.IsDefaultOrEmpty)
+            if (feature.Curves.Count > 0)
             {
                 foreach (var curve in feature.Curves)
                 {
-                    if (curve.IsDefaultOrEmpty) continue;
+                    if (curve.Count == 0) continue;
                     foreach (var (lat, lon) in curve) Expand(lat, lon);
                 }
             }
-            if (!feature.ExteriorRing.IsDefaultOrEmpty)
+            if (feature.ExteriorRing.Count > 0)
             {
                 foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
             }
@@ -565,7 +564,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         lock (_gate)
         {
             _cache.Clear();
-            _snapshot = ImmutableArray<LoadedDataset>.Empty;
+            _snapshot = [];
         }
     }
 }

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.IO;
 using EncDotNet.S100.Viewer;
@@ -72,7 +73,7 @@ public class ViewerCommandSettingsTests
         var s = new ViewerCommandSettings { Center = "47.6,-122.3", Zoom = 12 };
         Assert.True(Ok(s));
         Assert.True(s.HasExplicitViewport);
-        Assert.Equal((47.6, -122.3), s.ParsedCenter);
+        Assert.Equal(new GeoPosition(47.6, -122.3), s.ParsedCenter);
     }
 
     [Fact]
@@ -185,7 +186,7 @@ public class ViewerCommandSettingsTests
     public void ParsedOwnShipPosition_parses_latlon()
     {
         var s = new ViewerCommandSettings { OwnShipPosition = "47.6,-122.3" };
-        Assert.Equal((47.6, -122.3), s.ParsedOwnShipPosition);
+        Assert.Equal(new GeoPosition(47.6, -122.3), s.ParsedOwnShipPosition);
         Assert.Null(new ViewerCommandSettings().ParsedOwnShipPosition);
     }
 

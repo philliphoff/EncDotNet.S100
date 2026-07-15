@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
@@ -75,9 +76,9 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var mariner = new MarinerSettings
         {
             FourShades = true,
-            ShallowContour = 2.0,
-            SafetyContour = 30.0,
-            DeepContour = 30.0,
+            ShallowContour = Depth.FromMetres(2.0),
+            SafetyContour = Depth.FromMetres(30.0),
+            DeepContour = Depth.FromMetres(30.0),
         };
 
         var pipeline = new CoveragePipeline();
@@ -158,7 +159,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var mariner = new MarinerSettings
         {
             FourShades = false,
-            SafetyContour = 30.0,
+            SafetyContour = Depth.FromMetres(30.0),
         };
 
         var pipeline = new CoveragePipeline();
@@ -187,9 +188,9 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var mariner = new MarinerSettings
         {
             FourShades = true,
-            ShallowContour = 2.0,
-            SafetyContour = 10.0,
-            DeepContour = 30.0,
+            ShallowContour = Depth.FromMetres(2.0),
+            SafetyContour = Depth.FromMetres(10.0),
+            DeepContour = Depth.FromMetres(30.0),
         };
 
         var scheme = catalogue.ResolveColorScheme(mariner);
@@ -213,7 +214,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var mariner = new MarinerSettings
         {
             FourShades = false,
-            SafetyContour = 10.0,
+            SafetyContour = Depth.FromMetres(10.0),
         };
 
         var scheme = catalogue.ResolveColorScheme(mariner);

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S57;
 
@@ -51,32 +50,28 @@ internal static class DefaultRules
             Objl = 30,
             S57Acronym = "COALNE",
             DefaultS101Code = "Coastline",
-            AttributeOverrides = ImmutableDictionary.CreateRange(
-                StringComparer.OrdinalIgnoreCase,
-                new[]
+            AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CATCOA"] = new S57AttributeOverride
                 {
-                    new KeyValuePair<string, S57AttributeOverride>(
-                        "CATCOA",
-                        new S57AttributeOverride
-                        {
-                            S101CodeByValue = ImmutableDictionary.CreateRange(new[]
-                            {
-                                new KeyValuePair<string, string>("3", "natureOfSurface"),
-                                new KeyValuePair<string, string>("4", "natureOfSurface"),
-                                new KeyValuePair<string, string>("5", "natureOfSurface"),
-                                new KeyValuePair<string, string>("9", "natureOfSurface"),
-                                new KeyValuePair<string, string>("11", "natureOfSurface"),
-                            }),
-                            ValueRemap = ImmutableDictionary.CreateRange(new[]
-                            {
-                                new KeyValuePair<string, string?>("3", "4"),   // sandy → sand
-                                new KeyValuePair<string, string?>("4", "5"),   // stony → stone
-                                new KeyValuePair<string, string?>("5", "7"),   // shingly → pebbles
-                                new KeyValuePair<string, string?>("9", "14"),  // coral reef → coral
-                                new KeyValuePair<string, string?>("11", "17"), // shelly → shells
-                            }),
-                        }),
-                }),
+                    S101CodeByValue = new Dictionary<string, string>
+                    {
+                        ["3"] = "natureOfSurface",
+                        ["4"] = "natureOfSurface",
+                        ["5"] = "natureOfSurface",
+                        ["9"] = "natureOfSurface",
+                        ["11"] = "natureOfSurface",
+                    },
+                    ValueRemap = new Dictionary<string, string?>
+                    {
+                        ["3"] = "4",   // sandy → sand
+                        ["4"] = "5",   // stony → stone
+                        ["5"] = "7",   // shingly → pebbles
+                        ["9"] = "14",  // coral reef → coral
+                        ["11"] = "17", // shelly → shells
+                    },
+                },
+            },
         };
         // CTRPNT — IHO Conversion Guidance § 4.3: drop in general; redirect
         // CATCTR ∈ {1, 5} to Landmark with value-remapped categoryOfLandmark.
@@ -85,28 +80,24 @@ internal static class DefaultRules
             Objl = 33,
             S57Acronym = "CTRPNT",
             DefaultS101Code = null,
-            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            Redirects = [new S57FeatureRedirect
             {
                 ConditionAttribute = "CATCTR",
-                ConditionValues = ImmutableArray.Create("1", "5"),
+                ConditionValues = ["1", "5"],
                 TargetS101Code = "Landmark",
-                AttributeOverrides = ImmutableDictionary.CreateRange(
-                    StringComparer.OrdinalIgnoreCase,
-                    new[]
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATCTR"] = new S57AttributeOverride
                     {
-                        new KeyValuePair<string, S57AttributeOverride>(
-                            "CATCTR",
-                            new S57AttributeOverride
-                            {
-                                S101Code = "categoryOfLandmark",
-                                ValueRemap = ImmutableDictionary.CreateRange(new[]
-                                {
-                                    new KeyValuePair<string, string?>("1", "22"), // triangulation mark
-                                    new KeyValuePair<string, string?>("5", "23"), // boundary mark
-                                }),
-                            }),
-                    }),
-            }),
+                        S101Code = "categoryOfLandmark",
+                        ValueRemap = new Dictionary<string, string?>
+                        {
+                            ["1"] = "22", // triangulation mark
+                            ["5"] = "23", // boundary mark
+                        },
+                    },
+                },
+            }],
         };
         yield return F(35, "CRANES", "Crane");
         yield return F(42, "DEPARE", "DepthArea");
@@ -126,8 +117,89 @@ internal static class DefaultRules
         yield return F(72, "LNDELV", "LandElevation");
         yield return F(73, "LNDRGN", "LandRegion");
         yield return F(74, "LNDMRK", "Landmark");
-        yield return F(75, "LIGHTS", "LightAllAround");
+        // LIGHTS defaults to LightAllAround, but a light object carrying a
+        // sector arc (SECTR1/SECTR2 present) is a sectored light and maps to
+        // LightSectored, whose mandatory sectorCharacteristics complex the
+        // translator assembles from LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/
+        // SIGGRP/SIGPER/SIGSEQ (S-101 FC: LightSectored / sectorCharacteristics
+        // [1..*]).
+        yield return new S57FeatureRule
+        {
+            Objl = 75,
+            S57Acronym = "LIGHTS",
+            DefaultS101Code = "LightAllAround",
+            Redirects = [
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "SECTR1",
+                    ConditionPresent = true,
+                    TargetS101Code = "LightSectored",
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "SECTR2",
+                    ConditionPresent = true,
+                    TargetS101Code = "LightSectored",
+                },
+            ],
+        };
         yield return F(79, "LOKBSN", "LockBasin");
+        // MORFAC — S-101 removed the generic S-57 MooringWarpingFacility class
+        // (it survives only in the sister product S-131). The S-101 portrayal
+        // catalogue wires the MORFAC symbols to Dolphin.lua (point) and
+        // ShorelineConstruction.lua (line/area), which fixes the geometry
+        // default: point MORFAC → Dolphin, line/area MORFAC → ShorelineConstruction.
+        // CATMOR (ATTL 40) refines specific point facilities that DO have a
+        // dedicated S-101 class — bollard → Bollard, post/pile → Pile, mooring
+        // buoy → MooringBuoy — so those redirect regardless of the geometry
+        // default (all such instances are points in practice). On the remaining
+        // point Dolphins, CATMOR maps to categoryOfDolphin, but the S-57 and
+        // S-101 enumerations diverge (S-101 has Mooring/Deviation/Berthing/Fender
+        // dolphins, S-57 has dolphin/deviation-dolphin/bollard/tie-up-wall/pile/
+        // chain/mooring-buoy); only the two coincident meanings are carried —
+        // dolphin → Mooring Dolphin (1), deviation dolphin → Deviation Dolphin
+        // (2) — via the CATMOR attribute rule's value remap. CATMOR is dropped
+        // wherever MORFAC redirects to a class that does not bind
+        // categoryOfDolphin.
+        yield return new S57FeatureRule
+        {
+            Objl = 84,
+            S57Acronym = "MORFAC",
+            DefaultS101Code = "Dolphin",
+            Redirects =
+            [
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATMOR",
+                    ConditionValues = ["3"], // bollard
+                    ConditionPrimitives = [S57GeometryPrimitive.Point],
+                    TargetS101Code = "Bollard",
+                    AttributeOverrides = DropCatmor,
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATMOR",
+                    ConditionValues = ["5"], // post or pile
+                    ConditionPrimitives = [S57GeometryPrimitive.Point],
+                    TargetS101Code = "Pile",
+                    AttributeOverrides = DropCatmor,
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATMOR",
+                    ConditionValues = ["7"], // mooring buoy
+                    ConditionPrimitives = [S57GeometryPrimitive.Point],
+                    TargetS101Code = "MooringBuoy",
+                    AttributeOverrides = DropCatmor,
+                },
+                new S57FeatureRedirect
+                {
+                    ConditionPrimitives = [S57GeometryPrimitive.Curve, S57GeometryPrimitive.Surface],
+                    TargetS101Code = "ShorelineConstruction",
+                    AttributeOverrides = DropCatmor,
+                },
+            ],
+        };
         yield return F(85, "NAVLNE", "NavigationLine");
         yield return F(86, "OBSTRN", "Obstruction");
         yield return F(90, "PILPNT", "Pile");
@@ -145,6 +217,143 @@ internal static class DefaultRules
         yield return F(153, "UWTROC", "UnderwaterAwashRock");
         yield return F(157, "WATFAL", "Waterfall");
         yield return F(159, "WRECKS", "Wreck");
+
+        // --- Gap coverage: S-57 classes with a direct S-101 FC alias ---
+        // Each target is the S-101 Feature Catalogue code declared by that
+        // feature type's <S100FC:alias> (= the originating S-57 acronym), and
+        // was validated as a concrete (non-abstract) feature type. The set was
+        // derived from a 3,636-cell NOAA ENC corpus audit of classes the
+        // translator was silently dropping (no mapping rule). See the
+        // IHO "S-57 to S-101 Conversion Guidance" for the authoritative
+        // conversions; the FC alias is used here as the machine-readable bridge.
+        yield return F(1, "ADMARE", "AdministrationArea");
+        yield return F(12, "BUISGL", "Building");
+        yield return F(20, "CBLARE", "CableArea");
+        yield return F(21, "CBLOHD", "CableOverhead");
+        yield return F(22, "CBLSUB", "CableSubmarine");
+        yield return F(23, "CANALS", "Canal");
+        yield return F(25, "CTSARE", "CargoTranshipmentArea");
+        yield return F(26, "CAUSWY", "Causeway");
+        // CTNARE aliases two S-101 features (DiscolouredWater, CautionArea);
+        // CautionArea is the general-case conversion for S-57 caution areas.
+        yield return F(27, "CTNARE", "CautionArea");
+        yield return F(29, "CGUSTA", "CoastGuardStation");
+        yield return F(31, "CONZNE", "ContiguousZone");
+        yield return F(34, "CONVYR", "Conveyor");
+        yield return F(36, "CURENT", "CurrentNonGravitational");
+        yield return F(38, "DAMCON", "Dam");
+        yield return F(39, "DAYMAR", "Daymark");
+        yield return F(40, "DWRTCL", "DeepWaterRouteCentreline");
+        yield return F(41, "DWRTPT", "DeepWaterRoutePart");
+        yield return F(48, "DMPGRD", "DumpingGround");
+        yield return F(49, "DYKCON", "Dyke");
+        yield return F(50, "EXEZNE", "ExclusiveEconomicZone");
+        yield return F(52, "FNCLNE", "FenceWall");
+        yield return F(53, "FERYRT", "FerryRoute");
+        yield return F(54, "FSHZNE", "FisheryZone");
+        yield return F(55, "FSHFAC", "FishingFacility");
+        yield return F(56, "FSHGRD", "FishingGround");
+        yield return F(58, "FOGSIG", "FogSignal");
+        yield return F(59, "FORSTC", "FortifiedStructure");
+        yield return F(63, "HRBARE", "HarbourAreaAdministrative");
+        yield return F(66, "ICEARE", "IceArea");
+        yield return F(68, "ISTZNE", "InshoreTrafficZone");
+        yield return F(76, "LITFLT", "LightFloat");
+        yield return F(78, "LOCMAG", "LocalMagneticAnomaly");
+        yield return F(80, "LOGPON", "LogPond");
+        yield return F(81, "MAGVAR", "MagneticVariation");
+        yield return F(82, "MARCUL", "MarineFarmCulture");
+        yield return F(83, "MIPARE", "MilitaryPracticeArea");
+        yield return F(87, "OFSPLF", "OffshorePlatform");
+        // OSPARE — OffshoreProductionArea binds `categoryOfOffshoreProductionArea`
+        // (NOT `categoryOfProductionArea`), a distinct S-101 enumeration
+        // (1=Wind Farm, 2=Wave Farm, 3=Current Farm, 4=Tank Farm,
+        // 5=Seabed Material Extraction Area, 6=Solar Farm). Redirect CATPRA to
+        // that attribute and remap the S-57 codes; S-57 production categories
+        // with no offshore equivalent (quarry, mine, stockpile, power station,
+        // refinery, timber yard, factory, slag/spoil, production plant) are
+        // dropped (no conformant home on this feature).
+        yield return new S57FeatureRule
+        {
+            Objl = 88,
+            S57Acronym = "OSPARE",
+            DefaultS101Code = "OffshoreProductionArea",
+            AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CATPRA"] = new S57AttributeOverride
+                {
+                    S101Code = "categoryOfOffshoreProductionArea",
+                    ValueRemap = new Dictionary<string, string?>
+                    {
+                        ["1"] = null,  // quarry — no offshore equivalent
+                        ["2"] = null,  // mine — no offshore equivalent
+                        ["3"] = null,  // stockpile — no offshore equivalent
+                        ["4"] = null,  // power station area — no offshore equivalent
+                        ["5"] = null,  // refinery area — no offshore equivalent
+                        ["6"] = null,  // timber yard — no offshore equivalent
+                        ["7"] = null,  // factory area — no offshore equivalent
+                        ["8"] = "4",   // tank farm → Tank Farm
+                        ["9"] = "1",   // wind farm → Wind Farm
+                        ["10"] = null, // slag heap/spoil heap — no offshore equivalent
+                        ["11"] = null, // production plant — no offshore equivalent
+                        ["12"] = "6",  // solar farm → Solar Farm
+                    },
+                },
+            },
+        };
+        yield return F(89, "OILBAR", "OilBarrier");
+        yield return F(91, "PILBOP", "PilotBoardingPlace");
+        yield return F(92, "PIPARE", "SubmarinePipelineArea");
+        yield return F(93, "PIPOHD", "PipelineOverhead");
+        yield return F(94, "PIPSOL", "PipelineSubmarineOnLand");
+        yield return F(96, "PRCARE", "PrecautionaryArea");
+        yield return F(97, "PRDARE", "ProductionStorageArea");
+        yield return F(98, "PYLONS", "PylonBridgeSupport");
+        yield return F(102, "RADSTA", "RadarStation");
+        yield return F(103, "RTPBCN", "RadarTransponderBeacon");
+        yield return F(104, "RDOCAL", "RadioCallingInPoint");
+        yield return F(105, "RDOSTA", "RadioStation");
+        yield return F(108, "RCRTCL", "RecommendedRouteCentreline");
+        yield return F(109, "RECTRC", "RecommendedTrack");
+        yield return F(110, "RCTLPT", "RecommendedTrafficLanePart");
+        yield return F(111, "RSCSTA", "RescueStation");
+        yield return F(113, "RETRFL", "Retroreflector");
+        yield return F(117, "RUNWAY", "Runway");
+        yield return F(118, "SNDWAV", "Sandwave");
+        yield return F(119, "SEAARE", "SeaAreaNamedWaterArea");
+        yield return F(120, "SPLARE", "SeaplaneLandingArea");
+        yield return F(121, "SBDARE", "SeabedArea");
+        yield return F(123, "SISTAT", "SignalStationTraffic");
+        yield return F(124, "SISTAW", "SignalStationWarning");
+        yield return F(125, "SILTNK", "SiloTank");
+        yield return F(130, "SPRING", "Spring");
+        yield return F(134, "SWPARE", "SweptArea");
+        yield return F(135, "TESARE", "TerritorialSeaArea");
+        yield return F(143, "TIDEWY", "Tideway");
+        yield return F(146, "TSSBND", "TrafficSeparationSchemeBoundary");
+        yield return F(148, "TSSLPT", "TrafficSeparationSchemeLanePart");
+        yield return F(151, "TUNNEL", "Tunnel");
+        yield return F(152, "TWRTPT", "TwoWayRoutePart");
+        yield return F(154, "UNSARE", "UnsurveyedArea");
+        yield return F(155, "VEGATN", "Vegetation");
+        yield return F(156, "WATTUR", "WaterTurbulence");
+        yield return F(158, "WEDKLP", "WeedKelp");
+        yield return F(160, "TS_FEB", "TidalStreamFloodEbb");
+
+        // Meta (M_*) objects. In S-101 several S-57 meta objects become
+        // first-class features carrying data-quality / coverage information.
+        // M_QUAL carries CATZOC (a bathymetric-quality concept) and therefore
+        // converts to QualityOfBathymetricData; QualityOfNonBathymetricData is
+        // sourced from M_ACCY (S-57 → S-101 Conversion Guidance; the bundled
+        // S-101 FC aliases QualityOfNonBathymetricData to M_ACCY).
+        yield return F(301, "M_ACCY", "QualityOfNonBathymetricData");
+        yield return F(302, "M_COVR", "DataCoverage");
+        yield return F(305, "M_NPUB", "InformationArea");
+        yield return F(306, "M_NSYS", "NavigationalSystemOfMarks");
+        yield return F(308, "M_QUAL", "QualityOfBathymetricData");
+        yield return F(309, "M_SDAT", "SoundingDatum");
+        yield return F(310, "M_SREL", "QualityOfSurvey");
+        yield return F(312, "M_VDAT", "VerticalDatumOfData");
     }
 
     public static IEnumerable<S57AttributeRule> AttributeRules()
@@ -196,7 +405,179 @@ internal static class DefaultRules
         yield return A(184, "VERCSA", "verticalClearanceSafe");
         yield return A(186, "VERLEN", "verticalLength");
         yield return A(187, "WATLEV", "waterLevelEffect");
+
+        // --- Gap coverage: S-57 attributes with a direct S-101 FC alias ---
+        // Each target is the S-101 simple-attribute code declared by that
+        // attribute's <S100FC:alias> (= the originating S-57 acronym), AND is
+        // directly bound to one or more feature types in the FC (verified
+        // against the FC feature bindings). Derived from the same corpus audit
+        // as the feature gap coverage above.
+        //
+        // Deliberately NOT mapped here (they are sub-attributes of an S-101
+        // *complex* attribute, so a flat emission would be non-conformant;
+        // they need complex-attribute assembly, like OBJNAM → featureName).
+        // Several complexes are now assembled in the translator directly
+        // (information, featureName, rhythmOfLight, the date ranges,
+        // zoneOfConfidence/CATZOC, and surfaceCharacteristics/NATSUR+NATQUA).
+        // Still deferred:
+        //   SORIND (source indication — no general S-101 equivalent; the FC's
+        //   `source` attribute binds only UpdateInformation).
+        //
+        // Assembled into S-101 complex attributes by S57ToS101Translator (feature
+        // binding-gated), NOT emitted here as flat simple attributes:
+        //   DATSTA/DATEND → fixedDateRange, PERSTA/PEREND → periodicDateRange,
+        //   SURSTA/SUREND → surveyDateRange (each with dateStart/dateEnd);
+        //   NATSUR/NATQUA → surfaceCharacteristics (natureOfSurface plus
+        //   natureOfSurfaceQualifyingTerms) on SeabedArea;
+        //   HORCLR → horizontalClearanceValue of horizontalClearanceOpen (Gate)
+        //   or horizontalClearanceFixed (spans/tunnels/shoreline/canals/etc.);
+        //   SORDAT → reportedDate (top-level simple attribute, feature
+        //   binding-gated — SORDAT is near-universal in S-57 but reportedDate
+        //   binds only ~50 feature types);
+        //   VALLMA → valueOfLocalMagneticAnomaly (magneticAnomalyValue) on
+        //   LocalMagneticAnomaly;
+        //   RADWAL → radarWaveLength (waveLengthValue + radarBand, one instance
+        //   per "value-band" pair) on RadarTransponderBeacon;
+        //   CURVEL → speed (speedMaximum) on CurrentNonGravitational /
+        //   TidalStreamFloodEbb;
+        //   MLTYLT → multiplicityOfFeatures (multiplicityKnown + numberOfFeatures)
+        //   on the light classes;
+        //   LITCHR/SIGGRP/SIGPER/SIGSEQ → rhythmOfLight (non-sectored lights);
+        //   LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/SIGGRP/SIGPER/SIGSEQ →
+        //   sectorCharacteristics/lightSector/sectorLimit (sectored lights →
+        //   LightSectored).
+        //
+        // NOTE: enum (E/L) attributes still pass their values through the
+        // FC-driven S101AllowedEnumValues check; S-57 enum values that have no
+        // S-101 equivalent are reported by the translation diagnostics rather
+        // than silently dropping the whole attribute.
+        yield return A(2, "BCNSHP", "beaconShape");
+        yield return A(4, "BOYSHP", "buoyShape");
+        yield return A(7, "CATAIR", "categoryOfAirportAirfield");
+        yield return A(8, "CATACH", "categoryOfAnchorage");
+        yield return A(10, "CATBUA", "categoryOfBuiltUpArea");
+        yield return A(21, "CATDIS", "distanceMarkVisible");
+        yield return A(35, "CATLMK", "categoryOfLandmark");
+        yield return A(41, "CATNAV", "categoryOfNavigationLine");
+        yield return A(45, "CATPLE", "categoryOfPile");
+        yield return A(56, "CATREA", "categoryOfRestrictedArea");
+        yield return A(66, "CATSPM", "categoryOfSpecialPurposeMark");
+        yield return A(92, "EXCLIT", "exhibitionConditionOfLight");
+        yield return A(94, "FUNCTN", "function");
+        yield return A(99, "HORLEN", "horizontalLength");
+        yield return A(106, "LIFCAP", "liftingCapacity");
+        yield return A(108, "LITVIS", "lightVisibility");
+        yield return A(109, "MARSYS", "marksNavigationalSystemOf");
+        yield return A(117, "ORIENT", "orientationValue");
+        yield return A(120, "PICREP", "pictorialRepresentation");
+        yield return A(123, "PRODCT", "product");
+        yield return A(127, "RADIUS", "radius");
+        yield return A(131, "RESTRN", "restriction");
+        yield return A(141, "SIGGRP", "signalGroup");
+        yield return A(142, "SIGPER", "signalPeriod");
+        yield return A(156, "TECSOU", "techniqueOfVerticalMeasurement");
+        yield return A(172, "TRAFIC", "trafficFlow");
+        yield return A(178, "VALNMR", "valueOfNominalRange");
+        // SECTR1/SECTR2 are registered so the feature-redirect condition can
+        // see them in the acronym view (S57S101Mapping.BuildAcronymView only
+        // exposes attributes that carry a rule). Their nominal S-101 target is
+        // `sectorBearing`, but on the only feature that carries them — a
+        // sectored LIGHTS, which redirects to LightSectored — the translator
+        // diverts them into the `sectorCharacteristics` complex and suppresses
+        // this top-level pass-through, so they never leak as flat attributes.
+        yield return A(136, "SECTR1", "sectorBearing");
+        yield return A(137, "SECTR2", "sectorBearing");
+        yield return A(185, "VERDAT", "verticalDatum");
+
+        // --- Gap coverage (2nd wave): simple attributes surfaced once the
+        // feature classes above began translating. Same provenance rules:
+        // FC <S100FC:alias> = S-57 acronym, single-match, directly feature
+        // bound. Mostly the categoryOf* discriminators of the new features.
+        yield return A(3, "BUISHP", "buildingShape");
+        yield return A(5, "BURDEP", "buriedDepth");
+        yield return A(6, "CALSGN", "callSign");
+        yield return A(11, "CATCBL", "categoryOfCable");
+        yield return A(12, "CATCAN", "categoryOfCanal");
+        yield return A(17, "CATCON", "categoryOfConveyor");
+        yield return A(20, "CATDAM", "categoryOfDam");
+        yield return A(23, "CATDPG", "categoryOfDumpingGround");
+        yield return A(24, "CATFNC", "categoryOfFence");
+        yield return A(25, "CATFRY", "categoryOfFerry");
+        yield return A(26, "CATFIF", "categoryOfFishingFacility");
+        yield return A(27, "CATFOG", "categoryOfFogSignal");
+        yield return A(28, "CATFOR", "categoryOfFortifiedStructure");
+        yield return A(32, "CATICE", "categoryOfIce");
+        yield return A(39, "CATMPA", "categoryOfMilitaryPracticeArea");
+        yield return A(43, "CATOFP", "categoryOfOffshorePlatform");
+        yield return A(44, "CATOLB", "categoryOfOilBarrier");
+        yield return A(46, "CATPIL", "categoryOfPilotBoardingPlace");
+        yield return A(47, "CATPIP", "categoryOfPipelinePipe");
+        // CATPRA — the S-57 category-of-production-area code maps 1:1 to the
+        // S-101 `categoryOfProductionArea` enumeration (both share codes
+        // 1=Quarry … 9=Wind Farm), which is bound to ProductionStorageArea.
+        // On OffshoreProductionArea the FC binds a *different* attribute
+        // (`categoryOfOffshoreProductionArea`, a distinct enumeration); that
+        // feature carries a per-feature override below to redirect and remap.
+        yield return A(48, "CATPRA", "categoryOfProductionArea");
+        yield return A(49, "CATPYL", "categoryOfPylon");
+        yield return A(51, "CATRAS", "categoryOfRadarStation");
+        yield return A(52, "CATRTB", "categoryOfRadarTransponderBeacon");
+        yield return A(53, "CATROS", "categoryOfRadioStation");
+        yield return A(54, "CATTRK", "basedOnFixedMarks");
+        yield return A(55, "CATRSC", "categoryOfRescueStation");
+        yield return A(59, "CATSEA", "categoryOfSeaArea");
+        yield return A(61, "CATSIT", "categoryOfSignalStationTraffic");
+        yield return A(62, "CATSIW", "categoryOfSignalStationWarning");
+        yield return A(63, "CATSIL", "categoryOfSiloTank");
+        yield return A(67, "CATTSS", "iMOAdopted");
+        yield return A(68, "CATVEG", "categoryOfVegetation");
+        yield return A(69, "CATWAT", "categoryOfWaterTurbulence");
+        yield return A(70, "CATWED", "categoryOfWeedKelp");
+        yield return A(103, "JRSDTN", "jurisdiction");
+        yield return A(111, "NATION", "nationality");
+        yield return A(130, "RYRMGV", "referenceYearForMagneticVariation");
+        yield return A(139, "SIGFRQ", "signalFrequency");
+        yield return A(140, "SIGGEN", "signalGeneration");
+        yield return A(150, "SURATH", "surveyAuthority");
+        yield return A(153, "SURTYP", "surveyType");
+        yield return A(171, "TOPSHP", "topmarkDaymarkShape");
+        yield return A(173, "VALACM", "valueOfAnnualChangeInMagneticVariation");
+        yield return A(176, "VALMAG", "valueOfMagneticVariation");
+        yield return A(188, "CAT_TS", "categoryOfTidalStream");
+        // CATMOR (Category of mooring/warping facility) → categoryOfDolphin on
+        // the Dolphin target of MORFAC. The S-57 and S-101 enumerations do not
+        // align, so only the two coincident meanings are carried (1 → 1 Mooring
+        // Dolphin, 2 → 2 Deviation Dolphin). Values that select a different
+        // S-101 class (3 bollard, 5 pile, 7 mooring buoy) or have no dolphin
+        // category (4 tie-up wall, 6 chain/wire/cable) are dropped; on the
+        // redirected classes CATMOR is additionally dropped via the MORFAC
+        // redirect overrides.
+        yield return new S57AttributeRule
+        {
+            Attl = 40,
+            S57Acronym = "CATMOR",
+            DefaultS101Code = "categoryOfDolphin",
+            DefaultValueRemap = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["1"] = "1",  // dolphin → Mooring Dolphin
+                ["2"] = "2",  // deviation dolphin → Deviation Dolphin
+                ["3"] = null, // bollard → Bollard (no dolphin category)
+                ["4"] = null, // tie-up wall → no dolphin category
+                ["5"] = null, // post or pile → Pile (no dolphin category)
+                ["6"] = null, // chain/wire/cable → no dolphin category
+                ["7"] = null, // mooring buoy → MooringBuoy (no dolphin category)
+            },
+        };
     }
+
+    // Shared override that removes CATMOR entirely on a MORFAC redirect target
+    // that does not bind categoryOfDolphin (Bollard, Pile, MooringBuoy,
+    // ShorelineConstruction).
+    private static readonly IReadOnlyDictionary<string, S57AttributeOverride> DropCatmor =
+        new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATMOR"] = new S57AttributeOverride { Drop = true },
+        };
 
     private static S57FeatureRule F(ushort objl, string acronym, string? s101)
         => new() { Objl = objl, S57Acronym = acronym, DefaultS101Code = s101 };

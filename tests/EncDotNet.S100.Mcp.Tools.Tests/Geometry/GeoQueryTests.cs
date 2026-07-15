@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Geometry;
@@ -29,12 +28,12 @@ public class GeoQueryTests
     [Fact]
     public void Polygon_bounding_box_covers_every_vertex()
     {
-        var ring = ImmutableArray.Create(
+        IReadOnlyList<GeoPoint> ring = [
             new GeoPoint(0, 0),
             new GeoPoint(0, 10),
             new GeoPoint(5, 10),
             new GeoPoint(5, 0),
-            new GeoPoint(0, 0));
+            new GeoPoint(0, 0)];
         var q = new GeoQuery.Polygon(new GeoPolygon(ring));
 
         var b = q.GetBoundingBox();
@@ -49,7 +48,7 @@ public class GeoQueryTests
     public void Polyline_with_corridor_inflates_bounding_box()
     {
         var line = new GeoPolyline(
-            ImmutableArray.Create(new GeoPoint(0, 0), new GeoPoint(0, 1)),
+            [new GeoPoint(0, 0), new GeoPoint(0, 1)],
             CorridorWidthMeters: 111_320.0); // ~1°
         var q = new GeoQuery.Polyline(line);
 
@@ -67,7 +66,7 @@ public class GeoQueryTests
     public void Polyline_without_corridor_returns_tight_bbox()
     {
         var line = new GeoPolyline(
-            ImmutableArray.Create(new GeoPoint(0, 0), new GeoPoint(0, 1)));
+            [new GeoPoint(0, 0), new GeoPoint(0, 1)]);
         var q = new GeoQuery.Polyline(line);
 
         var b = q.GetBoundingBox();

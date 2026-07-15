@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
@@ -72,16 +71,16 @@ internal sealed class S124FeatureDescriber : ISpecFeatureDescriber
         return JsonSerializer.Deserialize<JsonElement>(bytes);
     }
 
-    private static ImmutableArray<FeatureReference> ProjectReferences(
-        ImmutableArray<GmlReference> references,
+    private static IReadOnlyList<FeatureReference> ProjectReferences(
+        IReadOnlyList<GmlReference> references,
         FeatureDescriberContext context)
     {
-        if (references.IsDefaultOrEmpty)
+        if (references.Count == 0)
         {
-            return ImmutableArray<FeatureReference>.Empty;
+            return [];
         }
 
-        var builder = ImmutableArray.CreateBuilder<FeatureReference>(references.Length);
+        var builder = new List<FeatureReference>(references.Count);
         foreach (var reference in references)
         {
             var targetId = ExtractFragment(reference.Href);
@@ -93,7 +92,7 @@ internal sealed class S124FeatureDescriber : ISpecFeatureDescriber
                 targetId,
                 resolved));
         }
-        return builder.MoveToImmutable();
+        return builder;
     }
 
     private static string? ExtractFragment(string href)

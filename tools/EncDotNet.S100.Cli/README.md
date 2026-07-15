@@ -1,10 +1,13 @@
 # EncDotNet.S100.Cli (`s100`)
 
 A small, cross-platform command-line tool for working with S-100 datasets. Its
-primary command renders any supported dataset to a PNG, JPEG, or WebP image by
+primary command renders any supported dataset — or a composite of several,
+via repeated `--layer` or by pointing at an entire exchange set / directory —
+to a PNG, JPEG, or WebP image by
 running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
-it can also report a dataset's product specification (`info`) and validate a
-dataset against its specification's normative rule pack (`validate`). It is
+it can also report a dataset's product specification (`info`), validate a
+dataset against its specification's normative rule pack (`validate`), and
+convert an S-57 base cell to an S-101 dataset (`s57 convert`). It is
 intended as the basis for batch scripts (for example, generating previews of
 sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
@@ -86,14 +89,37 @@ same step that signs the viewer, so it runs without Gatekeeper prompts.
 
 ## Commands
 
-### `s100 render <dataset> <output>`
+### `s100 render <dataset> <output>` (single dataset)
+### `s100 render --layer <dataset> … <output>` (composite)
+### `s100 render <exchange-set> <output>` (exchange-set composite)
 
-Detects the product specification of `<dataset>`, runs its portrayal pipeline,
-and writes an image to `<output>`. The output format (PNG, JPEG, or WebP) is
-inferred from the file extension unless `--format` is given.
+Detects the product specification of each input, runs its portrayal pipeline,
+and writes an image. Three grammars are supported:
+
+- **Single dataset** — `s100 render <dataset> <output>` renders one dataset.
+- **Composite** — `s100 render --layer A --layer B … <output>` stacks several
+  products into one image via the renderer-neutral S-98 interoperability
+  engine. `--layer` is repeatable; the output path is either the trailing
+  positional argument or `-o|--output`.
+- **Exchange set** — `s100 render <exchange-set> <output>` (or
+  `--exchange-set`/`--from`) discovers and composites **every** renderable
+  dataset in a directory / `CATALOG.XML` / exchange-set `.zip`, so you don't have
+  to enumerate each `--layer`. Auto-detected when the positional input is a
+  directory, a `CATALOG.XML`, or an exchange-set `.zip`. Mutually exclusive with
+  `--layer`.
+
+The output format (PNG, JPEG, or WebP) is inferred from the file extension
+unless `--format` is given.
 
 | Option | Default | Description |
 |---|---|---|
+| `--layer <path>` | _none_ | Add a dataset as a composite layer (repeatable). When any `--layer` is given, the composite grammar is used. |
+| `--exchange-set`, `--from <path>` | _none_ | Composite an entire exchange set (directory / `CATALOG.XML` / `.zip`). A directory / `CATALOG.XML` / `.zip` passed positionally is also auto-detected. Mutually exclusive with `--layer`. |
+| `--only <specs>` | _all_ | **Exchange-set only.** Restrict compositing to a comma-separated list of product specifications (e.g. `--only S101,S128`; hyphenation and case are ignored). |
+| `-o`, `--output <path>` | _positional_ | Output image path. Required (or given positionally) for the composite forms; an alternative to the positional `<output>` for the single form. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | union auto-fit | **Composite forms only.** Explicit shared viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. |
+| `--center <lon,lat>` | union auto-fit | **Composite forms only.** Explicit shared viewport centre. Must be used with `--scale`. |
+| `--scale <denominator>` | union auto-fit | **Composite forms only.** Explicit shared viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. |
 | `-w`, `--width` | `1024` | Output image width in pixels. |
 | `-h`, `--height` | `768` | Output image height in pixels. |
 | `--palette` | `day` | Colour palette: `day`, `dusk`, or `night`. |
@@ -103,25 +129,65 @@ inferred from the file extension unless `--format` is given.
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--format <fmt>` | inferred from extension, else `png` | Output image format: `png`, `jpeg` (`jpg`), or `webp`. When omitted, the format is inferred from the output file extension; an unrecognised extension falls back to `png`. An explicit `--format` that conflicts with a recognised output extension is rejected. |
 | `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
-| `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
-| `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
-| `--no-updates` | off | Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
+| `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. In the composite form the suppression is global (applies to every layer). |
+| `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. In the composite form the suppression is global. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
+| `--no-updates` | off | **Single form only.** Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
+| `--basemap <mode>` | `none` | Draw a basemap **beneath** the chart data: `none` (default) or `offline`. `offline` composites the bundled Natural Earth 1:10m land layer (public domain) under all chart layers in the muted parchment tone `238,232,220`, projected with the chart's own Web-Mercator viewport so it registers exactly. Works in both the single-dataset and `--layer` composite forms. Online tile basemaps (e.g. OSM) are **not** available in the headless renderer — only the offline land layer. |
+| `--display-mode <mode>` | `ice-concentration` | **S-411 only.** Sea-ice portrayal display mode: `ice-concentration` (total concentration, default), `ice-sod` (stage of development) or `ice-navigational` (**provisional** preview derived from total concentration — **not** a POLARIS/RIO navigational-risk computation). One dataset carries the full WMO egg code, so the same data renders in any mode; the concentration and stage-of-development colours are held inline in the adapter, mirrored from the bundled upstream WMO tables and guarded against drift by an xunit parity test. Applies to both forms (any S-411 layer in a composite reacts). Supplying it for a non-S-411 dataset is an error. Run `s100 info <dataset>` to list the supported modes. |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
 s100 render currents.h5 currents.png --time-step 6 --palette night
 s100 render warnings.gml warnings.png --width 2048 --height 1536
 s100 render seaice.gml seaice.png --no-text                # clean fill preview
+s100 render seaice.gml seaice.png --basemap offline        # land under the chart
 s100 render chart.gml chart.png --hide text,points         # hide text + symbols
 s100 render NL4NZ110.000 cell.png                          # applies .001/.002/… updates
 s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
 s100 render warnings.gml warnings.jpg --quality 85         # JPEG (format inferred from .jpg)
 s100 render warnings.gml preview.webp                      # WebP preview
+
+# Composite several products into one chart:
+s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
+s100 render --layer enc.000 --layer bathy.h5 -o chart.png --bbox -1.5,50.0,-1.0,50.5
+s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --scale 50000
+s100 render --layer enc.000 --layer warnings.gml chart.png --basemap offline
+
+# Composite an entire exchange set / directory / .zip:
+s100 render exchange-set/ chart.png                         # auto-detected directory
+s100 render exchange-set/CATALOG.XML chart.png              # auto-detected catalogue
+s100 render --exchange-set exchange-set.zip -o chart.png    # explicit, ZIP archive
+s100 render --from exchange-set/ chart.png --only S101,S102 # restrict to some specs
 ```
 
+> **Composite ordering.** The S-98 authority orders layers by display plane,
+> so the order in which you pass `--layer` is only a **within-plane tiebreak** —
+> hand-ordering layers generally has no visible effect. Explicitly ordering an
+> S-102 bathymetry surface above an S-101 chart, for example, is unnecessary:
+> the plane assignment already places it correctly.
+>
+> **Composite viewport.** When no `--bbox` / `--center`+`--scale` is given the
+> compositor auto-fits the union extent of all layers to the requested
+> `--width` × `--height`.
+>
+> **Composite and S-101 updates.** Neither composite form applies S-101
+> sequential/sibling updates — `--no-updates` applies to the single-dataset
+> form only. Render an S-101 cell singly if you need its updates folded in.
+>
+> **Exchange-set discovery.** The exchange-set form reuses the same
+> exchange-set reader the viewer and `validate` use. Only base and single cells
+> are composited (S-101 update files and orphan updates are skipped). Datasets
+> whose product specification is unsupported, whose file is missing, or that
+> declare data protection (encryption — this CLI has no decryption keys) are
+> **skipped with a warning on stderr** rather than failing the whole render; if
+> nothing renderable remains, `render` exits non-zero. A `.zip` exchange set is
+> extracted to a uniquely-named temporary directory (cleaned up after rendering,
+> even on failure), so a large set needs transient temporary disk space of
+> roughly its uncompressed size.
+
 > **S-101 sequential updates.** When pointed at an S-101 base cell
-> (`….000`), `render` and `info` discover sibling update files
-> (`….001`, `….002`, …) in the same directory and apply them in order
+> (`….000`), the single-dataset `render` and `info` discover sibling update
+> files (`….001`, `….002`, …) in the same directory and apply them in order
 > before processing the cell, mirroring how an exchange set is loaded
 > in the viewer. Application is best-effort: a missing, out-of-order, or
 > unreadable update is reported but never blocks the command. Pass
@@ -131,7 +197,9 @@ s100 render warnings.gml preview.webp                      # WebP preview
 
 Prints the detected specification, edition, whether the dataset supports
 headless rendering, and — for time-series datasets — the available time steps
-with their indices (use the index with `render --time-step`). For an S-101
+with their indices (use the index with `render --time-step`). For datasets
+whose portrayal catalogue declares display modes (e.g. S-411 sea-ice) it also
+lists the available `render --display-mode` tokens. For an S-101
 base cell, sibling sequential updates are applied first (see `--no-updates`)
 so the reported model reflects the up-to-date cell.
 
@@ -178,6 +246,27 @@ after suppression (warnings and info are reported but do not fail); pass
 Lists the supported product specifications and whether each supports the
 headless render path.
 
+### `s100 s57 convert -o <output> <source>`
+
+Converts an S-57 base cell (`.000`) to an S-101 dataset, writing an ISO/IEC 8211
+encoded `.000` file (S-100 Part 10a). The source is translated to an
+`S101Document` in memory with the same `S57ToS101Translator` the render/validate
+paths use, then encoded with `S101DocumentWriter`.
+
+```
+s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--output <path>` | _required_ | Path of the S-101 dataset file to write. |
+| `--debug` | off | Show a full stack trace on error. |
+
+The written dataset can be inspected with `s100 info`, validated with
+`s100 validate`, and rendered with `s100 render`. Conversion semantics (feature
+and attribute mapping, allowed-value enforcement) are owned by
+`S57ToS101Translator`; this command only drives it and encodes the result.
+
 ## Supported specifications
 
 | Family | Specs | Path |
@@ -203,7 +292,7 @@ headless render path.
 |---|---|
 | `0` | Success. |
 | `1` | Unhandled error (use `--debug` for a stack trace). |
-| `2` | Product specification could not be detected. |
+| `2` | Product specification could not be detected (single dataset), or no renderable datasets were discovered in an exchange set. |
 | `3` | The detected spec does not support headless rendering. |
 | `4` | The dataset is recognised but its shape or encoding is unsupported — e.g. a fixed-station coverage, or a data coding format the reader does not yet implement (such as dcf1, irregular time series at fixed stations). |
 | `5` | The dataset is recognised but non-conforming (a required attribute, dataset, or group is missing or malformed). |

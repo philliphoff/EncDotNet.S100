@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using System.Linq;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Features;
@@ -16,9 +17,9 @@ public class FeatureNamesTests
             Id = "f1",
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Attributes = (attributes ?? new Dictionary<string, string>()).ToImmutableDictionary(),
-            ComplexAttributes = (complex ?? []).ToImmutableArray(),
+            Points = [new GeoPosition(5.0, 5.0)],
+            Attributes = (attributes ?? new Dictionary<string, string>()).ToDictionary(),
+            ComplexAttributes = (complex ?? []).ToArray(),
         };
 
     [Fact]
@@ -45,9 +46,7 @@ public class FeatureNamesTests
             new S122ComplexAttribute
             {
                 Code = "featureName",
-                SubAttributes = ImmutableDictionary<string, string>.Empty
-                    .Add("name", "Harbour Entrance")
-                    .Add("displayName", "true"),
+                SubAttributes = new Dictionary<string, string> { ["name"] = "Harbour Entrance", ["displayName"] = "true" },
             },
         });
 
@@ -72,7 +71,7 @@ public class FeatureNamesTests
                 new S122ComplexAttribute
                 {
                     Code = "fixedDateRange",
-                    SubAttributes = ImmutableDictionary<string, string>.Empty.Add("name", "ignored"),
+                    SubAttributes = new Dictionary<string, string> { ["name"] = "ignored" },
                 },
             });
 

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines.Coverage;
 
@@ -93,9 +94,9 @@ public class CoveragePipelineTests
             });
         var mariner = new MarinerSettings
         {
-            SafetyContour = 30.0,
-            ShallowContour = 2.0,
-            DeepContour = 30.0,
+            SafetyContour = Depth.FromMetres(30.0),
+            ShallowContour = Depth.FromMetres(2.0),
+            DeepContour = Depth.FromMetres(30.0),
         };
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
 

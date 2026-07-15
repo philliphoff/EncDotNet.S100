@@ -96,7 +96,23 @@ public static class DisplayModeMembership
                 return;
             }
 
-            viewingGroups.SetActiveModeMembership(Resolve(catalogue, modeId));
+            var membership = Resolve(catalogue, modeId);
+
+            // A declared mode whose viewing-group layers reference only
+            // non-numeric viewing groups resolves to an empty integer set
+            // (e.g. S-411, whose sole viewing group id is the non-numeric
+            // "IceStandardViewingGroup"). An empty membership would otherwise
+            // hide every drawing instruction, which is never the authoring
+            // intent — such a mode selects a *portrayal* (a colour ramp fed to
+            // the rule engine via the display-mode id), not a viewing-group
+            // filter. Treat it as "no filter" so the mode still renders.
+            if (membership.Count == 0)
+            {
+                viewingGroups.SetActiveModeMembership(null);
+                return;
+            }
+
+            viewingGroups.SetActiveModeMembership(membership);
         };
 
         displayModes.Changed += handler;

@@ -1,3 +1,5 @@
+using EncDotNet.S100.Quantities;
+
 namespace EncDotNet.S100.Pipelines.Coverage;
 
 /// <summary>
@@ -5,8 +7,8 @@ namespace EncDotNet.S100.Pipelines.Coverage;
 /// </summary>
 public sealed class ContourStyle
 {
-    /// <summary>The depth value this contour represents, in metres.</summary>
-    public required float Depth { get; init; }
+    /// <summary>The depth value this contour represents.</summary>
+    public required Depth Depth { get; init; }
 
     /// <summary>Line width in display units.</summary>
     public required float LineWidth { get; init; }

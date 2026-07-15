@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 
@@ -226,9 +227,9 @@ internal static class AisStreamIoJson
             Timestamp = meta.Value.Timestamp,
             Latitude = lat.Value,
             Longitude = lon.Value,
-            CourseOverGroundDeg = cog,
-            HeadingDeg = hdg,
-            SpeedOverGroundKn = sog,
+            CourseOverGround = cog is { } c ? Angle.FromDegrees(c) : null,
+            Heading = hdg is { } h ? Angle.FromDegrees(h) : null,
+            SpeedOverGround = sog is { } s ? Speed.FromKnots(s) : null,
             RateOfTurnDegPerMin = rot,
             NavigationStatus = nav,
         };

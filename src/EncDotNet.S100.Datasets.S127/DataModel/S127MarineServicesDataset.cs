@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -52,13 +51,13 @@ public sealed class S127MarineServicesDataset
     /// shape (<see cref="S127PilotBoardingPlace"/> et al.) plus
     /// <see cref="S127Authority"/> and <see cref="S127OtherFeature"/>.
     /// </summary>
-    public required ImmutableArray<IS127Feature> Features { get; init; }
+    public required IReadOnlyList<IS127Feature> Features { get; init; }
 
     /// <summary>Convenience filter — every <see cref="S127Authority"/> in the dataset.</summary>
-    public required ImmutableArray<S127Authority> Authorities { get; init; }
+    public required IReadOnlyList<S127Authority> Authorities { get; init; }
 
     /// <summary>Convenience filter — every <see cref="S127OtherFeature"/> in the dataset.</summary>
-    public required ImmutableArray<S127OtherFeature> OtherFeatures { get; init; }
+    public required IReadOnlyList<S127OtherFeature> OtherFeatures { get; init; }
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S127Dataset Source { get; init; }
@@ -85,25 +84,18 @@ public sealed class S127MarineServicesDataset
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
-
-        var featureById = dataset.Features.IsDefaultOrEmpty
-            ? ImmutableDictionary<string, S127Feature>.Empty
-            : dataset.Features
-                .Where(f => !string.IsNullOrEmpty(f.Id))
-                .GroupBy(f => f.Id, StringComparer.OrdinalIgnoreCase)
-                .ToImmutableDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         // Pass 1: project every feature into a typed shape without binding
         // feature-to-feature references. We need every typed object to
         // exist before xlink resolution can hand back peers, so the
         // resolver is fed the typed objects after pass 1.
-        var pass1 = ImmutableArray.CreateBuilder<IS127Feature>(dataset.Features.IsDefaultOrEmpty ? 0 : dataset.Features.Length);
+        var pass1 = new List<IS127Feature>(dataset.Features.Count == 0 ? 0 : dataset.Features.Count);
         var emptyResolver = XlinkResolver.Build(Array.Empty<KeyValuePair<string, object>>());
         var preCtx = new ProjectionContext(emptyResolver);
 
-        if (!dataset.Features.IsDefaultOrEmpty)
+        if (dataset.Features.Count > 0)
         {
             foreach (var f in dataset.Features)
                 pass1.Add(Project(f, preCtx));
@@ -125,17 +117,17 @@ public sealed class S127MarineServicesDataset
         // diagnostics (xlink.unresolved) if the target is missing — the
         // raw FeatureReference list remains on the Source for callers
         // that need it.
-        var final = ImmutableArray.CreateBuilder<IS127Feature>(pass1.Count);
+        var final = new List<IS127Feature>(pass1.Count);
         foreach (var typed in pass1)
         {
             final.Add(BindReferences(typed, ctx));
         }
 
-        var features = final.ToImmutable();
-        var authorities = features.OfType<S127Authority>().ToImmutableArray();
-        var others = features.OfType<S127OtherFeature>().ToImmutableArray();
+        var features = final;
+        var authorities = features.OfType<S127Authority>().ToArray();
+        var others = features.OfType<S127OtherFeature>().ToArray();
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S127MarineServicesDataset
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
@@ -149,27 +141,27 @@ public sealed class S127MarineServicesDataset
 
     // ── Geometry ──────────────────────────────────────────────────────
 
-    private static (S127GeometryKind Kind, ImmutableArray<GeoPosition> Coords) ExtractGeometry(S127Feature f)
+    private static (S127GeometryKind Kind, IReadOnlyList<GeoPosition> Coords) ExtractGeometry(S127Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                if (f.Points.IsDefaultOrEmpty) return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
-                var pts = f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                if (f.Points.Count == 0) return (S127GeometryKind.None, []);
+                var pts = f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
                 return (S127GeometryKind.Point, pts);
             case S100GeometryType.Curve:
-                if (f.Curves.IsDefaultOrEmpty) return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                if (f.Curves.Count == 0) return (S127GeometryKind.None, []);
                 var curve = f.Curves
                     .SelectMany(c => c)
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
-                    .ToImmutableArray();
+                    .ToArray();
                 return (S127GeometryKind.Curve, curve);
             case S100GeometryType.Surface:
-                if (f.ExteriorRing.IsDefaultOrEmpty) return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
-                var ring = f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                if (f.ExteriorRing.Count == 0) return (S127GeometryKind.None, []);
+                var ring = f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
                 return (S127GeometryKind.Surface, ring);
             default:
-                return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                return (S127GeometryKind.None, []);
         }
     }
 
@@ -321,13 +313,13 @@ public sealed class S127MarineServicesDataset
     private static S127RegulatedArea BuildRegulatedArea(
         S127Feature f,
         S127GeometryKind kind,
-        ImmutableArray<GeoPosition> coords,
+        IReadOnlyList<GeoPosition> coords,
         S127RegulatedAreaKind areaKind,
         string? categoryAttr,
         ProjectionContext ctx)
     {
         int? code = null;
-        ImmutableDictionary<string, string> extras = f.Attributes;
+        IReadOnlyDictionary<string, string> extras = f.Attributes;
         if (categoryAttr is not null)
         {
             code = AttributeParser.TryParseInt(
@@ -445,7 +437,7 @@ public sealed class S127MarineServicesDataset
 
     private static IS127Feature? ResolveAuthority(S127Feature source, ProjectionContext ctx)
     {
-        if (source.FeatureReferences.IsDefaultOrEmpty) return null;
+        if (source.FeatureReferences.Count == 0) return null;
 
         foreach (var r in source.FeatureReferences)
         {

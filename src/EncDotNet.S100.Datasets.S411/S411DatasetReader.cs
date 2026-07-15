@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
@@ -106,7 +106,7 @@ internal static class S411DatasetReader
         string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         var issueDate = ParseIceIssueDate(root);
 
-        var features = ImmutableArray.CreateBuilder<S411Feature>();
+        var features = new List<S411Feature>();
 
         // Operational S-411 producers (e.g. the Canadian Ice Service) frequently
         // emit every feature with the same gml:id ("seaice.None"). The geometry
@@ -136,7 +136,7 @@ internal static class S411DatasetReader
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             IssueDate = issueDate,
-            Features = features.ToImmutable(),
+            Features = features,
             SourceDocument = doc,
         };
     }
@@ -162,7 +162,7 @@ internal static class S411DatasetReader
         var featureType = element.Name.LocalName;
 
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseInlineGmlGeometry(element);
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
+        var simple = new Dictionary<string, string>();
 
         foreach (var child in element.Elements())
         {
@@ -182,17 +182,17 @@ internal static class S411DatasetReader
             Curves = curves,
             ExteriorRing = exteriorRing,
             InteriorRings = interiorRings,
-            Attributes = simple.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S411ComplexAttribute>.Empty,
+            Attributes = simple,
+            ComplexAttributes = [],
         };
     }
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseInlineGmlGeometry(XElement element)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseInlineGmlGeometry(XElement element)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var polygon = element.Element(GmlNamespaces.Gml + "Polygon");
@@ -206,9 +206,9 @@ internal static class S411DatasetReader
         if (lineString is not null)
         {
             var coords = GmlCoordinateParser.ParseCurveCoordinates(lineString);
-            curves = coords.Length > 0
-                ? ImmutableArray.Create(coords)
-                : ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+            curves = coords.Count > 0
+                ? [coords]
+                : [];
             return (S100GeometryType.Curve, points, curves, exteriorRing, interiorRings);
         }
 
@@ -249,7 +249,7 @@ internal static class S411DatasetReader
                 issueDate = dt;
         }
 
-        var features = ImmutableArray.CreateBuilder<S411Feature>();
+        var features = new List<S411Feature>();
         foreach (var memberContainer in EnumerateMembers(root, datasetNs))
         {
             foreach (var element in memberContainer.Elements())
@@ -265,7 +265,7 @@ internal static class S411DatasetReader
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             IssueDate = issueDate,
-            Features = features.ToImmutable(),
+            Features = features,
             SourceDocument = doc,
         };
     }
@@ -323,12 +323,12 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -354,9 +354,9 @@ internal static class S411DatasetReader
         {
             geometryType = S100GeometryType.Curve;
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            curves = coords.Length > 0
-                ? ImmutableArray.Create(coords)
-                : ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+            curves = coords.Count > 0
+                ? [coords]
+                : [];
         }
 
         var surfaceProp = geometryContainer.Element(s100Ns + "surfaceProperty");
@@ -371,10 +371,10 @@ internal static class S411DatasetReader
         return (geometryType, points, curves, exteriorRing, interiorRings);
     }
 
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S411ComplexAttribute>) ParseGenericAttributes(XElement element, XNamespace s100Ns)
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S411ComplexAttribute>) ParseGenericAttributes(XElement element, XNamespace s100Ns)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S411ComplexAttribute>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S411ComplexAttribute>();
 
         foreach (var child in element.Elements())
         {
@@ -387,7 +387,7 @@ internal static class S411DatasetReader
 
             if (child.HasElements)
             {
-                var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
+                var subAttrs = new Dictionary<string, string>();
                 foreach (var sub in child.Elements())
                 {
                     if (!sub.HasElements && !string.IsNullOrEmpty(sub.Value))
@@ -400,7 +400,7 @@ internal static class S411DatasetReader
                     complex.Add(new S411ComplexAttribute
                     {
                         Code = localName,
-                        SubAttributes = subAttrs.ToImmutable(),
+                        SubAttributes = subAttrs,
                     });
                 }
             }
@@ -411,7 +411,7 @@ internal static class S411DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable());
+        return (simple, complex);
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)

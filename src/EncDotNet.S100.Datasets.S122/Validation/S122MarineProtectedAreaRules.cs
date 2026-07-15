@@ -75,7 +75,7 @@ public static class S122MarineProtectedAreaRules
                 {
                     if (feature.GeometryKind == S122GeometryKind.None)
                         continue;
-                    if (!feature.Coordinates.IsDefaultOrEmpty)
+                    if (feature.Coordinates.Count > 0)
                         continue;
 
                     findings.Add(new ValidationFinding
@@ -115,10 +115,10 @@ public static class S122MarineProtectedAreaRules
                 var findings = new List<ValidationFinding>();
                 foreach (var feature in dataset.Features)
                 {
-                    if (feature.Coordinates.IsDefaultOrEmpty)
+                    if (feature.Coordinates.Count == 0)
                         continue;
 
-                    for (int i = 0; i < feature.Coordinates.Length; i++)
+                    for (int i = 0; i < feature.Coordinates.Count; i++)
                     {
                         var pos = feature.Coordinates[i];
                         bool latOk = pos.Latitude is >= -90 and <= 90;
@@ -176,11 +176,11 @@ public static class S122MarineProtectedAreaRules
                 {
                     if (feature.GeometryKind != S122GeometryKind.Surface)
                         continue;
-                    if (feature.Coordinates.IsDefaultOrEmpty)
+                    if (feature.Coordinates.Count == 0)
                         continue;
 
                     var ring = feature.Coordinates;
-                    if (ring.Length < 4)
+                    if (ring.Count < 4)
                     {
                         findings.Add(new ValidationFinding
                         {
@@ -188,7 +188,7 @@ public static class S122MarineProtectedAreaRules
                             Severity = ValidationSeverity.Error,
                             Message =
                                 $"Feature '{feature.Id}' ({feature.FeatureType}) surface exterior ring " +
-                                $"has {ring.Length} coordinate(s); a closed ring requires at least 4.",
+                                $"has {ring.Count} coordinate(s); a closed ring requires at least 4.",
                             RelatedFeatureId = feature.Id,
                             DatasetId = dataset.DatasetIdentifier,
                         });
@@ -196,7 +196,7 @@ public static class S122MarineProtectedAreaRules
                     }
 
                     var first = ring[0];
-                    var last = ring[ring.Length - 1];
+                    var last = ring[ring.Count - 1];
                     if (Math.Abs(first.Latitude - last.Latitude) > ClosureToleranceDegrees
                         || Math.Abs(first.Longitude - last.Longitude) > ClosureToleranceDegrees)
                     {

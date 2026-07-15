@@ -138,12 +138,29 @@ internal interface IExchangeSetService
     /// <see langword="null"/>, the service surfaces its own notification for
     /// terminal/failure states.
     /// </param>
+    /// <param name="onFramingReady">
+    /// Optional callback invoked <em>once</em> as soon as the catalogue's
+    /// union bounding box is known — immediately after the catalogue (S-100)
+    /// or base cells (S-57) are parsed, and <em>before</em> any dataset has
+    /// finished loading. This lets the caller frame the viewport up front so
+    /// that incremental per-dataset paints land in the correctly-framed view
+    /// (issue #448). Not invoked when no dataset declares a bounding box
+    /// (e.g. loose-cell folders); callers should keep a debounce fallback for
+    /// that case. Invoked synchronously on whatever thread /
+    /// synchronization context the catalogue-parse continuation resumes on —
+    /// the caller's context, since the parse is awaited with
+    /// <c>ConfigureAwait(true)</c>. Callers that cannot guarantee that context
+    /// is the UI thread should marshal before touching view state. The same
+    /// bounding box is also returned on
+    /// <see cref="ExchangeSetOpenResult.UnionBoundingBox"/>.
+    /// </param>
     /// <returns>A summary that is always non-null (even on cancellation
     /// or fatal error).</returns>
     Task<ExchangeSetOpenResult> OpenAsync(
         string folderOrZipPath,
         IProgress<ExchangeSetProgress>? progress = null,
         CancellationToken cancellationToken = default,
-        INotificationHandle? notification = null);
+        INotificationHandle? notification = null,
+        Action<BoundingBox>? onFramingReady = null);
 }
 

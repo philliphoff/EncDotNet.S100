@@ -70,5 +70,5 @@ public static class SupportedSpecEditions
     /// through for informational display only.
     /// </summary>
     public static SpecVersionAssessment? Assess(SpecRef declared, CatalogueRef? catalogue = null)
-        => SpecVersionAssessment.Create(declared, For(declared.Name), catalogue);
+        => SpecVersionAssessment.TryCreate(declared, For(declared.Name), catalogue);
 }

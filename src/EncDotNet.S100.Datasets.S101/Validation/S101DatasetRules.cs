@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
@@ -533,8 +532,8 @@ public static class S101DatasetRules
         return (cmfX, cmfY);
     }
 
-    private static (double lat, double lon) ToLatLon(int y, int x, uint cmfY, uint cmfX)
-        => ((double)y / cmfY, (double)x / cmfX);
+    private static GeoPosition ToLatLon(int y, int x, uint cmfY, uint cmfX)
+        => new((double)y / cmfY, (double)x / cmfX);
 
     private static void EmitIfOutOfRange(
         List<ValidationFinding> sink, string? datasetId, string relatedId, string kind, double lat, double lon)

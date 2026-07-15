@@ -99,8 +99,8 @@ internal static class S131ContextParameterBindings
 {
     public static IReadOnlyList<LuaContextParameterBinding> Build() =>
     [
-        new("SafetyContour", m => m.SafetyContour, LuaValueSerializers.Number),
-        new("SafetyDepth", m => m.SafetyDepth, LuaValueSerializers.Number),
+        new("SafetyContour", m => m.SafetyContour.TotalMetres, LuaValueSerializers.Number),
+        new("SafetyDepth", m => m.SafetyDepth.TotalMetres, LuaValueSerializers.Number),
         new("TwoShades", m => !m.FourShades, LuaValueSerializers.Bool),
     ];
 }

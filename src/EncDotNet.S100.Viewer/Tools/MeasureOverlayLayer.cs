@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using System.Globalization;
 using EncDotNet.S100.Viewer.Geodesy;
@@ -81,7 +82,7 @@ internal static class MeasureOverlayLayer
         // Build the polyline(s) through finalised + rubber-band waypoints,
         // splitting at the antimeridian so e.g. Tokyo→Honolulu doesn't
         // smear across the whole world.
-        var allPoints = new List<(double Lat, double Lon)>(state.Waypoints);
+        var allPoints = new List<GeoPosition>(state.Waypoints);
         if (state.Phase == MeasurePathState.MeasurePhase.Drawing && state.RubberBand is { } rb)
             allPoints.Add(rb);
 
@@ -122,14 +123,14 @@ internal static class MeasureOverlayLayer
         // always sees a circle showing where the next click will land.
         if (state.Phase == MeasurePathState.MeasurePhase.Drawing && state.RubberBand is { } rbMarker)
         {
-            AddWaypointDisc(features, rbMarker.Lat, rbMarker.Lon, fillColor, borderColor);
+            AddWaypointDisc(features, rbMarker.Latitude, rbMarker.Longitude, fillColor, borderColor);
         }
 
         layer.Features = features;
         layer.DataHasChanged();
     }
 
-    private static void AddPolyline(List<IFeature> features, IReadOnlyList<(double Lat, double Lon)> points, bool dashed, MapsuiColor strokeColor)
+    private static void AddPolyline(List<IFeature> features, IReadOnlyList<GeoPosition> points, bool dashed, MapsuiColor strokeColor)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
         {
@@ -137,7 +138,7 @@ internal static class MeasureOverlayLayer
             var coords = new Coordinate[subPath.Count];
             for (int i = 0; i < subPath.Count; i++)
             {
-                var (mx, my) = SphericalMercator.FromLonLat(subPath[i].Lon, subPath[i].Lat);
+                var (mx, my) = SphericalMercator.FromLonLat(subPath[i].Longitude, subPath[i].Latitude);
                 coords[i] = new Coordinate(mx, my);
             }
             var line = new LineString(coords);

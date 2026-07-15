@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 
@@ -52,7 +51,7 @@ public sealed record SpecCapabilities(
     [property: Description("True when list_time_steps can enumerate time steps for this spec (time-varying coverage products only).")] bool CanListTimeSteps);
 
 /// <summary>Result of <see cref="ListSpecsTool"/>.</summary>
-public sealed record ListSpecsResult([property: Description("Per-spec summaries in catalog order, one entry per known spec.")] ImmutableArray<SpecSummary> Specs);
+public sealed record ListSpecsResult([property: Description("Per-spec summaries in catalog order, one entry per known spec.")] IReadOnlyList<SpecSummary> Specs);
 
 /// <summary>
 /// Returns the product specifications this MCP-tools assembly knows
@@ -153,7 +152,7 @@ public sealed class ListSpecsTool
         var names = new SortedSet<string>(KnownSpecs, StringComparer.Ordinal);
         foreach (var k in counts.Keys) names.Add(k);
 
-        var summaries = ImmutableArray.CreateBuilder<SpecSummary>(names.Count);
+        var summaries = new List<SpecSummary>(names.Count);
         foreach (var name in names)
         {
             counts.TryGetValue(name, out var loaded);
@@ -166,6 +165,6 @@ public sealed class ListSpecsTool
         }
 
         return Task.FromResult(ToolResult<ListSpecsResult>.Ok(
-            new ListSpecsResult(summaries.MoveToImmutable())));
+            new ListSpecsResult(summaries)));
     }
 }

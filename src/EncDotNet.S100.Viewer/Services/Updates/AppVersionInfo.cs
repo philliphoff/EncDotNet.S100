@@ -6,7 +6,7 @@ using System.Reflection;
 namespace EncDotNet.S100.Viewer.Services.Updates;
 
 /// <summary>
-/// Immutable description of the running application's version, surfaced by
+/// Read-only description of the running application's version, surfaced by
 /// the About dialog. Derived from assembly metadata so it always reflects
 /// the version injected at build time (<c>-p:Version=…</c>).
 /// </summary>

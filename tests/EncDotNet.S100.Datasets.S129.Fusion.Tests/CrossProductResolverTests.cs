@@ -13,7 +13,7 @@ public class CrossProductResolverTests
         Assert.Null(result.Bathymetry);
         Assert.Null(result.WaterLevel);
         Assert.Null(result.Route);
-        Assert.Equal(3, result.Unresolved.Length);
+        Assert.Equal(3, result.Unresolved.Count);
         Assert.All(result.Unresolved,
             u => Assert.Equal(S129ReferenceResolutionReason.DatasetNotProvided, u.Reason));
     }

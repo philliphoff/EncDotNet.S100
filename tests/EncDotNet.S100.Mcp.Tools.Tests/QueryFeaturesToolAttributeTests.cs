@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Features;
@@ -12,7 +12,7 @@ public class QueryFeaturesToolAttributeTests
 {
     private static S122Feature Feature(string id, string featureType, params (string Key, string Value)[] attributes)
     {
-        var builder = ImmutableDictionary.CreateBuilder<string, string>();
+        var builder = new Dictionary<string, string>();
         foreach (var (key, value) in attributes)
         {
             builder[key] = value;
@@ -23,12 +23,12 @@ public class QueryFeaturesToolAttributeTests
             Id = id,
             FeatureType = featureType,
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = builder.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S122ComplexAttribute>.Empty,
+            Points = [new GeoPosition(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = builder.ToDictionary(),
+            ComplexAttributes = [],
         };
     }
 
@@ -36,8 +36,8 @@ public class QueryFeaturesToolAttributeTests
     {
         var dataset = new S122Dataset
         {
-            Features = features.ToImmutableArray(),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = features.ToArray(),
+            InformationTypes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(new LoadedDataset(
@@ -61,8 +61,8 @@ public class QueryFeaturesToolAttributeTests
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             Box,
-            Attributes: ImmutableArray.Create(
-                new AttributePredicate("categoryOfMarineProtectedArea", AttributeOperator.Eq, "1"))));
+            Attributes: [
+                new AttributePredicate("categoryOfMarineProtectedArea", AttributeOperator.Eq, "1")]));
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -80,8 +80,8 @@ public class QueryFeaturesToolAttributeTests
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             Box,
-            Attributes: ImmutableArray.Create(
-                new AttributePredicate("valueOfDepth", AttributeOperator.Ge, "10"))));
+            Attributes: [
+                new AttributePredicate("valueOfDepth", AttributeOperator.Ge, "10")]));
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -99,12 +99,12 @@ public class QueryFeaturesToolAttributeTests
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             Box,
-            Attributes: ImmutableArray.Create(
-                new AttributePredicate("restriction", AttributeOperator.Exists, null))));
+            Attributes: [
+                new AttributePredicate("restriction", AttributeOperator.Exists, null)]));
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.TotalCount);
-        Assert.Equal(2, value.TypeBreakdown.Length);
+        Assert.Equal(2, value.TypeBreakdown.Count);
         Assert.Contains(value.TypeBreakdown, t => t.FeatureType == "MarineProtectedArea" && t.Count == 1);
         Assert.Contains(value.TypeBreakdown, t => t.FeatureType == "RestrictedAreaRegulatory" && t.Count == 1);
     }

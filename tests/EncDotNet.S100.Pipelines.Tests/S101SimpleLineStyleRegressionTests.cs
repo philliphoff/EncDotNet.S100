@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
@@ -66,13 +67,27 @@ public class S101SimpleLineStyleRegressionTests
         var cell = FindCell();
         Skip.If(cell is null, "No S-101 cell present.");
 
-        var keyNotFound = new List<string>();
+        var missingAssets = new List<string>();
         EventHandler<FirstChanceExceptionEventArgs> handler = (_, e) =>
         {
-            if (e.Exception is KeyNotFoundException knf)
+            // Scope detection to the #286 symptom specifically: the synthetic
+            // "_simple_" line-style sentinel being resolved against the
+            // catalogue. Matching only that sentinel (rather than any missing
+            // asset) keeps this process-global handler from observing
+            // deliberate missing-asset exceptions thrown by other tests running
+            // in parallel. The sentinel miss now surfaces as
+            // PortrayalAssetNotFoundException; KeyNotFoundException is still
+            // checked for any legacy lookup path.
+            var isSentinelMiss =
+                (e.Exception is PortrayalAssetNotFoundException pex &&
+                 string.Equals(pex.AssetName, LineInstruction.SimpleLineStyleReference, StringComparison.OrdinalIgnoreCase))
+                || (e.Exception is KeyNotFoundException &&
+                    e.Exception.Message.Contains(LineInstruction.SimpleLineStyleReference, StringComparison.OrdinalIgnoreCase));
+
+            if (isSentinelMiss)
             {
-                lock (keyNotFound)
-                    keyNotFound.Add(knf.Message);
+                lock (missingAssets)
+                    missingAssets.Add(e.Exception.Message);
             }
         };
 
@@ -89,8 +104,8 @@ public class S101SimpleLineStyleRegressionTests
         }
 
         Assert.True(
-            keyNotFound.Count == 0,
-            $"Building the S-101 vector portrayal raised {keyNotFound.Count} " +
-            $"KeyNotFoundException(s): {string.Join("; ", keyNotFound)}");
+            missingAssets.Count == 0,
+            $"Building the S-101 vector portrayal raised {missingAssets.Count} " +
+            $"missing-asset exception(s) for the '_simple_' sentinel: {string.Join("; ", missingAssets)}");
     }
 }

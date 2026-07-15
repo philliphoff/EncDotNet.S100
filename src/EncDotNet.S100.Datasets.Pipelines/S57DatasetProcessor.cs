@@ -44,6 +44,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
+    // ECDIS settings that hide nothing — used when a render context carries no
+    // explicit display state, so a standalone/headless render draws everything
+    // the catalogue can (Category.All maps to a null display mode). Mirrors
+    // S101DatasetProcessor.UnfilteredEcdisDisplay.
+    private static readonly EcdisDisplaySettings UnfilteredEcdisDisplay =
+        new() { Category = EcdisDisplayCategory.All };
+
     public SpecRef Spec => new("S-57", default);
 
     public S57DatasetProcessor(
@@ -186,7 +193,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
     private async Task<VectorPortrayalResult> BuildVectorPortrayalCoreAsync(RenderContext? context, CancellationToken cancellationToken)
     {
-        var mariner = MarinerSettings.Default;
+        var mariner = context?.Mariner ?? MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")
             ?? throw new InvalidOperationException(
@@ -198,6 +205,12 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         var paletteType = context?.Palette ?? PaletteType.Day;
         await s101Cat.SwitchPaletteAsync(paletteType, cancellationToken).ConfigureAwait(false);
         var palette = s101Cat.ActivePalette;
+
+        // Activate the ECDIS display-mode / category and write the hidden
+        // viewing-group overrides before portrayal. The catalogue's Spec.Name
+        // is "S-101" (the S-57 portrayal spec), so ApplyTo keys the S-101
+        // category mapping and default-hidden VGs correctly.
+        (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
         var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
         var featureSource = new S101FeatureXmlSource(_translatedDataset);
@@ -214,6 +227,27 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         var info = $"{_translatedDataset.DatasetName} (S-57 → S-101) — " +
                    $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
 
+        // Out-of-scale-band declutter. S-57 has no DataCoverage /
+        // minimumDisplayScale (S-101 FC §3.1.1); the equivalent cell scale
+        // band is the compilation scale denominator carried in the S-57 DSPM
+        // field (CSCL, S-57 Appendix B.1 §7.3.1.1).
+        //
+        // S-57 feeds this into the ungated whole-cell window
+        // (CellMinimumDisplayScale) only — NOT the per-feature line-work cap
+        // (OutOfBandMinDisplayScale / ApplyOutOfBandCap). The two mechanisms
+        // trigger at the same denominator, but they differ in placeholder:
+        // the whole-cell window (viewer MapsuiDatasetRenderer.ApplyCellScale
+        // Window) hides the cell AND draws its extent border when zoomed out,
+        // whereas the per-feature cap silently blanks every feature with no
+        // placeholder. Unlike S-101 — whose per-feature cap is driven by an
+        // optional, frequently-absent DataCoverage.minimumDisplayScale band —
+        // S-57's CSCL is always present, so applying it as a per-feature cap
+        // would blank the whole cell at any whole-cell-fit view (no border),
+        // which is both redundant with the whole-cell window and defeats a
+        // full-extent render. The mariner's IgnoreScaleMinimum override is
+        // therefore applied by the viewer against the ungated whole-cell value.
+        var cellMinimumDisplayScale = ResolveCellMinimumDisplayScale();
+
         return new VectorPortrayalResult
         {
             // S-57 is the legacy ENC fallback; treat the whole layer as
@@ -229,6 +263,10 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                     Instructions = prepared,
                     Plane = S98DisplayPlane.BaseChartOver,
                     WithinPlanePriority = 0,
+                    // The per-feature out-of-band cap is deliberately not
+                    // applied for S-57 (see above); the whole-cell window
+                    // handles zoom-out suppression with an extent border.
+                    ApplyOutOfBandCap = false,
                 },
             },
             Palette = palette,
@@ -242,7 +280,24 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
+            OutOfBandMinDisplayScale = null,
+            CellMinimumDisplayScale = cellMinimumDisplayScale,
         };
+    }
+
+    /// <summary>
+    /// Resolves this S-57 cell's coarsest intended display-scale denominator
+    /// from the compilation scale (CSCL) in the DSPM field (S-57 Appendix B.1
+    /// §7.3.1.1). This is the S-57 analogue of the S-101 <c>DataCoverage</c> /
+    /// <c>minimumDisplayScale</c> band (S-101 FC §3.1.1): the smallest scale
+    /// (largest denominator) at which the cell should remain drawn. Returns
+    /// <see langword="null"/> when the cell declares no usable compilation
+    /// scale, leaving the cell visible at every zoom (previous behaviour).
+    /// </summary>
+    private int? ResolveCellMinimumDisplayScale()
+    {
+        var compilationScale = _rawS57Document.DataSetParameters?.CompilationScale ?? 0;
+        return compilationScale > 0 ? compilationScale : (int?)null;
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef)
@@ -395,7 +450,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var mariner = MarinerSettings.Default;
+            var mariner = context?.Mariner ?? MarinerSettings.Default;
             var fc = _featureCatalogueManager.GetCatalogue("S-101")
                 ?? throw new InvalidOperationException(
                     "S-101 feature catalogue is required to render S-57 datasets but none was provided.");
@@ -403,6 +458,10 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             var s101Cat = _catalogue;
             await s101Cat.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
             var palette = s101Cat.ActivePalette;
+
+            // Honor the ECDIS display state (category + hidden VGs) before
+            // portrayal, keyed on the S-101 portrayal spec — see the core path.
+            (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
             var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
             var featureSource = new S101FeatureXmlSource(_translatedDataset);

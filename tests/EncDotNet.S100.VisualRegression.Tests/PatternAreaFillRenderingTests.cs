@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
@@ -172,16 +173,16 @@ public sealed class PatternAreaFillRenderingTests
         DrawingPriority = priority,
     };
 
-    private static IReadOnlyList<(double Lat, double Lon)> SquareRing(
+    private static IReadOnlyList<GeoPosition> SquareRing(
         double lon, double lat, double halfLon, double halfLat)
     {
         return
         [
-            (lat - halfLat, lon - halfLon),
-            (lat - halfLat, lon + halfLon),
-            (lat + halfLat, lon + halfLon),
-            (lat + halfLat, lon - halfLon),
-            (lat - halfLat, lon - halfLon),
+            new GeoPosition(lat - halfLat, lon - halfLon),
+            new GeoPosition(lat - halfLat, lon + halfLon),
+            new GeoPosition(lat + halfLat, lon + halfLon),
+            new GeoPosition(lat + halfLat, lon - halfLon),
+            new GeoPosition(lat - halfLat, lon - halfLon),
         ];
     }
 
@@ -241,7 +242,7 @@ public sealed class PatternAreaFillRenderingTests
     {
         private readonly Dictionary<string, FeatureGeometry> _features = new();
 
-        public void Add(string id, IReadOnlyList<(double Lat, double Lon)> ring)
+        public void Add(string id, IReadOnlyList<GeoPosition> ring)
         {
             _features[id] = new FeatureGeometry
             {

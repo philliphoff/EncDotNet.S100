@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -46,7 +47,7 @@ public class MapsuiRenderAssetCacheTests
                 ? new FeatureGeometry
                 {
                     Type = GeometryType.Point,
-                    Coordinates = new[] { (Latitude: 0.0, Longitude: 0.0) },
+                    Coordinates = new[] { new GeoPosition(0.0, 0.0) },
                 }
                 : null;
     }

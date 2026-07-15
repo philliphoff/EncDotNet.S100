@@ -621,7 +621,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
                 background: background ?? new RgbaColor(255, 255, 255, 255),
                 areaFillProvider: name => prewarm.ResolveAreaFill(name),
                 hiddenCategories: context?.HiddenInstructionCategories
-                    ?? DrawingInstructionCategory.None);
+                    ?? DrawingInstructionCategory.None,
+                basemap: context?.Basemap ?? BasemapKind.None);
         }
         finally
         {
@@ -728,9 +729,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // Mapsui renderer multiplies into a maximum visible resolution and
         // clamps onto the line-work styles. Honour the mariner's
         // IgnoreScaleMinimum override (disables the cap, consistent with SCAMIN).
+        var cellMinimumDisplayScale = ResolveOutOfBandMinDisplayScale(_featureIndex.Values);
         var outOfBandMinDisplayScale = mariner.IgnoreScaleMinimum
             ? (int?)null
-            : ResolveOutOfBandMinDisplayScale(_featureIndex.Values);
+            : cellMinimumDisplayScale;
 
         Console.WriteLine($"[S101-Lua] Prepared {areaInstructions.Count} area + {otherInstructions.Count} non-area instructions");
 
@@ -784,6 +786,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             LayerNames = new[] { "s101.areas", "s101.linework" },
             FeatureTags = featureTags,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
+            CellMinimumDisplayScale = cellMinimumDisplayScale,
         };
     }
 
@@ -837,10 +840,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var c = System.Globalization.CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
         sb.Append("m:");
-        sb.Append(mariner.SafetyContour.ToString(c)).Append('|');
-        sb.Append(mariner.SafetyDepth.ToString(c)).Append('|');
-        sb.Append(mariner.ShallowContour.ToString(c)).Append('|');
-        sb.Append(mariner.DeepContour.ToString(c)).Append('|');
+        sb.Append(mariner.SafetyContour.TotalMetres.ToString(c)).Append('|');
+        sb.Append(mariner.SafetyDepth.TotalMetres.ToString(c)).Append('|');
+        sb.Append(mariner.ShallowContour.TotalMetres.ToString(c)).Append('|');
+        sb.Append(mariner.DeepContour.TotalMetres.ToString(c)).Append('|');
         sb.Append((int)mariner.DepthUnit).Append('|');
         sb.Append(mariner.FourShades ? '1' : '0');
         sb.Append(mariner.ShallowWaterDangers ? '1' : '0');

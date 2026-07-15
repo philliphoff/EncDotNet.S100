@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// and text ops. Antimeridian crossing and Web-Mercator pole limits are out
 /// of scope.</para>
 /// </remarks>
-public sealed class SkiaDisplayListRenderer
+public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 {
     /// <summary>Background colour cleared before painting. Defaults to transparent.</summary>
     public RgbaColor Background { get; set; } = RgbaColor.Transparent;
@@ -41,6 +41,26 @@ public sealed class SkiaDisplayListRenderer
     /// wrongly cull scale-ranged detail.
     /// </summary>
     public bool HonorScaleVisibility { get; set; } = true;
+
+    /// <summary>
+    /// Whether to apply the antimeridian seam-wrap in <see cref="WorldToScreen"/>
+    /// (wrapping each op's world-X into the viewport's shifted longitude window
+    /// when <c>MaxLongitude &gt; 180</c> or <c>MinLongitude &lt; −180</c>).
+    /// Defaults to <see langword="true"/> so the headless single-viewport
+    /// auto-fit path (issue #413) can gather geometry across the ±180° seam.
+    /// <para>
+    /// The <b>tiled</b> subsystem sets this to <see langword="false"/>: it
+    /// rasterises each tile from a narrow per-tile viewport over geometry that is
+    /// already positioned in a <i>continuous</i> EPSG:3857 X frame (longitudes
+    /// may exceed +180° without wrapping). Under a per-tile window whose bounds
+    /// both lie east of +180°, the seam-wrap would teleport the far vertices of
+    /// large polygons that extend west of the tile back across the world,
+    /// smearing them across the tile. Disabling the wrap keeps continuous
+    /// geometry continuous; off-tile vertices simply project outside the tile
+    /// and are clipped.
+    /// </para>
+    /// </summary>
+    public bool EnableSeamWrap { get; set; } = true;
 
     /// <summary>
     /// Process-wide cache of parsed symbol pictures keyed by the resolved SVG
@@ -225,6 +245,18 @@ public sealed class SkiaDisplayListRenderer
         => RenderOnto(canvas, scene, viewport, pointCullBounds: null);
 
     /// <summary>
+    /// Draws <paramref name="scene"/> onto <paramref name="surface"/> for the
+    /// pluggable <see cref="IVectorSceneRenderer{TSurface}"/> seam. Delegates to
+    /// <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>; the canvas is
+    /// neither cleared nor flushed.
+    /// </summary>
+    /// <param name="surface">The destination canvas.</param>
+    /// <param name="scene">The display list to draw, in Part 9 draw order.</param>
+    /// <param name="viewport">The viewport whose projection places the ops.</param>
+    void IVectorSceneRenderer<SKCanvas>.Render(SKCanvas surface, VectorScene scene, Viewport viewport)
+        => RenderOnto(surface, scene, viewport);
+
+    /// <summary>
     /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>, but culls
     /// point and point-anchored text ops whose projected anchor falls outside
     /// <paramref name="pointCullBounds"/> (in viewport pixel space) before any
@@ -271,7 +303,7 @@ public sealed class SkiaDisplayListRenderer
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(options);
 
-        var transform = WorldToScreen.Create(viewport);
+        var transform = WorldToScreen.Create(viewport, EnableSeamWrap);
         double denom = viewport.ScaleDenominator;
 
         var cullBounds = options.PointCullBounds ?? new SKRect(
@@ -866,42 +898,3 @@ public sealed class SkiaDisplayListRenderer
     }
 }
 
-/// <summary>
-/// A linear EPSG:3857-world → screen-pixel affine derived from a
-/// <see cref="Viewport"/>. The viewport's geographic bounds are projected to
-/// EPSG:3857 and mapped to the pixel rectangle (origin top-left, +Y down).
-/// </summary>
-internal readonly struct WorldToScreen
-{
-    private readonly double _minX;
-    private readonly double _maxY;
-    private readonly double _scaleX;
-    private readonly double _scaleY;
-
-    private WorldToScreen(double minX, double maxY, double scaleX, double scaleY)
-    {
-        _minX = minX;
-        _maxY = maxY;
-        _scaleX = scaleX;
-        _scaleY = scaleY;
-    }
-
-    public static WorldToScreen Create(Viewport viewport)
-    {
-        var (minX, minY) = WebMercator.FromLonLat(viewport.MinLongitude, viewport.MinLatitude);
-        var (maxX, maxY) = WebMercator.FromLonLat(viewport.MaxLongitude, viewport.MaxLatitude);
-
-        double spanX = maxX - minX;
-        double spanY = maxY - minY;
-        double scaleX = spanX != 0 ? viewport.WidthPixels / spanX : 0;
-        double scaleY = spanY != 0 ? viewport.HeightPixels / spanY : 0;
-        return new WorldToScreen(minX, maxY, scaleX, scaleY);
-    }
-
-    public (float X, float Y) Project((double X, double Y) world)
-    {
-        float sx = (float)((world.X - _minX) * _scaleX);
-        float sy = (float)((_maxY - world.Y) * _scaleY);
-        return (sx, sy);
-    }
-}

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
@@ -50,7 +49,7 @@ public sealed class S421Waypoint
     public S421Leg? IncomingLeg { get; internal set; }
 
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }
 
 /// <summary>
@@ -63,7 +62,7 @@ public sealed class S421Leg
     public required string Id { get; init; }
 
     /// <summary>The leg's curve geometry as an ordered sequence of positions.</summary>
-    public required ImmutableArray<GeoPosition> Coordinates { get; init; }
+    public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>
     /// The waypoint at the start of this leg — the waypoint whose
@@ -140,5 +139,5 @@ public sealed class S421Leg
     public string? Note { get; init; }
 
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }

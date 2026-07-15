@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
 
@@ -8,14 +8,14 @@ internal static class S124Synth
 {
     public static S124Dataset Dataset(params S124Feature[] features) => new()
     {
-        Features = features.ToImmutableArray(),
-        InformationTypes = ImmutableArray<S124InformationType>.Empty,
+        Features = features.ToArray(),
+        InformationTypes = [],
     };
 
     public static S124Dataset Dataset(IEnumerable<S124Feature> features, IEnumerable<S124InformationType> infos) => new()
     {
-        Features = features.ToImmutableArray(),
-        InformationTypes = infos.ToImmutableArray(),
+        Features = features.ToArray(),
+        InformationTypes = infos.ToArray(),
     };
 
     public static S124Feature Feature(
@@ -30,9 +30,9 @@ internal static class S124Synth
             Id = id,
             FeatureType = featureType,
             GeometryType = S100GeometryType.Point,
-            Attributes = (attributes ?? new Dictionary<string, string>()).ToImmutableDictionary(),
-            ComplexAttributes = (complex ?? []).ToImmutableArray(),
-            References = (references ?? []).ToImmutableArray(),
+            Attributes = (attributes ?? new Dictionary<string, string>()).ToDictionary(),
+            ComplexAttributes = (complex ?? []).ToArray(),
+            References = (references ?? []).ToArray(),
         };
     }
 
@@ -40,8 +40,8 @@ internal static class S124Synth
     {
         Id = id,
         TypeCode = typeCode,
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
     public static GmlReference Ref(string role, string href) => new()
@@ -53,6 +53,6 @@ internal static class S124Synth
     public static S124ComplexAttribute Complex(string code, IDictionary<string, string> sub) => new()
     {
         Code = code,
-        SubAttributes = sub.ToImmutableDictionary(),
+        SubAttributes = sub.ToDictionary(),
     };
 }

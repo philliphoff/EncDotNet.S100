@@ -97,6 +97,60 @@ public sealed class DatasetDiscoveryMetadata
     public DateOnly? MetadataDateStamp { get; init; }
 
     public bool? ReplaceData { get; set; }
+    /// <summary>
+    /// The most-permissive coarsest display-scale denominator across all
+    /// <see cref="DataCoverages"/> — the <em>largest</em>
+    /// <see cref="DataCoverage.MinimumDisplayScale"/> present — or
+    /// <see langword="null"/> when no coverage declares one.
+    /// </summary>
+    /// <remarks>
+    /// This is the most zoomed-out edge of the cell's intended scale band
+    /// (S-100 Part 17; S-101 FC §3.1.1 <c>DataCoverage.minimumDisplayScale</c>).
+    /// The maximum is taken so detail remains visible wherever <em>any</em>
+    /// coverage region still permits it, matching the S-101 in-file
+    /// out-of-scale-band resolution. Drives the hole-safe per-cell zoom-out
+    /// visibility window (issue #438).
+    /// </remarks>
+    public int? ResolveMinimumDisplayScale()
+    {
+        int? result = null;
+        foreach (var coverage in DataCoverages)
+        {
+            if (coverage.MinimumDisplayScale is not int value || value <= 0)
+                continue;
+            result = result is null ? value : Math.Max(result.Value, value);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// The most-permissive finest display-scale denominator across all
+    /// <see cref="DataCoverages"/> — the <em>smallest</em>
+    /// <see cref="DataCoverage.MaximumDisplayScale"/> present — or
+    /// <see langword="null"/> when no coverage declares one.
+    /// </summary>
+    /// <remarks>
+    /// This is the most zoomed-in edge of the cell's intended scale band
+    /// (S-100 Part 17; S-101 FC §3.1.1 <c>DataCoverage.maximumDisplayScale</c>).
+    /// Carried for completeness; the zoom-in cutoff it would drive is deferred
+    /// to the coverage-clipping work (issue #438 Phase 2) because a naive
+    /// whole-cell cutoff would leave holes outside finer cells' footprints.
+    /// </remarks>
+    public int? ResolveMaximumDisplayScale()
+    {
+        int? result = null;
+        foreach (var coverage in DataCoverages)
+        {
+            if (coverage.MaximumDisplayScale is not int value || value <= 0)
+                continue;
+            result = result is null ? value : Math.Min(result.Value, value);
+        }
+
+        return result;
+    }
+
+    public string? DefaultLocaleLanguage { get; init; }
 
     public string? DataReplacement { get; init; }
 

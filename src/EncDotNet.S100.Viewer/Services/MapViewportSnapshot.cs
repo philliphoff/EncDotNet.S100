@@ -1,7 +1,7 @@
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Immutable lat/lon (EPSG:4326) bounding box of the map's current
+/// Read-only lat/lon (EPSG:4326) bounding box of the map's current
 /// viewport. Published by <see cref="IMapViewportNotifier"/> on every
 /// viewport change so subscribers can reason about the visible area
 /// in geographic coordinates without depending on Mapsui types.

@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed record RenderStyleStat(string Style, long Calls, double DurationMs);
 
 /// <summary>
-/// Immutable snapshot of the most recently completed map paint on the
+/// Read-only snapshot of the most recently completed map paint on the
 /// live compositor render thread.
 /// </summary>
 /// <remarks>
@@ -182,7 +182,7 @@ internal interface IRenderActivitySink
     /// </summary>
     /// <param name="frameDurationMs">Wall-clock duration of the paint, in milliseconds.</param>
     /// <param name="styles">
-    /// Immutable per-style breakdown for the paint. The caller must pass
+    /// Read-only per-style breakdown for the paint. The caller must pass
     /// a fresh list the monitor can retain; the monitor does not copy it.
     /// </param>
     void NotifyPaint(double frameDurationMs, IReadOnlyList<RenderStyleStat> styles);

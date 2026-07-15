@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
@@ -63,7 +62,7 @@ public sealed record NearestFeatureMatch(
 /// <param name="Truncated"><c>true</c> when more features were in range than were returned.</param>
 public sealed record NearestFeaturesResult(
     [property: Description("The echoed query point.")] GeoPoint Point,
-    [property: Description("Ranked matches, nearest first (distance ascending; ties broken by feature type then id).")] ImmutableArray<NearestFeatureMatch> Features,
+    [property: Description("Ranked matches, nearest first (distance ascending; ties broken by feature type then id).")] IReadOnlyList<NearestFeatureMatch> Features,
     [property: Description("Total number of features within range before applying limit.")] int TotalMatched,
     [property: Description("True when more features were in range than were returned.")] bool Truncated);
 
@@ -212,7 +211,7 @@ public sealed class NearestFeaturesTool
 
         var total = hits.Count;
         var take = Math.Min(limit, total);
-        var builder = ImmutableArray.CreateBuilder<NearestFeatureMatch>(take);
+        var builder = new List<NearestFeatureMatch>(take);
         for (var i = 0; i < take; i++)
         {
             builder.Add(hits[i]);
@@ -221,7 +220,7 @@ public sealed class NearestFeaturesTool
         return Task.FromResult(ToolResult<NearestFeaturesResult>.Ok(
             new NearestFeaturesResult(
                 point,
-                builder.MoveToImmutable(),
+                builder,
                 total,
                 take < total)));
     }

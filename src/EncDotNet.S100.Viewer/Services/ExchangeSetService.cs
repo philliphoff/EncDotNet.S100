@@ -74,7 +74,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         string folderOrZipPath,
         IProgress<ExchangeSetProgress>? progress = null,
         CancellationToken cancellationToken = default,
-        INotificationHandle? notification = null)
+        INotificationHandle? notification = null,
+        Action<BoundingBox>? onFramingReady = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(folderOrZipPath);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -86,7 +87,18 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         // own loader. S-100 sets fall through to the logic below.
         if (ExchangeSetDetection.LooksLikeS57ExchangeSet(folderOrZipPath))
         {
-            return await OpenS57Async(folderOrZipPath, progress, cancellationToken, notification)
+            return await OpenS57Async(folderOrZipPath, progress, cancellationToken, notification, onFramingReady)
+                .ConfigureAwait(true);
+        }
+
+        // A catalogue-less folder of loose ENC cells (a base ….000 plus its
+        // sequential updates, with no CATALOG.XML/CATALOG.031) is not an
+        // exchange set but is still loadable: scan for base cells and apply
+        // their in-folder updates. S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+        if (ExchangeSetDetection.LooksLikeLooseCellFolder(folderOrZipPath))
+        {
+            return await OpenLooseCellFolderAsync(
+                    folderOrZipPath, progress, cancellationToken, notification)
                 .ConfigureAwait(true);
         }
 
@@ -94,6 +106,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         // s100.viewer.command span the caller (MainWindow) opened.
         using var activity = Telemetry.ActivitySource.StartActivity(
             "s100.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var openStart = System.Diagnostics.Stopwatch.GetTimestamp();
         var sourceKind = ResolveSourceKind(folderOrZipPath);
         activity?.SetTag("s100.exchangeset.source.kind", sourceKind);
         activity?.SetTag("s100.exchangeset.source.path", folderOrZipPath);
@@ -105,7 +118,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             source = OpenSource(folderOrZipPath);
             try
             {
-                exchangeSet = await ExchangeSet.OpenAsync(source, "CATALOG.XML", cancellationToken)
+                // Most producers use the canonical CATALOG.XML (S-100
+                // Part 17), but some — notably JCOMM/IHO S-411 sample
+                // sets — name it catalogue.xml. Resolve the actual name
+                // so the asset source opens the right entry.
+                var catalogueName = ResolveCatalogueName(folderOrZipPath);
+                exchangeSet = await ExchangeSet.OpenAsync(source, catalogueName, cancellationToken)
                     .ConfigureAwait(true);
             }
             catch (FileNotFoundException)
@@ -155,6 +173,19 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             activity?.SetTag("s100.exchangeset.plan.count", plan.Count);
 
             progress?.Report(new ExchangeSetProgress(folderOrZipPath, plan.Count, 0, 0, null));
+
+            // Frame the viewport as soon as the union bounding box is known —
+            // before any dataset finishes loading — so incremental per-dataset
+            // paints land in the correctly-framed view rather than off-screen
+            // (issue #448). The same value is returned below on the result, so
+            // the caller can skip the redundant end-of-load reframe.
+            var unionBoundingBox = ComputeUnionBoundingBox(datasets);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+            {
+                var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(openStart).TotalMilliseconds;
+                activity?.SetTag("s100.exchangeset.framing.emitted_ms", elapsedMs);
+                onFramingReady(framingBox);
+            }
 
             var assetSource = exchangeSet.Source;
             var catalogue = exchangeSet.Catalogue;
@@ -219,7 +250,10 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 }
 
                 var spec = DatasetPipelineFactory.MapProductSpecificationToSpec(
-                    metadata.ProductSpecification);
+                    metadata.ProductSpecification)
+                    ?? await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(
+                        tracked.Source, relativePath, cancellationToken)
+                        .ConfigureAwait(true);
                 if (spec is null)
                 {
                     var msg = string.Format(
@@ -248,7 +282,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     relativePath,
                     spec,
                     displayName: Path.GetFileName(relativePath),
-                    updateRelativePaths: updateRelativePaths);
+                    updateRelativePaths: updateRelativePaths,
+                    minimumDisplayScale: metadata.ResolveMinimumDisplayScale(),
+                    maximumDisplayScale: metadata.ResolveMaximumDisplayScale());
                 tracked.Entries.Add(entry);
                 loadTasks.Add(_datasets.RequestLoadAsync(entry));
                 dispatched++;
@@ -351,7 +387,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 SkippedUnsupported = skipped,
                 Cancelled = cancelled,
                 SkipMessages = skipMessages,
-                UnionBoundingBox = ComputeUnionBoundingBox(datasets),
+                UnionBoundingBox = unionBoundingBox,
                 PendingTerminal = pendingTerminal,
             };
         }
@@ -396,10 +432,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         string folderOrCataloguePath,
         IProgress<ExchangeSetProgress>? progress,
         CancellationToken cancellationToken,
-        INotificationHandle? notification)
+        INotificationHandle? notification,
+        Action<BoundingBox>? onFramingReady = null)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(
             "s57.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var openStart = System.Diagnostics.Stopwatch.GetTimestamp();
         activity?.SetTag("s57.exchangeset.source.path", folderOrCataloguePath);
 
         IAssetSource? source = null;
@@ -444,6 +482,18 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             progress?.Report(new ExchangeSetProgress(folderOrCataloguePath, cells.Count, 0, 0, null));
 
+            // Frame the viewport up front from the cell union — mirrors the
+            // S-100 path so early per-cell paints land in the correctly-framed
+            // view (issue #448). Reused on the result below to let the caller
+            // skip the redundant end-of-load reframe.
+            var unionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+            {
+                var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(openStart).TotalMilliseconds;
+                activity?.SetTag("s57.exchangeset.framing.emitted_ms", elapsedMs);
+                onFramingReady(framingBox);
+            }
+
             source = FileSystemAssetSource.Create(root);
             var tracked = new TrackedExchangeSet(
                 folderOrCataloguePath,
@@ -473,7 +523,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                IReadOnlyList<string> updateRelativePaths = cell.UpdateRelativePaths.IsDefaultOrEmpty
+                IReadOnlyList<string> updateRelativePaths = cell.UpdateRelativePaths.Count == 0
                     ? Array.Empty<string>()
                     : cell.UpdateRelativePaths;
 
@@ -538,7 +588,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 SkippedUnsupported = 0,
                 Cancelled = false,
                 SkipMessages = Array.Empty<string>(),
-                UnionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells),
+                UnionBoundingBox = unionBoundingBox,
                 PendingTerminal = pendingTerminal,
             };
         }
@@ -561,6 +611,194 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             return new ExchangeSetOpenResult
             {
                 SourcePath = folderOrCataloguePath,
+                FailureMessage = ex.Message,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Opens a catalogue-less folder of loose ENC cells. Each top-level
+    /// base cell (<c>….000</c>) is dispatched with its sibling sequential
+    /// updates (<c>….001</c>, <c>….002</c>, …) applied, mirroring a single
+    /// dropped <c>.000</c> so a folder-of-cells and a lone cell behave
+    /// consistently. Cells are told apart as S-57 vs S-101 by the same
+    /// content sniff the single-file loader uses
+    /// (<see cref="DatasetPipelineFactory.DetectProductSpec"/>); a
+    /// <see cref="FileSystemAssetSource"/> rooted at the folder backs every
+    /// entry and its updates. S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+    /// </summary>
+    private async Task<ExchangeSetOpenResult> OpenLooseCellFolderAsync(
+        string folderPath,
+        IProgress<ExchangeSetProgress>? progress,
+        CancellationToken cancellationToken,
+        INotificationHandle? notification)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "loosecells.folder.open", System.Diagnostics.ActivityKind.Internal);
+        activity?.SetTag("loosecells.source.path", folderPath);
+
+        IAssetSource? source = null;
+        try
+        {
+            var baseCells = ExchangeSetDetection.EnumerateLooseBaseCells(folderPath);
+            activity?.SetTag("loosecells.cell.count", baseCells.Count);
+
+            if (baseCells.Count == 0)
+            {
+                var emptyMsg = string.Format(
+                    Strings.Status_LooseCellFolderNoCells, folderPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = emptyMsg,
+                };
+            }
+
+            progress?.Report(new ExchangeSetProgress(folderPath, baseCells.Count, 0, 0, null));
+
+            source = FileSystemAssetSource.Create(folderPath);
+            var tracked = new TrackedExchangeSet(
+                folderPath,
+                source,
+                owner: source,
+                verifier: null);
+            _tracked.Add(tracked);
+            // Lifetime ownership has transferred to the tracked entry; do not
+            // dispose `source` directly below.
+            source = null;
+
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                tracked.Source,
+                folderPath,
+                producer: null,
+                issueDate: null,
+                baseCells.Count,
+                closeAction: CloseExchangeSetFromHeader);
+
+            var dispatched = 0;
+            var completedLoads = 0;
+            var loadTasks = new List<Task>();
+            foreach (var baseCell in baseCells)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var spec = DatasetPipelineFactory.DetectProductSpec(baseCell);
+                if (spec is null) continue;
+
+                // Discover the sibling updates on disk and pass them as
+                // folder-relative names so they resolve through the same
+                // FileSystemAssetSource as the base cell.
+                var updateRelativePaths = S101FilesystemUpdateDiscovery
+                    .FindSequentialUpdates(baseCell)
+                    .Select(Path.GetFileName)
+                    .OfType<string>()
+                    .ToList();
+
+                var entry = _datasets.AddFromExchangeSet(
+                    tracked.Source,
+                    Path.GetFileName(baseCell),
+                    spec,
+                    displayName: Path.GetFileName(baseCell),
+                    updateRelativePaths: updateRelativePaths);
+                tracked.Entries.Add(entry);
+                loadTasks.Add(_datasets.RequestLoadAsync(entry));
+                dispatched++;
+            }
+
+            // Report progress on actual load completions rather than dispatch
+            // (see the S-100 path for rationale).
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderPath, baseCells.Count, done, 0, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            // Every base cell failed the content sniff (e.g. not actually an
+            // ENC .000) — release the tracked source so the folder handle is
+            // not leaked, and surface a warning instead of an empty group.
+            if (dispatched == 0)
+            {
+                if (tracked.Header is { } orphanHeader)
+                {
+                    _datasets.RemoveExchangeSetHeader(orphanHeader);
+                    tracked.Header = null;
+                }
+                tracked.Owner.Dispose();
+                _tracked.Remove(tracked);
+
+                var noneMsg = string.Format(
+                    Strings.Status_LooseCellFolderNoCells, folderPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, noneMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no loadable cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = noneMsg,
+                };
+            }
+
+            var loadedMsg = string.Format(
+                Strings.Status_ExchangeSetLoaded, dispatched,
+                Notifications.NotificationFormat.ShortenPath(folderPath));
+            var pendingTerminal = new ExchangeSetTerminalInfo(
+                NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
+
+            activity?.SetTag("loosecells.dataset.loaded", dispatched);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = 0;
+            }
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                Total = baseCells.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = 0,
+                Cancelled = false,
+                SkipMessages = Array.Empty<string>(),
+                // Loose cells carry no catalogue bounding box; the drop
+                // handler frames them by unioning loaded layer extents.
+                UnionBoundingBox = null,
+                PendingTerminal = pendingTerminal,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                Cancelled = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderPath, ex.Message);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
                 FailureMessage = ex.Message,
             };
         }
@@ -625,6 +863,28 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         }
         throw new FileNotFoundException(
             $"Exchange set source not found or not a folder/.zip: {path}", path);
+    }
+
+    /// <summary>
+    /// Resolves the relative catalogue name to open within the source at
+    /// <paramref name="path"/>. Folders and ZIP archives may use the
+    /// canonical <c>CATALOG.XML</c> or the S-411 <c>catalogue.xml</c>
+    /// spelling; the discovered name (preserving casing) is returned so
+    /// the asset source opens the correct entry. Falls back to
+    /// <c>CATALOG.XML</c> when nothing is found, letting the subsequent
+    /// open surface the standard "catalogue not found" message.
+    /// </summary>
+    private static string ResolveCatalogueName(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            return ExchangeSetDetection.ResolveFolderCatalogueName(path) ?? "CATALOG.XML";
+        }
+        if (ExchangeSetDetection.IsZipPath(path))
+        {
+            return ExchangeSetDetection.ResolveZipCatalogueEntry(path) ?? "CATALOG.XML";
+        }
+        return "CATALOG.XML";
     }
 
     private void EnsureCollectionSubscription()

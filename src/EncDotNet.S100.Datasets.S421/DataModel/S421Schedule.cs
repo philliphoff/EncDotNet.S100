@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
 
@@ -32,10 +31,10 @@ public sealed class S421Schedule
     public string? Name { get; init; }
 
     /// <summary>The schedule variants present on this schedule.</summary>
-    public required ImmutableArray<S421ScheduleVariant> Variants { get; init; }
+    public required IReadOnlyList<S421ScheduleVariant> Variants { get; init; }
 
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }
 
 /// <summary>
@@ -55,7 +54,7 @@ public sealed class S421ScheduleVariant
     public required S421ScheduleVariantKind Kind { get; init; }
 
     /// <summary>The schedule elements, each addressing one waypoint.</summary>
-    public required ImmutableArray<S421ScheduleElement> Elements { get; init; }
+    public required IReadOnlyList<S421ScheduleElement> Elements { get; init; }
 }
 
 /// <summary>
@@ -96,5 +95,5 @@ public sealed class S421ScheduleElement
     public string? Note { get; init; }
 
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }

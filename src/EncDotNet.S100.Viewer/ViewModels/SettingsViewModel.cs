@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -674,6 +675,31 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <summary>Whether the prediction knob is user-editable (not env-pinned).</summary>
     public bool TilePredictionEditable => !RenderingOptimizations.TilePredictionEnvExplicit;
 
+    private bool _tileCrossBandPrewarmEnabled;
+    /// <summary>
+    /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428). Read
+    /// every frame, so the change takes effect live. Not user-editable (see
+    /// <see cref="TileCrossBandPrewarmEditable"/>) when pinned by
+    /// <c>S100_VECTOR_TILE_XBAND</c> — env pinning can force it either on or off.
+    /// </summary>
+    public bool TileCrossBandPrewarmEnabled
+    {
+        get => _tileCrossBandPrewarmEnabled;
+        set
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
+            var effective = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+            if (SetProperty(ref _tileCrossBandPrewarmEnabled, effective))
+            {
+                _settings.TileCrossBandPrewarmEnabled = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the cross-band pre-warm knob is user-editable (not env-pinned).</summary>
+    public bool TileCrossBandPrewarmEditable => !RenderingOptimizations.TileCrossBandPrewarmEnvExplicit;
+
     private bool _tileDiskCacheEnabled;
     /// <summary>
     /// Whether the warm disk tile cache is enabled. The shared cache is created
@@ -817,10 +843,15 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
                 _tileDiskMb = RenderingOptimizations.TileDiskMb;
                 _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
+                // ApplyProfile re-derives the cross-band pre-warm default from the
+                // new tier (off on LowEnd), so mirror it back or the toggle would
+                // drift from the renderer after a profile switch (issue #428).
+                _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
                 OnPropertyChanged(nameof(TileBudgetMb));
                 OnPropertyChanged(nameof(TileGpuBudgetMb));
                 OnPropertyChanged(nameof(TileDiskMb));
                 OnPropertyChanged(nameof(TileWorkerCount));
+                OnPropertyChanged(nameof(TileCrossBandPrewarmEnabled));
                 OnPropertyChanged(nameof(ResolvedProfileLabel));
                 RaiseMarinerChanged();
             }
@@ -866,6 +897,33 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Raised when <see cref="ShowOutOfScaleExtentIndicators"/> changes so the
+    /// extent-indicator overlay can be rebuilt without a relaunch.
+    /// </summary>
+    public event Action? ExtentIndicatorsChanged;
+
+    private bool _showOutOfScaleExtentIndicators;
+    /// <summary>
+    /// Whether an accent border is drawn around the extent of a loaded dataset
+    /// that has zoomed out past its display-scale minimum (issue #446).
+    /// Persisted to <see cref="ViewerSettings.ShowOutOfScaleExtentIndicators"/>;
+    /// changing it raises <see cref="ExtentIndicatorsChanged"/>.
+    /// </summary>
+    public bool ShowOutOfScaleExtentIndicators
+    {
+        get => _showOutOfScaleExtentIndicators;
+        set
+        {
+            if (SetProperty(ref _showOutOfScaleExtentIndicators, value))
+            {
+                _settings.ShowOutOfScaleExtentIndicators = value;
+                _settings.Save();
+                ExtentIndicatorsChanged?.Invoke();
+            }
+        }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -887,10 +945,10 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// </summary>
     public MarinerSettings BuildMarinerSettings() => new()
     {
-        SafetyContour = _safetyContour,
-        SafetyDepth = _safetyDepth,
-        ShallowContour = _shallowContour,
-        DeepContour = _deepContour,
+        SafetyContour = Depth.FromMetres(_safetyContour),
+        SafetyDepth = Depth.FromMetres(_safetyDepth),
+        ShallowContour = Depth.FromMetres(_shallowContour),
+        DeepContour = Depth.FromMetres(_deepContour),
         DepthUnit = _selectedDepthUnit,
         FourShades = _fourShades,
         ShallowWaterDangers = _shallowWaterDangers,
@@ -942,10 +1000,10 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         // Mariner settings — pull from JSON, falling back to MarinerSettings.Default.
         var def = MarinerSettings.Default;
-        _safetyContour = settings.SafetyContour ?? def.SafetyContour;
-        _safetyDepth = settings.SafetyDepth ?? def.SafetyDepth;
-        _shallowContour = settings.ShallowContour ?? def.ShallowContour;
-        _deepContour = settings.DeepContour ?? def.DeepContour;
+        _safetyContour = settings.SafetyContour ?? def.SafetyContour.TotalMetres;
+        _safetyDepth = settings.SafetyDepth ?? def.SafetyDepth.TotalMetres;
+        _shallowContour = settings.ShallowContour ?? def.ShallowContour.TotalMetres;
+        _deepContour = settings.DeepContour ?? def.DeepContour.TotalMetres;
         _selectedDepthUnit = Enum.TryParse<DepthUnit>(settings.DepthUnit, ignoreCase: true, out var du)
             ? du
             : def.DepthUnit;
@@ -1019,6 +1077,13 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         _tilePredictionEnabled = RenderingOptimizations.TilePredictionEnabled;
 
+        if (settings.TileCrossBandPrewarmEnabled is { } tileXBand)
+        {
+            RenderingOptimizations.TileCrossBandPrewarmEnabled = tileXBand;
+        }
+
+        _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+
         if (settings.TileDiskCacheEnabled is { } tileDisk)
         {
             RenderingOptimizations.TileDiskCacheEnabled = tileDisk;
@@ -1055,11 +1120,17 @@ internal sealed class SettingsViewModel : ViewModelBase
         _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
 
         _basemapMode = settings.BasemapMode;
+        _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;
         _mcpPort = settings.McpPort;
         ResetMcpPortCommand = new RelayCommand(() => McpPort = 0);
+
+        _examinerLinksEnabled = settings.S100ExaminerLinksEnabled;
+        _examinerBaseUrl = settings.S100ExaminerBaseUrl ?? ViewerSettings.DefaultS100ExaminerBaseUrl;
+        ResetExaminerBaseUrlCommand = new RelayCommand(
+            () => ExaminerBaseUrl = ViewerSettings.DefaultS100ExaminerBaseUrl);
 
         var own = settings.OwnShip ?? new OwnShipSettings();
         _ownShipOverlayEnabled = settings.OwnShipOverlayEnabled;
@@ -1191,6 +1262,68 @@ internal sealed class SettingsViewModel : ViewModelBase
             }
         }
     }
+
+    // ---------------------------------------------------------------
+    // S-100 Feature Catalogue eXaminer deep-links (issue #442).
+    // ---------------------------------------------------------------
+
+    private bool _examinerLinksEnabled;
+    /// <summary>
+    /// Whether feature/attribute rows offer "open in S-100 Feature Catalogue
+    /// eXaminer" deep-links. Persisted to
+    /// <see cref="ViewerSettings.S100ExaminerLinksEnabled"/>.
+    /// </summary>
+    public bool ExaminerLinksEnabled
+    {
+        get => _examinerLinksEnabled;
+        set
+        {
+            if (SetProperty(ref _examinerLinksEnabled, value))
+            {
+                _settings.S100ExaminerLinksEnabled = value;
+                _settings.Save();
+                ExaminerSettingsChanged?.Invoke();
+            }
+        }
+    }
+
+    private string _examinerBaseUrl;
+    /// <summary>
+    /// Base URL of the S-100 Feature Catalogue eXaminer used to build
+    /// deep-links. Persisted to
+    /// <see cref="ViewerSettings.S100ExaminerBaseUrl"/>.
+    /// </summary>
+    public string ExaminerBaseUrl
+    {
+        get => _examinerBaseUrl;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value)
+                ? ViewerSettings.DefaultS100ExaminerBaseUrl
+                : value.Trim();
+            if (SetProperty(ref _examinerBaseUrl, normalized))
+            {
+                _settings.S100ExaminerBaseUrl = normalized;
+                _settings.Save();
+                ExaminerSettingsChanged?.Invoke();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Command bound to the "Reset to default" button next to the eXaminer
+    /// base-URL field. Restores
+    /// <see cref="ViewerSettings.DefaultS100ExaminerBaseUrl"/>.
+    /// </summary>
+    public ICommand ResetExaminerBaseUrlCommand { get; }
+
+    /// <summary>
+    /// Raised when an examiner setting (<see cref="ExaminerLinksEnabled"/> or
+    /// <see cref="ExaminerBaseUrl"/>) changes, so panels that surface
+    /// "open in eXaminer" affordances can refresh their availability without
+    /// waiting for a reload or the next pick (issue #442).
+    /// </summary>
+    public event Action? ExaminerSettingsChanged;
 
     // ---------------------------------------------------------------
     // Own-vessel dimensions (own-ship symbology PR).

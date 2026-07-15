@@ -198,6 +198,12 @@ public interface IVectorLayer : IPortrayalLayer
 /// <summary>
 /// The display plane a feature is drawn on (S-52/S-100 portrayal model).
 /// </summary>
+/// <remarks>
+/// The numeric values are a persisted contract: they are written by ordinal
+/// into the disk-backed portrayal cache
+/// (<see cref="Caching.DrawingInstructionSerializer"/>). Do not renumber or
+/// reorder existing members.
+/// </remarks>
 public enum DisplayPlane
 {
     UnderRadar = 0,

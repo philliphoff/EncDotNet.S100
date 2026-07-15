@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S101.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Tests.Validation;
 
@@ -55,22 +55,22 @@ public class S101ValidationTests
         CoordinateMultiplicationFactorZ = cmf,
     };
 
-    private static ImmutableDictionary<ushort, string> FeatureCatalogueByDefault =>
+    private static IReadOnlyDictionary<ushort, string> FeatureCatalogueByDefault =>
         new Dictionary<ushort, string>
         {
             [DepthAreaCode] = "DepthArea",
             [SoundingCode] = "Sounding",
             [ObstrCode] = "Obstruction",
-        }.ToImmutableDictionary();
+        }.ToDictionary();
 
-    private static ImmutableDictionary<ushort, string> AttributeCatalogueByDefault =>
+    private static IReadOnlyDictionary<ushort, string> AttributeCatalogueByDefault =>
         new Dictionary<ushort, string>
         {
             [Drval1Code] = "DRVAL1",
             [Drval2Code] = "DRVAL2",
             [Objnam] = "OBJNAM",
             [CatpibCode] = "CATPIB",
-        }.ToImmutableDictionary();
+        }.ToDictionary();
 
     private static S101Document Document(
         IEnumerable<S101FeatureRecord>? features = null,
@@ -79,24 +79,24 @@ public class S101ValidationTests
         IEnumerable<S101CompositeCurveRecord>? composites = null,
         IEnumerable<S101SurfaceRecord>? surfaces = null,
         IEnumerable<S101InformationRecord>? information = null,
-        ImmutableDictionary<ushort, string>? featureCatalogue = null,
-        ImmutableDictionary<ushort, string>? attributeCatalogue = null)
+        IReadOnlyDictionary<ushort, string>? featureCatalogue = null,
+        IReadOnlyDictionary<ushort, string>? attributeCatalogue = null)
         => new()
         {
             Identification = Identification(),
             StructureInfo = StructureInfo(),
             FeatureTypeCatalogue = featureCatalogue ?? FeatureCatalogueByDefault,
             AttributeTypeCatalogue = attributeCatalogue ?? AttributeCatalogueByDefault,
-            Points = (points ?? Array.Empty<S101PointRecord>()).ToImmutableDictionary(p => p.RecordId),
-            CurveSegments = (curves ?? Array.Empty<S101CurveSegmentRecord>()).ToImmutableDictionary(c => c.RecordId),
-            CompositeCurves = (composites ?? Array.Empty<S101CompositeCurveRecord>()).ToImmutableDictionary(c => c.RecordId),
-            Surfaces = (surfaces ?? Array.Empty<S101SurfaceRecord>()).ToImmutableDictionary(s => s.RecordId),
-            Features = (features ?? Array.Empty<S101FeatureRecord>()).ToImmutableArray(),
-            InformationTypes = (information ?? Array.Empty<S101InformationRecord>()).ToImmutableDictionary(i => i.RecordId),
-            InformationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            Points = (points ?? Array.Empty<S101PointRecord>()).ToDictionary(p => p.RecordId),
+            CurveSegments = (curves ?? Array.Empty<S101CurveSegmentRecord>()).ToDictionary(c => c.RecordId),
+            CompositeCurves = (composites ?? Array.Empty<S101CompositeCurveRecord>()).ToDictionary(c => c.RecordId),
+            Surfaces = (surfaces ?? Array.Empty<S101SurfaceRecord>()).ToDictionary(s => s.RecordId),
+            Features = (features ?? Array.Empty<S101FeatureRecord>()).ToArray(),
+            InformationTypes = (information ?? Array.Empty<S101InformationRecord>()).ToDictionary(i => i.RecordId),
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
 
     private static S101FeatureRecord Feature(
@@ -105,9 +105,9 @@ public class S101ValidationTests
         ushort agency = 1,
         uint fidn = 1,
         ushort fids = 1,
-        ImmutableArray<S101Attribute>? attributes = null,
-        ImmutableArray<S101SpatialAssociation>? spatial = null,
-        ImmutableArray<S101InformationAssociation>? info = null)
+        IReadOnlyList<S101Attribute>? attributes = null,
+        IReadOnlyList<S101SpatialAssociation>? spatial = null,
+        IReadOnlyList<S101InformationAssociation>? info = null)
         => new()
         {
             RecordId = rcid,
@@ -115,10 +115,10 @@ public class S101ValidationTests
             ProducingAgency = agency,
             FeatureIdentificationNumber = fidn,
             FeatureIdentificationSubdivision = fids,
-            Attributes = attributes ?? ImmutableArray<S101Attribute>.Empty,
-            SpatialAssociations = spatial ?? ImmutableArray<S101SpatialAssociation>.Empty,
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = info ?? ImmutableArray<S101InformationAssociation>.Empty,
+            Attributes = attributes ?? [],
+            SpatialAssociations = spatial ?? [],
+            FeatureAssociations = [],
+            InformationAssociations = info ?? [],
         };
 
     private static S101DatasetView ViewOf(S101Document doc, FeatureCatalogueDecoder? decoder = null)
@@ -189,7 +189,7 @@ public class S101ValidationTests
     [Fact]
     public void Default_RuleSet_Has_Ten_Rules()
     {
-        Assert.Equal(10, S101DatasetRules.Default.Rules.Length);
+        Assert.Equal(10, S101DatasetRules.Default.Rules.Count);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class S101ValidationTests
     [Fact]
     public void R1_2_Fires_When_Attribute_Code_Not_In_Catalogue()
     {
-        var attrs = ImmutableArray.Create(new S101Attribute(UnknownAttrCode, 1, "x"));
+        S101Attribute[] attrs = [new S101Attribute(UnknownAttrCode, 1, "x")];
         var doc = Document(features: new[] { Feature(1, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, BuildDecoder()));
 
@@ -252,7 +252,7 @@ public class S101ValidationTests
     public void R1_2_Fires_When_Attribute_Not_Bound_To_Feature_Class()
     {
         // DRVAL1 is bound to DepthArea, not to Sounding.
-        var attrs = ImmutableArray.Create(new S101Attribute(Drval1Code, 1, "5.0"));
+        S101Attribute[] attrs = [new S101Attribute(Drval1Code, 1, "5.0")];
         var doc = Document(features: new[] { Feature(1, typeCode: SoundingCode, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, BuildDecoder()));
 
@@ -264,7 +264,7 @@ public class S101ValidationTests
     [Fact]
     public void R1_2_Passes_When_Attribute_Bound_To_Feature_Class()
     {
-        var attrs = ImmutableArray.Create(new S101Attribute(Drval1Code, 1, "5.0"));
+        S101Attribute[] attrs = [new S101Attribute(Drval1Code, 1, "5.0")];
         var doc = Document(features: new[] { Feature(1, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, BuildDecoder()));
         Assert.DoesNotContain(report.Findings, f => f.RuleId == "S101-R-1.2");
@@ -275,7 +275,7 @@ public class S101ValidationTests
     {
         // Attribute not bound to feature class — without a decoder the
         // FC-conformance half of the rule is silently skipped.
-        var attrs = ImmutableArray.Create(new S101Attribute(Drval1Code, 1, "5.0"));
+        S101Attribute[] attrs = [new S101Attribute(Drval1Code, 1, "5.0")];
         var doc = Document(features: new[] { Feature(1, typeCode: SoundingCode, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, decoder: null));
         Assert.DoesNotContain(report.Findings, f => f.RuleId == "S101-R-1.2");
@@ -323,7 +323,7 @@ public class S101ValidationTests
     [Fact]
     public void R3_1_Fires_When_Spatial_Reference_Is_Dangling()
     {
-        var spas = ImmutableArray.Create(new S101SpatialAssociation(RecordName: 110, RecordId: 999, Orientation: 1));
+        S101SpatialAssociation[] spas = [new S101SpatialAssociation(RecordName: 110, RecordId: 999, Orientation: 1)];
         var doc = Document(features: new[] { Feature(1, spatial: spas) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc));
 
@@ -336,7 +336,7 @@ public class S101ValidationTests
     public void R3_1_Passes_When_Spatial_Reference_Resolves()
     {
         var pt = new S101PointRecord { RecordId = 5, Y = 500_000_000, X = 100_000_000 };
-        var spas = ImmutableArray.Create(new S101SpatialAssociation(110, 5, 1));
+        S101SpatialAssociation[] spas = [new S101SpatialAssociation(110, 5, 1)];
         var doc = Document(
             features: new[] { Feature(1, spatial: spas) },
             points: new[] { pt });
@@ -364,10 +364,10 @@ public class S101ValidationTests
         var surface = new S101SurfaceRecord
         {
             RecordId = 20,
-            RingAssociations = ImmutableArray.Create(
+            RingAssociations = [
                 new S101RingAssociation(RecordName: 120, RecordId: 11, Orientation: 1, Usage: 1),
                 new S101RingAssociation(120, 12, 1, 1),
-                new S101RingAssociation(120, 13, 1, 1)),
+                new S101RingAssociation(120, 13, 1, 1)],
         };
 
         var doc = Document(
@@ -391,9 +391,9 @@ public class S101ValidationTests
         var surface = new S101SurfaceRecord
         {
             RecordId = 30,
-            RingAssociations = ImmutableArray.Create(
+            RingAssociations = [
                 new S101RingAssociation(120, 11, 1, 1),
-                new S101RingAssociation(120, 12, 1, 1)),
+                new S101RingAssociation(120, 12, 1, 1)],
         };
         var doc = Document(
             points: new[] { p1, p2 },
@@ -417,10 +417,10 @@ public class S101ValidationTests
         var surface = new S101SurfaceRecord
         {
             RecordId = 40,
-            RingAssociations = ImmutableArray.Create(
+            RingAssociations = [
                 new S101RingAssociation(120, 11, 1, 1),
                 new S101RingAssociation(120, 12, 1, 1),
-                new S101RingAssociation(120, 13, 1, 1)),
+                new S101RingAssociation(120, 13, 1, 1)],
         };
 
         var doc = Document(
@@ -450,9 +450,9 @@ public class S101ValidationTests
         var composite = new S101CompositeCurveRecord
         {
             RecordId = 50,
-            CurveComponents = ImmutableArray.Create(
+            CurveComponents = [
                 new S101CurveUsage(RecordName: 120, RecordId: 11, Orientation: 1),
-                new S101CurveUsage(120, 12, 1)),
+                new S101CurveUsage(120, 12, 1)],
         };
 
         var doc = Document(
@@ -475,9 +475,9 @@ public class S101ValidationTests
         var composite = new S101CompositeCurveRecord
         {
             RecordId = 60,
-            CurveComponents = ImmutableArray.Create(
+            CurveComponents = [
                 new S101CurveUsage(120, 11, 1),
-                new S101CurveUsage(120, 12, 1)),
+                new S101CurveUsage(120, 12, 1)],
         };
         var doc = Document(
             points: new[] { p1, p2, p3 },
@@ -495,7 +495,7 @@ public class S101ValidationTests
     public void R4_1_Fires_When_Enumerated_Value_Out_Of_Domain()
     {
         // CATPIB listed values are "1" and "2"; "9" is out of domain.
-        var attrs = ImmutableArray.Create(new S101Attribute(CatpibCode, 1, "9"));
+        S101Attribute[] attrs = [new S101Attribute(CatpibCode, 1, "9")];
         var doc = Document(features: new[] { Feature(1, typeCode: ObstrCode, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, BuildDecoder()));
 
@@ -508,7 +508,7 @@ public class S101ValidationTests
     [Fact]
     public void R4_1_Passes_When_Enumerated_Value_In_Domain()
     {
-        var attrs = ImmutableArray.Create(new S101Attribute(CatpibCode, 1, "1"));
+        S101Attribute[] attrs = [new S101Attribute(CatpibCode, 1, "1")];
         var doc = Document(features: new[] { Feature(1, typeCode: ObstrCode, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, BuildDecoder()));
         Assert.DoesNotContain(report.Findings, f => f.RuleId == "S101-R-4.1");
@@ -517,7 +517,7 @@ public class S101ValidationTests
     [Fact]
     public void R4_1_Skipped_For_Non_Enumerated_Attribute()
     {
-        var attrs = ImmutableArray.Create(new S101Attribute(Objnam, 1, "anything"));
+        S101Attribute[] attrs = [new S101Attribute(Objnam, 1, "anything")];
         var doc = Document(features: new[] { Feature(1, attributes: attrs) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc, BuildDecoder()));
         Assert.DoesNotContain(report.Findings, f => f.RuleId == "S101-R-4.1");
@@ -553,7 +553,7 @@ public class S101ValidationTests
     [Fact]
     public void R5_2_Fires_When_Information_Association_Dangling()
     {
-        var info = ImmutableArray.Create(new S101InformationAssociation(0, 999, 0));
+        S101InformationAssociation[] info = [new S101InformationAssociation(0, 999, 0)];
         var doc = Document(features: new[] { Feature(1, info: info) });
         var report = S101DatasetRules.Default.Run(ViewOf(doc));
         var finding = Assert.Single(report.Findings, f => f.RuleId == "S101-R-5.2");
@@ -564,8 +564,8 @@ public class S101ValidationTests
     [Fact]
     public void R5_2_Passes_When_Information_Association_Resolves()
     {
-        var iRec = new S101InformationRecord { RecordId = 7, InformationTypeCode = 1, Attributes = ImmutableArray<S101Attribute>.Empty };
-        var info = ImmutableArray.Create(new S101InformationAssociation(0, 7, 0));
+        var iRec = new S101InformationRecord { RecordId = 7, InformationTypeCode = 1, Attributes = [] };
+        S101InformationAssociation[] info = [new S101InformationAssociation(0, 7, 0)];
         var doc = Document(
             features: new[] { Feature(1, info: info) },
             information: new[] { iRec });
@@ -611,9 +611,9 @@ public class S101ValidationTests
     [Fact]
     public void Feature_GetSimple_Returns_Attribute_Value()
     {
-        var attrs = ImmutableArray.Create(
+        S101Attribute[] attrs = [
             new S101Attribute(Drval1Code, 1, "5.0"),
-            new S101Attribute(Drval2Code, 1, "10.0"));
+            new S101Attribute(Drval2Code, 1, "10.0")];
         var doc = Document(features: new[] { Feature(1, attributes: attrs) });
         var feature = ViewOf(doc).Features[0];
         Assert.Equal("5.0", feature.GetSimple("DRVAL1"));
@@ -633,7 +633,7 @@ public class S101ValidationTests
     public void View_TryGetSpatial_Routes_By_RecordName()
     {
         var pt = new S101PointRecord { RecordId = 1, Y = 0, X = 0 };
-        var sur = new S101SurfaceRecord { RecordId = 10, RingAssociations = ImmutableArray<S101RingAssociation>.Empty };
+        var sur = new S101SurfaceRecord { RecordId = 10, RingAssociations = [] };
         var doc = Document(points: new[] { pt }, surfaces: new[] { sur });
         var view = ViewOf(doc);
 
@@ -650,9 +650,9 @@ public class S101ValidationTests
         => new()
         {
             RecordId = rcid,
-            PointAssociations = ImmutableArray.Create(
+            PointAssociations = [
                 new S101PointAssociation(RecordName: 110, RecordId: beginPoint, Topology: 1),
-                new S101PointAssociation(110, endPoint, 2)),
-            IntermediateCoordinates = ImmutableArray<(int, int)>.Empty,
+                new S101PointAssociation(110, endPoint, 2)],
+            IntermediateCoordinates = [],
         };
 }

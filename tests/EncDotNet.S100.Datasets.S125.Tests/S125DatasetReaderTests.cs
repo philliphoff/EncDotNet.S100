@@ -20,7 +20,7 @@ public class S125DatasetReaderTests
         var dataset = S125Dataset.Open(path);
 
         Assert.Equal("S-125", dataset.ProductIdentifier);
-        Assert.Equal(2, dataset.Features.Length);
+        Assert.Equal(2, dataset.Features.Count);
         Assert.Single(dataset.InformationTypes);
 
         var lateralBuoy = dataset.Features.Single(f => f.FeatureType == "LateralBuoy");
@@ -61,7 +61,7 @@ public class S125DatasetReaderTests
         Assert.Equal("NavigationLine", nav.FeatureType);
         Assert.Equal(S100GeometryType.Curve, nav.GeometryType);
         var curve = Assert.Single(nav.Curves);
-        Assert.Equal(3, curve.Length);
+        Assert.Equal(3, curve.Count);
         Assert.Equal(36.95, curve[0].Latitude, 4);
         Assert.Equal("045", nav.Attributes["orientation"]);
     }
@@ -74,7 +74,7 @@ public class S125DatasetReaderTests
         var coverage = Assert.Single(dataset.Features);
         Assert.Equal("DataCoverage", coverage.FeatureType);
         Assert.Equal(S100GeometryType.Surface, coverage.GeometryType);
-        Assert.Equal(5, coverage.ExteriorRing.Length);
+        Assert.Equal(5, coverage.ExteriorRing.Count);
         Assert.Empty(coverage.InteriorRings);
     }
 }

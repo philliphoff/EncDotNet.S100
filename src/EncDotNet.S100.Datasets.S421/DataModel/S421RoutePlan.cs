@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -76,7 +75,7 @@ public sealed class S421RoutePlan
                 "routeFormatVersion", "routeID", "routeEditionNo"),
         };
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S421RoutePlan
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
@@ -109,7 +108,7 @@ public sealed class S421RoutePlan
     /// attribute payload of their own that the typed model uses, so a
     /// uniform reference list is sufficient.
     /// </summary>
-    private static (string Id, ImmutableArray<GmlReference> References)? ResolveContainer(
+    private static (string Id, IReadOnlyList<GmlReference> References)? ResolveContainer(
         string href, string role, ProjectionContext ctx, string? relatedId = null)
     {
         var obj = ctx.Xlinks.ResolveAny(href, role, ctx, relatedId);
@@ -163,7 +162,7 @@ public sealed class S421RoutePlan
         };
     }
 
-    private static S421VesselInfo? BuildVessel(ImmutableDictionary<string, string> a, ProjectionContext ctx, string relatedId)
+    private static S421VesselInfo? BuildVessel(IReadOnlyDictionary<string, string> a, ProjectionContext ctx, string relatedId)
     {
         bool any =
             a.ContainsKey("routeInfoVesselType") || a.ContainsKey("routeInfoVesselName") ||
@@ -189,21 +188,21 @@ public sealed class S421RoutePlan
 
     // ── Waypoints + legs ─────────────────────────────────────────
 
-    private static (ImmutableArray<S421Waypoint>, ImmutableArray<S421Leg>) ResolveWaypointsAndLegs(
+    private static (IReadOnlyList<S421Waypoint>, IReadOnlyList<S421Leg>) ResolveWaypointsAndLegs(
         S421Feature route, ProjectionContext ctx)
     {
         var wptsRef = route.References.FirstOrDefault(r => r.Role == "routeWaypoints");
         if (wptsRef is null)
-            return (ImmutableArray<S421Waypoint>.Empty, ImmutableArray<S421Leg>.Empty);
+            return ([], []);
 
         var container = ResolveContainer(wptsRef.Href, "routeWaypoints", ctx, route.Id);
         if (container is null)
-            return (ImmutableArray<S421Waypoint>.Empty, ImmutableArray<S421Leg>.Empty);
+            return ([], []);
 
-        var legs = ImmutableArray.CreateBuilder<S421Leg>();
+        var legs = new List<S421Leg>();
         var seenLegs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var waypoints = ImmutableArray.CreateBuilder<S421Waypoint>();
+        var waypoints = new List<S421Waypoint>();
         foreach (var wptRef in container.Value.References.Where(r => r.Role == "routeWaypoint"))
         {
             var wptFeature = ctx.Xlinks.Resolve<S421Feature>(wptRef.Href, "routeWaypoint", ctx, container.Value.Id);
@@ -225,9 +224,9 @@ public sealed class S421RoutePlan
             waypoints.Add(ProjectWaypoint(wptFeature, leg, ctx));
         }
 
-        var waypointArray = waypoints.ToImmutable();
+        var waypointArray = waypoints;
         LinkLegEndpoints(waypointArray, ctx);
-        return (waypointArray, legs.ToImmutable());
+        return (waypointArray, legs);
     }
 
     /// <summary>
@@ -241,15 +240,15 @@ public sealed class S421RoutePlan
     /// still carries an <see cref="S421Waypoint.OutgoingLeg"/> (i.e. the
     /// leg has no successor waypoint to terminate at).
     /// </summary>
-    private static void LinkLegEndpoints(ImmutableArray<S421Waypoint> waypoints, ProjectionContext ctx)
+    private static void LinkLegEndpoints(IReadOnlyList<S421Waypoint> waypoints, ProjectionContext ctx)
     {
-        for (int i = 0; i < waypoints.Length; i++)
+        for (int i = 0; i < waypoints.Count; i++)
         {
             var leg = waypoints[i].OutgoingLeg;
             if (leg is null) continue;
 
             leg.StartWaypoint = waypoints[i];
-            if (i + 1 < waypoints.Length)
+            if (i + 1 < waypoints.Count)
             {
                 leg.EndWaypoint = waypoints[i + 1];
                 waypoints[i + 1].IncomingLeg = leg;
@@ -270,7 +269,7 @@ public sealed class S421RoutePlan
     private static S421Waypoint ProjectWaypoint(S421Feature f, S421Leg? leg, ProjectionContext ctx)
     {
         GeoPosition position = default;
-        if (!f.Points.IsDefaultOrEmpty)
+        if (f.Points.Count > 0)
         {
             var (lat, lon) = f.Points[0];
             position = new GeoPosition(lat, lon);
@@ -304,7 +303,7 @@ public sealed class S421RoutePlan
 
     private static S421Leg ProjectLeg(S421Feature f, ProjectionContext ctx)
     {
-        var coords = ImmutableArray.CreateBuilder<GeoPosition>();
+        var coords = new List<GeoPosition>();
         foreach (var curve in f.Curves)
             foreach (var (lat, lon) in curve)
                 coords.Add(new GeoPosition(lat, lon));
@@ -313,7 +312,7 @@ public sealed class S421RoutePlan
         return new S421Leg
         {
             Id = f.Id,
-            Coordinates = coords.ToImmutable(),
+            Coordinates = coords,
             StarboardCrossTrackDistanceLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegStarboardXTDL"), ctx, f.Id, "routeWaypointLegStarboardXTDL"),
             PortCrossTrackDistanceLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegPortXTDL"), ctx, f.Id, "routeWaypointLegPortXTDL"),
             StarboardChannelLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegStarboardCL"), ctx, f.Id, "routeWaypointLegStarboardCL"),
@@ -345,51 +344,51 @@ public sealed class S421RoutePlan
 
     // ── Action points ────────────────────────────────────────────
 
-    private static ImmutableArray<S421ActionPoint> ResolveActionPoints(S421Feature route, ProjectionContext ctx)
+    private static IReadOnlyList<S421ActionPoint> ResolveActionPoints(S421Feature route, ProjectionContext ctx)
     {
         var apRef = route.References.FirstOrDefault(r => r.Role == "routeActionPoints");
-        if (apRef is null) return ImmutableArray<S421ActionPoint>.Empty;
+        if (apRef is null) return [];
 
         var container = ResolveContainer(apRef.Href, "routeActionPoints", ctx, route.Id);
-        if (container is null) return ImmutableArray<S421ActionPoint>.Empty;
+        if (container is null) return [];
 
-        var result = ImmutableArray.CreateBuilder<S421ActionPoint>();
+        var result = new List<S421ActionPoint>();
         foreach (var apFeatureRef in container.Value.References.Where(r => r.Role == "routeActionPoint"))
         {
             var ap = ctx.Xlinks.Resolve<S421Feature>(apFeatureRef.Href, "routeActionPoint", ctx, container.Value.Id);
             if (ap is null) continue;
             result.Add(ProjectActionPoint(ap, ctx));
         }
-        return result.ToImmutable();
+        return result;
     }
 
     private static S421ActionPoint ProjectActionPoint(S421Feature f, ProjectionContext ctx)
     {
         S421ActionPointGeometryKind kind;
-        ImmutableArray<GeoPosition> coords;
+        IReadOnlyList<GeoPosition> coords;
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
                 kind = S421ActionPointGeometryKind.Point;
-                coords = f.Points.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                coords = f.Points.Count == 0
+                    ? []
+                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
                 break;
             case S100GeometryType.Curve:
                 kind = S421ActionPointGeometryKind.Curve;
-                coords = f.Curves.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                coords = f.Curves.Count == 0
+                    ? []
+                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
                 break;
             case S100GeometryType.Surface:
                 kind = S421ActionPointGeometryKind.Surface;
-                coords = f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                coords = f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
                 break;
             default:
                 kind = S421ActionPointGeometryKind.Point;
-                coords = ImmutableArray<GeoPosition>.Empty;
+                coords = [];
                 break;
         }
 
@@ -419,27 +418,27 @@ public sealed class S421RoutePlan
 
     // ── Schedules ────────────────────────────────────────────────
 
-    private static ImmutableArray<S421Schedule> ResolveSchedules(S421Feature route, ProjectionContext ctx)
+    private static IReadOnlyList<S421Schedule> ResolveSchedules(S421Feature route, ProjectionContext ctx)
     {
         var schRef = route.References.FirstOrDefault(r => r.Role == "routeSchedules");
-        if (schRef is null) return ImmutableArray<S421Schedule>.Empty;
+        if (schRef is null) return [];
 
         var container = ResolveContainer(schRef.Href, "routeSchedules", ctx, route.Id);
-        if (container is null) return ImmutableArray<S421Schedule>.Empty;
+        if (container is null) return [];
 
-        var result = ImmutableArray.CreateBuilder<S421Schedule>();
+        var result = new List<S421Schedule>();
         foreach (var entry in container.Value.References.Where(r => r.Role == "routeSchedule"))
         {
             var sched = ctx.Xlinks.Resolve<S421InformationType>(entry.Href, "routeSchedule", ctx, container.Value.Id);
             if (sched is null) continue;
             result.Add(ProjectSchedule(sched, ctx));
         }
-        return result.ToImmutable();
+        return result;
     }
 
     private static S421Schedule ProjectSchedule(S421InformationType sched, ProjectionContext ctx)
     {
-        var variants = ImmutableArray.CreateBuilder<S421ScheduleVariant>();
+        var variants = new List<S421ScheduleVariant>();
         AddVariant(sched, "routeScheduleManual", S421ScheduleVariantKind.Manual, ctx, variants);
         AddVariant(sched, "routeScheduleCalculated", S421ScheduleVariantKind.Calculated, ctx, variants);
         AddVariant(sched, "routeScheduleRecommended", S421ScheduleVariantKind.Recommended, ctx, variants);
@@ -450,13 +449,13 @@ public sealed class S421RoutePlan
             Id = sched.Id,
             ScheduleNumber = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleID"), ctx, sched.Id, "routeScheduleID"),
             Name = a.GetValueOrDefault("routeScheduleName"),
-            Variants = variants.ToImmutable(),
+            Variants = variants,
             ExtraAttributes = ExtraAttributes.ExcludeKnown(a, "routeScheduleID", "routeScheduleName"),
         };
     }
 
     private static void AddVariant(S421InformationType schedule, string role, S421ScheduleVariantKind kind,
-        ProjectionContext ctx, ImmutableArray<S421ScheduleVariant>.Builder output)
+        ProjectionContext ctx, List<S421ScheduleVariant> output)
     {
         var reference = schedule.References.FirstOrDefault(r => r.Role == role);
         if (reference is null) return;
@@ -464,7 +463,7 @@ public sealed class S421RoutePlan
         var variant = ctx.Xlinks.Resolve<S421InformationType>(reference.Href, role, ctx, schedule.Id);
         if (variant is null) return;
 
-        var elements = ImmutableArray.CreateBuilder<S421ScheduleElement>();
+        var elements = new List<S421ScheduleElement>();
         foreach (var elemRef in variant.References.Where(r => r.Role == "routeScheduleElement"))
         {
             var elem = ctx.Xlinks.Resolve<S421InformationType>(elemRef.Href, "routeScheduleElement", ctx, variant.Id);
@@ -476,7 +475,7 @@ public sealed class S421RoutePlan
         {
             Id = variant.Id,
             Kind = kind,
-            Elements = elements.ToImmutable(),
+            Elements = elements,
         });
     }
 

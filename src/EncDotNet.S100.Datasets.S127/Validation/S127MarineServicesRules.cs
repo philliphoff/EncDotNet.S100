@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S127.DataModel;
@@ -78,7 +77,7 @@ public static class S127MarineServicesRules
                 var findings = new List<ValidationFinding>();
                 foreach (var feature in dataset.Features)
                 {
-                    if (feature.Coordinates.IsDefaultOrEmpty) continue;
+                    if (feature.Coordinates.Count == 0) continue;
 
                     foreach (var pos in feature.Coordinates)
                     {
@@ -129,7 +128,7 @@ public static class S127MarineServicesRules
                 foreach (var pbp in dataset.Features.OfType<S127PilotBoardingPlace>())
                 {
                     if (pbp.GeometryKind != S127GeometryKind.None
-                        && !pbp.Coordinates.IsDefaultOrEmpty)
+                        && pbp.Coordinates.Count > 0)
                         continue;
 
                     findings.Add(new ValidationFinding
@@ -138,7 +137,7 @@ public static class S127MarineServicesRules
                         Severity = ValidationSeverity.Error,
                         Message =
                             $"PilotBoardingPlace '{pbp.Id}' has no geometry " +
-                            $"(GeometryKind={pbp.GeometryKind}, {pbp.Coordinates.Length} coordinate(s)).",
+                            $"(GeometryKind={pbp.GeometryKind}, {pbp.Coordinates.Count} coordinate(s)).",
                         RelatedFeatureId = pbp.Id,
                         DatasetId = dataset.DatasetIdentifier,
                     });
@@ -173,9 +172,9 @@ public static class S127MarineServicesRules
                 {
                     if (feature.GeometryKind != S127GeometryKind.Surface) continue;
                     var ring = feature.Coordinates;
-                    if (ring.IsDefaultOrEmpty) continue;
+                    if (ring.Count == 0) continue;
 
-                    if (ring.Length < 4)
+                    if (ring.Count < 4)
                     {
                         findings.Add(new ValidationFinding
                         {
@@ -183,7 +182,7 @@ public static class S127MarineServicesRules
                             Severity = ValidationSeverity.Error,
                             Message =
                                 $"Feature '{feature.Id}' ({feature.FeatureType}) has a surface exterior ring " +
-                                $"with only {ring.Length} vertex(es); a closed polygon needs at least 4.",
+                                $"with only {ring.Count} vertex(es); a closed polygon needs at least 4.",
                             RelatedFeatureId = feature.Id,
                             DatasetId = dataset.DatasetIdentifier,
                         });
@@ -232,7 +231,7 @@ public static class S127MarineServicesRules
                 foreach (var feature in dataset.Features)
                 {
                     if (feature.GeometryKind != S127GeometryKind.Curve) continue;
-                    if (feature.Coordinates.Length >= 2) continue;
+                    if (feature.Coordinates.Count >= 2) continue;
 
                     findings.Add(new ValidationFinding
                     {
@@ -240,7 +239,7 @@ public static class S127MarineServicesRules
                         Severity = ValidationSeverity.Error,
                         Message =
                             $"Feature '{feature.Id}' ({feature.FeatureType}) is a curve with only " +
-                            $"{feature.Coordinates.Length} vertex(es); a curve requires at least 2.",
+                            $"{feature.Coordinates.Count} vertex(es); a curve requires at least 2.",
                         RelatedFeatureId = feature.Id,
                         DatasetId = dataset.DatasetIdentifier,
                     });
@@ -281,7 +280,7 @@ public static class S127MarineServicesRules
                 foreach (var feature in dataset.Features)
                 {
                     var attrs = feature.Source.Attributes;
-                    if (attrs.IsEmpty) continue;
+                    if (attrs.Count == 0) continue;
 
                     foreach (var (minKey, maxKey) in s_vesselSizeLimitPairs)
                     {
@@ -337,7 +336,7 @@ public static class S127MarineServicesRules
                 var findings = new List<ValidationFinding>();
                 foreach (var feature in dataset.Features)
                 {
-                    if (feature.Source.ComplexAttributes.IsDefaultOrEmpty) continue;
+                    if (feature.Source.ComplexAttributes.Count == 0) continue;
 
                     foreach (var complex in feature.Source.ComplexAttributes)
                     {
@@ -401,7 +400,7 @@ public static class S127MarineServicesRules
             .WithSeverity(ValidationSeverity.Error)
             .Yield((dataset, _) =>
             {
-                if (dataset.Features.IsDefaultOrEmpty)
+                if (dataset.Features.Count == 0)
                     return Array.Empty<ValidationFinding>();
 
                 var findings = new List<ValidationFinding>();

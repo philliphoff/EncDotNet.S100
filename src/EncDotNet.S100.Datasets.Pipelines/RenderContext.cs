@@ -57,6 +57,38 @@ public abstract record RenderContext
     /// </remarks>
     public DrawingInstructionCategory HiddenInstructionCategories { get; init; }
         = DrawingInstructionCategory.None;
+
+    /// <summary>
+    /// Basemap drawn beneath the chart data in the headless render path (issue
+    /// #411). When <see cref="BasemapKind.Offline"/>, the bundled Natural Earth
+    /// 1:10m land layer is composited under the dataset, projected with the
+    /// dataset's own auto-fitted viewport so it registers exactly. Defaults to
+    /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the headless render path (<c>HeadlessVectorRenderer.Render</c>
+    /// for vector products and <c>CoverageHeadlessRenderer.Render</c> for
+    /// coverage products); the Mapsui viewer path selects its basemap
+    /// independently via <c>BasemapMode</c>.
+    /// </remarks>
+    public BasemapKind Basemap { get; init; } = BasemapKind.None;
+
+    /// <summary>
+    /// The S-100 Part 9 §11.7 display-mode id to activate for this render,
+    /// or <c>null</c> to leave the catalogue's current/default mode in place.
+    /// Unlike <see cref="EcdisDisplay"/>'s ECDIS category (which maps to a
+    /// display mode only for specs that declare the canonical DisplayBase /
+    /// StandardDisplay / OtherInformation ids), this is an explicit,
+    /// spec-native mode id — used by products whose modes select a
+    /// <em>portrayal</em> rather than a viewing-group filter. S-411 uses it to
+    /// choose between its concentration
+    /// (<c>IceScientificIceactDisplayMode</c>), stage-of-development
+    /// (<c>IceScientificIcesodDisplayMode</c>) and navigational
+    /// (<c>IceNavigationalDisplayMode</c>) portrayals. When set, it wins over
+    /// the ECDIS-category-derived mode. Ignored by processors whose catalogue
+    /// does not declare the id.
+    /// </summary>
+    public string? DisplayModeId { get; init; }
 }
 
 public sealed record S101RenderContext : RenderContext;

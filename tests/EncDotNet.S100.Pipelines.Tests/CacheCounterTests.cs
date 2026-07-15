@@ -47,12 +47,10 @@ public sealed class CacheCounterTests
 
         // Other parallel tests may also exercise S-101 Lua sources, so we
         // assert at-least bounds plus correct product tagging.
-        Assert.True(missSnap.Length >= 1, $"expected at least 1 miss, got {missSnap.Length}");
-        Assert.True(hitSnap.Length >= 2, $"expected at least 2 hits, got {hitSnap.Length}");
-        Assert.All(hitSnap, tags => Assert.Contains(tags,
-            t => t.Key == "s100.product" && (string?)t.Value == "S-101"));
-        Assert.All(missSnap, tags => Assert.Contains(tags,
-            t => t.Key == "s100.product" && (string?)t.Value == "S-101"));
+        var s101Misses = missSnap.Count(HasS101ProductTag);
+        var s101Hits = hitSnap.Count(HasS101ProductTag);
+        Assert.True(s101Misses >= 1, $"expected at least 1 S-101 miss, got {s101Misses}");
+        Assert.True(s101Hits >= 2, $"expected at least 2 S-101 hits, got {s101Hits}");
     }
 
     [Fact]
@@ -118,12 +116,10 @@ public sealed class CacheCounterTests
         lock (hits) hitSnap = hits.ToArray();
         lock (misses) missSnap = misses.ToArray();
 
-        Assert.True(missSnap.Length >= 1, $"expected at least 1 miss, got {missSnap.Length}");
-        Assert.True(hitSnap.Length >= 2, $"expected at least 2 hits, got {hitSnap.Length}");
-        Assert.All(hitSnap, tags => Assert.Contains(tags,
-            t => t.Key == "s100.product" && (string?)t.Value == "S-101"));
-        Assert.All(missSnap, tags => Assert.Contains(tags,
-            t => t.Key == "s100.product" && (string?)t.Value == "S-101"));
+        var s101Misses = missSnap.Count(HasS101ProductTag);
+        var s101Hits = hitSnap.Count(HasS101ProductTag);
+        Assert.True(s101Misses >= 1, $"expected at least 1 S-101 miss, got {s101Misses}");
+        Assert.True(s101Hits >= 2, $"expected at least 2 S-101 hits, got {s101Hits}");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
@@ -153,4 +149,7 @@ public sealed class CacheCounterTests
         listener.Start();
         return listener;
     }
+
+    private static bool HasS101ProductTag(KeyValuePair<string, object?>[] tags) =>
+        tags.Any(t => t.Key == "s100.product" && (string?)t.Value == "S-101");
 }

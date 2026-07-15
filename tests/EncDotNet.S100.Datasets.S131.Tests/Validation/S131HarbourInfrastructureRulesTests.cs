@@ -1,7 +1,7 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S131.Validation;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S131.Tests.Validation;
 
@@ -19,55 +19,55 @@ public class S131HarbourInfrastructureRulesTests
     private static S131Feature RawFeature(
         string id,
         string featureType,
-        ImmutableDictionary<string, string>? attributes = null) => new()
+        IReadOnlyDictionary<string, string>? attributes = null) => new()
         {
             Id = id,
             FeatureType = featureType,
-            Attributes = attributes ?? ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S131ComplexAttribute>.Empty,
-            References = ImmutableArray<S131Reference>.Empty,
+            Attributes = attributes ?? ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
         };
 
     private static S131InformationType RawInfoType(string id, string typeCode) => new()
     {
         Id = id,
         TypeCode = typeCode,
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S131ComplexAttribute>.Empty,
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
     private static S131Geometry PointGeometry(double lat, double lon) => new()
     {
         GeometryType = S131GeometryType.Point,
-        Points = ImmutableArray.Create(new GeoPosition(lat, lon)),
+        Points = [new GeoPosition(lat, lon)],
     };
 
-    private static S131Geometry CurveGeometry(params (double lat, double lon)[] coords) => new()
+    private static S131Geometry CurveGeometry(params GeoPosition[] coords) => new()
     {
         GeometryType = S131GeometryType.Curve,
-        Curves = ImmutableArray.Create(
-            coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray()),
+        Curves = [
+            coords],
     };
 
     private static S131Geometry SurfaceGeometry(
-        ImmutableArray<GeoPosition> exterior,
-        ImmutableArray<ImmutableArray<GeoPosition>>? interior = null) => new()
+        IReadOnlyList<GeoPosition> exterior,
+        IReadOnlyList<IReadOnlyList<GeoPosition>>? interior = null) => new()
         {
             GeometryType = S131GeometryType.Surface,
             ExteriorRing = exterior,
-            InteriorRings = interior ?? ImmutableArray<ImmutableArray<GeoPosition>>.Empty,
+            InteriorRings = interior ?? [],
         };
 
-    private static ImmutableArray<GeoPosition> Ring(params (double lat, double lon)[] coords) =>
-        coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray();
+    private static IReadOnlyList<GeoPosition> Ring(params GeoPosition[] coords) =>
+        coords;
 
     private static S131HarbourInfrastructure HarbourInfra(
         string id,
         string featureType,
         S131HarbourInfrastructureKind kind,
         S131Geometry? geometry = null,
-        ImmutableDictionary<string, string>? attributes = null,
-        ImmutableArray<S131ResolvedReference>? resolved = null)
+        IReadOnlyDictionary<string, string>? attributes = null,
+        IReadOnlyList<S131ResolvedReference>? resolved = null)
     {
         var raw = RawFeature(id, featureType, attributes);
         return new S131HarbourInfrastructure
@@ -77,7 +77,7 @@ public class S131HarbourInfrastructureRulesTests
             Kind = kind,
             Geometry = geometry ?? S131Geometry.Empty,
             Source = raw,
-            ResolvedReferences = resolved ?? ImmutableArray<S131ResolvedReference>.Empty,
+            ResolvedReferences = resolved ?? [],
         };
     }
 
@@ -86,8 +86,8 @@ public class S131HarbourInfrastructureRulesTests
         string featureType,
         S131LayoutKind kind,
         S131Geometry? geometry = null,
-        ImmutableDictionary<string, string>? attributes = null,
-        ImmutableArray<S131ResolvedReference>? resolved = null)
+        IReadOnlyDictionary<string, string>? attributes = null,
+        IReadOnlyList<S131ResolvedReference>? resolved = null)
     {
         var raw = RawFeature(id, featureType, attributes);
         return new S131LayoutFeature
@@ -97,7 +97,7 @@ public class S131HarbourInfrastructureRulesTests
             Kind = kind,
             Geometry = geometry ?? S131Geometry.Empty,
             Source = raw,
-            ResolvedReferences = resolved ?? ImmutableArray<S131ResolvedReference>.Empty,
+            ResolvedReferences = resolved ?? [],
         };
     }
 
@@ -111,11 +111,11 @@ public class S131HarbourInfrastructureRulesTests
 
     private static S131Authority Authority(
         string id,
-        ImmutableArray<S131ResolvedReference>? resolved = null) => new()
+        IReadOnlyList<S131ResolvedReference>? resolved = null) => new()
         {
             Id = id,
             Source = RawInfoType(id, "Authority"),
-            ResolvedReferences = resolved ?? ImmutableArray<S131ResolvedReference>.Empty,
+            ResolvedReferences = resolved ?? [],
         };
 
     private static S131OtherInformationType OtherInfo(string id, string typeCode) => new()
@@ -129,14 +129,14 @@ public class S131HarbourInfrastructureRulesTests
         IEnumerable<IS131Feature>? features = null,
         IEnumerable<IS131InformationType>? infoTypes = null)
     {
-        var feats = (features ?? Array.Empty<IS131Feature>()).ToImmutableArray();
-        var infos = (infoTypes ?? Array.Empty<IS131InformationType>()).ToImmutableArray();
+        var feats = (features ?? Array.Empty<IS131Feature>()).ToArray();
+        var infos = (infoTypes ?? Array.Empty<IS131InformationType>()).ToArray();
 
         var rawDataset = new S131Dataset
         {
             ProductIdentifier = "S-131",
-            Features = feats.Select(f => f.Source).ToImmutableArray(),
-            InformationTypes = infos.Select(i => i.Source).ToImmutableArray(),
+            Features = feats.Select(f => f.Source).ToArray(),
+            InformationTypes = infos.Select(i => i.Source).ToArray(),
         };
 
         return new S131HarbourInfrastructureDataset
@@ -144,13 +144,13 @@ public class S131HarbourInfrastructureRulesTests
             ProductIdentifier = "S-131",
             Features = feats,
             InformationTypes = infos,
-            HarbourInfrastructure = feats.OfType<S131HarbourInfrastructure>().ToImmutableArray(),
-            LayoutFeatures = feats.OfType<S131LayoutFeature>().ToImmutableArray(),
-            MetadataFeatures = feats.OfType<S131MetadataFeature>().ToImmutableArray(),
-            OtherFeatures = feats.OfType<S131OtherFeature>().ToImmutableArray(),
-            Authorities = infos.OfType<S131Authority>().ToImmutableArray(),
-            ContactDetails = infos.OfType<S131ContactDetails>().ToImmutableArray(),
-            RxNInformation = infos.OfType<S131RxNInformation>().ToImmutableArray(),
+            HarbourInfrastructure = feats.OfType<S131HarbourInfrastructure>().ToArray(),
+            LayoutFeatures = feats.OfType<S131LayoutFeature>().ToArray(),
+            MetadataFeatures = feats.OfType<S131MetadataFeature>().ToArray(),
+            OtherFeatures = feats.OfType<S131OtherFeature>().ToArray(),
+            Authorities = infos.OfType<S131Authority>().ToArray(),
+            ContactDetails = infos.OfType<S131ContactDetails>().ToArray(),
+            RxNInformation = infos.OfType<S131RxNInformation>().ToArray(),
             Source = rawDataset,
         };
     }
@@ -197,7 +197,7 @@ public class S131HarbourInfrastructureRulesTests
     public void LayoutFeatureGeometryPresent_Passes_WhenSurfacePopulated()
     {
         var berth = Layout("BERTH-1", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 1), (1, 1), (0, 0))));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0))));
         var findings = S131HarbourInfrastructureRules.LayoutFeatureGeometryPresent
             .Evaluate(Dataset(features: new[] { berth }), ValidationContext.Default);
         Assert.Empty(findings);
@@ -222,7 +222,7 @@ public class S131HarbourInfrastructureRulesTests
     public void AvailableBerthingLengthNonNegative_Passes_WhenAttributeAbsent()
     {
         var berth = Layout("BERTH-A", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 1), (1, 1), (0, 0))));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0))));
         var findings = S131HarbourInfrastructureRules.AvailableBerthingLengthNonNegative
             .Evaluate(Dataset(features: new[] { berth }), ValidationContext.Default);
         Assert.Empty(findings);
@@ -231,8 +231,10 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void AvailableBerthingLengthNonNegative_Passes_OnPositiveValue()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty
-            .Add("availableBerthingLength", "200.5");
+        var attrs = new Dictionary<string, string>
+        {
+            ["availableBerthingLength"] = "200.5",
+        };
         var berth = Layout("BERTH-B", "Berth", S131LayoutKind.Berth, attributes: attrs);
         var findings = S131HarbourInfrastructureRules.AvailableBerthingLengthNonNegative
             .Evaluate(Dataset(features: new[] { berth }), ValidationContext.Default);
@@ -242,8 +244,10 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void AvailableBerthingLengthNonNegative_Fails_OnNegativeValue()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty
-            .Add("availableBerthingLength", "-1");
+        var attrs = new Dictionary<string, string>
+        {
+            ["availableBerthingLength"] = "-1",
+        };
         var berth = Layout("BERTH-NEG", "Berth", S131LayoutKind.Berth, attributes: attrs);
         var findings = S131HarbourInfrastructureRules.AvailableBerthingLengthNonNegative
             .Evaluate(Dataset(features: new[] { berth }), ValidationContext.Default).ToList();
@@ -256,8 +260,10 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void AvailableBerthingLengthNonNegative_Fails_OnNonNumericValue()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty
-            .Add("availableBerthingLength", "two hundred");
+        var attrs = new Dictionary<string, string>
+        {
+            ["availableBerthingLength"] = "two hundred",
+        };
         var berth = Layout("BERTH-NAN", "Berth", S131LayoutKind.Berth, attributes: attrs);
         var findings = S131HarbourInfrastructureRules.AvailableBerthingLengthNonNegative
             .Evaluate(Dataset(features: new[] { berth }), ValidationContext.Default).ToList();
@@ -273,7 +279,7 @@ public class S131HarbourInfrastructureRulesTests
         var bollard = HarbourInfra("BO-1", "Bollard", S131HarbourInfrastructureKind.Bollard,
             PointGeometry(44.6, -63.5));
         var line = Layout("FEN-1", "FenderLine", S131LayoutKind.FenderLine,
-            CurveGeometry((44.6, -63.5), (44.7, -63.4)));
+            CurveGeometry(new GeoPosition(44.6, -63.5), new GeoPosition(44.7, -63.4)));
         var findings = S131HarbourInfrastructureRules.CoordinatesInWgs84Range
             .Evaluate(Dataset(features: new IS131Feature[] { bollard, line }), ValidationContext.Default);
         Assert.Empty(findings);
@@ -301,7 +307,7 @@ public class S131HarbourInfrastructureRulesTests
     public void CoordinatesInWgs84Range_Checks_SurfaceRings()
     {
         var bad = Layout("BAD-SURF", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 200), (1, 200), (1, 0), (0, 0))));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 200), new GeoPosition(1, 200), new GeoPosition(1, 0), new GeoPosition(0, 0))));
         var findings = S131HarbourInfrastructureRules.CoordinatesInWgs84Range
             .Evaluate(Dataset(features: new[] { bad }), ValidationContext.Default).ToList();
         Assert.NotEmpty(findings);
@@ -314,7 +320,7 @@ public class S131HarbourInfrastructureRulesTests
     public void SurfaceRingsClosed_Passes_OnClosedRing()
     {
         var f = Layout("OK-SURF", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 1), (1, 1), (0, 0))));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0))));
         Assert.Empty(S131HarbourInfrastructureRules.SurfaceRingsClosed
             .Evaluate(Dataset(features: new[] { f }), ValidationContext.Default));
     }
@@ -323,7 +329,7 @@ public class S131HarbourInfrastructureRulesTests
     public void SurfaceRingsClosed_Fails_WhenRingTooShort()
     {
         var f = Layout("SHORT", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 1), (0, 0))));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(0, 0))));
         var findings = S131HarbourInfrastructureRules.SurfaceRingsClosed
             .Evaluate(Dataset(features: new[] { f }), ValidationContext.Default).ToList();
         var finding = Assert.Single(findings);
@@ -335,7 +341,7 @@ public class S131HarbourInfrastructureRulesTests
     public void SurfaceRingsClosed_Fails_WhenNotClosed()
     {
         var f = Layout("OPEN", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 1), (1, 1), (1, 0))));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(1, 0))));
         var findings = S131HarbourInfrastructureRules.SurfaceRingsClosed
             .Evaluate(Dataset(features: new[] { f }), ValidationContext.Default).ToList();
         var finding = Assert.Single(findings);
@@ -346,10 +352,10 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void SurfaceRingsClosed_Checks_InteriorRings()
     {
-        var ext = Ring((0, 0), (0, 10), (10, 10), (10, 0), (0, 0));
-        var badInterior = Ring((1, 1), (1, 2), (2, 2), (2, 1)); // not closed
+        var ext = Ring(new GeoPosition(0, 0), new GeoPosition(0, 10), new GeoPosition(10, 10), new GeoPosition(10, 0), new GeoPosition(0, 0));
+        var badInterior = Ring(new GeoPosition(1, 1), new GeoPosition(1, 2), new GeoPosition(2, 2), new GeoPosition(2, 1)); // not closed
         var f = Layout("HOLE", "HarbourBasin", S131LayoutKind.HarbourBasin,
-            SurfaceGeometry(ext, ImmutableArray.Create(badInterior)));
+            SurfaceGeometry(ext, [badInterior]));
         var findings = S131HarbourInfrastructureRules.SurfaceRingsClosed
             .Evaluate(Dataset(features: new[] { f }), ValidationContext.Default).ToList();
         var finding = Assert.Single(findings);
@@ -362,7 +368,7 @@ public class S131HarbourInfrastructureRulesTests
         var pt = HarbourInfra("P", "Bollard", S131HarbourInfrastructureKind.Bollard,
             PointGeometry(0, 0));
         var cv = Layout("C", "FenderLine", S131LayoutKind.FenderLine,
-            CurveGeometry((0, 0), (1, 1)));
+            CurveGeometry(new GeoPosition(0, 0), new GeoPosition(1, 1)));
         Assert.Empty(S131HarbourInfrastructureRules.SurfaceRingsClosed
             .Evaluate(Dataset(features: new IS131Feature[] { pt, cv }), ValidationContext.Default));
     }
@@ -409,12 +415,12 @@ public class S131HarbourInfrastructureRulesTests
     public void ResolvedReferencesNotNull_Passes_WhenAllTargetsResolved()
     {
         var target = HarbourInfra("T", "Bollard", S131HarbourInfrastructureKind.Bollard, PointGeometry(0, 0));
-        var resolved = ImmutableArray.Create(new S131ResolvedReference
+        IReadOnlyList<S131ResolvedReference> resolved = [new S131ResolvedReference
         {
             Role = "theBollard",
             TargetRef = "T",
             Target = target,
-        });
+        }];
         var src = HarbourInfra("S", "Dolphin", S131HarbourInfrastructureKind.Dolphin,
             PointGeometry(0, 0), resolved: resolved);
         Assert.Empty(S131HarbourInfrastructureRules.ResolvedReferencesNotNull
@@ -424,12 +430,12 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void ResolvedReferencesNotNull_Fails_OnUnresolvedFeatureXlink()
     {
-        var unresolved = ImmutableArray.Create(new S131ResolvedReference
+        IReadOnlyList<S131ResolvedReference> unresolved = [new S131ResolvedReference
         {
             Role = "theBollard",
             TargetRef = "MISSING",
             Target = null,
-        });
+        }];
         var src = HarbourInfra("S", "Dolphin", S131HarbourInfrastructureKind.Dolphin,
             PointGeometry(0, 0), resolved: unresolved);
         var findings = S131HarbourInfrastructureRules.ResolvedReferencesNotNull
@@ -445,12 +451,12 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void ResolvedReferencesNotNull_Fails_OnUnresolvedInformationTypeXlink()
     {
-        var unresolved = ImmutableArray.Create(new S131ResolvedReference
+        IReadOnlyList<S131ResolvedReference> unresolved = [new S131ResolvedReference
         {
             Role = "theContactDetails",
             TargetRef = "MISSING-CD",
             Target = null,
-        });
+        }];
         var auth = Authority("AUTH-1", resolved: unresolved);
         var findings = S131HarbourInfrastructureRules.ResolvedReferencesNotNull
             .Evaluate(Dataset(infoTypes: new[] { auth }), ValidationContext.Default).ToList();
@@ -498,7 +504,7 @@ public class S131HarbourInfrastructureRulesTests
     [Fact]
     public void Default_ContainsAllEightRules()
     {
-        Assert.Equal(8, S131HarbourInfrastructureRules.Default.Rules.Length);
+        Assert.Equal(8, S131HarbourInfrastructureRules.Default.Rules.Count);
         var ids = S131HarbourInfrastructureRules.Default.Rules.Select(r => r.RuleId).ToHashSet();
         Assert.Contains("S131-R-1.1", ids);
         Assert.Contains("S131-R-1.2", ids);
@@ -516,7 +522,7 @@ public class S131HarbourInfrastructureRulesTests
         var bollard = HarbourInfra("BO-1", "Bollard", S131HarbourInfrastructureKind.Bollard,
             PointGeometry(44.6, -63.5));
         var berth = Layout("BE-1", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((44.6, -63.5), (44.6, -63.4), (44.7, -63.4), (44.6, -63.5))));
+            SurfaceGeometry(Ring(new GeoPosition(44.6, -63.5), new GeoPosition(44.6, -63.4), new GeoPosition(44.7, -63.4), new GeoPosition(44.6, -63.5))));
         var auth = Authority("AU-1");
 
         var report = S131HarbourInfrastructureRules.Validate(
@@ -535,8 +541,8 @@ public class S131HarbourInfrastructureRulesTests
         var emptyBollard = HarbourInfra("EMPTY-BO", "Bollard", S131HarbourInfrastructureKind.Bollard);
         var emptyBerth = Layout("EMPTY-BE", "Berth", S131LayoutKind.Berth);
         var negBerth = Layout("NEG-BE", "Berth", S131LayoutKind.Berth,
-            SurfaceGeometry(Ring((0, 0), (0, 1), (1, 1), (0, 0))),
-            attributes: ImmutableDictionary<string, string>.Empty.Add("availableBerthingLength", "-5"));
+            SurfaceGeometry(Ring(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0))),
+            attributes: new Dictionary<string, string> { ["availableBerthingLength"] = "-5" });
         var badCoord = HarbourInfra("BAD", "Bollard", S131HarbourInfrastructureKind.Bollard,
             PointGeometry(99, 0));
         var dup1 = HarbourInfra("DUP", "Bollard", S131HarbourInfrastructureKind.Bollard, PointGeometry(0, 0));

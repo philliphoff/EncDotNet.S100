@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -23,7 +24,7 @@ public sealed class VectorSceneBuilderOutOfBandCapTests
         public FeatureGeometry? GetGeometry(string featureReference) => new FeatureGeometry
         {
             Type = GeometryType.Point,
-            Coordinates = new (double, double)[] { (50.72, -1.29) },
+            Coordinates = new[] { new GeoPosition(50.72, -1.29) },
         };
     }
 

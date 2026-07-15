@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -44,6 +45,7 @@ public partial class MainWindow : ShadUI.Window
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
+    private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -145,6 +147,11 @@ public partial class MainWindow : ShadUI.Window
             new ViewerRenderStateController(
                 App.Services.GetRequiredService<ViewModels.SettingsViewModel>(),
                 App.Services.GetRequiredService<EcdisDisplayState>());
+        // UI controller bridges MCP / scripted callers to the viewer's
+        // activity-panel state (which docks are open and which tab each
+        // shows) without exposing MainViewModel directly.
+        App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
+            new ViewerUiController(_viewModel);
         _loader.Initialize(mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
@@ -188,6 +195,14 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceOverlayHost = null;
             _pickHighlightController?.Dispose();
             _pickHighlightController = null;
+            _extentIndicatorController?.Dispose();
+            _extentIndicatorController = null;
+            // Clear the late-bound accessors this window owns so panel /
+            // screenshot MCP tools observe the torn-down state (UiNotReady /
+            // WindowNotReady) rather than a stale controller, and so the
+            // MainViewModel / window are not kept alive after close.
+            App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
+            App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
         };
         DataContext = _viewModel;
 
@@ -250,7 +265,7 @@ public partial class MainWindow : ShadUI.Window
         // land — zero network); the user can switch to None or Online in
         // Settings (or via --basemap). Keep a reference so swapping mode
         // can replace it live. Always sits at index 0, beneath datasets.
-        _basemapLayer = BasemapLayerFactory.Create(_viewModel.Settings.SelectedBasemapMode);
+        _basemapLayer = BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode);
         if (_basemapLayer is not null)
         {
             MapControl.Map?.Layers.Add(_basemapLayer);
@@ -326,6 +341,12 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.MapViewportNotifier>()
                 .Bind(notifierNav);
+
+            // Clamp zoom in/out so the user cannot zoom to an unbounded,
+            // meaningless scale (e.g. many world copies off the edge of a
+            // cross-antimeridian dataset, or arbitrarily deep past chart
+            // resolution).
+            MapZoomLimits.Apply(notifierNav);
         }
 
         // PR-D2: dynamic-source overlay host. Registered *after* the
@@ -378,6 +399,15 @@ public partial class MainWindow : ShadUI.Window
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             App.Services.GetRequiredService<SettingsViewModel>());
 
+        // Out-of-scale extent indicators: outline the extents of loaded
+        // datasets that have zoomed out past their display-scale minimum, so a
+        // wide-spread exchange set still shows where its members are (#446).
+        _extentIndicatorController = new EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController(
+            mapHost,
+            _viewModel.Datasets,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>());
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the
         // render thread where we cannot intercept it.
@@ -661,7 +691,7 @@ public partial class MainWindow : ShadUI.Window
             _basemapLayer = null;
         }
 
-        _basemapLayer = BasemapLayerFactory.Create(mode);
+        _basemapLayer = BasemapLayerFactory.TryCreate(mode);
         if (_basemapLayer is not null)
         {
             map.Layers.Insert(0, _basemapLayer);
@@ -914,7 +944,9 @@ public partial class MainWindow : ShadUI.Window
         _accentColor = color;
         var variant = Application.Current?.ActualThemeVariant;
         var theme = ChromeThemes.FromVariant(variant) ?? ChromeTheme.Light;
-        Resources["AccentBrush"] = new SolidColorBrush(AccentColors.ForTheme(color, theme));
+        var themed = AccentColors.ForTheme(color, theme);
+        Resources["AccentBrush"] = new SolidColorBrush(themed);
+        Resources["AccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(0x33, themed.R, themed.G, themed.B));
     }
 
     private void CaptureScreenshot(string outputPath)
@@ -1023,7 +1055,7 @@ public partial class MainWindow : ShadUI.Window
     /// math used by the mouse lat/lon readout in
     /// <see cref="MapInteractionController"/>.
     /// </summary>
-    private (double Lat, double Lon)? ScreenToLatLon(Point screen)
+    private GeoPosition? ScreenToLatLon(Point screen)
     {
         if (MapControl.Map?.Navigator is not { } navigator)
             return null;
@@ -1040,7 +1072,7 @@ public partial class MainWindow : ShadUI.Window
         // Normalize longitude into the canonical (-180, 180] range so paths
         // that cross the antimeridian render with consistent endpoints.
         lon = ((lon + 540.0) % 360.0) - 180.0;
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
     /// <summary>
@@ -1050,12 +1082,12 @@ public partial class MainWindow : ShadUI.Window
     /// by editing tools to hit-test pointer gestures against world-space
     /// features.
     /// </summary>
-    private Point? LatLonToScreen((double Lat, double Lon) world)
+    private Point? LatLonToScreen(GeoPosition world)
     {
         if (MapControl.Map?.Navigator is not { } navigator)
             return null;
 
-        var (x, y) = SphericalMercator.FromLonLat(world.Lon, world.Lat);
+        var (x, y) = SphericalMercator.FromLonLat(world.Longitude, world.Latitude);
         var screen = navigator.Viewport.WorldToScreen(x, y);
         if (double.IsNaN(screen.X) || double.IsNaN(screen.Y) ||
             double.IsInfinity(screen.X) || double.IsInfinity(screen.Y))
@@ -1170,16 +1202,53 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
-            var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token, notification);
+            // Frame the viewport as soon as the service knows the catalogue's
+            // union bounding box — before any dataset finishes loading — so
+            // incremental per-dataset paints appear in the correctly-framed
+            // view instead of off-screen (issue #448). The service resumes on
+            // this UI thread (ConfigureAwait(true)) before invoking the
+            // callback, so we frame inline here; a Dispatcher.UIThread.Invoke
+            // fallback covers any off-thread invocation. A flag lets us skip
+            // the redundant end-of-load reframe below.
+            var framedEarly = false;
+            void FrameEarly(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+            {
+                if (MapControl.Map?.Navigator is { } nav)
+                {
+                    ZoomToCatalogueBoundingBox(nav, bbox);
+                    framedEarly = true;
+                }
+            }
+
+            Action<EncDotNet.S100.ExchangeSets.BoundingBox> onFramingReady = bbox =>
+            {
+                if (Dispatcher.UIThread.CheckAccess())
+                {
+                    FrameEarly(bbox);
+                }
+                else
+                {
+                    Dispatcher.UIThread.Invoke(() => FrameEarly(bbox));
+                }
+            };
+
+            var result = await _exchangeSetService.OpenAsync(
+                sourcePath, progress, token, notification, onFramingReady);
             _viewModel.EndExchangeSetLoad(result);
 
-            // Frame the loaded cells. Prefer the catalogue's union bbox when
-            // available — it's ready immediately and matches producer intent.
-            // Otherwise debounce on DatasetLoaded events: zoom once no new
-            // event has arrived for QuietWindowMs. This naturally handles
-            // per-dataset load failures (which never raise the event) without
-            // waiting a fixed timeout.
-            if (result.UnionBoundingBox is { } bbox &&
+            // Frame the loaded cells. If early framing already ran, skip the
+            // reframe: the early and final union bounding boxes are computed
+            // from the same immutable catalogue metadata, so they are identical
+            // and a second zoom would only be a jarring no-op. Otherwise prefer
+            // the catalogue's union bbox when available; failing that, debounce
+            // on DatasetLoaded events (zoom once no new event has arrived for
+            // QuietWindowMs), which naturally handles per-dataset load failures
+            // (which never raise the event) without waiting a fixed timeout.
+            if (framedEarly)
+            {
+                // Already framed up front — nothing to do.
+            }
+            else if (result.UnionBoundingBox is { } bbox &&
                 MapControl.Map?.Navigator is { } nav)
             {
                 ZoomToCatalogueBoundingBox(nav, bbox);
@@ -1349,14 +1418,25 @@ public partial class MainWindow : ShadUI.Window
                 continue;
 
             // Folder drop: treat as an exchange set when CATALOG.XML
-            // (S-100) or CATALOG.031 (S-57) is at the root, otherwise
-            // ignore (the dataset loader is single-file).
+            // (S-100) or CATALOG.031 (S-57) is at the root. Otherwise, a
+            // catalogue-less folder of loose ENC cells (a base ….000 plus
+            // its updates) is scanned and loaded; anything else raises a
+            // notification rather than being silently ignored.
             if (Directory.Exists(path))
             {
                 if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
-                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path))
+                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeLooseCellFolder(path))
                 {
                     await RunExchangeSetAsync(path);
+                }
+                else
+                {
+                    App.Services.GetRequiredService<INotificationService>()
+                        .Create(Strings.Toast_Warning)
+                        .WithSeverity(NotificationSeverity.Warning)
+                        .WithContent(string.Format(Strings.Status_FolderNoDatasets, path))
+                        .Show();
                 }
                 continue;
             }

@@ -12,6 +12,7 @@ using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using Mapsui.Layers;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -111,6 +112,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
+            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
             ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),

@@ -10,6 +10,7 @@ using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using EncDotNet.S100.Viewer.Views;
 using Mapsui.Layers;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -79,6 +80,7 @@ public class MainViewModelPickModeTests
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
+            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
             ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),

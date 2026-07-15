@@ -19,6 +19,8 @@ internal sealed class EcdisDisplayState
     private readonly Dictionary<string, HashSet<int>> _hidden =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<DisplayPlane> _hiddenPlanes = new();
+    private readonly Dictionary<string, string?> _displayModes =
+        new(StringComparer.OrdinalIgnoreCase);
     private EcdisDisplayCategory _category = EcdisDisplayCategory.Standard;
 
     /// <summary>Raised after any mutation completes.</summary>
@@ -124,6 +126,49 @@ internal sealed class EcdisDisplayState
     }
 
     /// <summary>
+    /// Sets the explicit S-100 Part 9 §11.7 display-mode selection for
+    /// <paramref name="productSpec"/> (e.g. an S-411 concentration /
+    /// stage-of-development / navigational choice). A <c>null</c> or empty
+    /// <paramref name="modeId"/> clears the selection so the spec's
+    /// portrayal catalogue renders its default mode. Raises
+    /// <see cref="Changed"/> when the effective selection differs.
+    /// </summary>
+    public void SetDisplayMode(string productSpec, string? modeId)
+    {
+        ArgumentNullException.ThrowIfNull(productSpec);
+
+        bool changed;
+        lock (_gate)
+        {
+            _displayModes.TryGetValue(productSpec, out var current);
+            if (string.IsNullOrEmpty(modeId))
+            {
+                changed = _displayModes.Remove(productSpec);
+            }
+            else
+            {
+                changed = !string.Equals(current, modeId, StringComparison.Ordinal);
+                _displayModes[productSpec] = modeId;
+            }
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Returns the explicit display-mode selection for
+    /// <paramref name="productSpec"/>, or <c>null</c> when the spec uses its
+    /// default mode.
+    /// </summary>
+    public string? GetDisplayMode(string productSpec)
+    {
+        ArgumentNullException.ThrowIfNull(productSpec);
+        lock (_gate)
+        {
+            return _displayModes.TryGetValue(productSpec, out var id) ? id : null;
+        }
+    }
+
+    /// <summary>
     /// Clears every per-spec viewing-group override and raises
     /// <see cref="Changed"/> if anything was cleared.
     /// </summary>
@@ -187,20 +232,23 @@ internal sealed class EcdisDisplayState
                 Category = _category,
                 HiddenViewingGroups = copy,
                 HiddenDisplayPlanes = new HashSet<DisplayPlane>(_hiddenPlanes),
+                ActiveDisplayModes = new Dictionary<string, string?>(
+                    _displayModes, StringComparer.OrdinalIgnoreCase),
             };
         }
     }
 
     /// <summary>
     /// Replaces the entire state from a hydrated settings record
-    /// (used on viewer startup to restore the persisted category and
-    /// per-spec overrides). Raises <see cref="Changed"/> exactly
-    /// once after the swap.
+    /// (used on viewer startup to restore the persisted category,
+    /// per-spec overrides, and explicit display-mode selections).
+    /// Raises <see cref="Changed"/> exactly once after the swap.
     /// </summary>
     public void Hydrate(
         EcdisDisplayCategory category,
         IReadOnlyDictionary<string, IReadOnlySet<int>> hidden,
-        IReadOnlySet<DisplayPlane>? hiddenPlanes = null)
+        IReadOnlySet<DisplayPlane>? hiddenPlanes = null,
+        IReadOnlyDictionary<string, string?>? displayModes = null)
     {
         ArgumentNullException.ThrowIfNull(hidden);
         lock (_gate)
@@ -214,6 +262,15 @@ internal sealed class EcdisDisplayState
             {
                 foreach (var p in hiddenPlanes)
                     _hiddenPlanes.Add(p);
+            }
+            _displayModes.Clear();
+            if (displayModes is not null)
+            {
+                foreach (var kv in displayModes)
+                {
+                    if (!string.IsNullOrEmpty(kv.Value))
+                        _displayModes[kv.Key] = kv.Value;
+                }
             }
         }
         Changed?.Invoke();

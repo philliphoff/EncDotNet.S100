@@ -291,7 +291,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     }
 
     /// <summary>
-    /// Immutable, palette-independent projection layout for one grid geometry.
+    /// Stable, palette-independent projection layout for one grid geometry.
     /// </summary>
     private sealed class LayoutCacheEntry
     {

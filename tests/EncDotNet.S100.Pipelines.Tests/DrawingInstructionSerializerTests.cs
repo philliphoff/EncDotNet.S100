@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 
@@ -27,7 +28,7 @@ public class DrawingInstructionSerializerTests
         LocalOffsetX = 1.5,
         LocalOffsetY = -2.5,
         LinePlacementPosition = 0.5,
-        CoordinateOverride = (50.5, -1.25),
+        CoordinateOverride = new GeoPosition(50.5, -1.25),
     };
 
     private static LineInstruction FullLine() => new()
@@ -42,8 +43,8 @@ public class DrawingInstructionSerializerTests
         LineWidth = 0.32,
         LineColor = "CHBLK",
         Dashes = [(0.0, 1.0), (1.0, 2.0)],
-        DashOnLengthMm = 1.0,
-        CoordinatesOverride = [(50.1, -1.1), (50.2, -1.2), (50.3, -1.3)],
+        DashOnLength = 1.0,
+        CoordinatesOverride = [new GeoPosition(50.1, -1.1), new GeoPosition(50.2, -1.2), new GeoPosition(50.3, -1.3)],
     };
 
     private static AreaInstruction FullArea() => new()
@@ -79,12 +80,12 @@ public class DrawingInstructionSerializerTests
         LinePlacementPosition = 0.75,
         HorizontalAlignment = TextHorizontalAlignment.End,
         VerticalAlignment = TextVerticalAlignment.Top,
-        OffsetXmm = 0.6,
-        OffsetYmm = -0.6,
+        OffsetX = 0.6,
+        OffsetY = -0.6,
         LineStartOffset = 0.1,
         LineEndOffset = 0.9,
         LineOffsetMode = LinePlacementMode.Absolute,
-        CoordinateOverride = (51.0, 1.0),
+        CoordinateOverride = new GeoPosition(51.0, 1.0),
     };
 
     // Minimal variants: every optional / nullable left at its default so the
@@ -187,7 +188,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LineWidth, al.LineWidth);
                 Assert.Equal(e.LineColor, al.LineColor);
                 Assert.Equal(e.Dashes, al.Dashes);
-                Assert.Equal(e.DashOnLengthMm, al.DashOnLengthMm);
+                Assert.Equal(e.DashOnLength, al.DashOnLength);
                 Assert.Equal(e.CoordinatesOverride, al.CoordinatesOverride);
                 break;
 
@@ -212,8 +213,8 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LinePlacementPosition, at.LinePlacementPosition);
                 Assert.Equal(e.HorizontalAlignment, at.HorizontalAlignment);
                 Assert.Equal(e.VerticalAlignment, at.VerticalAlignment);
-                Assert.Equal(e.OffsetXmm, at.OffsetXmm);
-                Assert.Equal(e.OffsetYmm, at.OffsetYmm);
+                Assert.Equal(e.OffsetX, at.OffsetX);
+                Assert.Equal(e.OffsetY, at.OffsetY);
                 Assert.Equal(e.LineStartOffset, at.LineStartOffset);
                 Assert.Equal(e.LineEndOffset, at.LineEndOffset);
                 Assert.Equal(e.LineOffsetMode, at.LineOffsetMode);
@@ -224,5 +225,29 @@ public class DrawingInstructionSerializerTests
                 Assert.Fail($"Unhandled instruction type {expected.GetType().Name}");
                 break;
         }
+    }
+
+    // The disk-backed portrayal cache persists these enums by their numeric
+    // ordinal (DrawingInstructionSerializer writes/reads them as int). The
+    // values are therefore an on-disk contract: reordering or renumbering a
+    // member would silently reinterpret already-cached files. These asserts
+    // pin the values so any accidental change fails the build; a deliberate
+    // change must also bump DrawingInstructionSerializer.FormatVersion.
+    [Fact]
+    public void PersistedEnumValues_AreStable()
+    {
+        Assert.Equal(0, (int)DisplayPlane.UnderRadar);
+        Assert.Equal(1, (int)DisplayPlane.OverRadar);
+
+        Assert.Equal(0, (int)TextHorizontalAlignment.Start);
+        Assert.Equal(1, (int)TextHorizontalAlignment.Center);
+        Assert.Equal(2, (int)TextHorizontalAlignment.End);
+
+        Assert.Equal(0, (int)TextVerticalAlignment.Top);
+        Assert.Equal(1, (int)TextVerticalAlignment.Center);
+        Assert.Equal(2, (int)TextVerticalAlignment.Bottom);
+
+        Assert.Equal(0, (int)LinePlacementMode.Relative);
+        Assert.Equal(1, (int)LinePlacementMode.Absolute);
     }
 }

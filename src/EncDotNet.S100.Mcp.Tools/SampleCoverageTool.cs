@@ -6,7 +6,6 @@ using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Time;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using System.Collections.Immutable;
 using System.ComponentModel;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -52,7 +51,7 @@ public sealed record SampleCoverageResult(
     [property: Description("Latitude that was requested, echoed back in decimal degrees, WGS-84.")] double Latitude,
     [property: Description("Longitude that was requested, echoed back in decimal degrees, WGS-84.")] double Longitude,
     [property: Description("Typed sample payload; the JSON \"$kind\" discriminator selects the variant.")] SampledValue Value,
-    [property: Description("Optional per-step series; populated when the request's Times is Range/Series and the dataset is gridded S-104 or S-111.")] ImmutableArray<TimedSampledValue>? Series = null);
+    [property: Description("Optional per-step series; populated when the request's Times is Range/Series and the dataset is gridded S-104 or S-111.")] IReadOnlyList<TimedSampledValue>? Series = null);
 
 /// <summary>
 /// A single entry in a <see cref="SampleCoverageResult.Series"/>: the
@@ -429,7 +428,7 @@ public sealed class SampleCoverageTool
     /// </summary>
     private static ToolResult<SampleCoverageResult> SampleS104StationSeries(
         SampleCoverageRequest request,
-        System.Collections.Immutable.ImmutableArray<LoadedDataset> snapshot)
+        IReadOnlyList<LoadedDataset> snapshot)
     {
         LoadedDataset? bestDataset = null;
         WaterLevelStation? bestStation = null;
@@ -619,7 +618,7 @@ public sealed class SampleCoverageTool
     /// </summary>
     private static ToolResult<SampleCoverageResult> SampleS111StationSeries(
         SampleCoverageRequest request,
-        System.Collections.Immutable.ImmutableArray<LoadedDataset> snapshot)
+        IReadOnlyList<LoadedDataset> snapshot)
     {
         LoadedDataset? bestDataset = null;
         SurfaceCurrentStation? bestStation = null;
@@ -724,7 +723,7 @@ public sealed class SampleCoverageTool
         }
 
         var instants = ResolveStepIndices(bestModel.Coverages, request.Times!, out var firstStep, out var lastStep);
-        if (instants.Length == 0)
+        if (instants.Count == 0)
         {
             var (from, to) = request.Times!.GetWindow();
             return ToolResult<SampleCoverageResult>.Err(new TimeOutOfRange(
@@ -739,7 +738,7 @@ public sealed class SampleCoverageTool
             var cellLat = bestCoverage.OriginLatitude + row * bestCoverage.SpacingLatitudinal;
             var cellLon = bestCoverage.OriginLongitude + col * bestCoverage.SpacingLongitudinal;
 
-            var series = ImmutableArray.CreateBuilder<TimedSampledValue>(instants.Length);
+            var series = new List<TimedSampledValue>(instants.Count);
             SampledValue? firstValue = null;
             DateTime firstSampleTime = default;
             foreach (var (requestedInstant, stepIndex) in instants)
@@ -786,7 +785,7 @@ public sealed class SampleCoverageTool
                 request.Latitude,
                 request.Longitude,
                 firstValue,
-                series.MoveToImmutable()));
+                series));
         }
         catch (ObjectDisposedException)
         {
@@ -839,7 +838,7 @@ public sealed class SampleCoverageTool
         }
 
         var instants = ResolveStepIndices(bestModel.Coverages, request.Times!, out var firstStep, out var lastStep);
-        if (instants.Length == 0)
+        if (instants.Count == 0)
         {
             var (from, to) = request.Times!.GetWindow();
             return ToolResult<SampleCoverageResult>.Err(new TimeOutOfRange(
@@ -854,7 +853,7 @@ public sealed class SampleCoverageTool
             var cellLat = bestCoverage.OriginLatitude + row * bestCoverage.SpacingLatitudinal;
             var cellLon = bestCoverage.OriginLongitude + col * bestCoverage.SpacingLongitudinal;
 
-            var series = ImmutableArray.CreateBuilder<TimedSampledValue>(instants.Length);
+            var series = new List<TimedSampledValue>(instants.Count);
             SampledValue? firstValue = null;
             DateTime firstSampleTime = default;
             foreach (var (requestedInstant, stepIndex) in instants)
@@ -901,7 +900,7 @@ public sealed class SampleCoverageTool
                 request.Latitude,
                 request.Longitude,
                 firstValue,
-                series.MoveToImmutable()));
+                series));
         }
         catch (ObjectDisposedException)
         {
@@ -922,7 +921,7 @@ public sealed class SampleCoverageTool
     /// </list>
     /// Returns an empty array when no overlap exists.
     /// </summary>
-    private static ImmutableArray<(DateTimeOffset RequestedTime, int StepIndex)> ResolveStepIndices<TCoverage>(
+    private static IReadOnlyList<(DateTimeOffset RequestedTime, int StepIndex)> ResolveStepIndices<TCoverage>(
         IReadOnlyList<TCoverage> coverages,
         TimeQuery query,
         out DateTime? firstStep,
@@ -933,7 +932,7 @@ public sealed class SampleCoverageTool
         lastStep = coverages.Count == 0 ? null : GetTimePoint(coverages[coverages.Count - 1]);
         if (coverages.Count == 0)
         {
-            return ImmutableArray<(DateTimeOffset, int)>.Empty;
+            return [];
         }
 
         switch (query)
@@ -942,7 +941,7 @@ public sealed class SampleCoverageTool
             {
                 var fromUtc = r.From.UtcDateTime;
                 var toUtc = r.To.UtcDateTime;
-                var builder = ImmutableArray.CreateBuilder<(DateTimeOffset, int)>();
+                var builder = new List<(DateTimeOffset, int)>();
                 for (int i = 0; i < coverages.Count; i++)
                 {
                     var tp = GetTimePoint(coverages[i]);
@@ -951,12 +950,12 @@ public sealed class SampleCoverageTool
                         builder.Add((new DateTimeOffset(DateTime.SpecifyKind(tp, DateTimeKind.Utc)), i));
                     }
                 }
-                return builder.ToImmutable();
+                return builder;
             }
             case TimeQuery.Series s:
             {
                 var enumerated = s.Enumerate();
-                var builder = ImmutableArray.CreateBuilder<(DateTimeOffset, int)>(enumerated.Length);
+                var builder = new List<(DateTimeOffset, int)>(enumerated.Count);
                 int? lastIndex = null;
                 foreach (var instant in enumerated)
                 {
@@ -970,10 +969,10 @@ public sealed class SampleCoverageTool
                     builder.Add((instant, idx));
                     lastIndex = idx;
                 }
-                return builder.ToImmutable();
+                return builder;
             }
             default:
-                return ImmutableArray<(DateTimeOffset, int)>.Empty;
+                return [];
         }
     }
 

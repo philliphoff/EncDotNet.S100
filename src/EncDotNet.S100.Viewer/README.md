@@ -86,7 +86,9 @@ The viewer accepts:
 
 - **S-100 Exchange Sets** — point it at a directory containing a
   `CATALOG.XML` or at a `.zip` exchange-set archive, and it will
-  load every dataset entry the catalogue lists.
+  load every dataset entry the catalogue lists. The canonical
+  `CATALOG.XML` name and the `catalogue.xml` spelling used by some
+  products (e.g. JCOMM/IHO S-411 sample sets) are both recognised.
 - **S-57 / S-63 Exchange Sets** — point it at a directory containing a
   `CATALOG.031` (or drop the `CATALOG.031` file itself) and it will
   enumerate every base cell the catalogue lists, apply each cell's
@@ -96,9 +98,17 @@ The viewer accepts:
   as S-100 sets, driven by the S-57 verifier. (Directory/`CATALOG.031`
   only — zipped S-57 sets are not supported, matching the
   directory-rooted S-57 verifier used by the `s100 validate` CLI.)
+- **Catalogue-less ENC cell folders** — point it at a directory that
+  holds loose base cells (`.000`) with no `CATALOG.031`/`CATALOG.XML`
+  and it loads every base cell, sniffing S-57 vs S-101 per cell and
+  applying each cell's sibling filesystem updates (`.001`, `.002`, …).
+  A dropped folder that yields no renderable cells raises a
+  notification instead of being silently ignored.
 - **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
   S-111), `.gml` (any of the GML-encoded products), `.000` S-101
-  ENC cell, or `.000` S-57 ENC cell onto the window.
+  ENC cell, or `.000` S-57 ENC cell onto the window. A dropped `.000`
+  base cell also picks up any sibling `.001`/`.002`… updates that sit
+  next to it on disk.
 - **Recent files** — the **File → Recent** submenu replays previous
   loads in order; entries that no longer exist on disk are skipped.
 
@@ -133,6 +143,12 @@ is draggable and persisted. The panel opens on the Exchange sets tab,
 unless only loose datasets are loaded, in which case it opens on the
 Datasets tab.
 
+**Double-click a dataset row to reveal it** — the viewer ensures the
+dataset is loaded and then flies the map to that dataset's extent. This
+is the quickest way to locate a member of a wide-spread exchange set,
+especially one that has zoomed out of scale (see *Out-of-scale extent
+indicators* below).
+
 ## The map view
 
 A Mapsui-backed map fills the centre of the window with a basemap
@@ -147,6 +163,24 @@ The viewer renders directly in WGS-84 latitude/longitude internally
 and projects to EPSG:3857 (Web Mercator) for display. Coverage
 grids tagged with UTM-band CRSs (typical for S-102) are reprojected
 on the fly via ProjNet.
+
+### Out-of-scale extent indicators
+
+S-101 datasets stop drawing once the map is zoomed out past their
+coarsest intended display scale. When an exchange set spans far-apart
+areas, framing its union extent can zoom out far enough that *every*
+member disappears — leaving an empty map with nothing to aim at. To keep
+those datasets discoverable, the viewer draws a thin dotted accent-colour
+border around the extent of any loaded, visible dataset **exactly when
+its content has zoomed out of scale**. The border marks where the
+dataset is so you have a target to zoom in on (or double-click its row in
+the Datasets panel to fly straight to it). Zooming back in past the
+dataset's display-scale limit hides the border and restores its content.
+
+The indicators can be turned off via **Settings → Map → Out-of-scale
+dataset outlines** (on by default). They have no effect when "ignore
+scale minima" is enabled, since datasets then never drop out on
+zoom-out.
 
 ## Routes
 
@@ -230,12 +264,29 @@ shows:
   `CATPLE`) are shown as friendly names ("Category of pile") and
   enumerated values are shown with their FC labels. Complex
   attribute groups can be collapsed.
+- An **open-in-eXaminer** link on the feature heading and on each
+  attribute row that opens the matching entry on the
+  [S-100 Feature Catalogue eXaminer](https://s100examiner.com/) in
+  your browser, so you can read the full FC definition. The links
+  appear only for product specs the eXaminer hosts; they can be turned
+  off (or pointed at a mirror) under **Settings → S-100 Feature
+  Catalogue eXaminer**. The **Feature Catalogues** panel offers the
+  same catalogue-level link per built-in/loaded catalogue.
 - A **References** section listing every `xlink:href` the feature
   carries. Clicking a row resolves the reference through the same
   processor and re-targets the pick report — particularly useful
   for S-125 AtoN status bindings and S-421 route topology.
 - A **Time-series chart** when the picked feature is a fixed-station
   observation (S-104 / S-111 data-coding-format-8 stations).
+- An **Egg code** diagram when the picked feature is an S-411 sea-ice
+  or lake-ice area. The WMO / SIGRID-3 "egg" draws the total
+  concentration on top of the oval with the partial-concentration,
+  stage-of-development and form-of-ice rows beneath it (a single ice
+  type folds the partial row away, and open water omits the oval).
+  Thinner fourth / fifth ice classes are flanked to the right of their
+  row outside the oval; snow depth appears as a caption beneath it.
+  Hovering any cell shows its Feature-Catalogue meaning (e.g.
+  "Grey Ice") alongside its role in the egg.
 
 A standard one-shot pick gesture (platform-specific click modifier,
 or a press-and-hold of about half a second) works outside Pick Mode
@@ -320,6 +371,15 @@ and from a pair of compact pill buttons on the map toolbar:
 - **Text groups** — quick toggles for the three S-101 text
   viewing-group layers (Important Text / Other Text / All Other
   Chart Text).
+- **Ice display mode** *(S-411 sea ice)* — a per-dataset selector,
+  shown only when an S-411 dataset is loaded, that switches the
+  sea-ice portrayal between **Concentration** (total concentration),
+  **Stage of development**, and a **Navigational** preview
+  (S-100 Part 9 §11.7). This axis is independent of the ECDIS display
+  category above. The navigational option is *provisional* — a
+  concentration-derived preview, not a POLARIS/RIO navigational-risk
+  product — and is labelled as such in its tooltip. The selection
+  persists between sessions.
 - **Per-spec viewing groups** — the **ECDIS** activity-bar panel
   lists each loaded vector product's viewing groups individually so
   power users can hide or reveal specific symbol families. Labels
@@ -644,13 +704,18 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Twenty-one viewer-only tools
-are injected when the server starts: `render_to_image` (read-only —
+bound port back to the user's `settings.json`. A family of viewer-only
+tools are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
+`capture_app_screenshot` (read-only — captures a PNG of the whole
+application window: chart plus docks, panels, timeline, and status bar),
 `set_viewport` (mutating — drives the live navigator to a bbox or
 centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
-OtherInformation / All), `set_time_step` (mutating — drives the
+OtherInformation / All), `set_display_mode` (mutating — explicit
+per-spec S-100 Part 9 §11.7 mode; today only S-411 sea ice, switching
+`ice-concentration` / `ice-sod` / provisional `ice-navigational`),
+`set_time_step` (mutating — drives the
 global time clock to a sample by index or timestamp),
 `set_own_ship` (mutating — positions and steers the simulated
 own-ship: WGS-84 `lat`/`lon`, `cog`, `sog`, `heading`, and
@@ -673,9 +738,19 @@ panel and route overlay: `create_route`, `list_routes` (read-only),
 `get_route` (read-only), `delete_route`, `append_waypoint`,
 `insert_waypoint`, `move_waypoint`, `delete_waypoint`,
 `set_leg_attributes`, and `set_route_info` (all mutating; fields mirror
-the in-repo S-421 model). See
-`docs/mcp-server.md` for the full catalogue and the read-only /
-mutating split.
+the in-repo S-421 model). Beyond the map, the **activity-panel tools**
+let an agent drive and verify the viewer's non-render UX:
+`list_panels` (read-only — snapshots the left / right / bottom dock
+tabs and their `available` / `selected` / `dockOpen` / `showing`
+state) and `set_panel` (mutating — shows or hides a panel by id, e.g.
+`Datasets`, `LayerStack`, `PickReport`, `Timeline`, so a code / run /
+verify loop can assert panel behaviour without the GUI).
+`capture_app_screenshot` (read-only) completes that loop visually: it
+returns a PNG of the **whole application window** — chart plus the
+surrounding chrome (docks, panels, timeline, status bar) — so an agent
+can *see* the non-render UX, where `render_to_image` captures only the
+map surface. See `docs/mcp-server.md` for the full catalogue and the
+read-only / mutating split.
 
 **Settings isolation.** `--settings <PATH>` points the run at an
 alternate settings file instead of the per-user default.
@@ -718,6 +793,18 @@ Natural Earth 1:10m land (public domain) with zero network access;
 map to Online/None. Use None or Offline for offline operation, or for
 performance runs that want to measure only dataset rendering without
 basemap tile fetch / raster activity (issue #295).
+
+The **Offline** basemap repeats its Natural Earth land across the
+immediately-adjacent world copies (one circumference east and west), so
+a dataset kept in a continuous longitude frame across the ±180°
+antimeridian — e.g. the US NWS S-411 sea-ice product (~175°E → ~225°E) —
+has land beneath it instead of floating over empty water. The layer
+still reports a single-world extent, so "zoom to extent" is unaffected.
+The **Online** OpenStreetMap tiles are *not* world-copied (the XYZ tile
+schema spans one world and Mapsui's tiling does not wrap), so such a
+dataset shows no online tiles beneath the portion east of +180°; use the
+Offline basemap for antimeridian datasets. Wrapping the online tile
+source is a possible future enhancement.
 
 **Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
 own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course

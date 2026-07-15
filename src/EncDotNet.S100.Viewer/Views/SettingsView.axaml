@@ -186,6 +186,12 @@
                 </ComboBox>
             </Grid>
 
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowOutOfScaleExtentIndicators}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShowOutOfScaleExtentIndicators}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOutOfScaleExtentIndicators}" />
+            </Grid>
+
             <!-- Render subsystem A/B + tiled knobs (issue #331) -->
             <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
                        FontSize="12"
@@ -291,6 +297,13 @@
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_TilePredictionEnabled}">
                         <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TilePredictionEnabled}" />
                         <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding TilePredictionEnabled}" />
+                    </Grid>
+
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          IsEnabled="{Binding TileCrossBandPrewarmEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileCrossBandPrewarmEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TileCrossBandPrewarmEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding TileCrossBandPrewarmEnabled}" />
                     </Grid>
 
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
@@ -585,6 +598,40 @@
                             ToolTip.Tip="{x:Static loc:Strings.Settings_McpPort_ResetToAutoTooltip}"
                             VerticalAlignment="Center" />
                 </StackPanel>
+            </StackPanel>
+
+            <!-- S-100 Feature Catalogue eXaminer links (issue #442) -->
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_ExaminerSection}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Opacity="0.7" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_ExaminerSection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_ExaminerEnabledTooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ExaminerEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ExaminerLinksEnabled}" />
+            </Grid>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_ExaminerBaseUrl}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding ExaminerBaseUrl}"
+                             ToolTip.Tip="{x:Static loc:Strings.Settings_ExaminerBaseUrlTooltip}"
+                             MinWidth="120"
+                             Margin="0,0,8,0"
+                             VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="{x:Static loc:Strings.Settings_ExaminerBaseUrl_Reset}"
+                            Command="{Binding ResetExaminerBaseUrlCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Settings_ExaminerBaseUrl_ResetTooltip}"
+                            VerticalAlignment="Center" />
+                </Grid>
             </StackPanel>
 
             <!-- AIS overlay (PR-D3) -->

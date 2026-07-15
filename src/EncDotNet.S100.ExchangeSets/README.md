@@ -39,6 +39,17 @@ are wrapped in product-specific elements and namespaces
 (e.g. `S102_DatasetDiscoveryMetadata` in `http://www.iho.int/s102/2.0/xc`),
 not just the generic `S100_DatasetDiscoveryMetadata`.
 
+### Legacy `S100EC` catalogue layout
+
+Modern S-100 (Edition 5.x, Part 17) nests discovery records inside a
+wrapper element such as `<datasetDiscoveryMetadata>`. Some products —
+notably JCOMM/IHO **S-411** sample sets (namespace
+`http://www.iho.int/S100EC`) — instead place the
+`S100_DatasetDiscoveryMetadata` records **directly under the catalogue
+root** with no wrapper. The reader tolerates both layouts: when the
+wrapper is present its children are read, otherwise the root is scanned
+directly.
+
 ## Digital Signature Verification
 
 The library implements the S-100 Part 15 Data Protection Scheme for **signature verification** and a complementary **checksum/integrity** dimension. Exchange sets may include per-file digital signatures (DSA or ECDSA P-256 over SHA-256) embedded in `CATALOG.XML`, along with a certificate block referencing the signing data provider. Independently of any signature, each file's SHA-256 digest is computed and its presence/readability confirmed, so even an **unsigned** exchange set can be checked for missing or corrupt files.

@@ -1,5 +1,6 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S201.Diagnostics;
 
@@ -79,8 +80,8 @@ internal static class S201DatasetReader
         string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         string? productId = ReadProductIdentifier(root);
 
-        var features = ImmutableArray.CreateBuilder<S201Feature>();
-        var informationTypes = ImmutableArray.CreateBuilder<S201InformationType>();
+        var features = new List<S201Feature>();
+        var informationTypes = new List<S201InformationType>();
         var informationTypeIds = new HashSet<string>(StringComparer.Ordinal);
 
         var pendingFeatureRefs = new List<(PendingFeature Pending, List<(string Role, string Target)> Refs)>();
@@ -131,8 +132,8 @@ internal static class S201DatasetReader
         // Unknown targets default to feature references.
         foreach (var (pending, refs) in pendingFeatureRefs)
         {
-            var infoRefs = ImmutableArray.CreateBuilder<S201InformationReference>();
-            var featureRefs = ImmutableArray.CreateBuilder<S201FeatureReference>();
+            var infoRefs = new List<S201InformationReference>();
+            var featureRefs = new List<S201FeatureReference>();
             foreach (var (role, target) in refs)
             {
                 if (informationTypeIds.Contains(target))
@@ -155,8 +156,8 @@ internal static class S201DatasetReader
                 InteriorRings = pending.InteriorRings,
                 Attributes = pending.Attributes,
                 ComplexAttributes = pending.ComplexAttributes,
-                InformationReferences = infoRefs.ToImmutable(),
-                FeatureReferences = featureRefs.ToImmutable(),
+                InformationReferences = infoRefs,
+                FeatureReferences = featureRefs,
             });
         }
 
@@ -165,8 +166,8 @@ internal static class S201DatasetReader
             ProductIdentifier = productId ?? "S-201",
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
-            Features = features.ToImmutable(),
-            InformationTypes = informationTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = informationTypes,
         };
     }
 
@@ -185,12 +186,12 @@ internal static class S201DatasetReader
         string Id,
         string FeatureType,
         S100GeometryType GeometryType,
-        ImmutableArray<(double, double)> Points,
-        ImmutableArray<ImmutableArray<(double, double)>> Curves,
-        ImmutableArray<(double, double)> ExteriorRing,
-        ImmutableArray<ImmutableArray<(double, double)>> InteriorRings,
-        ImmutableDictionary<string, string> Attributes,
-        ImmutableArray<S201ComplexAttribute> ComplexAttributes);
+        IReadOnlyList<GeoPosition> Points,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> Curves,
+        IReadOnlyList<GeoPosition> ExteriorRing,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings,
+        IReadOnlyDictionary<string, string> Attributes,
+        IReadOnlyList<S201ComplexAttribute> ComplexAttributes);
 
     private static (PendingFeature, List<(string, string)>) ParseFeaturePending(XElement element)
     {
@@ -223,12 +224,12 @@ internal static class S201DatasetReader
         };
     }
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Elements()
@@ -252,7 +253,7 @@ internal static class S201DatasetReader
         {
             geometryType = S100GeometryType.Curve;
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            if (coords.Length > 0)
+            if (coords.Count > 0)
                 curves = [coords];
         }
 
@@ -279,10 +280,10 @@ internal static class S201DatasetReader
                  e.Name.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase)));
     }
 
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S201ComplexAttribute>, List<(string, string)>) ParseAttributes(XElement element)
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S201ComplexAttribute>, List<(string, string)>) ParseAttributes(XElement element)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S201ComplexAttribute>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S201ComplexAttribute>();
         var xlinkRefs = new List<(string, string)>();
 
         foreach (var child in element.Elements())
@@ -307,7 +308,7 @@ internal static class S201DatasetReader
 
             if (child.HasElements)
             {
-                var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
+                var subAttrs = new Dictionary<string, string>();
                 foreach (var sub in child.Elements())
                 {
                     if (!sub.HasElements && !string.IsNullOrEmpty(sub.Value))
@@ -318,7 +319,7 @@ internal static class S201DatasetReader
                     complex.Add(new S201ComplexAttribute
                     {
                         Code = localName,
-                        SubAttributes = subAttrs.ToImmutable(),
+                        SubAttributes = subAttrs,
                     });
                 }
             }
@@ -328,7 +329,7 @@ internal static class S201DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable(), xlinkRefs);
+        return (simple, complex, xlinkRefs);
     }
 
     /// <summary>

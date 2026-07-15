@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-
 namespace EncDotNet.S100.Validation;
 
 /// <summary>
@@ -10,26 +8,24 @@ namespace EncDotNet.S100.Validation;
 /// <param name="RulesEvaluated">The number of rules that were evaluated.</param>
 /// <param name="RulesWithFindings">The number of rules that emitted at least one finding.</param>
 public sealed record ValidationReport(
-    ImmutableArray<ValidationFinding> Findings,
+    IReadOnlyList<ValidationFinding> Findings,
     int RulesEvaluated,
     int RulesWithFindings)
 {
     /// <summary>True when no rule emitted a finding.</summary>
-    public bool IsValid => Findings.IsDefaultOrEmpty;
+    public bool IsValid => Findings.Count == 0;
 
     /// <summary>True when any finding has severity <see cref="ValidationSeverity.Error"/>.</summary>
-    public bool HasErrors => !Findings.IsDefaultOrEmpty && Findings.Any(f => f.Severity == ValidationSeverity.Error);
+    public bool HasErrors => Findings.Any(f => f.Severity == ValidationSeverity.Error);
 
     /// <summary>True when any finding has severity <see cref="ValidationSeverity.Warning"/>.</summary>
-    public bool HasWarnings => !Findings.IsDefaultOrEmpty && Findings.Any(f => f.Severity == ValidationSeverity.Warning);
+    public bool HasWarnings => Findings.Any(f => f.Severity == ValidationSeverity.Warning);
 
     /// <summary>Returns findings filtered to a particular severity.</summary>
     public IEnumerable<ValidationFinding> FindingsOfSeverity(ValidationSeverity severity)
-        => Findings.IsDefaultOrEmpty
-            ? Enumerable.Empty<ValidationFinding>()
-            : Findings.Where(f => f.Severity == severity);
+        => Findings.Where(f => f.Severity == severity);
 
     /// <summary>An empty report (no rules, no findings).</summary>
     public static ValidationReport Empty { get; } =
-        new(ImmutableArray<ValidationFinding>.Empty, RulesEvaluated: 0, RulesWithFindings: 0);
+        new([], RulesEvaluated: 0, RulesWithFindings: 0);
 }

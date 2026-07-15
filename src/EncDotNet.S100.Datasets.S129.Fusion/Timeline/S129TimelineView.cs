@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S129.DataModel;
 
 namespace EncDotNet.S100.Datasets.S129.Fusion.Timeline;
@@ -28,9 +27,9 @@ namespace EncDotNet.S100.Datasets.S129.Fusion.Timeline;
 /// </remarks>
 public sealed class S129TimelineView
 {
-    private readonly ImmutableArray<S129ControlPoint> _timedControlPoints;
-    private readonly ImmutableArray<DateTimeOffset> _times;
-    private readonly ImmutableArray<int> _firstIndexByTime;
+    private readonly IReadOnlyList<S129ControlPoint> _timedControlPoints;
+    private readonly IReadOnlyList<DateTimeOffset> _times;
+    private readonly IReadOnlyList<int> _firstIndexByTime;
 
     /// <summary>The source plan.</summary>
     public S129UnderKeelClearancePlan Plan { get; }
@@ -40,19 +39,19 @@ public sealed class S129TimelineView
     /// the set of <see cref="S129ControlPoint.ExpectedPassingTime"/>
     /// values present in <see cref="Plan"/>, deduplicated.
     /// </summary>
-    public ImmutableArray<DateTimeOffset> Times => _times;
+    public IReadOnlyList<DateTimeOffset> Times => _times;
 
     /// <summary>The earliest sample time, or <c>null</c> when the timeline is empty.</summary>
-    public DateTimeOffset? Start => _times.IsDefaultOrEmpty ? null : _times[0];
+    public DateTimeOffset? Start => _times.Count == 0 ? null : _times[0];
 
     /// <summary>The latest sample time, or <c>null</c> when the timeline is empty.</summary>
-    public DateTimeOffset? End => _times.IsDefaultOrEmpty ? null : _times[^1];
+    public DateTimeOffset? End => _times.Count == 0 ? null : _times[^1];
 
     /// <summary>
     /// <c>true</c> when the source plan has no control points with an
     /// <see cref="S129ControlPoint.ExpectedPassingTime"/>.
     /// </summary>
-    public bool IsEmpty => _times.IsDefaultOrEmpty;
+    public bool IsEmpty => _times.Count == 0;
 
     /// <summary>
     /// Builds a timeline view from an
@@ -64,25 +63,25 @@ public sealed class S129TimelineView
         ArgumentNullException.ThrowIfNull(plan);
         Plan = plan;
 
-        var timed = plan.ControlPoints
+        IReadOnlyList<S129ControlPoint> timed = plan.ControlPoints
             .Where(cp => cp.ExpectedPassingTime.HasValue)
-            .ToImmutableArray();
+            .ToArray();
         _timedControlPoints = timed;
 
-        if (timed.IsDefaultOrEmpty)
+        if (timed.Count == 0)
         {
-            _times = ImmutableArray<DateTimeOffset>.Empty;
-            _firstIndexByTime = ImmutableArray<int>.Empty;
+            _times = [];
+            _firstIndexByTime = [];
             return;
         }
 
         // The projection already sorts CPs by ExpectedPassingTime
         // (stable); just collect distinct times and record the index of
         // the first CP at each time so overlap detection is O(1).
-        var times = ImmutableArray.CreateBuilder<DateTimeOffset>();
-        var firstIndex = ImmutableArray.CreateBuilder<int>();
+        var times = new List<DateTimeOffset>();
+        var firstIndex = new List<int>();
         DateTimeOffset? previous = null;
-        for (int i = 0; i < timed.Length; i++)
+        for (int i = 0; i < timed.Count; i++)
         {
             var t = timed[i].ExpectedPassingTime!.Value;
             if (previous.HasValue && t == previous.Value) continue;
@@ -90,8 +89,8 @@ public sealed class S129TimelineView
             firstIndex.Add(i);
             previous = t;
         }
-        _times = times.ToImmutable();
-        _firstIndexByTime = firstIndex.ToImmutable();
+        _times = times;
+        _firstIndexByTime = firstIndex;
     }
 
     /// <summary>
@@ -100,7 +99,7 @@ public sealed class S129TimelineView
     /// </summary>
     public IEnumerable<S129TimelineSnapshot> EnumerateTimeline()
     {
-        for (int i = 0; i < _times.Length; i++)
+        for (int i = 0; i < _times.Count; i++)
         {
             int cpIndex = _firstIndexByTime[i];
             bool overlap = HasOverlapAt(i, cpIndex);
@@ -131,14 +130,10 @@ public sealed class S129TimelineView
         DateTimeOffset time,
         S129TimelineSamplingMode mode = S129TimelineSamplingMode.NearestEarlier)
     {
-        if (_times.IsDefaultOrEmpty) return null;
+        if (_times.Count == 0) return null;
 
-        // Binary search for the time. ImmutableArray<T>.BinarySearch is
-        // not directly exposed on the struct; use Array.BinarySearch over
-        // the underlying segment via ToArray() once is fine for the
-        // small sizes typical of an S-129 plan, but we keep an in-place
-        // loop to avoid allocations.
-        int lo = 0, hi = _times.Length - 1;
+        // Keep an in-place binary search to avoid allocations.
+        int lo = 0, hi = _times.Count - 1;
         int exact = -1;
         while (lo <= hi)
         {
@@ -175,7 +170,7 @@ public sealed class S129TimelineView
                 if (exact >= 0) { chosen = exact; isExact = true; }
                 else
                 {
-                    if (lo >= _times.Length) return null;
+                    if (lo >= _times.Count) return null;
                     chosen = lo;
                     isExact = false;
                 }
@@ -188,7 +183,7 @@ public sealed class S129TimelineView
                     int prev = lo - 1;
                     int next = lo;
                     if (prev < 0) { chosen = next; isExact = false; break; }
-                    if (next >= _times.Length) { chosen = prev; isExact = false; break; }
+                    if (next >= _times.Count) { chosen = prev; isExact = false; break; }
                     var dPrev = time - _times[prev];
                     var dNext = _times[next] - time;
                     // Ties resolve to the earlier sample.
@@ -211,9 +206,9 @@ public sealed class S129TimelineView
 
     private bool HasOverlapAt(int timeIndex, int firstCpIndex)
     {
-        int nextCpIndex = timeIndex + 1 < _firstIndexByTime.Length
+        int nextCpIndex = timeIndex + 1 < _firstIndexByTime.Count
             ? _firstIndexByTime[timeIndex + 1]
-            : _timedControlPoints.Length;
+            : _timedControlPoints.Count;
         return (nextCpIndex - firstCpIndex) > 1;
     }
 }

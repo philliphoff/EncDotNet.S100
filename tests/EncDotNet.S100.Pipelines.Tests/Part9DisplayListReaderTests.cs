@@ -45,8 +45,8 @@ public class Part9DisplayListReaderTests
         Assert.Equal(15, text.Rotation);
         Assert.Equal(TextHorizontalAlignment.Start, text.HorizontalAlignment);
         Assert.Equal(TextVerticalAlignment.Bottom, text.VerticalAlignment);
-        Assert.Equal(0.5, text.OffsetXmm);
-        Assert.Equal(1.0, text.OffsetYmm);
+        Assert.Equal(0.5, text.OffsetX);
+        Assert.Equal(1.0, text.OffsetY);
         Assert.Null(text.LinePlacementPosition);
         Assert.Null(text.LineStartOffset);
     }

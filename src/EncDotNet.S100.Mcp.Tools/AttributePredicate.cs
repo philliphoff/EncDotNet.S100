@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
@@ -77,7 +76,7 @@ public static class AttributePredicateJsonReader
 {
     /// <summary>Parses <paramref name="json"/> into predicates.</summary>
     /// <exception cref="ArgumentException">The JSON is malformed or names an unknown operator.</exception>
-    public static ImmutableArray<AttributePredicate> Parse(string json)
+    public static IReadOnlyList<AttributePredicate> Parse(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
 
@@ -105,19 +104,19 @@ public static class AttributePredicateJsonReader
         }
     }
 
-    private static ImmutableArray<AttributePredicate> ParseObject(JsonElement obj)
+    private static IReadOnlyList<AttributePredicate> ParseObject(JsonElement obj)
     {
-        var builder = ImmutableArray.CreateBuilder<AttributePredicate>();
+        var builder = new List<AttributePredicate>();
         foreach (var property in obj.EnumerateObject())
         {
             builder.Add(new AttributePredicate(property.Name, AttributeOperator.Eq, ReadScalar(property.Value)));
         }
-        return builder.ToImmutable();
+        return builder;
     }
 
-    private static ImmutableArray<AttributePredicate> ParseArray(JsonElement array)
+    private static IReadOnlyList<AttributePredicate> ParseArray(JsonElement array)
     {
-        var builder = ImmutableArray.CreateBuilder<AttributePredicate>();
+        var builder = new List<AttributePredicate>();
         foreach (var item in array.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
@@ -145,7 +144,7 @@ public static class AttributePredicateJsonReader
 
             builder.Add(new AttributePredicate(attrEl.GetString()!, op, value));
         }
-        return builder.ToImmutable();
+        return builder;
     }
 
     private static string? ReadScalar(JsonElement element) => element.ValueKind switch
@@ -185,11 +184,11 @@ public static class AttributePredicateEvaluator
     /// <paramref name="predicates"/> holds for <paramref name="feature"/>.
     /// An empty predicate set matches every feature.
     /// </summary>
-    public static bool Matches(IS100Feature feature, ImmutableArray<AttributePredicate> predicates)
+    public static bool Matches(IS100Feature feature, IReadOnlyList<AttributePredicate> predicates)
     {
         ArgumentNullException.ThrowIfNull(feature);
 
-        if (predicates.IsDefaultOrEmpty)
+        if (predicates.Count == 0)
         {
             return true;
         }
@@ -237,7 +236,7 @@ public static class AttributePredicateEvaluator
         };
     }
 
-    private static bool TryGet(ImmutableDictionary<string, string> attributes, string key, out string? value)
+    private static bool TryGet(IReadOnlyDictionary<string, string> attributes, string key, out string? value)
     {
         if (attributes.TryGetValue(key, out var exact))
         {

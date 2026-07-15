@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
 
@@ -28,27 +27,27 @@ public sealed class S421Route
     /// Waypoints in route order, resolved via
     /// <c>RouteWaypoints/routeWaypoint</c> <c>xlink:href</c> references.
     /// </summary>
-    public required ImmutableArray<S421Waypoint> Waypoints { get; init; }
+    public required IReadOnlyList<S421Waypoint> Waypoints { get; init; }
 
     /// <summary>
     /// Route legs in geometric order. Each leg corresponds to a
     /// <c>RouteWaypointLeg</c> feature; legs are typically resolved via
     /// <c>routeWaypointLeg</c> references on waypoints.
     /// </summary>
-    public required ImmutableArray<S421Leg> Legs { get; init; }
+    public required IReadOnlyList<S421Leg> Legs { get; init; }
 
     /// <summary>Action points referenced by the route, in document order.</summary>
-    public required ImmutableArray<S421ActionPoint> ActionPoints { get; init; }
+    public required IReadOnlyList<S421ActionPoint> ActionPoints { get; init; }
 
     /// <summary>Schedules referenced by the route, in document order.</summary>
-    public required ImmutableArray<S421Schedule> Schedules { get; init; }
+    public required IReadOnlyList<S421Schedule> Schedules { get; init; }
 
     /// <summary>
     /// Attributes on the source <c>Route</c> feature that are not recognised
     /// by this typed projection. Unknown / extension / future-edition
     /// attributes round-trip here verbatim.
     /// </summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }
 
 /// <summary>
@@ -112,7 +111,7 @@ public sealed class S421RouteInfo
     public S421VesselInfo? Vessel { get; init; }
 
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }
 
 /// <summary>

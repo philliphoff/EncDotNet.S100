@@ -218,12 +218,12 @@ internal sealed class HelmViewModel : ViewModelBase, IDisposable
         {
             if (fix is not null)
             {
-                var cog = fix.CourseOverGroundDeg ?? 0.0;
+                var cog = fix.CourseOverGround?.TotalDegrees ?? 0.0;
                 CourseDeg = Math.Round(cog, 1);
                 PositionText = LatLonFormatter.Format(fix.Latitude, fix.Longitude);
                 CourseText = FormatBearing(cog);
-                SpeedText = FormatSpeed(fix.SpeedOverGroundMs ?? 0.0);
-                HeadingText = FormatBearing(fix.HeadingDeg ?? cog);
+                SpeedText = FormatSpeed(fix.SpeedOverGround?.TotalMetresPerSecond ?? 0.0);
+                HeadingText = FormatBearing(fix.Heading?.TotalDegrees ?? cog);
             }
 
             SpeedMs = Math.Round(commandedSpeed, 2);

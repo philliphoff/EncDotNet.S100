@@ -64,6 +64,17 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             table.AddRow("Headless render", processor is IHeadlessImageRenderer ? "[green]yes[/]" : "[yellow]no[/]");
 
+            if (processor is IDisplayModeAwareDatasetProcessor displayModeAware &&
+                displayModeAware.DeclaredDisplayModeIds.Count > 0)
+            {
+                var tokens = displayModeAware.DeclaredDisplayModeIds.Select(DisplayModeCliToken).ToList();
+                table.AddRow("Display modes", Markup.Escape(string.Join(", ", tokens)));
+                if (tokens.Contains("ice-navigational"))
+                {
+                    table.AddRow(string.Empty, "[yellow]ice-navigational is a provisional preview, not a POLARIS/RIO risk computation[/]");
+                }
+            }
+
             if (processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0)
             {
                 table.AddRow("Time steps", timeAware.AvailableTimes.Count.ToString());
@@ -139,4 +150,13 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
     /// </summary>
     private static string DescribeDeclaredEdition(SpecRef spec) =>
         spec.Edition == default ? "(not declared)" : spec.Edition.ToString();
+
+    /// <summary>
+    /// Maps a spec-native display-mode id to the friendly <c>render
+    /// --display-mode</c> token, falling back to the raw id for modes with no
+    /// CLI alias. Kept in step with
+    /// <c>RenderCommand.TryParseDisplayMode</c> (issue #416).
+    /// </summary>
+    private static string DisplayModeCliToken(string displayModeId) =>
+        S411DisplayModes.ToCliToken(displayModeId);
 }

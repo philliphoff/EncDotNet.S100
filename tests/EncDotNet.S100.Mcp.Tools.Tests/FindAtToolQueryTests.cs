@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
@@ -41,7 +40,7 @@ public class FindAtToolQueryTests
             Query: new GeoQuery.Box(new GeoBoundingBox(3, 3, 12, 12))));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(2, value.Datasets.Length);
+        Assert.Equal(2, value.Datasets.Count);
         Assert.Equal(new[] { "a", "b" }, value.Datasets.Select(d => d.Id.Value).ToArray());
     }
 
@@ -57,7 +56,7 @@ public class FindAtToolQueryTests
         // (≈1°) should pick up the dataset 0.5° to the north; without a
         // corridor it should not.
         var line = new GeoPolyline(
-            ImmutableArray.Create(new GeoPoint(0, -1), new GeoPoint(0, 1)),
+            [new GeoPoint(0, -1), new GeoPoint(0, 1)],
             CorridorWidthMeters: 111_320.0);
 
         var withCorridor = await tool.InvokeAsync(new FindAtRequest(
@@ -77,11 +76,11 @@ public class FindAtToolQueryTests
         var catalog = new FakeDatasetCatalog();
         var tool = new FindAtTool(catalog);
 
-        var open = new GeoPolygon(ImmutableArray.Create(
+        var open = new GeoPolygon([
             new GeoPoint(0, 0),
             new GeoPoint(0, 1),
             new GeoPoint(1, 1),
-            new GeoPoint(1, 0))); // unclosed
+            new GeoPoint(1, 0)]); // unclosed
         var result = await tool.InvokeAsync(new FindAtRequest(
             0, 0, Query: new GeoQuery.Polygon(open)));
 

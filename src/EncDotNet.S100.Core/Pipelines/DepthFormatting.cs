@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Pipelines;
 
@@ -10,23 +11,22 @@ namespace EncDotNet.S100.Pipelines;
 /// (settings inputs, Pick panel, S-102 legend, status bar).
 /// </summary>
 /// <remarks>
-/// Conversion factors used:
-/// <list type="bullet">
-///   <item><description>1 m = 3.28084 ft</description></item>
-///   <item><description>1 fathom = 6 ft</description></item>
-///   <item><description>1 m = 0.546806649168854 fm (= 3.28084 / 6)</description></item>
-/// </list>
+/// Unit conversions are delegated to <see cref="Depth"/>/<see cref="Length"/>,
+/// which use the exact international foot (1 ft = 0.3048 m) and fathom
+/// (1 fathom = 6 ft = 1.8288 m). This type adds only the string
+/// formatting/parsing (including the combined fathoms-and-feet form) that the
+/// viewer needs.
 /// </remarks>
 public static class DepthFormatting
 {
     /// <summary>Feet per metre (international foot).</summary>
-    public const double FeetPerMetre = 3.28084;
+    public const double FeetPerMetre = 1.0 / Length.MetresPerFoot;
 
     /// <summary>Feet per fathom.</summary>
     public const double FeetPerFathom = 6.0;
 
     /// <summary>Fathoms per metre.</summary>
-    public const double FathomsPerMetre = FeetPerMetre / FeetPerFathom;
+    public const double FathomsPerMetre = 1.0 / Length.MetresPerFathom;
 
     /// <summary>
     /// Converts a depth value from canonical metres to the supplied display unit.
@@ -34,9 +34,9 @@ public static class DepthFormatting
     public static double ToDisplay(double metres, DepthUnit unit) => unit switch
     {
         DepthUnit.Metres => metres,
-        DepthUnit.Feet => metres * FeetPerMetre,
-        DepthUnit.FathomsFeet => metres * FeetPerMetre, // exposed as total feet; Format splits into fm/ft
-        DepthUnit.Fathoms => metres * FathomsPerMetre,
+        DepthUnit.Feet => Depth.FromMetres(metres).TotalFeet,
+        DepthUnit.FathomsFeet => Depth.FromMetres(metres).TotalFeet, // exposed as total feet; Format splits into fm/ft
+        DepthUnit.Fathoms => Depth.FromMetres(metres).TotalFathoms,
         _ => metres,
     };
 
@@ -50,9 +50,9 @@ public static class DepthFormatting
     public static double ToMetres(double display, DepthUnit unit) => unit switch
     {
         DepthUnit.Metres => display,
-        DepthUnit.Feet => display / FeetPerMetre,
-        DepthUnit.FathomsFeet => display / FeetPerMetre,
-        DepthUnit.Fathoms => display / FathomsPerMetre,
+        DepthUnit.Feet => Depth.FromFeet(display).TotalMetres,
+        DepthUnit.FathomsFeet => Depth.FromFeet(display).TotalMetres,
+        DepthUnit.Fathoms => Depth.FromFathoms(display).TotalMetres,
         _ => display,
     };
 
@@ -88,7 +88,7 @@ public static class DepthFormatting
         {
             // Convert to total feet, then split into fathoms + feet remainder.
             // Sign-aware so values like -3.5m round-trip sensibly.
-            double totalFeet = metres * FeetPerMetre;
+            double totalFeet = Depth.FromMetres(metres).TotalFeet;
             int sign = totalFeet < 0 ? -1 : 1;
             double absFeet = Math.Abs(totalFeet);
             int wholeFeet = (int)Math.Round(absFeet, MidpointRounding.AwayFromZero);
@@ -190,7 +190,7 @@ public static class DepthFormatting
         if (!sawFm && !sawFt) return false;
 
         double totalFeet = fathoms * FeetPerFathom + feet;
-        metres = sign * totalFeet / FeetPerMetre;
+        metres = sign * Depth.FromFeet(totalFeet).TotalMetres;
         return true;
     }
 

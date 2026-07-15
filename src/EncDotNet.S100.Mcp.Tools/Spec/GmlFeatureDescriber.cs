@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -19,7 +18,7 @@ namespace EncDotNet.S100.Mcp.Tools.Spec;
 /// </para>
 /// <para>
 /// References (xlink:href cross-feature bindings) are intentionally
-/// returned as <see cref="ImmutableArray{T}.Empty"/> here because each
+/// returned as an empty read-only list here because each
 /// spec models references with its own type
 /// (<c>S125InformationReference</c>, <c>S131Reference</c>,
 /// <c>S201FeatureReference</c>, …) and unifying them requires a
@@ -69,7 +68,7 @@ internal sealed class GmlFeatureDescriber : ISpecFeatureDescriber
                 context.Dataset.Spec,
                 feature.FeatureType,
                 attributesJson,
-                ImmutableArray<FeatureReference>.Empty));
+                []));
     }
 
     private static JsonElement SerializeFeature(IS100Feature feature)

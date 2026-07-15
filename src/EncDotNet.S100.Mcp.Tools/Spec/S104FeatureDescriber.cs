@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S104;
@@ -64,7 +63,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
                 context.Dataset.Spec,
                 InstanceFeatureType,
                 attributes,
-                ImmutableArray<FeatureReference>.Empty));
+                []));
         }
 
         var idx = groupIndex.Value - 1;
@@ -79,7 +78,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
             context.Dataset.Spec,
             InstanceFeatureType,
             groupAttrs,
-            ImmutableArray<FeatureReference>.Empty));
+            []));
     }
 
     private static ToolResult<DescribeFeatureResult> DescribeStations(
@@ -98,7 +97,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
                     context.Dataset.Spec,
                     InstanceFeatureType,
                     attributes,
-                    ImmutableArray<FeatureReference>.Empty));
+                    []));
             }
 
             var idx = groupIndex.Value - 1;
@@ -113,7 +112,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
                 context.Dataset.Spec,
                 StationFeatureType,
                 stationAttrs,
-                ImmutableArray<FeatureReference>.Empty));
+                []));
         }
 
         // Try station identifier.
@@ -126,7 +125,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
                     context.Dataset.Spec,
                     StationFeatureType,
                     attrs,
-                    ImmutableArray<FeatureReference>.Empty));
+                    []));
             }
         }
 

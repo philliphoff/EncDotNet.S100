@@ -21,8 +21,8 @@ public class DataModelTests
         {
             ProductIdentifier = "S-201",
             DatasetIdentifier = "EMPTY",
-            Features = System.Collections.Immutable.ImmutableArray<S201Feature>.Empty,
-            InformationTypes = System.Collections.Immutable.ImmutableArray<S201InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         Assert.Throws<InvalidOperationException>(() => S201AtonInventory.From(empty, out _));
     }
@@ -34,7 +34,7 @@ public class DataModelTests
         var inv = S201AtonInventory.From(ds, out var diagnostics);
 
         Assert.Equal("S-201", inv.ProductIdentifier);
-        Assert.Equal(2, inv.AtoNs.Length);
+        Assert.Equal(2, inv.AtoNs.Count);
 
         var buoy = Assert.IsType<S201StructureObject>(inv.AtoNs.Single(a => a.Id == "f1"));
         Assert.Equal("LateralBuoy", buoy.FeatureClass);
@@ -81,7 +81,7 @@ public class DataModelTests
         Assert.Single(inv.Aggregations);
         var agg = inv.Aggregations[0];
         Assert.Equal("agg1", agg.Id);
-        Assert.Equal(2, agg.Peers.Length);
+        Assert.Equal(2, agg.Peers.Count);
         Assert.Contains(agg.Peers, p => p.Id == "structure1");
         Assert.Contains(agg.Peers, p => p.Id == "equipment1");
 
@@ -109,7 +109,7 @@ public class DataModelTests
         var ds = OpenFixture("aton_ais.gml");
         var inv = S201AtonInventory.From(ds, out _);
 
-        Assert.Equal(2, inv.ElectronicAtoNs.Length);
+        Assert.Equal(2, inv.ElectronicAtoNs.Count);
 
         var virtualAis = inv.ElectronicAtoNs.Single(e => e.Id == "virtualAis");
         Assert.Equal(AisAtonKind.Virtual, virtualAis.Kind);
@@ -171,7 +171,7 @@ public class DataModelTests
         var inv = S201AtonInventory.From(ds, out _);
 
         // Both LateralBuoy and Landmark are structures.
-        Assert.Equal(2, inv.Structures.Length);
+        Assert.Equal(2, inv.Structures.Count);
         Assert.Empty(inv.Equipment);
         Assert.Empty(inv.ElectronicAtoNs);
         Assert.Single(inv.StatusInformation);

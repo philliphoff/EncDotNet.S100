@@ -35,6 +35,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? _ownShipHelm;
     private readonly RoutesService? _routesService;
     private readonly IGeographicPickPresenter? _pickPresenter;
+    private readonly IViewerUiControllerAccessor? _uiControllerAccessor;
+    private readonly IAppScreenshotProvider? _appScreenshot;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -52,7 +54,9 @@ internal sealed class McpServerHost : IAsyncDisposable
         IDatasetLoadGateway? loadGateway = null,
         EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null,
         RoutesService? routesService = null,
-        IGeographicPickPresenter? pickPresenter = null)
+        IGeographicPickPresenter? pickPresenter = null,
+        IViewerUiControllerAccessor? uiControllerAccessor = null,
+        IAppScreenshotProvider? appScreenshot = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -66,6 +70,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         _ownShipHelm = ownShipHelm;
         _routesService = routesService;
         _pickPresenter = pickPresenter;
+        _uiControllerAccessor = uiControllerAccessor;
+        _appScreenshot = appScreenshot;
         _loggers = loggers;
     }
 
@@ -285,6 +291,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(SetPaletteMcpAdapter.Create(new SetPaletteTool(_renderStateAccessor)));
             tools.Add(SetDisplayCategoryMcpAdapter.Create(new SetDisplayCategoryTool(_renderStateAccessor)));
+            tools.Add(SetDisplayModeMcpAdapter.Create(new SetDisplayModeTool(_renderStateAccessor)));
             tools.Add(SetRenderSubsystemMcpAdapter.Create(new SetRenderSubsystemTool(_renderStateAccessor)));
         }
         if (_globalTime is not null)
@@ -305,6 +312,15 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_ownShipHelm is not null)
         {
             tools.Add(SetOwnShipMcpAdapter.Create(new SetOwnShipTool(_ownShipHelm)));
+        }
+        if (_uiControllerAccessor is not null)
+        {
+            tools.Add(ListPanelsMcpAdapter.Create(new ListPanelsTool(_uiControllerAccessor)));
+            tools.Add(SetPanelMcpAdapter.Create(new SetPanelTool(_uiControllerAccessor)));
+        }
+        if (_appScreenshot is not null)
+        {
+            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(_appScreenshot)));
         }
         if (_routesService is not null)
         {

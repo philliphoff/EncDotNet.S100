@@ -272,6 +272,15 @@ internal sealed class ViewerSettings
     public bool? TilePredictionEnabled { get; set; }
 
     /// <summary>
+    /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
+    /// <see langword="null"/> → best default (on, except off by default on the
+    /// LowEnd tier; an explicit opt-in is still honoured there). Mirrors
+    /// <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
+    /// <c>S100_VECTOR_TILE_XBAND</c>.
+    /// </summary>
+    public bool? TileCrossBandPrewarmEnabled { get; set; }
+
+    /// <summary>
     /// Whether the warm disk tile cache is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
     /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /
@@ -337,6 +346,16 @@ internal sealed class ViewerSettings
     public string EcdisHiddenDisplayPlanes { get; set; } = "";
 
     /// <summary>
+    /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections. Keys
+    /// are spec codes (e.g. "S-411"); values are the spec-native mode id
+    /// (e.g. "IceScientificIcesodDisplayMode"). Populated by the per-dataset
+    /// display-mode selector for products declaring more than one mode.
+    /// Empty by default (each catalogue renders its default mode).
+    /// </summary>
+    public Dictionary<string, string> EcdisActiveDisplayModes { get; set; }
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Whether the viewer's default ECDIS viewing-group visibility has
     /// been seeded into <see cref="EcdisHiddenViewingGroups"/>. Applied
     /// once per profile (see
@@ -349,6 +368,17 @@ internal sealed class ViewerSettings
     public bool EcdisDefaultsApplied { get; set; }
 
     public bool IsStatusBarVisible { get; set; } = true;
+
+    /// <summary>
+    /// Whether an accent-coloured border is drawn around the extent of a loaded
+    /// dataset that has zoomed out past its display-scale minimum (and therefore
+    /// renders no content). Enabled by default so a mariner who frames a
+    /// wide-spread exchange set still sees where the member datasets are and has
+    /// a target to zoom toward (issue #446). No effect when the
+    /// <see cref="IgnoreScaleMinimum"/> mariner override is set, since datasets
+    /// then never drop out on zoom-out.
+    /// </summary>
+    public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
 
     /// <summary>
     /// Whether the online OpenStreetMap basemap tile layer is shown
@@ -479,6 +509,27 @@ internal sealed class ViewerSettings
     /// pin to a specific loopback variant.
     /// </summary>
     public string McpBindAddress { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Whether "open in S-100 Feature Catalogue eXaminer" deep-links are
+    /// surfaced from the Feature Catalogues and Object Information panels
+    /// (issue #442). Enabled by default; can be turned off for air-gapped
+    /// or otherwise restricted deployments where opening a third-party
+    /// site is undesirable.
+    /// </summary>
+    public bool S100ExaminerLinksEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Base URL of the S-100 Feature Catalogue eXaminer used to build the
+    /// deep-links (issue #442). Configurable so an operator can point the
+    /// links at a self-hosted mirror. The builder appends
+    /// <c>?catalog=&amp;feature=&amp;attribute=</c> query parameters; an
+    /// empty or malformed value disables the links.
+    /// </summary>
+    public string S100ExaminerBaseUrl { get; set; } = DefaultS100ExaminerBaseUrl;
+
+    /// <summary>Default S-100 Examiner base URL.</summary>
+    public const string DefaultS100ExaminerBaseUrl = "https://s100examiner.com/";
 
     /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
     public const int MaxRecentDatasets = 10;

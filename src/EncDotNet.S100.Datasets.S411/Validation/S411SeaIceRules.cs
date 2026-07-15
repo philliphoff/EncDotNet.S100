@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Validation;
@@ -105,7 +104,7 @@ public static class S411SeaIceRules
                     if (f.GeometryKind != S411GeometryKind.Surface) continue;
 
                     var coords = f.Coordinates;
-                    if (coords.Length < 4)
+                    if (coords.Count < 4)
                     {
                         findings.Add(new ValidationFinding
                         {
@@ -113,7 +112,7 @@ public static class S411SeaIceRules
                             Severity = ValidationSeverity.Error,
                             Message =
                                 $"Surface feature '{f.Id}' ({f.NormalizedFeatureType}) has " +
-                                $"{coords.Length} coordinate(s); a closed ring requires ≥ 4.",
+                                $"{coords.Count} coordinate(s); a closed ring requires ≥ 4.",
                             RelatedFeatureId = f.Id,
                         });
                         continue;
@@ -163,7 +162,7 @@ public static class S411SeaIceRules
                 foreach (var f in EnumerateAllFeatures(inv))
                 {
                     if (f.GeometryKind != S411GeometryKind.Curve) continue;
-                    if (f.Coordinates.Length >= 2) continue;
+                    if (f.Coordinates.Count >= 2) continue;
 
                     findings.Add(new ValidationFinding
                     {
@@ -171,7 +170,7 @@ public static class S411SeaIceRules
                         Severity = ValidationSeverity.Error,
                         Message =
                             $"Curve feature '{f.Id}' ({f.NormalizedFeatureType}) has " +
-                            $"{f.Coordinates.Length} vertex(es); a linestring requires ≥ 2.",
+                            $"{f.Coordinates.Count} vertex(es); a linestring requires ≥ 2.",
                         RelatedFeatureId = f.Id,
                     });
                 }
@@ -188,7 +187,8 @@ public static class S411SeaIceRules
     /// 10/20/…/90 = N/10 ice, 12/13/23/24/… = range pairs, 91 = ice of
     /// land origin, 92 = undefined / unknown, 99 = not surveyed).
     /// </summary>
-    private static readonly ImmutableHashSet<int> ValidTotalConcentrationCodes = ImmutableHashSet.Create(
+    private static readonly HashSet<int> ValidTotalConcentrationCodes =
+    [
         1, 2, 3,
         10, 12, 13,
         20, 23, 24,
@@ -198,7 +198,8 @@ public static class S411SeaIceRules
         60, 67, 68,
         70, 78, 79,
         80, 81, 89,
-        90, 91, 92, 99);
+        90, 91, 92, 99,
+    ];
 
     /// <summary>
     /// <c>S411-R-4.1</c> — When a <c>SeaIce</c> or <c>LakeIce</c> feature
@@ -334,8 +335,7 @@ public static class S411SeaIceRules
     /// 5 = Large, 6 = Very Large, 7 = Tabular, 8 = Pinnacle, 9 = Dome,
     /// 99 = Other.
     /// </summary>
-    private static readonly ImmutableHashSet<int> ValidIcebergSizeCodes =
-        ImmutableHashSet.Create(1, 2, 3, 4, 5, 6, 7, 8, 9, 99);
+    private static readonly HashSet<int> ValidIcebergSizeCodes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99];
 
     /// <summary>
     /// <c>S411-R-4.4</c> — When an <see cref="S411Iceberg"/> feature

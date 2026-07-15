@@ -20,7 +20,7 @@ public class S131DatasetReaderTests
         var dataset = S131Dataset.Open(path);
 
         // Two point features (Bollard, MooringBuoy) and one info type (ContactDetails)
-        Assert.Equal(2, dataset.Features.Length);
+        Assert.Equal(2, dataset.Features.Count);
         Assert.Single(dataset.InformationTypes);
 
         // Verify Bollard feature
@@ -65,7 +65,7 @@ public class S131DatasetReaderTests
         Assert.Equal("Berth", berth.FeatureType);
         Assert.Equal(S100GeometryType.Curve, berth.GeometryType);
         var curve = Assert.Single(berth.Curves);
-        Assert.Equal(3, curve.Length);
+        Assert.Equal(3, curve.Count);
         Assert.Equal(44.6475, curve[0].Latitude, 4);
         Assert.Equal(-63.5713, curve[0].Longitude, 4);
         Assert.Equal("12.5", berth.Attributes["maximumPermittedDraught"]);
@@ -83,7 +83,7 @@ public class S131DatasetReaderTests
         var area = Assert.Single(dataset.Features);
         Assert.Equal("AnchorageArea", area.FeatureType);
         Assert.Equal(S100GeometryType.Surface, area.GeometryType);
-        Assert.Equal(5, area.ExteriorRing.Length);
+        Assert.Equal(5, area.ExteriorRing.Count);
         Assert.Empty(area.InteriorRings);
     }
 
@@ -94,7 +94,7 @@ public class S131DatasetReaderTests
 
         // Berth is a feature; Applicability, ContactDetails, and Authority are info types
         Assert.Single(dataset.Features);
-        Assert.Equal(3, dataset.InformationTypes.Length);
+        Assert.Equal(3, dataset.InformationTypes.Count);
 
         // Authority is an information type (FC §B.1)
         Assert.Contains(dataset.InformationTypes, i => i.TypeCode == "Authority");
@@ -117,8 +117,8 @@ public class S131DatasetReaderTests
             byStream = S131Dataset.Open(stream);
         }
 
-        Assert.Equal(byPath.Features.Length, byStream.Features.Length);
-        Assert.Equal(byPath.InformationTypes.Length, byStream.InformationTypes.Length);
+        Assert.Equal(byPath.Features.Count, byStream.Features.Count);
+        Assert.Equal(byPath.InformationTypes.Count, byStream.InformationTypes.Count);
         Assert.Equal(byPath.Features[0].FeatureType, byStream.Features[0].FeatureType);
     }
 }

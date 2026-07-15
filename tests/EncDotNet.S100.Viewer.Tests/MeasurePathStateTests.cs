@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Tools;
 using Xunit;
 
@@ -103,15 +104,15 @@ public class MeasurePathStateTests
     {
         var s = new MeasurePathState();
         // Idle → no rubber band even with cursor.
-        s.Hover((10.0, 10.0));
+        s.Hover(new GeoPosition(10.0, 10.0));
         Assert.Null(s.RubberBand);
 
         s.Click(0.0, 0.0);
-        s.Hover((1.0, 1.0));
+        s.Hover(new GeoPosition(1.0, 1.0));
         Assert.NotNull(s.RubberBand);
 
         s.Finalise();
-        s.Hover((2.0, 2.0));
+        s.Hover(new GeoPosition(2.0, 2.0));
         Assert.Null(s.RubberBand);
     }
 

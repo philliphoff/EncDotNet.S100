@@ -37,7 +37,7 @@ public class S127DatasetReaderTests
     public void PointDataset_HasThreeFeatures()
     {
         var ds = LoadTestData("marine_point.gml");
-        Assert.Equal(3, ds.Features.Length);
+        Assert.Equal(3, ds.Features.Count);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class S127DatasetReaderTests
     public void CurveDataset_HasTwoFeatures()
     {
         var ds = LoadTestData("marine_curve.gml");
-        Assert.Equal(2, ds.Features.Length);
+        Assert.Equal(2, ds.Features.Count);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class S127DatasetReaderTests
         Assert.Equal("RouteingMeasure", f1.FeatureType);
         Assert.Equal(S100GeometryType.Curve, f1.GeometryType);
         Assert.Single(f1.Curves);
-        Assert.Equal(4, f1.Curves[0].Length);
+        Assert.Equal(4, f1.Curves[0].Count);
         Assert.Equal(29.31, f1.Curves[0][0].Latitude, 4);
         Assert.Equal(-94.78, f1.Curves[0][0].Longitude, 4);
     }
@@ -114,7 +114,7 @@ public class S127DatasetReaderTests
 
         Assert.Equal(S100GeometryType.Curve, f2.GeometryType);
         Assert.Single(f2.Curves);
-        Assert.Equal(3, f2.Curves[0].Length);
+        Assert.Equal(3, f2.Curves[0].Count);
     }
 
     // ── Surface dataset ──────────────────────────────────────────
@@ -123,7 +123,7 @@ public class S127DatasetReaderTests
     public void SurfaceDataset_HasThreeFeatures()
     {
         var ds = LoadTestData("marine_surface.gml");
-        Assert.Equal(3, ds.Features.Length);
+        Assert.Equal(3, ds.Features.Count);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class S127DatasetReaderTests
 
         Assert.Equal("RestrictedArea", f1.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f1.GeometryType);
-        Assert.Equal(5, f1.ExteriorRing.Length); // closed ring
+        Assert.Equal(5, f1.ExteriorRing.Count); // closed ring
         Assert.Equal(51.05, f1.ExteriorRing[0].Latitude, 4);
         Assert.Equal(1.20, f1.ExteriorRing[0].Longitude, 4);
     }
@@ -147,9 +147,9 @@ public class S127DatasetReaderTests
 
         Assert.Equal("VesselTrafficServiceArea", f3.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f3.GeometryType);
-        Assert.Equal(5, f3.ExteriorRing.Length);
+        Assert.Equal(5, f3.ExteriorRing.Count);
         Assert.Single(f3.InteriorRings);
-        Assert.Equal(5, f3.InteriorRings[0].Length);
+        Assert.Equal(5, f3.InteriorRings[0].Count);
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class S127DatasetReaderTests
     public void MixedDataset_HasFiveFeatures()
     {
         var ds = LoadTestData("marine_mixed.gml");
-        Assert.Equal(5, ds.Features.Length);
+        Assert.Equal(5, ds.Features.Count);
     }
 
     [Fact]
@@ -204,9 +204,9 @@ public class S127DatasetReaderTests
         var f5 = ds.Features.First(f => f.Id == "f5");
 
         Assert.Equal(S100GeometryType.None, f5.GeometryType);
-        Assert.True(f5.Points.IsDefaultOrEmpty);
-        Assert.True(f5.Curves.IsDefaultOrEmpty);
-        Assert.True(f5.ExteriorRing.IsDefaultOrEmpty);
+        Assert.True(f5.Points.Count == 0);
+        Assert.True(f5.Curves.Count == 0);
+        Assert.True(f5.ExteriorRing.Count == 0);
     }
 
     // ── Legacy S-100 GML 1.0 namespace shape (Edition 1.0.1, 2019) ──
@@ -220,7 +220,7 @@ public class S127DatasetReaderTests
         // tolerate both 5.0 and the two 1.0 spellings.
         var ds = LoadTestData("marine_legacy_s100gml1.gml");
 
-        Assert.Equal(3, ds.Features.Length);
+        Assert.Equal(3, ds.Features.Count);
         Assert.Equal(
             S100GeometryType.Point,
             ds.Features.First(f => f.Id == "f1").GeometryType);
@@ -242,7 +242,7 @@ public class S127DatasetReaderTests
         // infrastructure), so the reader must accept them.
         var ds = LoadTestData("marine_mixed_namespaces.gml");
 
-        Assert.Equal(2, ds.Features.Length);
+        Assert.Equal(2, ds.Features.Count);
         Assert.Equal(
             S100GeometryType.Point,
             ds.Features.First(f => f.Id == "f1").GeometryType);

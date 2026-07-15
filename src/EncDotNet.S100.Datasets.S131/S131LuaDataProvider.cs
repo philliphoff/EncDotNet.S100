@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Lua;
@@ -63,7 +62,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
     /// The FC code on success, or <see langword="null"/> when
     /// <paramref name="featureRef"/> cannot be resolved.
     /// </returns>
-    public string? TryGetFeatureTypeCode(string featureRef)
+    public string? GetFeatureTypeCode(string featureRef)
     {
         if (string.IsNullOrEmpty(featureRef)) return null;
 
@@ -469,7 +468,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
         // Lua expects X=longitude, Y=latitude.
         return feat.GeometryType switch
         {
-            S100GeometryType.Point when feat.Points.Length > 0 =>
+            S100GeometryType.Point when feat.Points.Count > 0 =>
                 new Dictionary<string, object?>
                 {
                     ["RecordType"] = "Point",
@@ -477,10 +476,10 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
                     ["Y"] = feat.Points[0].Latitude.ToString(CultureInfo.InvariantCulture),
                 },
 
-            S100GeometryType.Curve when feat.Curves.Length > 0 =>
+            S100GeometryType.Curve when feat.Curves.Count > 0 =>
                 BuildCurveData(feat),
 
-            S100GeometryType.Surface when feat.ExteriorRing.Length > 0 =>
+            S100GeometryType.Surface when feat.ExteriorRing.Count > 0 =>
                 BuildSurfaceData(feat),
 
             _ => null,
@@ -490,7 +489,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
     private static Dictionary<string, object?> BuildCurveData(S131Feature feat)
     {
         var coords = feat.Curves[0];
-        if (coords.Length == 0)
+        if (coords.Count == 0)
             return new Dictionary<string, object?> { ["RecordType"] = "Point" };
 
         // Start and end points as separate synthetic spatial associations
@@ -499,7 +498,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
 
         var controlPoints = new List<object>();
         // Intermediate points (skip start and end, which become point associations)
-        for (int i = 1; i < coords.Length - 1; i++)
+        for (int i = 1; i < coords.Count - 1; i++)
         {
             controlPoints.Add(new Dictionary<string, object?>
             {
@@ -539,7 +538,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
         };
 
         var interiorRings = new List<object>();
-        for (int i = 0; i < feat.InteriorRings.Length; i++)
+        for (int i = 0; i < feat.InteriorRings.Count; i++)
         {
             interiorRings.Add(new Dictionary<string, object?>
             {
@@ -766,8 +765,8 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
     /// instances by index.
     /// </remarks>
     private static List<object> GetSimpleAttributeValues(
-        ImmutableDictionary<string, string> simpleAttrs,
-        ImmutableArray<S131ComplexAttribute> complexAttrs,
+        IReadOnlyDictionary<string, string> simpleAttrs,
+        IReadOnlyList<S131ComplexAttribute> complexAttrs,
         string attributePath,
         string attributeCode)
     {
@@ -821,7 +820,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
     }
 
     private static double CountComplexAttributes(
-        ImmutableArray<S131ComplexAttribute> complexAttrs,
+        IReadOnlyList<S131ComplexAttribute> complexAttrs,
         string attributePath,
         string attributeCode)
     {
