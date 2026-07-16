@@ -66,18 +66,52 @@ public sealed class S101DatasetMetadataTests
         Assert.Equal(20000, meta.DisplayScale.Value.Maximum);   // smallest maximumDisplayScale
     }
 
+    [Fact]
+    public void ReadMetadata_PointAtOrigin_YieldsNonNullExtent()
+    {
+        // A dataset whose only coordinate is 0°N 0°E is a legitimate extent,
+        // not an "empty" cell — the metadata must surface it rather than null.
+        var originPoint = new S101PointRecord { RecordId = 5, Y = 0, X = 0 };
+        var dataset = S101Dataset.FromDocument(
+            BuildDocument(includeCurveGeometry: false, points: new[] { originPoint }));
+
+        var meta = dataset.ReadMetadata();
+
+        Assert.NotNull(meta.Extent);
+        Assert.Equal(0, meta.Extent!.SouthLatitude);
+        Assert.Equal(0, meta.Extent.WestLongitude);
+        Assert.Equal(0, meta.Extent.NorthLatitude);
+        Assert.Equal(0, meta.Extent.EastLongitude);
+    }
+
+    [Fact]
+    public void ReadMetadata_NoCoordinates_YieldsNullExtent()
+    {
+        var dataset = S101Dataset.FromDocument(BuildDocument(includeCurveGeometry: false));
+
+        var meta = dataset.ReadMetadata();
+
+        Assert.Null(meta.Extent);
+    }
+
     private static S101Document BuildDocument(
         bool includeDataCoverage = true,
         int? extraCoverageMin = null,
-        int? extraCoverageMax = null)
+        int? extraCoverageMax = null,
+        bool includeCurveGeometry = true,
+        IReadOnlyList<S101PointRecord>? points = null)
     {
-        var curve = new S101CurveSegmentRecord
-        {
-            RecordId = 10,
-            PointAssociations = [],
-            IntermediateCoordinates = [(0, 0), (0, 10), (10, 10), (10, 0)],
-        };
-
+        IReadOnlyDictionary<uint, S101CurveSegmentRecord> curveSegments = includeCurveGeometry
+            ? new[]
+            {
+                new S101CurveSegmentRecord
+                {
+                    RecordId = 10,
+                    PointAssociations = [],
+                    IntermediateCoordinates = [(0, 0), (0, 10), (10, 10), (10, 0)],
+                },
+            }.ToDictionary(c => c.RecordId)
+            : ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty;
         var features = new List<S101FeatureRecord>();
         if (includeDataCoverage)
         {
@@ -126,8 +160,10 @@ public sealed class S101DatasetMetadataTests
                 [MinScaleCode] = "minimumDisplayScale",
                 [MaxScaleCode] = "maximumDisplayScale",
             },
-            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
-            CurveSegments = new[] { curve }.ToDictionary(c => c.RecordId),
+            Points = points is null
+                ? ReadOnlyDictionary<uint, S101PointRecord>.Empty
+                : points.ToDictionary(p => p.RecordId),
+            CurveSegments = curveSegments,
             CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
             Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
             Features = features,

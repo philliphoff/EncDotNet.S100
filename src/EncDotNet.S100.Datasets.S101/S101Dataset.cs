@@ -169,19 +169,46 @@ public sealed class S101Dataset
         var vector = new S101VectorSource(this).Metadata;
 
         // S101VectorSource.ComputeExtent yields BoundingBox(0,0,0,0) when the
-        // cell carries no coordinates; treat that as "no extent" rather than a
-        // spurious point at Null Island.
-        var extent = vector.Extent;
-        bool degenerate = extent.SouthLatitude == 0 && extent.WestLongitude == 0
-            && extent.NorthLatitude == 0 && extent.EastLongitude == 0;
+        // cell carries no coordinate-bearing spatial records. Detect that
+        // "no coordinates" case from the document directly rather than
+        // special-casing the numeric bounds, so a dataset that legitimately
+        // sits at 0°N 0°E is not mistaken for an empty one.
+        bool hasCoordinates = DatasetHasCoordinates(Document);
 
         return new DatasetMetadata
         {
             Spec = vector.Spec,
-            Extent = degenerate ? null : extent,
+            Extent = hasCoordinates ? vector.Extent : null,
             HorizontalCrsEpsg = null,
             DisplayScale = ResolveDisplayScale(Document),
         };
+    }
+
+    /// <summary>
+    /// Reports whether the dataset carries any coordinate-bearing spatial
+    /// record — the same Point / MultiPoint / curve-segment sources that
+    /// <see cref="S101VectorSource"/> folds into the extent. Used to
+    /// distinguish a genuinely empty cell (extent unavailable) from one that
+    /// legitimately resolves to a bounding box at the origin.
+    /// </summary>
+    private static bool DatasetHasCoordinates(S101Document document)
+    {
+        if (document.Points.Count > 0)
+            return true;
+
+        foreach (var mp in document.MultiPoints.Values)
+        {
+            if (mp.Points.Count > 0)
+                return true;
+        }
+
+        foreach (var seg in document.CurveSegments.Values)
+        {
+            if (seg.IntermediateCoordinates.Count > 0)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
