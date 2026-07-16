@@ -28,8 +28,9 @@ namespace EncDotNet.S100.Core;
 /// <see cref="DisplayScale"/>, and <see cref="TimeCoverage"/> are optional
 /// because they are not universal across S-100 encodings: display scale is
 /// an ENC / catalogue concept, temporal coverage exists only for dynamic
-/// products (S-104, S-111, S-411), and some encodings (notably GML without
-/// a reliable <c>gml:boundedBy</c>) cannot yield an extent cheaply. A
+/// products (the HDF5 time-series products S-104 and S-111), and some
+/// encodings (notably GML without a reliable <c>gml:boundedBy</c>) cannot
+/// yield an extent cheaply. A
 /// <c>null</c> optional means "not cheaply available" — the host should
 /// fall back to a full load rather than treat it as authoritative.
 /// </para>
@@ -46,9 +47,10 @@ public sealed record DatasetMetadata
     /// The product specification (name + edition) the dataset declares
     /// conformance to, resolved from the dataset itself (HDF5
     /// <c>productSpecification</c> attribute, GML application namespace,
-    /// S-101 <c>ProductSpecificationEdition</c>, etc.). Always present; the
-    /// edition falls back to the reader's default when the dataset does not
-    /// self-describe it.
+    /// S-101 <c>ProductSpecificationEdition</c>, etc.). Always present. The
+    /// edition is <c>default</c> (<c>0.0.0</c>) when the dataset does not
+    /// self-describe a parseable edition — callers should not assume a real
+    /// supported edition is always present.
     /// </summary>
     public required SpecRef Spec { get; init; }
 
@@ -88,8 +90,11 @@ public sealed record DatasetMetadata
 
     /// <summary>
     /// The temporal span the dataset covers, or <c>null</c> for static
-    /// products. Present for dynamic products with a forecast / observation
-    /// time dimension (S-104, S-111, S-411).
+    /// products. Populated for the HDF5 time-series products (S-104 and
+    /// S-111), whose forecast / observation time dimension is read from the
+    /// group time attributes without touching the payload. Other encodings
+    /// that carry time (e.g. GML S-411) leave this <c>null</c> because it is
+    /// not surfaced cheaply today.
     /// </summary>
     public TimeCoverage? TimeCoverage { get; init; }
 }
