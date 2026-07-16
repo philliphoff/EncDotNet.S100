@@ -77,6 +77,37 @@ jobs:
           name: nupkgs
           path: nupkgs/*.nupkg
 
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Verify formatting (whitespace)
+        # Enforces the whitespace / formatting rules encoded in .editorconfig
+        # (see docs/coding-style.md). Fix locally with:
+        #   dotnet format whitespace EncDotNet.S100.slnx
+        #
+        # Scope note: only the *whitespace* rules are verified here. Style,
+        # naming, and unused-using rules are intentionally NOT gated because
+        # nearly every project multi-targets net8.0;net10.0, where dotnet
+        # format's solution-wide fix-all is unreliable and a using can be
+        # required under one target framework but redundant under another.
+        run: dotnet format whitespace EncDotNet.S100.slnx --no-restore --verify-no-changes
+
   test-arm64:
     strategy:
       matrix:

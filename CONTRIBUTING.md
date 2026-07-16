@@ -112,6 +112,24 @@ code. In brief:
 For API-shape conventions (collection return types, `class` vs `record`,
 quantity types) see [API design conventions](docs/design/api-conventions.md).
 
+The formatting rules are encoded in [`.editorconfig`](.editorconfig) and
+enforced in CI (the **Format check** job). Before pushing, apply and verify
+formatting locally:
+
+```bash
+# Auto-fix whitespace/formatting across the solution
+dotnet format whitespace EncDotNet.S100.slnx
+
+# Verify with no changes (what CI runs — fails if anything is unformatted)
+dotnet format whitespace EncDotNet.S100.slnx --verify-no-changes
+```
+
+> Only *whitespace/formatting* is gated in CI. Style/naming and unused-using
+> rules are not machine-enforced solution-wide because nearly every project
+> multi-targets `net8.0;net10.0`, where `dotnet format`'s fix-all is unreliable
+> and a `using` may be required under one target framework but not another.
+> Follow those rules by hand (the `.editorconfig` still flags them in your IDE).
+
 ## Documentation
 
 - Each library has a `README.md` in its `src/<project>/` directory. Update it

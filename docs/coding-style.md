@@ -13,11 +13,15 @@ code is migrated toward it opportunistically.
 
 > **Enforcement.** The mechanically-checkable rules below are encoded in the
 > repository [`.editorconfig`](../.editorconfig) and can be checked/applied with
-> `dotnet format`. CI enforcement (`dotnet format --verify-no-changes`) and
-> `EnforceCodeStyleInBuild` are deferred until the existing code is refactored
-> into compliance, so the build stays green in the interim. When this document
-> and the `.editorconfig` disagree, the encoded rule wins and this document
-> should be corrected.
+> `dotnet format`. CI enforces the **whitespace/formatting** subset via a
+> `dotnet format whitespace --verify-no-changes` gate (the *Format check* job).
+> Style/naming and unused-using rules are **not** machine-gated: nearly every
+> project multi-targets `net8.0;net10.0`, where `dotnet format`'s solution-wide
+> fix-all is unreliable and a `using` can be required under one target framework
+> but redundant under another — so those rules are followed by hand (the
+> `.editorconfig` surfaces them in the IDE). `EnforceCodeStyleInBuild` is left
+> off for the same reason. When this document and the `.editorconfig` disagree,
+> the encoded rule wins and this document should be corrected.
 
 ## 1. Guiding principles
 
@@ -185,7 +189,9 @@ code is migrated toward it opportunistically.
 
 ---
 
-*This guide is Phase 1 ("Define") of the coding-style initiative. Phase 2
-encodes the mechanically-checkable rules here into `.editorconfig`/analyzers,
-Phase 3 enforces them in CI, and Phase 4 refactors existing code into
-compliance.*
+*This guide was delivered in phases: Phase 1 ("Define") wrote it, Phase 2
+("Encode") captured the mechanically-checkable rules in `.editorconfig`,
+Phase 3 ("Enforce") added the CI whitespace-format gate, and Phase 4
+("Refactor") brought existing code into whitespace compliance. Style/naming
+and unused-using cleanup remain hand-followed due to the multi-target
+constraint noted above.*
