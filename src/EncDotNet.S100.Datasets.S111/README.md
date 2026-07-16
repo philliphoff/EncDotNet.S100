@@ -7,7 +7,7 @@ Reader and coverage portrayal pipeline for S-111 Surface Current datasets.
 This library reads S-111 datasets from HDF5 files and provides time-series current speed and direction grids for the portrayal pipeline. Key types include:
 
 - **`S111Dataset`** — root model containing horizontal CRS, depth, data coding format, and time-step coverages.
-- **`S111DatasetReader`** — reads an S-111 dataset from an `IHdf5File` (regular grid format). `ReadAny(file)` decodes every time step eagerly; `ReadAny(file, new S111ReadOptions { DeferValueReads = true })` reads only metadata up front and decodes each step's `values` compound lazily on first access (see *Lazy reads* below).
+- **`S111DatasetReader`** — reads an S-111 dataset from an `IHdf5File` (regular grid format). `ReadAny(file)` decodes every time step eagerly; `ReadAny(file, new S111ReadOptions { DeferValueReads = true })` reads only metadata up front and decodes each step's `values` compound lazily on first access (see *Lazy reads* below). `ReadMetadata(file)` is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` (declared spec, union grid extent, and temporal coverage — from the arithmetic `dateTimeOfFirstRecord` + `timeRecordInterval` cadence or the per-group `timePoint` attributes) without reading any `values` arrays.
 - **`S111ReadOptions`** — opt-in read options; `DeferValueReads` enables lazy per-time-step value decoding for dcf2 (regular-grid) datasets.
 - **`S111CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S111PortrayalCatalogue`** — coverage portrayal catalogue for current arrow rendering (see *Portrayal* below).

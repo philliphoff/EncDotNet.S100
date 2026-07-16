@@ -1,4 +1,7 @@
 
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Pipelines;
+
 namespace EncDotNet.S100.Datasets.S101;
 
 /// <summary>
@@ -122,5 +125,157 @@ public sealed class S101Dataset
     {
         ArgumentNullException.ThrowIfNull(document);
         return new S101Dataset(document);
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-101
+    /// cell at <paramref name="path"/> — its declared specification, geographic
+    /// extent, and intended display-scale window — for phased / deferred
+    /// loading (issue #460).
+    /// </summary>
+    /// <remarks>
+    /// Unlike the HDF5 products, the S-101 ISO 8211 encoding carries no
+    /// header-level minimum bounding rectangle, so the extent is still derived
+    /// by scanning the spatial records; the phased win over a full load is that
+    /// the feature graph is not resolved and — crucially — the portrayal
+    /// catalogue is never loaded or executed. The display-scale window is read
+    /// cheaply from the <c>DataCoverage</c> feature records
+    /// (S-101 FC §3.1.1 <c>minimumDisplayScale</c> / <c>maximumDisplayScale</c>).
+    /// </remarks>
+    public static DatasetMetadata ReadMetadata(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return Open(path).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-101
+    /// cell from <paramref name="stream"/>. See
+    /// <see cref="ReadMetadata(string)"/> for the phased-loading rationale.
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return Open(stream).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Produces the lightweight <see cref="DatasetMetadata"/> for this already
+    /// parsed dataset: declared specification, geographic extent, and the
+    /// <c>DataCoverage</c> display-scale window (issue #460).
+    /// </summary>
+    public DatasetMetadata ReadMetadata()
+    {
+        var vector = new S101VectorSource(this).Metadata;
+
+        // S101VectorSource.ComputeExtent yields BoundingBox(0,0,0,0) when the
+        // cell carries no coordinate-bearing spatial records. Detect that
+        // "no coordinates" case from the document directly rather than
+        // special-casing the numeric bounds, so a dataset that legitimately
+        // sits at 0°N 0°E is not mistaken for an empty one.
+        bool hasCoordinates = DatasetHasCoordinates(Document);
+
+        return new DatasetMetadata
+        {
+            Spec = vector.Spec,
+            Extent = hasCoordinates ? vector.Extent : null,
+            HorizontalCrsEpsg = null,
+            DisplayScale = ResolveDisplayScale(Document),
+        };
+    }
+
+    /// <summary>
+    /// Reports whether the dataset carries any coordinate-bearing spatial
+    /// record — the same Point / MultiPoint / curve-segment sources that
+    /// <see cref="S101VectorSource"/> folds into the extent. Used to
+    /// distinguish a genuinely empty cell (extent unavailable) from one that
+    /// legitimately resolves to a bounding box at the origin.
+    /// </summary>
+    private static bool DatasetHasCoordinates(S101Document document)
+    {
+        if (document.Points.Count > 0)
+            return true;
+
+        foreach (var mp in document.MultiPoints.Values)
+        {
+            if (mp.Points.Count > 0)
+                return true;
+        }
+
+        foreach (var seg in document.CurveSegments.Values)
+        {
+            if (seg.IntermediateCoordinates.Count > 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Reads the dataset-level display-scale window from the <c>DataCoverage</c>
+    /// feature records (S-101 FC §3.1.1). The coarsest bound (largest
+    /// denominator) is the maximum <c>minimumDisplayScale</c> and the finest
+    /// bound (smallest denominator) is the minimum <c>maximumDisplayScale</c>
+    /// across all coverages, matching the exchange-set catalogue's
+    /// <c>DatasetDiscoveryMetadata</c> resolution.
+    /// </summary>
+    private static DisplayScaleRange? ResolveDisplayScale(S101Document document)
+    {
+        ushort? dataCoverageCode = ResolveCode(document.FeatureTypeCatalogue, "DataCoverage");
+        if (dataCoverageCode is null)
+            return null;
+
+        ushort? minCode = ResolveCode(document.AttributeTypeCatalogue, "minimumDisplayScale");
+        ushort? maxCode = ResolveCode(document.AttributeTypeCatalogue, "maximumDisplayScale");
+        if (minCode is null && maxCode is null)
+            return null;
+
+        int? coarsest = null; // largest minimumDisplayScale denominator
+        int? finest = null;   // smallest maximumDisplayScale denominator
+
+        foreach (var feature in document.Features)
+        {
+            if (feature.FeatureTypeCode != dataCoverageCode.Value)
+                continue;
+
+            foreach (var attr in feature.Attributes)
+            {
+                if (minCode is not null && attr.NumericCode == minCode.Value
+                    && TryParseDenominator(attr.Value, out int minDenom))
+                {
+                    coarsest = coarsest is null ? minDenom : Math.Max(coarsest.Value, minDenom);
+                }
+                else if (maxCode is not null && attr.NumericCode == maxCode.Value
+                    && TryParseDenominator(attr.Value, out int maxDenom))
+                {
+                    finest = finest is null ? maxDenom : Math.Min(finest.Value, maxDenom);
+                }
+            }
+        }
+
+        if (coarsest is null && finest is null)
+            return null;
+
+        return new DisplayScaleRange(coarsest, finest);
+    }
+
+    private static ushort? ResolveCode(IReadOnlyDictionary<ushort, string> catalogue, string name)
+    {
+        foreach (var pair in catalogue)
+        {
+            if (string.Equals(pair.Value, name, StringComparison.Ordinal))
+                return pair.Key;
+        }
+
+        return null;
+    }
+
+    private static bool TryParseDenominator(string? value, out int denominator)
+    {
+        denominator = 0;
+        return !string.IsNullOrWhiteSpace(value)
+            && int.TryParse(value, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out denominator)
+            && denominator > 0;
     }
 }
