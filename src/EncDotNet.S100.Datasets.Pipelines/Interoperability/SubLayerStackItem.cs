@@ -39,10 +39,26 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// When set, the authority slots the item by the catalogue's <c>order</c>
 /// rather than by <paramref name="Plane"/>. Always null for PR-L1.
 /// </param>
+/// <param name="SourceScaleDenominator">
+/// The source cell's coarsest intended display-scale denominator — a proxy
+/// for its navigational-purpose (usage) band, used to break ties between
+/// overlapping cells of different scales within the same
+/// <paramref name="Plane"/> and <paramref name="WithinPlanePriority"/>. A
+/// <em>smaller</em> denominator means a larger-scale (finer) cell, which must
+/// paint <em>on top of</em> a smaller-scale (coarser) cell of the same feature
+/// content (S-101 FC §3.1.1 <c>DataCoverage.minimumDisplayScale</c>; S-57
+/// DSPM compilation scale CSCL, S-57 Appendix B.1 §7.3.1.1). Without this the
+/// tie falls through to dataset load order, which is non-deterministic under
+/// viewport-driven lazy loading (issue #464). <see langword="null"/> when the
+/// producing dataset carries no usable cell-wide scale (e.g. GML and coverage
+/// products); such items are treated as coarsest and keep their relative load
+/// order.
+/// </param>
 public sealed record SubLayerStackItem(
     StackPayload Payload,
     S98DisplayPlane Plane,
     int WithinPlanePriority,
     string SourceDatasetId,
     string? SourceFeatureType = null,
-    string? ExtensionId = null);
+    string? ExtensionId = null,
+    int? SourceScaleDenominator = null);

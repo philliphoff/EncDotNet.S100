@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// Resolves the per-product default plane from a hardcoded table
 /// derived from S-98 Main §9.2.1 / MSC.530(106)/Rev.1 §Appendix 2
 /// "priority of information"; sorts entries by
-/// <c>(Plane, WithinPlanePriority, input order)</c>.
+/// <c>(Plane, WithinPlanePriority, scale denominator descending, input order)</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -61,12 +61,22 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
         ArgumentNullException.ThrowIfNull(entries);
 
         // OrderBy is documented as a stable sort in LINQ-to-Objects,
-        // so entries that share (Plane, WithinPlanePriority) retain
+        // so entries that share (Plane, WithinPlanePriority, scale) retain
         // their input order — that's the dataset-load-order tiebreaker
         // required by §4.3.2 of the design note.
+        //
+        // The scale tiebreaker (issue #464) orders overlapping cells of
+        // different navigational-purpose bands deterministically: a smaller
+        // denominator is a larger-scale (finer) cell, which must paint on top,
+        // so we sort by denominator DESCENDING (coarse first / bottom, fine
+        // last / top). Items with no known scale (null) are treated as coarsest
+        // (int.MaxValue) so they sit at the bottom of their plane and preserve
+        // their relative load order among themselves — leaving the prior
+        // behaviour unchanged for products that carry no cell-wide scale.
         return entries
             .OrderBy(e => (int)e.Plane)
             .ThenBy(e => e.WithinPlanePriority)
+            .ThenByDescending(e => e.SourceScaleDenominator ?? int.MaxValue)
             .ToList();
     }
 
