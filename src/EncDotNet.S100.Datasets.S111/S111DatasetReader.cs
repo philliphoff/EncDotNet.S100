@@ -244,8 +244,11 @@ public static class S111DatasetReader
 
     /// <summary>
     /// Computes the union grid extent and time-step span of a dcf2 dataset
-    /// from georef and <c>timePoint</c> attributes alone (no <c>values</c>
-    /// read), so the result matches a full read's extent and available times.
+    /// from georef and time attributes alone (no <c>values</c> read), so the
+    /// result matches a full read's extent and available times. The time span
+    /// prefers each instance's arithmetic cadence
+    /// (<c>dateTimeOfFirstRecord</c> + <c>i × timeRecordInterval</c>) when
+    /// present, falling back to the per-step <c>timePoint</c> attributes.
     /// </summary>
     private static (BoundingBox? Extent, TimeCoverage? Time) ReadGriddedExtentAndTime(IHdf5Group scGroup)
     {

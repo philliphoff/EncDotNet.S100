@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
-using Xunit;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
