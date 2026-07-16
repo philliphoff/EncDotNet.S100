@@ -1,7 +1,6 @@
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

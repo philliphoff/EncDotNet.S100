@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
 

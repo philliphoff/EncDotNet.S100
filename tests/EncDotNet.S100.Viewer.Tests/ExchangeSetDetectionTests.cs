@@ -1,8 +1,5 @@
-using System;
-using System.IO;
 using System.IO.Compression;
 using EncDotNet.S100.Viewer.Services;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

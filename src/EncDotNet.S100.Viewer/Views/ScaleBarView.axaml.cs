@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
-using Avalonia.Layout;
 using Avalonia.Media;
 
 namespace EncDotNet.S100.Viewer.Views;

@@ -1,10 +1,5 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using EncDotNet.S100.Mcp.Tools.Catalog;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Services;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

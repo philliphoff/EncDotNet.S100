@@ -1,5 +1,5 @@
-using EncDotNet.S100.Datasets.S129.Fusion.Timeline;
 using EncDotNet.S100.Datasets.S129.Fusion.Tests.Helpers;
+using EncDotNet.S100.Datasets.S129.Fusion.Timeline;
 
 namespace EncDotNet.S100.Datasets.S129.Fusion.Tests;
 

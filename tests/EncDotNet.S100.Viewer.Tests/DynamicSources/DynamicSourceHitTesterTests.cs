@@ -5,7 +5,6 @@ using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using Mapsui;
 using Mapsui.Projections;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 
@@ -75,8 +74,8 @@ public class DynamicSourceHitTesterTests
 
         Assert.Equal(3, hits.Count);
         Assert.Equal("close", hits[0].Feature.Id);
-        Assert.Equal("mid",   hits[1].Feature.Id);
-        Assert.Equal("far",   hits[2].Feature.Id);
+        Assert.Equal("mid", hits[1].Feature.Id);
+        Assert.Equal("far", hits[2].Feature.Id);
     }
 
     [Fact]

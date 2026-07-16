@@ -1,7 +1,4 @@
-using System.Collections.Generic;
-using System.ComponentModel;
 using EncDotNet.S100.Viewer.ViewModels;
-using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

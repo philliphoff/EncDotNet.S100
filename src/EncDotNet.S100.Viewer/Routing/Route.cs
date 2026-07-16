@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Geodesy;
 

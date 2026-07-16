@@ -15,17 +15,17 @@ public class OwnShipRendererTests
         double lat = 50.8, double lon = -1.3,
         double? headingDeg = 0.0, double sogKn = 10.0,
         DynamicVesselGeometry? geometry = null) => new()
-    {
-        Id = "ownship",
-        Kind = "ownship",
-        GeometryType = GeometryType.Point,
-        Coordinates = new[] { new GeoPosition(lat, lon) },
-        Motion = headingDeg is null && sogKn == 0
+        {
+            Id = "ownship",
+            Kind = "ownship",
+            GeometryType = GeometryType.Point,
+            Coordinates = new[] { new GeoPosition(lat, lon) },
+            Motion = headingDeg is null && sogKn == 0
             ? null
             : new DynamicMotion { Heading = headingDeg is { } h ? Angle.FromDegrees(h) : null, SpeedOverGround = Speed.FromKnots(sogKn) },
-        VesselGeometry = geometry,
-        LastUpdated = DateTimeOffset.UtcNow,
-    };
+            VesselGeometry = geometry,
+            LastUpdated = DateTimeOffset.UtcNow,
+        };
 
     private static DynamicVesselGeometry DefaultGeom() => new()
     {
@@ -42,7 +42,8 @@ public class OwnShipRendererTests
         Assert.True(r.CanRender(MakeFeature()));
         Assert.False(r.CanRender(new DynamicFeature
         {
-            Id = "x", GeometryType = GeometryType.Curve,
+            Id = "x",
+            GeometryType = GeometryType.Curve,
             Coordinates = new[] { new GeoPosition(0.0, 0.0), new GeoPosition(1.0, 1.0) },
             LastUpdated = DateTimeOffset.UtcNow,
         }));
@@ -70,7 +71,8 @@ public class OwnShipRendererTests
     {
         var feat = new DynamicFeature
         {
-            Id = "ownship", GeometryType = GeometryType.Point,
+            Id = "ownship",
+            GeometryType = GeometryType.Point,
             Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
@@ -160,7 +162,8 @@ public class OwnShipRendererTests
     {
         var feat = new DynamicFeature
         {
-            Id = "ownship", GeometryType = GeometryType.Point,
+            Id = "ownship",
+            GeometryType = GeometryType.Point,
             Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             VesselGeometry = DefaultGeom(),
             LastUpdated = DateTimeOffset.UtcNow,

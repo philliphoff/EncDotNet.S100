@@ -149,46 +149,46 @@ public sealed class MapsuiCoverageArrowRenderer
         var features = new List<IFeature>();
 
         for (int r = 0; r < srcRows; r += stride)
-        for (int c = 0; c < srcCols; c += stride)
-        {
-            float value = valueData[r, c];
-            bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
-            if (isNoData) continue;
-
-            float direction = rotationData[r, c];
-            bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
-            if (dirNoData) continue;
-
-            var band = symbolScheme.Resolve(value);
-            if (band is null) continue;
-
-            var svgSource = GetResolvedSvg(band.SymbolRef);
-            if (svgSource is null) continue;
-
-            // Project grid cell centre to Mercator for the PointFeature.
-            var (nativeX, nativeY) = georeferencer.ToNative(r, c);
-            double lon, lat;
-            if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
-            else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
-            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-
-            double bandScale = band.ScaleByValue
-                ? band.ScaleFactor * value
-                : band.ScaleFactor;
-
-            var feature = new PointFeature(mx, my);
-            feature.Styles.Add(new ImageStyle
+            for (int c = 0; c < srcCols; c += stride)
             {
-                Image = new Image { Source = svgSource, RasterizeSvg = true },
-                SymbolScale = BaseSymbolScale * bandScale,
-                // SymbolRotation in Mapsui is degrees clockwise from
-                // map-up; surfaceCurrentDirection is degrees true (0=N,
-                // 90=E), which is the same convention.
-                SymbolRotation = direction,
-                Opacity = (float)Opacity,
-            });
-            features.Add(feature);
-        }
+                float value = valueData[r, c];
+                bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
+                if (isNoData) continue;
+
+                float direction = rotationData[r, c];
+                bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
+                if (dirNoData) continue;
+
+                var band = symbolScheme.Resolve(value);
+                if (band is null) continue;
+
+                var svgSource = GetResolvedSvg(band.SymbolRef);
+                if (svgSource is null) continue;
+
+                // Project grid cell centre to Mercator for the PointFeature.
+                var (nativeX, nativeY) = georeferencer.ToNative(r, c);
+                double lon, lat;
+                if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
+                else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
+                var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+
+                double bandScale = band.ScaleByValue
+                    ? band.ScaleFactor * value
+                    : band.ScaleFactor;
+
+                var feature = new PointFeature(mx, my);
+                feature.Styles.Add(new ImageStyle
+                {
+                    Image = new Image { Source = svgSource, RasterizeSvg = true },
+                    SymbolScale = BaseSymbolScale * bandScale,
+                    // SymbolRotation in Mapsui is degrees clockwise from
+                    // map-up; surfaceCurrentDirection is degrees true (0=N,
+                    // 90=E), which is the same convention.
+                    SymbolRotation = direction,
+                    Opacity = (float)Opacity,
+                });
+                features.Add(feature);
+            }
 
         return new MemoryLayer
         {

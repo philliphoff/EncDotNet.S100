@@ -1,9 +1,7 @@
-using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 

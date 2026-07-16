@@ -1,6 +1,6 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S102;
 
@@ -11,7 +11,7 @@ public class S102CoverageSource : ICoverageSource
 
     private readonly S102Dataset _dataset;
     private readonly BathymetryCoverage _coverage;
-    
+
     public S102CoverageSource(S102Dataset dataset, int coverageIndex = 0)
     {
         _dataset = dataset;
@@ -23,7 +23,7 @@ public class S102CoverageSource : ICoverageSource
 
     /// <summary>The single bathymetry coverage instance this source exposes.</summary>
     public BathymetryCoverage Coverage => _coverage;
-    
+
     public CoverageMetadata Metadata => new CoverageMetadata
     {
         Spec = new SpecRef("S-102", default),
@@ -46,9 +46,9 @@ public class S102CoverageSource : ICoverageSource
         NoDataValue = FillValue,
         ValueFields =
         [
-            new CoverageValueField 
-            { 
-                Name = "depth", 
+            new CoverageValueField
+            {
+                Name = "depth",
                 Type = CoverageValueType.Float,
                 Units = "metres",
                 FillValue = FillValue,
@@ -62,11 +62,11 @@ public class S102CoverageSource : ICoverageSource
             },
         ]
     };
-    
+
     // S-102 is static — no time dimension
     public IReadOnlyList<DateTime> AvailableTimes => [];
     public void SelectTime(DateTime time) { }  // no-op
-    
+
     public virtual SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
     {
         var values = _coverage.Values;

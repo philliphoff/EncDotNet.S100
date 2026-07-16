@@ -1,5 +1,3 @@
-using System.IO;
-using System.Linq;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Viewer.Catalogs;
 

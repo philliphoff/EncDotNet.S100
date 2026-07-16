@@ -1,7 +1,6 @@
 using System.Xml;
-using EncDotNet.S100.Core;
 using System.Xml.Xsl;
-using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Pipelines.Tests;

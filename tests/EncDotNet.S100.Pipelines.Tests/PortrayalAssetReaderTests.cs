@@ -1,6 +1,4 @@
 using System.Text;
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.Pipelines.Tests;

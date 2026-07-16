@@ -1,9 +1,6 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Threading;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.ViewModels;
 

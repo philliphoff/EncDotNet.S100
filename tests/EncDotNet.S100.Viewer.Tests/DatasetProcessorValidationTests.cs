@@ -1,5 +1,3 @@
-using System.IO;
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Specifications;

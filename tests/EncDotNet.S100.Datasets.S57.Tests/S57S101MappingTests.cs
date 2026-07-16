@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.S57;
 using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;

@@ -1,10 +1,9 @@
 using Avalonia;
 using Spectre.Console.Cli;
-using System;
 
 namespace EncDotNet.S100.Viewer;
 
-sealed class Program
+internal sealed class Program
 {
     [STAThread]
     public static int Main(string[] args)

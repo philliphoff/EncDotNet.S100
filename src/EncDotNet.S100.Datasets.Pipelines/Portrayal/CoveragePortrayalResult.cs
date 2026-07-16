@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;

@@ -1,6 +1,6 @@
+using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
-using System.ComponentModel;
 
 namespace EncDotNet.S100.Mcp.Tools.Catalog;
 

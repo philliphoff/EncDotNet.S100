@@ -1,12 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
@@ -455,19 +448,19 @@ internal sealed class MainViewModel : ViewModelBase
         switch (tab.Dock)
         {
             case TabDock.Left when ReferenceEquals(_selectedLeftTab, tab):
-            {
-                var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
-                if (next is not null)
                 {
-                    SetLeftSelectionSystem(next);
+                    var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
+                    if (next is not null)
+                    {
+                        SetLeftSelectionSystem(next);
+                    }
+                    else
+                    {
+                        SetLeftSelectionSystem(null);
+                        IsLeftDockOpen = false;
+                    }
+                    break;
                 }
-                else
-                {
-                    SetLeftSelectionSystem(null);
-                    IsLeftDockOpen = false;
-                }
-                break;
-            }
             case TabDock.Right when ReferenceEquals(_selectedRightTab, tab):
                 SelectedRightTab = RightTabs.FirstOrDefault(t => t.IsVisible);
                 break;

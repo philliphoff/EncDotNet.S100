@@ -1,12 +1,11 @@
+using System.ComponentModel;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Time;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using System.ComponentModel;
 
 namespace EncDotNet.S100.Mcp.Tools;
 
@@ -325,23 +324,23 @@ public sealed class SampleCoverageTool
             switch (dataset.Data)
             {
                 case S104CoverageData s104:
-                {
-                    anyS104Gridded = true;
-                    var model = s104.Source.Dataset;
-                    if (model.Coverages.Count == 0) break;
-                    var probe = model.Coverages[0];
-                    if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
-                    var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-                    if (area < bestArea)
                     {
-                        bestArea = area;
-                        bestDataset = dataset;
-                        bestSource = s104.Source;
-                        bestModel = model;
-                        bestCoverage = probe;
+                        anyS104Gridded = true;
+                        var model = s104.Source.Dataset;
+                        if (model.Coverages.Count == 0) break;
+                        var probe = model.Coverages[0];
+                        if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
+                        var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
+                        if (area < bestArea)
+                        {
+                            bestArea = area;
+                            bestDataset = dataset;
+                            bestSource = s104.Source;
+                            bestModel = model;
+                            bestCoverage = probe;
+                        }
+                        break;
                     }
-                    break;
-                }
                 case S104StationSeriesData:
                     anyS104StationSeries = true;
                     break;
@@ -517,23 +516,23 @@ public sealed class SampleCoverageTool
             switch (dataset.Data)
             {
                 case S111CoverageData s111:
-                {
-                    anyS111Gridded = true;
-                    var model = s111.Source.Dataset;
-                    if (model.Coverages.Count == 0) break;
-                    var probe = model.Coverages[0];
-                    if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
-                    var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-                    if (area < bestArea)
                     {
-                        bestArea = area;
-                        bestDataset = dataset;
-                        bestSource = s111.Source;
-                        bestModel = model;
-                        bestCoverage = probe;
+                        anyS111Gridded = true;
+                        var model = s111.Source.Dataset;
+                        if (model.Coverages.Count == 0) break;
+                        var probe = model.Coverages[0];
+                        if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
+                        var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
+                        if (area < bestArea)
+                        {
+                            bestArea = area;
+                            bestDataset = dataset;
+                            bestSource = s111.Source;
+                            bestModel = model;
+                            bestCoverage = probe;
+                        }
+                        break;
                     }
-                    break;
-                }
                 case S111StationSeriesData:
                     anyS111StationSeries = true;
                     break;
@@ -938,39 +937,39 @@ public sealed class SampleCoverageTool
         switch (query)
         {
             case TimeQuery.Range r:
-            {
-                var fromUtc = r.From.UtcDateTime;
-                var toUtc = r.To.UtcDateTime;
-                var builder = new List<(DateTimeOffset, int)>();
-                for (int i = 0; i < coverages.Count; i++)
                 {
-                    var tp = GetTimePoint(coverages[i]);
-                    if (tp >= fromUtc && tp <= toUtc)
+                    var fromUtc = r.From.UtcDateTime;
+                    var toUtc = r.To.UtcDateTime;
+                    var builder = new List<(DateTimeOffset, int)>();
+                    for (int i = 0; i < coverages.Count; i++)
                     {
-                        builder.Add((new DateTimeOffset(DateTime.SpecifyKind(tp, DateTimeKind.Utc)), i));
+                        var tp = GetTimePoint(coverages[i]);
+                        if (tp >= fromUtc && tp <= toUtc)
+                        {
+                            builder.Add((new DateTimeOffset(DateTime.SpecifyKind(tp, DateTimeKind.Utc)), i));
+                        }
                     }
+                    return builder;
                 }
-                return builder;
-            }
             case TimeQuery.Series s:
-            {
-                var enumerated = s.Enumerate();
-                var builder = new List<(DateTimeOffset, int)>(enumerated.Count);
-                int? lastIndex = null;
-                foreach (var instant in enumerated)
                 {
-                    var idx = SelectTimeStep(coverages, instant);
-                    if (lastIndex == idx)
+                    var enumerated = s.Enumerate();
+                    var builder = new List<(DateTimeOffset, int)>(enumerated.Count);
+                    int? lastIndex = null;
+                    foreach (var instant in enumerated)
                     {
-                        // Preserve the requested-time echo but skip duplicate dataset rows.
+                        var idx = SelectTimeStep(coverages, instant);
+                        if (lastIndex == idx)
+                        {
+                            // Preserve the requested-time echo but skip duplicate dataset rows.
+                            builder.Add((instant, idx));
+                            continue;
+                        }
                         builder.Add((instant, idx));
-                        continue;
+                        lastIndex = idx;
                     }
-                    builder.Add((instant, idx));
-                    lastIndex = idx;
+                    return builder;
                 }
-                return builder;
-            }
             default:
                 return [];
         }

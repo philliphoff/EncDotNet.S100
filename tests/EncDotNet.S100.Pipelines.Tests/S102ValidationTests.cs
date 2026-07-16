@@ -2,7 +2,6 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
 using EncDotNet.S100.Validation;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

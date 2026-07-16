@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Viewer.Services.Notifications;
 
 namespace EncDotNet.S100.Viewer.Tests.Notifications;

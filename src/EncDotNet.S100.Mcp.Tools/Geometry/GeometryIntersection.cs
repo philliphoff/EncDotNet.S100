@@ -68,51 +68,51 @@ public static class GeometryIntersection
                 return ContainsArea(ring, holes, p.Value);
 
             case GeoQuery.Box or GeoQuery.Polygon:
-            {
-                var qring = QueryRing(query);
-                // A query-ring vertex inside the feature area.
-                foreach (var v in qring)
                 {
-                    if (ContainsArea(ring, holes, new GeoPoint(v.Latitude, v.Longitude)))
+                    var qring = QueryRing(query);
+                    // A query-ring vertex inside the feature area.
+                    foreach (var v in qring)
                     {
-                        return true;
+                        if (ContainsArea(ring, holes, new GeoPoint(v.Latitude, v.Longitude)))
+                        {
+                            return true;
+                        }
                     }
-                }
 
-                // A feature-ring vertex inside the (hole-less) query ring.
-                foreach (var v in ring)
-                {
-                    if (GeometryDistance.ContainsPoint(qring, new GeoPoint(v.Latitude, v.Longitude)))
+                    // A feature-ring vertex inside the (hole-less) query ring.
+                    foreach (var v in ring)
                     {
-                        return true;
+                        if (GeometryDistance.ContainsPoint(qring, new GeoPoint(v.Latitude, v.Longitude)))
+                        {
+                            return true;
+                        }
                     }
-                }
 
-                // Boundary crossing (exterior ring or any hole edge).
-                return RingsCross(ring, qring) || HolesCross(holes, qring);
-            }
+                    // Boundary crossing (exterior ring or any hole edge).
+                    return RingsCross(ring, qring) || HolesCross(holes, qring);
+                }
 
             case GeoQuery.Polyline pl:
-            {
-                var segments = Segments(pl.Value.Vertices);
-
-                // A leg endpoint inside the feature area.
-                foreach (var v in pl.Value.Vertices)
                 {
-                    if (ContainsArea(ring, holes, new GeoPoint(v.Latitude, v.Longitude)))
+                    var segments = Segments(pl.Value.Vertices);
+
+                    // A leg endpoint inside the feature area.
+                    foreach (var v in pl.Value.Vertices)
+                    {
+                        if (ContainsArea(ring, holes, new GeoPoint(v.Latitude, v.Longitude)))
+                        {
+                            return true;
+                        }
+                    }
+
+                    // A leg crossing the exterior ring or any hole edge.
+                    if (SegmentsCrossRing(segments, ring) || HolesCrossSegments(holes, segments))
                     {
                         return true;
                     }
-                }
 
-                // A leg crossing the exterior ring or any hole edge.
-                if (SegmentsCrossRing(segments, ring) || HolesCrossSegments(holes, segments))
-                {
-                    return true;
+                    return WithinCorridor(pl.Value, ring, holes);
                 }
-
-                return WithinCorridor(pl.Value, ring, holes);
-            }
 
             default:
                 return true;
@@ -130,40 +130,40 @@ public static class GeometryIntersection
                 return true;
 
             case GeoQuery.Box or GeoQuery.Polygon:
-            {
-                var qring = QueryRing(query);
-                foreach (var curve in curves)
                 {
-                    foreach (var v in curve)
+                    var qring = QueryRing(query);
+                    foreach (var curve in curves)
                     {
-                        if (GeometryDistance.ContainsPoint(qring, new GeoPoint(v.Latitude, v.Longitude)))
+                        foreach (var v in curve)
+                        {
+                            if (GeometryDistance.ContainsPoint(qring, new GeoPoint(v.Latitude, v.Longitude)))
+                            {
+                                return true;
+                            }
+                        }
+
+                        if (SegmentsCrossRing(Segments(curve), qring))
                         {
                             return true;
                         }
                     }
 
-                    if (SegmentsCrossRing(Segments(curve), qring))
-                    {
-                        return true;
-                    }
+                    return false;
                 }
-
-                return false;
-            }
 
             case GeoQuery.Polyline pl:
-            {
-                var legs = Segments(pl.Value.Vertices);
-                foreach (var curve in curves)
                 {
-                    if (SegmentsCross(Segments(curve), legs))
+                    var legs = Segments(pl.Value.Vertices);
+                    foreach (var curve in curves)
                     {
-                        return true;
+                        if (SegmentsCross(Segments(curve), legs))
+                        {
+                            return true;
+                        }
                     }
-                }
 
-                return CurvesWithinCorridor(curves, pl.Value);
-            }
+                    return CurvesWithinCorridor(curves, pl.Value);
+                }
 
             default:
                 return true;
@@ -177,40 +177,40 @@ public static class GeometryIntersection
         switch (query)
         {
             case GeoQuery.Box or GeoQuery.Polygon:
-            {
-                var qring = QueryRing(query);
-                foreach (var p in points)
                 {
-                    if (GeometryDistance.ContainsPoint(qring, new GeoPoint(p.Latitude, p.Longitude)))
+                    var qring = QueryRing(query);
+                    foreach (var p in points)
                     {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            case GeoQuery.Polyline pl:
-            {
-                // A point feature lies on a route leg only when its distance
-                // to the leg is within the corridor half-width (a tiny
-                // epsilon for a zero-width leg, i.e. genuinely on the line).
-                var half = pl.Value.CorridorWidthMeters is { } w && w > 0 ? w : 1e-6;
-                var legs = Segments(pl.Value.Vertices);
-                foreach (var p in points)
-                {
-                    var gp = new GeoPoint(p.Latitude, p.Longitude);
-                    foreach (var (a, b) in legs)
-                    {
-                        if (GeometryDistance.PointToSegment(gp, a, b).Distance <= half)
+                        if (GeometryDistance.ContainsPoint(qring, new GeoPoint(p.Latitude, p.Longitude)))
                         {
                             return true;
                         }
                     }
+
+                    return false;
                 }
 
-                return false;
-            }
+            case GeoQuery.Polyline pl:
+                {
+                    // A point feature lies on a route leg only when its distance
+                    // to the leg is within the corridor half-width (a tiny
+                    // epsilon for a zero-width leg, i.e. genuinely on the line).
+                    var half = pl.Value.CorridorWidthMeters is { } w && w > 0 ? w : 1e-6;
+                    var legs = Segments(pl.Value.Vertices);
+                    foreach (var p in points)
+                    {
+                        var gp = new GeoPoint(p.Latitude, p.Longitude);
+                        foreach (var (a, b) in legs)
+                        {
+                            if (GeometryDistance.PointToSegment(gp, a, b).Distance <= half)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+
+                    return false;
+                }
 
             default:
                 // Point query against a point feature is degenerate, so keep

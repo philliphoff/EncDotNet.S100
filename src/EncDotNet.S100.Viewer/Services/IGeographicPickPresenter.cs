@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>

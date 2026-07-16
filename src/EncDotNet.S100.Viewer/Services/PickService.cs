@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -9,7 +6,6 @@ using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
-using Mapsui.Rendering;
 
 namespace EncDotNet.S100.Viewer.Services;
 

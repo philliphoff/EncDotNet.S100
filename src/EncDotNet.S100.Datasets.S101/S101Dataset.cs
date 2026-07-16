@@ -1,6 +1,5 @@
 
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Datasets.S101;
 

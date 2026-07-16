@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
-using EncDotNet.S100.Quantities;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources.OwnShip;
 

@@ -3,7 +3,6 @@ using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
 using EncDotNet.S100.Viewer.ViewModels;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -290,20 +290,20 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         switch (algorithm)
         {
             case DigitalSignatureAlgorithm.ECDSA:
-            {
-                using var ecdsa = cert.GetECDsaPublicKey();
-                if (ecdsa is null)
-                    throw new CryptographicException("Certificate does not contain an ECDSA public key.");
-                return ecdsa.VerifyHash(hash, signature);
-            }
+                {
+                    using var ecdsa = cert.GetECDsaPublicKey();
+                    if (ecdsa is null)
+                        throw new CryptographicException("Certificate does not contain an ECDSA public key.");
+                    return ecdsa.VerifyHash(hash, signature);
+                }
 
             case DigitalSignatureAlgorithm.DSA:
-            {
-                using var dsa = cert.GetDSAPublicKey();
-                if (dsa is null)
-                    throw new CryptographicException("Certificate does not contain a DSA public key.");
-                return dsa.VerifySignature(hash, signature);
-            }
+                {
+                    using var dsa = cert.GetDSAPublicKey();
+                    if (dsa is null)
+                        throw new CryptographicException("Certificate does not contain a DSA public key.");
+                    return dsa.VerifySignature(hash, signature);
+                }
 
             default:
                 throw new CryptographicException(

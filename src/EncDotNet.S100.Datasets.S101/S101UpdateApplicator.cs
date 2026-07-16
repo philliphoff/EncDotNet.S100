@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 namespace EncDotNet.S100.Datasets.S101;
 
 /// <summary>Severity of a message produced while applying S-101 sequential updates.</summary>

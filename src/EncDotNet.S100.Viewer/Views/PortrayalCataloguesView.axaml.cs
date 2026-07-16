@@ -1,4 +1,3 @@
-using System.IO;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using EncDotNet.S100.Portrayals;

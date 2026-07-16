@@ -1,5 +1,4 @@
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Datasets.S129.Validation;
 using EncDotNet.S100.Validation;
@@ -26,13 +25,13 @@ public class S129UkcRulesTests
         DateTimeOffset? start = null,
         DateTimeOffset? end = null,
         double? maximumDraught = null) => new()
-    {
-        Id = id,
-        FixedTimeRange = (start is null && end is null)
+        {
+            Id = id,
+            FixedTimeRange = (start is null && end is null)
             ? null
             : new S129TimeRange { Start = start, End = end },
-        MaximumDraught = maximumDraught,
-    };
+            MaximumDraught = maximumDraught,
+        };
 
     private static S129ControlPoint ControlPoint(
         string id,
@@ -42,44 +41,44 @@ public class S129UkcRulesTests
         bool withPosition = true,
         double? distance = null,
         double? speed = null) => new()
-    {
-        Id = id,
-        ExpectedPassingTime = time,
-        ExpectedPassingSpeed = speed,
-        DistanceAboveUkcLimit = distance,
-        Position = withPosition ? new GeoPosition(lat, lon) : null,
-    };
+        {
+            Id = id,
+            ExpectedPassingTime = time,
+            ExpectedPassingSpeed = speed,
+            DistanceAboveUkcLimit = distance,
+            Position = withPosition ? new GeoPosition(lat, lon) : null,
+        };
 
     private static S129UkcPlanArea PlanArea(
         string id,
         IReadOnlyList<GeoPosition> coords,
         IReadOnlyList<IReadOnlyList<GeoPosition>>? holes = null) => new()
-    {
-        Id = id,
-        GeometryKind = S129GeometryKind.Surface,
-        Coordinates = coords,
-        InteriorRings = holes ?? [],
-    };
+        {
+            Id = id,
+            GeometryKind = S129GeometryKind.Surface,
+            Coordinates = coords,
+            InteriorRings = holes ?? [],
+        };
 
     private static S129NonNavigableArea NonNav(
         string id,
         IReadOnlyList<GeoPosition> coords) => new()
-    {
-        Id = id,
-        GeometryKind = S129GeometryKind.Surface,
-        Coordinates = coords,
-        InteriorRings = [],
-    };
+        {
+            Id = id,
+            GeometryKind = S129GeometryKind.Surface,
+            Coordinates = coords,
+            InteriorRings = [],
+        };
 
     private static S129AlmostNonNavigableArea AlmostNonNav(
         string id,
         IReadOnlyList<GeoPosition> coords) => new()
-    {
-        Id = id,
-        GeometryKind = S129GeometryKind.Surface,
-        Coordinates = coords,
-        InteriorRings = [],
-    };
+        {
+            Id = id,
+            GeometryKind = S129GeometryKind.Surface,
+            Coordinates = coords,
+            InteriorRings = [],
+        };
 
     private static S129UnderKeelClearancePlan Plan(
         S129UkcPlanMetadata? meta = null,
@@ -87,14 +86,14 @@ public class S129UkcRulesTests
         IReadOnlyList<S129ControlPoint>? controlPoints = null,
         IReadOnlyList<S129NonNavigableArea>? nonNav = null,
         IReadOnlyList<S129AlmostNonNavigableArea>? almostNonNav = null) => new()
-    {
-        Plan = meta,
-        PlanArea = area,
-        ControlPoints = controlPoints ?? [],
-        NonNavigableAreas = nonNav ?? [],
-        AlmostNonNavigableAreas = almostNonNav ?? [],
-        Source = EmptyDataset,
-    };
+        {
+            Plan = meta,
+            PlanArea = area,
+            ControlPoints = controlPoints ?? [],
+            NonNavigableAreas = nonNav ?? [],
+            AlmostNonNavigableAreas = almostNonNav ?? [],
+            Source = EmptyDataset,
+        };
 
     private static DateTimeOffset T(int minute) =>
         new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero).AddMinutes(minute);

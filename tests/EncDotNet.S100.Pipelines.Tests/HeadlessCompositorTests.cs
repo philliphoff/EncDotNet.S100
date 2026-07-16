@@ -1,15 +1,11 @@
-using EncDotNet.S100.DataModel;
-using System.Collections.Generic;
-using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using SkiaSharp;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -171,12 +167,12 @@ public class HeadlessCompositorTests
     private static bool HasRedPixel(SKBitmap bitmap, int xStart, int xEnd)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = xStart; x < xEnd; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red > 200 && p.Green < 80 && p.Blue < 80)
-                return true;
-        }
+            for (int x = xStart; x < xEnd; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red > 200 && p.Green < 80 && p.Blue < 80)
+                    return true;
+            }
         return false;
     }
 

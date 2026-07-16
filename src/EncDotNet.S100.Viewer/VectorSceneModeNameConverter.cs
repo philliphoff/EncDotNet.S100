@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using Avalonia.Data.Converters;
 using EncDotNet.S100.Renderers.Mapsui;

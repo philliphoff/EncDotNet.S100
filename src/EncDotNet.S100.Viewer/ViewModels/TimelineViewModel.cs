@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Windows.Input;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.Input;

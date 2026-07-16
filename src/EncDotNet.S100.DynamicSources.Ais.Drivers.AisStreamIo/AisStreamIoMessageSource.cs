@@ -1,4 +1,3 @@
-using EncDotNet.S100.Pipelines;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 

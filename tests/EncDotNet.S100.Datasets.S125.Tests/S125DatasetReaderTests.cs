@@ -1,4 +1,3 @@
-using System.Linq;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S125.Tests;

@@ -1,5 +1,4 @@
 using EncDotNet.S100.DynamicSources;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui;
 using Microsoft.Extensions.DependencyInjection;

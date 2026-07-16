@@ -1,8 +1,6 @@
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Threading;
 using EncDotNet.S100.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Diagnostics;

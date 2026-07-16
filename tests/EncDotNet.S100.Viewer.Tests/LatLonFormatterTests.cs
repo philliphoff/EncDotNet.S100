@@ -1,5 +1,3 @@
-using EncDotNet.S100.Viewer;
-
 namespace EncDotNet.S100.Viewer.Tests;
 
 public class LatLonFormatterTests

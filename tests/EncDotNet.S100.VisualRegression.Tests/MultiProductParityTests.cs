@@ -1,10 +1,7 @@
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.VisualRegression;
-using Mapsui.Layers;
 using Mapsui.Projections;
 using SkiaSharp;
 

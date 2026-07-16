@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace EncDotNet.S100.Viewer.Services.Notifications;
 
 /// <summary>

@@ -1,5 +1,3 @@
-using System;
-using System.Threading;
 using Avalonia.Headless;
 
 namespace EncDotNet.S100.Viewer.Tests;

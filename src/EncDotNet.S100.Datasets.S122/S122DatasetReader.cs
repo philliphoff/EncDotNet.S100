@@ -1,6 +1,5 @@
-using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
-using System.Collections.ObjectModel;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S122.Diagnostics;
 

@@ -1,7 +1,5 @@
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S104.Tests.Fixtures;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
 

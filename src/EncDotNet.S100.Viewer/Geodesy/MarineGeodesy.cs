@@ -1,6 +1,4 @@
 using EncDotNet.S100.DataModel;
-using System;
-using System.Collections.Generic;
 
 namespace EncDotNet.S100.Viewer.Geodesy;
 

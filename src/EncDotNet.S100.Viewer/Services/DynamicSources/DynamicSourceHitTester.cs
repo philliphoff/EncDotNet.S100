@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using Mapsui;

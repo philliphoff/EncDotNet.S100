@@ -1,4 +1,3 @@
-using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;

@@ -1,12 +1,9 @@
 using System.Diagnostics;
 using System.Reflection;
-using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using Mapsui;

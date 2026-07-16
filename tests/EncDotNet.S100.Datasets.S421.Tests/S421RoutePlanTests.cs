@@ -1,8 +1,7 @@
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Features;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S421.Tests;
 

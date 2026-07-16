@@ -1,6 +1,6 @@
+using EncDotNet.S100.Renderers.Skia;
 using Mapsui;
 using Mapsui.Extensions;
-using EncDotNet.S100.Renderers.Skia;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Rendering;

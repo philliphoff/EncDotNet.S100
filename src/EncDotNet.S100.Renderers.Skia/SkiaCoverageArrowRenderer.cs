@@ -98,48 +98,48 @@ public sealed class SkiaCoverageArrowRenderer
         }
 
         for (int r = 0; r < srcRows; r += stride)
-        for (int c = 0; c < srcCols; c += stride)
-        {
-            float value = valueData[r, c];
-            bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
-            if (isNoData) continue;
+            for (int c = 0; c < srcCols; c += stride)
+            {
+                float value = valueData[r, c];
+                bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
+                if (isNoData) continue;
 
-            float direction = rotationData[r, c];
-            bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
-            if (dirNoData) continue;
+                float direction = rotationData[r, c];
+                bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
+                if (dirNoData) continue;
 
-            var band = symbolScheme.Resolve(value);
-            if (band is null) continue;
+                var band = symbolScheme.Resolve(value);
+                if (band is null) continue;
 
-            var picture = GetPicture(band.SymbolRef);
-            if (picture is null) continue;
+                var picture = GetPicture(band.SymbolRef);
+                if (picture is null) continue;
 
-            var (nativeX, nativeY) = georeferencer.ToNative(r, c);
-            double lon, lat;
-            if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
-            else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
-            var (mx, my) = WebMercator.FromLonLat(lon, lat);
-            var (px, py) = project((mx, my));
+                var (nativeX, nativeY) = georeferencer.ToNative(r, c);
+                double lon, lat;
+                if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
+                else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
+                var (mx, my) = WebMercator.FromLonLat(lon, lat);
+                var (px, py) = project((mx, my));
 
-            double bandScale = band.ScaleByValue
-                ? band.ScaleFactor * value
-                : band.ScaleFactor;
-            float scale = (float)(BaseSymbolScale * bandScale);
-            if (scale <= 0) continue;
+                double bandScale = band.ScaleByValue
+                    ? band.ScaleFactor * value
+                    : band.ScaleFactor;
+                float scale = (float)(BaseSymbolScale * bandScale);
+                if (scale <= 0) continue;
 
-            var bounds = picture.CullRect;
+                var bounds = picture.CullRect;
 
-            canvas.Save();
-            canvas.Translate(px, py);
-            // surfaceCurrentDirection is degrees true (0=N, 90=E), which matches
-            // Skia's clockwise-from-up rotation convention.
-            canvas.RotateDegrees(direction);
-            canvas.Scale(scale);
-            // Centre the symbol's bbox on the (now rotated/scaled) origin.
-            canvas.Translate(-(bounds.Left + bounds.Width / 2f), -(bounds.Top + bounds.Height / 2f));
-            canvas.DrawPicture(picture);
-            canvas.Restore();
-        }
+                canvas.Save();
+                canvas.Translate(px, py);
+                // surfaceCurrentDirection is degrees true (0=N, 90=E), which matches
+                // Skia's clockwise-from-up rotation convention.
+                canvas.RotateDegrees(direction);
+                canvas.Scale(scale);
+                // Centre the symbol's bbox on the (now rotated/scaled) origin.
+                canvas.Translate(-(bounds.Left + bounds.Width / 2f), -(bounds.Top + bounds.Height / 2f));
+                canvas.DrawPicture(picture);
+                canvas.Restore();
+            }
     }
 
     private SKPicture? GetPicture(string symbolRef)

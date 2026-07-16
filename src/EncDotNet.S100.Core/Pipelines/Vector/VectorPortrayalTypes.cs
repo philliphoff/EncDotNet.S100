@@ -1,7 +1,7 @@
-namespace EncDotNet.S100.Pipelines.Vector;
-
-using EncDotNet.S100.Collections;
 using System.Collections.ObjectModel;
+using EncDotNet.S100.Collections;
+
+namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
 /// Supporting types referenced by the vector portrayal catalogue.

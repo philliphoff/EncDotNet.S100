@@ -1,5 +1,4 @@
 using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;
 

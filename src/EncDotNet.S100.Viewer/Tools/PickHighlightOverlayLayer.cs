@@ -1,5 +1,4 @@
 using EncDotNet.S100.DataModel;
-using System.Collections.Generic;
 using EncDotNet.S100.Viewer.Geodesy;
 using Mapsui;
 using Mapsui.Layers;

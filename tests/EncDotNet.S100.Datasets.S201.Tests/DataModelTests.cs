@@ -1,5 +1,3 @@
-using System.Linq;
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S201.DataModel;
 
 namespace EncDotNet.S100.Datasets.S201.Tests;

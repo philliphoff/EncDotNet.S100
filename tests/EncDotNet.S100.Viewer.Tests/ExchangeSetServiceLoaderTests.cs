@@ -1,19 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Viewer.Services;
-using ExchangeSetProgress = EncDotNet.S100.Viewer.Services.ExchangeSetProgress;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
-using Xunit;
-using System.Collections.ObjectModel;
+using ExchangeSetProgress = EncDotNet.S100.Viewer.Services.ExchangeSetProgress;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

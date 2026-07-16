@@ -1,5 +1,3 @@
-using EncDotNet.S100.Core;
-
 namespace EncDotNet.S100.Core.Tests;
 
 /// <summary>

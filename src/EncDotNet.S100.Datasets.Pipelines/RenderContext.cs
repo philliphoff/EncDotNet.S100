@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 

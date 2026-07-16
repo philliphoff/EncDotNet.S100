@@ -1,5 +1,4 @@
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Projections;
@@ -175,15 +174,15 @@ public sealed class SkiaDisplayListRendererTests
         // Measure the painted (non-white) bounding box.
         int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+            for (int x = 0; x < bitmap.Width; x++)
             {
-                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
-                minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+                {
+                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                    minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                }
             }
-        }
         Assert.True(maxX >= 0, "Symbol rendered nothing.");
 
         int paintedWidth = maxX - minX + 1;
@@ -254,11 +253,11 @@ public sealed class SkiaDisplayListRendererTests
         // Red-square centroid.
         long sx = 0, sy = 0, n = 0;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red > 150 && p.Green < 100 && p.Blue < 100) { sx += x; sy += y; n++; }
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red > 150 && p.Green < 100 && p.Blue < 100) { sx += x; sy += y; n++; }
+            }
         Assert.True(n > 0, "Symbol rendered nothing.");
 
         double cx = sx / (double)n, cy = sy / (double)n;
@@ -394,12 +393,12 @@ public sealed class SkiaDisplayListRendererTests
 
         int foreground = 0;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
-                foreground++;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                    foreground++;
+            }
 
         Assert.True(foreground > 20,
             $"Text-only scene produced too few foreground pixels ({foreground}); labels did not render.");
@@ -436,12 +435,12 @@ public sealed class SkiaDisplayListRendererTests
 
         int red = 0, blue = 0;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red > 200 && p.Green < 80 && p.Blue < 80) red++;
-            if (p.Blue > 200 && p.Red < 80 && p.Green < 80) blue++;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red > 200 && p.Green < 80 && p.Blue < 80) red++;
+                if (p.Blue > 200 && p.Red < 80 && p.Green < 80) blue++;
+            }
 
         Assert.True(red > 50, $"label background did not paint (red pixels={red}).");
         Assert.True(blue > 20, $"label foreground did not paint (blue pixels={blue}).");
@@ -469,17 +468,17 @@ public sealed class SkiaDisplayListRendererTests
             using var bitmap = Render(scene, MakeViewport(denom: 25_000));
             int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
             for (int y = 0; y < bitmap.Height; y++)
-            for (int x = 0; x < bitmap.Width; x++)
-            {
-                var p = bitmap.GetPixel(x, y);
-                if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                for (int x = 0; x < bitmap.Width; x++)
                 {
-                    if (x < minX) minX = x;
-                    if (y < minY) minY = y;
-                    if (x > maxX) maxX = x;
-                    if (y > maxY) maxY = y;
+                    var p = bitmap.GetPixel(x, y);
+                    if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                    {
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
                 }
-            }
             return maxX < 0 ? 0 : (maxY - minY + 1);
         }
 
@@ -531,12 +530,12 @@ public sealed class SkiaDisplayListRendererTests
     private static bool IsBlank(SKBitmap bitmap, RgbaColor background)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != background.R || p.Green != background.G || p.Blue != background.B)
-                return false;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != background.R || p.Green != background.G || p.Blue != background.B)
+                    return false;
+            }
         return true;
     }
 }

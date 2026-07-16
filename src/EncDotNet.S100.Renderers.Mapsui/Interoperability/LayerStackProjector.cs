@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;

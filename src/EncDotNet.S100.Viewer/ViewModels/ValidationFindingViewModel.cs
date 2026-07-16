@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;

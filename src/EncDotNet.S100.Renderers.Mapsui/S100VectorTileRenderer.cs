@@ -1,20 +1,15 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
-using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using SkiaSharp;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using CoreViewport = EncDotNet.S100.Pipelines.Viewport;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using SceneRgbaColor = EncDotNet.S100.Pipelines.RgbaColor;
 
 namespace EncDotNet.S100.Renderers.Mapsui;

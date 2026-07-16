@@ -1,5 +1,5 @@
-using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S421.Diagnostics;
 
@@ -165,7 +165,8 @@ internal static class S421DatasetReader
         }
 
         return (geomType, points, curves, exterior, interiors);
-    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S421ComplexAttribute>, IReadOnlyList<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S421ComplexAttribute>, IReadOnlyList<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
         var simple = new Dictionary<string, string>();
         var complex = new List<S421ComplexAttribute>();

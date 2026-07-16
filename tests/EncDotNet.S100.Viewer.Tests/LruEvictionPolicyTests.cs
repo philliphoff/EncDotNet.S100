@@ -1,5 +1,4 @@
 using EncDotNet.S100.Viewer.Services.LazyLoading;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

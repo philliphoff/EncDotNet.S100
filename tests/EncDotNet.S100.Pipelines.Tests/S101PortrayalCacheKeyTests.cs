@@ -1,9 +1,6 @@
-using System.Collections.Generic;
-using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
-using Xunit;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

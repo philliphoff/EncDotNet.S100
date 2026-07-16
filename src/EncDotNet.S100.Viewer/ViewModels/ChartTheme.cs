@@ -48,13 +48,13 @@ internal sealed record ChartTheme(
     //   SeriesDirection(#FF7F0E) — S-111 surface-current direction (orange)
     //   NowMarker      (#E6494B) — vertical "now" rule (red)
     private static readonly ChartTheme Light = new(
-        SeriesPrimary:   new SKColor(0x1F, 0x77, 0xB4),
-        SeriesSpeed:     new SKColor(0x2C, 0xA0, 0x2C),
+        SeriesPrimary: new SKColor(0x1F, 0x77, 0xB4),
+        SeriesSpeed: new SKColor(0x2C, 0xA0, 0x2C),
         SeriesDirection: new SKColor(0xFF, 0x7F, 0x0E),
-        NowMarker:       new SKColor(0xE6, 0x49, 0x4B),
-        AxisLabel:       new SKColor(0x33, 0x33, 0x33),
-        AxisName:        new SKColor(0x1A, 0x1A, 0x1A),
-        Separator:       new SKColor(0xE0, 0xE0, 0xE0));
+        NowMarker: new SKColor(0xE6, 0x49, 0x4B),
+        AxisLabel: new SKColor(0x33, 0x33, 0x33),
+        AxisName: new SKColor(0x1A, 0x1A, 0x1A),
+        Separator: new SKColor(0xE0, 0xE0, 0xE0));
 
     // ── Dark-theme colours ───────────────────────────────────────────
     // Lifted / desaturated variants of the light series picks. Saturated
@@ -68,13 +68,13 @@ internal sealed record ChartTheme(
     // Axis label/name greys are pulled toward the light end so they
     // remain legible against ShadUI dark-theme background colours.
     private static readonly ChartTheme Dark = new(
-        SeriesPrimary:   new SKColor(0x4F, 0xC3, 0xF7),
-        SeriesSpeed:     new SKColor(0x7F, 0xE0, 0x7F),
+        SeriesPrimary: new SKColor(0x4F, 0xC3, 0xF7),
+        SeriesSpeed: new SKColor(0x7F, 0xE0, 0x7F),
         SeriesDirection: new SKColor(0xFF, 0xB7, 0x4D),
-        NowMarker:       new SKColor(0xFF, 0x8A, 0x80),
-        AxisLabel:       new SKColor(0xCC, 0xCC, 0xCC),
-        AxisName:        new SKColor(0xE6, 0xE6, 0xE6),
-        Separator:       new SKColor(0x40, 0x40, 0x40));
+        NowMarker: new SKColor(0xFF, 0x8A, 0x80),
+        AxisLabel: new SKColor(0xCC, 0xCC, 0xCC),
+        AxisName: new SKColor(0xE6, 0xE6, 0xE6),
+        Separator: new SKColor(0x40, 0x40, 0x40));
 
     /// <summary>
     /// Returns the chart palette appropriate for the current chrome

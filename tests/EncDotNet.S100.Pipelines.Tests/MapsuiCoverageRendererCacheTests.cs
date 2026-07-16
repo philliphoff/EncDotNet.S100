@@ -1,8 +1,6 @@
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Mapsui;
-using Mapsui;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -17,9 +15,12 @@ public class MapsuiCoverageRendererCacheTests
 {
     private static readonly Viewport DefaultViewport = new()
     {
-        MinLatitude = 0, MaxLatitude = 1,
-        MinLongitude = 0, MaxLongitude = 1,
-        WidthPixels = 100, HeightPixels = 100,
+        MinLatitude = 0,
+        MaxLatitude = 1,
+        MinLongitude = 0,
+        MaxLongitude = 1,
+        WidthPixels = 100,
+        HeightPixels = 100,
         ScaleDenominator = 50_000,
     };
 

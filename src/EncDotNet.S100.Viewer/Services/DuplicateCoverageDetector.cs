@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>

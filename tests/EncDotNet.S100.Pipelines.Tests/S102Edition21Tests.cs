@@ -1,12 +1,11 @@
 using System.Reflection;
-using EncDotNet.S100.Core;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
-using EncDotNet.S100.Crs.ProjNet;
 using PureHDF;
 using SkiaSharp;
 
@@ -153,12 +152,12 @@ public class S102Edition21Tests
     private static void AssertNonBlank(SKBitmap bitmap)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
-                return;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+                    return;
+            }
 
         Assert.Fail("Edition 2.1 S-102 cell rendered a blank (all-white) bitmap.");
     }

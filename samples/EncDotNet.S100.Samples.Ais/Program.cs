@@ -1,4 +1,3 @@
-using EncDotNet.S100.DataModel;
 // PR-D3 sample app: connects to aisstream.io, prints decoded AIS
 // messages projected through AisDynamicFeatureSource. Demonstrates
 // the three-layer split (driver → IAisMessageSource → dynamic
@@ -12,6 +11,7 @@ using EncDotNet.S100.DataModel;
 // constrain the area (default = world).
 
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;

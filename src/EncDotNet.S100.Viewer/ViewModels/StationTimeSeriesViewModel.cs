@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
@@ -7,10 +5,8 @@ using EncDotNet.S100.Viewer.Services;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.Kernel.Sketches;
-using LiveChartsCore.Measure;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
-using SkiaSharp;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 

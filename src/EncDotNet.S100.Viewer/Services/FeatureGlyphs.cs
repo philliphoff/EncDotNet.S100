@@ -1,4 +1,3 @@
-using System;
 using Icon = FluentIcons.Common.Icon;
 
 namespace EncDotNet.S100.Viewer.Services;

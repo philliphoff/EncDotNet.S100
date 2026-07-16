@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Viewer.Services.LazyLoading;

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
@@ -473,7 +471,9 @@ public class PickReportViewModelTests
         var vm = new PickReportViewModel();
         var hit = new PickHit
         {
-            FeatureType = "LightLateral", FeatureTypeName = "Lateral Light", FeatureRef = "L1",
+            FeatureType = "LightLateral",
+            FeatureTypeName = "Lateral Light",
+            FeatureRef = "L1",
             References = new[] { Ref("AtonStatus", "S1"), Ref("SpatialAccuracy", "A2") },
         };
 

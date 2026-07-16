@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

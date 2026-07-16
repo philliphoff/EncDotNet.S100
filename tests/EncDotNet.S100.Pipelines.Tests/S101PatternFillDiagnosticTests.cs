@@ -1,7 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
@@ -164,10 +163,10 @@ public class S101PatternFillDiagnosticTests
                     // Count non-transparent pixels
                     int nonTransparent = 0;
                     for (int y = 0; y < tileBmpCheck.Height; y++)
-                    for (int x = 0; x < tileBmpCheck.Width; x++)
-                    {
-                        if (tileBmpCheck.GetPixel(x, y).Alpha > 0) nonTransparent++;
-                    }
+                        for (int x = 0; x < tileBmpCheck.Width; x++)
+                        {
+                            if (tileBmpCheck.GetPixel(x, y).Alpha > 0) nonTransparent++;
+                        }
                     dimReport.Add($"  Non-transparent pixels: {nonTransparent}/{tileBmpCheck.Width * tileBmpCheck.Height}");
 
                     File.WriteAllBytes(Path.Combine(OutputDir, $"tile_{fillName}.png"), png);
@@ -180,10 +179,10 @@ public class S101PatternFillDiagnosticTests
                     canvas.Clear(SKColors.LightBlue); // Simulate the blue background
 
                     for (int row = 0; row < 3; row++)
-                    for (int col = 0; col < 3; col++)
-                    {
-                        canvas.DrawBitmap(tileImage, col * tw, row * th);
-                    }
+                        for (int col = 0; col < 3; col++)
+                        {
+                            canvas.DrawBitmap(tileImage, col * tw, row * th);
+                        }
 
                     canvas.Flush();
                     using var tiledImage = SKImage.FromBitmap(tiledBitmap);

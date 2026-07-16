@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.ExchangeSets.Tests;

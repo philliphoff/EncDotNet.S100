@@ -1,5 +1,3 @@
-using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
