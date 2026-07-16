@@ -38,16 +38,21 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 {
     private readonly DatasetsViewModel _datasets;
     private readonly INotificationService _notifications;
+    private readonly LazyLoading.ExchangeSetLazyLoadCoordinator? _lazyCoordinator;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
 
-    public ExchangeSetService(DatasetsViewModel datasets, INotificationService notifications)
+    public ExchangeSetService(
+        DatasetsViewModel datasets,
+        INotificationService notifications,
+        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(notifications);
         _datasets = datasets;
         _notifications = notifications;
+        _lazyCoordinator = lazyCoordinator;
     }
 
     /// <summary>
@@ -523,9 +528,83 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 cells.Count,
                 closeAction: CloseExchangeSetFromHeader);
 
+            // Above the lazy-load threshold, register every cell without
+            // loading its bytes and hand them to the viewport-driven
+            // coordinator, which loads only the cells that are actually in view
+            // at a relevant scale. This keeps a 7,000-cell set from freezing the
+            // UI thread and exhausting memory (issue #458). Small sets still load
+            // eagerly for immediacy.
+            var deferLoads = _lazyCoordinator is not null
+                && cells.Count > _lazyCoordinator.Options.CellThreshold;
+
             var dispatched = 0;
             var completedLoads = 0;
             var loadTasks = new List<Task>();
+
+            if (deferLoads)
+            {
+                // Build every cell's registration descriptor and add them in a
+                // single batch so the grouping / extent-overlay subscribers
+                // rebuild once, not once per cell (O(N) instead of O(N²)).
+                var specs = new List<ViewModels.ExchangeSetCellRegistration>(cells.Count);
+                foreach (var cell in cells)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    IReadOnlyList<string> updates = cell.UpdateRelativePaths.Count == 0
+                        ? Array.Empty<string>()
+                        : cell.UpdateRelativePaths;
+                    specs.Add(new ViewModels.ExchangeSetCellRegistration(
+                        Source: tracked.Source,
+                        RelativePath: cell.RelativePath,
+                        ProductSpec: "S-57",
+                        DisplayName: cell.CellName,
+                        UpdateRelativePaths: updates,
+                        GeographicBounds: cell.BoundingBox));
+                }
+
+                var entries = _datasets.AddRangeFromExchangeSet(specs);
+                tracked.Entries.AddRange(entries);
+                dispatched = entries.Count;
+
+                // The registered entries appear immediately (dimmed, with extent
+                // outlines); the coordinator loads the in-view ones on the next
+                // viewport tick. Nothing to await, so the open completes at once
+                // and the UI stays responsive.
+                _lazyCoordinator!.Register(entries);
+
+                var registeredMsg = string.Format(
+                    Strings.Status_ExchangeSetRegistered, dispatched,
+                    Notifications.NotificationFormat.ShortenPath(folderOrCataloguePath));
+                var deferredTerminal = new ExchangeSetTerminalInfo(
+                    NotificationSeverity.Success, Strings.Toast_ExchangeSetRegistered, registeredMsg);
+
+                if (tracked.Header is { } deferredHeader)
+                {
+                    deferredHeader.LoadedCount = dispatched;
+                    deferredHeader.UnsupportedCount = 0;
+                }
+
+                _ = VerifySignaturesAsync(tracked);
+                activity?.SetTag("s57.exchangeset.dataset.deferred", dispatched);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrCataloguePath,
+                    Total = cells.Count,
+                    // Deferred path: report the registered-cell count so the
+                    // open is treated as a success (no bytes are dispatched
+                    // yet). See ExchangeSetOpenResult.Loaded and issue #458.
+                    Loaded = dispatched,
+                    SkippedUnsupported = 0,
+                    Cancelled = false,
+                    SkipMessages = Array.Empty<string>(),
+                    UnionBoundingBox = unionBoundingBox,
+                    PendingTerminal = deferredTerminal,
+                };
+            }
+
+            // Eager path: build every cell entry and queue its byte load.
             foreach (var cell in cells)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -539,7 +618,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     cell.RelativePath,
                     "S-57",
                     displayName: cell.CellName,
-                    updateRelativePaths: updateRelativePaths);
+                    updateRelativePaths: updateRelativePaths,
+                    geographicBounds: cell.BoundingBox);
                 tracked.Entries.Add(entry);
                 loadTasks.Add(_datasets.RequestLoadAsync(entry));
                 dispatched++;
@@ -950,6 +1030,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         // Snapshot the entries: removing from `_datasets.Entries`
         // mutates `tracked.Entries` indirectly via OnEntriesChanged.
         var entriesToRemove = tracked.Entries.ToArray();
+        _lazyCoordinator?.Unregister(entriesToRemove);
         foreach (var entry in entriesToRemove)
         {
             _datasets.Entries.Remove(entry);

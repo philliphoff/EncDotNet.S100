@@ -1199,6 +1199,10 @@
     <value>Loaded {0} of {1} dataset(s) from {2} ({3} skipped).</value>
     <comment>{0} = dispatched, {1} = total, {2} = source path, {3} = skipped count.</comment>
   </data>
+  <data name="Status_ExchangeSetRegistered" xml:space="preserve">
+    <value>Registered {0} cell(s) from {1}; loading on demand as you navigate.</value>
+    <comment>{0} = registered (deferred) cell count, {1} = source path. Used for large exchange sets whose cells load lazily.</comment>
+  </data>
   <data name="Status_ExchangeSetFailed" xml:space="preserve">
     <value>Failed to open exchange set {0}: {1}</value>
   </data>
@@ -1673,6 +1677,9 @@
   </data>
   <data name="Toast_ExchangeSetLoaded" xml:space="preserve">
     <value>Exchange Set Loaded</value>
+  </data>
+  <data name="Toast_ExchangeSetRegistered" xml:space="preserve">
+    <value>Exchange Set Ready</value>
   </data>
   <data name="Toast_ExchangeSetFailed" xml:space="preserve">
     <value>Exchange Set Failed</value>

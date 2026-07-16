@@ -43,7 +43,12 @@ public sealed class ExchangeSetOpenResult
     /// <summary>Total datasets in the catalogue.</summary>
     public int Total { get; init; }
 
-    /// <summary>Datasets successfully dispatched to a processor.</summary>
+    /// <summary>Datasets successfully dispatched to a processor. For a large
+    /// exchange set opened on the lazy (deferred) path, no cell bytes are
+    /// dispatched during the open, so this instead reports the number of cells
+    /// <em>registered</em> for on-demand loading — a non-zero success count the
+    /// open flow (e.g. the MCP <c>open_dataset</c> tool) treats as "opened".
+    /// See issue #458.</summary>
     public int Loaded { get; init; }
 
     /// <summary>Datasets skipped because their product identifier is not

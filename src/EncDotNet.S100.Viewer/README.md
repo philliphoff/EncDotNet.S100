@@ -117,6 +117,25 @@ and translated to the in-memory S-101 model so they render through
 the S-101 portrayal pipeline. This is best-effort, not an S-52
 implementation.
 
+### Lazy loading of very large exchange sets
+
+Opening a large S-57 exchange set (thousands of cells) no longer loads
+every cell up front. Above a threshold (default 50 cells) the viewer
+**registers** every cell — the Datasets panel lists them immediately
+(dimmed) and their footprints are drawn as extent outlines — but
+**defers** reading and portraying a cell's bytes until it actually
+enters the viewport at a relevant scale. Cells are selected by
+viewport intersection plus a usage-band → scale gate, loaded through a
+bounded-concurrency gate, and evicted (LRU, beyond a retention budget)
+when they leave the view. This keeps the open non-blocking and bounds
+peak memory regardless of set size (issue #458). The relevant types
+live under `Services/LazyLoading/`
+(`ExchangeSetLazyLoadCoordinator`, `LazyCellGate`, `LruEvictionPolicy`,
+`CellUsageBand`). Cells are registered in a single batch via
+`DatasetsViewModel.AddRangeFromExchangeSet(IReadOnlyList<ExchangeSetCellRegistration>)`
+(backed by `BulkObservableCollection`) so a set of thousands of cells
+registers with one collection notification rather than one per cell.
+
 ## The Datasets panel
 
 Loaded data is organised in the **Datasets** activity panel as two
