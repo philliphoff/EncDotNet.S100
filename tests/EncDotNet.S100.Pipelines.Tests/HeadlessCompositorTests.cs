@@ -171,12 +171,12 @@ public class HeadlessCompositorTests
     private static bool HasRedPixel(SKBitmap bitmap, int xStart, int xEnd)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = xStart; x < xEnd; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red > 200 && p.Green < 80 && p.Blue < 80)
-                return true;
-        }
+            for (int x = xStart; x < xEnd; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red > 200 && p.Green < 80 && p.Blue < 80)
+                    return true;
+            }
         return false;
     }
 

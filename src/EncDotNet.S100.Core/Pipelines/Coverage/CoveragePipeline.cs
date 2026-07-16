@@ -118,14 +118,14 @@ public class CoveragePipeline
 
 public interface ICoverageSource
 {
-// File-level metadata — available immediately after opening
+    // File-level metadata — available immediately after opening
     CoverageMetadata Metadata { get; }
-    
+
     // Time dimension — null/empty for static products (S-102)
     // Populated for time-varying products (S-111, S-104)
     IReadOnlyList<DateTime> AvailableTimes { get; }
     void SelectTime(DateTime time);
-    
+
     // The actual data access
     /// <summary>
     /// Copies the requested grid region into a <see cref="SampledCoverage"/>.
@@ -148,7 +148,7 @@ public class CoverageMetadata
     public required string HorizontalCRS { get; init; }
     public required string VerticalDatum { get; init; }
     public required float NoDataValue { get; init; }
-    
+
     // What value fields this coverage carries
     // S-102: ["depth", "uncertainty"]
     // S-111: ["surfaceCurrentSpeed", "surfaceCurrentDirection"]
@@ -192,11 +192,11 @@ public class GridRegion
     public int? RowEnd { get; }
     public int? ColStart { get; }
     public int? ColEnd { get; }
-    
+
     // Optional downsampling stride
     public int RowStride { get; }
     public int ColStride { get; }
-    
+
     public static GridRegion Full => new GridRegion(null, null, null, null, 1, 1);
 
     /// <summary>
@@ -205,7 +205,7 @@ public class GridRegion
     /// </summary>
     public (int RowStart, int RowEnd, int ColStart, int ColEnd) Resolve(int numRows, int numColumns) =>
         (RowStart ?? 0, RowEnd ?? numRows, ColStart ?? 0, ColEnd ?? numColumns);
-    
+
     // Factory — compute region from viewport intersection with grid
     public static GridRegion FromViewport(Viewport viewport, GridMetadata grid)
     {

@@ -18,13 +18,13 @@ public class S125AtonRulesTests
 
     private static S125Buoy Buoy(string id, double? lat = 0, double? lon = 0,
         S125AtonStatusInformation? status = null) => new()
-    {
-        Id = id,
-        FeatureType = "LateralBuoy",
-        Kind = S125BuoyKind.Lateral,
-        Position = (lat is null || lon is null) ? null : new GeoPosition(lat.Value, lon.Value),
-        Status = status,
-    };
+        {
+            Id = id,
+            FeatureType = "LateralBuoy",
+            Kind = S125BuoyKind.Lateral,
+            Position = (lat is null || lon is null) ? null : new GeoPosition(lat.Value, lon.Value),
+            Status = status,
+        };
 
     private static S125AisAton Ais(string id, S125AisKind kind = S125AisKind.Virtual, string? mmsi = "123456789") => new()
     {
@@ -48,13 +48,13 @@ public class S125AtonRulesTests
         S125ChangeType type = S125ChangeType.AdvanceNoticeOfChange,
         S125DateRange? fixedRange = null,
         IReadOnlyList<S125DateRange>? periodic = null) => new()
-    {
-        Id = id,
-        ChangeTypeCode = code,
-        ChangeType = type,
-        FixedDateRange = fixedRange,
-        PeriodicDateRanges = periodic ?? [],
-    };
+        {
+            Id = id,
+            ChangeTypeCode = code,
+            ChangeType = type,
+            FixedDateRange = fixedRange,
+            PeriodicDateRanges = periodic ?? [],
+        };
 
     private static S125AtonStatusIndication Indication(string id, GeoPosition? pos) => new()
     {

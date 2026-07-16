@@ -92,13 +92,13 @@ internal static class SyntheticDatasets
         const int n = 10;
         var values = new BathymetryValue[n * n];
         for (int r = 0; r < n; r++)
-        for (int c = 0; c < n; c++)
-        {
-            bool sentinel = (r == 5 && c == 5);
-            values[r * n + c] = new BathymetryValue(
-                depth: sentinel ? 20f : 10f,
-                uncertainty: sentinel ? 0.5f : 0.2f);
-        }
+            for (int c = 0; c < n; c++)
+            {
+                bool sentinel = (r == 5 && c == 5);
+                values[r * n + c] = new BathymetryValue(
+                    depth: sentinel ? 20f : 10f,
+                    uncertainty: sentinel ? 0.5f : 0.2f);
+            }
         var coverage = new BathymetryCoverage
         {
             OriginLatitude = 50.0,
@@ -128,13 +128,13 @@ internal static class SyntheticDatasets
         {
             var values = new WaterLevelValue[n * n];
             for (int r = 0; r < n; r++)
-            for (int c = 0; c < n; c++)
-            {
-                bool sentinel = (r == 5 && c == 5);
-                values[r * n + c] = new WaterLevelValue(
-                    height: sentinel ? sentinelHeight : baseHeight,
-                    trend: 0);
-            }
+                for (int c = 0; c < n; c++)
+                {
+                    bool sentinel = (r == 5 && c == 5);
+                    values[r * n + c] = new WaterLevelValue(
+                        height: sentinel ? sentinelHeight : baseHeight,
+                        trend: 0);
+                }
             return new WaterLevelCoverage
             {
                 OriginLatitude = 50.0,

@@ -112,72 +112,72 @@ public sealed class S201FeatureXmlSource : GmlFeatureXmlSource<S201Feature>
         switch (feature.FeatureType)
         {
             case "LateralBuoy":
-            {
-                var cat = Get("categoryOfLateralMark");
-                switch (cat)
                 {
-                    case "1": // Port-Hand
-                        AddIfMissing("buoyShape", "2"); // Can
-                        AddIfMissing("colour", "3"); // Red
-                        break;
-                    case "2": // Starboard-Hand
-                        AddIfMissing("buoyShape", "1"); // Conical
-                        AddIfMissing("colour", "4"); // Green
-                        break;
-                    case "3": // Preferred Channel to Starboard (red with green band)
-                        AddIfMissing("buoyShape", "2"); // Can
-                        AddIfMissing("colour", "3");
-                        break;
-                    case "4": // Preferred Channel to Port (green with red band)
-                        AddIfMissing("buoyShape", "1"); // Conical
-                        AddIfMissing("colour", "4");
-                        break;
+                    var cat = Get("categoryOfLateralMark");
+                    switch (cat)
+                    {
+                        case "1": // Port-Hand
+                            AddIfMissing("buoyShape", "2"); // Can
+                            AddIfMissing("colour", "3"); // Red
+                            break;
+                        case "2": // Starboard-Hand
+                            AddIfMissing("buoyShape", "1"); // Conical
+                            AddIfMissing("colour", "4"); // Green
+                            break;
+                        case "3": // Preferred Channel to Starboard (red with green band)
+                            AddIfMissing("buoyShape", "2"); // Can
+                            AddIfMissing("colour", "3");
+                            break;
+                        case "4": // Preferred Channel to Port (green with red band)
+                            AddIfMissing("buoyShape", "1"); // Conical
+                            AddIfMissing("colour", "4");
+                            break;
+                    }
+                    break;
                 }
-                break;
-            }
 
             case "LateralBeacon":
-            {
-                var cat = Get("categoryOfLateralMark");
-                switch (cat)
                 {
-                    case "1": AddIfMissing("colour", "3"); break;
-                    case "2": AddIfMissing("colour", "4"); break;
-                    case "3": AddIfMissing("colour", "3"); break;
-                    case "4": AddIfMissing("colour", "4"); break;
+                    var cat = Get("categoryOfLateralMark");
+                    switch (cat)
+                    {
+                        case "1": AddIfMissing("colour", "3"); break;
+                        case "2": AddIfMissing("colour", "4"); break;
+                        case "3": AddIfMissing("colour", "3"); break;
+                        case "4": AddIfMissing("colour", "4"); break;
+                    }
+                    break;
                 }
-                break;
-            }
 
             case "CardinalBuoy":
-            {
-                // IALA cardinal marks are pillar or spar with yellow + black bands.
-                AddIfMissing("buoyShape", "4"); // Pillar
-                AddIfMissing("colour", "2"); // Black (primary; band sequence varies)
-                break;
-            }
+                {
+                    // IALA cardinal marks are pillar or spar with yellow + black bands.
+                    AddIfMissing("buoyShape", "4"); // Pillar
+                    AddIfMissing("colour", "2"); // Black (primary; band sequence varies)
+                    break;
+                }
 
             case "IsolatedDangerBuoy":
-            {
-                AddIfMissing("buoyShape", "4"); // Pillar
-                AddIfMissing("colour", "2"); // Black with red bands
-                break;
-            }
+                {
+                    AddIfMissing("buoyShape", "4"); // Pillar
+                    AddIfMissing("colour", "2"); // Black with red bands
+                    break;
+                }
 
             case "SafeWaterBuoy":
-            {
-                AddIfMissing("buoyShape", "3"); // Spherical
-                AddIfMissing("colour", "3"); // Red (with white vertical stripes)
-                break;
-            }
+                {
+                    AddIfMissing("buoyShape", "3"); // Spherical
+                    AddIfMissing("colour", "3"); // Red (with white vertical stripes)
+                    break;
+                }
 
             case "SpecialPurposeGeneralBuoy":
             case "InstallationBuoy":
-            {
-                AddIfMissing("buoyShape", "4"); // Pillar
-                AddIfMissing("colour", "6"); // Yellow
-                break;
-            }
+                {
+                    AddIfMissing("buoyShape", "4"); // Pillar
+                    AddIfMissing("colour", "6"); // Yellow
+                    break;
+                }
         }
     }
 

@@ -24,19 +24,19 @@ public class S201AtonRulesTests
         string id,
         string featureType = "LateralBuoy",
         params S201FeatureReference[] featureReferences) => new()
-    {
-        Id = id,
-        FeatureType = featureType,
-        GeometryType = S100GeometryType.Point,
-        Points = [],
-        Curves = [],
-        ExteriorRing = [],
-        InteriorRings = [],
-        Attributes = ReadOnlyDictionary<string, string>.Empty,
-        ComplexAttributes = [],
-        InformationReferences = [],
-        FeatureReferences = featureReferences.ToArray(),
-    };
+        {
+            Id = id,
+            FeatureType = featureType,
+            GeometryType = S100GeometryType.Point,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            InformationReferences = [],
+            FeatureReferences = featureReferences.ToArray(),
+        };
 
     private static S201StructureObject Structure(
         string id,

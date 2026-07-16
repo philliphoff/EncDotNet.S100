@@ -212,44 +212,44 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         var opacity = (float)(layer.Opacity * style.Opacity);
         switch (geometry)
         {
-        case Polygon polygon when CanFastPolygon(vectorStyle):
-        {
-            DrawPolygon(canvas, viewport, vectorStyle, geometryFeature.Id, 0, polygon, opacity);
-            return true;
-        }
-        case MultiPolygon multiPolygon when CanFastPolygon(vectorStyle):
-        {
-            for (var i = 0; i < multiPolygon.Count; i++)
-            {
-                if (multiPolygon[i] is Polygon part)
+            case Polygon polygon when CanFastPolygon(vectorStyle):
                 {
-                    DrawPolygon(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                    DrawPolygon(canvas, viewport, vectorStyle, geometryFeature.Id, 0, polygon, opacity);
+                    return true;
                 }
-            }
-            return true;
-        }
-        case LineString lineString when CanFastLine(vectorStyle):
-        {
-            DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, 0, lineString, opacity);
-            return true;
-        }
-        case MultiLineString multiLineString when CanFastLine(vectorStyle):
-        {
-            for (var i = 0; i < multiLineString.Count; i++)
-            {
-                if (multiLineString[i] is LineString part)
+            case MultiPolygon multiPolygon when CanFastPolygon(vectorStyle):
                 {
-                    DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                    for (var i = 0; i < multiPolygon.Count; i++)
+                    {
+                        if (multiPolygon[i] is Polygon part)
+                        {
+                            DrawPolygon(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                        }
+                    }
+                    return true;
                 }
-            }
-            return true;
-        }
-        default:
-        {
-            // GeometryCollections, points, casing-outlined lines, patterned
-            // fills, and any unsupported style: leave to Mapsui.
-            return _inner.Draw(canvas, viewport, layer, feature, style, renderService, iteration);
-        }
+            case LineString lineString when CanFastLine(vectorStyle):
+                {
+                    DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, 0, lineString, opacity);
+                    return true;
+                }
+            case MultiLineString multiLineString when CanFastLine(vectorStyle):
+                {
+                    for (var i = 0; i < multiLineString.Count; i++)
+                    {
+                        if (multiLineString[i] is LineString part)
+                        {
+                            DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                        }
+                    }
+                    return true;
+                }
+            default:
+                {
+                    // GeometryCollections, points, casing-outlined lines, patterned
+                    // fills, and any unsupported style: leave to Mapsui.
+                    return _inner.Draw(canvas, viewport, layer, feature, style, renderService, iteration);
+                }
         }
     }
 

@@ -29,11 +29,11 @@ public class SpecRefTests
     }
 
     [Theory]
-    [InlineData("S-101/1.2.0",   "S-101", 1, 2, 0)]
-    [InlineData("S-102@3.0.0",   "S-102", 3, 0, 0)]
-    [InlineData("s101/1.2",      "S-101", 1, 2, 0)]
+    [InlineData("S-101/1.2.0", "S-101", 1, 2, 0)]
+    [InlineData("S-102@3.0.0", "S-102", 3, 0, 0)]
+    [InlineData("s101/1.2", "S-101", 1, 2, 0)]
     [InlineData("INT.IHO.S-101.1.2.0", "S-101", 1, 2, 0)]
-    [InlineData("INT.IHO.S101.2.0.0",  "S-101", 2, 0, 0)]
+    [InlineData("INT.IHO.S101.2.0.0", "S-101", 2, 0, 0)]
     public void Parse_accepts_recognised_forms(string input, string expectedName, int major, int minor, int clar)
     {
         var spec = SpecRef.Parse(input);
@@ -72,8 +72,8 @@ public class SpecRefTests
     public void Equality_normalises_Name_so_case_and_dash_dont_matter()
     {
         var a = new SpecRef("S-101", new SpecVersion(1, 2, 0));
-        var b = new SpecRef("s101",  new SpecVersion(1, 2, 0));
-        var c = new SpecRef("S101",  new SpecVersion(1, 2, 0));
+        var b = new SpecRef("s101", new SpecVersion(1, 2, 0));
+        var c = new SpecRef("S101", new SpecVersion(1, 2, 0));
 
         Assert.Equal(a, b);
         Assert.Equal(a, c);
@@ -107,8 +107,8 @@ public class SpecRefTests
             [new SpecRef("S-102", new SpecVersion(3, 0, 0))] = "bath",
         };
 
-        Assert.Equal("old",  dict[new SpecRef("S-101", new SpecVersion(1, 2, 0))]);
-        Assert.Equal("new",  dict[new SpecRef("s101",  new SpecVersion(2, 0, 0))]);
+        Assert.Equal("old", dict[new SpecRef("S-101", new SpecVersion(1, 2, 0))]);
+        Assert.Equal("new", dict[new SpecRef("s101", new SpecVersion(2, 0, 0))]);
         Assert.Equal("bath", dict[new SpecRef("S-102", new SpecVersion(3, 0, 0))]);
     }
 }

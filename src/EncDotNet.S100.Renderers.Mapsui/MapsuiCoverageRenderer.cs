@@ -121,35 +121,35 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             bandPacked[i] = PackRgba(bands[i].Color);
 
         for (int r = 0; r < srcRows; r++)
-        for (int c = 0; c < srcCols; c++)
-        {
-            float value = fieldData[r, c];
-            bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
+            for (int c = 0; c < srcCols; c++)
+            {
+                float value = fieldData[r, c];
+                bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
 
-            uint packed;
-            if (isNoData)
-            {
-                if (!noDataIsFilled) continue;
-                packed = noDataPacked;
-            }
-            else
-            {
-                packed = 0;
-                for (int b = 0; b < bands.Length; b++)
+                uint packed;
+                if (isNoData)
                 {
-                    if (value >= bands[b].Min && value < bands[b].Max)
-                    {
-                        packed = bandPacked[b];
-                        break;
-                    }
+                    if (!noDataIsFilled) continue;
+                    packed = noDataPacked;
                 }
-                if (packed == 0) continue;
-            }
+                else
+                {
+                    packed = 0;
+                    for (int b = 0; b < bands.Length; b++)
+                    {
+                        if (value >= bands[b].Min && value < bands[b].Max)
+                        {
+                            packed = bandPacked[b];
+                            break;
+                        }
+                    }
+                    if (packed == 0) continue;
+                }
 
-            int target = nodeToPixel[r * srcCols + c];
-            if (target >= 0)
-                pixels[target] = packed;
-        }
+                int target = nodeToPixel[r * srcCols + c];
+                if (target >= 0)
+                    pixels[target] = packed;
+            }
 
         using var bmp = new SKBitmap(new SKImageInfo(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul));
         // Bulk-copy the pixel buffer into the bitmap's native backing store.
@@ -219,29 +219,29 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         double mercMaxX = double.MinValue, mercMaxY = double.MinValue;
 
         for (int r = 0; r < srcRows; r++)
-        for (int c = 0; c < srcCols; c++)
-        {
-            var (nativeX, nativeY) = georeferencer.ToNative(r, c);
-
-            double lon, lat;
-            if (nativeToWgs84.IsIdentity)
+            for (int c = 0; c < srcCols; c++)
             {
-                lon = nativeX;
-                lat = nativeY;
-            }
-            else
-            {
-                (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY);
-            }
+                var (nativeX, nativeY) = georeferencer.ToNative(r, c);
 
-            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-            nodePositions[r, c] = (mx, my);
+                double lon, lat;
+                if (nativeToWgs84.IsIdentity)
+                {
+                    lon = nativeX;
+                    lat = nativeY;
+                }
+                else
+                {
+                    (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY);
+                }
 
-            if (mx < mercMinX) mercMinX = mx;
-            if (my < mercMinY) mercMinY = my;
-            if (mx > mercMaxX) mercMaxX = mx;
-            if (my > mercMaxY) mercMaxY = my;
-        }
+                var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+                nodePositions[r, c] = (mx, my);
+
+                if (mx < mercMinX) mercMinX = mx;
+                if (my < mercMinY) mercMinY = my;
+                if (mx > mercMaxX) mercMaxX = mx;
+                if (my > mercMaxY) mercMaxY = my;
+            }
 
         // Determine output bitmap dimensions using separate X/Y cell sizes
         // to account for non-conformal projections (e.g. WGS84 → Mercator distortion).
@@ -271,16 +271,16 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         // (post-MaxDim) cell sizes. Out-of-bounds nodes map to -1.
         var nodeToPixel = new int[srcRows * srcCols];
         for (int r = 0; r < srcRows; r++)
-        for (int c = 0; c < srcCols; c++)
-        {
-            var (mx, my) = nodePositions[r, c];
-            int px = (int)((mx - mercMinX) / cellSizeX);
-            int py = outRows - 1 - (int)((my - mercMinY) / cellSizeY);
-            nodeToPixel[r * srcCols + c] =
-                (px >= 0 && px < outCols && py >= 0 && py < outRows)
-                    ? py * outCols + px
-                    : -1;
-        }
+            for (int c = 0; c < srcCols; c++)
+            {
+                var (mx, my) = nodePositions[r, c];
+                int px = (int)((mx - mercMinX) / cellSizeX);
+                int py = outRows - 1 - (int)((my - mercMinY) / cellSizeY);
+                nodeToPixel[r * srcCols + c] =
+                    (px >= 0 && px < outCols && py >= 0 && py < outRows)
+                        ? py * outCols + px
+                        : -1;
+            }
 
         return new LayoutCacheEntry(
             georeferencer.CRS, srcRows, srcCols,

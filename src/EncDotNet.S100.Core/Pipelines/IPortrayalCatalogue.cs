@@ -26,4 +26,3 @@ public interface IPortrayalCatalogue
     /// <param name="cancellationToken">Cancellation token.</param>
     ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default);
 }
- 

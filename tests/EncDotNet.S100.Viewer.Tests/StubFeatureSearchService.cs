@@ -18,7 +18,8 @@ internal sealed class StubPickService : IPickService
     public void PresentGeographicPick(
         double latitude,
         double longitude,
-        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features) { }
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features)
+    { }
 
     public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;
 

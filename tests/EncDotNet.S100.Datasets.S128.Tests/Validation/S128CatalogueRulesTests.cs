@@ -35,17 +35,17 @@ public class S128CatalogueRulesTests
         S128GeometryKind geometryKind = S128GeometryKind.None,
         IReadOnlyList<GeoPosition>? coordinates = null,
         IReadOnlyList<S128OnlineResource>? onlineResources = null) => new()
-    {
-        Id = id,
-        FeatureType = "ElectronicProduct",
-        EditionNumber = editionNumber,
-        IssueDate = issueDate,
-        UpdateDate = updateDate,
-        GeometryKind = geometryKind,
-        Coordinates = coordinates ?? [],
-        OnlineResources = onlineResources ?? [],
-        Source = SourceFeature(id),
-    };
+        {
+            Id = id,
+            FeatureType = "ElectronicProduct",
+            EditionNumber = editionNumber,
+            IssueDate = issueDate,
+            UpdateDate = updateDate,
+            GeometryKind = geometryKind,
+            Coordinates = coordinates ?? [],
+            OnlineResources = onlineResources ?? [],
+            Source = SourceFeature(id),
+        };
 
     private static S128ProducerInformation Producer(string id = "P1") => new()
     {

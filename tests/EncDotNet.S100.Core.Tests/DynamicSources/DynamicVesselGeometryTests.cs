@@ -11,8 +11,10 @@ public class DynamicVesselGeometryTests
     {
         var g = new DynamicVesselGeometry
         {
-            LengthMetres = 1, BeamMetres = 1,
-            BowOffsetMetres = 0, PortOffsetMetres = 0,
+            LengthMetres = 1,
+            BeamMetres = 1,
+            BowOffsetMetres = 0,
+            PortOffsetMetres = 0,
         };
         Assert.Equal(1, g.LengthMetres);
         Assert.Equal(1, g.BeamMetres);
@@ -23,13 +25,17 @@ public class DynamicVesselGeometryTests
     {
         var a = new DynamicVesselGeometry
         {
-            LengthMetres = 50, BeamMetres = 10,
-            BowOffsetMetres = 25, PortOffsetMetres = 5,
+            LengthMetres = 50,
+            BeamMetres = 10,
+            BowOffsetMetres = 25,
+            PortOffsetMetres = 5,
         };
         var b = new DynamicVesselGeometry
         {
-            LengthMetres = 50, BeamMetres = 10,
-            BowOffsetMetres = 25, PortOffsetMetres = 5,
+            LengthMetres = 50,
+            BeamMetres = 10,
+            BowOffsetMetres = 25,
+            PortOffsetMetres = 5,
         };
         Assert.Equal(a, b);
     }
@@ -39,12 +45,15 @@ public class DynamicVesselGeometryTests
     {
         var g = new DynamicVesselGeometry
         {
-            LengthMetres = 100, BeamMetres = 20,
-            BowOffsetMetres = 50, PortOffsetMetres = 10,
+            LengthMetres = 100,
+            BeamMetres = 20,
+            BowOffsetMetres = 50,
+            PortOffsetMetres = 10,
         };
         var f = new DynamicFeature
         {
-            Id = "ownship", GeometryType = GeometryType.Point,
+            Id = "ownship",
+            GeometryType = GeometryType.Point,
             Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             VesselGeometry = g,
             LastUpdated = DateTimeOffset.UtcNow,
@@ -58,7 +67,8 @@ public class DynamicVesselGeometryTests
     {
         var f = new DynamicFeature
         {
-            Id = "x", GeometryType = GeometryType.Point,
+            Id = "x",
+            GeometryType = GeometryType.Point,
             Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             LastUpdated = DateTimeOffset.UtcNow,
         };

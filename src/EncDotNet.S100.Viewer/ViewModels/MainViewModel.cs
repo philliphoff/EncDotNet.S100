@@ -455,19 +455,19 @@ internal sealed class MainViewModel : ViewModelBase
         switch (tab.Dock)
         {
             case TabDock.Left when ReferenceEquals(_selectedLeftTab, tab):
-            {
-                var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
-                if (next is not null)
                 {
-                    SetLeftSelectionSystem(next);
+                    var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
+                    if (next is not null)
+                    {
+                        SetLeftSelectionSystem(next);
+                    }
+                    else
+                    {
+                        SetLeftSelectionSystem(null);
+                        IsLeftDockOpen = false;
+                    }
+                    break;
                 }
-                else
-                {
-                    SetLeftSelectionSystem(null);
-                    IsLeftDockOpen = false;
-                }
-                break;
-            }
             case TabDock.Right when ReferenceEquals(_selectedRightTab, tab):
                 SelectedRightTab = RightTabs.FirstOrDefault(t => t.IsVisible);
                 break;

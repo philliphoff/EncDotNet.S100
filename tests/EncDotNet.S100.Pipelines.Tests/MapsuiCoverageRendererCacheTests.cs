@@ -17,9 +17,12 @@ public class MapsuiCoverageRendererCacheTests
 {
     private static readonly Viewport DefaultViewport = new()
     {
-        MinLatitude = 0, MaxLatitude = 1,
-        MinLongitude = 0, MaxLongitude = 1,
-        WidthPixels = 100, HeightPixels = 100,
+        MinLatitude = 0,
+        MaxLatitude = 1,
+        MinLongitude = 0,
+        MaxLongitude = 1,
+        WidthPixels = 100,
+        HeightPixels = 100,
         ScaleDenominator = 50_000,
     };
 

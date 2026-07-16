@@ -848,7 +848,8 @@ public sealed class MapsuiDisplayListRenderer
     // ── Coordinate projection ──────────────────────────────────────────
 
     private static Polygon? CreatePolygonFromGeometry(FeatureGeometry geometry)
-    {        var shell = BuildLinearRing(geometry.Coordinates);
+    {
+        var shell = BuildLinearRing(geometry.Coordinates);
         if (shell is null)
             return null;
 

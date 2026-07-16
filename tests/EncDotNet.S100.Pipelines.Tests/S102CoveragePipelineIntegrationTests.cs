@@ -92,13 +92,13 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         int cols = depths.GetLength(1);
         int realCells = 0;
         for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
-        {
-            float v = depths[r, c];
-            if (v == layer.NoDataValue) continue;
-            realCells++;
-            Assert.Equal(DEPMS, layer.ColorScheme.Resolve(v));
-        }
+            for (int c = 0; c < cols; c++)
+            {
+                float v = depths[r, c];
+                if (v == layer.NoDataValue) continue;
+                realCells++;
+                Assert.Equal(DEPMS, layer.ColorScheme.Resolve(v));
+            }
 
         Assert.True(realCells > 0, "Expected some real depth cells in the test file");
     }
@@ -121,11 +121,11 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         int fillCount = 0;
         int realCount = 0;
         for (int r = 0; r < depths.GetLength(0); r++)
-        for (int c = 0; c < depths.GetLength(1); c++)
-        {
-            if (depths[r, c] == layer.NoDataValue) fillCount++;
-            else realCount++;
-        }
+            for (int c = 0; c < depths.GetLength(1); c++)
+            {
+                if (depths[r, c] == layer.NoDataValue) fillCount++;
+                else realCount++;
+            }
 
         Assert.True(fillCount > 0, "Expected some no-data cells in the test file");
         Assert.True(realCount > 0, "Expected some real-depth cells in the test file");
@@ -170,13 +170,13 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var depths = layer.Coverage.GetField("depth");
         int realCells = 0;
         for (int r = 0; r < depths.GetLength(0); r++)
-        for (int c = 0; c < depths.GetLength(1); c++)
-        {
-            float v = depths[r, c];
-            if (v == layer.NoDataValue) continue;
-            realCells++;
-            Assert.Equal(DEPVS, layer.ColorScheme.Resolve(v));
-        }
+            for (int c = 0; c < depths.GetLength(1); c++)
+            {
+                float v = depths[r, c];
+                if (v == layer.NoDataValue) continue;
+                realCells++;
+                Assert.Equal(DEPVS, layer.ColorScheme.Resolve(v));
+            }
 
         Assert.True(realCells > 0);
     }

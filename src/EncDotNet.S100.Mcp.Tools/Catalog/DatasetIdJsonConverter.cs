@@ -27,35 +27,35 @@ public sealed class DatasetIdJsonConverter : JsonConverter<DatasetId>
                 return new DatasetId(reader.GetString()!);
 
             case JsonTokenType.StartObject:
-            {
-                string? value = null;
-                while (reader.Read())
                 {
-                    if (reader.TokenType == JsonTokenType.EndObject)
+                    string? value = null;
+                    while (reader.Read())
                     {
-                        break;
+                        if (reader.TokenType == JsonTokenType.EndObject)
+                        {
+                            break;
+                        }
+                        if (reader.TokenType != JsonTokenType.PropertyName)
+                        {
+                            continue;
+                        }
+                        var name = reader.GetString();
+                        reader.Read();
+                        if (string.Equals(name, "value", StringComparison.OrdinalIgnoreCase))
+                        {
+                            value = reader.GetString();
+                        }
+                        else
+                        {
+                            reader.Skip();
+                        }
                     }
-                    if (reader.TokenType != JsonTokenType.PropertyName)
+                    if (string.IsNullOrEmpty(value))
                     {
-                        continue;
+                        throw new JsonException("Expected a non-empty 'value' property for DatasetId.");
                     }
-                    var name = reader.GetString();
-                    reader.Read();
-                    if (string.Equals(name, "value", StringComparison.OrdinalIgnoreCase))
-                    {
-                        value = reader.GetString();
-                    }
-                    else
-                    {
-                        reader.Skip();
-                    }
+                    return new DatasetId(value);
                 }
-                if (string.IsNullOrEmpty(value))
-                {
-                    throw new JsonException("Expected a non-empty 'value' property for DatasetId.");
-                }
-                return new DatasetId(value);
-            }
 
             default:
                 throw new JsonException(

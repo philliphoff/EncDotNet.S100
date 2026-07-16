@@ -20,8 +20,10 @@ public class OwnShipSettingsTests
     {
         var s = new OwnShipSettings
         {
-            LengthMetres = 120, BeamMetres = 18,
-            BowOffsetMetres = 90, PortOffsetMetres = 9,
+            LengthMetres = 120,
+            BeamMetres = 18,
+            BowOffsetMetres = 90,
+            PortOffsetMetres = 9,
         };
         var json = JsonSerializer.Serialize(s);
         var back = JsonSerializer.Deserialize<OwnShipSettings>(json)!;

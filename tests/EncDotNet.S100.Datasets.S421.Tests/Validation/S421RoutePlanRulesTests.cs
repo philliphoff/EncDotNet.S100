@@ -37,12 +37,12 @@ public class S421RoutePlanRulesTests
         string id,
         IReadOnlyList<GeoPosition> coords,
         S421ActionPointGeometryKind kind = S421ActionPointGeometryKind.Point) => new()
-    {
-        Id = id,
-        GeometryKind = kind,
-        Coordinates = coords,
-        ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
-    };
+        {
+            Id = id,
+            GeometryKind = kind,
+            Coordinates = coords,
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
+        };
 
     private static S421RoutePlan Plan(
         IReadOnlyList<S421Waypoint>? waypoints = null,

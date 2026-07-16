@@ -15,7 +15,7 @@ public class CatalogueRefTests
     [Theory]
     [InlineData("S-101@2.0.0", "S-101", 2, 0, 0)]
     [InlineData("S-101/2.0.0", "S-101", 2, 0, 0)]
-    [InlineData("s101@1.2.1",  "S-101", 1, 2, 1)]
+    [InlineData("s101@1.2.1", "S-101", 1, 2, 1)]
     public void Parse_accepts_recognised_forms(string input, string name, int major, int minor, int clar)
     {
         var c = CatalogueRef.Parse(input);

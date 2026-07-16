@@ -55,13 +55,13 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         bool noDataIsNaN = float.IsNaN(noDataValue);
 
         for (int row = 0; row < rows; row++)
-        for (int col = 0; col < cols; col++)
-        {
-            float value = fieldSpan[row * cols + col];
-            var color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
-            // Grid row 0 is the southernmost (bottom of image), so flip vertically.
-            bitmap.SetPixel(col, rows - 1 - row, color);
-        }
+            for (int col = 0; col < cols; col++)
+            {
+                float value = fieldSpan[row * cols + col];
+                var color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
+                // Grid row 0 is the southernmost (bottom of image), so flip vertically.
+                bitmap.SetPixel(col, rows - 1 - row, color);
+            }
 
         S100Diag.Telemetry.CoverageFrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);

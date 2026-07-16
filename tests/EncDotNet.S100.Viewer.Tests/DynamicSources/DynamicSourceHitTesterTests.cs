@@ -75,8 +75,8 @@ public class DynamicSourceHitTesterTests
 
         Assert.Equal(3, hits.Count);
         Assert.Equal("close", hits[0].Feature.Id);
-        Assert.Equal("mid",   hits[1].Feature.Id);
-        Assert.Equal("far",   hits[2].Feature.Id);
+        Assert.Equal("mid", hits[1].Feature.Id);
+        Assert.Equal("far", hits[2].Feature.Id);
     }
 
     [Fact]

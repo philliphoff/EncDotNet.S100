@@ -182,7 +182,8 @@ internal static class S127DatasetReader
                 (e.Name.Namespace == S100Ns5 ||
                  e.Name.Namespace == S100Ns1 ||
                  e.Name.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase)));
-    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S127ComplexAttribute>, IReadOnlyList<S127FeatureReference>) ParseAttributes(XElement element)
+    }
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S127ComplexAttribute>, IReadOnlyList<S127FeatureReference>) ParseAttributes(XElement element)
     {
         var simple = new Dictionary<string, string>();
         var complex = new List<S127ComplexAttribute>();

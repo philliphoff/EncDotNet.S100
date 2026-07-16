@@ -419,9 +419,9 @@ internal static class S411DatasetReader
         return (name.Namespace == datasetNs || name.Namespace == XNamespace.None) &&
                FeatureTypeCodes.Contains(name.LocalName);
     }    /// <summary>
-    /// Parses an xs:dateTime or xs:date timestamp into UTC, accepting any
-    /// of the formats S-100 Part 17 / Part 10b allow for dataset metadata.
-    /// </summary>
+         /// Parses an xs:dateTime or xs:date timestamp into UTC, accepting any
+         /// of the formats S-100 Part 17 / Part 10b allow for dataset metadata.
+         /// </summary>
     private static bool TryParseDateTime(string value, out DateTime result)
     {
         var trimmed = value.Trim();

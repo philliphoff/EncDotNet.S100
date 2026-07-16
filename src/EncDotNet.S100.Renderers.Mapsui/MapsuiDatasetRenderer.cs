@@ -232,35 +232,35 @@ public sealed class MapsuiDatasetRenderer
             switch (sub)
             {
                 case GridCoverageSubLayer grid:
-                {
-                    var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
                     {
-                        LayerName = grid.LayerName,
-                    };
-                    layer = renderer.Render(grid.Coverage, grid.Viewport);
-                    break;
-                }
+                        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+                        {
+                            LayerName = grid.LayerName,
+                        };
+                        layer = renderer.Render(grid.Coverage, grid.Viewport);
+                        break;
+                    }
 
                 case ArrowCoverageSubLayer arrow:
-                {
-                    var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
                     {
-                        LayerName = arrow.LayerName,
-                        Palette = arrow.Palette,
-                        BaseSymbolScale = arrow.BaseSymbolScale,
-                        SymbolProvider = arrow.SymbolProvider,
-                    };
-                    layer = renderer.Render(arrow.Coverage, arrow.Viewport);
-                    fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
-                    break;
-                }
+                        var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
+                        {
+                            LayerName = arrow.LayerName,
+                            Palette = arrow.Palette,
+                            BaseSymbolScale = arrow.BaseSymbolScale,
+                            SymbolProvider = arrow.SymbolProvider,
+                        };
+                        layer = renderer.Render(arrow.Coverage, arrow.Viewport);
+                        fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
+                        break;
+                    }
 
                 case GlyphCoverageSubLayer glyph:
-                {
-                    layer = BuildGlyphLayer(glyph);
-                    fallback = Union(fallback, ToMercator(glyph.Extent));
-                    break;
-                }
+                    {
+                        layer = BuildGlyphLayer(glyph);
+                        fallback = Union(fallback, ToMercator(glyph.Extent));
+                        break;
+                    }
             }
 
             if (layer is null)

@@ -113,8 +113,10 @@ public class AisDynamicFeatureSourceTests
 
         var dims = new AisDimensions
         {
-            LengthMetres = 50, BeamMetres = 10,
-            BowOffsetMetres = 25, PortOffsetMetres = 5,
+            LengthMetres = 50,
+            BeamMetres = 10,
+            BowOffsetMetres = 25,
+            PortOffsetMetres = 5,
         };
         fake.Subscriptions[0].EmitStatic(Static(42, AisShipType.Cargo, dims, "CARGO 42"));
 

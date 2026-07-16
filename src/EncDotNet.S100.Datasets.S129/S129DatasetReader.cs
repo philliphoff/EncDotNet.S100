@@ -165,7 +165,8 @@ internal static class S129DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S129ComplexAttribute>, IReadOnlyList<S129Reference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S129ComplexAttribute>, IReadOnlyList<S129Reference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
         var simple = new Dictionary<string, string>();
         var complex = new List<S129ComplexAttribute>();
