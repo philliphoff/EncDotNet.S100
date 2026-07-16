@@ -70,9 +70,12 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
         // denominator is a larger-scale (finer) cell, which must paint on top,
         // so we sort by denominator DESCENDING (coarse first / bottom, fine
         // last / top). Items with no known scale (null) are treated as coarsest
-        // (int.MaxValue) so they sit at the bottom of their plane and preserve
-        // their relative load order among themselves — leaving the prior
-        // behaviour unchanged for products that carry no cell-wide scale.
+        // (int.MaxValue): they keep their relative load order AMONG THEMSELVES,
+        // but a known-scale (finer) item in the same plane/priority now sorts
+        // ABOVE them where previously the two would have been decided purely by
+        // load order. Products that carry no cell-wide scale at all (all GML and
+        // coverage items are null) are therefore unaffected relative to each
+        // other; only mixed null/known groups shift.
         return entries
             .OrderBy(e => (int)e.Plane)
             .ThenBy(e => e.WithinPlanePriority)

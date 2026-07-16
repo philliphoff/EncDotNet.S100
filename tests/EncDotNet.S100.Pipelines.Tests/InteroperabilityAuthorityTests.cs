@@ -201,5 +201,5 @@ public class InteroperabilityAuthorityTests
         => new(new SyntheticStackPayload(id), plane, priority, id);
 
     private static SubLayerStackItem Entry(string id, S98DisplayPlane plane, int? scale, int priority = 0)
-        => new(new SyntheticStackPayload(id), plane, priority, id, SourceScaleDenominator: scale);
+        => new(new SyntheticStackPayload(id), plane, priority, id) { SourceScaleDenominator = scale };
 }

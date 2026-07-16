@@ -183,8 +183,10 @@ public sealed class MapsuiDatasetRenderer
                     sub.Plane,
                     sub.WithinPlanePriority,
                     result.SourceDatasetId,
-                    sub.SourceFeatureType,
-                    SourceScaleDenominator: result.CellMinimumDisplayScale)));
+                    sub.SourceFeatureType)
+                {
+                    SourceScaleDenominator = result.CellMinimumDisplayScale,
+                }));
 
             union = Union(union, layer.Extent);
         }
