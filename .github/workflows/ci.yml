@@ -100,13 +100,22 @@ jobs:
         # Enforces the whitespace / formatting rules encoded in .editorconfig
         # (see docs/coding-style.md). Fix locally with:
         #   dotnet format whitespace EncDotNet.S100.slnx
-        #
-        # Scope note: only the *whitespace* rules are verified here. Style,
-        # naming, and unused-using rules are intentionally NOT gated because
-        # nearly every project multi-targets net8.0;net10.0, where dotnet
-        # format's solution-wide fix-all is unreliable and a using can be
-        # required under one target framework but redundant under another.
         run: dotnet format whitespace EncDotNet.S100.slnx --no-restore --verify-no-changes
+
+      - name: Verify usings (ordering + unused)
+        # Enforces the using-directive rules from .editorconfig: System-first
+        # ordering, placement outside the file-scoped namespace, and removal of
+        # unnecessary directives (IDE0005). Fix locally with:
+        #   dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005
+        #
+        # Scope note: this is intentionally scoped to imports only. Broader
+        # style and naming rules (e.g. IDE1006) are NOT gated because dotnet
+        # format cannot Fix-All naming, and its solution-wide style fix-all is
+        # unreliable on the multi-targeted (net8.0;net10.0) projects. Imports
+        # are safe to gate: IDE0005 is identical across both target frameworks
+        # here, and the scoped verify does not false-positive on the handful of
+        # multi-target files that the full fix-all mis-handles.
+        run: dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005 --severity warn --no-restore --verify-no-changes
 
   test-arm64:
     strategy:

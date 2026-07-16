@@ -120,15 +120,20 @@ formatting locally:
 # Auto-fix whitespace/formatting across the solution
 dotnet format whitespace EncDotNet.S100.slnx
 
-# Verify with no changes (what CI runs — fails if anything is unformatted)
+# Auto-fix using directives (System-first ordering + remove unused)
+dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005
+
+# Verify with no changes (what CI runs — fails if anything is off)
 dotnet format whitespace EncDotNet.S100.slnx --verify-no-changes
+dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005 --verify-no-changes
 ```
 
-> Only *whitespace/formatting* is gated in CI. Style/naming and unused-using
-> rules are not machine-enforced solution-wide because nearly every project
-> multi-targets `net8.0;net10.0`, where `dotnet format`'s fix-all is unreliable
-> and a `using` may be required under one target framework but not another.
-> Follow those rules by hand (the `.editorconfig` still flags them in your IDE).
+> CI gates *whitespace/formatting* and *using directives* (ordering +
+> unused-directive removal). Broader style and naming rules are not
+> machine-enforced solution-wide because `dotnet format` cannot Fix-All naming
+> and its style fix-all is unreliable on the multi-targeted
+> (`net8.0;net10.0`) projects. Follow those rules by hand (the `.editorconfig`
+> still flags them in your IDE).
 
 ## Documentation
 

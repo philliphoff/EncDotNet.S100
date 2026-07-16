@@ -13,15 +13,21 @@ code is migrated toward it opportunistically.
 
 > **Enforcement.** The mechanically-checkable rules below are encoded in the
 > repository [`.editorconfig`](../.editorconfig) and can be checked/applied with
-> `dotnet format`. CI enforces the **whitespace/formatting** subset via a
-> `dotnet format whitespace --verify-no-changes` gate (the *Format check* job).
-> Style/naming and unused-using rules are **not** machine-gated: nearly every
-> project multi-targets `net8.0;net10.0`, where `dotnet format`'s solution-wide
-> fix-all is unreliable and a `using` can be required under one target framework
-> but redundant under another — so those rules are followed by hand (the
-> `.editorconfig` surfaces them in the IDE). `EnforceCodeStyleInBuild` is left
-> off for the same reason. When this document and the `.editorconfig` disagree,
-> the encoded rule wins and this document should be corrected.
+> `dotnet format`. CI gates two subsets (the *Format check* job): the
+> **whitespace/formatting** rules via `dotnet format whitespace
+> --verify-no-changes`, and the **using-directive** rules (System-first
+> ordering, placement outside the file-scoped namespace, and removal of
+> unnecessary directives) via `dotnet format style --diagnostics IDE0005
+> --verify-no-changes`. Broader style and **naming** rules (e.g. IDE1006) are
+> **not** machine-gated: `dotnet format` cannot Fix-All naming, and its
+> solution-wide style fix-all is unreliable on the multi-targeted
+> (`net8.0;net10.0`) projects — so those rules are followed by hand (the
+> `.editorconfig` surfaces them in the IDE). Imports are safe to gate because
+> IDE0005 is identical across both target frameworks here.
+> `EnforceCodeStyleInBuild` is left off so `dotnet build` stays fast and does
+> not turn style suggestions into build errors. When this document and the
+> `.editorconfig` disagree, the encoded rule wins and this document should be
+> corrected.
 
 ## 1. Guiding principles
 
@@ -191,7 +197,7 @@ code is migrated toward it opportunistically.
 
 *This guide was delivered in phases: Phase 1 ("Define") wrote it, Phase 2
 ("Encode") captured the mechanically-checkable rules in `.editorconfig`,
-Phase 3 ("Enforce") added the CI whitespace-format gate, and Phase 4
-("Refactor") brought existing code into whitespace compliance. Style/naming
-and unused-using cleanup remain hand-followed due to the multi-target
-constraint noted above.*
+Phase 3 ("Enforce") added the CI format gates, and Phase 4 ("Refactor")
+brought existing code into whitespace and using-directive compliance. CI now
+gates whitespace and using directives; broader style and naming rules remain
+hand-followed due to the multi-target constraint noted above.*
