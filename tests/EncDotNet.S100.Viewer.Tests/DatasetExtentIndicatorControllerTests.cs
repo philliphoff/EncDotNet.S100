@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Viewer.Services;
@@ -156,5 +157,60 @@ public class DatasetExtentIndicatorControllerTests
         controller.Dispose();
 
         Assert.DoesNotContain(host.OverlayLayers, l => l.Name == DatasetExtentIndicatorOverlayLayer.LayerName);
+    }
+
+    private sealed class StubAssetSource : IAssetSource
+    {
+        public Task<System.IO.Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
+            => Task.FromResult<System.IO.Stream>(new System.IO.MemoryStream());
+        public void Dispose() { }
+    }
+
+    private static ExchangeSets.BoundingBox Box(double w, double e, double s, double n) => new()
+    {
+        WestBoundLongitude = w,
+        EastBoundLongitude = e,
+        SouthBoundLatitude = s,
+        NorthBoundLatitude = n,
+    };
+
+    private static DatasetEntry DeferredEntry(DatasetsViewModel vm)
+        => vm.AddRangeFromExchangeSet(new List<ExchangeSetCellRegistration>
+        {
+            new(new StubAssetSource(), "a/US1.000", "S-57", GeographicBounds: Box(-123, -122, 37, 38)),
+        })[0];
+
+    [Fact]
+    public void DeferredVisibleEntry_ProducesOutline()
+    {
+        var host = new FakeMapHost();
+        var vm = new DatasetsViewModel(new NoopLoader());
+        using var controller = new DatasetExtentIndicatorController(
+            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            marshal: a => a());
+
+        var entry = DeferredEntry(vm);
+
+        Assert.True(entry.IsDeferred);
+        Assert.True(entry.IsVisible);
+        Assert.Equal(1, FeatureCount(host));
+    }
+
+    [Fact]
+    public void HiddenDeferredEntry_ProducesNoOutline()
+    {
+        var host = new FakeMapHost();
+        var vm = new DatasetsViewModel(new NoopLoader());
+        using var controller = new DatasetExtentIndicatorController(
+            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            marshal: a => a());
+
+        var entry = DeferredEntry(vm);
+        Assert.Equal(1, FeatureCount(host));
+
+        // Hiding a deferred cell must remove its outline too, consistent with
+        // hiding a loaded dataset (issue #458).
+        entry.IsVisible = false;
+        Assert.Equal(0, FeatureCount(host));
     }
 }

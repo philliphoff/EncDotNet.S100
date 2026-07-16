@@ -71,7 +71,7 @@ S-131 GML → S131DatasetReader → S131Dataset
 
 | Type | Description |
 |---|---|
-| `S131Dataset` | Parsed dataset model (features + information types) |
+| `S131Dataset` | Parsed dataset model (features + information types). `ReadMetadata()` / static `ReadMetadata(path)` / `ReadMetadata(stream)` is the phased-loading "peek" path (issue #460): declared spec + raw WGS-84 extent from feature geometry (`null` when geometry-less, e.g. container-only `Authority`), skipping the Lua portrayal pipeline |
 | `S131Feature` | Feature with geometry, attributes, complex attributes, xlink refs |
 | `S131InformationType` | Information type with attributes and xlink refs |
 | `S131DatasetReader` | GML parser; namespace-driven feature recognition |

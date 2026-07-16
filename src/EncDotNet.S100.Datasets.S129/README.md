@@ -8,7 +8,7 @@ This library reads S-129 datasets from GML files and provides an XSLT-based port
 
 ### Raw GML (feature-bag) surface
 
-- **`S129Dataset`** — root model containing parsed features and dataset identification.
+- **`S129Dataset`** — root model containing parsed features and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S129Feature`** — a geographic feature with type code, geometry, simple attributes, complex attributes, and `xlink:href` references.
 - **`S129ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
 - **`S129Reference`** — an `xlink:href` cross-reference carried on a feature's child element (S-100 Part 10b §7.2).

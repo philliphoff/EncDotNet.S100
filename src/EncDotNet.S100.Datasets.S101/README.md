@@ -6,7 +6,7 @@ Reader and Lua portrayal pipeline for S-101 Electronic Navigational Chart (ENC) 
 
 This library reads S-101 datasets encoded in ISO 8211 format and executes the S-100 Part 9A Lua portrayal pipeline to produce drawing instructions. Key types include:
 
-- **`S101Dataset`** — parsed ENC dataset containing features from ISO 8211 records.
+- **`S101Dataset`** — parsed ENC dataset containing features from ISO 8211 records. `ReadMetadata()` (and the static `S101Dataset.ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec, the geographic extent (from a geometry scan; `null` when the dataset carries no coordinates), and the `DisplayScale` window read cheaply from the `DataCoverage` `minimumDisplayScale` / `maximumDisplayScale` attributes — without running the Part 9A Lua portrayal pipeline.
 - **`S101Document`**, **`S101DocumentReader`** — low-level ISO 8211 record parsing.
 - **`S101DocumentWriter`** — the symmetric inverse of `S101DocumentReader`: encodes an `S101Document` back to an ISO/IEC 8211 S-101 dataset (`byte[]` / stream / file). Used by the S-57 → S-101 conversion path (`s100 s57 convert`). It emits a Data Descriptive Record (DDR) plus one data record per dataset / spatial / feature / information object; a document read from a `.000` and written back round-trips through the reader. See below.
 - **`S101LuaRuleExecutor`** — `ILuaVectorRuleExecutor` implementation that wraps the product-agnostic `LuaRuleExecutor` from `EncDotNet.S100.Core`, supplying the S-101 seams: the `S101LuaDataProvider` host bridge, the mariner→context-parameter bindings, a feature-anchor provider for augmented line tessellation, and the SAFCON contour-label transform.

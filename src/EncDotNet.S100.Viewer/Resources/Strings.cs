@@ -473,6 +473,7 @@ internal static class Strings
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
     public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));
     public static string Status_ExchangeSetLoadedWithErrors => Get(nameof(Status_ExchangeSetLoadedWithErrors));
+    public static string Status_ExchangeSetRegistered => Get(nameof(Status_ExchangeSetRegistered));
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
     public static string Status_S57ExchangeSetNoCells => Get(nameof(Status_S57ExchangeSetNoCells));
@@ -623,6 +624,7 @@ internal static class Strings
     public static string Toast_Success => Get(nameof(Toast_Success));
     public static string Toast_Info => Get(nameof(Toast_Info));
     public static string Toast_ExchangeSetLoaded => Get(nameof(Toast_ExchangeSetLoaded));
+    public static string Toast_ExchangeSetRegistered => Get(nameof(Toast_ExchangeSetRegistered));
     public static string Toast_ExchangeSetFailed => Get(nameof(Toast_ExchangeSetFailed));
     public static string Toast_DatasetError => Get(nameof(Toast_DatasetError));
     public static string Toast_Loading => Get(nameof(Toast_Loading));

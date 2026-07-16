@@ -1,6 +1,8 @@
 using System.Globalization;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Pipelines;
 using S100Diag = EncDotNet.S100.Datasets.S104.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S104;
@@ -151,6 +153,164 @@ public static class S104DatasetReader
             DeclaredProductSpecification = productSpecification,
         };
     }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for the S-104
+    /// dataset — its declared specification, horizontal CRS, geographic
+    /// extent, and temporal coverage — for phased / deferred loading (issue
+    /// #460).
+    /// </summary>
+    /// <remarks>
+    /// For data coding format 2 (regularly-gridded) the extent is the union
+    /// of the <c>WaterLevel.NN</c> grid footprints and the time coverage
+    /// spans the <c>timePoint</c> attributes of every <c>Group_NNN</c> step,
+    /// read <em>without</em> touching the per-step <c>values</c> arrays. For
+    /// data coding format 8 (time series at fixed stations) the comparatively
+    /// small station series is read in full and the extent / time span are
+    /// derived from the station positions and record windows.
+    /// </remarks>
+    public static DatasetMetadata ReadMetadata(IHdf5File file)
+    {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.readmetadata");
+        __activity?.SetTag("s100.product", "S-104");
+        ArgumentNullException.ThrowIfNull(file);
+
+        var root = file.Root;
+
+        int? horizontalCRS = root.AttributeExists("horizontalCRS")
+            ? (int)root.ReadInt64Attribute("horizontalCRS")
+            : null;
+
+        string? productSpecification = root.AttributeExists("productSpecification")
+            ? root.ReadStringAttribute("productSpecification")
+            : null;
+
+        var wlGroup = root.OpenGroup("WaterLevel");
+        const string WaterLevelPath = "/WaterLevel";
+
+        int dataCodingFormat = wlGroup.AttributeExists("dataCodingFormat")
+            ? (int)wlGroup.ReadRequiredInt64Attribute(
+                "dataCodingFormat", "S-104", null, WaterLevelPath, "S-100 Part 10c §10.2.1")
+            : 2;
+
+        BoundingBox? extent;
+        TimeCoverage? time;
+
+        if (dataCodingFormat == 8)
+        {
+            var stations = ReadStationSeriesGuarded(root, wlGroup, productSpecification);
+            extent = StationExtent(stations);
+            time = StationTimeCoverage(stations);
+        }
+        else
+        {
+            (extent, time) = ReadGriddedExtentAndTime(wlGroup);
+        }
+
+        return new DatasetMetadata
+        {
+            Spec = HdfDeclaredSpec.Resolve(productSpecification, "S-104"),
+            Extent = extent,
+            HorizontalCrsEpsg = horizontalCRS,
+            TimeCoverage = time,
+        };
+    }
+
+    /// <summary>
+    /// Computes the union grid extent and time-step span of a dcf2 dataset
+    /// from georef and <c>timePoint</c> attributes alone (no <c>values</c>
+    /// read), so the result matches a full read's extent and available times.
+    /// </summary>
+    private static (BoundingBox? Extent, TimeCoverage? Time) ReadGriddedExtentAndTime(IHdf5Group wlGroup)
+    {
+        double south = double.MaxValue, west = double.MaxValue;
+        double north = double.MinValue, east = double.MinValue;
+        DateTime min = DateTime.MaxValue, max = DateTime.MinValue;
+        bool anyBounds = false, anyTime = false;
+
+        foreach (var instanceName in wlGroup.GroupNames)
+        {
+            if (!instanceName.StartsWith("WaterLevel.", StringComparison.Ordinal))
+                continue;
+
+            var instance = wlGroup.OpenGroup(instanceName);
+            var instancePath = $"/WaterLevel/{instanceName}";
+            const string Spec = "S-100 Part 10c §10.2.1.2";
+
+            double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-104", null, instancePath, Spec);
+            double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-104", null, instancePath, Spec);
+            double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-104", null, instancePath, Spec);
+            double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-104", null, instancePath, Spec);
+            int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-104", null, instancePath, Spec);
+            int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-104", null, instancePath, Spec);
+
+            double latA = originLat, latB = originLat + spacingLat * numLat;
+            double lonA = originLon, lonB = originLon + spacingLon * numLon;
+            south = Math.Min(south, Math.Min(latA, latB));
+            north = Math.Max(north, Math.Max(latA, latB));
+            west = Math.Min(west, Math.Min(lonA, lonB));
+            east = Math.Max(east, Math.Max(lonA, lonB));
+            anyBounds = true;
+
+            foreach (var groupName in instance.GroupNames)
+            {
+                if (!groupName.StartsWith("Group_", StringComparison.Ordinal))
+                    continue;
+
+                var group = instance.OpenGroup(groupName);
+                var t = ParseTimePoint(group.ReadStringAttribute("timePoint"));
+                if (t < min) min = t;
+                if (t > max) max = t;
+                anyTime = true;
+            }
+        }
+
+        BoundingBox? extent = anyBounds ? new BoundingBox(south, west, north, east) : null;
+        TimeCoverage? time = anyTime ? new TimeCoverage(min, max) : null;
+        return (extent, time);
+    }
+
+    private static BoundingBox? StationExtent(IReadOnlyList<WaterLevelStation> stations)
+    {
+        if (stations.Count == 0) return null;
+
+        double south = double.MaxValue, west = double.MaxValue;
+        double north = double.MinValue, east = double.MinValue;
+        foreach (var s in stations)
+        {
+            south = Math.Min(south, s.Latitude);
+            north = Math.Max(north, s.Latitude);
+            west = Math.Min(west, s.Longitude);
+            east = Math.Max(east, s.Longitude);
+        }
+
+        return new BoundingBox(south, west, north, east);
+    }
+
+    private static TimeCoverage? StationTimeCoverage(IReadOnlyList<WaterLevelStation> stations)
+    {
+        DateTime min = DateTime.MaxValue, max = DateTime.MinValue;
+        bool any = false;
+        foreach (var s in stations)
+        {
+            if (s.StartTime is { } start) { if (start < min) min = start; any = true; }
+            if (s.EndTime is { } end) { if (end > max) max = end; any = true; }
+        }
+
+        return any ? new TimeCoverage(min, max) : null;
+    }
+
+    /// <summary>
+    /// Parses an S-104 <c>timePoint</c> attribute (S-100 Part 10c) accepting
+    /// both the compact <c>yyyyMMddTHHmmssZ</c> and extended
+    /// <c>yyyy-MM-ddTHH:mm:ssZ</c> ISO-8601 forms seen in production files.
+    /// </summary>
+    private static DateTime ParseTimePoint(string timePointStr) =>
+        DateTime.ParseExact(
+            timePointStr,
+            ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
 
     /// <summary>
     /// Runs <see cref="ReadCoverages"/>, enriching any
@@ -319,12 +479,7 @@ public static class S104DatasetReader
 
             var group = instance.OpenGroup(groupName);
 
-            string timePointStr = group.ReadStringAttribute("timePoint");
-            DateTime timePoint = DateTime.ParseExact(
-                timePointStr,
-                ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+            DateTime timePoint = ParseTimePoint(group.ReadStringAttribute("timePoint"));
 
             var values = ReadValues(group);
 

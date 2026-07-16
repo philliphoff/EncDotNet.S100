@@ -584,6 +584,22 @@ public partial class App : Application
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
+        // Viewport-driven lazy loading of large exchange sets (issue #458):
+        // registers cells without loading them and loads only what is in view.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            var loader = sp.GetRequiredService<IDatasetLoaderService>();
+            var notifier = sp.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.IMapViewportNotifier>();
+            return new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
+                notifier,
+                (entry, _) => datasets.RequestLoadAsync(entry),
+                loader.UnloadEntry,
+                logger: sp.GetService<ILogger<
+                    EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>>());
+        });
+
         // Own-ship dynamic source. The steerable driver dead-reckons a
         // moving point seeded at Solent (50.8°N 1.3°W) tracking due east
         // at 5 m/s (~9.7 kn) and exposes IOwnShipHelm so map gestures,

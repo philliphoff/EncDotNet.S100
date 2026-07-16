@@ -38,4 +38,15 @@ internal sealed record MapViewportSnapshot
 
     /// <summary>Longitude span (east - west) in degrees.</summary>
     public double LongitudeSpanDegrees => MaxLongitude - MinLongitude;
+
+    /// <summary>
+    /// The map's EPSG:3857 (Web Mercator) resolution in metres-per-pixel
+    /// at the moment of the snapshot, taken from Mapsui's
+    /// <c>Viewport.Resolution</c>. Combined with the viewport-centre
+    /// latitude this yields the on-screen scale denominator used to pick
+    /// which usage-band cells are relevant (see
+    /// <see cref="LazyLoading.LazyCellGate"/>). <c>0</c> when the
+    /// resolution was unavailable.
+    /// </summary>
+    public double MercatorResolution { get; init; }
 }

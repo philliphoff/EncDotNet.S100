@@ -15,7 +15,7 @@ S-127 provides a standard data model for distributing marine traffic-management 
 
 Key types:
 
-- **`S127Dataset`** — root model containing parsed features, information types, and dataset identification.
+- **`S127Dataset`** — root model containing parsed features, information types, and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S127Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S127InformationType`** — a non-geographic information type instance (S-127 Edition 2.0.0 declares none, but the parser preserves any `imember` content for forward compatibility).
 - **`S127ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
