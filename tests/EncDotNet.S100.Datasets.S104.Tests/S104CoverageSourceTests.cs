@@ -1,6 +1,4 @@
-using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Hdf5.PureHdf;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.S104.Tests;

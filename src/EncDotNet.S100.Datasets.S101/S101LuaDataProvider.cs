@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;

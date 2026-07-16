@@ -1,14 +1,12 @@
-using EncDotNet.S100.DataModel;
 using System.Diagnostics;
 using System.Globalization;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
-using Scene = EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -19,6 +17,8 @@ using NetTopologySuite.Operation.Overlay;
 using NetTopologySuite.Operation.OverlayNG;
 using NetTopologySuite.Simplify;
 using MapsuiColor = Mapsui.Styles.Color;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using Scene = EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 

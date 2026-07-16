@@ -1,14 +1,10 @@
-using System.Collections.Generic;
-using EncDotNet.S100.Quantities;
 using System.Globalization;
-using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
-using Xunit;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

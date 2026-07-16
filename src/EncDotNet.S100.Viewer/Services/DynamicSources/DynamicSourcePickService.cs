@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Viewer.Resources;

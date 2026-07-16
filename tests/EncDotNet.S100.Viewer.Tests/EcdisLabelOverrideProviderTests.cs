@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Text;
 using EncDotNet.S100.Viewer.Services;

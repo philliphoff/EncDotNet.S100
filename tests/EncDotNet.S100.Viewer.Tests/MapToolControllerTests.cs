@@ -1,6 +1,5 @@
 using Avalonia.Input;
 using EncDotNet.S100.Viewer.Tools;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

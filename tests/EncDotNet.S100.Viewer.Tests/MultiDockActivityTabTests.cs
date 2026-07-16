@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Avalonia.Controls;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -11,8 +7,6 @@ using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using Mapsui.Layers;
-using Xunit;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

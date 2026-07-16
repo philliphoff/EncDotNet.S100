@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;

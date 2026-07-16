@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;

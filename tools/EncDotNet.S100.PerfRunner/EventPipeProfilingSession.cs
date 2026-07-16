@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using Microsoft.Diagnostics.NETCore.Client;
 

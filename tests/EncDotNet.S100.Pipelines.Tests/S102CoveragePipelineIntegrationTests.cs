@@ -1,10 +1,9 @@
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Scripting.MoonSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;

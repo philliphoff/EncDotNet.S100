@@ -3,7 +3,6 @@ using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 

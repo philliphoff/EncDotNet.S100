@@ -1,4 +1,3 @@
-using System;
 using System.Reflection;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Viewer.Services;

@@ -1,7 +1,6 @@
-using SkiaSharp;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Skia;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

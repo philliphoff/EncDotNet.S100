@@ -1,5 +1,3 @@
-using System;
-
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>

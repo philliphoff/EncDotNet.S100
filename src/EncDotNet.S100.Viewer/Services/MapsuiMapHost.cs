@@ -1,10 +1,6 @@
-using EncDotNet.S100.DataModel;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Threading;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Viewer.Diagnostics;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -12,7 +8,6 @@ using Mapsui.Projections;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using Mapsui.UI.Avalonia;
-using EncDotNet.S100.Viewer.Diagnostics;
 
 namespace EncDotNet.S100.Viewer.Services;
 

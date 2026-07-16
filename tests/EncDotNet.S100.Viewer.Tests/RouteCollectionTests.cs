@@ -1,5 +1,4 @@
 using EncDotNet.S100.Viewer.Routing;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

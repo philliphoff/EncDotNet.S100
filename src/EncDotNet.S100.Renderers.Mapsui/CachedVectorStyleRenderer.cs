@@ -1,13 +1,11 @@
-using System;
-using System.Collections.Generic;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
-using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Rendering.Skia.Extensions;
+using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using SkiaSharp;

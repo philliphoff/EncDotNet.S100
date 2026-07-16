@@ -1,6 +1,4 @@
-using System.IO;
 using EncDotNet.S100.Viewer.Services.Notifications;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

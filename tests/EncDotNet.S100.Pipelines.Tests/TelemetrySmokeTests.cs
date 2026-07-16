@@ -1,13 +1,10 @@
 using System.Collections.Concurrent;
-using EncDotNet.S100.Core;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Xml;
 using System.Xml.Xsl;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
-using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Specifications;
 
 namespace EncDotNet.S100.Pipelines.Tests;

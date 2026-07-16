@@ -5,7 +5,6 @@ using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using Mapsui;
 using Mapsui.Projections;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 

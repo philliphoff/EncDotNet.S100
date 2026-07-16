@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;

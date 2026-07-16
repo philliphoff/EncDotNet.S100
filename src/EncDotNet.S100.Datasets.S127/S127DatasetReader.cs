@@ -1,7 +1,7 @@
-using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
-using S100Diag = EncDotNet.S100.Datasets.S127.Diagnostics;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using S100Diag = EncDotNet.S100.Datasets.S127.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S127;
 

@@ -1,8 +1,4 @@
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
 using EncDotNet.S100.Viewer.Services.Updates;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

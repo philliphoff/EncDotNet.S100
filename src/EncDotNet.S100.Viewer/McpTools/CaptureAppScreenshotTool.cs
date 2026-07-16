@@ -1,8 +1,5 @@
-using System;
 using System.Buffers.Binary;
 using System.ComponentModel;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Viewer.Services;
 

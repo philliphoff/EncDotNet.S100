@@ -1,4 +1,3 @@
-using System;
 using System.Xml.Linq;
 
 namespace EncDotNet.S100.Features;

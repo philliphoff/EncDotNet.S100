@@ -1,5 +1,3 @@
-using System.Linq;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Tests;

@@ -1,8 +1,7 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Specifications;
-using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

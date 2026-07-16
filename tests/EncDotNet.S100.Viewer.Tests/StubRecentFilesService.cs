@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Tests;

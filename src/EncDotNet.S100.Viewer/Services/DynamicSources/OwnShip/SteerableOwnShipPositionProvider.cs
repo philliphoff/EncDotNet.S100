@@ -1,5 +1,4 @@
 using EncDotNet.S100.DataModel;
-using System.Threading;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;

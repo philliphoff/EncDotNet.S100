@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S128.Tests;

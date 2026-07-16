@@ -1,10 +1,7 @@
-using System;
-using System.Linq;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using Mapsui.Layers;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 

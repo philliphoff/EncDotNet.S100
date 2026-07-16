@@ -4,7 +4,6 @@ using System.Reflection;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Scripting.MoonSharp.Diagnostics;
 using MoonSharp.Interpreter;
-using MoonSharp.Interpreter.Loaders;
 
 namespace EncDotNet.S100.Scripting.MoonSharp;
 

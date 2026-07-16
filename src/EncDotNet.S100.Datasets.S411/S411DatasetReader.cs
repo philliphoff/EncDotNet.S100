@@ -1,6 +1,6 @@
-using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S411.Diagnostics;
 

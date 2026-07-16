@@ -1,6 +1,4 @@
-using EncDotNet.S100.VisualRegression;
 using SkiaSharp;
-using VerifyTests;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
 

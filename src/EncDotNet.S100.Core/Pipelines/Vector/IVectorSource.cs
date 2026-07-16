@@ -1,7 +1,7 @@
-using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Pipelines.Vector;

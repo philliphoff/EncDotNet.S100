@@ -1,4 +1,3 @@
-using System;
 using Avalonia.Styling;
 using EncDotNet.S100.Pipelines;
 

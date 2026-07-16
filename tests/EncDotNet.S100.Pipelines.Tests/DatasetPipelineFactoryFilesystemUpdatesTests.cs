@@ -1,15 +1,10 @@
-using System;
-using System.IO;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

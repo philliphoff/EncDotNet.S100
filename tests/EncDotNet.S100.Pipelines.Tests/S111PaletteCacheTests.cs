@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S111;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Specifications;
 

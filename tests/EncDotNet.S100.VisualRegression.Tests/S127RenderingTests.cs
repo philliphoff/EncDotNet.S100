@@ -1,5 +1,3 @@
-using EncDotNet.S100.VisualRegression;
-
 namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>

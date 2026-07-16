@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Pipelines;
 using global::ProjNet.CoordinateSystems;
 using global::ProjNet.CoordinateSystems.Transformations;

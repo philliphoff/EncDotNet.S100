@@ -1,6 +1,4 @@
-using System.Linq;
 using EncDotNet.S100.Datasets.S127.DataModel;
-using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S127.Tests;
 

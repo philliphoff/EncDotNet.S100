@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using Mapsui;

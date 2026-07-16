@@ -1,18 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.DynamicSources;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -1,10 +1,6 @@
-using System;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading.Tasks;
 using EncDotNet.S100.Mcp.Tools.Catalog;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Tests;

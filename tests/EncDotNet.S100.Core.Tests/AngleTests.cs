@@ -1,6 +1,4 @@
-using System;
 using EncDotNet.S100.Quantities;
-using Xunit;
 
 namespace EncDotNet.S100.Core.Tests;
 

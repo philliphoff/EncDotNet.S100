@@ -1,4 +1,3 @@
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Validation;
 

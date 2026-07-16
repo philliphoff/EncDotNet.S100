@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S57.ExchangeSets;
 using S57Outcome = EncDotNet.S57.ExchangeSets.S57VerificationOutcome;

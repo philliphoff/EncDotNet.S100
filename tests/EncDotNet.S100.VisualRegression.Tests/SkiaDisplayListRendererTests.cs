@@ -1,5 +1,4 @@
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Projections;

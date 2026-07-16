@@ -1,8 +1,7 @@
-using EncDotNet.S100.DataModel;
-using System;
 using System.ComponentModel;
 using System.Globalization;
 using Avalonia;
+using EncDotNet.S100.DataModel;
 using Spectre.Console.Cli;
 
 namespace EncDotNet.S100.Viewer;

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer;

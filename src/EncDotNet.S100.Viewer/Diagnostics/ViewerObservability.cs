@@ -1,14 +1,12 @@
-using System;
 using System.Diagnostics;
+using EncDotNet.S100.Diagnostics.Export;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using EncDotNet.S100.Diagnostics.Export;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EncDotNet.S100.Viewer.Diagnostics;
 

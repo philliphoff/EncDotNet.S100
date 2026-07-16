@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Services;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

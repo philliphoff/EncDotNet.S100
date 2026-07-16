@@ -1,6 +1,5 @@
 using System.Text.Json;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Mcp.Tools.Catalog;
 
 namespace EncDotNet.S100.Mcp.Tools.Spec;
 

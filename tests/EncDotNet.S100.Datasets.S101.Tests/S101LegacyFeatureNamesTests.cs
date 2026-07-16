@@ -1,5 +1,3 @@
-using EncDotNet.S100.Datasets.S101;
-
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
 /// <summary>

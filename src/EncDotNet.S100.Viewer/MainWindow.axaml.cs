@@ -1,11 +1,3 @@
-using EncDotNet.S100.DataModel;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,9 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using Mapsui.Extensions;
-using Mapsui.Manipulations;
-using Microsoft.Extensions.DependencyInjection;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
@@ -24,8 +14,10 @@ using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
+using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Projections;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Viewer;
 

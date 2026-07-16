@@ -1,5 +1,4 @@
 using EncDotNet.S100.Renderers.Mapsui;
-using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Rendering;
@@ -8,7 +7,6 @@ using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using SkiaSharp;
-using System.Threading;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

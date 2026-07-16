@@ -1,6 +1,5 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
-using EncDotNet.S100.Pipelines.Vector;
 using Mapsui;
 using Mapsui.Nts;
 using Mapsui.Projections;

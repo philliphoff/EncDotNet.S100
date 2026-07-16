@@ -1,15 +1,13 @@
+using System.Runtime.InteropServices;
 using EncDotNet.S100.Pipelines;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using EncDotNet.S100.Pipelines.Coverage;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using SkiaSharp;
-using System.Runtime.InteropServices;
-using System.Threading;
-
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 

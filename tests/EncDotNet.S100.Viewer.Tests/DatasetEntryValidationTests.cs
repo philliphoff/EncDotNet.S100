@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.ComponentModel;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.ViewModels;
 

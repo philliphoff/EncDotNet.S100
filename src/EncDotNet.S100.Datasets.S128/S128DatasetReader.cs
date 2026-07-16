@@ -1,9 +1,8 @@
-using EncDotNet.S100.DataModel;
 using System.Diagnostics;
 using System.Xml.Linq;
-using System.Collections.ObjectModel;
-using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S128;
 

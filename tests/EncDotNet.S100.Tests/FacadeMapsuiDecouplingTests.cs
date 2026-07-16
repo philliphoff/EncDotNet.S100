@@ -1,4 +1,3 @@
-using EncDotNet.S100;
 using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Tests;

@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S57;

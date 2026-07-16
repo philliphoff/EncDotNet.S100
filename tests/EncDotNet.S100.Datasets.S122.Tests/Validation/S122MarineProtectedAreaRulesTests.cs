@@ -1,9 +1,8 @@
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S122.DataModel;
 using EncDotNet.S100.Datasets.S122.Validation;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S122.Tests.Validation;
 

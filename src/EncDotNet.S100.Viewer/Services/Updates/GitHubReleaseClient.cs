@@ -1,10 +1,5 @@
-using System;
-using System.Linq;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Viewer.Services.Updates;

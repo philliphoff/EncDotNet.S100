@@ -1,5 +1,3 @@
-using EncDotNet.S57;
-
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>

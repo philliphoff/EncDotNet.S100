@@ -1,7 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;

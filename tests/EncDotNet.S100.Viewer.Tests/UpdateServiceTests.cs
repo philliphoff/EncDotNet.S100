@@ -1,12 +1,6 @@
-using System;
-using System.Linq;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Services.Updates;
 using Microsoft.Extensions.Time.Testing;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

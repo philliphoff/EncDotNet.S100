@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Avalonia.Threading;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;

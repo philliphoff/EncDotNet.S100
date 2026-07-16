@@ -1,9 +1,6 @@
 using EncDotNet.S100.DataModel;
-using System.Collections.Generic;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
