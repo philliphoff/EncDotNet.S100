@@ -1243,7 +1243,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// window (<see cref="ApplyCellScaleWindow"/>) — so an override still shows
     /// every cell in full. Recomputed on every load / unload / re-render because
     /// each build produces fresh <see cref="ILayer"/> instances and the finer/
-    /// coarser overlap set changes as cells come and go.
+    /// coarser overlap set changes as cells come and go, and on every
+    /// visibility/opacity change (a cell that is not currently drawing is
+    /// excluded as a suppressor so hiding a finer cell does not leave a hole).
     /// </summary>
     private void ApplyOverlapSuppression()
     {
@@ -1253,12 +1255,32 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             if (layers.Count == 0)
                 continue;
 
+            // A cell that is not currently drawing (parent hidden, opacity 0, or
+            // all its sub-layers toggled off) must not suppress coarser cells —
+            // otherwise hiding a finer cell would leave the "blank hole" its own
+            // content used to fill. ApplyDisplayState (run before this on load,
+            // and on every visibility/opacity change) has already folded the
+            // composed state into each layer's Enabled/Opacity, so a cell is
+            // drawing iff any of its layers is enabled with non-zero opacity.
+            // Non-drawing entries stay in the set with null Coverage so their own
+            // clip attachments are cleared (they paint in full when re-shown).
+            var isDrawing = false;
+            foreach (var layer in layers)
+            {
+                if (layer.Enabled && layer.Opacity > 0)
+                {
+                    isDrawing = true;
+                    break;
+                }
+            }
+
             _entryCoverage.TryGetValue(entry, out var coverage);
+            var effectiveCoverage = isDrawing ? coverage.Coverage : null;
             cells.Add(new OverlapSuppressionCell
             {
                 Layers = layers,
-                Coverage = coverage.Coverage,
-                ScaleDenominator = coverage.Coverage is null ? null : coverage.ScaleDenominator,
+                Coverage = effectiveCoverage,
+                ScaleDenominator = effectiveCoverage is null ? null : coverage.ScaleDenominator,
             });
         }
 
@@ -1432,6 +1454,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         if (e.PropertyName is not (nameof(DatasetEntry.IsVisible) or nameof(DatasetEntry.Opacity)))
             return;
         ApplyDisplayState(entry);
+        // Visibility/opacity feeds the suppression set (a hidden finer cell must
+        // stop clipping coarser cells), so keep the clip attachments in sync.
+        ApplyOverlapSuppression();
     }
 
     private void OnSubLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1448,6 +1473,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             if (entry.SubLayers.Contains(sub))
             {
                 ApplyDisplayState(entry);
+                // Toggling all of a cell's sub-layers off makes it non-drawing,
+                // so refresh suppression to release any clip it imposed.
+                ApplyOverlapSuppression();
                 break;
             }
         }

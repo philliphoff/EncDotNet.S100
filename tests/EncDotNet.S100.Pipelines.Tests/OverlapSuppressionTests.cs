@@ -110,6 +110,18 @@ public class OverlapSuppressionTests
     }
 
     [Fact]
+    public void CollectFinerCoverages_FinerCellWithNullCoverage_DoesNotSuppress()
+    {
+        // A finer cell whose coverage has been nulled (e.g. the viewer hides it,
+        // so it is no longer drawing) must not clip the coarser cell — otherwise
+        // hiding the finer cell would leave the "blank hole" its content filled.
+        var coarse = Cell(Square(0, 0, 10), 90000);
+        var hiddenFiner = Cell(null, 10000);
+
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(coarse, [coarse, hiddenFiner]));
+    }
+
+    [Fact]
     public void CollectFinerCoverages_CutoffDerivedFromEachFinerDenominator()
     {
         // Each finer contribution carries a cutoff derived from that finer cell's
