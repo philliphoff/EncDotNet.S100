@@ -239,7 +239,10 @@ public sealed class HeadlessCompositor
                     sub.Plane,
                     sub.WithinPlanePriority,
                     vector.SourceDatasetId,
-                    sub.SourceFeatureType));
+                    sub.SourceFeatureType)
+                {
+                    SourceScaleDenominator = vector.CellMinimumDisplayScale,
+                });
             }
             return (items, vector.Spec.Name, vector.SourceDatasetId);
         }

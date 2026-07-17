@@ -45,4 +45,28 @@ public sealed record SubLayerStackItem(
     int WithinPlanePriority,
     string SourceDatasetId,
     string? SourceFeatureType = null,
-    string? ExtensionId = null);
+    string? ExtensionId = null)
+{
+    /// <summary>
+    /// The source cell's coarsest intended display-scale denominator — a proxy
+    /// for its navigational-purpose (usage) band, used to break ties between
+    /// overlapping cells of different scales within the same
+    /// <see cref="Plane"/> and <see cref="WithinPlanePriority"/>. A
+    /// <em>smaller</em> denominator means a larger-scale (finer) cell, which
+    /// must paint <em>on top of</em> a smaller-scale (coarser) cell of the same
+    /// feature content (S-101 FC §3.1.1 <c>DataCoverage.minimumDisplayScale</c>;
+    /// S-57 DSPM compilation scale CSCL, S-57 Appendix B.1 §7.3.1.1). Without
+    /// this the tie falls through to dataset load order, which is
+    /// non-deterministic under viewport-driven lazy loading (issue #464).
+    /// <see langword="null"/> when the producing dataset carries no usable
+    /// cell-wide scale (e.g. GML and coverage products); such items are treated
+    /// as coarsest and preserve their relative load order among themselves.
+    /// </summary>
+    /// <remarks>
+    /// Kept as an init-only property rather than a primary-constructor
+    /// parameter so appending it does not change the generated constructor
+    /// signature — that keeps the public record binary-compatible with callers
+    /// compiled against the earlier six-parameter constructor.
+    /// </remarks>
+    public int? SourceScaleDenominator { get; init; }
+}

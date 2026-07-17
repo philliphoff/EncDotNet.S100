@@ -142,6 +142,64 @@ public class InteroperabilityAuthorityTests
         Assert.Equal(S98DisplayPlane.BaseChartUnder, lo.GetDefaultPlane("S-101", "area"));
     }
 
+    [Fact]
+    public void Sort_finer_cell_paints_on_top_within_same_plane_and_priority()
+    {
+        // Two overlapping ENC cells of different navigational-purpose bands on
+        // the same plane/priority: the finer (smaller-denominator) harbour cell
+        // must paint LAST (on top), regardless of input (load) order.
+        var general = Entry("general", S98DisplayPlane.BaseChartOver, scale: 150_000);
+        var harbour = Entry("harbour", S98DisplayPlane.BaseChartOver, scale: 12_000);
+
+        var coarseFirst = _auth.Sort(new[] { general, harbour });
+        var fineFirst = _auth.Sort(new[] { harbour, general });
+
+        Assert.Equal(new[] { "general", "harbour" }, coarseFirst.Select(e => e.SourceDatasetId).ToArray());
+        Assert.Equal(new[] { "general", "harbour" }, fineFirst.Select(e => e.SourceDatasetId).ToArray());
+    }
+
+    [Fact]
+    public void Sort_unknown_scale_is_treated_as_coarsest()
+    {
+        // An item with no known scale (null) is treated as coarsest, so a known
+        // finer cell in the same plane/priority paints above it.
+        var unknown = Entry("unknown", S98DisplayPlane.BaseChartOver, scale: null);
+        var fine = Entry("fine", S98DisplayPlane.BaseChartOver, scale: 12_000);
+
+        var sorted = _auth.Sort(new[] { fine, unknown });
+
+        Assert.Equal(new[] { "unknown", "fine" }, sorted.Select(e => e.SourceDatasetId).ToArray());
+    }
+
+    [Fact]
+    public void Sort_preserves_load_order_when_scale_unknown()
+    {
+        // Two items that both lack a scale keep their input (load) order — the
+        // scale tiebreaker must not disturb products with no cell-wide scale.
+        var a = Entry("a", S98DisplayPlane.OtherChartOverlays, scale: null);
+        var b = Entry("b", S98DisplayPlane.OtherChartOverlays, scale: null);
+
+        var sorted = _auth.Sort(new[] { a, b });
+
+        Assert.Equal(new[] { "a", "b" }, sorted.Select(e => e.SourceDatasetId).ToArray());
+    }
+
+    [Fact]
+    public void Sort_scale_tiebreaker_yields_to_plane_and_priority()
+    {
+        // Scale only breaks ties WITHIN a plane/priority: a finer cell on a
+        // lower plane still paints below a coarser cell on a higher plane.
+        var fineUnder = Entry("fineUnder", S98DisplayPlane.BaseChartUnder, scale: 12_000);
+        var coarseOver = Entry("coarseOver", S98DisplayPlane.BaseChartOver, scale: 150_000);
+
+        var sorted = _auth.Sort(new[] { coarseOver, fineUnder });
+
+        Assert.Equal(new[] { "fineUnder", "coarseOver" }, sorted.Select(e => e.SourceDatasetId).ToArray());
+    }
+
     private static SubLayerStackItem Entry(string id, S98DisplayPlane plane, int priority = 0)
         => new(new SyntheticStackPayload(id), plane, priority, id);
+
+    private static SubLayerStackItem Entry(string id, S98DisplayPlane plane, int? scale, int priority = 0)
+        => new(new SyntheticStackPayload(id), plane, priority, id) { SourceScaleDenominator = scale };
 }

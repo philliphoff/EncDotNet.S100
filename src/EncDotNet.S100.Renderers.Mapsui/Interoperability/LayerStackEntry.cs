@@ -38,4 +38,12 @@ public sealed record LayerStackEntry(ILayer Layer, SubLayerStackItem Item)
 
     /// <summary>Optional IC-declared custom plane identifier (S-98 Annex A §A-3.2.1.1).</summary>
     public string? ExtensionId => Item.ExtensionId;
+
+    /// <summary>
+    /// The source cell's coarsest intended display-scale denominator (a proxy
+    /// for its navigational-purpose band), or <see langword="null"/> when the
+    /// dataset carries no cell-wide scale. Smaller means a finer cell that
+    /// paints on top of coarser overlapping cells (issue #464).
+    /// </summary>
+    public int? SourceScaleDenominator => Item.SourceScaleDenominator;
 }
