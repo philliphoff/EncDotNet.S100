@@ -132,8 +132,9 @@ public static class OverlapSuppression
     /// clipped to a blank hole with the now-hidden finer cell drawing nothing).
     /// Derived from the same true-scale denominator the renderer clamps the cell's
     /// layers to (<c>MapsuiDatasetRenderer.ApplyCellScaleWindow</c> and the
-    /// per-feature out-of-scale-band cap), converted at the coverage centroid's
-    /// latitude to undo web-mercator <c>1/cos φ</c> distortion — so the cutoff
+    /// per-feature out-of-scale-band cap), converted at the coverage envelope-
+    /// centre latitude to undo web-mercator <c>1/cos φ</c> distortion (the same
+    /// extent-centre convention <c>ApplyCellScaleWindow</c> uses) — so the cutoff
     /// tracks the finer cell's content visibility exactly, for both exchange-set
     /// and standalone-loaded cells.
     /// </summary>

@@ -543,15 +543,19 @@ public sealed class MapsuiDatasetRenderer
         try
         {
             var normalized = geometry.Buffer(0);
-            if (!normalized.IsEmpty)
-                return normalized;
+            // A degenerate / zero-area coverage normalises to an empty geometry;
+            // treat that as "no usable coverage" (return null so suppression is
+            // simply disabled for the cell) rather than propagating the raw,
+            // possibly non-simple geometry into Intersects / SKPath clipping,
+            // where it risks TopologyExceptions or incorrect clipping.
+            return normalized.IsEmpty ? null : normalized;
         }
         catch (NetTopologySuite.Geometries.TopologyException)
         {
-            // Fall back to the raw (possibly non-simple) geometry.
+            // Normalisation failed outright — disable suppression for this cell
+            // rather than feed an invalid geometry downstream.
+            return null;
         }
-
-        return geometry;
     }
 
     /// <summary>
