@@ -14,7 +14,6 @@ using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S421;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
@@ -167,52 +166,52 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             "S-122" => ProjectGml(id, "S-122", entry, stream =>
             {
                 var model = S122Dataset.Open(stream);
-                return (new S122DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S122DatasetData(model), model.ReadMetadata());
             }),
             "S-124" => ProjectGml(id, "S-124", entry, stream =>
             {
                 var model = S124Dataset.Open(stream);
-                return (new S124DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S124DatasetData(model), model.ReadMetadata());
             }),
             "S-125" => ProjectGml(id, "S-125", entry, stream =>
             {
                 var model = S125Dataset.Open(stream);
-                return (new S125DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S125DatasetData(model), model.ReadMetadata());
             }),
             "S-127" => ProjectGml(id, "S-127", entry, stream =>
             {
                 var model = S127Dataset.Open(stream);
-                return (new S127DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S127DatasetData(model), model.ReadMetadata());
             }),
             "S-128" => ProjectGml(id, "S-128", entry, stream =>
             {
                 var model = S128Dataset.Open(stream);
-                return (new S128DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S128DatasetData(model), model.ReadMetadata());
             }),
             "S-129" => ProjectGml(id, "S-129", entry, stream =>
             {
                 var model = S129Dataset.Open(stream);
-                return (new S129DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S129DatasetData(model), model.ReadMetadata());
             }),
             "S-131" => ProjectGml(id, "S-131", entry, stream =>
             {
                 var model = S131Dataset.Open(stream);
-                return (new S131DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S131DatasetData(model), model.ReadMetadata());
             }),
             "S-201" => ProjectGml(id, "S-201", entry, stream =>
             {
                 var model = S201Dataset.Open(stream);
-                return (new S201DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S201DatasetData(model), model.ReadMetadata());
             }),
             "S-411" => ProjectGml(id, "S-411", entry, stream =>
             {
                 var model = S411Dataset.Open(stream);
-                return (new S411DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S411DatasetData(model), model.ReadMetadata());
             }),
             "S-421" => ProjectGml(id, "S-421", entry, stream =>
             {
                 var model = S421Dataset.Open(stream);
-                return (new S421DatasetData(model), ComputeGmlBounds(model.Features));
+                return (new S421DatasetData(model), model.ReadMetadata());
             }),
             _ => null,
         };
@@ -243,14 +242,22 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         DatasetId id,
         string specName,
         DatasetEntry entry,
-        Func<Stream, (LoadedDatasetData Data, BoundingBox? Bounds)> open)
+        Func<Stream, (LoadedDatasetData Data, DatasetMetadata Metadata)> open)
     {
         using var stream = OpenEntryStream(entry);
-        var (data, bounds) = open(stream);
+        var (data, metadata) = open(stream);
+        // Canonical metadata derived from the parsed features
+        // (GmlDatasetMetadata via the dataset's ReadMetadata): the declared
+        // product edition and the raw WGS-84 envelope, replacing the former
+        // hand-rolled bounds walk (issue #467 WS1). The catalog keeps its own
+        // canonical spec name (the S-57 → S-101 mapping is applied upstream in
+        // TryProject) and only adopts the edition. A geometry-less container
+        // feature (e.g. S-131 / S-127 Authority) yields a null extent, so the
+        // caller falls back to world bounds.
         return new LoadedDataset(
             id,
-            new SpecRef(specName, default),
-            bounds ?? WorldBounds,
+            new SpecRef(specName, metadata.Spec.Edition),
+            metadata.Extent ?? WorldBounds,
             null,
             data);
     }
@@ -259,17 +266,19 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     {
         using var stream = OpenEntryStream(entry);
         var dataset = S101Dataset.Open(stream);
-        // Recover the cell's geographic extent from the vector source,
-        // which joins feature/spatial/coordinate records and applies the
-        // S-100 Part 10a coordinate multiplication factors to yield
-        // decimal degrees (the same EPSG:4326 extent the renderer fits).
-        // Fall back to world bounds only when the cell carries no
-        // resolvable coordinates.
-        var bounds = ComputeS101Bounds(dataset) ?? WorldBounds;
+        // Canonical metadata derived from the already-parsed cell (issue #467
+        // WS1): the declared product-specification edition (DSID/PRED subfield,
+        // S-100 Part 10a §4.3.1) and the WGS-84 extent recovered from the
+        // vector source, which joins feature/spatial/coordinate records and
+        // applies the S-100 Part 10a coordinate multiplication factors to
+        // yield decimal degrees (the same EPSG:4326 extent the renderer fits).
+        // Falls back to world bounds when the cell carries no resolvable
+        // coordinates.
+        var metadata = dataset.ReadMetadata();
         return new LoadedDataset(
             id,
-            new SpecRef("S-101", ResolveS101Edition(dataset)),
-            bounds,
+            metadata.Spec,
+            metadata.Extent ?? WorldBounds,
             null,
             new S101DatasetData(dataset, BuildExternalTextResolver(entry)));
     }
@@ -288,41 +297,6 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             return null;
 
         return new ExternalTextFileResolver(entry.Source, entry.RelativePath).AsDelegate();
-    }
-
-    /// <summary>
-    /// Resolves the product-specification edition an S-101 cell declares in
-    /// its ISO 8211 dataset identification (DSID/PRED subfield; S-100
-    /// Part 10a §4.3.1) so <c>list_datasets</c> surfaces the real edition
-    /// instead of <c>0.0.0</c>. Returns the <see langword="default"/>
-    /// <see cref="SpecVersion"/> when the subfield is absent or not a
-    /// <c>major[.minor[.clarification]]</c> string.
-    /// </summary>
-    internal static SpecVersion ResolveS101Edition(S101Dataset dataset)
-    {
-        ArgumentNullException.ThrowIfNull(dataset);
-        var declaredEdition = dataset.Document.Identification?.ProductSpecificationEdition;
-        return !string.IsNullOrWhiteSpace(declaredEdition)
-            && SpecVersion.TryParse(declaredEdition, out var edition)
-            ? edition
-            : default;
-    }
-
-    /// <summary>
-    /// Computes an S-101 cell's WGS-84 bounding box from its vector
-    /// source extent, returning <see langword="null"/> when the extent is
-    /// degenerate (no resolvable coordinates) so the caller can fall back
-    /// to world bounds.
-    /// </summary>
-    internal static BoundingBox? ComputeS101Bounds(S101Dataset dataset)
-    {
-        var extent = new S101VectorSource(dataset).Metadata.Extent;
-        if (extent.NorthLatitude <= extent.SouthLatitude
-            && extent.EastLongitude <= extent.WestLongitude)
-        {
-            return null;
-        }
-        return extent;
     }
 
     private static LoadedDataset ProjectS102(DatasetId id, DatasetEntry entry)
@@ -497,58 +471,6 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         var start = new DateTimeOffset(DateTime.SpecifyKind(dataset.MinTime.Value, DateTimeKind.Utc));
         var end = new DateTimeOffset(DateTime.SpecifyKind(dataset.MaxTime.Value, DateTimeKind.Utc));
         return new TimeRange(start, end);
-    }
-
-    /// <summary>
-    /// Computes a lat/lon bounding box covering every coordinate
-    /// referenced by the supplied GML features (points, curves, ring
-    /// vertices). Returns <c>null</c> when no feature carries any
-    /// geometry — container-style features such as S-131
-    /// <c>Authority</c> or S-127 <c>Authority</c> are valid in their
-    /// respective product specs but produce no bounds, in which case
-    /// callers fall back to <see cref="WorldBounds"/>.
-    /// </summary>
-    private static BoundingBox? ComputeGmlBounds<TFeature>(IEnumerable<TFeature> features)
-        where TFeature : IS100Feature
-    {
-        if (features is null) return null;
-
-        double minLat = double.PositiveInfinity, maxLat = double.NegativeInfinity;
-        double minLon = double.PositiveInfinity, maxLon = double.NegativeInfinity;
-        bool any = false;
-
-        void Expand(double lat, double lon)
-        {
-            any = true;
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-        }
-
-        foreach (var feature in features)
-        {
-            if (feature is null) continue;
-            if (feature.Points.Count > 0)
-            {
-                foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
-            }
-            if (feature.Curves.Count > 0)
-            {
-                foreach (var curve in feature.Curves)
-                {
-                    if (curve.Count == 0) continue;
-                    foreach (var (lat, lon) in curve) Expand(lat, lon);
-                }
-            }
-            if (feature.ExteriorRing.Count > 0)
-            {
-                foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
-            }
-        }
-
-        if (!any) return null;
-        return new BoundingBox(minLat, minLon, maxLat, maxLon);
     }
 
     /// <inheritdoc />
