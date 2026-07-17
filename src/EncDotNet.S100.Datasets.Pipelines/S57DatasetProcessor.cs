@@ -217,7 +217,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
-        var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
+        var sourceFeatures = new S101VectorSource(_translatedDataset).GetFeatures().ToList();
+        var geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
+        var coverageAreas = CoverageAreaResolver.Resolve(sourceFeatures);
 
         var info = $"{_translatedDataset.DatasetName} (S-57 → S-101) — " +
                    $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
@@ -277,6 +279,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             OutOfBandMinDisplayScale = null,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
+            CoverageAreas = coverageAreas,
         };
     }
 

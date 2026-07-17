@@ -948,12 +948,30 @@ public static class S100VectorTileRenderer
 
                 ManageGpuResidency(state, grContext, layer);
 
-                Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+                // Cross-cell overlap suppression (issue #438 Phase 2): clip this
+                // cell's composite + overlay to its coverage minus the union of
+                // finer overlapping cells (screen-space, so tiles stay cached).
+                using var clipPath = CoverageClip.BuildScreenPath(layer, viewport);
+                if (clipPath is not null)
+                {
+                    canvas.Save();
+                    canvas.ClipPath(clipPath, antialias: true);
+                }
 
-                // Draw point symbols + soundings live, on top of the composited
-                // base tiles, at constant on-screen size (the base tiles are
-                // band-scaled, so symbols must not be baked into them).
-                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                try
+                {
+                    Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+
+                    // Draw point symbols + soundings live, on top of the composited
+                    // base tiles, at constant on-screen size (the base tiles are
+                    // band-scaled, so symbols must not be baked into them).
+                    DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                }
+                finally
+                {
+                    if (clipPath is not null)
+                        canvas.Restore();
+                }
             }
             catch (Exception ex)
             {

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -211,6 +212,7 @@ public sealed class MapsuiDatasetRenderer
             LayerNames = result.LayerNames,
             StackEntries = stackEntries,
             CellMinimumDisplayScale = result.CellMinimumDisplayScale,
+            CoverageGeometry = ToMercatorCoverage(result.CoverageAreas),
         };
     }
 
@@ -488,6 +490,95 @@ public sealed class MapsuiDatasetRenderer
         if (bounds is not { } b)
             return null;
         return new MRect(b.MinX, b.MinY, b.MaxX, b.MaxY);
+    }
+
+    /// <summary>
+    /// Projects a cell's EPSG:4326 <c>DataCoverage</c> polygons (S-101 FC §3.1.1;
+    /// S-57 <c>M_COVR</c>) into a single EPSG:3857 (Web Mercator) geometry — the
+    /// union of the individual coverage polygons, holes preserved — for
+    /// cross-cell overlap suppression (issue #438 Phase 2). Returns
+    /// <see langword="null"/> when the cell declares no usable coverage geometry
+    /// or the projected rings are degenerate.
+    /// </summary>
+    private static Geometry? ToMercatorCoverage(IReadOnlyList<CoverageArea> areas)
+    {
+        if (areas.Count == 0)
+            return null;
+
+        var polygons = new List<Polygon>(areas.Count);
+        foreach (var area in areas)
+        {
+            var shell = ToMercatorRing(area.ExteriorRing);
+            if (shell is null)
+                continue;
+
+            LinearRing[]? holes = null;
+            if (area.InteriorRings.Count > 0)
+            {
+                var holeList = new List<LinearRing>(area.InteriorRings.Count);
+                foreach (var interior in area.InteriorRings)
+                {
+                    var hole = ToMercatorRing(interior);
+                    if (hole is not null)
+                        holeList.Add(hole);
+                }
+
+                if (holeList.Count > 0)
+                    holes = holeList.ToArray();
+            }
+
+            polygons.Add(new Polygon(shell, holes));
+        }
+
+        if (polygons.Count == 0)
+            return null;
+
+        Geometry geometry = polygons.Count == 1
+            ? polygons[0]
+            : new MultiPolygon(polygons.ToArray());
+
+        // Coverage rings can be self-touching or slightly non-simple after
+        // projection; a zero-width buffer normalises them and unions the parts
+        // into a clean footprint for reliable clip algebra.
+        try
+        {
+            var normalized = geometry.Buffer(0);
+            if (!normalized.IsEmpty)
+                return normalized;
+        }
+        catch (NetTopologySuite.Geometries.TopologyException)
+        {
+            // Fall back to the raw (possibly non-simple) geometry.
+        }
+
+        return geometry;
+    }
+
+    /// <summary>
+    /// Projects a single EPSG:4326 coverage ring (lat/lon per S-100 Part 10b
+    /// §6.2) to a closed EPSG:3857 <see cref="LinearRing"/>, or
+    /// <see langword="null"/> when it has fewer than three distinct positions.
+    /// </summary>
+    private static LinearRing? ToMercatorRing(IReadOnlyList<GeoPosition> ring)
+    {
+        if (ring.Count < 3)
+            return null;
+
+        var coordinates = new List<Coordinate>(ring.Count + 1);
+        foreach (var position in ring)
+        {
+            var (x, y) = SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
+            coordinates.Add(new Coordinate(x, y));
+        }
+
+        // Ensure the ring is explicitly closed for NTS.
+        if (!coordinates[0].Equals2D(coordinates[^1]))
+            coordinates.Add(coordinates[0].Copy());
+
+        if (coordinates.Count < 4)
+            return null;
+
+        return new LinearRing(coordinates.ToArray());
     }
 
     private static Color ToMapsuiColor(CoreRgbaColor c) => new(c.R, c.G, c.B, c.A);

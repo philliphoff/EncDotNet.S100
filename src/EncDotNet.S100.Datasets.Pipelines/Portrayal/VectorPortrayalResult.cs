@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -113,6 +114,17 @@ public sealed class VectorPortrayalResult
     /// scale (e.g. no <c>DataCoverage</c> band or no CSCL present).
     /// </summary>
     public int? CellMinimumDisplayScale { get; init; }
+
+    /// <summary>
+    /// The cell's declared data-coverage polygons in EPSG:4326 (lat/lon),
+    /// resolved from its <c>DataCoverage</c> surface features (S-101 FC §3.1.1;
+    /// the S-57 <c>M_COVR</c> meta-object translated to <c>DataCoverage</c>).
+    /// Drives cross-cell scale-band overlap suppression (issue #438 Phase 2):
+    /// the renderer projects these to EPSG:3857 so a coarser cell can be
+    /// clipped to its coverage minus the union of finer overlapping cells'
+    /// coverage. Empty when the cell declares no usable coverage geometry.
+    /// </summary>
+    public IReadOnlyList<CoverageArea> CoverageAreas { get; init; } = [];
 
     /// <summary>
     /// Optional pre-padded geographic extent (lat / lon) that is used
