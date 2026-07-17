@@ -948,14 +948,18 @@ public static class S100VectorTileRenderer
 
                 ManageGpuResidency(state, grContext, layer);
 
-                // Cross-cell overlap suppression (issue #438 Phase 2): clip this
-                // cell's composite + overlay to its coverage minus the union of
-                // finer overlapping cells (screen-space, so tiles stay cached).
-                using var clipPath = CoverageClip.BuildScreenPath(layer, viewport);
-                if (clipPath is not null)
+                // Cross-cell overlap suppression (issue #438 Phase 2): remove
+                // from this coarser cell's drawable region the coverage of every
+                // finer overlapping cell that is still visible at the live
+                // resolution (screen-space, so tiles stay cached; zoom-aware, so
+                // a finer cell that has dropped out of its band no longer leaves
+                // a blank hole).
+                var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution);
+                if (clipPaths.Count > 0)
                 {
                     canvas.Save();
-                    canvas.ClipPath(clipPath, antialias: true);
+                    foreach (var clipPath in clipPaths)
+                        canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
                 }
 
                 try
@@ -969,8 +973,10 @@ public static class S100VectorTileRenderer
                 }
                 finally
                 {
-                    if (clipPath is not null)
+                    if (clipPaths.Count > 0)
                         canvas.Restore();
+                    foreach (var clipPath in clipPaths)
+                        clipPath.Dispose();
                 }
             }
             catch (Exception ex)

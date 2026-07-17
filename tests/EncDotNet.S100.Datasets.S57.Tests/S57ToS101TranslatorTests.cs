@@ -221,6 +221,113 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_MCovr_CoverageAvailable_BecomesDataCoverage()
+    {
+        // M_COVR (OBJL 302) with CATCOV = 1 (coverage available) converts to a
+        // DataCoverage feature (S-57 → S-101 Conversion Guidance).
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 302, // M_COVR
+            attributes: new[] { Attr(18, "1") },          // CATCOV = coverage available
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { feature });
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+    }
+
+    [Fact]
+    public void Translate_MCovr_NoCoverageAvailable_IsDropped()
+    {
+        // M_COVR (OBJL 302) with CATCOV = 2 (no coverage available) has no
+        // S-101 equivalent — S-101 represents the absence of data by the
+        // absence of a DataCoverage feature. Emitting it as DataCoverage would
+        // falsely assert coverage over the cell's no-data region and drive
+        // cross-cell overlap suppression to blank the coarser overlapping cell
+        // there (issue #438). It must be dropped.
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 302, // M_COVR
+            attributes: new[] { Attr(18, "2") },          // CATCOV = no coverage available
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { feature });
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        Assert.Empty(s101.Features);
+    }
+
+    [Fact]
+    public void Translate_MCovr_MixedCoverage_KeepsOnlyCoverageAvailable()
+    {
+        // A cell commonly carries both a coverage-available M_COVR (CATCOV = 1)
+        // and a no-coverage M_COVR (CATCOV = 2). Only the former survives.
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+
+        var available = Feat(
+            recordId: 1, primitive: 3, objectClass: 302,
+            featureIdentificationNumber: 1,
+            attributes: new[] { Attr(18, "1") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+        var noCoverage = Feat(
+            recordId: 2, primitive: 3, objectClass: 302,
+            featureIdentificationNumber: 2,
+            attributes: new[] { Attr(18, "2") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { available, noCoverage });
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+    }
+
+    [Fact]
     public void Translate_AreaFeature_BuildsSurfaceWithCompositeCurveExterior()
     {
         var n1 = Node(1, 0, 0);

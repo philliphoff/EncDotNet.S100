@@ -2,15 +2,15 @@ using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 
-
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Verifies the screen-space projection of cross-cell overlap-suppression clip
-/// regions (<see cref="CoverageClip"/>, issue #438 Phase 2): an attached
-/// EPSG:3857 region projects to the live viewport as an even-odd
-/// <c>SKPath</c>, an empty region yields a draw-nothing path, and clearing a
-/// region removes the clip so the layer paints in full again.
+/// Verifies the zoom-aware screen-space projection of cross-cell
+/// overlap-suppression clip regions (<see cref="CoverageClip"/>, issue #438
+/// Phase 2): each finer coverage projects to the live viewport as an even-odd
+/// difference-clip <c>SKPath</c>, a finer coverage whose scale band has zoomed
+/// out (resolution past its cutoff) is dropped so the coarser cell paints in
+/// full, and clearing removes all clips.
 /// </summary>
 public class CoverageClipTests
 {
@@ -35,37 +35,25 @@ public class CoverageClipTests
     }
 
     [Fact]
-    public void BuildScreenPath_NoRegion_ReturnsNull()
+    public void BuildActiveDifferencePaths_NoRegion_ReturnsEmpty()
     {
         var layer = new MemoryLayer();
         CoverageClip.Set(layer, null);
 
-        Assert.Null(CoverageClip.BuildScreenPath(layer, MakeViewport()));
+        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
     }
 
     [Fact]
-    public void BuildScreenPath_EmptyRegion_ReturnsEmptyPath()
-    {
-        var layer = new MemoryLayer();
-        CoverageClip.Set(layer, Gf.CreatePolygon());
-
-        var path = CoverageClip.BuildScreenPath(layer, MakeViewport());
-
-        Assert.NotNull(path);
-        Assert.Equal(0, path!.PointCount);
-    }
-
-    [Fact]
-    public void BuildScreenPath_Polygon_ProjectsToScreenBounds()
+    public void BuildActiveDifferencePaths_ActiveFiner_ProjectsToScreenBounds()
     {
         var layer = new MemoryLayer();
         // World square (-50,-50)-(50,50) -> screen (50,50)-(150,150).
-        CoverageClip.Set(layer, Square(-50, -50, 100));
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 2.0)]);
 
-        var path = CoverageClip.BuildScreenPath(layer, MakeViewport());
+        var paths = CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1);
 
-        Assert.NotNull(path);
-        var bounds = path!.Bounds;
+        var path = Assert.Single(paths);
+        var bounds = path.Bounds;
         Assert.Equal(50f, bounds.Left, 3);
         Assert.Equal(50f, bounds.Top, 3);
         Assert.Equal(150f, bounds.Right, 3);
@@ -73,7 +61,42 @@ public class CoverageClipTests
     }
 
     [Fact]
-    public void BuildScreenPath_PolygonWithHole_IsEvenOddWithBothRings()
+    public void BuildActiveDifferencePaths_FinerZoomedOut_IsDropped()
+    {
+        var layer = new MemoryLayer();
+        // Cutoff 0.5 < live resolution 1 -> the finer cell is hidden, so it must
+        // not clip the coarser cell (no blank hole).
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 0.5)]);
+
+        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+    }
+
+    [Fact]
+    public void BuildActiveDifferencePaths_CutoffAtOrAboveResolution_IsActive()
+    {
+        var layer = new MemoryLayer();
+        // A finer cell whose content is still drawing (cutoff >= live resolution)
+        // clips the coarser cell where they overlap.
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 1000)]);
+
+        Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1000));
+    }
+
+    [Fact]
+    public void BuildActiveDifferencePaths_MixedBands_KeepsOnlyActive()
+    {
+        var layer = new MemoryLayer();
+        CoverageClip.Set(layer,
+        [
+            new FinerCoverage(Square(-50, -50, 40), CutoffResolution: 2.0),  // active (>=1)
+            new FinerCoverage(Square(10, 10, 40), CutoffResolution: 0.25),   // dropped (<1)
+        ]);
+
+        Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+    }
+
+    [Fact]
+    public void BuildActiveDifferencePaths_PolygonWithHole_IsEvenOddWithBothRings()
     {
         var layer = new MemoryLayer();
         var shell = Gf.CreateLinearRing(
@@ -92,14 +115,13 @@ public class CoverageClipTests
             new Coordinate(-10, 10),
             new Coordinate(-10, -10),
         ]);
-        CoverageClip.Set(layer, Gf.CreatePolygon(shell, [hole]));
+        CoverageClip.Set(layer, [new FinerCoverage(Gf.CreatePolygon(shell, [hole]), CutoffResolution: double.MaxValue)]);
 
-        var path = CoverageClip.BuildScreenPath(layer, MakeViewport());
+        var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
 
-        Assert.NotNull(path);
-        // Even-odd fill lets the inner ring punch a hole so the coarse cell
-        // still shows through a finer cell's no-coverage gaps.
-        Assert.Equal(SkiaSharp.SKPathFillType.EvenOdd, path!.FillType);
+        // Even-odd fill lets the inner ring punch a hole so the coarse cell still
+        // shows through a finer cell's no-coverage gaps.
+        Assert.Equal(SkiaSharp.SKPathFillType.EvenOdd, path.FillType);
         // Exterior (4 unique + close) and hole (4 unique + close) both emitted.
         Assert.True(path.PointCount >= 8, $"expected both rings, got {path.PointCount} points");
     }
@@ -108,12 +130,12 @@ public class CoverageClipTests
     public void Set_NullRegion_ClearsPreviousAttachment()
     {
         var layer = new MemoryLayer();
-        CoverageClip.Set(layer, Square(-50, -50, 100));
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: double.MaxValue)]);
         Assert.NotNull(CoverageClip.Get(layer));
 
         CoverageClip.Set(layer, null);
 
         Assert.Null(CoverageClip.Get(layer));
-        Assert.Null(CoverageClip.BuildScreenPath(layer, MakeViewport()));
+        Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
     }
 }

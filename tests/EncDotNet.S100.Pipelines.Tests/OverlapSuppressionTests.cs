@@ -6,10 +6,11 @@ namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
 /// Verifies cross-cell scale-band overlap suppression
-/// (<see cref="OverlapSuppression"/>, issue #438 Phase 2): a coarser cell is
-/// clipped to its coverage minus the union of finer, overlapping in-band cells'
-/// coverage, equal-band siblings never mutually clip, and a fully-covered
-/// coarser cell resolves to an empty (draw-nothing) region.
+/// (<see cref="OverlapSuppression"/>, issue #438 Phase 2): a coarser cell gathers
+/// the finer, overlapping in-band cells whose coverage the renderer subtracts,
+/// equal-band siblings never mutually clip, a finer cell is never clipped by a
+/// coarser one, and each finer contribution carries the finer cell's zoom-out
+/// cutoff so suppression is zoom-aware.
 /// </summary>
 public class OverlapSuppressionTests
 {
@@ -36,101 +37,94 @@ public class OverlapSuppressionTests
     };
 
     [Fact]
-    public void ComputeClip_NoFinerOverlap_ReturnsNull()
+    public void CollectFinerCoverages_NoFinerOverlap_ReturnsNull()
     {
         var coarse = Cell(Square(0, 0, 10), 90000);
         var farFiner = Cell(Square(100, 100, 5), 10000);
 
-        var clip = OverlapSuppression.ComputeClip(coarse, [coarse, farFiner]);
+        var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, farFiner]);
 
-        Assert.Null(clip);
+        Assert.Null(finer);
     }
 
     [Fact]
-    public void ComputeClip_FinerPartialOverlap_SubtractsUnion()
+    public void CollectFinerCoverages_FinerPartialOverlap_IncludesFinerCoverage()
     {
         // Finer cell covers the bottom-left 5x5 quadrant of the coarse cell.
         var coarse = Cell(Square(0, 0, 10), 90000);
-        var finer = Cell(Square(0, 0, 5), 10000);
+        var finerCell = Cell(Square(0, 0, 5), 10000);
 
-        var clip = OverlapSuppression.ComputeClip(coarse, [coarse, finer]);
+        var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerCell]);
 
-        Assert.NotNull(clip);
-        Assert.False(clip!.IsEmpty);
-        // Coarse area 100 minus the 5x5 overlap (25) = 75.
-        Assert.Equal(75.0, clip.Area, 6);
+        Assert.NotNull(finer);
+        var contribution = Assert.Single(finer!);
+        Assert.Same(finerCell.Coverage, contribution.Coverage);
+        // Cutoff is derived from the finer cell's own scale denominator so the
+        // renderer drops it once the viewport zooms out past the finer cell's
+        // content: 10000 * 0.00028 m/px at the (near-equator) coverage centroid.
+        Assert.Equal(10000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.CutoffResolution, 6);
     }
 
     [Fact]
-    public void ComputeClip_FinerFullyCovers_ReturnsEmpty()
+    public void CollectFinerCoverages_MultipleFinerOverlaps_IncludesAll()
     {
         var coarse = Cell(Square(0, 0, 10), 90000);
-        var finer = Cell(Square(-1, -1, 12), 10000);
+        var finerA = Cell(Square(0, 0, 5), 10000);
+        var finerB = Cell(Square(5, 5, 5), 20000);
 
-        var clip = OverlapSuppression.ComputeClip(coarse, [coarse, finer]);
+        var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerA, finerB]);
 
-        Assert.NotNull(clip);
-        Assert.True(clip!.IsEmpty);
+        Assert.NotNull(finer);
+        Assert.Equal(2, finer!.Count);
     }
 
     [Fact]
-    public void ComputeClip_EqualBandSibling_DoesNotClip()
+    public void CollectFinerCoverages_EqualBandSibling_DoesNotClip()
     {
         var a = Cell(Square(0, 0, 10), 90000);
         var b = Cell(Square(5, 0, 10), 90000);
 
-        var clip = OverlapSuppression.ComputeClip(a, [a, b]);
-
-        Assert.Null(clip);
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(a, [a, b]));
     }
 
     [Fact]
-    public void ComputeClip_CoarserOverlap_DoesNotClipFinerCell()
+    public void CollectFinerCoverages_CoarserOverlap_DoesNotClipFinerCell()
     {
         // From the finer cell's perspective a coarser overlapping cell must not
         // suppress it (larger-scale-in only).
-        var finer = Cell(Square(0, 0, 5), 10000);
+        var finerCell = Cell(Square(0, 0, 5), 10000);
         var coarse = Cell(Square(0, 0, 10), 90000);
 
-        var clip = OverlapSuppression.ComputeClip(finer, [finer, coarse]);
-
-        Assert.Null(clip);
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(finerCell, [finerCell, coarse]));
     }
 
     [Fact]
-    public void ComputeClip_NullCoverageOrScale_ReturnsNull()
+    public void CollectFinerCoverages_NullCoverageOrScale_ReturnsNull()
     {
         var noCoverage = Cell(null, 90000);
         var noScale = Cell(Square(0, 0, 10), null);
-        var finer = Cell(Square(0, 0, 5), 10000);
+        var finerCell = Cell(Square(0, 0, 5), 10000);
 
-        Assert.Null(OverlapSuppression.ComputeClip(noCoverage, [noCoverage, finer]));
-        Assert.Null(OverlapSuppression.ComputeClip(noScale, [noScale, finer]));
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(noCoverage, [noCoverage, finerCell]));
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(noScale, [noScale, finerCell]));
     }
 
     [Fact]
-    public void ComputeClip_HoleInFinerCoverage_LeavesCoarseShowingThrough()
+    public void CollectFinerCoverages_CutoffDerivedFromEachFinerDenominator()
     {
-        // A finer cell with a no-coverage hole should not suppress the coarse
-        // cell where the hole is, so the difference retains that hole region.
+        // Each finer contribution carries a cutoff derived from that finer cell's
+        // own denominator, so a finer cell stops suppressing exactly when its own
+        // content is hidden out of scale band.
         var coarse = Cell(Square(0, 0, 10), 90000);
-        var shell = Gf.CreateLinearRing(
-        [
-            new Coordinate(0, 0), new Coordinate(10, 0),
-            new Coordinate(10, 10), new Coordinate(0, 10), new Coordinate(0, 0),
-        ]);
-        var hole = Gf.CreateLinearRing(
-        [
-            new Coordinate(4, 4), new Coordinate(6, 4),
-            new Coordinate(6, 6), new Coordinate(4, 6), new Coordinate(4, 4),
-        ]);
-        var finerWithHole = Cell(Gf.CreatePolygon(shell, [hole]), 10000);
+        var finerA = Cell(Square(0, 0, 5), 10000);
+        var finerB = Cell(Square(5, 5, 5), 20000);
 
-        var clip = OverlapSuppression.ComputeClip(coarse, [coarse, finerWithHole]);
+        var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerA, finerB]);
 
-        Assert.NotNull(clip);
-        // Only the 2x2 hole (area 4) remains uncovered.
-        Assert.Equal(4.0, clip!.Area, 6);
+        Assert.NotNull(finer);
+        var cutoffs = finer!.Select(f => f.CutoffResolution).OrderBy(c => c).ToList();
+        Assert.Equal(10000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, cutoffs[0], 6);
+        Assert.Equal(20000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, cutoffs[1], 6);
     }
 
     [Fact]

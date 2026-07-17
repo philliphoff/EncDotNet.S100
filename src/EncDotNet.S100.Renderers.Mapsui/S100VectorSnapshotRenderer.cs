@@ -292,18 +292,21 @@ public static class S100VectorSnapshotRenderer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(layer);
 
-        // Cross-cell overlap suppression (issue #438 Phase 2): clip this cell's
-        // output to its coverage minus the union of finer overlapping cells
-        // (screen-space; see CoverageClip). Applied around every draw path.
-        using var clipPath = CoverageClip.BuildScreenPath(layer, viewport);
-        if (clipPath is null)
+        // Cross-cell overlap suppression (issue #438 Phase 2): remove from this
+        // coarser cell's output the coverage of every finer overlapping cell that
+        // is still visible at the live resolution (screen-space; see
+        // CoverageClip). Applied around every draw path; zoom-aware so a finer
+        // cell that has dropped out of its band leaves no blank hole.
+        var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, viewport.Resolution);
+        if (clipPaths.Count == 0)
         {
             RenderCore(canvas, viewport, layer, renderService);
             return;
         }
 
         canvas.Save();
-        canvas.ClipPath(clipPath, antialias: true);
+        foreach (var clipPath in clipPaths)
+            canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
         try
         {
             RenderCore(canvas, viewport, layer, renderService);
@@ -311,6 +314,8 @@ public static class S100VectorSnapshotRenderer
         finally
         {
             canvas.Restore();
+            foreach (var clipPath in clipPaths)
+                clipPath.Dispose();
         }
     }
 
