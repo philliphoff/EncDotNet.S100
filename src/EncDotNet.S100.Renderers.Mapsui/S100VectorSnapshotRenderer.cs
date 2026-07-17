@@ -304,16 +304,25 @@ public static class S100VectorSnapshotRenderer
             return;
         }
 
-        canvas.Save();
-        foreach (var clipPath in clipPaths)
-            canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+        var clipApplied = false;
         try
         {
+            // Apply the clip inside the try so that if ClipPath throws (e.g. a
+            // degenerate path) the finally still restores the canvas and disposes
+            // every path.
+            canvas.Save();
+            clipApplied = true;
+            foreach (var clipPath in clipPaths)
+                canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+
             RenderCore(canvas, viewport, layer, renderService);
         }
         finally
         {
-            canvas.Restore();
+            // Restore only if Save() actually ran, so a throw between Save() and
+            // the first ClipPath still balances the stack.
+            if (clipApplied)
+                canvas.Restore();
             foreach (var clipPath in clipPaths)
                 clipPath.Dispose();
         }

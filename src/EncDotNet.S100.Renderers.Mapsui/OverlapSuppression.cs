@@ -6,9 +6,11 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// One loaded chart cell's contribution to cross-cell scale-band overlap
 /// suppression (issue #438 Phase 2): its base-chart layers, its EPSG:3857 data
-/// coverage footprint, the scale-band denominator used to decide which cells are
-/// "finer" (smaller denominator = larger scale), and the live viewport
-/// resolution beyond which the cell is hidden by the Phase 1 zoom-out window.
+/// coverage footprint, and the scale-band denominator used both to decide which
+/// cells are "finer" (smaller denominator = larger scale) and to derive each
+/// finer cell's zoom-out cutoff (the resolution past which it stops drawing, so
+/// it must stop suppressing — computed per finer cell in
+/// <see cref="OverlapSuppression.CollectFinerCoverages"/>).
 /// </summary>
 public sealed class OverlapSuppressionCell
 {

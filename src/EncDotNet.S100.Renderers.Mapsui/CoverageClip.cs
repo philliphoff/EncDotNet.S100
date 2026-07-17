@@ -64,7 +64,7 @@ internal static class CoverageClip
 
         s_regions.Remove(layer);
         if (finerCoverages is { Count: > 0 })
-            s_regions.AddOrUpdate(layer, finerCoverages as FinerCoverage[] ?? [.. finerCoverages]);
+            s_regions.Add(layer, finerCoverages as FinerCoverage[] ?? [.. finerCoverages]);
     }
 
     /// <summary>

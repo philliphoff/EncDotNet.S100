@@ -955,15 +955,20 @@ public static class S100VectorTileRenderer
                 // a finer cell that has dropped out of its band no longer leaves
                 // a blank hole).
                 var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution);
-                if (clipPaths.Count > 0)
-                {
-                    canvas.Save();
-                    foreach (var clipPath in clipPaths)
-                        canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
-                }
-
+                var clipApplied = false;
                 try
                 {
+                    // Apply the clip inside the try so that if ClipPath throws
+                    // (e.g. a degenerate path) the finally still restores the
+                    // canvas and disposes every path.
+                    if (clipPaths.Count > 0)
+                    {
+                        canvas.Save();
+                        clipApplied = true;
+                        foreach (var clipPath in clipPaths)
+                            canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+                    }
+
                     Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
 
                     // Draw point symbols + soundings live, on top of the composited
@@ -973,7 +978,9 @@ public static class S100VectorTileRenderer
                 }
                 finally
                 {
-                    if (clipPaths.Count > 0)
+                    // Restore only if Save() actually ran, so a throw between
+                    // Save() and the first ClipPath still balances the stack.
+                    if (clipApplied)
                         canvas.Restore();
                     foreach (var clipPath in clipPaths)
                         clipPath.Dispose();
