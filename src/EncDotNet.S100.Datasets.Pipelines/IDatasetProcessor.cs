@@ -23,6 +23,19 @@ public interface IDatasetProcessor
     SpecRef Spec { get; }
 
     /// <summary>
+    /// The lightweight, product-agnostic <see cref="DatasetMetadata"/> for
+    /// this dataset — its declared specification and, where cheaply
+    /// derivable, its geographic extent, horizontal CRS, display-scale
+    /// window, and temporal coverage. Derived <em>once</em> from the
+    /// already-parsed dataset (never a second parse) and cached, so hosts can
+    /// frame a viewport, register a layer, draw an out-of-scale indicator, or
+    /// gate visibility without re-reading the dataset. The default
+    /// implementation carries only <see cref="Spec"/>; processors that can
+    /// supply an extent (and other facts) override it. See issue #467 / #460.
+    /// </summary>
+    DatasetMetadata Metadata => new() { Spec = Spec };
+
+    /// <summary>
     /// The specification whose Feature Catalogue, Portrayal Catalogue, and
     /// ECDIS display conventions are actually used to process and draw this
     /// dataset. Equal to <see cref="Spec"/> for every native S-100 product;

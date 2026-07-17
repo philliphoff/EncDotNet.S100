@@ -118,6 +118,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     public SpecRef Spec { get; }
 
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived once from the already-parsed <see cref="S101Dataset"/> (folding
+    /// its spatial records into the extent); no second parse is incurred
+    /// (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= _dataset.ReadMetadata();
+
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
