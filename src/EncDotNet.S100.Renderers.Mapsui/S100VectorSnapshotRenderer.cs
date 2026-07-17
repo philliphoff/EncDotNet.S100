@@ -292,6 +292,47 @@ public static class S100VectorSnapshotRenderer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(layer);
 
+        // Cross-cell overlap suppression (issue #438 Phase 2): remove from this
+        // coarser cell's output the coverage of every finer overlapping cell that
+        // is still visible at the live resolution (screen-space; see
+        // CoverageClip). Applied around every draw path; zoom-aware so a finer
+        // cell that has dropped out of its band leaves no blank hole.
+        var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, viewport.Resolution);
+        if (clipPaths.Count == 0)
+        {
+            RenderCore(canvas, viewport, layer, renderService);
+            return;
+        }
+
+        var clipApplied = false;
+        try
+        {
+            // Apply the clip inside the try so that if ClipPath throws (e.g. a
+            // degenerate path) the finally still restores the canvas and disposes
+            // every path.
+            canvas.Save();
+            clipApplied = true;
+            foreach (var clipPath in clipPaths)
+                canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+
+            RenderCore(canvas, viewport, layer, renderService);
+        }
+        finally
+        {
+            // Restore only if Save() actually ran, so a throw between Save() and
+            // the first ClipPath still balances the stack.
+            if (clipApplied)
+                canvas.Restore();
+            foreach (var clipPath in clipPaths)
+                clipPath.Dispose();
+        }
+    }
+
+    private static void RenderCore(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(layer);
+
         if (!viewport.HasSize())
         {
             return;

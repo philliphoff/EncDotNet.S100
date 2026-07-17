@@ -948,12 +948,43 @@ public static class S100VectorTileRenderer
 
                 ManageGpuResidency(state, grContext, layer);
 
-                Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+                // Cross-cell overlap suppression (issue #438 Phase 2): remove
+                // from this coarser cell's drawable region the coverage of every
+                // finer overlapping cell that is still visible at the live
+                // resolution (screen-space, so tiles stay cached; zoom-aware, so
+                // a finer cell that has dropped out of its band no longer leaves
+                // a blank hole).
+                var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution);
+                var clipApplied = false;
+                try
+                {
+                    // Apply the clip inside the try so that if ClipPath throws
+                    // (e.g. a degenerate path) the finally still restores the
+                    // canvas and disposes every path.
+                    if (clipPaths.Count > 0)
+                    {
+                        canvas.Save();
+                        clipApplied = true;
+                        foreach (var clipPath in clipPaths)
+                            canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+                    }
 
-                // Draw point symbols + soundings live, on top of the composited
-                // base tiles, at constant on-screen size (the base tiles are
-                // band-scaled, so symbols must not be baked into them).
-                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                    Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+
+                    // Draw point symbols + soundings live, on top of the composited
+                    // base tiles, at constant on-screen size (the base tiles are
+                    // band-scaled, so symbols must not be baked into them).
+                    DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                }
+                finally
+                {
+                    // Restore only if Save() actually ran, so a throw between
+                    // Save() and the first ClipPath still balances the stack.
+                    if (clipApplied)
+                        canvas.Restore();
+                    foreach (var clipPath in clipPaths)
+                        clipPath.Dispose();
+                }
             }
             catch (Exception ex)
             {

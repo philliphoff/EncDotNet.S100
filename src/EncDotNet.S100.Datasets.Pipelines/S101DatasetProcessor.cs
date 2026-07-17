@@ -701,7 +701,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var areaInstructions = prepared.Where(i => i is AreaInstruction).ToList();
         var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
 
-        var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
+        var sourceFeatures = new S101VectorSource(_dataset).GetFeatures().ToList();
+        var geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
+        var coverageAreas = CoverageAreaResolver.Resolve(sourceFeatures);
+
 
         // Mapsui-free pattern-clip cache identity: the per-dataset scope
         // (content hash + name + edition + CRS) qualified by the portrayal-
@@ -782,6 +785,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             FeatureTags = featureTags,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
+            CoverageAreas = coverageAreas,
         };
     }
 

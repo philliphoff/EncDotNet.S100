@@ -112,8 +112,11 @@ portrayal-output seam:
 - `IVectorPortrayalSource.BuildVectorPortrayalAsync(...)` →
   `VectorPortrayalResult` — immutable drawing-instruction slices,
   geometry provider, resolved palette / asset snapshot, EPSG:3857
-  extent, layer keys, the out-of-scale-band cutoff *value*, and
-  Mapsui-free S-98 display-plane metadata.
+  extent, layer keys, the out-of-scale-band cutoff *value*, the cell's
+  data-coverage footprints (`CoverageAreas`, a `CoverageArea` list in
+  EPSG:4326 resolved from `DataCoverage` surfaces — used for cross-cell
+  overlap suppression, issue #438 Phase 2), and Mapsui-free S-98
+  display-plane metadata.
 - `ICoveragePortrayalSource.BuildCoveragePortrayalAsync(...)` →
   `CoveragePortrayalResult` — materialized `StyledCoverageLayer`(s)
   plus viewport/georef, info, layer keys, and (S-111) the arrow symbol

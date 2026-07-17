@@ -51,6 +51,15 @@ public sealed class S57ToS101Translator
     private const string SoundingS101Code = "Sounding";
     private const ushort LightsObjl = 75;  // LIGHTS (S-57 object class)
 
+    // M_COVR (S-57 meta object, OBJL 302) with CATCOV = "no coverage
+    // available" (2) has no S-101 equivalent: S-101 represents the absence of
+    // data by the absence of a DataCoverage feature (the S-101 FC's
+    // DataCoverage carries no categoryOfCoverage attribute). See the M_COVR
+    // filter in the feature loop for why it must be dropped.
+    private const ushort MCovrObjl = 302;
+    private const string CatcovAcronym = "CATCOV";
+    private const string CatcovNoCoverage = "2";
+
     // ── S-57 textual-info attribute codes (S-57 Appendix A Chapter 2) ──
     // Per IHO S-57→S-101 Conversion Guidance §2.3, these four attributes
     // do NOT pass through as simple S-101 attributes; instead they are
@@ -725,6 +734,24 @@ public sealed class S57ToS101Translator
                         else
                             _diagnostics.RecordUnmappedObjectClass(objl);
                     }
+                    continue;
+                }
+
+                // Drop M_COVR meta-objects flagged "no coverage available"
+                // (CATCOV = 2). S-101 has no such construct — a DataCoverage
+                // feature always asserts coverage (its FC binds no
+                // categoryOfCoverage attribute), so translating a no-coverage
+                // M_COVR into DataCoverage would falsely claim data coverage
+                // over the cell's no-data region. That in turn drives
+                // cross-cell scale-band overlap suppression to blank the
+                // coarser overlapping cell there, producing the mid-zoom
+                // "drop-out" holes reported in issue #438. Coverage-available
+                // M_COVR (CATCOV = 1, or absent) still converts normally.
+                if (objl == MCovrObjl
+                    && acronymView.TryGetValue(CatcovAcronym, out var catcov)
+                    && catcov.Trim() == CatcovNoCoverage)
+                {
+                    _diagnostics?.RecordRuleDroppedObjectClass(objl);
                     continue;
                 }
 
