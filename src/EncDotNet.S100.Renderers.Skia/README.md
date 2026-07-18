@@ -36,8 +36,12 @@ exactly one place:
   (`EPSG:3857 → screen`) via a `Viewport`-derived affine. Parsed symbol pictures
   are cached process-wide (keyed by the resolved SVG), point/text ops whose
   anchor falls outside the viewport (plus `PointCullMarginPx`) are culled before
-  any per-op work, and text drawing pools its `SKFont`/`SKPaint` per render —
-  all three matter for the tiled subsystem's per-frame overlay, which replays
+  any per-op work, line ops whose projected bounding box (padded by the stroke
+  half-width) misses the cull rectangle are likewise skipped before the native
+  `DrawPath`, and both text and line drawing pool their Skia resources per
+  render (text pools `SKFont`/`SKPaint`; lines reuse one `SKPath`/`SKPaint`, a
+  batched `AddPoly` point buffer, and a per-pattern dash-effect cache) —
+  all of which matter for the tiled subsystem's per-frame overlay, which replays
   this renderer live every frame. `RenderOnto` takes an optional cull rectangle
   so a caller that rotates the canvas can expand it to the rotated viewport's
   bounding box, plus an `OverlayDrawOptions` overload that adds the live
