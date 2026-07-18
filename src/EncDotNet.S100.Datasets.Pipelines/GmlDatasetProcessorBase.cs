@@ -506,8 +506,11 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
     /// <summary>
     /// Raw (unpadded) WGS-84 envelope of a dataset's features. <see cref="Any"/>
-    /// is <see langword="false"/> when no feature carried coordinates.
+    /// is <see langword="false"/> when no feature carried coordinates. A
+    /// reference type so the unsynchronized <c>??=</c> memoization publishes it
+    /// via an atomic reference write — concurrent readers never observe a torn
+    /// multi-field value (issue #467, WS1).
     /// </summary>
-    private readonly record struct RawEnvelope(
+    private sealed record RawEnvelope(
         double MinLat, double MinLon, double MaxLat, double MaxLon, bool Any);
 }

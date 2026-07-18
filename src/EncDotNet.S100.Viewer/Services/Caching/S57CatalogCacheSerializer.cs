@@ -110,11 +110,18 @@ internal static class S57CatalogCacheSerializer
                 if (updateCount < 0)
                     return null;
 
-                var updates = updateCount == 0
-                    ? (IReadOnlyList<string>)Array.Empty<string>()
-                    : new List<string>(updateCount);
-                for (var u = 0; u < updateCount; u++)
-                    ((List<string>)updates).Add(r.ReadString());
+                IReadOnlyList<string> updates;
+                if (updateCount == 0)
+                {
+                    updates = Array.Empty<string>();
+                }
+                else
+                {
+                    var updateList = new List<string>(updateCount);
+                    for (var u = 0; u < updateCount; u++)
+                        updateList.Add(r.ReadString());
+                    updates = updateList;
+                }
 
                 BoundingBox? box = null;
                 if (r.ReadBoolean())
