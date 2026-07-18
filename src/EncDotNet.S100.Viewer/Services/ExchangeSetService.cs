@@ -751,10 +751,15 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             // union extent is known — parity with the catalogued S-100 / S-57
             // branches — instead of waiting for every cell's full load
             // (issue #467 WS3). A null union (no probeable cell) preserves the
-            // legacy "frame by unioning loaded layer extents" fallback.
+            // legacy "frame by unioning loaded layer extents" fallback. The
+            // probe runs on a worker thread: on a first-open cache miss it
+            // parses each cell's metadata, which must not block the UI thread
+            // that OpenAsync is dispatched on.
             var unionBoundingBox = _metadataReader is null
                 ? null
-                : ComputeLooseCellUnion(baseCells, _metadataReader);
+                : await Task.Run(
+                    () => ComputeLooseCellUnion(baseCells, _metadataReader),
+                    cancellationToken).ConfigureAwait(true);
             if (unionBoundingBox is { } framingBox && onFramingReady is not null)
                 onFramingReady(framingBox);
 

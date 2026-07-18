@@ -199,7 +199,7 @@ public sealed class DiskDatasetMetadataCache : IDatasetMetadataCache
                 return null;
 
             var payloadLength = r.ReadInt32();
-            if (payloadLength < 0)
+            if (payloadLength < 0 || payloadLength > ms.Length - ms.Position)
                 return null;
 
             var payload = r.ReadBytes(payloadLength);
