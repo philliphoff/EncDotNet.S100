@@ -101,4 +101,20 @@ public class DatasetMetadataSerializerTests
     {
         Assert.Null(DatasetMetadataSerializer.TryDeserialize([]));
     }
+
+    [Fact]
+    public void Oversized_string_length_prefix_yields_null()
+    {
+        // A corrupt frame whose spec-name length prefix claims far more bytes
+        // than the payload holds must degrade to a miss, not attempt a huge
+        // allocation.
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            w.Write(DatasetMetadataSerializer.FormatVersion);
+            w.Write7BitEncodedInt(int.MaxValue);
+        }
+
+        Assert.Null(DatasetMetadataSerializer.TryDeserialize(ms.ToArray()));
+    }
 }

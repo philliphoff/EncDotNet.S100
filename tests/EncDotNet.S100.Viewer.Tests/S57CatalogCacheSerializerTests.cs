@@ -89,4 +89,21 @@ public class S57CatalogCacheSerializerTests
 
         Assert.Null(S57CatalogCacheSerializer.TryDeserialize(bytes));
     }
+
+    [Fact]
+    public void Oversized_string_length_prefix_deserializes_to_null()
+    {
+        // A corrupt frame whose first cell-name length prefix claims far more
+        // bytes than the payload holds must degrade to a miss, not attempt a
+        // huge allocation.
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            w.Write(S57CatalogCacheSerializer.FormatVersion);
+            w.Write(1);
+            w.Write7BitEncodedInt(int.MaxValue);
+        }
+
+        Assert.Null(S57CatalogCacheSerializer.TryDeserialize(ms.ToArray()));
+    }
 }

@@ -104,7 +104,7 @@ public static class DatasetMetadataSerializer
             if (version != FormatVersion)
                 return null;
 
-            var name = r.ReadString();
+            var name = ReadBoundedString(r);
             var edition = new SpecVersion(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
             var spec = new SpecRef(name, edition);
 
@@ -165,4 +165,23 @@ public static class DatasetMetadataSerializer
 
     private static int? ReadNullableInt(BinaryReader r)
         => r.ReadBoolean() ? r.ReadInt32() : null;
+
+    /// <summary>
+    /// Reads a length-prefixed UTF-8 string, rejecting a length prefix larger
+    /// than the bytes remaining in the (in-memory, size-framed) payload before
+    /// allocating — so a corrupt sidecar degrades to a cache miss rather than a
+    /// large allocation. Wire-compatible with <see cref="BinaryWriter.Write(string)"/>.
+    /// </summary>
+    private static string ReadBoundedString(BinaryReader r)
+    {
+        var byteLength = r.Read7BitEncodedInt();
+        if (byteLength < 0 || byteLength > r.BaseStream.Length - r.BaseStream.Position)
+            throw new InvalidDataException("String length prefix exceeds remaining payload bytes.");
+
+        var bytes = r.ReadBytes(byteLength);
+        if (bytes.Length != byteLength)
+            throw new EndOfStreamException();
+
+        return Encoding.UTF8.GetString(bytes);
+    }
 }

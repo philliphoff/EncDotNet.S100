@@ -103,8 +103,8 @@ internal static class S57CatalogCacheSerializer
             var cells = new List<S57ExchangeSetCell>(count);
             for (var i = 0; i < count; i++)
             {
-                var cellName = r.ReadString();
-                var relativePath = r.ReadString();
+                var cellName = ReadBoundedString(r);
+                var relativePath = ReadBoundedString(r);
 
                 var updateCount = r.ReadInt32();
                 if (updateCount < 0)
@@ -119,7 +119,7 @@ internal static class S57CatalogCacheSerializer
                 {
                     var updateList = new List<string>(updateCount);
                     for (var u = 0; u < updateCount; u++)
-                        updateList.Add(r.ReadString());
+                        updateList.Add(ReadBoundedString(r));
                     updates = updateList;
                 }
 
@@ -151,5 +151,24 @@ internal static class S57CatalogCacheSerializer
             // Truncated / corrupt frame: treat as a miss.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads a length-prefixed UTF-8 string, rejecting a length prefix larger
+    /// than the bytes remaining in the (in-memory, size-framed) payload before
+    /// allocating — so a corrupt sidecar degrades to a cache miss rather than a
+    /// large allocation. Wire-compatible with <see cref="BinaryWriter.Write(string)"/>.
+    /// </summary>
+    private static string ReadBoundedString(BinaryReader r)
+    {
+        var byteLength = r.Read7BitEncodedInt();
+        if (byteLength < 0 || byteLength > r.BaseStream.Length - r.BaseStream.Position)
+            throw new InvalidDataException("String length prefix exceeds remaining payload bytes.");
+
+        var bytes = r.ReadBytes(byteLength);
+        if (bytes.Length != byteLength)
+            throw new EndOfStreamException();
+
+        return Encoding.UTF8.GetString(bytes);
     }
 }
