@@ -23,6 +23,9 @@ Current highlights:
 - Added callout-heavy troubleshooting guidance in main guide pages.
 - Added architecture and workflow diagrams.
 - Added themed docs styling for stronger brand identity.
+- Added a **Bringing S-57 into the pipeline** guide covering convert / view /
+  validate, sibling-update folding, and the `s100 s57 convert` diagnostics
+  summary (`--report`).
 
 ## Troubleshooting
 

@@ -72,4 +72,54 @@ public sealed class S57ConvertCommandTests : IDisposable
         Assert.False(Directory.Exists(missingDir));
         Assert.False(File.Exists(output));
     }
+
+    [SkippableFact]
+    public void Convert_report_writes_json_diagnostics()
+    {
+        var source = FixturePath("US5MA1BO.000");
+        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+
+        var output = Path.Combine(_outputDir, "converted.000");
+        var report = Path.Combine(_outputDir, "report.json");
+
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "--report", report, source]);
+
+        Assert.Equal(0, exit);
+        Assert.True(File.Exists(report), "Expected the diagnostics report to be written.");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(report));
+        var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("featuresEmitted", out _));
+        Assert.True(root.TryGetProperty("unmappedObjectClasses", out _));
+        Assert.Equal(0, root.GetProperty("updatesApplied").GetArrayLength());
+    }
+
+    [SkippableFact]
+    public void Convert_report_missing_directory_returns_validation_error()
+    {
+        var source = FixturePath("US5MA1BO.000");
+        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+
+        var output = Path.Combine(_outputDir, "converted.000");
+        var report = Path.Combine(_outputDir, "missing", "report.json");
+
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "--report", report, source]);
+
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(report));
+    }
+
+    [SkippableFact]
+    public void Convert_no_updates_still_writes_dataset()
+    {
+        var source = FixturePath("US5MA1BO.000");
+        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+
+        var output = Path.Combine(_outputDir, "converted.000");
+
+        int exit = CliApp.Build().Run(["s57", "convert", "--no-updates", "-o", output, source]);
+
+        Assert.Equal(0, exit);
+        Assert.True(File.Exists(output));
+    }
 }

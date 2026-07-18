@@ -253,6 +253,13 @@ encoded `.000` file (S-100 Part 10a). The source is translated to an
 `S101Document` in memory with the same `S57ToS101Translator` the render/validate
 paths use, then encoded with `S101DocumentWriter`.
 
+Sibling sequential update files (`.001`, `.002`, …) sitting next to the base
+cell are auto-discovered and folded in (S-57 Part 3 dataset updating) before
+translation, so a converted cell reflects its up-to-date state. Pass
+`--no-updates` to convert only the bare base cell. After a successful convert a
+concise translation-coverage summary is printed; add `--report <path>` to also
+write the full diagnostics as JSON.
+
 ```
 s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
 ```
@@ -260,6 +267,8 @@ s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
 | Option | Default | Description |
 |---|---|---|
 | `-o`, `--output <path>` | _required_ | Path of the S-101 dataset file to write. |
+| `--report <path>` | off | Write a machine-readable (JSON) translation diagnostics report. |
+| `--no-updates` | off | Do not auto-discover and fold sibling update files before converting. |
 | `--debug` | off | Show a full stack trace on error. |
 
 The written dataset can be inspected with `s100 info`, validated with
