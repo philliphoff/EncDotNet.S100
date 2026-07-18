@@ -2,8 +2,9 @@ namespace EncDotNet.S100.Viewer;
 
 /// <summary>
 /// Single source of truth for every on-disk location the viewer writes to:
-/// the persisted settings file, the crash-marker directory, and the three
-/// disk caches (pattern-clip, portrayal-instruction, warm tile cache).
+/// the persisted settings file, the crash-marker directory, and the disk
+/// caches (pattern-clip, portrayal-instruction, dataset-metadata sidecar,
+/// and warm tile cache).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -97,6 +98,12 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "caches", "PortrayalInstructionCache")
             : Path.Combine(DefaultLocalDataDirectory, "PortrayalInstructionCache");
 
+    /// <summary>Directory for the shared cross-session dataset-metadata sidecar cache.</summary>
+    public string DatasetMetadataCacheDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "caches", "DatasetMetadataCache")
+            : Path.Combine(DefaultLocalDataDirectory, "DatasetMetadataCache");
+
     /// <summary>
     /// Directory for the warm tile disk cache when a base directory is in
     /// use, or <see langword="null"/> to let the renderer pick its own
@@ -123,6 +130,7 @@ internal sealed class ViewerDataPaths
             {
                 PatternClipCacheDirectory,
                 PortrayalInstructionCacheDirectory,
+                DatasetMetadataCacheDirectory,
             };
             if (TileDiskCacheDirectory is { } tiles)
             {

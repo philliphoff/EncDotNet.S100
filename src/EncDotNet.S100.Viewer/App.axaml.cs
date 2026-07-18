@@ -427,6 +427,19 @@ public partial class App : Application
             const long maxBytes = 256L * 1024 * 1024;
             return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, maxBytes);
         });
+        services.AddSingleton<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>(sp =>
+        {
+            // One process-wide disk cache of per-dataset "peek" metadata so a
+            // previously-probed dataset (e.g. framing a loose-cell folder) costs
+            // zero parse on a later session. Entries key on the source file's
+            // mtime + size, so editing or replacing a dataset auto-invalidates.
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().DatasetMetadataCacheDirectory;
+            const long maxBytes = 16L * 1024 * 1024;
+            return new EncDotNet.S100.Core.Metadata.DiskDatasetMetadataCache(cacheDir, maxBytes);
+        });
+        services.AddSingleton<IDatasetMetadataReader>(sp =>
+            new CachingDatasetMetadataReader(
+                sp.GetRequiredService<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>()));
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),

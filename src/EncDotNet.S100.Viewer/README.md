@@ -102,6 +102,11 @@ The viewer accepts:
   holds loose base cells (`.000`) with no `CATALOG.031`/`CATALOG.XML`
   and it loads every base cell, sniffing S-57 vs S-101 per cell and
   applying each cell's sibling filesystem updates (`.001`, `.002`, …).
+  Each S-101 cell's extent is read once via the cross-session
+  dataset-metadata sidecar cache and unioned, so the map frames the
+  folder up front (subsequent opens reuse the cached extents with no
+  re-parse); S-57 cells, which have no cheap extent reader, are skipped
+  from that union and framed when they load.
   A dropped folder that yields no renderable cells raises a
   notification instead of being silently ignored.
 - **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
@@ -781,7 +786,8 @@ parallel agent runs do not collide.
 **Full data-directory redirect.** `--data-dir <PATH>` (also honoured
 via the `S100_DATA_DIR` environment variable) re-roots **everything**
 the viewer writes — the settings file, crash markers, and all three
-disk caches (pattern-clip, portrayal-instruction, warm tile cache) —
+disk caches (pattern-clip, portrayal-instruction, warm tile cache, and
+the cross-session dataset-metadata sidecar cache) —
 underneath one folder. Point it at an empty temp directory for a
 guaranteed-fresh instance whose entire footprint can be deleted in one
 `rm -rf`, or pre-seed the folder to launch with mocked-up settings or
