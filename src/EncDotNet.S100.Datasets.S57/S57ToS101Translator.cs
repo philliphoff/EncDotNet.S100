@@ -2393,13 +2393,45 @@ public sealed class S57ToS101Translator
         private List<List<S101CurveUsage>> ChainEdgesIntoRings(List<S101CurveUsage> edges)
         {
             var rings = new List<List<S101CurveUsage>>();
-            var pool = new LinkedList<S101CurveUsage>(edges);
+            var curveNodes = new Dictionary<uint, (uint? Begin, uint? End)>();
+            var edgeNodes = new (uint? Begin, uint? End)[edges.Count];
+            var incidentEdgesByNode = new Dictionary<uint, List<int>>();
+            var used = new bool[edges.Count];
 
-            while (pool.First is not null)
+            for (var i = 0; i < edges.Count; i++)
             {
+                var edge = edges[i];
+                if (!curveNodes.TryGetValue(edge.RecordId, out var nodes))
+                {
+                    nodes = (
+                        EdgeNode(edge.RecordId, TopologyBegin),
+                        EdgeNode(edge.RecordId, TopologyEnd));
+                    curveNodes.Add(edge.RecordId, nodes);
+                }
+
+                edgeNodes[i] = nodes;
+
+                if (nodes.Begin is uint begin)
+                {
+                    AddIncidentEdge(begin, i);
+                }
+
+                if (nodes.End is uint end && end != nodes.Begin)
+                {
+                    AddIncidentEdge(end, i);
+                }
+            }
+
+            for (var seedIndex = 0; seedIndex < edges.Count; seedIndex++)
+            {
+                if (used[seedIndex])
+                {
+                    continue;
+                }
+
                 // Seed a new ring with the next available edge in its FSPT orientation.
-                var seed = pool.First.Value;
-                pool.RemoveFirst();
+                var seed = edges[seedIndex];
+                used[seedIndex] = true;
 
                 var seedOrientation = seed.Orientation == OrientationReverse
                     ? OrientationReverse
@@ -2410,11 +2442,11 @@ public sealed class S57ToS101Translator
                 };
 
                 uint? startNode = seedOrientation == OrientationReverse
-                    ? EdgeNode(seed.RecordId, TopologyEnd)
-                    : EdgeNode(seed.RecordId, TopologyBegin);
+                    ? edgeNodes[seedIndex].End
+                    : edgeNodes[seedIndex].Begin;
                 uint? endNode = seedOrientation == OrientationReverse
-                    ? EdgeNode(seed.RecordId, TopologyBegin)
-                    : EdgeNode(seed.RecordId, TopologyEnd);
+                    ? edgeNodes[seedIndex].Begin
+                    : edgeNodes[seedIndex].End;
 
                 // Extend the chain from its trailing node until the ring closes
                 // (returns to its start node) or no connecting edge remains.
@@ -2422,25 +2454,34 @@ public sealed class S57ToS101Translator
                 while (extended && endNode is not null && endNode != startNode)
                 {
                     extended = false;
-                    for (var node = pool.First; node is not null; node = node.Next)
+                    if (!incidentEdgesByNode.TryGetValue(endNode.Value, out var candidates))
                     {
-                        uint? begin = EdgeNode(node.Value.RecordId, TopologyBegin);
-                        uint? end = EdgeNode(node.Value.RecordId, TopologyEnd);
+                        break;
+                    }
 
+                    foreach (var edgeIndex in candidates)
+                    {
+                        if (used[edgeIndex])
+                        {
+                            continue;
+                        }
+
+                        var edge = edges[edgeIndex];
+                        var (begin, end) = edgeNodes[edgeIndex];
                         if (begin is not null && begin == endNode)
                         {
-                            ring.Add(new S101CurveUsage(S101RcnmCurveSegment, node.Value.RecordId, OrientationForward));
+                            ring.Add(new S101CurveUsage(S101RcnmCurveSegment, edge.RecordId, OrientationForward));
                             endNode = end;
-                            pool.Remove(node);
+                            used[edgeIndex] = true;
                             extended = true;
                             break;
                         }
 
                         if (end is not null && end == endNode)
                         {
-                            ring.Add(new S101CurveUsage(S101RcnmCurveSegment, node.Value.RecordId, OrientationReverse));
+                            ring.Add(new S101CurveUsage(S101RcnmCurveSegment, edge.RecordId, OrientationReverse));
                             endNode = begin;
-                            pool.Remove(node);
+                            used[edgeIndex] = true;
                             extended = true;
                             break;
                         }
@@ -2451,6 +2492,17 @@ public sealed class S57ToS101Translator
             }
 
             return rings;
+
+            void AddIncidentEdge(uint nodeId, int edgeIndex)
+            {
+                if (!incidentEdgesByNode.TryGetValue(nodeId, out var edgeIndices))
+                {
+                    edgeIndices = [];
+                    incidentEdgesByNode.Add(nodeId, edgeIndices);
+                }
+
+                edgeIndices.Add(edgeIndex);
+            }
         }
 
         /// <summary>

@@ -2748,9 +2748,10 @@ public class S57ToS101TranslatorTests
 
         foreach (var ring in feature.InteriorRings)
         {
+            var maxSegment = MaxSegment(ring);
             Assert.True(
-                MaxSegment(ring) < spikeThresholdDegrees,
-                $"Interior ring contains a cross-hole spike segment of {MaxSegment(ring):G4} degrees.");
+                maxSegment < spikeThresholdDegrees,
+                $"Interior ring contains a cross-hole spike segment of {maxSegment:G4} degrees.");
         }
     }
 }
