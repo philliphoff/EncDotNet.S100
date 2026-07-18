@@ -2659,4 +2659,98 @@ public class S57ToS101TranslatorTests
         Assert.Equal("4", attr.Value);
         Assert.DoesNotContain("surfaceCharacteristics", s101.AttributeTypeCatalogue.Values);
     }
+
+    // ── Area ring chaining (multi-hole "spike" regression) ─────────────
+
+    // Builds a LandArea (LNDARE, OBJL 71) with a square exterior ring and two
+    // disjoint square holes. S-57 lists every interior edge consecutively with
+    // USAG = interior, so a translator that groups by USAG alone merges both
+    // holes into one boundary — flattening that merged ring to coordinates then
+    // jumps between the holes and renders as a long "spike" segment.
+    private static EncDotNet.S57.S57Document BuildTwoHoleArea()
+    {
+        // Exterior square 0..1000.
+        var ext = new[]
+        {
+            Node(1, 0, 0), Node(2, 0, 1000), Node(3, 1000, 1000), Node(4, 1000, 0),
+            Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 4), Edge(13, 4, 1),
+        };
+        // Hole A square 100..200.
+        var holeA = new[]
+        {
+            Node(101, 100, 100), Node(102, 100, 200), Node(103, 200, 200), Node(104, 200, 100),
+            Edge(20, 101, 102), Edge(21, 102, 103), Edge(22, 103, 104), Edge(23, 104, 101),
+        };
+        // Hole B square 700..800 (far from hole A).
+        var holeB = new[]
+        {
+            Node(201, 700, 700), Node(202, 700, 800), Node(203, 800, 800), Node(204, 800, 700),
+            Edge(30, 201, 202), Edge(31, 202, 203), Edge(32, 203, 204), Edge(33, 204, 201),
+        };
+
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 71, // LNDARE → LandArea
+            spatialPointers: new[]
+            {
+                // Exterior ring (USAG = 1).
+                Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0), Sp(RcnmEdge, 13, 1, 1, 0),
+                // Both holes' edges listed consecutively (USAG = 2).
+                Sp(RcnmEdge, 20, 1, 2, 0), Sp(RcnmEdge, 21, 1, 2, 0),
+                Sp(RcnmEdge, 22, 1, 2, 0), Sp(RcnmEdge, 23, 1, 2, 0),
+                Sp(RcnmEdge, 30, 1, 2, 0), Sp(RcnmEdge, 31, 1, 2, 0),
+                Sp(RcnmEdge, 32, 1, 2, 0), Sp(RcnmEdge, 33, 1, 2, 0),
+            });
+
+        return BuildDocument(
+            vectorRecords: ext.Concat(holeA).Concat(holeB).ToArray(),
+            features: new[] { feature });
+    }
+
+    [Fact]
+    public void Translate_AreaWithTwoHoles_ProducesSeparateInteriorRings()
+    {
+        // The two disjoint holes must resolve to two distinct interior rings,
+        // not one merged ring that jumps between them.
+        var s101 = new S57ToS101Translator().Translate(BuildTwoHoleArea());
+        var source = new S101VectorSource(S101Dataset.FromDocument(s101));
+
+        var feature = Assert.Single(source.GetFeatures());
+        Assert.Equal("LandArea", feature.FeatureType);
+        Assert.Equal(2, feature.InteriorRings.Count);
+    }
+
+    [Fact]
+    public void Translate_AreaWithTwoHoles_HasNoCrossHoleSpike()
+    {
+        // Every segment within each resolved ring must stay local to its hole;
+        // a merged ring would contain a long jump between the two holes (the
+        // spike artifact). Hole edges span ~1e-5 deg; the inter-hole jump would
+        // be ~8e-5 deg, so a 3e-5 deg ceiling cleanly distinguishes them.
+        const double spikeThresholdDegrees = 3e-5;
+
+        var s101 = new S57ToS101Translator().Translate(BuildTwoHoleArea());
+        var source = new S101VectorSource(S101Dataset.FromDocument(s101));
+        var feature = Assert.Single(source.GetFeatures());
+
+        static double MaxSegment(IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> ring)
+        {
+            double max = 0;
+            for (var i = 0; i < ring.Count - 1; i++)
+            {
+                var dLat = ring[i + 1].Latitude - ring[i].Latitude;
+                var dLon = ring[i + 1].Longitude - ring[i].Longitude;
+                max = Math.Max(max, Math.Sqrt((dLat * dLat) + (dLon * dLon)));
+            }
+
+            return max;
+        }
+
+        foreach (var ring in feature.InteriorRings)
+        {
+            Assert.True(
+                MaxSegment(ring) < spikeThresholdDegrees,
+                $"Interior ring contains a cross-hole spike segment of {MaxSegment(ring):G4} degrees.");
+        }
+    }
 }
