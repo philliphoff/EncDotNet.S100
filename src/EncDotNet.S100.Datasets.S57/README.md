@@ -19,7 +19,12 @@ Key types:
 - **`S57Dataset`** — entry point; opens a `.000` file and exposes the parsed
   `EncDotNet.S57.S57Document` from the upstream package, plus a static
   `IsS57File(path)` discriminator used by `EncDotNet.S100.Datasets.Pipelines`
-  to disambiguate `.000` files that could otherwise be S-101.
+  to disambiguate `.000` files that could otherwise be S-101. Also exposes a
+  cheap `ReadMetadata` "peek" path (issue #460) that folds the WGS-84 extent
+  from the raw spatial coordinates (via the DSPM coordinate multiplication
+  factor) and the compilation-scale (CSCL) display window **without** the
+  S-57 → S-101 translation or any portrayal — so a host can frame a viewport
+  over a loose folder of S-57 cells before deciding to load each in full.
 - **`S57ToS101Translator`** — translates an `S57Document` (package type) into
   an `S101Document` by remapping object/attribute codes, exploding multi-point
   soundings, synthesising the `information` complex attribute from textual
