@@ -85,6 +85,19 @@ public sealed class S57TranslationDiagnostics
     public int SectorLightsMerged { get; internal set; }
 
     /// <summary>
+    /// Number of S-57 <c>TOPMAR</c> (topmark/daymark, OBJL 144) feature records
+    /// absorbed into their master buoy/beacon's <c>topmark</c> complex attribute
+    /// during the topmark-fold pass. S-101 models the topmark as an attribute of
+    /// the parent structure (reached via the S-57 master/slave feature-to-feature
+    /// relationship) rather than a standalone feature, so an absorbed TOPMAR
+    /// produces no S-101 feature of its own and is counted here <em>instead of</em>
+    /// under <see cref="UnmappedObjectClasses"/>. A TOPMAR referenced by no
+    /// topmark-binding master is still recorded as unmapped (IHO S-57→S-101
+    /// Conversion Guidance: TOPMAR → parent attribute).
+    /// </summary>
+    public int TopmarksAbsorbed { get; internal set; }
+
+    /// <summary>
     /// Number of <c>NauticalInformation</c> information-type records emitted by
     /// the S-57→S-101 conversion. One is created per feature that carries any of
     /// the textual attributes <c>INFORM</c>/<c>TXTDSC</c>/<c>NINFOM</c>/

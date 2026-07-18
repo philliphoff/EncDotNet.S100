@@ -116,6 +116,8 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
 
         if (diagnostics.SectorLightsMerged > 0)
             table.AddRow("Sector lights merged", diagnostics.SectorLightsMerged.ToString());
+        if (diagnostics.TopmarksAbsorbed > 0)
+            table.AddRow("Topmarks folded into parent", diagnostics.TopmarksAbsorbed.ToString());
         if (diagnostics.NauticalInformationTypesEmitted > 0)
             table.AddRow("NauticalInformation records", diagnostics.NauticalInformationTypesEmitted.ToString());
         if (diagnostics.RangeSystemsEmitted > 0)
@@ -167,6 +169,7 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             soundingPointsEmitted = diagnostics.SoundingPointsEmitted,
             soundingFeaturesWithoutPoints = diagnostics.SoundingFeaturesWithoutPoints,
             sectorLightsMerged = diagnostics.SectorLightsMerged,
+            topmarksAbsorbed = diagnostics.TopmarksAbsorbed,
             nauticalInformationTypesEmitted = diagnostics.NauticalInformationTypesEmitted,
             rangeSystemsEmitted = diagnostics.RangeSystemsEmitted,
             unmappedObjectClasses = diagnostics.UnmappedObjectClasses
