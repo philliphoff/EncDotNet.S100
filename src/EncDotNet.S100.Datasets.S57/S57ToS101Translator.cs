@@ -2309,12 +2309,17 @@ public sealed class S57ToS101Translator
 
         private IReadOnlyList<S101SpatialAssociation> TranslateAreaSpatial(EncDotNet.S57.S57FeatureRecord feat)
         {
-            // Area features reference a ring of edges via FSPT. Group by
-            // USAG (1 = exterior, 2 = interior) and wrap each group into a
-            // composite curve referenced from a synthesised surface record.
-            var exterior = new List<S101CurveUsage>();
-            var interiors = new List<List<S101CurveUsage>>();
-            List<S101CurveUsage>? currentInterior = null;
+            // Area features reference their boundary edges via FSPT, tagged by
+            // USAG (1 = exterior, 2 = interior). S-57 lists every interior edge
+            // consecutively, so grouping by USAG alone merges all holes into a
+            // single boundary; flattening that merged ring to coordinates then
+            // jumps from one hole to the next and renders as long "spike"
+            // artifacts. Instead we collect the edges per usage and chain them
+            // into contiguous rings by shared node identity (S-57 Appendix B.1
+            // area topology; S-100 Part 10a surface ring topology), so each hole
+            // becomes its own interior ring.
+            var exteriorEdges = new List<S101CurveUsage>();
+            var interiorEdges = new List<S101CurveUsage>();
 
             foreach (var ptr in feat.SpatialPointers)
             {
@@ -2323,47 +2328,37 @@ public sealed class S57ToS101Translator
                 var ornt = (int)ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
                 var usage = new S101CurveUsage(S101RcnmCurveSegment, cid, ornt);
 
-                switch ((int)ptr.Usage)
-                {
-                    case UsageInterior:
-                        currentInterior ??= new List<S101CurveUsage>();
-                        currentInterior.Add(usage);
-                        break;
-                    case UsageExterior:
-                    case 3: // exterior truncated
-                    default:
-                        if (currentInterior is not null)
-                        {
-                            interiors.Add(currentInterior);
-                            currentInterior = null;
-                        }
-                        exterior.Add(usage);
-                        break;
-                }
+                // USAG 2 is interior; USAG 1 (exterior) and 3 (exterior
+                // truncated at the cell boundary) both bound the exterior.
+                if ((int)ptr.Usage == UsageInterior)
+                    interiorEdges.Add(usage);
+                else
+                    exteriorEdges.Add(usage);
             }
-            if (currentInterior is not null) interiors.Add(currentInterior);
-            if (exterior.Count == 0) return [];
+
+            if (exteriorEdges.Count == 0) return [];
 
             var rings = new List<S101RingAssociation>();
 
-            // Exterior ring as one composite curve.
-            var extId = _nextCompositeId++;
-            CompositeCurves[extId] = new S101CompositeCurveRecord
+            foreach (var ringEdges in ChainEdgesIntoRings(exteriorEdges))
             {
-                RecordId = extId,
-                CurveComponents = exterior,
-            };
-            rings.Add(new S101RingAssociation(
-                S101RcnmCompositeCurve, extId, OrientationForward, UsageExterior));
+                var extId = _nextCompositeId++;
+                CompositeCurves[extId] = new S101CompositeCurveRecord
+                {
+                    RecordId = extId,
+                    CurveComponents = ringEdges,
+                };
+                rings.Add(new S101RingAssociation(
+                    S101RcnmCompositeCurve, extId, OrientationForward, UsageExterior));
+            }
 
-            // Interior rings each as their own composite curve.
-            foreach (var interior in interiors)
+            foreach (var ringEdges in ChainEdgesIntoRings(interiorEdges))
             {
                 var intId = _nextCompositeId++;
                 CompositeCurves[intId] = new S101CompositeCurveRecord
                 {
                     RecordId = intId,
-                    CurveComponents = interior.ToArray(),
+                    CurveComponents = ringEdges,
                 };
                 rings.Add(new S101RingAssociation(
                     S101RcnmCompositeCurve, intId, OrientationForward, UsageInterior));
@@ -2377,6 +2372,153 @@ public sealed class S57ToS101Translator
             };
 
             return [new S101SpatialAssociation(S101RcnmSurface, sid, OrientationForward)];
+        }
+
+        /// <summary>
+        /// Chains a set of area boundary edges into contiguous rings using shared
+        /// begin/end node identity, reversing individual edges as required so that
+        /// each edge connects head-to-tail. Edges that do not connect to the current
+        /// chain start a new ring.
+        /// </summary>
+        /// <remarks>
+        /// S-57 does not guarantee that the edges bounding a single ring are listed
+        /// in traversal order, nor does it separate the multiple interior boundaries
+        /// (holes) of an area. Chaining by node identity reconstructs the individual
+        /// rings, preventing the long cross-hole "spike" segments that a naive
+        /// concatenation produces (S-57 Appendix B.1 area topology; S-100 Part 10a
+        /// §4 surface ring topology).
+        /// </remarks>
+        /// <param name="edges">The edge references (with FSPT orientation) to chain.</param>
+        /// <returns>One list of ordered, correctly oriented edges per contiguous ring.</returns>
+        private List<List<S101CurveUsage>> ChainEdgesIntoRings(List<S101CurveUsage> edges)
+        {
+            var rings = new List<List<S101CurveUsage>>();
+            var curveNodes = new Dictionary<uint, (uint? Begin, uint? End)>();
+            var edgeNodes = new (uint? Begin, uint? End)[edges.Count];
+            var incidentEdgesByNode = new Dictionary<uint, List<int>>();
+            var used = new bool[edges.Count];
+
+            for (var i = 0; i < edges.Count; i++)
+            {
+                var edge = edges[i];
+                if (!curveNodes.TryGetValue(edge.RecordId, out var nodes))
+                {
+                    nodes = (
+                        EdgeNode(edge.RecordId, TopologyBegin),
+                        EdgeNode(edge.RecordId, TopologyEnd));
+                    curveNodes.Add(edge.RecordId, nodes);
+                }
+
+                edgeNodes[i] = nodes;
+
+                if (nodes.Begin is uint begin)
+                {
+                    AddIncidentEdge(begin, i);
+                }
+
+                if (nodes.End is uint end && end != nodes.Begin)
+                {
+                    AddIncidentEdge(end, i);
+                }
+            }
+
+            for (var seedIndex = 0; seedIndex < edges.Count; seedIndex++)
+            {
+                if (used[seedIndex])
+                {
+                    continue;
+                }
+
+                // Seed a new ring with the next available edge in its FSPT orientation.
+                var seed = edges[seedIndex];
+                used[seedIndex] = true;
+
+                var seedOrientation = seed.Orientation == OrientationReverse
+                    ? OrientationReverse
+                    : OrientationForward;
+                var ring = new List<S101CurveUsage>
+                {
+                    new(S101RcnmCurveSegment, seed.RecordId, seedOrientation),
+                };
+
+                uint? startNode = seedOrientation == OrientationReverse
+                    ? edgeNodes[seedIndex].End
+                    : edgeNodes[seedIndex].Begin;
+                uint? endNode = seedOrientation == OrientationReverse
+                    ? edgeNodes[seedIndex].Begin
+                    : edgeNodes[seedIndex].End;
+
+                // Extend the chain from its trailing node until the ring closes
+                // (returns to its start node) or no connecting edge remains.
+                var extended = true;
+                while (extended && endNode is not null && endNode != startNode)
+                {
+                    extended = false;
+                    if (!incidentEdgesByNode.TryGetValue(endNode.Value, out var candidates))
+                    {
+                        break;
+                    }
+
+                    foreach (var edgeIndex in candidates)
+                    {
+                        if (used[edgeIndex])
+                        {
+                            continue;
+                        }
+
+                        var edge = edges[edgeIndex];
+                        var (begin, end) = edgeNodes[edgeIndex];
+                        if (begin is not null && begin == endNode)
+                        {
+                            ring.Add(new S101CurveUsage(S101RcnmCurveSegment, edge.RecordId, OrientationForward));
+                            endNode = end;
+                            used[edgeIndex] = true;
+                            extended = true;
+                            break;
+                        }
+
+                        if (end is not null && end == endNode)
+                        {
+                            ring.Add(new S101CurveUsage(S101RcnmCurveSegment, edge.RecordId, OrientationReverse));
+                            endNode = begin;
+                            used[edgeIndex] = true;
+                            extended = true;
+                            break;
+                        }
+                    }
+                }
+
+                rings.Add(ring);
+            }
+
+            return rings;
+
+            void AddIncidentEdge(uint nodeId, int edgeIndex)
+            {
+                if (!incidentEdgesByNode.TryGetValue(nodeId, out var edgeIndices))
+                {
+                    edgeIndices = [];
+                    incidentEdgesByNode.Add(nodeId, edgeIndices);
+                }
+
+                edgeIndices.Add(edgeIndex);
+            }
+        }
+
+        /// <summary>
+        /// Returns the record id of the begin (<paramref name="topology"/> = 1) or
+        /// end (2) node of a translated curve segment, or <see langword="null"/> when
+        /// the segment or the requested node association is unavailable.
+        /// </summary>
+        private uint? EdgeNode(uint curveId, byte topology)
+        {
+            if (!CurveSegments.TryGetValue(curveId, out var segment)) return null;
+            foreach (var pta in segment.PointAssociations)
+            {
+                if (pta.Topology == topology) return pta.RecordId;
+            }
+
+            return null;
         }
 
         // ── Catalogue interning ─────────────────────────────────────────
