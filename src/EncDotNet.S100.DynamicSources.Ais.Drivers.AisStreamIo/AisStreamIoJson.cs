@@ -12,7 +12,7 @@ namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 /// </summary>
 internal static class AisStreamIoJson
 {
-    private static readonly JsonSerializerOptions s_options = new()
+    private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,
     };

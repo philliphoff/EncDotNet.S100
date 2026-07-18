@@ -84,7 +84,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// because tiles rasterise on background threads while the overlay draws on
     /// the render thread.
     /// </remarks>
-    private static readonly ConcurrentDictionary<string, SKSvg?> s_symbolPictureCache =
+    private static readonly ConcurrentDictionary<string, SKSvg?> SymbolPictureCache =
         new(StringComparer.Ordinal);
 
     /// <summary>
@@ -99,14 +99,14 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// so the 1:1 blit through the canvas's HiDPI matrix is crisp; a different
     /// device scale (e.g. moving the window to another monitor) keys a fresh
     /// sprite. <see cref="SKImage"/> is immutable and its CPU pixels are safe to
-    /// share across threads, so — like <see cref="s_symbolPictureCache"/> — this
+    /// share across threads, so — like <see cref="SymbolPictureCache"/> — this
     /// is a never-evicted <see cref="ConcurrentDictionary{TKey,TValue}"/> bounded
     /// by the small number of distinct symbols in a cell. A <see langword="null"/>
     /// value caches "do not atlas this symbol" (unparseable, or larger than
     /// <see cref="MaxSpriteDimensionPx"/>) so the miss is not re-probed each frame.
     /// </para>
     /// </summary>
-    private static readonly ConcurrentDictionary<(string Svg, int ScaleMilli, int DeviceMilli), SymbolSprite?> s_symbolSpriteCache = new();
+    private static readonly ConcurrentDictionary<(string Svg, int ScaleMilli, int DeviceMilli), SymbolSprite?> SymbolSpriteCache = new();
 
     /// <summary>
     /// Sampling for the atlas blit. The sprite is rasterised at device resolution
@@ -114,7 +114,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// fractional sub-pixel anchor placement; it matches the antialiased vector
     /// edge to within a pixel.
     /// </summary>
-    private static readonly SKSamplingOptions s_spriteSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+    private static readonly SKSamplingOptions SpriteSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
     /// <summary>
     /// Maximum width/height (device px) of a cached symbol sprite. Symbols larger
@@ -146,7 +146,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// <see cref="ConcurrentDictionary{TKey,TValue}"/> because tiles and the
     /// overlay may probe coverage from different threads.
     /// </summary>
-    private static readonly ConcurrentDictionary<(SKTypeface Face, string Text), bool> s_primaryCoverageCache = new();
+    private static readonly ConcurrentDictionary<(SKTypeface Face, string Text), bool> PrimaryCoverageCache = new();
 
     /// <summary>
     /// Process-wide cache of fallback typefaces resolved via
@@ -154,27 +154,27 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// codepoint. <c>MatchCharacter</c> enumerates the platform font set and is
     /// expensive, so this must outlive any single frame: held for the app
     /// lifetime (entries never evicted, faces never disposed), mirroring
-    /// <see cref="s_symbolPictureCache"/>. A <see langword="null"/> value caches
+    /// <see cref="SymbolPictureCache"/>. A <see langword="null"/> value caches
     /// "no platform fallback exists" so the miss is not re-probed every frame.
     /// </summary>
-    private static readonly ConcurrentDictionary<int, SKTypeface?> s_fallbackFaceCache = new();
+    private static readonly ConcurrentDictionary<int, SKTypeface?> FallbackFaceCache = new();
 
     /// <summary>
     /// Process-wide cache of fallback <see cref="SKFont"/>s keyed by their
     /// typeface and pixel size, so a non-ASCII label does not allocate and
     /// destroy a native font handle every frame. App-lifetime, like
-    /// <see cref="s_fallbackFaceCache"/>.
+    /// <see cref="FallbackFaceCache"/>.
     /// </summary>
-    private static readonly ConcurrentDictionary<(SKTypeface Face, float SizePx), SKFont> s_fallbackFontCache = new();
+    private static readonly ConcurrentDictionary<(SKTypeface Face, float SizePx), SKFont> FallbackFontCache = new();
 
     /// <summary>
     /// Returns whether <paramref name="face"/> can render every glyph in
     /// <paramref name="text"/>, caching the result per (face, text) so the
     /// allocating full-string probe runs at most once per distinct string. See
-    /// <see cref="s_primaryCoverageCache"/>.
+    /// <see cref="PrimaryCoverageCache"/>.
     /// </summary>
     private static bool PrimaryRendersAll(SKTypeface face, string text) =>
-        s_primaryCoverageCache.GetOrAdd((face, text), static key => key.Face.ContainsGlyphs(key.Text));
+        PrimaryCoverageCache.GetOrAdd((face, text), static key => key.Face.ContainsGlyphs(key.Text));
 
     /// <summary>
     /// Half-extent, in display pixels, by which the point/text cull rectangle is
@@ -193,7 +193,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// </summary>
     internal static SKPicture? GetSymbolPicture(string processedSvg)
     {
-        var svg = s_symbolPictureCache.GetOrAdd(processedSvg, static content =>
+        var svg = SymbolPictureCache.GetOrAdd(processedSvg, static content =>
         {
             try
             {
@@ -588,7 +588,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                             destLeft, destTop,
                             destLeft + bounds.Width * scale,
                             destTop + bounds.Height * scale);
-                        canvas.DrawImage(sprite.Image, dest, s_spriteSampling);
+                        canvas.DrawImage(sprite.Image, dest, SpriteSampling);
                         return;
                     }
                 }
@@ -630,7 +630,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             (int)MathF.Round(scale * 1000f),
             (int)MathF.Round(deviceScale * 1000f));
 
-        return s_symbolSpriteCache.GetOrAdd(key, _ =>
+        return SymbolSpriteCache.GetOrAdd(key, _ =>
         {
             float r = scale * deviceScale;
             if (!(r > 0) || bounds.Width <= 0 || bounds.Height <= 0)
@@ -888,11 +888,11 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         /// Returns a typeface that can render <paramref name="codepoint"/> when
         /// the primary face cannot, or <see langword="null"/> when the platform
         /// font manager has no match. Resolved via the app-lifetime
-        /// <see cref="s_fallbackFaceCache"/> (the platform lookup is expensive
+        /// <see cref="FallbackFaceCache"/> (the platform lookup is expensive
         /// and must not re-run per frame).
         /// </summary>
         public SKTypeface? FallbackFor(int codepoint) =>
-            s_fallbackFaceCache.GetOrAdd(codepoint, static cp =>
+            FallbackFaceCache.GetOrAdd(codepoint, static cp =>
             {
                 try
                 {
@@ -904,9 +904,9 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                 }
             });
 
-        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/> from the app-lifetime <see cref="s_fallbackFontCache"/>.</summary>
+        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/> from the app-lifetime <see cref="FallbackFontCache"/>.</summary>
         public SKFont FallbackFontFor(SKTypeface face, float sizePx) =>
-            s_fallbackFontCache.GetOrAdd((face, sizePx), static key => new SKFont(key.Face, key.SizePx));
+            FallbackFontCache.GetOrAdd((face, sizePx), static key => new SKFont(key.Face, key.SizePx));
 
         public void Dispose()
         {

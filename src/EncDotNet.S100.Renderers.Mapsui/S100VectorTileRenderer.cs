@@ -207,9 +207,9 @@ public static class S100VectorTileRenderer
     /// </summary>
     internal static bool DiagEnabled { get; } = ReadBool("S100_VECTOR_TILE_DIAG", false);
 
-    private static long s_diagLastTick;
+    private static long _diagLastTick;
 
-    private static long s_diagBailTick;
+    private static long _diagBailTick;
 
     /// <summary>
     /// The on-screen rotation, in degrees, to apply to the north-up tile
@@ -244,13 +244,13 @@ public static class S100VectorTileRenderer
     private static void DiagBail(string reason)
     {
         var now = Environment.TickCount64;
-        var last = Interlocked.Read(ref s_diagBailTick);
+        var last = Interlocked.Read(ref _diagBailTick);
         if (last != 0 && now - last < 1000)
         {
             return;
         }
 
-        if (Interlocked.CompareExchange(ref s_diagBailTick, now, last) != last)
+        if (Interlocked.CompareExchange(ref _diagBailTick, now, last) != last)
         {
             return;
         }
@@ -275,7 +275,7 @@ public static class S100VectorTileRenderer
     /// <see cref="ShutdownAndDrain"/> before letting the process exit. See
     /// <see cref="WorkerDrainGate"/>.
     /// </summary>
-    private static readonly WorkerDrainGate s_drainGate = new();
+    private static readonly WorkerDrainGate DrainGate = new();
 
     /// <summary>
     /// Process-wide cap on the total number of concurrent tile workers across
@@ -285,17 +285,17 @@ public static class S100VectorTileRenderer
     /// they oversubscribe the CPU/GPU and starve the UI paint thread (a paint-p95
     /// blow-up on big multi-cell exchange sets). Read once at start-up.
     /// </summary>
-    private static readonly int s_maxTotalWorkers =
+    private static readonly int MaxTotalWorkers =
         Math.Max(RenderingOptimizations.TileWorkerCount, Environment.ProcessorCount);
 
-    private static int s_activeWorkerTotal;
+    private static int _activeWorkerTotal;
 
     /// <summary>
     /// Sliding window, in seconds, over which a layer that had visible cold work
     /// is still counted as an active competitor for the fairness reservation used
     /// by elastic borrowing (issue #432). A layer that stops painting (culled,
     /// resolution-hidden, torn down) or that fully caches its visible tiles ages
-    /// out of the <see cref="s_visibleLayerStamps"/> registry within this window,
+    /// out of the <see cref="VisibleLayerStamps"/> registry within this window,
     /// so the "active visible layers" divisor never inflates with dead layers.
     /// A couple of frames' worth is enough to bridge the serialized per-layer
     /// paint of one frame without over-holding.
@@ -303,13 +303,13 @@ public static class S100VectorTileRenderer
     private const double ElasticFairnessWindowSeconds = 0.5;
 
     /// <summary>
-    /// Guards <see cref="s_visibleLayerStamps"/> and <see cref="s_visibleLayerPruneScratch"/>.
+    /// Guards <see cref="VisibleLayerStamps"/> and <see cref="VisibleLayerPruneScratch"/>.
     /// Only ever taken on the render/UI thread (layer paint is serialized there),
     /// so it is effectively uncontended; tile workers never touch it. Always
     /// acquired <em>after</em> a layer's <c>state.Sync</c> and never the reverse,
     /// and workers never take it, so it introduces no lock-order cycle.
     /// </summary>
-    private static readonly object s_visibleLayerSync = new();
+    private static readonly object VisibleLayerSync = new();
 
     /// <summary>
     /// Registry of layers that recently had visible cold work, keyed by their
@@ -324,7 +324,7 @@ public static class S100VectorTileRenderer
     /// <para>
     /// Keyed <b>weakly</b> via <see cref="ConditionalWeakTable{TKey,TValue}"/> so it
     /// never roots a <see cref="TileState"/>. <see cref="TileState"/> is otherwise
-    /// held only weakly (in <see cref="s_states"/>, keyed by <see cref="ILayer"/>);
+    /// held only weakly (in <see cref="States"/>, keyed by <see cref="ILayer"/>);
     /// a plain <see cref="Dictionary{TKey,TValue}"/> here would keep a removed
     /// layer's tiling state — including its rasterised tile cache and scenes — alive
     /// for the process lifetime if the layer disappeared while still registered and
@@ -332,16 +332,16 @@ public static class S100VectorTileRenderer
     /// entry even when no further paint occurs.
     /// </para>
     /// </summary>
-    private static readonly ConditionalWeakTable<TileState, ActiveVisibleEntry> s_visibleLayerStamps = new();
+    private static readonly ConditionalWeakTable<TileState, ActiveVisibleEntry> VisibleLayerStamps = new();
 
-    /// <summary>Reusable scratch for time-pruning <see cref="s_visibleLayerStamps"/> without per-call allocation.</summary>
-    private static readonly List<TileState> s_visibleLayerPruneScratch = new();
+    /// <summary>Reusable scratch for time-pruning <see cref="VisibleLayerStamps"/> without per-call allocation.</summary>
+    private static readonly List<TileState> VisibleLayerPruneScratch = new();
 
     /// <summary>
     /// A layer's active-visible registry entry: the <see cref="Stopwatch"/> tick of
     /// its last paint with visible cold work, and the workers it held then. A mutable
     /// reference type because <see cref="ConditionalWeakTable{TKey,TValue}"/> requires
-    /// a reference value; it is only ever read/written under <see cref="s_visibleLayerSync"/>.
+    /// a reference value; it is only ever read/written under <see cref="VisibleLayerSync"/>.
     /// </summary>
     private sealed class ActiveVisibleEntry(long stampTicks, int activeWorkers)
     {
@@ -369,9 +369,9 @@ public static class S100VectorTileRenderer
     /// otherwise <see langword="false"/>.
     /// </returns>
     public static bool ShutdownAndDrain(TimeSpan timeout) =>
-        s_drainGate.DrainAndWait(timeout);
+        DrainGate.DrainAndWait(timeout);
 
-    private static readonly ConditionalWeakTable<ILayer, TileState> s_states = new();
+    private static readonly ConditionalWeakTable<ILayer, TileState> States = new();
 
     /// <summary>
     /// Process-wide registry of every live GPU-texture residency cache, keyed
@@ -395,7 +395,7 @@ public static class S100VectorTileRenderer
     /// live context. See <c>docs/design/S100-Render-Subsystem-Design.md</c>
     /// Appendix&#160;F.
     /// </summary>
-    private static readonly List<GpuRegistryEntry> s_gpuRegistry = new();
+    private static readonly List<GpuRegistryEntry> GpuRegistry = new();
 
     /// <summary>
     /// A single layer's pinned GPU residency: its texture cache and — mirrored
@@ -403,7 +403,7 @@ public static class S100VectorTileRenderer
     /// off-screen composite. The mirror exists purely to keep those GPU objects
     /// strongly reachable (off the weakly-held <see cref="TileState"/>) so they
     /// survive to be disposed on the render thread rather than the finalizer
-    /// thread. See <see cref="s_gpuRegistry"/>.
+    /// thread. See <see cref="GpuRegistry"/>.
     /// </summary>
     internal sealed class GpuRegistryEntry
     {
@@ -423,15 +423,15 @@ public static class S100VectorTileRenderer
     }
 
 
-    private static readonly object s_gpuRegistrySync = new();
+    private static readonly object GpuRegistrySync = new();
 
-    private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+    private static readonly SKSamplingOptions Sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
     // Reusable display-list renderer for the live symbol/text overlay. Render is
     // single-threaded (Mapsui's render thread), so one shared, stateless
     // instance is safe. Transparent background + scale-visibility so SCAMIN is
     // honoured against the live viewport's denominator.
-    private static readonly SkiaDisplayListRenderer s_overlayRenderer = new()
+    private static readonly SkiaDisplayListRenderer OverlayRenderer = new()
     {
         Background = SceneRgbaColor.Transparent,
         HonorScaleVisibility = true,
@@ -448,16 +448,16 @@ public static class S100VectorTileRenderer
     // Stateless, render-thread-only label declutter for the live overlay. S-100
     // Part 9 makes overlap avoidance the portrayal engine's job; this resolves it
     // deterministically each frame from the ops' drawing priority / SCAMIN.
-    private static readonly LabelDeclutterer s_labelDeclutterer = new();
+    private static readonly LabelDeclutterer _labelDeclutterer = new();
 
-    private static readonly Lazy<TileDiskCache?> s_diskCache = new(CreateSharedDiskCache);
+    private static readonly Lazy<TileDiskCache?> DiskCache = new(CreateSharedDiskCache);
 
     /// <summary>
     /// The process-wide warm disk cache, or <see langword="null"/> when disabled
     /// or its root directory could not be established. Shared across every layer
     /// and session.
     /// </summary>
-    private static TileDiskCache? SharedDiskCache => s_diskCache.Value;
+    private static TileDiskCache? SharedDiskCache => DiskCache.Value;
 
     /// <summary>
     /// The effective warm-tile disk-cache root directory for this process:
@@ -552,7 +552,7 @@ public static class S100VectorTileRenderer
                 ? TileDiskCache.NamespaceFor(productLayerSet, styleStateHash)
                 : null;
 
-        var state = s_states.GetValue(layer, static _ => new TileState());
+        var state = States.GetValue(layer, static _ => new TileState());
         lock (state.Sync)
         {
             var (baseScene, overlayScene) = PartitionScene(scene);
@@ -602,7 +602,7 @@ public static class S100VectorTileRenderer
     {
         ArgumentNullException.ThrowIfNull(layer);
 
-        if (s_states.TryGetValue(layer, out var state))
+        if (States.TryGetValue(layer, out var state))
         {
             lock (state.Sync)
             {
@@ -698,7 +698,7 @@ public static class S100VectorTileRenderer
             return;
         }
 
-        var state = s_states.GetValue(layer, static _ => new TileState());
+        var state = States.GetValue(layer, static _ => new TileState());
 
         // Resolve the live GPU context from the compositor canvas (null on a
         // software/CPU surface or when residency is disabled). Phase 5: warm
@@ -879,7 +879,7 @@ public static class S100VectorTileRenderer
                 // Spin up workers to cover the pending tiles. The per-layer
                 // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
                 // a layer with a visible backlog may borrow idle global capacity
-                // toward s_maxTotalWorkers (issue #432), but only for *visible*
+                // toward MaxTotalWorkers (issue #432), but only for *visible*
                 // work — predicted/speculative tiles (including the idle cross-band
                 // ±1 pre-warm, issue #428) never justify borrowing, so a busy
                 // layer's prewarm can't occupy cores a sibling wants for on-screen
@@ -892,13 +892,13 @@ public static class S100VectorTileRenderer
                 var baseline = RenderingOptimizations.TileWorkerCount;
                 var elasticCeiling = RenderingOptimizations.ResolvedProfile == PerformanceProfile.LowEnd
                     ? baseline
-                    : s_maxTotalWorkers;
+                    : MaxTotalWorkers;
 
                 workersToStart = ComputeWorkersToStart(
                     baseline,
                     elasticCeiling,
-                    s_maxTotalWorkers,
-                    Volatile.Read(ref s_activeWorkerTotal),
+                    MaxTotalWorkers,
+                    Volatile.Read(ref _activeWorkerTotal),
                     state.ActiveWorkers,
                     state.PendingVisible.Count,
                     state.PendingPredicted.Count + state.PendingCrossBand.Count,
@@ -907,7 +907,7 @@ public static class S100VectorTileRenderer
                 if (workersToStart > 0)
                 {
                     state.ActiveWorkers += workersToStart;
-                    Interlocked.Add(ref s_activeWorkerTotal, workersToStart);
+                    Interlocked.Add(ref _activeWorkerTotal, workersToStart);
 
                     // Publish the post-grant worker count so a sibling painting later
                     // in this same frame sees this layer's true share and reserves
@@ -1014,7 +1014,7 @@ public static class S100VectorTileRenderer
             var started = 0;
             for (var i = 0; i < workersToStart; i++)
             {
-                if (s_drainGate.TryRegister())
+                if (DrainGate.TryRegister())
                 {
                     _ = Task.Run(() => Worker(state));
                     started++;
@@ -1032,7 +1032,7 @@ public static class S100VectorTileRenderer
                     state.ActiveWorkers -= workersToStart - started;
                 }
 
-                Interlocked.Add(ref s_activeWorkerTotal, -(workersToStart - started));
+                Interlocked.Add(ref _activeWorkerTotal, -(workersToStart - started));
             }
         }
     }
@@ -1299,7 +1299,7 @@ public static class S100VectorTileRenderer
         var dest = new SKRect(
             (float)originX, (float)originY,
             (float)(originX + coverWidth), (float)(originY + coverHeight));
-        canvas.DrawImage(image, dest, s_sampling);
+        canvas.DrawImage(image, dest, Sampling);
         canvas.Restore();
 
         // DrawImage is deferred until the frame flushes (after Render returns), so
@@ -1331,13 +1331,13 @@ public static class S100VectorTileRenderer
         List<TileKey> fallback)
     {
         var now = Environment.TickCount64;
-        var last = Interlocked.Read(ref s_diagLastTick);
+        var last = Interlocked.Read(ref _diagLastTick);
         if (last != 0 && now - last < 1000)
         {
             return;
         }
 
-        if (Interlocked.CompareExchange(ref s_diagLastTick, now, last) != last)
+        if (Interlocked.CompareExchange(ref _diagLastTick, now, last) != last)
         {
             return;
         }
@@ -1432,7 +1432,7 @@ public static class S100VectorTileRenderer
     /// owning layer's GPU rotation composite, mirrored into the returned entry —
     /// are held alive against off-thread finalization until the owning layer is
     /// collected (Phase&#160;5). Returns the entry so the caller can mirror its
-    /// rotation resources into it. See <see cref="s_gpuRegistry"/>.
+    /// rotation resources into it. See <see cref="GpuRegistry"/>.
     /// </summary>
     private static GpuRegistryEntry RegisterGpuCache(ILayer layer, TileCache cache, object context)
     {
@@ -1443,9 +1443,9 @@ public static class S100VectorTileRenderer
             Context = context,
         };
 
-        lock (s_gpuRegistrySync)
+        lock (GpuRegistrySync)
         {
-            s_gpuRegistry.Add(entry);
+            GpuRegistry.Add(entry);
         }
 
         return entry;
@@ -1454,17 +1454,17 @@ public static class S100VectorTileRenderer
     /// <summary>
     /// Removes a GPU-texture cache from the registry once the render thread has
     /// taken ownership of disposing it (a live layer rebuilding or dropping its
-    /// cache). See <see cref="s_gpuRegistry"/>.
+    /// cache). See <see cref="GpuRegistry"/>.
     /// </summary>
     private static void UnregisterGpuCache(TileCache cache)
     {
-        lock (s_gpuRegistrySync)
+        lock (GpuRegistrySync)
         {
-            for (int i = s_gpuRegistry.Count - 1; i >= 0; i--)
+            for (int i = GpuRegistry.Count - 1; i >= 0; i--)
             {
-                if (ReferenceEquals(s_gpuRegistry[i].Cache, cache))
+                if (ReferenceEquals(GpuRegistry[i].Cache, cache))
                 {
-                    s_gpuRegistry.RemoveAt(i);
+                    GpuRegistry.RemoveAt(i);
                 }
             }
         }
@@ -1483,15 +1483,15 @@ public static class S100VectorTileRenderer
     /// backend on the finalizer thread. Only resources bound to
     /// <paramref name="grContext"/> are touched; a cache from a different (e.g.
     /// lost) context is left for that context's own teardown rather than freed
-    /// under the wrong one. See <see cref="s_gpuRegistry"/>.
+    /// under the wrong one. See <see cref="GpuRegistry"/>.
     /// </summary>
     private static void ReconcileGpuCaches(object grContext)
     {
-        lock (s_gpuRegistrySync)
+        lock (GpuRegistrySync)
         {
-            for (int i = s_gpuRegistry.Count - 1; i >= 0; i--)
+            for (int i = GpuRegistry.Count - 1; i >= 0; i--)
             {
-                var entry = s_gpuRegistry[i];
+                var entry = GpuRegistry[i];
                 if (entry.Layer.TryGetTarget(out _))
                 {
                     continue;
@@ -1510,7 +1510,7 @@ public static class S100VectorTileRenderer
                     entry.RotationSurface = null;
                 }
 
-                s_gpuRegistry.RemoveAt(i);
+                GpuRegistry.RemoveAt(i);
             }
         }
     }
@@ -1543,9 +1543,9 @@ public static class S100VectorTileRenderer
     {
         get
         {
-            lock (s_gpuRegistrySync)
+            lock (GpuRegistrySync)
             {
-                return s_gpuRegistry.Count;
+                return GpuRegistry.Count;
             }
         }
     }
@@ -1557,16 +1557,16 @@ public static class S100VectorTileRenderer
     /// </summary>
     internal static void ClearGpuRegistryForTest()
     {
-        lock (s_gpuRegistrySync)
+        lock (GpuRegistrySync)
         {
-            foreach (var entry in s_gpuRegistry)
+            foreach (var entry in GpuRegistry)
             {
                 entry.Cache.Dispose();
                 entry.RotationImage?.Dispose();
                 entry.RotationSurface?.Dispose();
             }
 
-            s_gpuRegistry.Clear();
+            GpuRegistry.Clear();
         }
     }
     /// world bounds and hard-clips to the tile core so adjacent tiles meet
@@ -1632,7 +1632,7 @@ public static class S100VectorTileRenderer
 
         canvas.Save();
         canvas.ClipRect(coreRect, SKClipOperation.Intersect, antialias: false);
-        canvas.DrawImage(toDraw, fullRect, s_sampling);
+        canvas.DrawImage(toDraw, fullRect, Sampling);
         canvas.Restore();
     }
 
@@ -1653,7 +1653,7 @@ public static class S100VectorTileRenderer
     /// work. Equal to <paramref name="baseline"/> on a LowEnd host (no borrowing),
     /// otherwise <paramref name="maxTotalWorkers"/>.
     /// </param>
-    /// <param name="maxTotalWorkers">The process-wide worker cap (<see cref="s_maxTotalWorkers"/>).</param>
+    /// <param name="maxTotalWorkers">The process-wide worker cap (<see cref="MaxTotalWorkers"/>).</param>
     /// <param name="activeWorkerTotal">Current total live workers across all layers.</param>
     /// <param name="layerActiveWorkers">This layer's current live workers.</param>
     /// <param name="pendingVisible">This layer's pending visible (on-screen) cold tiles.</param>
@@ -1748,7 +1748,7 @@ public static class S100VectorTileRenderer
     /// sibling's reservation. Stamps (or removes) this layer, then prunes stale
     /// entries so layers that stopped painting — culled, resolution-hidden, or torn
     /// down — age out of the reservation. Called only on the render thread under
-    /// the layer's <c>state.Sync</c>; takes <see cref="s_visibleLayerSync"/> second,
+    /// the layer's <c>state.Sync</c>; takes <see cref="VisibleLayerSync"/> second,
     /// never the reverse.
     /// </summary>
     /// <param name="state">The painting layer's tile state.</param>
@@ -1760,34 +1760,34 @@ public static class S100VectorTileRenderer
     {
         var windowTicks = (long)(Stopwatch.Frequency * ElasticFairnessWindowSeconds);
         var baseline = RenderingOptimizations.TileWorkerCount;
-        lock (s_visibleLayerSync)
+        lock (VisibleLayerSync)
         {
             if (hasVisibleWork)
             {
-                if (s_visibleLayerStamps.TryGetValue(state, out var box))
+                if (VisibleLayerStamps.TryGetValue(state, out var box))
                 {
                     box.StampTicks = nowTicks;
                     box.ActiveWorkers = layerActiveWorkers;
                 }
                 else
                 {
-                    s_visibleLayerStamps.Add(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
+                    VisibleLayerStamps.Add(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
                 }
             }
             else
             {
-                s_visibleLayerStamps.Remove(state);
+                VisibleLayerStamps.Remove(state);
             }
 
             var reserved = 0;
-            s_visibleLayerPruneScratch.Clear();
+            VisibleLayerPruneScratch.Clear();
             // A dead layer's weak key drops out of the table on its own; this pass
             // only evicts still-live layers whose last visible paint aged out.
-            foreach (var entry in s_visibleLayerStamps)
+            foreach (var entry in VisibleLayerStamps)
             {
                 if (nowTicks - entry.Value.StampTicks > windowTicks)
                 {
-                    s_visibleLayerPruneScratch.Add(entry.Key);
+                    VisibleLayerPruneScratch.Add(entry.Key);
                 }
                 else if (!ReferenceEquals(entry.Key, state))
                 {
@@ -1795,9 +1795,9 @@ public static class S100VectorTileRenderer
                 }
             }
 
-            foreach (var stale in s_visibleLayerPruneScratch)
+            foreach (var stale in VisibleLayerPruneScratch)
             {
-                s_visibleLayerStamps.Remove(stale);
+                VisibleLayerStamps.Remove(stale);
             }
 
             return reserved;
@@ -1812,9 +1812,9 @@ public static class S100VectorTileRenderer
     /// </summary>
     private static void RecordActiveVisibleLayerWorkers(TileState state, int layerActiveWorkers, long nowTicks)
     {
-        lock (s_visibleLayerSync)
+        lock (VisibleLayerSync)
         {
-            if (s_visibleLayerStamps.TryGetValue(state, out var box))
+            if (VisibleLayerStamps.TryGetValue(state, out var box))
             {
                 box.StampTicks = nowTicks;
                 box.ActiveWorkers = layerActiveWorkers;
@@ -1840,7 +1840,7 @@ public static class S100VectorTileRenderer
                 // into a half-torn-down Skia. slotReleased is still false on this
                 // path, so the finally below releases the slot and completes the
                 // drain-gate registration.
-                if (s_drainGate.IsDraining)
+                if (DrainGate.IsDraining)
                 {
                     return;
                 }
@@ -1878,7 +1878,7 @@ public static class S100VectorTileRenderer
                             baseline: RenderingOptimizations.TileWorkerCount))
                     {
                         state.ActiveWorkers--;
-                        Interlocked.Decrement(ref s_activeWorkerTotal);
+                        Interlocked.Decrement(ref _activeWorkerTotal);
                         slotReleased = true;
                         return;
                     }
@@ -2028,12 +2028,12 @@ public static class S100VectorTileRenderer
                     state.ActiveWorkers--;
                 }
 
-                Interlocked.Decrement(ref s_activeWorkerTotal);
+                Interlocked.Decrement(ref _activeWorkerTotal);
             }
 
             // Pair the TryRegister at the worker-start site. When the last
             // worker completes, this signals ShutdownAndDrain that Skia is idle.
-            s_drainGate.Complete();
+            DrainGate.Complete();
         }
     }
 
@@ -2227,13 +2227,13 @@ public static class S100VectorTileRenderer
         // on-screen space (anchors rotated by the same angle as the overlay), so
         // collisions are correct under rotation. Points reserve space first;
         // lower-priority labels that overlap an occupied footprint are skipped.
-        var suppressed = s_labelDeclutterer.Declutter(
-            scene, viewport, screenCull, s_overlayRenderer.HonorScaleVisibility,
+        var suppressed = _labelDeclutterer.Declutter(
+            scene, viewport, screenCull, OverlayRenderer.HonorScaleVisibility,
             rotationDeg, cx, cy);
 
         if (!rotate)
         {
-            s_overlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
+            OverlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
             {
                 PointCullBounds = screenCull,
                 SuppressedText = suppressed,
@@ -2249,7 +2249,7 @@ public static class S100VectorTileRenderer
         canvas.RotateDegrees((float)rotationDeg, cx, cy);
         try
         {
-            s_overlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
+            OverlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
             {
                 PointCullBounds = rotatedCull,
                 DrawText = false,
@@ -2261,7 +2261,7 @@ public static class S100VectorTileRenderer
             canvas.Restore();
         }
 
-        s_overlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
+        OverlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
         {
             PointCullBounds = screenCull,
             SuppressedText = suppressed,
@@ -2436,7 +2436,7 @@ public static class S100VectorTileRenderer
         // mirroring the GPU-backed RotationSurface/RotationImage into it (in
         // lockstep with the fields below) keeps them reachable for render-thread
         // disposal even after the weakly-held TileState is collected. See
-        // GpuRegistryEntry / s_gpuRegistry.
+        // GpuRegistryEntry / GpuRegistry.
         public GpuRegistryEntry? GpuEntry;
 
         // Visible misses drain before speculative (predicted) tiles.

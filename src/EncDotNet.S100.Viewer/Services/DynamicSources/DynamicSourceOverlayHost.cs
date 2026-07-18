@@ -63,7 +63,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     private readonly Dictionary<string, bool> _visibility = new(StringComparer.Ordinal);
     private readonly object _lock = new();
 
-    private static readonly DefaultDynamicFeatureRenderer s_defaultRenderer = new();
+    private static readonly DefaultDynamicFeatureRenderer DefaultRenderer = new();
 
     /// <inheritdoc />
     public event Action? SourcesChanged;
@@ -168,7 +168,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     {
         if (string.IsNullOrEmpty(rendererKey))
         {
-            return s_defaultRenderer;
+            return DefaultRenderer;
         }
 
         var resolved = _services.GetKeyedService<IDynamicFeatureRenderer>(rendererKey);
@@ -178,7 +178,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
             "No IDynamicFeatureRenderer registered under key '{RendererKey}' for source '{SourceId}'; falling back to default renderer.",
             rendererKey,
             sourceId);
-        return s_defaultRenderer;
+        return DefaultRenderer;
     }
 
     private void Rebuild(Registration registration)

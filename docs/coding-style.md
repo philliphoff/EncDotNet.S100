@@ -101,10 +101,16 @@ code is migrated toward it opportunistically.
 | Interface | `PascalCase` prefixed with `I` | `IAssetSource` |
 | Type parameter | `PascalCase` prefixed with `T` | `TModel`, `TKey` |
 | Local variable, parameter | `camelCase` | `versionPart`, `edition` |
-| Private / internal instance field | `_camelCase` | `_assetSource` |
-| Constant, `static readonly` | `PascalCase` | `MaxDepthBands` |
+| Private / internal field (instance or mutable static) | `_camelCase` | `_assetSource`, `_tileWorkerCount` |
+| Constant, `static readonly` | `PascalCase` | `MaxDepthBands`, `Sampling` |
 | Async method | `PascalCase` suffixed `Async` | `OpenFeatureCatalogueAsync` |
 
+- The `s_`/`t_` prefixes (the dotnet/runtime convention for static and
+  thread-static fields) are **not** used here: a private field is `_camelCase`
+  regardless of whether it is instance or static, and a `static readonly` /
+  `const` field is `PascalCase`. When a `static readonly` field backs a
+  same-named property, method, or type, keep the `_camelCase` form for the
+  field (the accessor owns the `PascalCase` name).
 - Do **not** prefix with `this.` to disambiguate fields — the `_` field prefix
   already makes fields visually distinct, and `this.` is effectively unused in
   the codebase.

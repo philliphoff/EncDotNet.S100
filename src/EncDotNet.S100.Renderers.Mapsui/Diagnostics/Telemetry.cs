@@ -30,7 +30,7 @@ internal static class Telemetry
         public long LastReadTimestamp = Stopwatch.GetTimestamp();
     }
 
-    private static readonly ConcurrentDictionary<string, CallStats> s_callStats =
+    private static readonly ConcurrentDictionary<string, CallStats> _callStats =
         new ConcurrentDictionary<string, CallStats>();
 
     /// <summary>
@@ -42,7 +42,7 @@ internal static class Telemetry
     internal static void RecordGetFeaturesCall(string? product)
     {
         var key = product ?? string.Empty;
-        var stats = s_callStats.GetOrAdd(key, static _ => new CallStats());
+        var stats = _callStats.GetOrAdd(key, static _ => new CallStats());
         Interlocked.Increment(ref stats.Count);
     }
 
@@ -442,21 +442,21 @@ internal static class Telemetry
         Activity.Current?.AddException(ex);
 
         var now = Environment.TickCount64;
-        var last = Interlocked.Read(ref s_lastRenderFaultLogTick);
+        var last = Interlocked.Read(ref _lastRenderFaultLogTick);
         if ((last == 0 || now - last >= RenderFaultLogIntervalMs)
-            && Interlocked.CompareExchange(ref s_lastRenderFaultLogTick, now, last) == last)
+            && Interlocked.CompareExchange(ref _lastRenderFaultLogTick, now, last) == last)
         {
             Console.Error.WriteLine($"[S100.Render] paint fault dropped a frame: {ex}");
         }
     }
 
     private const long RenderFaultLogIntervalMs = 5000;
-    private static long s_lastRenderFaultLogTick;
+    private static long _lastRenderFaultLogTick;
 
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
-        var measurements = new List<Measurement<double>>(s_callStats.Count);
-        foreach (var pair in s_callStats)
+        var measurements = new List<Measurement<double>>(_callStats.Count);
+        foreach (var pair in _callStats)
         {
             var stats = pair.Value;
             var nowTimestamp = Stopwatch.GetTimestamp();

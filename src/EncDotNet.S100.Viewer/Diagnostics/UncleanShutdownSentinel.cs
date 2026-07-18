@@ -74,13 +74,13 @@ internal static class UncleanShutdownSentinel
         "EncDotNet.S100.Viewer",
         "crash-markers");
 
-    private static string s_directory = DefaultDirectory;
-    private static bool s_enabled = true;
+    private static string _directory = DefaultDirectory;
+    private static bool _enabled = true;
 
     /// <summary>The active marker directory.</summary>
     public static string Directory
     {
-        get { lock (Gate) return s_directory; }
+        get { lock (Gate) return _directory; }
     }
 
     /// <summary>
@@ -97,8 +97,8 @@ internal static class UncleanShutdownSentinel
     {
         lock (Gate)
         {
-            s_enabled = enabled;
-            s_directory = string.IsNullOrWhiteSpace(directory) ? DefaultDirectory : directory;
+            _enabled = enabled;
+            _directory = string.IsNullOrWhiteSpace(directory) ? DefaultDirectory : directory;
         }
     }
 
@@ -122,8 +122,8 @@ internal static class UncleanShutdownSentinel
         string directory;
         lock (Gate)
         {
-            enabled = s_enabled;
-            directory = s_directory;
+            enabled = _enabled;
+            directory = _directory;
         }
 
         if (!enabled)
@@ -145,8 +145,8 @@ internal static class UncleanShutdownSentinel
         string directory;
         lock (Gate)
         {
-            enabled = s_enabled;
-            directory = s_directory;
+            enabled = _enabled;
+            directory = _directory;
         }
 
         if (!enabled)

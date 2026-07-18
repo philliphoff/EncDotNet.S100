@@ -16,17 +16,17 @@ namespace EncDotNet.S100.PerfRunner;
 /// </summary>
 internal static class SharedInfrastructure
 {
-    private static readonly Lazy<PortrayalCatalogueManager> s_catalogueManager = new(CreateCatalogueManager);
-    private static readonly Lazy<MoonSharpLuaEngine> s_luaEngine = new(() => new MoonSharpLuaEngine());
-    private static readonly Lazy<ProjNetCrsTransformFactory> s_crsFactory = new(() => new ProjNetCrsTransformFactory());
-    private static readonly Lazy<FeatureCatalogueManager> s_featureCatalogueManager =
+    private static readonly Lazy<PortrayalCatalogueManager> _catalogueManager = new(CreateCatalogueManager);
+    private static readonly Lazy<MoonSharpLuaEngine> _luaEngine = new(() => new MoonSharpLuaEngine());
+    private static readonly Lazy<ProjNetCrsTransformFactory> _crsFactory = new(() => new ProjNetCrsTransformFactory());
+    private static readonly Lazy<FeatureCatalogueManager> _featureCatalogueManager =
         new(() => new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
 
-    public static PortrayalCatalogueManager CatalogueManager => s_catalogueManager.Value;
-    public static MoonSharpLuaEngine LuaEngine => s_luaEngine.Value;
-    public static ProjNetCrsTransformFactory CrsFactory => s_crsFactory.Value;
+    public static PortrayalCatalogueManager CatalogueManager => _catalogueManager.Value;
+    public static MoonSharpLuaEngine LuaEngine => _luaEngine.Value;
+    public static ProjNetCrsTransformFactory CrsFactory => _crsFactory.Value;
     public static FeatureCatalogueManager FeatureCatalogueManager =>
-        s_featureCatalogueManager.Value;
+        _featureCatalogueManager.Value;
 
     public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory()
     {

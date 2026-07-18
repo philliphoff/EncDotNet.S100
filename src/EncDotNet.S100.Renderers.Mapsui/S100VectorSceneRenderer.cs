@@ -109,11 +109,11 @@ public static class S100VectorSceneRenderer
     /// </summary>
     public static Action? RequestRedraw { get; set; }
 
-    private static readonly ConditionalWeakTable<ILayer, SceneState> s_states = new();
+    private static readonly ConditionalWeakTable<ILayer, SceneState> States = new();
 
-    private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+    private static readonly SKSamplingOptions Sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
-    private static readonly bool s_diag =
+    private static readonly bool Diag =
         (Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_DIAG") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";
 
@@ -154,7 +154,7 @@ public static class S100VectorSceneRenderer
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
 
-        var state = s_states.GetValue(layer, static _ => new SceneState());
+        var state = States.GetValue(layer, static _ => new SceneState());
         lock (state.Sync)
         {
             state.Scene = scene;
@@ -205,7 +205,7 @@ public static class S100VectorSceneRenderer
             return;
         }
 
-        var state = s_states.GetValue(layer, static _ => new SceneState());
+        var state = States.GetValue(layer, static _ => new SceneState());
 
         var deviceScale = canvas.TotalMatrix.ScaleX;
         if (deviceScale <= 0 || float.IsNaN(deviceScale))
@@ -257,7 +257,7 @@ public static class S100VectorSceneRenderer
         if (toBlit is not null)
         {
             var compositeStart = Stopwatch.GetTimestamp();
-            canvas.DrawImage(toBlit, dest, s_sampling);
+            canvas.DrawImage(toBlit, dest, Sampling);
             S100Diag.Telemetry.SceneCompositeDuration.Record(
                 Stopwatch.GetElapsedTime(compositeStart).TotalMilliseconds);
         }
@@ -375,7 +375,7 @@ public static class S100VectorSceneRenderer
                     state.Pending = null;
                     published = true;
 
-                    if (s_diag)
+                    if (Diag)
                     {
                         Console.Error.WriteLine(
                             $"[VecScene] published res={request.Resolution:G6} img={image.Width}x{image.Height}");
