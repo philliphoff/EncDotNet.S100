@@ -26,12 +26,14 @@ public interface IDatasetProcessor
     /// The lightweight, product-agnostic <see cref="DatasetMetadata"/> for
     /// this dataset — its declared specification and, where cheaply
     /// derivable, its geographic extent, horizontal CRS, display-scale
-    /// window, and temporal coverage. Derived <em>once</em> from the
-    /// already-parsed dataset (never a second parse) and cached, so hosts can
-    /// frame a viewport, register a layer, draw an out-of-scale indicator, or
-    /// gate visibility without re-reading the dataset. The default
-    /// implementation carries only <see cref="Spec"/>; processors that can
-    /// supply an extent (and other facts) override it. See issue #467 / #460.
+    /// window, and temporal coverage. Overriding processors derive it
+    /// <em>once</em> from the already-parsed dataset (never a second parse) and
+    /// cache it, so hosts can frame a viewport, register a layer, draw an
+    /// out-of-scale indicator, or gate visibility without re-reading the
+    /// dataset. The default implementation does not override this and instead
+    /// returns a fresh, minimal value carrying only <see cref="Spec"/> on each
+    /// access; processors that can supply an extent (and other facts) override
+    /// it with the derive-once-and-cache behaviour above. See issue #467 / #460.
     /// </summary>
     DatasetMetadata Metadata => new() { Spec = Spec };
 
