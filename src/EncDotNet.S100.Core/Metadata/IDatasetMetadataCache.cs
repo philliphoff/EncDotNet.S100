@@ -27,7 +27,12 @@ public interface IDatasetMetadataCache
     /// <summary>Number of reads served from a valid cached entry.</summary>
     long Hits { get; }
 
-    /// <summary>Number of reads that fell through to the producer.</summary>
+    /// <summary>
+    /// Number of lookups (via either <see cref="GetOrRead"/> or
+    /// <see cref="TryGet"/>) not served from a valid cached entry. In
+    /// <see cref="GetOrRead"/> such a miss is where the producer runs;
+    /// in <see cref="TryGet"/> it simply returns <see langword="false"/>.
+    /// </summary>
     long Misses { get; }
 
     /// <summary>
