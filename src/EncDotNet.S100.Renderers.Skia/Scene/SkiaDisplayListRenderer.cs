@@ -978,10 +978,14 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         /// </summary>
         public SKPathEffect DashFor(ReadOnlySpan<float> intervals, float phase)
         {
-            var key = new DashKey(intervals, phase);
+            // Materialize the pattern once and share it between the cache key and
+            // the created effect, so a cache miss allocates a single array rather
+            // than one for the key and another for CreateDash.
+            float[] pattern = intervals.ToArray();
+            var key = new DashKey(pattern, phase);
             if (!_dashEffects.TryGetValue(key, out var effect))
             {
-                effect = SKPathEffect.CreateDash(intervals.ToArray(), phase);
+                effect = SKPathEffect.CreateDash(pattern, phase);
                 _dashEffects[key] = effect;
             }
             return effect;
@@ -1003,9 +1007,9 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             private readonly float _phase;
             private readonly int _hash;
 
-            public DashKey(ReadOnlySpan<float> intervals, float phase)
+            public DashKey(float[] intervals, float phase)
             {
-                _intervals = intervals.ToArray();
+                _intervals = intervals;
                 _phase = phase;
                 var hash = new HashCode();
                 foreach (var value in intervals)
