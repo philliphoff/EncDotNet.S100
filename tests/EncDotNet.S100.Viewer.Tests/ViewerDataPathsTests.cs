@@ -54,11 +54,11 @@ public class ViewerDataPathsTests
     public void CacheDirectories_IncludeTileCacheOnlyWhenBaseDirectoryInUse()
     {
         var withoutBase = new ViewerDataPaths();
-        Assert.Equal(2, withoutBase.CacheDirectories.Count);
+        Assert.Equal(4, withoutBase.CacheDirectories.Count);
         Assert.DoesNotContain(withoutBase.CacheDirectories, d => d.Contains("tiles"));
 
         var withBase = new ViewerDataPaths(Path.Combine(Path.GetTempPath(), "encdotnet-" + Guid.NewGuid().ToString("N")));
-        Assert.Equal(3, withBase.CacheDirectories.Count);
+        Assert.Equal(5, withBase.CacheDirectories.Count);
         Assert.Contains(withBase.CacheDirectories, d => d.EndsWith("tiles"));
     }
 

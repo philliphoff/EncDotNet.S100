@@ -138,6 +138,40 @@ public class S102Edition21Tests
         }
     }
 
+    [Fact]
+    public void Metadata_Edition21Utm_SurfacesCrsAndExtent_WithoutReReadingPayload()
+    {
+        var path = WriteEdition21Utm();
+        using var manager = CreateCatalogueManager();
+        var processor = new S102DatasetProcessor(
+            path,
+            manager,
+            new MoonSharpLuaEngine(),
+            new ProjNetCrsTransformFactory());
+
+        try
+        {
+            var metadata = processor.Metadata;
+
+            Assert.Equal("S-102", metadata.Spec.Name);
+            Assert.Equal(32617, metadata.HorizontalCrsEpsg);
+            Assert.NotNull(metadata.Extent);
+
+            var extent = metadata.Extent!;
+            Assert.True(extent.SouthLatitude <= extent.NorthLatitude);
+            Assert.True(extent.WestLongitude <= extent.EastLongitude);
+
+            // Metadata is memoized: the same instance is returned on repeat
+            // access (no second derivation, issue #467 WS1).
+            Assert.Same(metadata, processor.Metadata);
+        }
+        finally
+        {
+            processor.Dispose();
+            File.Delete(path);
+        }
+    }
+
     private static PortrayalCatalogueManager CreateCatalogueManager()
     {
         var manager = new PortrayalCatalogueManager();

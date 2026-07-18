@@ -61,6 +61,57 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the already-parsed dataset: for gridded (dcf2) surfaces
+    /// from the coverage source's georeferencing metadata; for fixed-station
+    /// (dcf8) series from the union of station coordinates. No HDF5 payload is
+    /// re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    private DatasetMetadata BuildMetadata()
+    {
+        if (_source is not null && _data is S104DatasetData.GriddedCoverage gridded)
+        {
+            var extent = _source.Metadata.Extent;
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(
+                    extent.SouthLatitude,
+                    extent.WestLongitude,
+                    extent.NorthLatitude,
+                    extent.EastLongitude),
+                HorizontalCrsEpsg = gridded.Dataset.HorizontalCRS,
+            };
+        }
+
+        if (_stationSeries is { Stations.Count: > 0 } series)
+        {
+            double minLat = double.MaxValue, minLon = double.MaxValue;
+            double maxLat = double.MinValue, maxLon = double.MinValue;
+            foreach (var station in series.Stations)
+            {
+                if (station.Latitude < minLat) minLat = station.Latitude;
+                if (station.Latitude > maxLat) maxLat = station.Latitude;
+                if (station.Longitude < minLon) minLon = station.Longitude;
+                if (station.Longitude > maxLon) maxLon = station.Longitude;
+            }
+
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(minLat, minLon, maxLat, maxLon),
+                HorizontalCrsEpsg = series.HorizontalCRS,
+            };
+        }
+
+        return new DatasetMetadata { Spec = Spec };
+    }
+
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;

@@ -30,6 +30,31 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     public SpecRef Spec { get; }
 
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the coverage source's already-read georeferencing
+    /// metadata (root attributes + coverage extent) and the dataset's
+    /// horizontal CRS — no HDF5 payload is re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    private DatasetMetadata BuildMetadata()
+    {
+        var extent = _source.Metadata.Extent;
+        return new DatasetMetadata
+        {
+            Spec = Spec,
+            Extent = new BoundingBox(
+                extent.SouthLatitude,
+                extent.WestLongitude,
+                extent.NorthLatitude,
+                extent.EastLongitude),
+            HorizontalCrsEpsg = _dataset.HorizontalCRS,
+        };
+    }
+
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 

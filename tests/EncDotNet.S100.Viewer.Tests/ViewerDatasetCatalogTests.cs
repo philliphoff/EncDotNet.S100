@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
@@ -57,21 +58,21 @@ public class ViewerDatasetCatalogTests
     }
 
     [Fact]
-    public void ResolveS101Edition_parses_declared_product_specification_edition()
+    public void S101_ReadMetadata_parses_declared_product_specification_edition()
     {
         var dataset = S101Dataset.FromDocument(SyntheticDocument("1.0.2"));
 
-        var edition = ViewerDatasetCatalog.ResolveS101Edition(dataset);
+        var edition = dataset.ReadMetadata().Spec.Edition;
 
         Assert.Equal(new SpecVersion(1, 0, 2), edition);
     }
 
     [Fact]
-    public void ResolveS101Edition_defaults_when_edition_absent()
+    public void S101_ReadMetadata_defaults_edition_when_absent()
     {
         var dataset = S101Dataset.FromDocument(SyntheticDocument(""));
 
-        var edition = ViewerDatasetCatalog.ResolveS101Edition(dataset);
+        var edition = dataset.ReadMetadata().Spec.Edition;
 
         Assert.Equal(default, edition);
     }
@@ -215,6 +216,33 @@ public class ViewerDatasetCatalogTests
         Assert.IsType<S124DatasetData>(loaded.Data);
     }
 
+    [SkippableFact]
+    public void Gml_entry_bounds_match_canonical_ReadMetadata_extent()
+    {
+        // Parity guard for issue #467 WS1: the catalog now derives GML bounds
+        // from the dataset's canonical ReadMetadata() rather than a hand-rolled
+        // coordinate walk. The projected bounds must equal that extent exactly.
+        var fixture = Path("S124", "navwarn_surface.gml");
+        Skip.IfNot(File.Exists(fixture), $"Missing fixture {fixture}");
+
+        BoundingBox? expected;
+        using (var stream = File.OpenRead(fixture))
+            expected = S124Dataset.Open(stream).ReadMetadata().Extent;
+        Assert.NotNull(expected);
+
+        var loader = new FakeDatasetLoaderService();
+        using var catalog = new ViewerDatasetCatalog(loader);
+        var entry = new DatasetEntry(fixture, "S-124");
+
+        loader.RaiseLoaded(entry);
+
+        var loaded = Assert.Single(catalog.Datasets);
+        Assert.Equal(expected!.SouthLatitude, loaded.Bounds.SouthLatitude, 9);
+        Assert.Equal(expected.WestLongitude, loaded.Bounds.WestLongitude, 9);
+        Assert.Equal(expected.NorthLatitude, loaded.Bounds.NorthLatitude, 9);
+        Assert.Equal(expected.EastLongitude, loaded.Bounds.EastLongitude, 9);
+    }
+
     [Fact]
     public void On_disk_entry_with_missing_file_is_skipped()
     {
@@ -247,13 +275,13 @@ public class ViewerDatasetCatalogTests
     }
 
     [Fact]
-    public void ComputeS101Bounds_returns_cell_extent_from_point_geometry()
+    public void S101_ReadMetadata_returns_cell_extent_from_point_geometry()
     {
         var dataset = SynthS101WithPoints(
             (Rcid: 1u, Lat: 50.5, Lon: -1.2),
             (Rcid: 2u, Lat: 50.9, Lon: -0.8));
 
-        var bounds = ViewerDatasetCatalog.ComputeS101Bounds(dataset);
+        var bounds = dataset.ReadMetadata().Extent;
 
         Assert.NotNull(bounds);
         Assert.Equal(50.5, bounds!.SouthLatitude, 6);
@@ -263,11 +291,11 @@ public class ViewerDatasetCatalogTests
     }
 
     [Fact]
-    public void ComputeS101Bounds_returns_null_for_coordinate_free_cell()
+    public void S101_ReadMetadata_returns_null_extent_for_coordinate_free_cell()
     {
         var dataset = SynthS101WithPoints();
 
-        Assert.Null(ViewerDatasetCatalog.ComputeS101Bounds(dataset));
+        Assert.Null(dataset.ReadMetadata().Extent);
     }
 
     private static S101Dataset SynthS101WithPoints(

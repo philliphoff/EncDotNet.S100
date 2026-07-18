@@ -46,6 +46,26 @@ product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### Metadata as a parse byproduct (issue #467 / #460)
+
+`IDatasetProcessor.Metadata` exposes the lightweight, product-agnostic
+`Core.DatasetMetadata` (declared spec, geographic extent, horizontal CRS,
+display-scale window, time coverage) **derived once from the dataset the
+processor already parsed** — never a second parse or a separate
+`ReadMetadata(path)` call. Hosts that need to frame a viewport, register a
+layer, draw an out-of-scale indicator, or gate visibility read it from the
+open processor rather than re-reading the file.
+
+The value is memoized per processor. GML processors compute the raw
+(unpadded) WGS-84 envelope with a single feature scan that is **shared**
+with the padded render extent (`ComputeGeographicExtent`), so repeated
+renders no longer re-walk every coordinate. HDF5 (S-102/104/111) derive
+the extent + CRS from the coverage source's already-read georeferencing
+metadata (no `values` payload is re-read); S-104/S-111 fixed-station
+(dcf8) datasets union their station coordinates. The default interface
+implementation carries only `Spec`, so a processor that cannot cheaply
+supply an extent still compiles.
+
 ### Declared-edition assessment (issue #248)
 
 Every processor populates `IDatasetProcessor.Spec` with the dataset's

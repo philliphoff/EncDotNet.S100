@@ -32,6 +32,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private readonly DatasetsViewModel _datasets;
     private readonly INotificationService _notifications;
     private readonly LazyLoading.ExchangeSetLazyLoadCoordinator? _lazyCoordinator;
+    private readonly IDatasetMetadataReader? _metadataReader;
+    private readonly Caching.IS57CatalogCache? _s57CatalogCache;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
@@ -39,13 +41,17 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     public ExchangeSetService(
         DatasetsViewModel datasets,
         INotificationService notifications,
-        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null)
+        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null,
+        IDatasetMetadataReader? metadataReader = null,
+        Caching.IS57CatalogCache? s57CatalogCache = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(notifications);
         _datasets = datasets;
         _notifications = notifications;
         _lazyCoordinator = lazyCoordinator;
+        _metadataReader = metadataReader;
+        _s57CatalogCache = s57CatalogCache;
     }
 
     /// <summary>
@@ -103,7 +109,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         if (ExchangeSetDetection.LooksLikeLooseCellFolder(folderOrZipPath))
         {
             return await OpenLooseCellFolderAsync(
-                    folderOrZipPath, progress, cancellationToken, notification)
+                    folderOrZipPath, progress, cancellationToken, notification, onFramingReady)
                 .ConfigureAwait(true);
         }
 
@@ -453,7 +459,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             try
             {
                 root = ExchangeSetDetection.ResolveS57Root(folderOrCataloguePath);
-                cells = S57ExchangeSetCatalog.ReadBaseCells(root);
+                cells = ReadBaseCellsCached(root);
             }
             catch (FileNotFoundException)
             {
@@ -711,7 +717,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         string folderPath,
         IProgress<ExchangeSetProgress>? progress,
         CancellationToken cancellationToken,
-        INotificationHandle? notification)
+        INotificationHandle? notification,
+        Action<BoundingBox>? onFramingReady = null)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(
             "loosecells.folder.open", System.Diagnostics.ActivityKind.Internal);
@@ -738,6 +745,23 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             }
 
             progress?.Report(new ExchangeSetProgress(folderPath, baseCells.Count, 0, 0, null));
+
+            // Frame the viewport up front from a cheap per-cell metadata probe
+            // (cross-session cached) so a loose folder frames as soon as its
+            // union extent is known — parity with the catalogued S-100 / S-57
+            // branches — instead of waiting for every cell's full load
+            // (issue #467 WS3). A null union (no probeable cell) preserves the
+            // legacy "frame by unioning loaded layer extents" fallback. The
+            // probe runs on a worker thread: on a first-open cache miss it
+            // parses each cell's metadata, which must not block the UI thread
+            // that OpenAsync is dispatched on.
+            var unionBoundingBox = _metadataReader is null
+                ? null
+                : await Task.Run(
+                    () => ComputeLooseCellUnion(baseCells, _metadataReader),
+                    cancellationToken).ConfigureAwait(true);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+                onFramingReady(framingBox);
 
             source = FileSystemAssetSource.Create(folderPath);
             var tracked = new TrackedExchangeSet(
@@ -854,9 +878,11 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 SkippedUnsupported = 0,
                 Cancelled = false,
                 SkipMessages = Array.Empty<string>(),
-                // Loose cells carry no catalogue bounding box; the drop
-                // handler frames them by unioning loaded layer extents.
-                UnionBoundingBox = null,
+                // Loose cells now frame up front from the cheap metadata
+                // probe when one is available (issue #467 WS3); the drop
+                // handler still unions loaded layer extents when the probe
+                // yielded nothing (unionBoundingBox is null).
+                UnionBoundingBox = unionBoundingBox,
                 PendingTerminal = pendingTerminal,
             };
         }
@@ -915,6 +941,80 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             SouthBoundLatitude = south!.Value,
             NorthBoundLatitude = north!.Value,
         };
+    }
+
+    /// <summary>
+    /// Computes the EPSG:4326 union of the extents obtained by probing each
+    /// loose base cell's cheap metadata via <paramref name="reader"/>,
+    /// ignoring cells whose product is not probeable or that report no
+    /// extent. Returns <c>null</c> when no cell yielded an extent (the caller
+    /// then keeps the legacy "frame from loaded layers" fallback).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The probe reads the same files the subsequent full loads will read,
+    /// but skips portrayal, so it is cheap; the reader is expected to cache
+    /// across sessions. Extents come from the reader as WGS-84
+    /// <see cref="EncDotNet.S100.Pipelines.BoundingBox"/> (south / west /
+    /// north / east) and are mapped onto the exchange-set
+    /// <see cref="BoundingBox"/> (west / east / south / north) the framing
+    /// callback expects. Antimeridian-spanning folders are not handled (they
+    /// would yield an over-wide box), mirroring
+    /// <see cref="ComputeUnionBoundingBox"/>. Exposed as <c>internal</c> for
+    /// unit testing.
+    /// </para>
+    /// </remarks>
+    internal static BoundingBox? ComputeLooseCellUnion(
+        IReadOnlyList<string> baseCells,
+        IDatasetMetadataReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(baseCells);
+        ArgumentNullException.ThrowIfNull(reader);
+
+        double? west = null, east = null, south = null, north = null;
+        foreach (var cell in baseCells)
+        {
+            if (reader.TryRead(cell)?.Extent is not { } ext)
+                continue;
+
+            west = west is null ? ext.WestLongitude : Math.Min(west.Value, ext.WestLongitude);
+            east = east is null ? ext.EastLongitude : Math.Max(east.Value, ext.EastLongitude);
+            south = south is null ? ext.SouthLatitude : Math.Min(south.Value, ext.SouthLatitude);
+            north = north is null ? ext.NorthLatitude : Math.Max(north.Value, ext.NorthLatitude);
+        }
+
+        if (west is null) return null;
+        return new BoundingBox
+        {
+            WestBoundLongitude = west.Value,
+            EastBoundLongitude = east!.Value,
+            SouthBoundLatitude = south!.Value,
+            NorthBoundLatitude = north!.Value,
+        };
+    }
+
+    /// <summary>
+    /// Reads the S-57 / S-63 base cells for the exchange set rooted at
+    /// <paramref name="root"/>, serving them from the cross-session catalogue
+    /// sidecar cache when a valid entry exists (issue #467 WS3 Slice 2), so a
+    /// large set re-opens without re-parsing the binary <c>CATALOG.031</c>.
+    /// Falls back to a direct read when no cache is configured.
+    /// </summary>
+    /// <param name="root">The resolved exchange-set root directory.</param>
+    /// <returns>The catalogue's base cells.</returns>
+    /// <exception cref="FileNotFoundException">No <c>CATALOG.031</c> was found under <paramref name="root"/>.</exception>
+    private IReadOnlyList<S57ExchangeSetCell> ReadBaseCellsCached(string root)
+    {
+        if (_s57CatalogCache is null)
+            return S57ExchangeSetCatalog.ReadBaseCells(root);
+
+        // Key the cache on the resolved CATALOG.031 file (mtime + size).
+        // ResolveCataloguePath throws FileNotFoundException when no catalogue
+        // exists — the same exception ReadBaseCells would throw — so the
+        // caller's catalogue-not-found handling is unchanged.
+        var cataloguePath = S57ExchangeSetCatalog.ResolveCataloguePath(root);
+        return _s57CatalogCache.GetOrRead(
+            cataloguePath, _ => S57ExchangeSetCatalog.ReadBaseCells(root));
     }
 
     private static string ResolveSourceKind(string path)

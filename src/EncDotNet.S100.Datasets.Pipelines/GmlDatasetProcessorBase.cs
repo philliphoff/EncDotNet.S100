@@ -42,6 +42,14 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     // is in flight) must not interleave. Mirrors the S-101 render gate.
     private readonly SemaphoreSlim _renderGate = new(1, 1);
 
+    // Memoized raw (unpadded) WGS-84 envelope of all features, computed once
+    // on first access. Features are immutable for this processor's lifetime,
+    // so both the padded render extent (ComputeGeographicExtent) and the raw
+    // Metadata.Extent derive from this single scan rather than re-walking
+    // every coordinate on each render (issue #467, WS1).
+    private RawEnvelope? _rawEnvelope;
+    private DatasetMetadata? _metadata;
+
     /// <summary>
     /// Initializes the shared processor state. Called by subclass constructors
     /// after parsing the dataset and creating the catalogue.
@@ -426,8 +434,51 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     /// Computes the padded geographic extent (lat / lon degrees) of all
     /// features. The Mapsui renderer projects this to Spherical Mercator;
     /// keeping it Mapsui-free lets the headless path share the same bounds.
+    /// Derives from the memoized raw envelope, so repeated renders do not
+    /// re-scan every coordinate (issue #467, WS1).
     /// </summary>
     protected GeographicBounds ComputeGeographicExtent()
+    {
+        var env = _rawEnvelope ??= ComputeRawEnvelope();
+        if (!env.Any) return new GeographicBounds(0, 0, 0, 0);
+
+        var pad = MinExtentPadding;
+        var latPad = Math.Max(pad, (env.MaxLat - env.MinLat) * 0.1);
+        var lonPad = Math.Max(pad, (env.MaxLon - env.MinLon) * 0.1);
+        return new GeographicBounds(
+            env.MinLon - lonPad,
+            env.MinLat - latPad,
+            env.MaxLon + lonPad,
+            env.MaxLat + latPad);
+    }
+
+    /// <inheritdoc/>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    /// <summary>
+    /// Builds the lightweight <see cref="DatasetMetadata"/> for this dataset
+    /// from the already-parsed features — declared spec plus the raw
+    /// (unpadded) geographic envelope. Shares the single feature scan with
+    /// <see cref="ComputeGeographicExtent"/> so no extra parse or coordinate
+    /// walk is incurred (issue #467, WS1).
+    /// </summary>
+    private DatasetMetadata BuildMetadata()
+    {
+        var env = _rawEnvelope ??= ComputeRawEnvelope();
+        return new DatasetMetadata
+        {
+            Spec = Spec,
+            Extent = env.Any
+                ? new BoundingBox(env.MinLat, env.MinLon, env.MaxLat, env.MaxLon)
+                : null,
+        };
+    }
+
+    /// <summary>
+    /// Scans every feature's coordinates once to produce the raw (unpadded)
+    /// WGS-84 envelope. Memoized by callers into <see cref="_rawEnvelope"/>.
+    /// </summary>
+    private RawEnvelope ComputeRawEnvelope()
     {
         double minLon = double.MaxValue, minLat = double.MaxValue;
         double maxLon = double.MinValue, maxLat = double.MinValue;
@@ -450,15 +501,16 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
         }
 
-        if (!any) return new GeographicBounds(0, 0, 0, 0);
-
-        var pad = MinExtentPadding;
-        var latPad = Math.Max(pad, (maxLat - minLat) * 0.1);
-        var lonPad = Math.Max(pad, (maxLon - minLon) * 0.1);
-        return new GeographicBounds(
-            minLon - lonPad,
-            minLat - latPad,
-            maxLon + lonPad,
-            maxLat + latPad);
+        return new RawEnvelope(minLat, minLon, maxLat, maxLon, any);
     }
+
+    /// <summary>
+    /// Raw (unpadded) WGS-84 envelope of a dataset's features. <see cref="Any"/>
+    /// is <see langword="false"/> when no feature carried coordinates. A
+    /// reference type so the unsynchronized <c>??=</c> memoization publishes it
+    /// via an atomic reference write — concurrent readers never observe a torn
+    /// multi-field value (issue #467, WS1).
+    /// </summary>
+    private sealed record RawEnvelope(
+        double MinLat, double MinLon, double MaxLat, double MaxLon, bool Any);
 }
