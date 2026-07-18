@@ -2397,17 +2397,24 @@ public sealed class S57ToS101Translator
 
             while (pool.First is not null)
             {
-                // Seed a new ring with the next available edge, traversed forward.
+                // Seed a new ring with the next available edge in its FSPT orientation.
                 var seed = pool.First.Value;
                 pool.RemoveFirst();
 
+                var seedOrientation = seed.Orientation == OrientationReverse
+                    ? OrientationReverse
+                    : OrientationForward;
                 var ring = new List<S101CurveUsage>
                 {
-                    new(S101RcnmCurveSegment, seed.RecordId, OrientationForward),
+                    new(S101RcnmCurveSegment, seed.RecordId, seedOrientation),
                 };
 
-                uint? startNode = EdgeNode(seed.RecordId, TopologyBegin);
-                uint? endNode = EdgeNode(seed.RecordId, TopologyEnd);
+                uint? startNode = seedOrientation == OrientationReverse
+                    ? EdgeNode(seed.RecordId, TopologyEnd)
+                    : EdgeNode(seed.RecordId, TopologyBegin);
+                uint? endNode = seedOrientation == OrientationReverse
+                    ? EdgeNode(seed.RecordId, TopologyBegin)
+                    : EdgeNode(seed.RecordId, TopologyEnd);
 
                 // Extend the chain from its trailing node until the ring closes
                 // (returns to its start node) or no connecting edge remains.

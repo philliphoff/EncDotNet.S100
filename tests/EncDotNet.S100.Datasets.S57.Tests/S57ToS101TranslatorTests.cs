@@ -2663,10 +2663,9 @@ public class S57ToS101TranslatorTests
     // ── Area ring chaining (multi-hole "spike" regression) ─────────────
 
     // Builds a LandArea (LNDARE, OBJL 71) with a square exterior ring and two
-    // disjoint square holes. S-57 lists every interior edge consecutively with
-    // USAG = interior, so a translator that groups by USAG alone merges both
-    // holes into one boundary — flattening that merged ring to coordinates then
-    // jumps between the holes and renders as a long "spike" segment.
+    // disjoint square holes. Boundary pointers are deliberately shuffled, with
+    // the first edge for each ring referenced in reverse orientation, so chaining
+    // must use node identity and FSPT orientation instead of input order.
     private static EncDotNet.S57.S57Document BuildTwoHoleArea()
     {
         // Exterior square 0..1000.
@@ -2692,14 +2691,15 @@ public class S57ToS101TranslatorTests
             recordId: 1, primitive: 3, objectClass: 71, // LNDARE → LandArea
             spatialPointers: new[]
             {
-                // Exterior ring (USAG = 1).
-                Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0),
-                Sp(RcnmEdge, 12, 1, 1, 0), Sp(RcnmEdge, 13, 1, 1, 0),
-                // Both holes' edges listed consecutively (USAG = 2).
-                Sp(RcnmEdge, 20, 1, 2, 0), Sp(RcnmEdge, 21, 1, 2, 0),
-                Sp(RcnmEdge, 22, 1, 2, 0), Sp(RcnmEdge, 23, 1, 2, 0),
-                Sp(RcnmEdge, 30, 1, 2, 0), Sp(RcnmEdge, 31, 1, 2, 0),
-                Sp(RcnmEdge, 32, 1, 2, 0), Sp(RcnmEdge, 33, 1, 2, 0),
+                // Exterior ring (USAG = 1), shuffled and seeded in reverse.
+                Sp(RcnmEdge, 12, 2, 1, 0), Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 13, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0),
+                // Both holes' edges remain one USAG = 2 pool, but each hole's
+                // order is shuffled and each first edge is referenced in reverse.
+                Sp(RcnmEdge, 22, 2, 2, 0), Sp(RcnmEdge, 32, 2, 2, 0),
+                Sp(RcnmEdge, 20, 1, 2, 0), Sp(RcnmEdge, 33, 1, 2, 0),
+                Sp(RcnmEdge, 23, 1, 2, 0), Sp(RcnmEdge, 30, 1, 2, 0),
+                Sp(RcnmEdge, 21, 1, 2, 0), Sp(RcnmEdge, 31, 1, 2, 0),
             });
 
         return BuildDocument(
