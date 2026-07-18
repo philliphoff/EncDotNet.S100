@@ -26,6 +26,8 @@
   href: whats-new.md
 - name: Command-line rendering
   href: cli.md
+- name: Bringing S-57 into the pipeline
+  href: s57-to-s101.md
 - name: Embedding the renderer
   href: embedding-the-renderer.md
 - name: Design notes
