@@ -38,6 +38,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
     private bool _validationCached;
+    private DatasetMetadata? _metadata;
 
     // ECDIS settings that hide nothing — used when a render context carries no
     // explicit display state, so a standalone/headless render draws everything
@@ -47,6 +48,16 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         new() { Category = EcdisDisplayCategory.All };
 
     public SpecRef Spec => new("S-57", default);
+
+    /// <summary>
+    /// The lightweight <see cref="DatasetMetadata"/> for this cell — canonical
+    /// <c>S-57</c> specification, WGS-84 extent, and compilation-scale display
+    /// window — derived from the already-parsed (update-folded) document without
+    /// a second read, and memoized (issue #460 / #467 WS1). The extent folds the
+    /// raw spatial coordinates directly rather than going through the S-101
+    /// translation, so it is a cheap byproduct.
+    /// </summary>
+    public DatasetMetadata Metadata => _metadata ??= S57Dataset.ReadMetadata(_rawS57Document);
 
     public S57DatasetProcessor(
         string path,
