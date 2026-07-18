@@ -440,6 +440,17 @@ public partial class App : Application
         services.AddSingleton<IDatasetMetadataReader>(sp =>
             new CachingDatasetMetadataReader(
                 sp.GetRequiredService<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>()));
+        services.AddSingleton<Services.Caching.IS57CatalogCache>(sp =>
+        {
+            // Cross-session cache of an S-57 exchange set's base-cell
+            // descriptor list, keyed by the CATALOG.031 file's mtime + size,
+            // so a large set re-opens (and feeds lazy registration) without
+            // re-parsing the binary ISO 8211 catalogue. Descriptors are tiny,
+            // so a modest cap holds many sets.
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().S57CatalogCacheDirectory;
+            const long maxBytes = 16L * 1024 * 1024;
+            return new Services.Caching.DiskS57CatalogCache(cacheDir, maxBytes);
+        });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),

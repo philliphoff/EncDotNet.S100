@@ -33,6 +33,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private readonly INotificationService _notifications;
     private readonly LazyLoading.ExchangeSetLazyLoadCoordinator? _lazyCoordinator;
     private readonly IDatasetMetadataReader? _metadataReader;
+    private readonly Caching.IS57CatalogCache? _s57CatalogCache;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
@@ -41,7 +42,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         DatasetsViewModel datasets,
         INotificationService notifications,
         LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null,
-        IDatasetMetadataReader? metadataReader = null)
+        IDatasetMetadataReader? metadataReader = null,
+        Caching.IS57CatalogCache? s57CatalogCache = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(notifications);
@@ -49,6 +51,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         _notifications = notifications;
         _lazyCoordinator = lazyCoordinator;
         _metadataReader = metadataReader;
+        _s57CatalogCache = s57CatalogCache;
     }
 
     /// <summary>
@@ -456,7 +459,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             try
             {
                 root = ExchangeSetDetection.ResolveS57Root(folderOrCataloguePath);
-                cells = S57ExchangeSetCatalog.ReadBaseCells(root);
+                cells = ReadBaseCellsCached(root);
             }
             catch (FileNotFoundException)
             {
@@ -983,6 +986,30 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             SouthBoundLatitude = south!.Value,
             NorthBoundLatitude = north!.Value,
         };
+    }
+
+    /// <summary>
+    /// Reads the S-57 / S-63 base cells for the exchange set rooted at
+    /// <paramref name="root"/>, serving them from the cross-session catalogue
+    /// sidecar cache when a valid entry exists (issue #467 WS3 Slice 2), so a
+    /// large set re-opens without re-parsing the binary <c>CATALOG.031</c>.
+    /// Falls back to a direct read when no cache is configured.
+    /// </summary>
+    /// <param name="root">The resolved exchange-set root directory.</param>
+    /// <returns>The catalogue's base cells.</returns>
+    /// <exception cref="FileNotFoundException">No <c>CATALOG.031</c> was found under <paramref name="root"/>.</exception>
+    private IReadOnlyList<S57ExchangeSetCell> ReadBaseCellsCached(string root)
+    {
+        if (_s57CatalogCache is null)
+            return S57ExchangeSetCatalog.ReadBaseCells(root);
+
+        // Key the cache on the resolved CATALOG.031 file (mtime + size).
+        // ResolveCataloguePath throws FileNotFoundException when no catalogue
+        // exists — the same exception ReadBaseCells would throw — so the
+        // caller's catalogue-not-found handling is unchanged.
+        var cataloguePath = S57ExchangeSetCatalog.ResolveCataloguePath(root);
+        return _s57CatalogCache.GetOrRead(
+            cataloguePath, _ => S57ExchangeSetCatalog.ReadBaseCells(root));
     }
 
     private static string ResolveSourceKind(string path)

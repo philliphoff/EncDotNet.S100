@@ -75,6 +75,49 @@ public class ExchangeSetServiceLoaderTests
     }
 
     [Fact]
+    public async Task OpenAsync_S57FramedFixture_ReopenServesCatalogueFromCache()
+    {
+        var cacheDir = Path.Combine(Path.GetTempPath(), "s57cat-e2e-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(cacheDir);
+        try
+        {
+            var cache = new Services.Caching.DiskS57CatalogCache(cacheDir, 1_000_000);
+
+            var datasets1 = new DatasetsViewModel(new NoopLoader());
+            using (var service1 = new ExchangeSetService(
+                datasets1, Notifications.TestNotifications.Create(), s57CatalogCache: cache))
+            {
+                var first = await service1.OpenAsync(S57FramedFixture());
+                Assert.Equal(2, datasets1.Entries.Count);
+                Assert.NotNull(first.UnionBoundingBox);
+            }
+
+            Assert.Equal(1, cache.Misses);
+            Assert.Equal(0, cache.Hits);
+
+            // A second, independent open of the same set must serve the
+            // catalogue descriptors from the sidecar (no re-parse) and still
+            // produce the same entries + framing.
+            var datasets2 = new DatasetsViewModel(new NoopLoader());
+            using (var service2 = new ExchangeSetService(
+                datasets2, Notifications.TestNotifications.Create(), s57CatalogCache: cache))
+            {
+                var second = await service2.OpenAsync(S57FramedFixture());
+                Assert.Equal(2, datasets2.Entries.Count);
+                Assert.NotNull(second.UnionBoundingBox);
+                Assert.Equal(-123.0, second.UnionBoundingBox!.WestBoundLongitude);
+            }
+
+            Assert.Equal(1, cache.Hits);
+            Assert.Equal(1, cache.Misses);
+        }
+        finally
+        {
+            try { Directory.Delete(cacheDir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public async Task OpenAsync_MixedFixture_LoadsSupportedAndSkipsUnsupported()
     {
         var (datasets, service) = CreateSystem();
