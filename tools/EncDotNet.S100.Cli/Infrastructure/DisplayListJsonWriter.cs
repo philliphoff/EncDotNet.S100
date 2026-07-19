@@ -129,20 +129,31 @@ internal static class DisplayListJsonWriter
         dto.DrawingPriority = instruction.DrawingPriority;
         dto.ScaleMinimum = instruction.ScaleMinimum;
         dto.ScaleMaximum = instruction.ScaleMaximum;
-        dto.Geometry = SummariseGeometry(geometry.GetGeometry(instruction.FeatureReference));
+        dto.Geometry = instruction is LineInstruction { CoordinatesOverride: { } overrideCoordinates }
+            ? SummariseCoordinates(GeometryType.Curve, overrideCoordinates)
+            : SummariseGeometry(geometry.GetGeometry(instruction.FeatureReference));
         return dto;
     }
 
     private static GeometrySummaryDto? SummariseGeometry(FeatureGeometry? geometry)
     {
-        if (geometry is null || geometry.Coordinates.Count == 0)
+        if (geometry is null)
             return null;
 
-        GeoPosition anchor = geometry.Coordinates[0];
+        return SummariseCoordinates(geometry.Type, geometry.Coordinates);
+    }
+
+    private static GeometrySummaryDto? SummariseCoordinates(
+        GeometryType type, IReadOnlyList<GeoPosition> coordinates)
+    {
+        if (coordinates.Count == 0)
+            return null;
+
+        GeoPosition anchor = coordinates[0];
         return new GeometrySummaryDto
         {
-            Type = geometry.Type.ToString(),
-            VertexCount = geometry.Coordinates.Count,
+            Type = type.ToString(),
+            VertexCount = coordinates.Count,
             Anchor = [Math.Round(anchor.Latitude, 6), Math.Round(anchor.Longitude, 6)],
         };
     }
