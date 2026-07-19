@@ -486,7 +486,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 background: background ?? new RgbaColor(255, 255, 255, 255),
                 areaFillProvider: name => prewarm.ResolveAreaFill(name),
                 hiddenCategories: context?.HiddenInstructionCategories
-                    ?? DrawingInstructionCategory.None);
+                    ?? DrawingInstructionCategory.None,
+                viewport: context?.Viewport);
         }
         finally
         {

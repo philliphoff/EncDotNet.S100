@@ -173,16 +173,26 @@ public sealed class RenderCompositeCommandTests
     }
 
     [Fact]
-    public void Bbox_in_single_dataset_form_returns_nonzero()
+    public void Bbox_in_single_dataset_vector_form_writes_png()
     {
+        // Alignment: a single vector dataset now honours an explicit viewport
+        // (previously composite-only). marine_curve.gml is S-127 (vector).
         var dataset = Path.Combine(AppContext.BaseDirectory, "TestData", "marine_curve.gml");
         Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(
-            ["render", dataset, output, "--bbox", "-1.5,50.0,-1.0,50.5"]);
-        Assert.NotEqual(0, exit);
-        Assert.False(File.Exists(output));
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, "--bbox", "-1.5,50.0,-1.0,50.5"]);
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
     }
 
     [Fact]

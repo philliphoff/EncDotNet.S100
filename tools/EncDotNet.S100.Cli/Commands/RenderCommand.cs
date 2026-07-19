@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -75,19 +76,19 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         public string? OutputOption { get; init; }
 
         [CommandOption("--bbox <BBOX>")]
-        [Description("Composite only: explicit shared viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the compositor auto-fits the union of all layers.")]
+        [Description("Explicit viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the single-dataset form auto-fits the dataset extent and the composite form auto-fits the union of all layers. For a single vector dataset this also enables S-100 Part 9 scale-visibility culling. Not supported for coverage products (S-102/S-104/S-111).")]
         public string? BoundingBox { get; init; }
 
         [CommandOption("--center <CENTER>")]
-        [Description("Composite only: explicit shared viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale.")]
+        [Description("Explicit viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale. Not supported for coverage products (S-102/S-104/S-111).")]
         public string? Center { get; init; }
 
         [CommandOption("--scale <DENOMINATOR>")]
-        [Description("Composite only: explicit shared viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center.")]
+        [Description("Explicit viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center. Not supported for coverage products (S-102/S-104/S-111).")]
         public double? Scale { get; init; }
 
         [CommandOption("--format")]
-        [Description("Output image format: png, jpeg (jpg), or webp. Default: inferred from the output file extension, falling back to png.")]
+        [Description("Output format: png, jpeg (jpg), webp, or json. json emits the S-100 Part 9 display list (single-dataset form only) instead of an image. Default: inferred from the output file extension, falling back to png.")]
         public string? Format { get; init; }
 
         [CommandOption("--quality")]
@@ -176,9 +177,6 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
         /// <summary>Whether this invocation composites an exchange set / directory.</summary>
         public bool IsExchangeSetComposite => IsExplicitExchangeSet || IsPositionalExchangeSet;
-
-        /// <summary>Whether the composite viewport flags (<c>--bbox</c>/<c>--center</c>/<c>--scale</c>) apply.</summary>
-        public bool AllowsViewport => IsComposite || IsExchangeSetComposite;
 
         /// <summary>The exchange-set source path for the exchange-set form.</summary>
         public string? ExchangeSetSource => IsExplicitExchangeSet ? ExchangeSet : Input;
@@ -321,10 +319,14 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                     return ValidationResult.Error("An output path is required.");
             }
 
-            if (!TryResolveFormat(Format, output, out _, out var formatError))
+            if (!TryResolveOutput(Format, output, out var outputKind, out _, out var formatError))
                 return ValidationResult.Error(formatError);
 
-            var viewportResult = ValidateViewport();
+            if (outputKind == RenderOutputKind.DisplayList && (IsComposite || IsExchangeSetComposite))
+                return ValidationResult.Error(
+                    "Display-list (json) output is currently supported only for the single-dataset form.");
+
+            var viewportResult = ValidateViewport(outputKind);
             if (!viewportResult.Successful)
                 return viewportResult;
 
@@ -335,15 +337,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             return ValidationResult.Success();
         }
 
-        private ValidationResult ValidateViewport()
+        private ValidationResult ValidateViewport(RenderOutputKind outputKind)
         {
             bool hasBbox = !string.IsNullOrWhiteSpace(BoundingBox);
             bool hasCenter = !string.IsNullOrWhiteSpace(Center);
             bool hasScale = Scale is not null;
 
-            if ((hasBbox || hasCenter || hasScale) && !AllowsViewport)
+            if ((hasBbox || hasCenter || hasScale) && outputKind == RenderOutputKind.DisplayList)
                 return ValidationResult.Error(
-                    "--bbox, --center, and --scale apply only to the composite forms (--layer or --exchange-set).");
+                    "--bbox, --center, and --scale do not apply to --format json (a display list has no viewport).");
 
             if (hasBbox && (hasCenter || hasScale))
                 return ValidationResult.Error("--bbox cannot be combined with --center/--scale.");
@@ -406,13 +408,6 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 Console.Error.WriteLine(processor.VersionAssessment.BuildMessage());
             }
 
-            if (processor is not IHeadlessImageRenderer headless)
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]Headless image rendering is not supported for {spec}.[/]");
-                return 3;
-            }
-
             TryParsePalette(settings.Palette, out var palette);
             RgbaColor? background = ResolveBackground(settings);
             var hidden = ResolveHiddenCategories(settings);
@@ -423,19 +418,56 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return 2;
             }
 
+            Viewport? viewport = ResolveViewport(settings);
+            if (viewport is not null && processor is not IVectorPortrayalSource)
+            {
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[red]An explicit viewport (--bbox/--center/--scale) is not yet supported for {spec}; it applies to vector products (their headless render honours the exact window).[/]");
+                return 3;
+            }
+
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
-                ResolveBasemap(settings), displayModeId);
+                ResolveBasemap(settings), displayModeId, viewport);
+
+            TryResolveOutput(settings.Format, outputPath, out var outputKind, out var imageFormat, out _);
+
+            if (outputKind == RenderOutputKind.DisplayList)
+            {
+                if (processor is not IVectorPortrayalSource vectorSource)
+                {
+                    AnsiConsole.MarkupLineInterpolated(
+                        $"[red]Display-list (json) output is not supported for {spec} (only vector products emit a Part 9 display list).[/]");
+                    return 3;
+                }
+
+                var portrayal = vectorSource.BuildVectorPortrayalAsync(renderContext)
+                    .GetAwaiter().GetResult();
+                var json = DisplayListJsonWriter.Serialize(
+                    portrayal, Path.GetFileName(datasetPath), settings.Palette.Trim().ToLowerInvariant());
+                File.WriteAllText(outputPath, json);
+
+                int instructionCount = portrayal.SubLayers.Sum(l => l.Instructions.Count);
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[green]Wrote[/] {outputPath} ([grey]{spec}, display-list, {instructionCount} instruction(s)[/])");
+                return 0;
+            }
+
+            if (processor is not IHeadlessImageRenderer headless)
+            {
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[red]Headless image rendering is not supported for {spec}.[/]");
+                return 3;
+            }
 
             using var bitmap = headless
                 .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
                 .GetAwaiter().GetResult();
 
-            TryResolveFormat(settings.Format, outputPath, out var format, out _);
-            WriteImage(bitmap, outputPath, format, settings.Quality);
+            WriteImage(bitmap, outputPath, imageFormat, settings.Quality);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Wrote[/] {outputPath} ([grey]{spec}, {format}, {bitmap.Width}x{bitmap.Height}[/])");
+                $"[green]Wrote[/] {outputPath} ([grey]{spec}, {imageFormat}, {bitmap.Width}x{bitmap.Height}[/])");
             return 0;
         }
         catch (Exception ex)
@@ -655,6 +687,73 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
     }
 
     /// <summary>
+    /// The kind of artifact <c>render</c> produces: a rasterised image, or the
+    /// S-100 Part 9 display list as JSON.
+    /// </summary>
+    internal enum RenderOutputKind
+    {
+        /// <summary>A rasterised image (png / jpeg / webp).</summary>
+        Image,
+
+        /// <summary>The Part 9 display list serialized as JSON (<c>--format json</c>).</summary>
+        DisplayList,
+    }
+
+    /// <summary>
+    /// Resolves both the output <see cref="RenderOutputKind"/> and, for the image
+    /// kind, the concrete <see cref="SKEncodedImageFormat"/> from an explicit
+    /// <paramref name="format"/> option (when supplied) or the extension of
+    /// <paramref name="outputPath"/>. The <c>json</c> token (explicit or via a
+    /// <c>.json</c> extension) selects <see cref="RenderOutputKind.DisplayList"/>;
+    /// everything else resolves through <see cref="TryResolveFormat"/> to an image
+    /// format. Returns <see langword="false"/> with a populated
+    /// <paramref name="error"/> when <c>--format json</c> conflicts with a
+    /// recognised image extension, or when the image resolution fails.
+    /// </summary>
+    internal static bool TryResolveOutput(
+        string? format, string outputPath,
+        out RenderOutputKind kind, out SKEncodedImageFormat imageFormat, out string error)
+    {
+        kind = RenderOutputKind.Image;
+        imageFormat = SKEncodedImageFormat.Png;
+        error = string.Empty;
+
+        var ext = Path.GetExtension(outputPath).TrimStart('.');
+        bool extIsImage = TryParseFormatToken(ext, out _);
+
+        if (!string.IsNullOrWhiteSpace(format))
+        {
+            if (IsDisplayListToken(format))
+            {
+                if (extIsImage)
+                {
+                    error =
+                        $"--format json conflicts with the output extension " +
+                        $"'{Path.GetExtension(outputPath)}'. Use a non-image extension " +
+                        "(e.g. .json) or omit --format.";
+                    return false;
+                }
+
+                kind = RenderOutputKind.DisplayList;
+                return true;
+            }
+
+            return TryResolveFormat(format, outputPath, out imageFormat, out error);
+        }
+
+        if (IsDisplayListToken(ext))
+        {
+            kind = RenderOutputKind.DisplayList;
+            return true;
+        }
+
+        return TryResolveFormat(format, outputPath, out imageFormat, out error);
+    }
+
+    private static bool IsDisplayListToken(string value) =>
+        value.Trim().ToLowerInvariant() is "json";
+
+    /// <summary>
     /// Resolves the desired <see cref="SKEncodedImageFormat"/> from an explicit
     /// <paramref name="format"/> option when supplied, otherwise infers it from
     /// the extension of <paramref name="outputPath"/>, falling back to PNG when
@@ -676,7 +775,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         {
             if (!TryParseFormatToken(format, out resolved))
             {
-                error = $"Unknown --format '{format}'. Use png, jpeg, or webp.";
+                error = $"Unknown --format '{format}'. Use png, jpeg, webp, or json.";
                 return false;
             }
 

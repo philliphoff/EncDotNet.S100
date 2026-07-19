@@ -88,6 +88,32 @@ public abstract record RenderContext
     /// does not declare the id.
     /// </summary>
     public string? DisplayModeId { get; init; }
+
+    /// <summary>
+    /// An explicit display window (geographic bounds + pixel size + scale
+    /// denominator) to render, or <c>null</c> to auto-fit the viewport to the
+    /// dataset extent (the historical single-dataset headless behaviour).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Supplying a viewport brings the single-dataset headless render path into
+    /// alignment with the composite/GUI paths, which have always accepted an
+    /// explicit viewport (CLI <c>--bbox</c> / <c>--center</c>+<c>--scale</c>).
+    /// It lets a caller frame an exact window — e.g. to reproduce a viewer
+    /// screenshot or capture a fixed scene — instead of the padded auto-fit.
+    /// </para>
+    /// <para>
+    /// Honoured by the vector headless path
+    /// (<c>HeadlessVectorRenderer.Render</c>) for S-101, S-57 and the GML
+    /// products. Because an explicit viewport carries a meaningful
+    /// <see cref="Viewport.ScaleDenominator"/>, the vector path additionally
+    /// enables S-100 Part 9 scale-visibility culling when it is set (the
+    /// auto-fit path leaves culling disabled, as the fitted scale is not a real
+    /// compilation scale). Coverage processors (S-102/S-104/S-111) do not yet
+    /// honour an explicit viewport and ignore this property.
+    /// </para>
+    /// </remarks>
+    public Viewport? Viewport { get; init; }
 }
 
 public sealed record S101RenderContext : RenderContext;
