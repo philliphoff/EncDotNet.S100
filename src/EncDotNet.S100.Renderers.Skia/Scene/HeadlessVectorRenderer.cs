@@ -26,8 +26,10 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// text within a plane) — the same ordering each Mapsui layer applies —
 /// but a single headless bitmap does not reproduce the S-101 processor's
 /// two-layer area/non-area split (that split exists only to interleave
-/// S-102), nor the Mapsui pattern phase's NetTopologySuite priority-clipping
-/// against higher-priority patterns and opaque solid fills.
+/// S-102). Pattern area-fills <b>are</b> priority-clipped against
+/// higher-priority patterns and opaque solid fills: the shared
+/// <c>VectorSceneBuilder</c> applies <c>PatternPriorityClipper</c> when
+/// lowering the scene, so headless output matches the Mapsui pattern phase.
 /// </remarks>
 public static class HeadlessVectorRenderer
 {
