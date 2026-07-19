@@ -136,7 +136,9 @@ public class S57ToS101TranslatorTests
     // S-57 where FFPT names carry rcnm=0/rcid=0 and identify the target by LNAM.
     private static EncDotNet.S57.S57FeaturePointer Ffpt(
         ushort producingAgency, uint featureIdentificationNumber,
-        ushort featureIdentificationSubdivision = 0)
+        ushort featureIdentificationSubdivision = 0,
+        EncDotNet.S57.S57RelationshipIndicator relationship
+            = EncDotNet.S57.S57RelationshipIndicator.Peer)
         => new()
         {
             Name = new EncDotNet.S57.S57RecordName
@@ -147,7 +149,7 @@ public class S57ToS101TranslatorTests
                 FeatureId = (int)featureIdentificationNumber,
                 FeatureSubdivision = (int)featureIdentificationSubdivision,
             },
-            Relationship = EncDotNet.S57.S57RelationshipIndicator.Peer,
+            Relationship = relationship,
         };
 
     // ── Tests ──────────────────────────────────────────────────────────
@@ -914,6 +916,173 @@ public class S57ToS101TranslatorTests
             var info = NauticalInformationOf(s101, feat);
             Assert.NotNull(info);
         }
+    }
+
+    // ── TOPMAR slave → parent `topmark` complex attribute ───────────────
+
+    // Builds a buoy/beacon master feature (with geometry) that references a
+    // TOPMAR slave via an FFPT with the S-57 master/slave relationship, plus
+    // the TOPMAR feature carrying the topmark shape/colour attributes.
+    private static EncDotNet.S57.S57Document TopmarkScenario(
+        ushort masterObjl,
+        IEnumerable<EncDotNet.S57.S57AttributeValue> topmarkAttrs,
+        EncDotNet.S57.S57RelationshipIndicator relationship
+            = EncDotNet.S57.S57RelationshipIndicator.Slave,
+        IEnumerable<EncDotNet.S57.S57AttributeValue>? masterAttrs = null)
+    {
+        var n1 = Node(1, 1000, 2000);
+        var master = Feat(
+            recordId: 1, primitive: 1, objectClass: masterObjl,
+            featureIdentificationNumber: 10,
+            attributes: masterAttrs,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 20, relationship: relationship) });
+        var topmar = Feat(
+            recordId: 2, primitive: 1, objectClass: 144, // TOPMAR
+            featureIdentificationNumber: 20,
+            attributes: topmarkAttrs);
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { master, topmar });
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_FoldsIntoParentTopmarkComplex()
+    {
+        // BOYSAW (OBJL 18) → SafeWaterBuoy, which binds the `topmark` complex.
+        // The TOPMAR slave carries TOPSHP + COLOUR + COLPAT, which fold into the
+        // parent's topmark instance (topmarkDaymarkShape / colour / colourPattern).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "1"),  // TOPSHP → topmarkDaymarkShape (mandatory)
+                Attr(75, "3"),   // COLOUR → colour (Red)
+                Attr(76, "1"),   // COLPAT → colourPattern
+            }), diag);
+
+        Assert.Equal(1, diag.TopmarksAbsorbed);
+
+        // Only the master buoy survives; the TOPMAR is absorbed, not standalone.
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("SafeWaterBuoy", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.DoesNotContain((ushort)144, diag.UnmappedObjectClasses.Keys);
+
+        var topmark = ComplexInstance(s101, feat.Attributes, "topmark", 1).ToList();
+        Assert.NotEmpty(topmark);
+        Assert.Equal("1", GetSubAttribute(s101, topmark, "topmarkDaymarkShape"));
+        Assert.Equal("3", GetSubAttribute(s101, topmark, "colour"));
+        Assert.Equal("1", GetSubAttribute(s101, topmark, "colourPattern"));
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_MultiValuedColour_SplitsIntoOccurrences()
+    {
+        // A comma-separated COLOUR list becomes multiple colour occurrences
+        // within the single topmark instance.
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "1"),   // TOPSHP → topmarkDaymarkShape
+                Attr(75, "1,3"),  // COLOUR → colour (White, Red)
+            }));
+
+        var feat = Assert.Single(s101.Features);
+        var topmark = ComplexInstance(s101, feat.Attributes, "topmark", 1).ToList();
+
+        ushort? colourCode = null;
+        foreach (var (c, n) in s101.AttributeTypeCatalogue)
+            if (string.Equals(n, "colour", StringComparison.OrdinalIgnoreCase)) colourCode = c;
+        var colours = topmark.Where(a => a.NumericCode == colourCode).Select(a => a.Value).ToList();
+        Assert.Equal(new[] { "1", "3" }, colours);
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_MissingShape_DropsTopmarkInstance()
+    {
+        // topmarkDaymarkShape is mandatory; with no valid TOPSHP the whole
+        // topmark instance is rolled back (recorded for corpus audits).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "99"), // invalid TOPSHP
+                Attr(75, "3"),   // COLOUR
+            }), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "topmark", 1).ToList());
+        var attributeNames = feat.Attributes
+            .Select(a => s101.AttributeTypeCatalogue[a.NumericCode])
+            .ToList();
+        Assert.DoesNotContain("topmark", attributeNames);
+    }
+
+    [Fact]
+    public void Translate_TopmarPeerRelationship_StaysUnmapped()
+    {
+        // A Peer (not Slave) relationship is not a topmark master/slave binding,
+        // so the TOPMAR is left unmapped and no topmark is folded in.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[] { Attr(171, "1"), Attr(75, "3") },
+            relationship: EncDotNet.S57.S57RelationshipIndicator.Peer), diag);
+
+        Assert.Equal(0, diag.TopmarksAbsorbed);
+        var buoy = FeatureOfClass(s101, "SafeWaterBuoy");
+        Assert.NotNull(buoy);
+        Assert.Empty(ComplexInstance(s101, buoy!.Attributes, "topmark", 1).ToList());
+        Assert.Contains((ushort)144, diag.UnmappedObjectClasses.Keys);
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_OnNonTopmarkBindingMaster_StaysUnmapped()
+    {
+        // DEPARE (OBJL 42) → DepthArea does not bind `topmark`; a Slave FFPT to a
+        // TOPMAR must not fold in, and the TOPMAR is left unmapped.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 42,
+            topmarkAttrs: new[] { Attr(171, "1"), Attr(75, "3") }), diag);
+
+        Assert.Equal(0, diag.TopmarksAbsorbed);
+        Assert.Contains((ushort)144, diag.UnmappedObjectClasses.Keys);
+    }
+
+    [Fact]
+    public void Translate_SharedTopmarSlave_FoldsIntoOnlyOneMaster()
+    {
+        // Two masters whose FFPTs both reference the same TOPMAR slave must not
+        // both fold it in (which would duplicate the topmark attributes); the
+        // TOPMAR is consumed by a single master only.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var masterA = Feat(
+            recordId: 1, primitive: 1, objectClass: 18, // BOYSAW → SafeWaterBuoy
+            featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 30, relationship: EncDotNet.S57.S57RelationshipIndicator.Slave) });
+        var masterB = Feat(
+            recordId: 2, primitive: 1, objectClass: 18,
+            featureIdentificationNumber: 20,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 30, relationship: EncDotNet.S57.S57RelationshipIndicator.Slave) });
+        var topmar = Feat(
+            recordId: 3, primitive: 1, objectClass: 144,
+            featureIdentificationNumber: 30,
+            attributes: new[] { Attr(171, "1"), Attr(75, "3") });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 },
+                features: new[] { masterA, masterB, topmar }), diag);
+
+        Assert.Equal(1, diag.TopmarksAbsorbed);
+        var withTopmark = s101.Features
+            .Count(f => ComplexInstance(s101, f.Attributes, "topmark", 1).Any());
+        Assert.Equal(1, withTopmark);
     }
 
     // ── C_AGGR → RangeSystemAggregation (synthesised RangeSystem) ────────

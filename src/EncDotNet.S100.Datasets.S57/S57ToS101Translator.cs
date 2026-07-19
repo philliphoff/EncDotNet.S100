@@ -316,6 +316,23 @@ public sealed class S57ToS101Translator
     private const string S101AttrValueOfNominalRange = "valueOfNominalRange";
     private const string S101AttrLightVisibility = "lightVisibility";
 
+    // S-57 TOPMAR (Topmark/daymark, OBJL 144) is a standalone object in S-57 but
+    // in S-101 the topmark is modelled as the `topmark` complex attribute (alias
+    // TOPMAR) carried by the parent buoy/beacon/light-float feature, reached via
+    // the S-57 master/slave feature-to-feature relationship (the master structure
+    // carries an FFPT to the TOPMAR slave). The complex binds `colour` [0..*]
+    // (COLOUR), `colourPattern` [0..1] (COLPAT) and the mandatory
+    // `topmarkDaymarkShape` [1..1] (TOPSHP); all three are straight code aliases,
+    // so the S-57 values pass through unchanged (validated against the S-101
+    // enumeration). A TOPMAR consumed this way emits no feature of its own.
+    // (IHO S-57→S-101 Conversion Guidance: TOPMAR as parent attribute.)
+    private const ushort TopmarObjl = 144;      // TOPMAR (S-57 object class)
+    private const ushort S57AttrTopshp = 171;   // TOPSHP — topmark/daymark shape
+    private const ushort S57AttrColpat = 76;    // COLPAT — colour pattern (single value)
+    private const string S101AttrTopmark = "topmark";
+    private const string S101AttrTopmarkDaymarkShape = "topmarkDaymarkShape";
+    private const string S101AttrColourPattern = "colourPattern";
+
     // S-57 HORCLR (Horizontal clearance, ATTL 98) maps to the mandatory
     // `horizontalClearanceValue` [1..1] sub-attribute of one of two S-101
     // complex attributes (S-101 Conversion Guidance; verified against the
@@ -693,6 +710,12 @@ public sealed class S57ToS101Translator
                 ?? _s57.FeatureRecords.ToList();
             var (absorbed, extraSectorsByIndex) = BuildSectorMergeGroups(featureRecords);
 
+            // S-57 TOPMAR objects are folded into the `topmark` complex attribute
+            // of their master buoy/beacon (the master's FFPT slave pointer), so
+            // an absorbed TOPMAR emits no feature of its own. See
+            // BuildTopmarkGroups.
+            var (absorbedTopmarks, topmarkByMaster) = BuildTopmarkGroups(featureRecords);
+
             // C_AGGR collection objects are deferred to a second pass: their
             // members are referenced by LNAM and may be emitted after the
             // C_AGGR in document order, so the member record ids are only known
@@ -715,6 +738,15 @@ public sealed class S57ToS101Translator
                 // Members absorbed into a co-located sector-light merge emit no
                 // feature of their own; their sector rides on the primary.
                 if (absorbed.Contains(fi)) continue;
+
+                // A TOPMAR absorbed into its master's `topmark` complex attribute
+                // emits no feature of its own; it is counted here instead of as an
+                // unmapped object class.
+                if (absorbedTopmarks.Contains(fi))
+                {
+                    if (_diagnostics is not null) _diagnostics.TopmarksAbsorbed++;
+                    continue;
+                }
 
                 if (objl == CAggrObjl)
                 {
@@ -768,8 +800,9 @@ public sealed class S57ToS101Translator
                 // allocates the record as a side effect).
                 var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
                 extraSectorsByIndex.TryGetValue(fi, out var extraSectors);
+                topmarkByMaster.TryGetValue(fi, out var topmarkSource);
                 var attributes = TranslateAttributes(
-                    feat.Attributes, resolved, objl, out var infoAssociations, extraSectors);
+                    feat.Attributes, resolved, objl, out var infoAssociations, extraSectors, topmarkSource);
 
                 if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
                 var recordId = _nextFeatureId++;
@@ -1014,7 +1047,72 @@ public sealed class S57ToS101Translator
             return (absorbed, extras);
         }
 
-        // Resolves the S-101 point record id a point feature references (via its
+        // Groups each S-57 master buoy/beacon feature with the TOPMAR slave it
+        // references, so the TOPMAR's TOPSHP/COLOUR/COLPAT can be folded into the
+        // master's `topmark` complex attribute (S-101 models the topmark as an
+        // attribute of the parent, not a standalone feature). In S-57 the
+        // relationship is a master/slave feature-to-feature pointer (FFPT) carried
+        // by the master pointing to the TOPMAR (Relationship = Slave). Returns the
+        // set of absorbed TOPMAR feature indices (which emit no feature of their
+        // own) and, per master feature index, the TOPMAR record that supplies its
+        // topmark. Only masters whose resolved S-101 class binds the `topmark`
+        // complex are grouped; a TOPMAR referenced by no such master falls through
+        // and is recorded as an unmapped object class as before. A master carries
+        // at most one topmark, so the first slave TOPMAR wins.
+        // (IHO S-57→S-101 Conversion Guidance: TOPMAR → parent attribute.)
+        private (HashSet<int> Absorbed, Dictionary<int, EncDotNet.S57.S57FeatureRecord> ByMaster) BuildTopmarkGroups(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var absorbed = new HashSet<int>();
+            var byMaster = new Dictionary<int, EncDotNet.S57.S57FeatureRecord>();
+
+            // Index every feature by LNAM so a master's FFPT (which references its
+            // slave by long name) can be resolved to the pointed-to record + index.
+            var indexByLnam = new Dictionary<(int, long, int), int>();
+            for (int i = 0; i < featureRecords.Count; i++)
+                indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
+
+            for (int mi = 0; mi < featureRecords.Count; mi++)
+            {
+                var master = featureRecords[mi];
+                if ((int)master.ObjectCode == TopmarObjl) continue;
+                if (master.FeaturePointers.Count == 0) continue;
+
+                foreach (var fp in master.FeaturePointers)
+                {
+                    if (fp.Relationship != EncDotNet.S57.S57RelationshipIndicator.Slave)
+                        continue;
+                    if (!indexByLnam.TryGetValue(Lnam(fp.Name), out var slaveIndex))
+                        continue;
+                    var slave = featureRecords[slaveIndex];
+                    if ((int)slave.ObjectCode != TopmarObjl)
+                        continue;
+
+                    // A TOPMAR can only be consumed by one master; if an earlier
+                    // master already absorbed it, do not fold it again (which would
+                    // duplicate the topmark attributes across features).
+                    if (absorbed.Contains(slaveIndex))
+                        continue;
+
+                    // Only fold the topmark onto masters whose S-101 class binds
+                    // the `topmark` complex; otherwise leave the TOPMAR unmapped.
+                    var acronymView = _mapping.BuildAcronymView(master.Attributes);
+                    var resolved = _mapping.ResolveFeature(
+                        (ushort)(int)master.ObjectCode, acronymView, MapPrimitive(master.Primitive));
+                    if (resolved is null
+                        || !_featureBindings.Binds(resolved.S101Code, S101AttrTopmark))
+                        continue;
+
+                    // A master carries a single topmark — take the first slave.
+                    byMaster[mi] = slave;
+                    absorbed.Add(slaveIndex);
+                    break;
+                }
+            }
+
+            return (absorbed, byMaster);
+        }
+
         // first spatial pointer to a connected/isolated node). Mirrors the lookup
         // in TranslatePointSpatial.
         private bool TryResolvePointId(EncDotNet.S57.S57FeatureRecord feat, out uint id)
@@ -1121,10 +1219,11 @@ public sealed class S57ToS101Translator
             ResolvedFeature feature,
             ushort ownerObjl,
             out IReadOnlyList<S101InformationAssociation> informationAssociations,
-            IReadOnlyList<SectorInput>? extraSectors = null)
+            IReadOnlyList<SectorInput>? extraSectors = null,
+            EncDotNet.S57.S57FeatureRecord? topmarkSource = null)
         {
             informationAssociations = [];
-            if (attrs.Count == 0) return [];
+            if (attrs.Count == 0 && topmarkSource is null) return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
             // can emit them as one or more S-101 `information` complex-attribute
@@ -1166,6 +1265,11 @@ public sealed class S57ToS101Translator
             // class that binds the complex (QualityOfBathymetricData).
             bool bindsZoc = _featureBindings.Binds(feature.S101Code, S101AttrZoneOfConfidence);
             string? catzocValue = null;
+            // topmark source — the TOPSHP/COLOUR/COLPAT of a master's slave TOPMAR
+            // record (BuildTopmarkGroups), assembled into the `topmark` complex on
+            // the buoy/beacon/light-float classes that bind it.
+            bool bindsTopmark = topmarkSource is not null
+                && _featureBindings.Binds(feature.S101Code, S101AttrTopmark);
             // surfaceCharacteristics source — NATSUR/NATQUA, assembled on the
             // (single) feature class that binds the complex (SeabedArea).
             bool bindsSurfaceChar = _featureBindings.Binds(feature.S101Code, S101AttrSurfaceCharacteristics);
@@ -1553,9 +1657,16 @@ public sealed class S57ToS101Translator
                 }
             }
 
-            // Append the `horizontalClearance` complex-attribute instance —
-            // `horizontalClearanceOpen` on Gate, `horizontalClearanceFixed`
-            // elsewhere. Its mandatory sub-attribute `horizontalClearanceValue`
+            // Append the `topmark` complex-attribute instance from the master's
+            // slave TOPMAR (BuildTopmarkGroups). The FC makes `topmarkDaymarkShape`
+            // [1..1] mandatory, so the instance is only emitted when a valid TOPSHP
+            // is present; COLOUR feeds the `colour` [0..*] list and COLPAT the
+            // optional `colourPattern`. (IHO S-57→S-101 Conversion Guidance:
+            // TOPMAR → parent attribute.)
+            if (bindsTopmark && topmarkSource is not null)
+                AppendTopmarkInstance(builder, topmarkSource);
+
+
             // is a real that carries the HORCLR value verbatim (matching the
             // fidelity of the other real sub-attributes such as
             // valueOfNominalRange); `horizontalDistanceUncertainty` has no S-57
@@ -1848,6 +1959,77 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalUncertainty), 1, string.Empty));
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.VerticalFixed));
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.VerticalVariable));
+        }
+
+        // Emits a `topmark` complex-attribute instance from the master's slave
+        // TOPMAR record, using the same flat marker / pre-order sub-attribute
+        // convention as the other nested complex attributes. The FC binding order
+        // is colour [0..*], colourPattern [0..1], topmarkDaymarkShape [1..1],
+        // shapeInformation [0..*]. `topmarkDaymarkShape` (TOPSHP) is mandatory, so
+        // a missing or FC-rejected shape drops the whole instance (reported);
+        // COLOUR is a list-valued enumerate split into individual `colour`
+        // occurrences, and COLPAT feeds the optional `colourPattern`. All three
+        // are straight S-57→S-101 code aliases, so values pass through unchanged
+        // (validated against the S-101 enumeration). (S-101 FC Ed 1.x; IHO
+        // S-57→S-101 Conversion Guidance.)
+        private void AppendTopmarkInstance(
+            List<S101Attribute> builder,
+            EncDotNet.S57.S57FeatureRecord topmarkSource)
+        {
+            string? topshp = null;
+            string? colourList = null;
+            string? colpat = null;
+            foreach (var a in topmarkSource.Attributes)
+            {
+                switch (a.AttributeCode)
+                {
+                    case S57AttrTopshp: if (!string.IsNullOrEmpty(a.Value)) topshp = a.Value; break;
+                    case S57AttrColour: if (!string.IsNullOrEmpty(a.Value)) colourList = a.Value; break;
+                    case S57AttrColpat: if (!string.IsNullOrEmpty(a.Value)) colpat = a.Value; break;
+                }
+            }
+
+            // topmarkDaymarkShape [1..1] is mandatory: without a valid shape the
+            // instance is non-conformant, so drop it entirely (and report the
+            // loss so corpus audits see it) rather than emit a partial complex.
+            if (topshp is null)
+            {
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrTopshp);
+                return;
+            }
+            if (_allowedEnumValues is not null
+                && !_allowedEnumValues.IsAllowed(S101AttrTopmarkDaymarkShape, topshp))
+            {
+                _diagnostics?.RecordDroppedEnumValue(S101AttrTopmarkDaymarkShape, topshp);
+                return;
+            }
+
+            // Marker entry — Index=1, value=empty — followed by the sub-attributes
+            // in FC binding order.
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrTopmark), 1, string.Empty));
+
+            ushort colourIndex = 1;
+            foreach (var colour in SplitEnumList(colourList))
+            {
+                if (_allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(S101AttrColour, colour))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrColour, colour);
+                    continue;
+                }
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrColour), colourIndex++, colour));
+            }
+
+            if (colpat is not null)
+            {
+                if (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrColourPattern, colpat))
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrColourPattern), 1, colpat));
+                else
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrColourPattern, colpat);
+            }
+
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrTopmarkDaymarkShape), 1, topshp));
         }
 
         // Emits a `horizontalClearanceOpen` / `horizontalClearanceFixed`
