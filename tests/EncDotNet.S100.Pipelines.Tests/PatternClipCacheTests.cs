@@ -82,13 +82,19 @@ public class PatternClipCacheTests
     private static MapsuiDisplayListRenderer NewRenderer(
         ColorPalette palette,
         IPatternClipCache? cache,
-        string? cacheKey) => new()
+        string? cacheKey,
+        RenderSubsystemKind subsystem = RenderSubsystemKind.Mapsui) => new()
         {
             Palette = palette,
             AreaFillProvider = AreaFills(),
             SymbolProvider = Symbols(),
             PatternClipCache = cache,
             PatternClipCacheKey = cacheKey,
+            // Pin the Mapsui feature ("A") arm: these tests inspect the clipped
+            // pattern-fill Mapsui features, which only the A arm builds. The
+            // TiledScene ("B") arm renders patterns from the IR and skips the
+            // feature-path pattern phase, so it produces no pattern features.
+            RenderSubsystemOverride = subsystem,
         };
 
     private static List<Geometry> PatternGeometries(Mapsui.Layers.ILayer layer)
@@ -132,10 +138,11 @@ public class PatternClipCacheTests
                 $"Clipped geometry {i} differs between cached and uncached paths.");
         }
 
-        // The expensive clip overlay is computed exactly once (a single miss);
-        // the number of cache reads (hits) depends on how many render arms consult
-        // the shared cache and is not asserted here.
+        // The expensive clip overlay is computed exactly once (a single miss).
+        // These tests pin the A arm, so the feature-path clip at the renderer's
+        // GetOrCompute site is the sole cache consumer.
         Assert.Equal(1, cache.Misses);
+        Assert.Equal(0, cache.Hits);
     }
 
     [Fact]
@@ -197,6 +204,44 @@ public class PatternClipCacheTests
         {
             Assert.Same(dayGeom[i], nightGeom[i]);
         }
+    }
+
+    [Fact]
+    public void TiledSceneArm_SkipsPatternFeatureBuilding()
+    {
+        var palette = ColorPalette.Default;
+        var provider = new StubGeometryProvider();
+
+        // The A arm builds clipped pattern-fill Mapsui features; the B arm
+        // (TiledScene) renders patterns from the IR scene and must skip that
+        // feature-path work entirely (the features are neither drawn nor
+        // pickable there), so no AnchoredPatternFillStyle features are emitted.
+        var aArm = PatternGeometries(
+            NewRenderer(palette, cache: null, cacheKey: null, RenderSubsystemKind.Mapsui)
+                .Render(BuildInstructions(), provider));
+        var bArm = PatternGeometries(
+            NewRenderer(palette, cache: null, cacheKey: null, RenderSubsystemKind.TiledScene)
+                .Render(BuildInstructions(), provider));
+
+        Assert.NotEmpty(aArm);
+        Assert.Empty(bArm);
+    }
+
+    [Fact]
+    public void TiledSceneArm_WarmsSharedClipCacheOnceViaMemoizer()
+    {
+        var palette = ColorPalette.Default;
+        var provider = new StubGeometryProvider();
+        var cache = new InMemoryPatternClipCache();
+
+        // On the B arm the feature-path clip (and its cache read) is skipped, but
+        // the VectorSceneBuilder memoizer still routes the IR clip through the
+        // same shared cache — so the expensive overlay is computed exactly once
+        // (a single miss), not twice.
+        NewRenderer(palette, cache, cacheKey: "k1", RenderSubsystemKind.TiledScene)
+            .Render(BuildInstructions(), provider);
+
+        Assert.Equal(1, cache.Misses);
     }
 
     [Fact]
