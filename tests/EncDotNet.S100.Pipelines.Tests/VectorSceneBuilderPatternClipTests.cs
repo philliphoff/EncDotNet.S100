@@ -122,6 +122,30 @@ public sealed class VectorSceneBuilderPatternClipTests
     }
 
     [Fact]
+    public void TranslucentSolidFill_DoesNotClipPattern()
+    {
+        // A translucent solid fill (Transparency > 0 -> alpha < 255) does not fully
+        // hide underlying patterns, so it must NOT be treated as a pattern occluder
+        // (PatternPriorityClipper treats every supplied polygon as a full occluder).
+        var geometry = new DictionaryGeometryProvider();
+        geometry.Add("pattern", Rectangle(0, 0, 10, 10));
+        geometry.Add("water", Rectangle(0, 0, 5, 10));
+
+        DrawingInstruction[] instructions =
+        [
+            new AreaInstruction { FeatureReference = "water", FillColor = "DEPVS", Transparency = 0.5, DrawingPriority = 1 },
+            new AreaInstruction { FeatureReference = "pattern", AreaFillReference = "PATTERN", DrawingPriority = 5 },
+        ];
+
+        var scene = NewBuilder().Build(instructions, geometry);
+
+        var patternGeometry = ToGeometry(SinglePatternOp(scene, "PATTERN"));
+        // The pattern is retained across the translucent fill (both halves visible).
+        Assert.True(patternGeometry.Contains(At(2, 5)));
+        Assert.True(patternGeometry.Contains(At(8, 5)));
+    }
+
+    [Fact]
     public void FeatureOwnSolidFill_DoesNotClipItsOwnPattern()
     {
         // A feature carrying both a solid fill and a pattern must not have its own

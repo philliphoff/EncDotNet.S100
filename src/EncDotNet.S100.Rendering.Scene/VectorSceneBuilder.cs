@@ -246,13 +246,18 @@ public sealed class VectorSceneBuilder
         List<(PatternAreaPaintOp Op, int Priority)> patternPriorities,
         HashSet<string>? featuresWithPatterns)
     {
-        // Opaque non-patterned solid colour fills (e.g. land) occlude patterns.
-        // A feature that itself carries a pattern does not contribute its solid
-        // fill as an exclusion area (mirrors the Mapsui feature path).
+        // Fully-opaque non-patterned solid colour fills (e.g. land) occlude
+        // patterns. Translucent fills (alpha < 255 — an AreaInstruction's
+        // Transparency is folded into the fill alpha) do not fully hide what lies
+        // under them, and PatternPriorityClipper treats every supplied polygon as
+        // a full occluder, so they must not clip patterns. A feature that itself
+        // carries a pattern does not contribute its solid fill as an exclusion
+        // area (mirrors the Mapsui feature path).
         var excludes = new List<Polygon>();
         foreach (var op in ops)
         {
             if (op is AreaPaintOp area
+                && area.Fill.A == 255
                 && (featuresWithPatterns is null || !featuresWithPatterns.Contains(area.FeatureReference)))
             {
                 var polygon = CreatePolygon(area.WorldShell, area.WorldHoles);

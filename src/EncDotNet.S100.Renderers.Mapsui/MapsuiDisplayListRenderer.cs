@@ -327,9 +327,16 @@ public sealed class MapsuiDisplayListRenderer
                     continue;
                 }
 
-                // Track non-patterned color fills (e.g. land areas) for pattern clipping
+                // Track fully-opaque non-patterned colour fills (e.g. land areas)
+                // as pattern occluders. Translucent fills (Transparency > 0) do
+                // not fully hide underlying patterns, and PatternPriorityClipper
+                // treats every supplied polygon as a full occluder, so they are
+                // excluded here — matching the IR path's alpha == 255 gate (area
+                // fills are otherwise opaque; Transparency is their only source of
+                // translucency).
                 if (instruction is AreaInstruction { FillColor: not null } colorFill
                     && geom is not null
+                    && colorFill.Transparency is null or <= 0
                     && !featuresWithPatterns.Contains(colorFill.FeatureReference))
                 {
                     var polygon = CreatePolygonFromGeometry(geom);
