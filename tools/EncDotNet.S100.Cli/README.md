@@ -338,12 +338,6 @@ and attribute mapping, allowed-value enforcement) are owned by
 
 ## Limitations
 
-- **Vector pattern area-fills are not priority-clipped** on the headless path.
-  Points, lines, solid-area fills, tiled **pattern** area-fills, and text all
-  render, but the headless path does not yet subtract higher-priority patterns
-  and opaque solid fills out of lower-priority semi-transparent patterns the way
-  the Mapsui/viewer path does (via NetTopologySuite), so dense pattern coverages
-  can bleed slightly across such boundaries.
 - **Explicit viewport is vector-only.** `--bbox` / `--center`+`--scale` frame an
   exact window (and enable scale-visibility culling) for a single **vector**
   dataset and for composites, but are **not** yet honoured for a single coverage
