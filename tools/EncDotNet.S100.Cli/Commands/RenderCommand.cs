@@ -76,15 +76,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         public string? OutputOption { get; init; }
 
         [CommandOption("--bbox <BBOX>")]
-        [Description("Explicit viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the single-dataset form auto-fits the dataset extent and the composite form auto-fits the union of all layers. For a single vector dataset this also enables S-100 Part 9 scale-visibility culling. Not supported for coverage products (S-102/S-104/S-111).")]
+        [Description("Explicit viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the single-dataset form auto-fits the dataset extent and the composite form auto-fits the union of all layers. For a single vector dataset this also enables S-100 Part 9 scale-visibility culling. Not supported for coverage products (S-102/S-104/S-111). Rejected with --format json (a display list has no viewport).")]
         public string? BoundingBox { get; init; }
 
         [CommandOption("--center <CENTER>")]
-        [Description("Explicit viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale. Not supported for coverage products (S-102/S-104/S-111).")]
+        [Description("Explicit viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale. Not supported for coverage products (S-102/S-104/S-111). Rejected with --format json (a display list has no viewport).")]
         public string? Center { get; init; }
 
         [CommandOption("--scale <DENOMINATOR>")]
-        [Description("Explicit viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center. Not supported for coverage products (S-102/S-104/S-111).")]
+        [Description("Explicit viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center. Not supported for coverage products (S-102/S-104/S-111). Rejected with --format json (a display list has no viewport).")]
         public double? Scale { get; init; }
 
         [CommandOption("--format")]
