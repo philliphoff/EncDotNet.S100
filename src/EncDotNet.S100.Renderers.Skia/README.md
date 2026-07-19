@@ -64,10 +64,15 @@ exactly one place:
 - **`ScaleVisibility`** (in `Rendering.Scene`) — shared S-100 Part 9 §11.1 scale-visibility rule.
 - **`ColorResolver`** — S-100 colour-token resolution (palette + inline hex).
 
-**Scope (spike):** the IR currently covers point, line, solid-area, and text
-ops. Pattern fills and Web-Mercator pole limits are not yet represented in the
-IR — pattern fills remain handled by the Mapsui renderer's dedicated pattern
-collection / priority-clip / insert phase. Antimeridian (±180°) crossing **is**
+**Scope:** the IR covers point, line, solid-area, text, and tiled **pattern**
+area-fill ops. Pattern fills are lowered into the IR as `PatternAreaPaintOp`
+when a pattern resolver is supplied (the headless Skia path and the Mapsui
+TiledScene subsystem) and are priority-clipped by the shared
+`PatternPriorityClipper` — the same NetTopologySuite clip the Mapsui feature
+path applies — so a lower-priority pattern does not bleed through a
+higher-priority pattern or an opaque solid fill. The Mapsui feature path leaves
+the resolver unset and drives its own pattern collection / insert phase (still
+sharing the clipper). Antimeridian (±180°) crossing **is**
 handled for the headless auto-fit: `SeamAwareBoundsAccumulator` (in
 `Rendering.Scene`) frames dateline-spanning datasets on their true extent and
 `WorldToScreen` wraps ops into the shifted window at draw time (issue #413).

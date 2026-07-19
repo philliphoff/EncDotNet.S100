@@ -183,13 +183,17 @@ public sealed class AreaPaintOp : PaintOp
 /// <c>SKShader</c> anchored at world (0,0) projected to screen space, matching
 /// the Mapsui <c>AnchoredPatternFillStyle</c> contract so the pattern is
 /// seamless across overlapping polygons that share a global tile grid.</para>
-/// <para><b>Known limitation.</b> Unlike the Mapsui pattern phase, the
-/// headless lowering does not perform NetTopologySuite priority-clipping:
-/// lower-priority pattern ops are simply drawn before higher-priority ones and
-/// are not clipped by non-patterned solid colour fills (e.g. land). Patterns
-/// may therefore visibly bleed across opaque overlay areas in headless
-/// renders. Acceptance per issue #192 is "as closely as practical"; tighter
-/// clipping is a separate refinement.</para>
+/// <para><b>Priority clipping.</b> When <see cref="VectorSceneBuilder"/> lowers
+/// pattern fills it priority-clips them via the shared
+/// <see cref="PatternPriorityClipper"/> (S-100 Part 9 §11.3): a lower-priority
+/// pattern op is clipped where a higher-priority pattern op — or an opaque
+/// non-patterned solid colour fill (e.g. land) — covers it, so the geometry
+/// carried here is already the visible portion. This is the identical clip the
+/// Mapsui feature path applies, so the headless Skia backend and the Mapsui
+/// TiledScene subsystem no longer bleed patterns across opaque overlay areas
+/// (resolves the issue #192 "as closely as practical" caveat). A clipped group
+/// can be a multi-polygon, so it is emitted as several ops (one shell + holes
+/// each).</para>
 /// </remarks>
 public sealed class PatternAreaPaintOp : PaintOp
 {

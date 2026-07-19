@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EncDotNet.S100.Cli.Infrastructure;
 using SkiaSharp;
 
@@ -247,6 +248,192 @@ public sealed class RenderCommandTests
             if (File.Exists(output))
                 File.Delete(output);
         }
+    }
+
+    [Fact]
+    public void Render_writes_a_display_list_json_document()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        try
+        {
+            int exit = CliApp.Build().Run(["render", dataset, output]);
+
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(output));
+            var root = doc.RootElement;
+            Assert.Equal("S-124", root.GetProperty("product").GetString());
+            Assert.Equal("navwarn_surface.gml", root.GetProperty("dataset").GetString());
+
+            var instructions = root.GetProperty("instructions");
+            Assert.Equal(JsonValueKind.Array, instructions.ValueKind);
+            Assert.Equal(
+                root.GetProperty("instructionCount").GetInt32(), instructions.GetArrayLength());
+            Assert.True(instructions.GetArrayLength() > 0);
+
+            // Every instruction carries the base portrayal fields the format promises.
+            foreach (var instruction in instructions.EnumerateArray())
+            {
+                Assert.False(string.IsNullOrEmpty(instruction.GetProperty("kind").GetString()));
+                Assert.False(string.IsNullOrEmpty(instruction.GetProperty("feature").GetString()));
+                Assert.True(instruction.TryGetProperty("plane", out _));
+                Assert.True(instruction.TryGetProperty("drawingPriority", out _));
+            }
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_display_list_json_is_deterministic()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var first = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        var second = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        try
+        {
+            Assert.Equal(0, CliApp.Build().Run(["render", dataset, first]));
+            Assert.Equal(0, CliApp.Build().Run(["render", dataset, second]));
+
+            // Pure portrayal output: two runs over the same dataset and render
+            // context must be byte-identical so the document is snapshot-testable.
+            Assert.Equal(File.ReadAllBytes(first), File.ReadAllBytes(second));
+        }
+        finally
+        {
+            if (File.Exists(first)) File.Delete(first);
+            if (File.Exists(second)) File.Delete(second);
+        }
+    }
+
+    [Fact]
+    public void Render_json_via_explicit_format_over_non_image_extension()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.txt");
+        try
+        {
+            int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"]);
+
+            Assert.Equal(0, exit);
+            using var doc = JsonDocument.Parse(File.ReadAllText(output));
+            Assert.Equal("S-124", doc.RootElement.GetProperty("product").GetString());
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_format_json_conflicting_with_image_extension_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Render_json_rejected_for_composite_form_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        int exit = CliApp.Build().Run(["render", "--layer", dataset, output]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Render_single_dataset_with_bbox_writes_png()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, "--bbox", "-80,30,-60,45", "--width", "400", "--height", "300"]);
+
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+
+            using var bitmap = SKBitmap.Decode(output);
+            Assert.NotNull(bitmap);
+            Assert.Equal(400, bitmap!.Width);
+            Assert.Equal(300, bitmap.Height);
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_single_dataset_with_center_scale_writes_png()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, "--center", "-70,38", "--scale", "20000000",
+                 "--width", "400", "--height", "300"]);
+
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_viewport_flags_rejected_with_format_json_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
+        int exit = CliApp.Build().Run(["render", dataset, output, "--bbox", "-80,30,-60,45"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Render_viewport_flags_rejected_for_coverage_product_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S102", "102US004MI1CI262227.h5"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(
+            ["render", dataset, output, "--bbox", "-76,38,-75,39", "--width", "200", "--height", "200"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
     }
 
     /// <summary>
