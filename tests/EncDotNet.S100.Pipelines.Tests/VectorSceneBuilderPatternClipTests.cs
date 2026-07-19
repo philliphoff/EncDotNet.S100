@@ -142,6 +142,36 @@ public sealed class VectorSceneBuilderPatternClipTests
     }
 
     [Fact]
+    public void MixedCasePatternReferences_GroupCaseInsensitively()
+    {
+        // The Mapsui feature path groups pattern references with OrdinalIgnoreCase
+        // (matching its tile-resolution comparer). The IR path must do the same, so
+        // two overlapping same-priority ops whose references differ only in case
+        // merge into ONE group (a single unioned op) rather than two separate ops.
+        var geometry = new DictionaryGeometryProvider();
+        geometry.Add("a", Rectangle(0, 0, 10, 10));
+        geometry.Add("b", Rectangle(0, 0, 10, 10));
+
+        DrawingInstruction[] instructions =
+        [
+            new AreaInstruction { FeatureReference = "a", AreaFillReference = "PATTERN", DrawingPriority = 5 },
+            new AreaInstruction { FeatureReference = "b", AreaFillReference = "pattern", DrawingPriority = 5 },
+        ];
+
+        var scene = NewBuilder().Build(instructions, geometry);
+
+        // Case-insensitive grouping unifies both ops under the first-seen key, so
+        // every emitted pattern op carries the same reference. Under the previous
+        // case-sensitive grouping they landed in two distinct groups ("PATTERN" and
+        // "pattern"), yielding two different reference values.
+        var references = scene.Ops.OfType<PatternAreaPaintOp>()
+            .Select(o => o.PatternReference)
+            .Distinct()
+            .ToList();
+        Assert.Equal(["PATTERN"], references);
+    }
+
+    [Fact]
     public void NoPatternResolver_EmitsNoPatternOps()
     {
         var geometry = new DictionaryGeometryProvider();

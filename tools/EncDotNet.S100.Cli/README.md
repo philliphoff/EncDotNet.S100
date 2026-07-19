@@ -180,9 +180,12 @@ error.
 The document is **pure portrayal output**: it contains no timing and no encoder
 settings, and geometry is summarised (type, vertex count, and a representative
 latitude/longitude anchor) rather than dumped in full, so two runs over the same
-dataset and render context produce byte-identical JSON. The viewport options
-(`--width` / `--height`) and palette still apply — they influence which
-instructions the pipeline emits — but `--quality` and `--background` are ignored.
+dataset and render context produce byte-identical JSON. The palette and the
+portrayal options (symbol/text scale, display mode, time step, and an explicit
+`--bbox` / `--center` / `--scale` viewport) still influence which instructions
+the pipeline emits, but the raster-only options `--width` / `--height` /
+`--quality` / `--background` are ignored (the JSON path builds the display list
+without rasterizing).
 
 ```bash
 s100 render warnings.gml warnings.json           # infer json from the .json extension

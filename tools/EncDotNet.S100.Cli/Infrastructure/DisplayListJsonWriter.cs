@@ -41,7 +41,11 @@ internal static class DisplayListJsonWriter
     /// <param name="result">The built vector portrayal (sub-layers + geometry).</param>
     /// <param name="datasetName">The source dataset file name, echoed into the document.</param>
     /// <param name="palette">The active palette token (e.g. <c>day</c>).</param>
-    /// <returns>The serialized JSON document, terminated with a trailing newline.</returns>
+    /// <returns>
+    /// The serialized JSON document, terminated with a single trailing <c>\n</c>.
+    /// A fixed newline (rather than <see cref="Environment.NewLine"/>) keeps the
+    /// output byte-identical across operating systems for stable snapshot/diffing.
+    /// </returns>
     public static string Serialize(VectorPortrayalResult result, string datasetName, string palette)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -73,7 +77,7 @@ internal static class DisplayListJsonWriter
             Instructions = instructions,
         };
 
-        return JsonSerializer.Serialize(document, Options) + Environment.NewLine;
+        return JsonSerializer.Serialize(document, Options) + "\n";
     }
 
     private static InstructionDto ToDto(

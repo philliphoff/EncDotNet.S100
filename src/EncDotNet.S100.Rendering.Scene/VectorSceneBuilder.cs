@@ -262,10 +262,13 @@ public sealed class VectorSceneBuilder
         }
 
         // Group pattern ops by (pattern reference, priority), building NTS polygons
-        // and a merged template (tile + union scale band) per group.
+        // and a merged template (tile + union scale band) per group. Pattern
+        // references are compared case-insensitively (OrdinalIgnoreCase) to match
+        // the Mapsui feature path's tile-resolution comparer, so mixed-case
+        // references group identically across both render arms.
         var groupOrder = new List<(string PatternRef, int Priority)>();
-        var groupPolygons = new Dictionary<(string, int), List<Polygon>>();
-        var groupTemplates = new Dictionary<(string, int), PatternGroupTemplate>();
+        var groupPolygons = new Dictionary<(string, int), List<Polygon>>(PatternGroupKeyComparer);
+        var groupTemplates = new Dictionary<(string, int), PatternGroupTemplate>(PatternGroupKeyComparer);
         var unclippable = new List<PatternAreaPaintOp>();
 
         foreach (var (op, priority) in patternPriorities)
@@ -347,6 +350,27 @@ public sealed class VectorSceneBuilder
             insertAt = ops.Count;
         ops.RemoveAll(o => o is PatternAreaPaintOp);
         ops.InsertRange(insertAt, rebuilt);
+    }
+
+    /// <summary>
+    /// Groups pattern-clip keys by drawing priority and case-insensitive pattern
+    /// reference (<see cref="StringComparison.OrdinalIgnoreCase"/>), mirroring the
+    /// Mapsui feature path's tile-resolution comparer so both render arms produce
+    /// identical clip topology for mixed-case pattern references.
+    /// </summary>
+    private static readonly IEqualityComparer<(string, int)> PatternGroupKeyComparer =
+        new PatternGroupKeyEqualityComparer();
+
+    private sealed class PatternGroupKeyEqualityComparer : IEqualityComparer<(string, int)>
+    {
+        public bool Equals((string, int) x, (string, int) y)
+            => x.Item2 == y.Item2
+                && string.Equals(x.Item1, y.Item1, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string, int) obj)
+            => HashCode.Combine(
+                obj.Item1 is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Item1),
+                obj.Item2);
     }
 
     /// <summary>Per-group attributes carried through the pattern clip.</summary>
