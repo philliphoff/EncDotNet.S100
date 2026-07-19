@@ -1051,6 +1051,40 @@ public class S57ToS101TranslatorTests
         Assert.Contains((ushort)144, diag.UnmappedObjectClasses.Keys);
     }
 
+    [Fact]
+    public void Translate_SharedTopmarSlave_FoldsIntoOnlyOneMaster()
+    {
+        // Two masters whose FFPTs both reference the same TOPMAR slave must not
+        // both fold it in (which would duplicate the topmark attributes); the
+        // TOPMAR is consumed by a single master only.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var masterA = Feat(
+            recordId: 1, primitive: 1, objectClass: 18, // BOYSAW → SafeWaterBuoy
+            featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 30, relationship: EncDotNet.S57.S57RelationshipIndicator.Slave) });
+        var masterB = Feat(
+            recordId: 2, primitive: 1, objectClass: 18,
+            featureIdentificationNumber: 20,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 30, relationship: EncDotNet.S57.S57RelationshipIndicator.Slave) });
+        var topmar = Feat(
+            recordId: 3, primitive: 1, objectClass: 144,
+            featureIdentificationNumber: 30,
+            attributes: new[] { Attr(171, "1"), Attr(75, "3") });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 },
+                features: new[] { masterA, masterB, topmar }), diag);
+
+        Assert.Equal(1, diag.TopmarksAbsorbed);
+        var withTopmark = s101.Features
+            .Count(f => ComplexInstance(s101, f.Attributes, "topmark", 1).Any());
+        Assert.Equal(1, withTopmark);
+    }
+
     // ── C_AGGR → RangeSystemAggregation (synthesised RangeSystem) ────────
 
     // Resolves the S-101 class name of a feature via the FeatureTypeCatalogue.

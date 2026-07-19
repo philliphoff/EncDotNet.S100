@@ -328,7 +328,7 @@ public sealed class S57ToS101Translator
     // (IHO S-57→S-101 Conversion Guidance: TOPMAR as parent attribute.)
     private const ushort TopmarObjl = 144;      // TOPMAR (S-57 object class)
     private const ushort S57AttrTopshp = 171;   // TOPSHP — topmark/daymark shape
-    private const ushort S57AttrColpat = 76;    // COLPAT — colour pattern (list)
+    private const ushort S57AttrColpat = 76;    // COLPAT — colour pattern (single value)
     private const string S101AttrTopmark = "topmark";
     private const string S101AttrTopmarkDaymarkShape = "topmarkDaymarkShape";
     private const string S101AttrColourPattern = "colourPattern";
@@ -1086,6 +1086,12 @@ public sealed class S57ToS101Translator
                         continue;
                     var slave = featureRecords[slaveIndex];
                     if ((int)slave.ObjectCode != TopmarObjl)
+                        continue;
+
+                    // A TOPMAR can only be consumed by one master; if an earlier
+                    // master already absorbed it, do not fold it again (which would
+                    // duplicate the topmark attributes across features).
+                    if (absorbed.Contains(slaveIndex))
                         continue;
 
                     // Only fold the topmark onto masters whose S-101 class binds

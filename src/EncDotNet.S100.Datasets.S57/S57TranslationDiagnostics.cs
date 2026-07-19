@@ -86,12 +86,15 @@ public sealed class S57TranslationDiagnostics
 
     /// <summary>
     /// Number of S-57 <c>TOPMAR</c> (topmark/daymark, OBJL 144) feature records
-    /// absorbed into their master buoy/beacon's <c>topmark</c> complex attribute
-    /// during the topmark-fold pass. S-101 models the topmark as an attribute of
-    /// the parent structure (reached via the S-57 master/slave feature-to-feature
-    /// relationship) rather than a standalone feature, so an absorbed TOPMAR
-    /// produces no S-101 feature of its own and is counted here <em>instead of</em>
-    /// under <see cref="UnmappedObjectClasses"/>. A TOPMAR referenced by no
+    /// absorbed by a master buoy/beacon during the topmark-fold pass. S-101 models
+    /// the topmark as an attribute of the parent structure (reached via the S-57
+    /// master/slave feature-to-feature relationship) rather than a standalone
+    /// feature, so an absorbed TOPMAR produces no S-101 feature of its own and is
+    /// counted here <em>instead of</em> under <see cref="UnmappedObjectClasses"/>.
+    /// This counts every TOPMAR consumed by a topmark-binding master; the parent's
+    /// <c>topmark</c> complex instance may still be dropped afterward (for example
+    /// a missing or FC-rejected <c>TOPSHP</c>), so an absorbed TOPMAR does not
+    /// guarantee an emitted <c>topmark</c> instance. A TOPMAR referenced by no
     /// topmark-binding master is still recorded as unmapped (IHO S-57→S-101
     /// Conversion Guidance: TOPMAR → parent attribute).
     /// </summary>
