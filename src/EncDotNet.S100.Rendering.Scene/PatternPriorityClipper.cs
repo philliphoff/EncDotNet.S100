@@ -79,15 +79,17 @@ public static class PatternPriorityClipper
 
     /// <summary>
     /// Clips each pattern group against all higher-priority pattern areas and the
-    /// supplied opaque non-patterned colour fills.
+    /// supplied non-patterned colour fills.
     /// </summary>
     /// <param name="entries">
     /// The pattern groups, <b>pre-sorted ascending by priority</b>. The returned
     /// list is in the same order as this input.
     /// </param>
     /// <param name="nonPatternedColorFills">
-    /// Opaque non-patterned colour-fill polygons (e.g. land) that occlude every
-    /// pattern fill. May be empty.
+    /// Non-patterned colour-fill polygons (e.g. land) that should occlude every
+    /// pattern fill. The clipper treats each polygon as a full occluder; the
+    /// caller is responsible for supplying only fills that are actually opaque.
+    /// May be empty.
     /// </param>
     /// <returns>
     /// The clipped geometry for each input group, in input order. A group whose

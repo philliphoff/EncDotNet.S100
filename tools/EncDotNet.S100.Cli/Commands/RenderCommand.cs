@@ -729,8 +729,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 {
                     error =
                         $"--format json conflicts with the output extension " +
-                        $"'{Path.GetExtension(outputPath)}'. Use a non-image extension " +
-                        "(e.g. .json) or omit --format.";
+                        $"'{Path.GetExtension(outputPath)}'. Use a non-image output " +
+                        "extension (e.g. .json) to write a display list, or drop " +
+                        "--format to render an image to the current extension.";
                     return false;
                 }
 
