@@ -423,6 +423,7 @@ public sealed class MapsuiDisplayListRenderer
                 SymbolResolver = ResolveSymbolAsset,
                 LineStyleProvider = LineStyleProvider,
                 PatternResolver = GetPatternTilePng,
+                PatternClipCache = BuildPatternClipMemoizer(),
                 SymbolScale = SymbolScale,
                 TextScale = TextScale,
                 OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
@@ -1124,6 +1125,35 @@ public sealed class MapsuiDisplayListRenderer
     /// </summary>
     /// <remarks>Entries must be sorted by ascending priority before calling;
     /// results are returned in the same order.</remarks>
+    /// <summary>
+    /// Adapts this renderer's <see cref="PatternClipCache"/> (an
+    /// <see cref="IPatternClipCache"/> keyed by <see cref="PatternClipCacheKey"/>)
+    /// into the <see cref="Scene.PatternClipMemoizer"/> consumed by
+    /// <see cref="Scene.VectorSceneBuilder"/>, so the default TiledScene ("B") arm
+    /// memoizes its pattern priority-clip exactly like the Mapsui feature ("A")
+    /// arm. Returns <see langword="null"/> when no cache or key is configured, in
+    /// which case the builder clips on every build. The clip result is
+    /// palette-independent, so a Day/Dusk/Night switch (which recolours the
+    /// pattern tiles applied after clipping) reuses the cached geometry.
+    /// </summary>
+    private Scene.PatternClipMemoizer? BuildPatternClipMemoizer()
+    {
+        if (PatternClipCache is not { } cache || PatternClipCacheKey is not { } key)
+            return null;
+
+        return compute => cache
+            .GetOrCompute(key, () =>
+            {
+                var clipped = compute();
+                var tuples = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
+                foreach (var c in clipped)
+                    tuples.Add((c.PatternRef, c.Priority, c.Geometry));
+                return tuples;
+            })
+            .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
+            .ToList();
+    }
+
     private static List<(string PatternRef, int Priority, Geometry Geometry)> ClipPatternsByPriority(
         List<(string PatternRef, int Priority, List<Polygon> Polygons)> entries,
         List<Polygon> nonPatternedColorFills)

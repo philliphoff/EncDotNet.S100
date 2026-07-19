@@ -158,4 +158,89 @@ public sealed class VectorSceneBuilderPatternClipTests
 
         Assert.Empty(scene.Ops.OfType<PatternAreaPaintOp>());
     }
+
+    [Fact]
+    public void PatternClipCache_ResultIsUsedInsteadOfRecomputing()
+    {
+        // The builder must build its pattern ops from the memoizer's returned
+        // geometry, not from a fresh clip. A memoizer that returns an empty clip
+        // result therefore yields a scene with no pattern ops.
+        var geometry = new DictionaryGeometryProvider();
+        geometry.Add("pattern", Rectangle(0, 0, 10, 10));
+
+        DrawingInstruction[] instructions =
+        [
+            new AreaInstruction { FeatureReference = "pattern", AreaFillReference = "PATTERN", DrawingPriority = 5 },
+        ];
+
+        int computeCount = 0;
+        var builder = new VectorSceneBuilder
+        {
+            ResolveColor = static _ => new RgbaColor(200, 200, 200, 255),
+            PatternResolver = static _ => [1, 2, 3, 4],
+            PatternClipCache = compute =>
+            {
+                computeCount++;
+                _ = compute();
+                return [];
+            },
+        };
+
+        var scene = builder.Build(instructions, geometry);
+
+        Assert.Equal(1, computeCount);
+        Assert.Empty(scene.Ops.OfType<PatternAreaPaintOp>());
+    }
+
+    [Fact]
+    public void PatternClipCache_MemoizesClipAcrossRebuilds()
+    {
+        // Simulates the palette-switch case: two consecutive layer builds sharing
+        // one cache must run the expensive clip only once, and the second build
+        // must still produce the correctly clipped geometry from the cache.
+        var geometry = new DictionaryGeometryProvider();
+        geometry.Add("low", Rectangle(0, 0, 10, 10));
+        geometry.Add("high", Rectangle(0, 0, 5, 10));
+
+        DrawingInstruction[] instructions =
+        [
+            new AreaInstruction { FeatureReference = "low", AreaFillReference = "PATTERN_LOW", DrawingPriority = 5 },
+            new AreaInstruction { FeatureReference = "high", AreaFillReference = "PATTERN_HIGH", DrawingPriority = 10 },
+        ];
+
+        IReadOnlyList<PatternPriorityClipper.ClippedPattern>? cached = null;
+        int computeCount = 0;
+        PatternClipMemoizer memoizer = compute =>
+        {
+            if (cached is null)
+            {
+                computeCount++;
+                cached = compute();
+            }
+
+            return cached;
+        };
+
+        VectorScene Build() => new VectorSceneBuilder
+        {
+            ResolveColor = static _ => new RgbaColor(200, 200, 200, 255),
+            PatternResolver = static _ => [1, 2, 3, 4],
+            PatternClipCache = memoizer,
+        }.Build(instructions, geometry);
+
+        var first = Build();
+        var second = Build();
+
+        // The clip overlay ran exactly once despite two builds.
+        Assert.Equal(1, computeCount);
+
+        // Both builds produce the same clipped low-priority pattern: the left half
+        // (under the higher-priority pattern) is removed, the right half remains.
+        foreach (var scene in new[] { first, second })
+        {
+            var lowGeometry = ToGeometry(SinglePatternOp(scene, "PATTERN_LOW"));
+            Assert.False(lowGeometry.Contains(At(2, 5)));
+            Assert.True(lowGeometry.Contains(At(8, 5)));
+        }
+    }
 }

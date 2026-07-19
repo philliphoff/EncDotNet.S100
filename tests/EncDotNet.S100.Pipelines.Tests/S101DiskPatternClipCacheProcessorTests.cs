@@ -63,10 +63,10 @@ public class S101DiskPatternClipCacheProcessorTests
             var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory(), sharedCache);
 
             // First cold open: the disk cache is empty, so the clip is computed
-            // (a miss) and persisted. No clip-cache hits yet.
+            // (a miss) and persisted.
             var first = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
             await renderer.RenderAsync(first);
-            Assert.Equal(0, sharedCache.Hits);
+            Assert.True(sharedCache.Misses >= 1);
 
             // Second cold open (simulates reopening the cell, even after a
             // restart): a brand-new processor over the same shared disk cache.

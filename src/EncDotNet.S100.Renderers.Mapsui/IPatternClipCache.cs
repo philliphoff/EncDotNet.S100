@@ -30,6 +30,16 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// switch reuse the previously computed geometry verbatim.
 /// </para>
 /// <para>
+/// Both render arms consult this cache. The Mapsui feature ("A") arm wraps its
+/// own clip directly; the default TiledScene ("B") arm — which clips inside the
+/// shared <see cref="EncDotNet.S100.Rendering.Scene.VectorSceneBuilder"/> when
+/// lowering the <see cref="EncDotNet.S100.Rendering.Scene.VectorScene"/> IR —
+/// reaches it through a <see cref="EncDotNet.S100.Rendering.Scene.PatternClipMemoizer"/>
+/// adapter (<see cref="MapsuiDisplayListRenderer"/>). Because both arms produce
+/// identical clip topology and share this key, the expensive overlay is computed
+/// at most once per build regardless of which arm is active.
+/// </para>
+/// <para>
 /// The abstraction is intentionally minimal so that the single-slot in-memory
 /// implementation (<see cref="InMemoryPatternClipCache"/>) and the disk-backed
 /// (WKB sidecar) implementation (<see cref="DiskPatternClipCache"/>) — which

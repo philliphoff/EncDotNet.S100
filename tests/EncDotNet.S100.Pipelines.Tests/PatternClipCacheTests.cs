@@ -132,8 +132,10 @@ public class PatternClipCacheTests
                 $"Clipped geometry {i} differs between cached and uncached paths.");
         }
 
+        // The expensive clip overlay is computed exactly once (a single miss);
+        // the number of cache reads (hits) depends on how many render arms consult
+        // the shared cache and is not asserted here.
         Assert.Equal(1, cache.Misses);
-        Assert.Equal(0, cache.Hits);
     }
 
     [Fact]
@@ -150,8 +152,10 @@ public class PatternClipCacheTests
             NewRenderer(palette, cache, cacheKey: "k1")
                 .Render(BuildInstructions(), provider));
 
+        // A second render with the same key adds no further compute (the miss
+        // count stays at one) and is served from the cache (at least one hit).
         Assert.Equal(1, cache.Misses);
-        Assert.Equal(1, cache.Hits);
+        Assert.True(cache.Hits >= 1);
 
         Assert.Equal(first.Count, second.Count);
         Assert.NotEmpty(first);
@@ -182,8 +186,10 @@ public class PatternClipCacheTests
             NewRenderer(night, cache, cacheKey: "k1")
                 .Render(BuildInstructions(), provider));
 
+        // A palette-only change reuses the cached (palette-independent) geometry:
+        // no further compute (miss count stays at one), served from the cache.
         Assert.Equal(1, cache.Misses);
-        Assert.Equal(1, cache.Hits);
+        Assert.True(cache.Hits >= 1);
 
         Assert.Equal(dayGeom.Count, nightGeom.Count);
         Assert.NotEmpty(dayGeom);

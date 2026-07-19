@@ -38,7 +38,9 @@ public readonly record struct SymbolAsset(
 /// own pattern collection / insert phase, so its output is unchanged. When
 /// pattern ops are emitted they are priority-clipped via the shared
 /// <see cref="PatternPriorityClipper"/> — the same algorithm the Mapsui feature
-/// path uses — so all three paths clip identically.
+/// path uses — so all three paths clip identically. The (palette-independent)
+/// clip result can be memoized via <see cref="PatternClipCache"/> so re-builds
+/// that only change the palette skip the expensive overlay.
 /// </remarks>
 public sealed class VectorSceneBuilder
 {
@@ -71,6 +73,21 @@ public sealed class VectorSceneBuilder
     /// for a given name silently drops just that instruction.
     /// </summary>
     public Func<string, byte[]?>? PatternResolver { get; init; }
+
+    /// <summary>
+    /// Optional memoizer for the pattern priority-clip result. When set, the
+    /// builder routes the shared <see cref="PatternPriorityClipper.Clip"/> call
+    /// through this delegate, so a re-build whose clip inputs are unchanged — most
+    /// importantly a Day/Dusk/Night palette switch — reuses the previously
+    /// computed (palette-independent) clip geometry instead of repeating the
+    /// expensive NetTopologySuite overlay. The Mapsui renderer wires this to its
+    /// pattern-clip cache for the default TiledScene render subsystem, matching
+    /// the caching the Mapsui feature path already enjoys; the headless Skia path
+    /// leaves it unset (a headless render clips once). Only consulted when a
+    /// <see cref="PatternResolver"/> is also set (otherwise no pattern ops are
+    /// emitted and there is nothing to clip).
+    /// </summary>
+    public PatternClipMemoizer? PatternClipCache { get; init; }
 
     /// <summary>Global scale factor applied to all point symbols (default 1.0).</summary>
     public double SymbolScale { get; init; } = 1.0;
@@ -285,7 +302,9 @@ public sealed class VectorSceneBuilder
         foreach (var key in groupOrder)
             entries.Add(new PatternPriorityClipper.PatternGroup(key.PatternRef, key.Priority, groupPolygons[key]));
 
-        var clipped = PatternPriorityClipper.Clip(entries, excludes);
+        var clipped = PatternClipCache is null
+            ? PatternPriorityClipper.Clip(entries, excludes)
+            : PatternClipCache(() => PatternPriorityClipper.Clip(entries, excludes));
 
         // Rebuild pattern ops from the clipped geometry, expanding a MultiPolygon
         // result into one op per polygon.
@@ -295,18 +314,26 @@ public sealed class VectorSceneBuilder
             if (geometry.IsEmpty)
                 continue;
 
-            var template = groupTemplates[(patternRef, priority)];
+            var template = groupTemplates.TryGetValue((patternRef, priority), out var found)
+                ? found
+                // A memoized clip result (shared with the Mapsui feature arm via
+                // PatternClipCache) can, in a pathological case, carry a group key
+                // absent from this build's templates; skip it rather than throw.
+                : (PatternGroupTemplate?)null;
+            if (template is null)
+                continue;
+
             foreach (var (shell, holes) in EnumeratePolygonRings(geometry))
             {
                 rebuilt.Add(new PatternAreaPaintOp
                 {
-                    FeatureReference = template.FeatureReference,
-                    ScaleMinimum = template.ScaleMinimum,
-                    ScaleMaximum = template.ScaleMaximum,
+                    FeatureReference = template.Value.FeatureReference,
+                    ScaleMinimum = template.Value.ScaleMinimum,
+                    ScaleMaximum = template.Value.ScaleMaximum,
                     PatternReference = patternRef,
                     WorldShell = shell,
                     WorldHoles = holes,
-                    TilePng = template.TilePng,
+                    TilePng = template.Value.TilePng,
                 });
             }
         }
