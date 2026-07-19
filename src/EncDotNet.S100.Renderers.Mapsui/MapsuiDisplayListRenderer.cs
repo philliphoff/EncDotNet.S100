@@ -145,6 +145,16 @@ public sealed class MapsuiDisplayListRenderer
     public string? PatternClipCacheKey { get; init; }
 
     /// <summary>
+    /// Optional per-render override of the active base-plane render subsystem
+    /// (see <see cref="RenderingOptimizations.RenderSubsystem"/>). When set, this
+    /// render uses the specified arm regardless of the process-wide default,
+    /// without mutating global state — making arm-specific behaviour
+    /// deterministic and parallel-safe for tests and harnesses. When
+    /// <see langword="null"/> (the default) the process-wide subsystem applies.
+    /// </summary>
+    public RenderSubsystemKind? RenderSubsystemOverride { get; init; }
+
+    /// <summary>
     /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
     /// the pivot-to-bounds-centre offset recovered from the raw SVG before
     /// <see cref="SvgProcessor"/> stripped its layout elements.  The relative
@@ -242,79 +252,93 @@ public sealed class MapsuiDisplayListRenderer
         // symbology emits exactly one rectangle per anchor (see the build loop).
         var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
         var patternEntries = new List<(string PatternRef, int Priority, List<Polygon> Polygons)>();
+        var nonPatternedColorFillPolygons = new List<Polygon>();
         int lastColorFillIndex = -1;
 
-        // 3a. Pattern bookkeeping (unchanged): collect pattern polygons grouped
+        // Select the base-plane render subsystem up front (design §4/§5). The
+        // pattern bookkeeping, priority clip, and pattern-fill feature insertion
+        // below feed the Mapsui feature ("A") arm exclusively: those features are
+        // never rendered by the TiledScene ("B") arm (which paints patterns from
+        // the IR scene bound to the layer) and carry no pick identity, so they are
+        // pure dead weight there. Compute the arm now so the whole pattern phase
+        // can be skipped when the B arm is active.
+        var useTiledScene =
+            (RenderSubsystemOverride ?? RenderingOptimizations.RenderSubsystem)
+                == RenderSubsystemKind.TiledScene;
+
+        // 3a. Pattern bookkeeping (A arm only): collect pattern polygons grouped
         //     by (pattern, priority), plus the non-patterned colour fills (e.g.
         //     land) that clip them. Pattern fills are merged per unique pattern so
         //     overlapping polygons with the same globally-anchored pattern are
         //     drawn exactly once. This mirrors the legacy single-pass collection
         //     and is kept separate from the IR for this slice.
-        var featuresWithPatterns = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var instruction in sorted)
+        if (!useTiledScene)
         {
-            if (instruction is AreaInstruction { AreaFillReference: not null } pa)
-                featuresWithPatterns.Add(pa.FeatureReference);
-        }
-
-        var nonPatternedColorFillPolygons = new List<Polygon>();
-
-        foreach (var instruction in sorted)
-        {
-            var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
-
-            // LineInstructions with CoordinatesOverride carry their own
-            // synthetic geometry (from augmented rays/arcs) and don't need
-            // the feature's natural geometry to have coordinates.
-            bool hasAugmentedLine = instruction is LineInstruction { CoordinatesOverride: not null };
-            if (!hasAugmentedLine && (geom is null || geom.Coordinates.Count == 0))
-                continue;
-
-            // Defer pattern fills for merging
-            if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern && geom is not null)
+            var featuresWithPatterns = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var instruction in sorted)
             {
-                // Inclusion gate: only collect the entry when the pattern
-                // resolves to a tile under the current palette (patterns with
-                // no resolvable asset are dropped, exactly as before). The
-                // resolved tile is discarded here; grouping/merging keys on the
-                // palette-independent pattern reference so the clip result is
-                // palette-independent and cacheable. The tile is re-resolved
-                // under the active palette after clipping.
-                if (GetPatternTilePng(patternRef) is not null)
+                if (instruction is AreaInstruction { AreaFillReference: not null } pa)
+                    featuresWithPatterns.Add(pa.FeatureReference);
+            }
+
+            foreach (var instruction in sorted)
+            {
+                var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
+
+                // LineInstructions with CoordinatesOverride carry their own
+                // synthetic geometry (from augmented rays/arcs) and don't need
+                // the feature's natural geometry to have coordinates.
+                bool hasAugmentedLine = instruction is LineInstruction { CoordinatesOverride: not null };
+                if (!hasAugmentedLine && (geom is null || geom.Coordinates.Count == 0))
+                    continue;
+
+                // Defer pattern fills for merging
+                if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern && geom is not null)
+                {
+                    // Inclusion gate: only collect the entry when the pattern
+                    // resolves to a tile under the current palette (patterns with
+                    // no resolvable asset are dropped, exactly as before). The
+                    // resolved tile is discarded here; grouping/merging keys on the
+                    // palette-independent pattern reference so the clip result is
+                    // palette-independent and cacheable. The tile is re-resolved
+                    // under the active palette after clipping.
+                    if (GetPatternTilePng(patternRef) is not null)
+                    {
+                        var polygon = CreatePolygonFromGeometry(geom);
+                        if (polygon is not null)
+                        {
+                            // Find existing entry with the same pattern reference and priority, or create a new one.
+                            // OrdinalIgnoreCase matches MapsuiRenderAssetCache's tile-resolution
+                            // comparer, so this grouping is exactly equivalent to the previous
+                            // ReferenceEquals(TilePng) grouping (same fillName -> same byte[] ref).
+                            var existing = patternEntries.Find(e =>
+                                string.Equals(e.PatternRef, patternRef, StringComparison.OrdinalIgnoreCase)
+                                && e.Priority == areaPattern.DrawingPriority);
+                            if (existing.PatternRef is not null)
+                            {
+                                existing.Polygons.Add(polygon);
+                            }
+                            else
+                            {
+                                patternEntries.Add((patternRef, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                // Track non-patterned color fills (e.g. land areas) for pattern clipping
+                if (instruction is AreaInstruction { FillColor: not null } colorFill
+                    && geom is not null
+                    && !featuresWithPatterns.Contains(colorFill.FeatureReference))
                 {
                     var polygon = CreatePolygonFromGeometry(geom);
                     if (polygon is not null)
-                    {
-                        // Find existing entry with the same pattern reference and priority, or create a new one.
-                        // OrdinalIgnoreCase matches MapsuiRenderAssetCache's tile-resolution
-                        // comparer, so this grouping is exactly equivalent to the previous
-                        // ReferenceEquals(TilePng) grouping (same fillName -> same byte[] ref).
-                        var existing = patternEntries.Find(e =>
-                            string.Equals(e.PatternRef, patternRef, StringComparison.OrdinalIgnoreCase)
-                            && e.Priority == areaPattern.DrawingPriority);
-                        if (existing.PatternRef is not null)
-                        {
-                            existing.Polygons.Add(polygon);
-                        }
-                        else
-                        {
-                            patternEntries.Add((patternRef, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
-                        }
-                    }
+                        nonPatternedColorFillPolygons.Add(polygon);
                 }
-                continue;
-            }
-
-            // Track non-patterned color fills (e.g. land areas) for pattern clipping
-            if (instruction is AreaInstruction { FillColor: not null } colorFill
-                && geom is not null
-                && !featuresWithPatterns.Contains(colorFill.FeatureReference))
-            {
-                var polygon = CreatePolygonFromGeometry(geom);
-                if (polygon is not null)
-                    nonPatternedColorFillPolygons.Add(polygon);
             }
         }
+
 
         // 3b. Build Mapsui features from the IR, in Part 9 draw order. Solid-area
         //     ops mark the colour-fill boundary so merged patterns are inserted
@@ -347,48 +371,51 @@ public sealed class MapsuiDisplayListRenderer
         // higher-priority patterns so that, e.g., DIAMOND1 (priority 9)
         // diamonds do not show through DQUAL (priority 12) pattern zones.
         // Also clips all patterns against non-patterned color fill areas
-        // (e.g. land) so patterns don't bleed over land.
-        patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-        var clippedPatterns = PatternClipCache is not null && PatternClipCacheKey is not null
-            ? PatternClipCache.GetOrCompute(
-                PatternClipCacheKey,
-                () => ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons))
-            : ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
-
-        // Insert merged pattern fill features after all color fills but before
-        // lines/points/text. This ensures no solid fill can occlude a pattern.
-        // The tile is re-resolved here under the active palette (the clip
-        // geometry is palette-independent and may have come from the cache,
-        // which is shared across palettes).
-        int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
-        foreach (var (patternRef, _, geometry) in clippedPatterns)
+        // (e.g. land) so patterns don't bleed over land. A-arm only: the B arm
+        // renders patterns from the IR scene and skips this phase entirely.
+        if (!useTiledScene)
         {
-            var tile = GetPatternTilePicture(patternRef);
-            if (tile is null)
-                continue;
+            patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+            var clippedPatterns = PatternClipCache is not null && PatternClipCacheKey is not null
+                ? PatternClipCache.GetOrCompute(
+                    PatternClipCacheKey,
+                    () => ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons))
+                : ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
 
-            var feature = new GeometryFeature(geometry);
-            feature.Styles.Add(new AnchoredPatternFillStyle
+            // Insert merged pattern fill features after all color fills but before
+            // lines/points/text. This ensures no solid fill can occlude a pattern.
+            // The tile is re-resolved here under the active palette (the clip
+            // geometry is palette-independent and may have come from the cache,
+            // which is shared across palettes).
+            int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
+            foreach (var (patternRef, _, geometry) in clippedPatterns)
             {
-                Tile = tile.Value.Picture,
-                TileRect = tile.Value.Rect,
-            });
-            mapFeatures.Insert(insertAt, feature);
-            insertAt++;
+                var tile = GetPatternTilePicture(patternRef);
+                if (tile is null)
+                    continue;
+
+                var feature = new GeometryFeature(geometry);
+                feature.Styles.Add(new AnchoredPatternFillStyle
+                {
+                    Tile = tile.Value.Picture,
+                    TileRect = tile.Value.Rect,
+                });
+                mapFeatures.Insert(insertAt, feature);
+                insertAt++;
+            }
         }
 
         S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
         S100Diag.Telemetry.FrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-        // Select the base-plane render subsystem (design §4/§5). When the
-        // TiledScene ("B") arm is active, the layer is portrayed by
+        // When the TiledScene ("B") arm is active, the layer is portrayed by
         // S100VectorSceneRenderer rasterising the VectorScene IR directly on a
         // worker — so build a *pattern-complete* scene (the Mapsui lowering above
         // deliberately omits patterns; the B arm renders them from the IR) and
         // bind it to the layer. Otherwise the snapshot ("A") arm (or the plain
-        // per-feature path) renders the Mapsui features built above.
-        var useTiledScene = RenderingOptimizations.RenderSubsystem == RenderSubsystemKind.TiledScene;
+        // per-feature path) renders the Mapsui features built above (including the
+        // clipped pattern fills inserted in the A-arm-only phase).
 
         // Within the TiledScene subsystem, the Phase-2 tiled renderer is the
         // default; S100_VECTOR_SCENE_MODE=single selects the Phase-1
