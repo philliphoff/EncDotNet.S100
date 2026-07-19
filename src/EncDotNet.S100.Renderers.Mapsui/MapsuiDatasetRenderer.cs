@@ -361,8 +361,8 @@ public sealed class MapsuiDatasetRenderer
     {
         var c = CultureInfo.InvariantCulture;
         return identityKey
-            + "|tol:" + MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres.ToString("R", c)
-            + "|gate:" + MapsuiDisplayListRenderer.MinPointsToSimplifyForClip.ToString(c)
+            + "|tol:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.SimplifyToleranceMetres.ToString("R", c)
+            + "|gate:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.MinPointsToSimplify.ToString(c)
             + "|fmt:" + DiskPatternClipCache.FormatVersion.ToString(c);
     }
 

@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// Caches the result of the S-101 pattern-fill priority clip
 /// (<see cref="MapsuiDisplayListRenderer"/>'s
-/// <c>ClipPatternsByPriority</c>) so that re-renders which do not change the
+/// <see cref="EncDotNet.S100.Rendering.Scene.PatternPriorityClipper"/>) so that re-renders which do not change the
 /// clip inputs — most importantly Day/Dusk/Night palette switches — skip the
 /// expensive NetTopologySuite overlay work.
 /// </summary>

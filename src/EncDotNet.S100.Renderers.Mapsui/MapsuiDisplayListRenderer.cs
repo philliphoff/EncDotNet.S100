@@ -13,9 +13,6 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
-using NetTopologySuite.Operation.Overlay;
-using NetTopologySuite.Operation.OverlayNG;
-using NetTopologySuite.Simplify;
 using MapsuiColor = Mapsui.Styles.Color;
 using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using Scene = EncDotNet.S100.Rendering.Scene;
@@ -1115,263 +1112,32 @@ public sealed class MapsuiDisplayListRenderer
 
         return null;
     }
-    /// 1. Lower-priority patterns are clipped by higher-priority pattern areas
-    ///    (e.g. DIAMOND1 at priority 9 is clipped by DQUAL at priority 12).
-    /// 2. All patterns are clipped to exclude non-patterned color fill areas
-    ///    (e.g. land areas) where patterns should not be visible.
+
+    /// <summary>
+    /// Clips lower-priority pattern groups by higher-priority pattern areas and by
+    /// the opaque non-patterned colour fills (e.g. land), so a lower-priority
+    /// pattern does not show through a higher-priority zone and no pattern bleeds
+    /// over land. Delegates to the shared, backend-neutral
+    /// <see cref="Scene.PatternPriorityClipper"/> so the Mapsui feature path and
+    /// the <see cref="Scene.VectorScene"/> IR path (headless Skia + TiledScene)
+    /// clip identically.
     /// </summary>
-    /// <remarks>
-    /// Entries must be sorted by ascending priority before calling.
-    /// Returns (tilePng, clippedGeometry) pairs in ascending priority order.
-    /// <para>
-    /// Pattern geometries are generalized with <see cref="TopologyPreservingSimplifier"/>
-    /// at <see cref="PatternClipSimplifyToleranceMetres"/> before the NetTopologySuite
-    /// overlay operations. S-101 quality/coverage areas (e.g. M_QUAL) can follow the
-    /// coastline with tens of thousands of vertices, the bulk of which are sub-pixel at
-    /// chart display scales. Because the clipped boundary only bounds a tiled raster
-    /// pattern fill, this generalization is visually negligible yet reduces the
-    /// <c>Difference</c>/<c>Union</c> cost on pathological geometries by an order of
-    /// magnitude. Topology-preserving simplification keeps the inputs valid for overlay.
-    /// </para>
-    /// <para>
-    /// The <c>Difference</c>/<c>Union</c> overlays are evaluated with
-    /// NetTopologySuite's <see cref="OverlayNGRobust"/> (OverlayNG) rather than the
-    /// library default legacy overlay. OverlayNG is markedly faster on dense inputs
-    /// and avoids the legacy robustness-snapping retry path (profiling on a ~64,000
-    /// vertex M_QUAL coverage area: the clip frame dropped from ~3.5&#160;s to
-    /// ~1.5&#160;s, with overlay <c>Difference</c> falling from ~2.45&#160;s to
-    /// ~0.45&#160;s). OverlayNG is also robust to the (occasionally invalid) output of
-    /// topology-preserving simplification, so no pre-overlay geometry repair is needed.
-    /// </para>
-    /// </remarks>
+    /// <remarks>Entries must be sorted by ascending priority before calling;
+    /// results are returned in the same order.</remarks>
     private static List<(string PatternRef, int Priority, Geometry Geometry)> ClipPatternsByPriority(
         List<(string PatternRef, int Priority, List<Polygon> Polygons)> entries,
         List<Polygon> nonPatternedColorFills)
     {
-        if (entries.Count == 0)
-            return [];
+        var groups = new List<Scene.PatternPriorityClipper.PatternGroup>(entries.Count);
+        foreach (var entry in entries)
+            groups.Add(new Scene.PatternPriorityClipper.PatternGroup(
+                entry.PatternRef, entry.Priority, entry.Polygons));
 
-        // Build a union of non-patterned color fill areas (e.g. land) that
-        // should occlude all pattern fills.
-        Geometry? excludeAreas = null;
-        if (nonPatternedColorFills.Count > 0)
-        {
-            try
-            {
-                Geometry nonPatterned = nonPatternedColorFills.Count == 1
-                    ? nonPatternedColorFills[0]
-                    : new MultiPolygon(nonPatternedColorFills.ToArray());
-                // Reduce to polygonal-only so this never becomes a mixed-dimension
-                // overlay clip (see ExtractPolygonal): OverlayNG rejects such inputs.
-                excludeAreas = ExtractPolygonal(SimplifyForClip(OverlayNGRobust.Union(nonPatterned)));
-            }
-            catch (TopologyException)
-            {
-                // If union fails, skip land clipping
-            }
-            catch (ArgumentException)
-            {
-                // Mixed-dimension union input rejected by OverlayNG; skip land clipping.
-            }
-        }
+        var clipped = Scene.PatternPriorityClipper.Clip(groups, nonPatternedColorFills);
 
-        // Build merged, generalized geometry for each entry. Simplifying once up
-        // front means the (potentially huge) geometry is cheap to use both as a
-        // Difference subject and when accumulated into the higher-priority union.
-        var merged = entries.Select(e =>
-        {
-            Geometry g = e.Polygons.Count == 1
-                ? e.Polygons[0]
-                : new MultiPolygon(e.Polygons.ToArray());
-            return (e.PatternRef, e.Priority, Geometry: SimplifyForClip(g));
-        }).ToList();
-
-        // Walk from highest priority down, accumulating a union of
-        // higher-priority areas that will clip lower-priority patterns.
-        Geometry? higherPriorityAreas = null;
-        var result = new (string PatternRef, int Priority, Geometry Geometry)[merged.Count];
-
-        for (int i = merged.Count - 1; i >= 0; i--)
-        {
-            var (patternRef, priority, geometry) = merged[i];
-
-            // Start with the original geometry, then subtract exclusion areas
-            var clipped = geometry;
-
-            // Subtract higher-priority pattern areas (only when they actually
-            // overlap this entry's extent — an envelope test avoids a costly
-            // overlay when the areas are disjoint).
-            if (higherPriorityAreas is not null &&
-                higherPriorityAreas.EnvelopeInternal.Intersects(geometry.EnvelopeInternal))
-            {
-                try
-                {
-                    clipped = OverlayNGRobust.Overlay(
-                        clipped, higherPriorityAreas, SpatialFunction.Difference);
-                }
-                catch (TopologyException)
-                {
-                    // Fall back to unclipped geometry
-                }
-                catch (ArgumentException)
-                {
-                    // NTS Difference rejects GeometryCollection arguments;
-                    // accumulated unions can degenerate to that shape.
-                    // Fall back to unclipped geometry.
-                }
-            }
-
-            // Subtract non-patterned color fill areas (e.g. land)
-            if (excludeAreas is not null &&
-                excludeAreas.EnvelopeInternal.Intersects(clipped.EnvelopeInternal))
-            {
-                try
-                {
-                    clipped = OverlayNGRobust.Overlay(
-                        clipped, excludeAreas, SpatialFunction.Difference);
-                }
-                catch (TopologyException)
-                {
-                    // Fall back to current clipped geometry
-                }
-                catch (ArgumentException)
-                {
-                    // GeometryCollection rejected by NTS Difference; keep current geometry.
-                }
-            }
-
-            result[i] = (patternRef, priority, clipped);
-
-            // Add this entry's (generalized) area to the higher-priority union
-            // for use by the next, lower-priority entries. The union is reduced
-            // to polygonal-only so it can never become a mixed-dimension
-            // GeometryCollection that the next iteration's Difference overlay
-            // (and OverlayNG) would reject.
-            try
-            {
-                Geometry accumulated = higherPriorityAreas is null
-                    ? geometry
-                    : OverlayNGRobust.Overlay(higherPriorityAreas, geometry, SpatialFunction.Union);
-                higherPriorityAreas = ExtractPolygonal(accumulated) ?? higherPriorityAreas;
-            }
-            catch (TopologyException)
-            {
-                // If union fails, keep the existing accumulated area
-            }
-            catch (ArgumentException)
-            {
-                // NTS Union rejects GeometryCollection LHS;
-                // keep existing accumulated area.
-            }
-        }
-
-        return [.. result];
-    }
-
-    /// <summary>
-    /// Tolerance, in EPSG:3857 (Web Mercator) metres, used to generalize pattern
-    /// and exclusion geometries before clipping. Web Mercator inflates distances by
-    /// 1/cos(latitude), so this projected tolerance is conservative (smaller in
-    /// ground metres) away from the equator. The clipped boundary only bounds a
-    /// tiled raster pattern fill, so this generalization is not visually significant.
-    /// </summary>
-    public const double PatternClipSimplifyToleranceMetres = 1.0;
-
-    /// <summary>
-    /// Minimum vertex count at which <see cref="SimplifyForClip"/> generalizes a
-    /// geometry before the clip overlay. Below this, the NetTopologySuite
-    /// <c>Difference</c>/<c>Union</c> cost is already small (profiling: a
-    /// ~2,600-vertex pattern area clips in ~50&#160;ms) and the simplifier's own
-    /// fixed setup cost would be net overhead. The cost the optimization targets is
-    /// super-linear and only becomes significant for very dense areas (profiling: a
-    /// ~64,000-vertex M_QUAL coverage area took ~7.7&#160;s), so gating on vertex
-    /// count applies the generalization only where it provides a clear net win and
-    /// leaves the common case (small/moderate areas) byte-identical to no
-    /// generalization at all.
-    /// </summary>
-    public const int MinPointsToSimplifyForClip = 2000;
-
-    /// <summary>
-    /// Generalizes a polygonal geometry for use as a clip subject/mask, preserving
-    /// topological validity so the result is safe for subsequent NetTopologySuite
-    /// overlay operations. Geometries below <see cref="MinPointsToSimplifyForClip"/>
-    /// vertices are returned unchanged (the overlay is already inexpensive at that
-    /// size). Returns the original geometry if simplification fails or degenerates
-    /// to empty.
-    /// </summary>
-    private static Geometry SimplifyForClip(Geometry geometry)
-    {
-        if (geometry.NumPoints < MinPointsToSimplifyForClip)
-            return geometry;
-
-        try
-        {
-            var simplified = TopologyPreservingSimplifier.Simplify(
-                geometry, PatternClipSimplifyToleranceMetres);
-
-            if (simplified is null || simplified.IsEmpty)
-                return geometry;
-
-            if (!simplified.IsValid)
-            {
-                var fixedGeometry = simplified.Buffer(0);
-                simplified = fixedGeometry.IsEmpty ? geometry : fixedGeometry;
-            }
-
-            // Topology-preserving simplification (and the Buffer(0) repair above)
-            // can collapse thin polygons to linestrings, producing a
-            // mixed-dimension GeometryCollection. OverlayNG rejects such inputs
-            // with "Overlay input is mixed-dimension", which previously failed the
-            // entire pattern-clip for a cell. Keep only the polygonal components
-            // so the result is always a valid overlay subject/clip area.
-            var polygonal = ExtractPolygonal(simplified);
-            return polygonal is null || polygonal.IsEmpty ? geometry : polygonal;
-        }
-        catch (TopologyException)
-        {
-            return geometry;
-        }
-    }
-
-    /// <summary>
-    /// Reduces an arbitrary geometry to its polygonal components, returning a
-    /// <see cref="Polygon"/> or <see cref="MultiPolygon"/> (or <see langword="null"/>
-    /// when no polygonal component exists). This guards the pattern-clip overlays
-    /// against the mixed-dimension <see cref="GeometryCollection"/> that
-    /// topology-preserving simplification can emit, which OverlayNG rejects.
-    /// </summary>
-    /// <param name="geometry">The geometry to reduce; may be any dimension.</param>
-    /// <returns>
-    /// The polygonal-only geometry, or <see langword="null"/> when the input
-    /// contains no polygon.
-    /// </returns>
-    internal static Geometry? ExtractPolygonal(Geometry geometry)
-    {
-        if (geometry is Polygon or MultiPolygon)
-            return geometry;
-
-        var polygons = new List<Polygon>();
-        CollectPolygons(geometry, polygons);
-
-        if (polygons.Count == 0)
-            return null;
-        if (polygons.Count == 1)
-            return polygons[0];
-
-        return geometry.Factory.CreateMultiPolygon(polygons.ToArray());
-    }
-
-    private static void CollectPolygons(Geometry geometry, List<Polygon> sink)
-    {
-        switch (geometry)
-        {
-            case Polygon polygon:
-                sink.Add(polygon);
-                break;
-            case GeometryCollection collection:
-                for (int i = 0; i < collection.NumGeometries; i++)
-                    CollectPolygons(collection.GetGeometryN(i), sink);
-                break;
-        }
+        var result = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
+        foreach (var c in clipped)
+            result.Add((c.PatternRef, c.Priority, c.Geometry));
+        return result;
     }
 }
