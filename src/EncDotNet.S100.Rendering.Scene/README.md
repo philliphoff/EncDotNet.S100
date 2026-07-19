@@ -17,6 +17,7 @@ Mapsui, or any GUI framework.
 | `ResolvedSymbol`, `SymbolAsset` | Resolved point-symbol content + pivot (S-100 Part 9 §11.5). |
 | `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles are supplied as PNG bytes through an injected `Func<string, byte[]?>` delegate, so the builder stays rasteriser-free. When it lowers pattern fills it priority-clips them via `PatternPriorityClipper`. |
 | `PatternPriorityClipper` | Backend-neutral NetTopologySuite priority-clipping of tiled pattern area fills (S-100 Part 9 §11.3): subtracts higher-priority pattern areas and opaque non-patterned solid fills (e.g. land) from each lower-priority pattern. Shared by both render paths (the Mapsui feature renderer delegates to it) so headless Skia, the Mapsui TiledScene subsystem, and the Mapsui feature path clip identically. |
+| `PatternClipMemoizer` | Optional delegate a caller injects into `VectorSceneBuilder` to memoize the (palette-independent) pattern-clip result, so a re-build that only changes the palette reuses the geometry instead of repeating the overlay. The Mapsui renderer wires it to its pattern-clip cache for the default TiledScene subsystem. |
 | `ColorResolver` | S-100 colour-token → `RgbaColor` resolution. |
 | `ScaleVisibility` | S-100 Part 9 §11.1 scale-visibility semantics (SCAMIN inclusion). |
 | `WebMercator` | Spherical EPSG:3857 forward projection (the `lat/lon → 3857` half of the S-100 Part 9 projection). |
@@ -59,9 +60,10 @@ guide for the end-to-end path.
 The **stable, supported surface** of this package is the set of types documented
 in [What lives here](#what-lives-here): `VectorScene`, the `PaintOp` hierarchy
 (`PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`,
-`TextPaintOp`), `VectorSceneBuilder`, `PatternPriorityClipper`, `ColorResolver`,
-`ScaleVisibility`, and `WebMercator`. Types that are `internal` or undocumented
-are implementation detail and may change at any time.
+`TextPaintOp`), `VectorSceneBuilder`, `PatternPriorityClipper`,
+`PatternClipMemoizer`, `ColorResolver`, `ScaleVisibility`, and `WebMercator`.
+Types that are `internal` or undocumented are implementation detail and may
+change at any time.
 
 All `EncDotNet.S100.*` packages share **one version**, derived from the release
 git tag (there is no per-package version). Versioning follows
