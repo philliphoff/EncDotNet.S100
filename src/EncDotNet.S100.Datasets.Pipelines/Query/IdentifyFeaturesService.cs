@@ -142,6 +142,12 @@ public sealed class IdentifyFeaturesService
                 new InvalidArgument("longitude", $"value {request.Longitude} is outside the WGS-84 range [-180, 180]")));
         }
 
+        if (!double.IsFinite(request.RadiusMeters))
+        {
+            return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Err(
+                new InvalidArgument("radiusMeters", $"value {request.RadiusMeters} is not a finite number")));
+        }
+
         var point = new GeoPoint(request.Latitude, request.Longitude);
         var radius = Math.Clamp(request.RadiusMeters, 0.0, 100_000.0);
         var maxResults = Math.Clamp(request.MaxResults, 1, 200);
@@ -181,7 +187,8 @@ public sealed class IdentifyFeaturesService
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (TryMatch(feature, point, latPad, lonPad, out var hit))
+                if (TryMatch(feature, point, latPad, lonPad, out var hit)
+                    && (hit.Inside || hit.DistanceMeters <= radius))
                 {
                     hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature });
                 }
@@ -263,7 +270,8 @@ public sealed class IdentifyFeaturesService
             return true;
         }
 
-        // Curve: nearest-vertex distance within the radius pre-filter.
+        // Curve: nearest-vertex distance; coarse bbox pre-filter here, the
+        // precise radius test is applied by the caller.
         if (feature.Curves.Count > 0)
         {
             if (!SpatialPredicates.Contains(Inflated(bounds, latPad, lonPad), point))
@@ -293,7 +301,8 @@ public sealed class IdentifyFeaturesService
             return true;
         }
 
-        // Point: nearest-point distance within the radius pre-filter.
+        // Point: nearest-point distance; coarse bbox pre-filter here, the
+        // precise radius test is applied by the caller.
         if (feature.Points.Count > 0)
         {
             if (!SpatialPredicates.Contains(Inflated(bounds, latPad, lonPad), point))

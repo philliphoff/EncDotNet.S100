@@ -128,6 +128,9 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 return ValidationResult.Error("--only applies only to the exchange-set form (--from or a positional exchange set).");
             }
 
+            if (!double.IsFinite(RadiusMeters))
+                return ValidationResult.Error("--radius must be a finite number.");
+
             if (!string.Equals(Format, "table", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(Format, "json", StringComparison.OrdinalIgnoreCase))
             {

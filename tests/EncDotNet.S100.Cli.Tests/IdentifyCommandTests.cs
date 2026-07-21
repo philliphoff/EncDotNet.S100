@@ -148,6 +148,18 @@ public sealed class IdentifyCommandTests
         Assert.NotEqual(0, exit);
     }
 
+    [Fact]
+    public void Identify_with_non_finite_radius_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(
+            ["identify", dataset, "--lat", "51.085", "--lon", "1.30", "--radius", "NaN"]);
+
+        Assert.NotEqual(0, exit);
+    }
+
     private static (int Exit, string Stdout) RunCapturingStdout(string[] args)
     {
         var original = Console.Out;
