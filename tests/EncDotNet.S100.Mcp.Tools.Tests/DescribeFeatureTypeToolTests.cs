@@ -1,5 +1,6 @@
 using System.Text;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 

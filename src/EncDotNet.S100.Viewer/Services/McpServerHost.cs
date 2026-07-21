@@ -21,7 +21,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class McpServerHost : IAsyncDisposable
 {
-    private readonly EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog _catalog;
+    private readonly EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
     private readonly IMapHostAccessor? _mapHostAccessor;
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
@@ -40,7 +40,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private bool _disposed;
 
     public McpServerHost(
-        EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog catalog,
+        EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
         IMapHostAccessor? mapHostAccessor = null,
         ILoggerFactory? loggers = null,

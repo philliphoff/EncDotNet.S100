@@ -40,6 +40,12 @@ internal static class CliApp
                 .WithDescription("Show the detected spec, edition, and available time steps for a dataset.")
                 .WithExample("info", "dataset.h5");
 
+            config.AddCommand<IdentifyCommand>("identify")
+                .WithDescription("Headless ECDIS-style pick: identify vector features and sample coverage values at a lat/lon across one or more dataset layers.")
+                .WithExample("identify", "warnings.gml", "--lat", "50.1", "--lon", "-1.3")
+                .WithExample("identify", "--layer", "enc.000", "--layer", "bathy.h5", "--lat", "50.1", "--lon", "-1.3")
+                .WithExample("identify", "--from", "exchange-set.zip", "--lat", "50.1", "--lon", "-1.3", "--format", "json");
+
             config.AddCommand<ListSpecsCommand>("list-specs")
                 .WithDescription("List supported product specifications and headless-render capability.")
                 .WithExample("list-specs");

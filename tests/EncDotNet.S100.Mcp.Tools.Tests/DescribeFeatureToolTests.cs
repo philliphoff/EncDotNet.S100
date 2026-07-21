@@ -1,5 +1,6 @@
 using System.Text.Json;
-using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;

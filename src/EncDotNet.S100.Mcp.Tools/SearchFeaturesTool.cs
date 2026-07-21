@@ -1,8 +1,9 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Mcp.Tools.Catalog;
-using EncDotNet.S100.Mcp.Tools.Geometry;
-using EncDotNet.S100.Mcp.Tools.Spec;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools;
