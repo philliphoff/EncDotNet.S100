@@ -287,7 +287,7 @@ warning on stderr rather than failing the whole pick.
 | `--only <specs>` | _all_ | Comma-separated spec filter for the exchange-set form (e.g. `--only S101,S102`). |
 | `--radius <metres>` | `50` | Search radius for point/near-miss feature matching (clamped 0..100000). |
 | `--spec <spec>` | _all_ | Restrict features and samples to one specification (e.g. `S-124`). |
-| `--time <iso8601>` | _latest_ | Time step for coverage sampling of time-series products (S-104 / S-111). |
+| `--time <iso8601>` | _first step_ | Time step for coverage sampling of time-series products (S-104 / S-111). When omitted the first available step is used; when supplied the nearest step is selected (clamped to the dataset range). |
 | `--max-results <n>` | `20` | Maximum number of features to report (clamped 1..200). |
 | `--attributes` | off | Include each feature's full attribute set (via `DescribeFeatureService`). |
 | `--format <fmt>` | `table` | Output format: `table` (human-readable) or `json` (machine-readable). |

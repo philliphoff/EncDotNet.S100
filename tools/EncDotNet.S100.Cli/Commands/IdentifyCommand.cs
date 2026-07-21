@@ -306,8 +306,11 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
     }
 
     /// <summary>
-    /// Samples every coverage dataset (S-102 / S-104 / S-111) present in the
-    /// catalog at the pick point, honouring an optional spec filter.
+    /// Samples the coverage products (S-102 / S-104 / S-111) present in the
+    /// catalog at the pick point, honouring an optional spec filter. Coverage
+    /// datasets are grouped by specification and <see cref="SampleCoverageService"/>
+    /// is invoked once per spec, so the result holds at most one sample per
+    /// specification (the service selects the covering dataset for that spec).
     /// </summary>
     private static List<SampleCoverageResult> SampleCoverages(
         IDatasetCatalog catalog,
