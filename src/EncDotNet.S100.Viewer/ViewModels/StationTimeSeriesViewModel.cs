@@ -94,7 +94,10 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         {
             _globalTime.CurrentTimeChanged += OnGlobalTimeChanged;
             if (_globalTime.CurrentTime is { } current)
+            {
                 UpdateNowMarker(current);
+                OnNowMarkerChanged(current);
+            }
         }
 
         if (_timeFormat is not null)
@@ -228,7 +231,23 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         return points;
     }
 
-    private void OnGlobalTimeChanged(DateTime time) => UpdateNowMarker(time);
+    private void OnGlobalTimeChanged(DateTime time)
+    {
+        UpdateNowMarker(time);
+        OnNowMarkerChanged(time);
+    }
+
+    /// <summary>
+    /// Called after the now-marker moves to <paramref name="time"/> (at
+    /// construction when a current time is already known, and whenever
+    /// <see cref="GlobalTimeService.CurrentTimeChanged"/> fires). Override to
+    /// refresh any "value at now" readout that tracks the global clock. The
+    /// base implementation is a no-op.
+    /// </summary>
+    /// <param name="time">The new current UTC time.</param>
+    protected virtual void OnNowMarkerChanged(DateTime time)
+    {
+    }
 
     private void OnTimeFormatChanged(TimeFormat format)
     {
