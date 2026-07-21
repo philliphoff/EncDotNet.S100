@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -202,12 +203,22 @@ public sealed class SampleCoverageTool
     private const double MetresPerSecondToKnots = 1.9438444924406046;
 
     private readonly IDatasetCatalog _catalog;
+    private readonly ICrsTransformFactory _transforms;
 
     /// <summary>Creates a new <see cref="SampleCoverageTool"/>.</summary>
-    public SampleCoverageTool(IDatasetCatalog catalog)
+    /// <param name="catalog">The catalog of loaded datasets to sample from.</param>
+    /// <param name="transforms">
+    /// Factory used to reproject the WGS-84 request point into a coverage's
+    /// native CRS before grid indexing — required for correct sampling of
+    /// projected S-102 tiles (e.g. UTM zone 31N), whose grid georeferencing
+    /// is native metres rather than degrees. Defaults to
+    /// <see cref="ProjNetCrsTransformFactory"/> when not supplied.
+    /// </param>
+    public SampleCoverageTool(IDatasetCatalog catalog, ICrsTransformFactory? transforms = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
+        _transforms = transforms ?? new ProjNetCrsTransformFactory();
     }
 
     /// <summary>Executes the tool.</summary>
@@ -274,7 +285,26 @@ public sealed class SampleCoverageTool
         {
             var metadata = source.Metadata;
             var grid = metadata.GridMetadata;
-            var (row, col) = NearestCell(grid, request.Latitude, request.Longitude);
+
+            // S-102 tiles are frequently in a projected CRS (e.g. UTM zone
+            // 31N); the grid georeferencing is then native metres, so the
+            // WGS-84 request point must be reprojected before grid indexing.
+            // (Matches CoveragePickHelper, the viewer's coverage-pick path.)
+            var toNative = _transforms.Create("EPSG:4326", metadata.HorizontalCRS);
+            var (nativeX, nativeY) = toNative.IsIdentity
+                ? (request.Longitude, request.Latitude)
+                : toNative.Transform(request.Longitude, request.Latitude);
+
+            if (!GridContainsNative(grid, nativeX, nativeY))
+            {
+                return ToolResult<SampleCoverageResult>.Err(
+                    new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+            }
+
+            // NearestCell indexes on (OriginLatitude/SpacingLatitudinal,
+            // OriginLongitude/SpacingLongitudinal); for a projected grid those
+            // are the native Y/X axes, so pass native (Y, X).
+            var (row, col) = NearestCell(grid, nativeY, nativeX);
 
             var region = new GridRegion(row, row + 1, col, col + 1, 1, 1);
             var sampled = source.Sample(region);
@@ -1063,6 +1093,24 @@ public sealed class SampleCoverageTool
         row = Math.Clamp(row, 0, grid.NumRows - 1);
         col = Math.Clamp(col, 0, grid.NumColumns - 1);
         return (row, col);
+    }
+
+    /// <summary>
+    /// Tests whether a point already expressed in the grid's native CRS
+    /// (<paramref name="x"/> on the longitudinal/easting axis,
+    /// <paramref name="y"/> on the latitudinal/northing axis) falls within the
+    /// grid's node extent. Handles negative spacing (origin at the north/east
+    /// edge).
+    /// </summary>
+    private static bool GridContainsNative(GridMetadata grid, double x, double y)
+    {
+        var minY = grid.OriginLatitude;
+        var maxY = grid.OriginLatitude + (grid.NumRows - 1) * grid.SpacingLatitudinal;
+        var minX = grid.OriginLongitude;
+        var maxX = grid.OriginLongitude + (grid.NumColumns - 1) * grid.SpacingLongitudinal;
+        if (minY > maxY) (minY, maxY) = (maxY, minY);
+        if (minX > maxX) (minX, maxX) = (maxX, minX);
+        return y >= minY && y <= maxY && x >= minX && x <= maxX;
     }
 
     private static (int Row, int Col) NearestCellInCoverage(WaterLevelCoverage cov, double lat, double lon)

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
@@ -53,6 +54,13 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
 {
     private static readonly BoundingBox WorldBounds = new(-90, -180, 90, 180);
+
+    /// <summary>
+    /// Shared, stateless CRS transform factory used to reproject projected
+    /// coverage grids (e.g. UTM S-102 tiles) into the WGS-84 bounds that
+    /// <see cref="LoadedDataset.Bounds"/> is contractually expressed in.
+    /// </summary>
+    private static readonly ICrsTransformFactory CrsTransforms = new ProjNetCrsTransformFactory();
 
     private readonly IDatasetLoaderService _loader;
     private readonly Dictionary<DatasetEntry, LoadedDataset> _cache = new();
@@ -309,7 +317,11 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         using var file = PureHdfFile.Open(stream);
         var dataset = S102DatasetReader.Read(file);
         var source = new S102CoverageSource(dataset);
-        var bounds = ComputeS102Bounds(dataset) ?? WorldBounds;
+        // LoadedDataset.Bounds is contractually WGS-84; an S-102 tile may be
+        // in a projected CRS (e.g. UTM zone 31N) whose grid georeferencing is
+        // native metres, so reproject through CoverageExtent rather than
+        // treating the native origin/spacing as degrees.
+        var bounds = CoverageExtent.ToWgs84Bounds(source.Metadata, CrsTransforms) ?? WorldBounds;
         return new LoadedDataset(
             id,
             new SpecRef("S-102", default),
@@ -370,19 +382,6 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             _ => throw new InvalidOperationException(
                 $"Unexpected S-111 dataset variant {data.GetType().Name}."),
         };
-    }
-
-    private static BoundingBox? ComputeS102Bounds(S102Dataset dataset)
-    {
-        if (dataset.Coverages is null || dataset.Coverages.Count == 0) return null;
-        var cov = dataset.Coverages[0];
-        if (cov.NumPointsLatitudinal <= 0 || cov.NumPointsLongitudinal <= 0) return null;
-
-        var south = cov.OriginLatitude;
-        var west = cov.OriginLongitude;
-        var north = cov.OriginLatitude + (cov.NumPointsLatitudinal - 1) * cov.SpacingLatitudinal;
-        var east = cov.OriginLongitude + (cov.NumPointsLongitudinal - 1) * cov.SpacingLongitudinal;
-        return new BoundingBox(south, west, north, east);
     }
 
     private static BoundingBox? ComputeS104Bounds(S104Dataset dataset)

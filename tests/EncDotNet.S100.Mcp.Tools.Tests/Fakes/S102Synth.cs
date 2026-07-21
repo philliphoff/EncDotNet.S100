@@ -12,12 +12,18 @@ internal static class S102Synth
         int numRows = 4,
         int numCols = 4,
         float depth = 12.5f,
-        float uncertainty = 0.25f)
+        float uncertainty = 0.25f,
+        int horizontalCrs = 4326,
+        Func<int, int, float>? depthAt = null)
     {
         var values = new BathymetryValue[numRows * numCols];
-        for (var i = 0; i < values.Length; i++)
+        for (var r = 0; r < numRows; r++)
         {
-            values[i] = new BathymetryValue(depth, uncertainty);
+            for (var c = 0; c < numCols; c++)
+            {
+                var d = depthAt?.Invoke(r, c) ?? depth;
+                values[r * numCols + c] = new BathymetryValue(d, uncertainty);
+            }
         }
 
         var coverage = new BathymetryCoverage
@@ -33,7 +39,7 @@ internal static class S102Synth
 
         return new S102Dataset
         {
-            HorizontalCRS = 4326,
+            HorizontalCRS = horizontalCrs,
             Coverages = [coverage],
         };
     }

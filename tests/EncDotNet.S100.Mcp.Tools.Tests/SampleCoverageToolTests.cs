@@ -47,6 +47,57 @@ public class SampleCoverageToolTests
     }
 
     [Fact]
+    public async Task Returns_depth_for_projected_utm_tile_by_reprojecting_click()
+    {
+        // A projected S-102 tile (UTM zone 31N, EPSG:32631) stores grid
+        // georeferencing in native metres. The tool must reproject the WGS-84
+        // request point into the grid CRS before indexing — otherwise the
+        // Rotterdam UTM tile reports no_dataset_covers_point (issue #479).
+        const double originNorthing = 5_750_000.0;
+        const double originEasting = 592_000.0;
+        const double spacing = 100.0;
+        const int count = 5;
+
+        // Encode the cell index into the depth so we can assert the exact hit.
+        var dataset = S102Synth.Dataset(
+            originLat: originNorthing, originLon: originEasting,
+            spacingLat: spacing, spacingLon: spacing,
+            numRows: count, numCols: count,
+            horizontalCrs: 32631,
+            depthAt: (r, c) => r * 10 + c);
+
+        var factory = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+
+        // Reproject the native SW/NE corners to build the WGS-84 catalog bounds
+        // exactly as the viewer catalog now does (CoverageExtent).
+        var toWgs84 = factory.Create("EPSG:32631", "EPSG:4326");
+        var (swLon, swLat) = toWgs84.Transform(originEasting, originNorthing);
+        var (neLon, neLat) = toWgs84.Transform(
+            originEasting + (count - 1) * spacing, originNorthing + (count - 1) * spacing);
+        var bounds = LoadedDatasetFactory.Box(
+            Math.Min(swLat, neLat), Math.Min(swLon, neLon),
+            Math.Max(swLat, neLat), Math.Max(swLon, neLon));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S102("s102-utm", bounds: bounds,
+            source: new S102CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog);
+
+        // Aim at the exact node position of cell (row 2, col 3) in native
+        // metres, then project back to WGS-84 to form the click.
+        var (lon, lat) = toWgs84.Transform(
+            originEasting + 3 * spacing, originNorthing + 2 * spacing);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-utm"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(2 * 10 + 3, depth.DepthMeters);
+    }
+
+    [Fact]
     public async Task Returns_NoDatasetCoversPoint_when_no_S102_loaded()
     {
         var catalog = new FakeDatasetCatalog();
