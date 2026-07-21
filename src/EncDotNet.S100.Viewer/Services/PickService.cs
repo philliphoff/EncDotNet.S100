@@ -33,6 +33,8 @@ internal sealed class PickService : IPickService
     private readonly GlobalTimeService? _globalTime;
     private readonly ITimeFormatProvider? _timeFormat;
     private readonly IThemeService? _themeService;
+    private readonly IMarinerSettingsProvider? _marinerSettings;
+    private readonly EncDotNet.S100.Viewer.Services.Depth.LocationDepthProbe _depthProbe = new();
 
     public PickService(
         IDatasetLoaderService loader,
@@ -67,7 +69,8 @@ internal sealed class PickService : IPickService
         IStatusPresenter status,
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat,
-        IThemeService? themeService)
+        IThemeService? themeService,
+        IMarinerSettingsProvider? marinerSettings = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -78,6 +81,7 @@ internal sealed class PickService : IPickService
         _globalTime = globalTime;
         _timeFormat = timeFormat;
         _themeService = themeService;
+        _marinerSettings = marinerSettings;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
@@ -127,7 +131,11 @@ internal sealed class PickService : IPickService
             // grid and returns a synthesised feature.
             if (TryCoveragePick(mapInfo, out var coverageHit))
             {
-                _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), TryGetLocation(mapInfo));
+                var coverageLocation = TryGetLocation(mapInfo);
+                var coverageDepth = coverageLocation is { } cloc
+                    ? BuildLocationDepth(new[] { coverageHit }, cloc.Latitude, cloc.Longitude)
+                    : null;
+                _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), coverageLocation, coverageDepth);
                 _status.StatusText = string.Format(
                     Strings.Status_FeatureSummary,
                     coverageHit.FeatureTypeName ?? coverageHit.FeatureType,
@@ -142,7 +150,11 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        _pickReport.SetPicks(hits, dynamic, TryGetLocation(mapInfo));
+        var vectorLocation = TryGetLocation(mapInfo);
+        var vectorDepth = vectorLocation is { } vloc
+            ? BuildLocationDepth(hits, vloc.Latitude, vloc.Longitude)
+            : null;
+        _pickReport.SetPicks(hits, dynamic, vectorLocation, vectorDepth);
 
         // Status text follows the first hit. Dataset hits take
         // precedence (their labels carry more dataset context); fall
@@ -208,7 +220,8 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        _pickReport.SetPicks(hits, Array.Empty<DynamicPickHit>(), new PickLocation(latitude, longitude));
+        var geoDepth = BuildLocationDepth(hits, latitude, longitude);
+        _pickReport.SetPicks(hits, Array.Empty<DynamicPickHit>(), new PickLocation(latitude, longitude), geoDepth);
 
         var first = hits[0];
         var primary = string.Format(
@@ -470,6 +483,38 @@ internal sealed class PickService : IPickService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Builds the location depth-assimilation card for a pick when the point is
+    /// classified as water and a base depth resolves. Returns <c>null</c> on
+    /// land, off-coverage, or when no depth source overlaps — in which cases the
+    /// pick report simply omits the card.
+    /// </summary>
+    private EncDotNet.S100.Viewer.ViewModels.DepthOverTimeViewModel? BuildLocationDepth(
+        IReadOnlyList<PickHit> hits,
+        double latitude,
+        double longitude)
+    {
+        var probe = _depthProbe.Evaluate(_loader.Processors, hits, latitude, longitude);
+        if (probe.Class != EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water || probe.Depth is not { } result)
+            return null;
+
+        var settings = _marinerSettings?.Current;
+        var depthUnit = settings?.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres;
+        double? safetyDepthMetres = settings?.SafetyDepth.TotalMetres;
+        var label = LatLonFormatter.FormatDecimal(latitude, longitude);
+
+        return new EncDotNet.S100.Viewer.ViewModels.DepthOverTimeViewModel(
+            result,
+            label,
+            latitude,
+            longitude,
+            depthUnit,
+            safetyDepthMetres,
+            _globalTime,
+            _timeFormat,
+            _themeService);
     }
 
     private static bool Contains<T>(IReadOnlyList<T> list, T item)

@@ -36,6 +36,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private PickHit? _selectedHit;
     private EggCodeViewModel? _eggCode;
     private PickLocation? _location;
+    private DepthOverTimeViewModel? _locationDepth;
 
     public PickReportViewModel()
         : this(timeFormat: null, marinerSettings: null)
@@ -363,6 +364,28 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasLocation => _location is not null;
 
     /// <summary>
+    /// The assimilated depth-over-time card for the current pick location, or
+    /// <c>null</c> when the pick is on land, off-coverage, or no base depth
+    /// could be resolved. Shown between the location block and the feature list.
+    /// </summary>
+    public DepthOverTimeViewModel? LocationDepthSeries
+    {
+        get => _locationDepth;
+        private set
+        {
+            if (ReferenceEquals(_locationDepth, value))
+                return;
+            _locationDepth?.Dispose();
+            _locationDepth = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasLocationDepthSeries));
+        }
+    }
+
+    /// <summary>True when a depth-assimilation card is available for the pick.</summary>
+    public bool HasLocationDepthSeries => _locationDepth is not null;
+
+    /// <summary>
     /// Mariner-friendly degrees-decimal-minutes rendering of
     /// <see cref="Location"/> for display in the panel, or <c>null</c> when
     /// no location is available.
@@ -618,7 +641,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public void SetPicks(
         IReadOnlyList<PickHit> hits,
         IReadOnlyList<DynamicPickHit> dynamicHits,
-        PickLocation? location = null)
+        PickLocation? location = null,
+        DepthOverTimeViewModel? locationDepth = null)
     {
         ArgumentNullException.ThrowIfNull(hits);
         ArgumentNullException.ThrowIfNull(dynamicHits);
@@ -634,11 +658,13 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
         if (hits.Count == 0 && dynamicHits.Count == 0)
         {
+            locationDepth?.Dispose();
             Clear();
             return;
         }
 
         Location = location;
+        LocationDepthSeries = locationDepth;
         HasPick = true;
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(HasDynamicHits));
@@ -710,6 +736,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         References.Clear();
         _eggCode = null;
         Location = null;
+        LocationDepthSeries = null;
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(HasReferencedText));

@@ -40,6 +40,12 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Gets a value indicating whether <see cref="Dispose"/> has been called.
+    /// Exposed for tests that assert deterministic resource cleanup.
+    /// </summary>
+    internal bool IsDisposed => _disposed;
+
+    /// <summary>
     /// Constructs a view model bound to <paramref name="snapshot"/>. The
     /// <paramref name="globalTime"/> service may be <c>null</c> in unit
     /// tests; when supplied, <see cref="GlobalTimeService.CurrentTimeChanged"/>

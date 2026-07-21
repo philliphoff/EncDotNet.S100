@@ -937,6 +937,19 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return BuildFeatureInfo(feature);
     }
 
+    /// <summary>
+    /// Samples the nearest charted S-101 <c>Sounding</c> (per-point depth) to a
+    /// WGS-84 location for depth assimilation, or <c>null</c> when the dataset
+    /// contains no soundings. Delegates to
+    /// <see cref="S101SoundingSampler.SampleNearest"/> (S-101 multipoint spatial
+    /// records, S-100 Part 10a §10a-6).
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns>The nearest sounding sample, or <c>null</c>.</returns>
+    public S101SoundingSample? SampleNearestSounding(double latitude, double longitude)
+        => S101SoundingSampler.SampleNearest(_dataset.Document, latitude, longitude);
+
     public FeatureInfo? GetFeatureInfoAt(int ordinal)
     {
         _featureIndex ??= BuildFeatureIndex();
