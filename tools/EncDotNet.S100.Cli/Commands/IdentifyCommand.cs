@@ -115,8 +115,18 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
             if (hasLayers && hasExchangeSet)
                 return ValidationResult.Error("--layer and --from are mutually exclusive.");
 
+            if (hasInput && (hasLayers || hasExchangeSet))
+                return ValidationResult.Error("A positional dataset cannot be combined with --layer or --from.");
+
             if (!hasLayers && !hasExchangeSet && !hasInput)
                 return ValidationResult.Error("Provide a dataset, one or more --layer options, or an exchange set (--from or positional).");
+
+            if (!string.IsNullOrWhiteSpace(Only)
+                && !hasExchangeSet
+                && !(hasInput && ExchangeSetInput.LooksLikeExchangeSet(Input!)))
+            {
+                return ValidationResult.Error("--only applies only to the exchange-set form (--from or a positional exchange set).");
+            }
 
             if (!string.Equals(Format, "table", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(Format, "json", StringComparison.OrdinalIgnoreCase))
@@ -391,7 +401,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                     foreach (var text in f.ReferencedTexts)
                     {
                         AnsiConsole.MarkupLineInterpolated(
-                            $"[grey]  {f.FeatureId} → {text.FileName}:[/] {Markup.Escape(Truncate(text.Text, 200))}");
+                            $"[grey]  {f.FeatureId} → {text.FileName}:[/] {Truncate(text.Text, 200)}");
                     }
                 }
 
@@ -401,7 +411,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                     if (attrs is not null)
                     {
                         AnsiConsole.MarkupLineInterpolated(
-                            $"[grey]  {f.FeatureId} attributes:[/] {Markup.Escape(Truncate(attrs.Value.GetRawText(), 400))}");
+                            $"[grey]  {f.FeatureId} attributes:[/] {Truncate(attrs.Value.GetRawText(), 400)}");
                     }
                 }
             }
@@ -613,7 +623,8 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         value.Length <= maxLength ? value : value[..maxLength] + "…";
 
     private static bool TryParseCoordinate(string? value, out double result) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
+            && double.IsFinite(result);
 
     private static IReadOnlySet<string> ParseOnlySpecs(string only) =>
         only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

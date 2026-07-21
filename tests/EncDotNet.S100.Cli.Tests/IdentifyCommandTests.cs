@@ -113,6 +113,41 @@ public sealed class IdentifyCommandTests
         Assert.NotEqual(0, exit);
     }
 
+    [Fact]
+    public void Identify_with_nan_coordinate_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(["identify", dataset, "--lat", "NaN", "--lon", "1.30"]);
+
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Identify_positional_combined_with_layer_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(
+            ["identify", dataset, "--layer", dataset, "--lat", "51.085", "--lon", "1.30"]);
+
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Identify_only_without_exchange_set_returns_nonzero()
+    {
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(
+            ["identify", "--layer", dataset, "--lat", "51.085", "--lon", "1.30", "--only", "S124"]);
+
+        Assert.NotEqual(0, exit);
+    }
+
     private static (int Exit, string Stdout) RunCapturingStdout(string[] args)
     {
         var original = Console.Out;

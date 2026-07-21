@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 /// The detected product specification name (e.g. <c>"S-101"</c>,
 /// <c>"S-102"</c>), typically from <c>DatasetPipelineFactory.DetectProductSpec</c>.
 /// </param>
-/// <param name="Path">Absolute filesystem path to the dataset file.</param>
+/// <param name="Path">Filesystem path to the dataset file (absolute, or relative to the current working directory).</param>
 /// <param name="ExternalTextResolver">
 /// Optional file-name → text delegate for S-101 <c>fileReference</c>
 /// attributes (S-101 Feature Catalogue); <c>null</c> for non-S-101 specs or
@@ -105,7 +105,7 @@ public sealed class FileDatasetCatalog : IDatasetCatalog
                 projected = LoadedDatasetProjector.Project(
                     input.Id, input.Spec, stream, input.ExternalTextResolver);
             }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or FormatException or NotSupportedException)
             {
                 warnings.Add($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
                 continue;
