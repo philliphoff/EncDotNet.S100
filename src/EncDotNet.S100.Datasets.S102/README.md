@@ -6,11 +6,14 @@ Reader and coverage portrayal pipeline for S-102 Bathymetric Surface datasets.
 
 This library reads S-102 datasets from HDF5 files and provides coverage data (depth and uncertainty grids) for the portrayal pipeline. Key types include:
 
-- **`S102Dataset`** — root model containing horizontal CRS and bathymetric coverages.
+- **`S102Dataset`** — root model containing horizontal CRS, vertical datum, and bathymetric coverages.
 - **`S102DatasetReader`** — reads an S-102 dataset from an `IHdf5File`. The
   horizontal CRS is resolved from the Edition 3.0.0 `horizontalCRS` root
   attribute, falling back to the Edition 2.1 `horizontalDatumValue` attribute
-  when the former is absent, so both editions georeference correctly.
+  when the former is absent, so both editions georeference correctly. The
+  `verticalDatum` root attribute (S-102 Ed 3.0.0 §12.3) is surfaced as
+  `S102Dataset.VerticalDatum` (an S-100 register code) and resolved to a label
+  by `S102CoverageSource` via `EncDotNet.S100.DataModel.VerticalDatums`.
   `ReadMetadata(file)` is the phased-loading "peek" path (issue #460): it
   returns a `DatasetMetadata` (declared spec, grid extent, and
   `HorizontalCrsEpsg` for correct UTM reprojection) computed from the grid

@@ -60,6 +60,10 @@ public static class S104DatasetReader
             ? (int)root.ReadInt64Attribute("horizontalCRS")
             : null;
 
+        int? verticalDatum = root.AttributeExists("verticalDatum")
+            ? (int)root.ReadInt64Attribute("verticalDatum")
+            : null;
+
         string? epoch = root.AttributeExists("epoch")
             ? root.ReadStringAttribute("epoch")
             : null;
@@ -120,6 +124,7 @@ public static class S104DatasetReader
             return new S104DatasetData.StationSeries(new S104StationSeriesDataset
             {
                 HorizontalCRS = horizontalCRS,
+                VerticalDatum = verticalDatum,
                 Epoch = epoch,
                 GeographicIdentifier = geographicIdentifier,
                 IssueDate = issueDate,
@@ -141,6 +146,7 @@ public static class S104DatasetReader
         return new S104DatasetData.GriddedCoverage(new S104Dataset
         {
             HorizontalCRS = horizontalCRS,
+            VerticalDatum = verticalDatum,
             Epoch = epoch,
             GeographicIdentifier = geographicIdentifier,
             IssueDate = issueDate,

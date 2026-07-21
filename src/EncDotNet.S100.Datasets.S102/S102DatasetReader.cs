@@ -24,6 +24,10 @@ public static class S102DatasetReader
 
         int? horizontalCRS = ResolveHorizontalCrs(root);
 
+        int? verticalDatum = root.AttributeExists("verticalDatum")
+            ? (int)root.ReadInt64Attribute("verticalDatum")
+            : null;
+
         string? epoch = root.AttributeExists("epoch")
             ? root.ReadStringAttribute("epoch")
             : null;
@@ -52,6 +56,7 @@ public static class S102DatasetReader
         return new S102Dataset
         {
             HorizontalCRS = horizontalCRS,
+            VerticalDatum = verticalDatum,
             Epoch = epoch,
             GeographicIdentifier = geographicIdentifier,
             IssueDate = issueDate,
