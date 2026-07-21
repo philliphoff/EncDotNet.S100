@@ -11,6 +11,7 @@ This library reads S-104 datasets from HDF5 files and provides time-series water
 - **`S104CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S104PortrayalCatalogue`** — viewer-parity heatmap catalogue with hand-coded Day / Dusk / Night band tables (see *Portrayal* below).
 - **`WaterLevelCoverage`**, **`WaterLevelValue`** — water level data models. `WaterLevelCoverage.GroupPath` carries the HDF5 instance path (e.g. `/WaterLevel/WaterLevel.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
+- **`S104TimeSeriesSampler`** — samples a regular-grid (dcf=2) dataset at an arbitrary geographic point across its time steps, returning an `S104TimeSeries` (nearest cell + a per-step `S104TimeSeriesPoint` list of height/trend, ordered by time and optionally windowed to a `from`/`to` range). This is the shared kernel for depth-over-time visualisations and tide reconciliation; the MCP `sample_coverage` windowed path delegates its nearest-cell and containment math to it. Nearest-cell selection operates in the coverage's geographic space (EPSG:4326 per S-104 Ed 2.0.0) without reprojection; NoData cells (`FillValue`, `-9999f`) report a `null` height.
 
 ## Portrayal
 

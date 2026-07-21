@@ -1058,11 +1058,7 @@ public sealed class SampleCoverageTool
         && lon <= b.EastLongitude;
 
     private static bool CoverageContains(WaterLevelCoverage cov, double lat, double lon) =>
-        CoverageContains(
-            cov.OriginLatitude, cov.OriginLongitude,
-            cov.SpacingLatitudinal, cov.SpacingLongitudinal,
-            cov.NumPointsLatitudinal, cov.NumPointsLongitudinal,
-            lat, lon);
+        S104TimeSeriesSampler.Contains(cov, lat, lon);
 
     private static bool CoverageContains(SurfaceCurrentCoverage cov, double lat, double lon) =>
         CoverageContains(
@@ -1113,14 +1109,8 @@ public sealed class SampleCoverageTool
         return y >= minY && y <= maxY && x >= minX && x <= maxX;
     }
 
-    private static (int Row, int Col) NearestCellInCoverage(WaterLevelCoverage cov, double lat, double lon)
-    {
-        var row = (int)Math.Round((lat - cov.OriginLatitude) / cov.SpacingLatitudinal);
-        var col = (int)Math.Round((lon - cov.OriginLongitude) / cov.SpacingLongitudinal);
-        row = Math.Clamp(row, 0, cov.NumPointsLatitudinal - 1);
-        col = Math.Clamp(col, 0, cov.NumPointsLongitudinal - 1);
-        return (row, col);
-    }
+    private static (int Row, int Col) NearestCellInCoverage(WaterLevelCoverage cov, double lat, double lon) =>
+        S104TimeSeriesSampler.NearestCell(cov, lat, lon);
 
     private static (int Row, int Col) NearestCellInCoverage(SurfaceCurrentCoverage cov, double lat, double lon)
     {
