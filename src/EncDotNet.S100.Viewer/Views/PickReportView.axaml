@@ -266,6 +266,105 @@
                 </Grid>
             </Border>
 
+            <!--
+                Location depth-assimilation card. Shown for water-based picks
+                that resolve a base depth (S-102 bathymetry, an S-101 depth /
+                dredged area, or the nearest sounding). When an overlapping
+                S-104 tide grid is found, the total available water depth is
+                plotted over time (more water plotted upward) with a now-marker
+                and, when configured, the mariner safety-depth reference line.
+                Collapsed by default so it never crowds the feature list.
+            -->
+            <Expander IsVisible="{Binding HasLocationDepthSeries}"
+                      Header="{x:Static loc:Strings.Pick_Depth_Title}"
+                      IsExpanded="True"
+                      HorizontalAlignment="Stretch">
+                <StackPanel Spacing="8" DataContext="{Binding LocationDepthSeries}">
+                    <!-- Base depth (with the source it was derived from). -->
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Text="{x:Static loc:Strings.Pick_Depth_Label_Base}"
+                                   FontSize="12"
+                                   Opacity="0.7"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding BaseSourceLabel}"
+                                   FontSize="11"
+                                   FontStyle="Italic"
+                                   Opacity="0.55"
+                                   Margin="8,0,0,0"
+                                   VerticalAlignment="Center" />
+                        <SelectableTextBlock Grid.Column="2"
+                                             Text="{Binding BaseDepthText}"
+                                             FontSize="13"
+                                             FontWeight="SemiBold"
+                                             VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Uncertainty caption (S-102 base only). -->
+                    <TextBlock Text="{Binding UncertaintyText}"
+                               FontSize="11"
+                               Opacity="0.6"
+                               IsVisible="{Binding HasUncertainty}" />
+
+                    <!-- Tide-adjusted depth over time (only when an S-104 grid overlaps). -->
+                    <StackPanel Spacing="6" IsVisible="{Binding HasTide}">
+                        <lvc:CartesianChart MinHeight="200"
+                                            Series="{Binding DepthSeries}"
+                                            XAxes="{Binding TimeAxisArray}"
+                                            YAxes="{Binding DepthAxisArray}"
+                                            Sections="{Binding DepthSections}" />
+                        <!-- Now-readout: tide-adjusted depth and tide offset at the global clock. -->
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Static loc:Strings.Pick_Depth_Label_Now}"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                            <SelectableTextBlock Grid.Column="2"
+                                                 Text="{Binding DepthNowText}"
+                                                 FontSize="13"
+                                                 FontWeight="SemiBold"
+                                                 VerticalAlignment="Center" />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Static loc:Strings.Pick_Depth_Label_Tide}"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding TideDatasetId}"
+                                       FontSize="11"
+                                       FontStyle="Italic"
+                                       Opacity="0.55"
+                                       Margin="8,0,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                            <SelectableTextBlock Grid.Column="2"
+                                                 Text="{Binding TideNowText}"
+                                                 FontSize="13"
+                                                 VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Empty-state caption when no tide data overlaps the point. -->
+                    <TextBlock Text="{Binding NoTideText}"
+                               FontSize="11"
+                               FontStyle="Italic"
+                               Opacity="0.6"
+                               IsVisible="{Binding !HasTide}" />
+
+                    <!-- Datum-reconciliation caveat. -->
+                    <TextBlock Text="{Binding DatumNoteText}"
+                               FontSize="11"
+                               FontStyle="Italic"
+                               Opacity="0.6"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasDatumNote}" />
+                </StackPanel>
+            </Expander>
+
             <!-- Hit list (visible only when more than one feature is at this point) -->
             <Border BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="0,0,0,1"
