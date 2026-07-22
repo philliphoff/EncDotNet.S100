@@ -3,10 +3,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 using ModelContextProtocol.Protocol;
 

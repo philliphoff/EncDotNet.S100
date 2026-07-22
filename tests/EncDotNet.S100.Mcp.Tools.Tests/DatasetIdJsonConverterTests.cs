@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 

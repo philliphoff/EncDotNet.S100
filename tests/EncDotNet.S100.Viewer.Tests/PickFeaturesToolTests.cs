@@ -1,7 +1,7 @@
 using System.Text.Json;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Mcp.Tools;
-using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.DynamicSources;

@@ -1,5 +1,6 @@
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
-using EncDotNet.S100.Mcp.Tools.Time;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
