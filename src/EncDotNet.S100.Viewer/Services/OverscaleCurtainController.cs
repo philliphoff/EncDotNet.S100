@@ -19,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// The curtain <em>region</em> geometry depends only on the set of loaded cells
 /// and the viewport <em>resolution</em> (zoom) — never on pan or rotation —
 /// because <see cref="OverscaleCurtain.ComputeRegions"/> works in world
-/// coordinates (EPSG:3857) and <see cref="AnchoredPatternFillRenderer"/>
+/// coordinates (EPSG:3857) and <see cref="OverscaleCurtainRenderer"/>
 /// re-projects and clips the fill per frame. The controller therefore caches the
 /// last resolution and skips recomputation on a pure pan, recomputing only when
 /// the zoom changes, a dataset is added/removed/(re)loaded/hidden/shown, or the

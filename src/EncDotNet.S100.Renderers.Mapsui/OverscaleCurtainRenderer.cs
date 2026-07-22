@@ -74,6 +74,7 @@ public sealed class OverscaleCurtainRenderer : ISkiaStyleRenderer
             using var polyPath = ToSkiaPath(polygon, viewport, clipRect);
             path.AddPath(polyPath);
         }
+        path.FillType = SKPathFillType.EvenOdd;
 
         if (path.IsEmpty)
             return false;
