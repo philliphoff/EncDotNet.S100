@@ -47,11 +47,21 @@ internal sealed class BaseDepthResolver
     /// The nearest S-101 charted sounding, or <c>null</c> when none is
     /// available.
     /// </param>
+    /// <param name="bathymetryDatasetId">
+    /// Display name of the S-102 dataset that supplied <paramref name="bathymetry"/>,
+    /// or <c>null</c>.
+    /// </param>
+    /// <param name="soundingDatasetId">
+    /// Display name of the S-101 dataset that supplied
+    /// <paramref name="nearestSounding"/>, or <c>null</c>.
+    /// </param>
     /// <returns>The chosen <see cref="BaseDepthResult"/>, or <c>null</c>.</returns>
     public BaseDepthResult? Resolve(
         S102DepthSample? bathymetry,
         IReadOnlyList<PickHit> hits,
-        S101SoundingSample? nearestSounding)
+        S101SoundingSample? nearestSounding,
+        string? bathymetryDatasetId = null,
+        string? soundingDatasetId = null)
     {
         ArgumentNullException.ThrowIfNull(hits);
 
@@ -62,27 +72,30 @@ internal sealed class BaseDepthResolver
                 BaseDepthSource.Bathymetry,
                 bathy.UncertaintyMeters,
                 bathy.VerticalDatumCode,
-                SoundingDistanceMeters: null);
+                SoundingDistanceMeters: null,
+                SourceDatasetId: bathymetryDatasetId);
         }
 
         if (TryReadAreaMinimumDepth(hits, "DredgedArea") is { } dredged)
         {
             return new BaseDepthResult(
-                dredged,
+                dredged.Depth,
                 BaseDepthSource.DredgedArea,
                 UncertaintyMeters: null,
                 VerticalDatumCode: null,
-                SoundingDistanceMeters: null);
+                SoundingDistanceMeters: null,
+                SourceDatasetId: dredged.DatasetId);
         }
 
         if (TryReadAreaMinimumDepth(hits, "DepthArea") is { } depthArea)
         {
             return new BaseDepthResult(
-                depthArea,
+                depthArea.Depth,
                 BaseDepthSource.DepthArea,
                 UncertaintyMeters: null,
                 VerticalDatumCode: null,
-                SoundingDistanceMeters: null);
+                SoundingDistanceMeters: null,
+                SourceDatasetId: depthArea.DatasetId);
         }
 
         if (nearestSounding is { } sounding)
@@ -92,7 +105,8 @@ internal sealed class BaseDepthResolver
                 BaseDepthSource.Sounding,
                 UncertaintyMeters: null,
                 VerticalDatumCode: null,
-                sounding.DistanceMeters);
+                sounding.DistanceMeters,
+                SourceDatasetId: soundingDatasetId);
         }
 
         return null;
@@ -100,11 +114,14 @@ internal sealed class BaseDepthResolver
 
     /// <summary>
     /// Finds the shoalest declared minimum depth across every pick hit of the
-    /// given S-101 feature type, or <c>null</c> when none is present.
+    /// given S-101 feature type together with the dataset it came from, or
+    /// <c>null</c> when none is present.
     /// </summary>
-    private static double? TryReadAreaMinimumDepth(IReadOnlyList<PickHit> hits, string featureType)
+    private static (double Depth, string? DatasetId)? TryReadAreaMinimumDepth(
+        IReadOnlyList<PickHit> hits, string featureType)
     {
         double? shoalest = null;
+        string? datasetId = null;
         foreach (var hit in hits)
         {
             if (!string.Equals(hit.FeatureType, featureType, StringComparison.Ordinal))
@@ -116,10 +133,11 @@ internal sealed class BaseDepthResolver
             if (depth is { } value && (shoalest is null || value < shoalest))
             {
                 shoalest = value;
+                datasetId = hit.DatasetFileName;
             }
         }
 
-        return shoalest;
+        return shoalest is { } result ? (result, datasetId) : null;
     }
 
     /// <summary>

@@ -24,7 +24,8 @@ public sealed class DepthOverTimeViewModelTests
         bool datumsNotReconciled = false,
         bool withTide = true,
         double[]? depths = null,
-        int? datumCode = 23)
+        int? datumCode = 23,
+        string? baseSourceId = null)
     {
         var times = Times(depths?.Length ?? 3);
         var points = new List<DepthOverTimePoint>(times.Count);
@@ -37,7 +38,7 @@ public sealed class DepthOverTimeViewModelTests
         var tide = withTide ? new LocationTideSelection("S104DS", datumCode) : null;
 
         return new LocationDepthResult(
-            new BaseDepthResult(baseMetres, source, uncertaintyMetres, datumCode, null),
+            new BaseDepthResult(baseMetres, source, uncertaintyMetres, datumCode, null, baseSourceId),
             tide,
             points,
             uncertaintyMetres,
@@ -134,6 +135,56 @@ public sealed class DepthOverTimeViewModelTests
             "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Source_Sounding, sounding.BaseSourceLabel);
+    }
+
+    [Fact]
+    public void BaseSourceTooltip_UsesSourceFile_WhenPresent()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(baseSourceId: "102NL005_519N043E.H5"),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.Equal(
+            string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_SourceData,
+                "102NL005_519N043E.H5"),
+            vm.BaseSourceTooltip);
+    }
+
+    [Fact]
+    public void BaseSourceTooltip_FallsBackToLabel_WhenNoSourceFile()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(source: BaseDepthSource.Sounding, baseSourceId: null),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.Equal(vm.BaseSourceLabel, vm.BaseSourceTooltip);
+    }
+
+    [Fact]
+    public void TideSourceTooltip_UsesTideDataset_WhenTidePresent()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(withTide: true),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.Equal(
+            string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_SourceData,
+                "S104DS"),
+            vm.TideSourceTooltip);
+    }
+
+    [Fact]
+    public void TideSourceTooltip_IsEmpty_WhenNoTide()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.Equal(string.Empty, vm.TideSourceTooltip);
     }
 
     [Fact]

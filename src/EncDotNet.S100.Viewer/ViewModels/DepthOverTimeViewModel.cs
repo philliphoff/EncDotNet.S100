@@ -162,6 +162,23 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         _ => Strings.Pick_Depth_Source_Sounding,
     };
 
+    /// <summary>
+    /// Hover tooltip for the base label: "Source data: &lt;file&gt;" naming the
+    /// exact dataset the base depth came from, or the source label when the
+    /// file name is unknown.
+    /// </summary>
+    public string BaseSourceTooltip => string.IsNullOrEmpty(Result.Base.SourceDatasetId)
+        ? BaseSourceLabel
+        : string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_SourceData, Result.Base.SourceDatasetId);
+
+    /// <summary>
+    /// Hover tooltip for the tide label: "Source data: &lt;file&gt;" naming the
+    /// selected S-104 dataset, or empty when no tide overlaps.
+    /// </summary>
+    public string TideSourceTooltip => string.IsNullOrEmpty(TideDatasetId)
+        ? string.Empty
+        : string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_SourceData, TideDatasetId);
+
     /// <summary>The formatted base depth in the mariner's depth unit.</summary>
     public string BaseDepthText => DepthFormatting.Format(_baseDepthMetres, _depthUnit);
 

@@ -68,6 +68,15 @@ public partial class PickReportView : UserControl
         }
     }
 
+    // Depth-card header tap: toggle the collapsible detail region. Using a
+    // plain Border (rather than a ToggleButton) keeps the header flat with a
+    // hover-only background; the expand state lives on the card view-model.
+    private void OnDepthHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: DepthOverTimeViewModel depth })
+            depth.IsExpanded = !depth.IsExpanded;
+    }
+
     // Egg-code value hover: surface the value's meaning in the description
     // region below the egg instead of a per-cell tooltip (which would obscure
     // neighbouring values the mariner may want to compare).

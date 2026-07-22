@@ -47,7 +47,9 @@ internal sealed class LocationDepthProbe
         ArgumentNullException.ThrowIfNull(hits);
 
         S102DepthSample? bathymetry = null;
+        string? bathymetryDatasetId = null;
         S101SoundingSample? nearestSounding = null;
+        string? soundingDatasetId = null;
         var tideCandidates = new List<S104TideCandidate>();
 
         foreach (var (entry, processor) in processors)
@@ -56,13 +58,19 @@ internal sealed class LocationDepthProbe
             {
                 case S102DatasetProcessor s102 when bathymetry is null:
                     if (TrySampleBathymetry(s102, latitude, longitude) is { } sample)
+                    {
                         bathymetry = sample;
+                        bathymetryDatasetId = entry.DisplayName;
+                    }
                     break;
 
                 case S101DatasetProcessor s101:
                     var sounding = SafeSampleSounding(s101, latitude, longitude);
                     if (sounding is { } s && (nearestSounding is not { } best || s.DistanceMeters < best.DistanceMeters))
+                    {
                         nearestSounding = s;
+                        soundingDatasetId = entry.DisplayName;
+                    }
                     break;
 
                 case S104DatasetProcessor s104:
@@ -80,7 +88,8 @@ internal sealed class LocationDepthProbe
         }
 
         var waterLand = _classifier.Classify(hits, s102CoversPoint: bathymetry is not null);
-        var baseDepth = _baseResolver.Resolve(bathymetry, hits, nearestSounding);
+        var baseDepth = _baseResolver.Resolve(
+            bathymetry, hits, nearestSounding, bathymetryDatasetId, soundingDatasetId);
         var result = _assimilation.Assimilate(baseDepth, tideCandidates);
 
         return new Probe(waterLand, result);

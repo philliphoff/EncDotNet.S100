@@ -327,6 +327,7 @@ internal static class Strings
     public static string Pick_Depth_Label_Now => Get(nameof(Pick_Depth_Label_Now));
     public static string Pick_Depth_Label_DepthNow => Get(nameof(Pick_Depth_Label_DepthNow));
     public static string Pick_Depth_Label_DepthStatic => Get(nameof(Pick_Depth_Label_DepthStatic));
+    public static string Pick_Depth_SourceData => Get(nameof(Pick_Depth_SourceData));
     public static string Pick_Depth_Uncertainty => Get(nameof(Pick_Depth_Uncertainty));
     public static string Pick_Depth_DatumNote => Get(nameof(Pick_Depth_DatumNote));
     public static string Pick_Depth_NoTide => Get(nameof(Pick_Depth_NoTide));

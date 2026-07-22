@@ -163,4 +163,58 @@ public class BaseDepthResolverTests
         Assert.NotNull(result);
         Assert.Equal(BaseDepthSource.Sounding, result!.Source);
     }
+
+    [Fact]
+    public void Resolve_threads_bathymetry_dataset_id()
+    {
+        var result = _resolver.Resolve(
+            new S102DepthSample(12.5, 0.3, VerticalDatumCode: 10),
+            [],
+            nearestSounding: null,
+            bathymetryDatasetId: "102NL005_519N043E.H5");
+
+        Assert.NotNull(result);
+        Assert.Equal("102NL005_519N043E.H5", result!.SourceDatasetId);
+    }
+
+    [Fact]
+    public void Resolve_threads_sounding_dataset_id()
+    {
+        var result = _resolver.Resolve(
+            bathymetry: null,
+            [],
+            Sounding(6.0, 5.0),
+            soundingDatasetId: "101NL005_519N043E.000");
+
+        Assert.NotNull(result);
+        Assert.Equal(BaseDepthSource.Sounding, result!.Source);
+        Assert.Equal("101NL005_519N043E.000", result.SourceDatasetId);
+    }
+
+    [Fact]
+    public void Resolve_reads_area_dataset_id_from_hit()
+    {
+        var hit = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureRef = "DepthArea.1",
+            ProductSpec = "S-101",
+            DatasetFileName = "101NL005_519N043E.000",
+            Attributes =
+            [
+                new PickAttribute
+                {
+                    Code = "depthRangeMinimumValue",
+                    RawValue = "7.0",
+                    DepthMetresValue = 7.0,
+                },
+            ],
+        };
+
+        var result = _resolver.Resolve(bathymetry: null, [hit], nearestSounding: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(BaseDepthSource.DepthArea, result!.Source);
+        Assert.Equal("101NL005_519N043E.000", result.SourceDatasetId);
+    }
 }

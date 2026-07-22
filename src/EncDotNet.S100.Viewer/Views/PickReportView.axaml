@@ -213,6 +213,16 @@
         <Style Selector="Border.eggCell:pointerover">
             <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
+        <!-- Depth-card header: flat by default, subtle fill on hover only (never
+             a persistent "expanded" background). Mirrors the eggCell pattern so
+             the base Background comes from a style and the :pointerover setter
+             can override it. -->
+        <Style Selector="Border.depthHeader">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.depthHeader:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
     </UserControl.Styles>
 
     <!--
@@ -284,23 +294,20 @@
             -->
             <Border IsVisible="{Binding HasLocationDepthSeries}"
                     BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="0">
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8">
                 <StackPanel DataContext="{Binding LocationDepthSeries}">
                     <!--
                         Header row: chevron + "Depth" title + source badge. The
-                        whole row toggles the detail region; rendered flat (no
-                        button chrome) so it reads as a section header.
+                        whole row toggles the detail region on tap; rendered flat
+                        (subtle fill on hover only) so it reads as a section
+                        header rather than a button.
                     -->
-                    <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay}"
-                                  Background="Transparent"
-                                  BorderThickness="0"
-                                  Padding="10,8"
-                                  Cursor="Hand"
-                                  HorizontalAlignment="Stretch"
-                                  HorizontalContentAlignment="Stretch"
-                                  ToolTip.Tip="{x:Static loc:Strings.Pick_Depth_Title}">
+                    <Border Classes="depthHeader"
+                            Tapped="OnDepthHeaderTapped"
+                            Cursor="Hand"
+                            Padding="0,6"
+                            ToolTip.Tip="{x:Static loc:Strings.Pick_Depth_Title}">
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
                             <ic:FluentIcon Grid.Column="0"
                                            Icon="ChevronDown"
@@ -384,7 +391,7 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
-                    </ToggleButton>
+                    </Border>
 
                     <!--
                         Prominent headline readout. Always visible (even when
@@ -393,7 +400,7 @@
                     -->
                     <Border Background="{DynamicResource AccentSubtleBrush}"
                             CornerRadius="6"
-                            Margin="10,0,10,10"
+                            Margin="0,0,0,8"
                             Padding="12,10">
                         <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                             <TextBlock Grid.Column="0"
@@ -414,47 +421,42 @@
 
                     <!-- Collapsible detail region. -->
                     <StackPanel Spacing="8"
-                                Margin="10,0,10,10"
+                                Margin="0"
                                 IsVisible="{Binding IsExpanded}">
-                        <!-- Base / tide value breakdown (only when tide overlaps). -->
-                        <StackPanel Spacing="4" IsVisible="{Binding HasTide}">
-                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                <TextBlock Grid.Column="0"
-                                           Text="{x:Static loc:Strings.Pick_Depth_Label_Base}"
-                                           FontSize="12"
-                                           Opacity="0.7"
-                                           VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding BaseSourceLabel}"
-                                           FontSize="11"
-                                           FontStyle="Italic"
-                                           Opacity="0.55"
-                                           Margin="8,0,0,0"
-                                           VerticalAlignment="Center" />
-                                <SelectableTextBlock Grid.Column="2"
-                                                     Text="{Binding BaseDepthText}"
-                                                     FontSize="13"
-                                                     FontWeight="SemiBold"
-                                                     VerticalAlignment="Center" />
+                        <!--
+                            Base / tide value breakdown. The base row is shown
+                            for every resolved pick (including the tide-less
+                            static case); the tide row appears only when an S-104
+                            grid overlaps. Each label sits directly beside its
+                            value, and the originating file (S-102 surface / S-104
+                            grid) is surfaced on hover of the label to avoid
+                            crowding.
+                        -->
+                        <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Depth_Label_Base}"
+                                               ToolTip.Tip="{Binding BaseSourceTooltip}"
+                                               FontSize="12"
+                                               Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                    <SelectableTextBlock Text="{Binding BaseDepthText}"
+                                                         FontSize="13"
+                                                         FontWeight="SemiBold"
+                                                         VerticalAlignment="Center" />
+                                </StackPanel>
                             </Grid>
-                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                <TextBlock Grid.Column="0"
-                                           Text="{x:Static loc:Strings.Pick_Depth_Label_Tide}"
-                                           FontSize="12"
-                                           Opacity="0.7"
-                                           VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding TideDatasetId}"
-                                           FontSize="11"
-                                           FontStyle="Italic"
-                                           Opacity="0.55"
-                                           Margin="8,0,0,0"
-                                           TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" />
-                                <SelectableTextBlock Grid.Column="2"
-                                                     Text="{Binding TideNowText}"
-                                                     FontSize="13"
-                                                     VerticalAlignment="Center" />
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasTide}">
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Depth_Label_Tide}"
+                                               ToolTip.Tip="{Binding TideSourceTooltip}"
+                                               FontSize="12"
+                                               Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                    <SelectableTextBlock Text="{Binding TideNowText}"
+                                                         FontSize="13"
+                                                         VerticalAlignment="Center" />
+                                </StackPanel>
                             </Grid>
                         </StackPanel>
 
@@ -472,12 +474,28 @@
                                    Opacity="0.6"
                                    IsVisible="{Binding HasUncertainty}" />
 
-                        <!-- Empty-state caption when no tide data overlaps the point. -->
-                        <TextBlock Text="{Binding NoTideText}"
-                                   FontSize="11"
-                                   FontStyle="Italic"
-                                   Opacity="0.6"
-                                   IsVisible="{Binding !HasTide}" />
+                        <!-- No-tide info bar: neutral (non-alarming) explanation
+                             that the depth is static because no S-104 grid
+                             overlaps the point. -->
+                        <Border IsVisible="{Binding !HasTide}"
+                                Background="{DynamicResource MutedBackgroundColor}"
+                                CornerRadius="4"
+                                Padding="10,8">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <ic:FluentIcon Grid.Column="0"
+                                               Icon="Info"
+                                               IconVariant="Filled"
+                                               FontSize="15"
+                                               Opacity="0.7"
+                                               Margin="0,0,7,0"
+                                               VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding NoTideText}"
+                                           FontSize="11"
+                                           Opacity="0.75"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
 
                         <!-- Datum-reconciliation caveat: a prominent amber warning box. -->
                         <Border IsVisible="{Binding HasDatumNote}"
@@ -486,17 +504,20 @@
                                 BorderThickness="1"
                                 CornerRadius="4"
                                 Padding="8,7">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <ic:FluentIcon Icon="Warning"
+                            <Grid ColumnDefinitions="Auto,*">
+                                <ic:FluentIcon Grid.Column="0"
+                                               Icon="Warning"
                                                IconVariant="Filled"
                                                FontSize="15"
                                                Foreground="{DynamicResource DepthWarningBrush}"
+                                               Margin="0,0,7,0"
                                                VerticalAlignment="Top" />
-                                <TextBlock Text="{Binding DatumNoteText}"
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DatumNoteText}"
                                            FontSize="11"
                                            TextWrapping="Wrap"
                                            VerticalAlignment="Center" />
-                            </StackPanel>
+                            </Grid>
                         </Border>
                     </StackPanel>
                 </StackPanel>

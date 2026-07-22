@@ -769,6 +769,10 @@
     <value>DEPTH (STATIC)</value>
     <comment>Headline label for the prominent depth readout when no tide data overlaps, so only the tide-independent base depth is shown.</comment>
   </data>
+  <data name="Pick_Depth_SourceData" xml:space="preserve">
+    <value>Source data: {0}</value>
+    <comment>Hover tooltip on a base/tide label naming the source dataset file; {0} is the dataset file name.</comment>
+  </data>
   <data name="Pick_Depth_Uncertainty" xml:space="preserve">
     <value>± {0}</value>
     <comment>Uncertainty band caption; {0} is the formatted vertical uncertainty (e.g. "0.3 m").</comment>
@@ -778,8 +782,8 @@
     <comment>Caption shown when the S-102 base and S-104 tide vertical datums differ or cannot be confirmed.</comment>
   </data>
   <data name="Pick_Depth_NoTide" xml:space="preserve">
-    <value>No tide data at this location</value>
-    <comment>Empty-state caption on the depth-over-time chart when no S-104 grid overlaps the pick.</comment>
+    <value>No tide station covers this location — depth is static (base value only, no time-based correction).</value>
+    <comment>Info-bar caption in the depth card when no S-104 grid overlaps the pick, so only the tide-independent base depth is shown.</comment>
   </data>
   <data name="Pick_Depth_Value_Unavailable" xml:space="preserve">
     <value>n/a</value>

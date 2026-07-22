@@ -26,9 +26,16 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// populated only when <see cref="Source"/> is
 /// <see cref="BaseDepthSource.Sounding"/>; <c>null</c> otherwise.
 /// </param>
+/// <param name="SourceDatasetId">
+/// Display name (no path) of the dataset the base depth was read from — the
+/// S-102 surface, or the S-101 cell carrying the area / sounding. Surfaced on
+/// hover in the depth card so the mariner can see the exact source file;
+/// <c>null</c> when the source is unknown (e.g. unit-test fixtures).
+/// </param>
 internal sealed record BaseDepthResult(
     double DepthMeters,
     BaseDepthSource Source,
     double? UncertaintyMeters,
     int? VerticalDatumCode,
-    double? SoundingDistanceMeters);
+    double? SoundingDistanceMeters,
+    string? SourceDatasetId = null);
