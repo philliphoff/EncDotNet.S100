@@ -276,6 +276,7 @@
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_Overscale}">
                         <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                             <ic:FluentIcon Icon="Warning" IconVariant="Filled" FontSize="13"
+                                           Foreground="{Binding $parent[Button].Foreground}"
                                            VerticalAlignment="Center" />
                             <TextBlock Text="{x:Static loc:Strings.Status_OverscaleLabel}"
                                        FontSize="11"

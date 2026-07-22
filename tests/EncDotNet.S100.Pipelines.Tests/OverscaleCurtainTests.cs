@@ -75,7 +75,7 @@ public class OverscaleCurtainTests
         // footprint (a finer cell draws on top there), while the harbour keeps
         // its own full region.
         var coastal = Rect(-500, -500, 500, 500);   // area 1_000_000
-        var harbour = Rect(-100, -100, 100, 100);   // area 160_000
+        var harbour = Rect(-100, -100, 100, 100);   // area 40_000
         var cells = new[]
         {
             Cell("Coastal", coastal, 90000),

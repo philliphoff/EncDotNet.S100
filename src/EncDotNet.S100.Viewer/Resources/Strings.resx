@@ -1185,7 +1185,7 @@
   </data>
   <data name="Status_FeatureRefNotFound" xml:space="preserve">
     <value>Referenced feature not found: {0}</value>
-    <comment>Status text shown when a "follow reference" click resolves to a target that does not exist in the same dataset.</comment>
+    <comment>Warning notification shown when a "follow reference" click resolves to a target that does not exist in the same dataset.</comment>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
