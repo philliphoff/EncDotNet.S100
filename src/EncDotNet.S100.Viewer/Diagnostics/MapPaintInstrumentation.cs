@@ -108,6 +108,7 @@ internal static class MapPaintInstrumentation
             // style type overwrite, so this is safe even if Render()
             // hasn't run yet.
             EncDotNet.S100.Renderers.Mapsui.AnchoredPatternFillRenderer.Register();
+            EncDotNet.S100.Renderers.Mapsui.OverscaleCurtainRenderer.Register();
 
             var dictField = typeof(MapRenderer).GetField(
                 "_styleRenderers",

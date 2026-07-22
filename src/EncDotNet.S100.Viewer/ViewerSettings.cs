@@ -378,6 +378,17 @@ internal sealed class ViewerSettings
     public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
 
     /// <summary>
+    /// Whether the on-chart overscale "curtain" (a subtle vertical-line pattern,
+    /// S-52 / S-101 <c>AP(OVERSC01)</c>) is drawn over the region of a cell that
+    /// is being displayed beyond its compilation scale (issue #441, Form A).
+    /// Enabled by default, matching type-approved ECDIS where overscale
+    /// indication is mandatory and on by default; the mariner may switch it off
+    /// here (it belongs to the S-52 "chart display" information set, viewing
+    /// group 21030).
+    /// </summary>
+    public bool ShowOverscaleIndication { get; set; } = true;
+
+    /// <summary>
     /// Whether the online OpenStreetMap basemap tile layer is shown
     /// beneath the chart data. Enabled by default. Disabling it removes
     /// the remote tile fetch entirely — useful for offline operation

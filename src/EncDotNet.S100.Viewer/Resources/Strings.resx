@@ -1113,6 +1113,12 @@
   <data name="Tooltip_ShowOutOfScaleExtentIndicators" xml:space="preserve">
     <value>When zoomed out past a dataset's display-scale minimum (so it draws nothing), outline its extent with an accent border so you can still see where the data is and zoom toward it. Has no effect when "ignore scale minima" is enabled, since datasets then never drop out on zoom-out.</value>
   </data>
+  <data name="Settings_ShowOverscaleIndication" xml:space="preserve">
+    <value>Overscale indication</value>
+  </data>
+  <data name="Tooltip_ShowOverscaleIndication" xml:space="preserve">
+    <value>When a chart is zoomed in beyond its compilation scale, overlay a subtle vertical-line pattern (the S-52 overscale "curtain") on the overscaled area as a caution that the displayed detail exceeds the survey's accuracy. Turn off to hide the pattern.</value>
+  </data>
   <data name="Basemap_None" xml:space="preserve">
     <value>None</value>
   </data>

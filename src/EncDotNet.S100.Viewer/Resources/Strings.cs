@@ -446,6 +446,8 @@ internal static class Strings
     public static string Tooltip_BasemapEnabled => Get(nameof(Tooltip_BasemapEnabled));
     public static string Settings_ShowOutOfScaleExtentIndicators => Get(nameof(Settings_ShowOutOfScaleExtentIndicators));
     public static string Tooltip_ShowOutOfScaleExtentIndicators => Get(nameof(Tooltip_ShowOutOfScaleExtentIndicators));
+    public static string Settings_ShowOverscaleIndication => Get(nameof(Settings_ShowOverscaleIndication));
+    public static string Tooltip_ShowOverscaleIndication => Get(nameof(Tooltip_ShowOverscaleIndication));
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
