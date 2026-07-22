@@ -734,20 +734,20 @@
     <comment>Legend/name for the mariner safety-depth reference line on the depth-over-time chart.</comment>
   </data>
   <data name="Pick_Depth_Source_Bathymetry" xml:space="preserve">
-    <value>S-102 bathymetry</value>
-    <comment>Base-depth source label: sampled from an S-102 bathymetric surface.</comment>
+    <value>S-102 Bathymetry</value>
+    <comment>Base-depth source badge: sampled from an S-102 bathymetric surface.</comment>
   </data>
   <data name="Pick_Depth_Source_DredgedArea" xml:space="preserve">
-    <value>Dredged area</value>
-    <comment>Base-depth source label: minimum depth of a charted S-101 dredged area.</comment>
+    <value>S-101 Dredged Area</value>
+    <comment>Base-depth source badge: minimum depth of a charted S-101 dredged area.</comment>
   </data>
   <data name="Pick_Depth_Source_DepthArea" xml:space="preserve">
-    <value>Charted depth area</value>
-    <comment>Base-depth source label: minimum depth of a charted S-101 depth area.</comment>
+    <value>S-101 Depth Area</value>
+    <comment>Base-depth source badge: minimum depth of a charted S-101 depth area.</comment>
   </data>
   <data name="Pick_Depth_Source_Sounding" xml:space="preserve">
-    <value>Charted sounding</value>
-    <comment>Base-depth source label: nearest charted S-101 sounding.</comment>
+    <value>S-101 Soundings</value>
+    <comment>Base-depth source badge: nearest charted S-101 sounding.</comment>
   </data>
   <data name="Pick_Depth_Label_Base" xml:space="preserve">
     <value>Base</value>
@@ -760,6 +760,14 @@
   <data name="Pick_Depth_Label_Now" xml:space="preserve">
     <value>Now</value>
     <comment>Compact-readout label for the tide-adjusted depth at the current time.</comment>
+  </data>
+  <data name="Pick_Depth_Label_DepthNow" xml:space="preserve">
+    <value>DEPTH NOW</value>
+    <comment>Headline label for the prominent depth readout when a live S-104 tide series drives it.</comment>
+  </data>
+  <data name="Pick_Depth_Label_DepthStatic" xml:space="preserve">
+    <value>DEPTH (STATIC)</value>
+    <comment>Headline label for the prominent depth readout when no tide data overlaps, so only the tide-independent base depth is shown.</comment>
   </data>
   <data name="Pick_Depth_Uncertainty" xml:space="preserve">
     <value>± {0}</value>

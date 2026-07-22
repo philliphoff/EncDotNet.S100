@@ -12,6 +12,11 @@
              x:DataType="vm:PickReportViewModel">
 
     <UserControl.Resources>
+        <!-- Subtle tints for the depth card's source badge and reconciliation warning. -->
+        <SolidColorBrush x:Key="DepthWarningSubtleBrush" Color="{DynamicResource WarningColor}" Opacity="0.12" />
+        <SolidColorBrush x:Key="DepthSuccessSubtleBrush" Color="{DynamicResource SuccessColor}" Opacity="0.14" />
+        <SolidColorBrush x:Key="DepthWarningBrush" Color="{DynamicResource WarningColor}" />
+        <SolidColorBrush x:Key="DepthSuccessBrush" Color="{DynamicResource SuccessColor}" />
         <!--
             Attribute table cell: one label/value row. Attributes are at most
             two levels deep (simple rows, plus complex rows that carry a single
@@ -269,101 +274,233 @@
             <!--
                 Location depth-assimilation card. Shown for water-based picks
                 that resolve a base depth (S-102 bathymetry, an S-101 depth /
-                dredged area, or the nearest sounding). When an overlapping
-                S-104 tide grid is found, the total available water depth is
-                plotted over time (more water plotted upward) with a now-marker
-                and, when configured, the mariner safety-depth reference line.
-                Collapsed by default so it never crowds the feature list.
+                dredged area, or the nearest sounding). A prominent headline
+                readout shows the tide-adjusted depth ("DEPTH NOW") when an
+                overlapping S-104 grid is found, or the static base depth
+                ("DEPTH (STATIC)") otherwise; that headline stays visible even
+                when the detail region is collapsed. Expanding reveals the
+                base/tide breakdown, the depth-over-time chart, and any
+                datum-reconciliation caveat.
             -->
-            <Expander IsVisible="{Binding HasLocationDepthSeries}"
-                      Header="{x:Static loc:Strings.Pick_Depth_Title}"
-                      IsExpanded="True"
-                      HorizontalAlignment="Stretch">
-                <StackPanel Spacing="8" DataContext="{Binding LocationDepthSeries}">
-                    <!-- Base depth (with the source it was derived from). -->
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                        <TextBlock Grid.Column="0"
-                                   Text="{x:Static loc:Strings.Pick_Depth_Label_Base}"
-                                   FontSize="12"
-                                   Opacity="0.7"
-                                   VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding BaseSourceLabel}"
-                                   FontSize="11"
-                                   FontStyle="Italic"
-                                   Opacity="0.55"
-                                   Margin="8,0,0,0"
-                                   VerticalAlignment="Center" />
-                        <SelectableTextBlock Grid.Column="2"
-                                             Text="{Binding BaseDepthText}"
-                                             FontSize="13"
-                                             FontWeight="SemiBold"
-                                             VerticalAlignment="Center" />
-                    </Grid>
+            <Border IsVisible="{Binding HasLocationDepthSeries}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="0">
+                <StackPanel DataContext="{Binding LocationDepthSeries}">
+                    <!--
+                        Header row: chevron + "Depth" title + source badge. The
+                        whole row toggles the detail region; rendered flat (no
+                        button chrome) so it reads as a section header.
+                    -->
+                    <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  Padding="10,8"
+                                  Cursor="Hand"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  ToolTip.Tip="{x:Static loc:Strings.Pick_Depth_Title}">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
+                            <ic:FluentIcon Grid.Column="0"
+                                           Icon="ChevronDown"
+                                           IconVariant="Regular"
+                                           FontSize="14"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding IsExpanded}" />
+                            <ic:FluentIcon Grid.Column="0"
+                                           Icon="ChevronRight"
+                                           IconVariant="Regular"
+                                           FontSize="14"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding !IsExpanded}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Static loc:Strings.Pick_Depth_Title}"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center" />
 
-                    <!-- Uncertainty caption (S-102 base only). -->
-                    <TextBlock Text="{Binding UncertaintyText}"
-                               FontSize="11"
-                               Opacity="0.6"
-                               IsVisible="{Binding HasUncertainty}" />
+                            <!-- S-102 bathymetry badge (blue). -->
+                            <Border Grid.Column="3"
+                                    IsVisible="{Binding IsBathymetrySource}"
+                                    Background="{DynamicResource AccentSubtleBrush}"
+                                    CornerRadius="10"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <ic:FluentIcon Icon="Layer"
+                                                   IconVariant="Filled"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding BaseSourceLabel}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
 
-                    <!-- Tide-adjusted depth over time (only when an S-104 grid overlaps). -->
-                    <StackPanel Spacing="6" IsVisible="{Binding HasTide}">
-                        <lvc:CartesianChart MinHeight="200"
+                            <!-- S-101 soundings badge (amber). -->
+                            <Border Grid.Column="3"
+                                    IsVisible="{Binding IsSoundingSource}"
+                                    Background="{DynamicResource DepthWarningSubtleBrush}"
+                                    CornerRadius="10"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <ic:FluentIcon Icon="Ruler"
+                                                   IconVariant="Filled"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource DepthWarningBrush}"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding BaseSourceLabel}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource DepthWarningBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Charted S-101 area badge (green). -->
+                            <Border Grid.Column="3"
+                                    IsVisible="{Binding IsChartedAreaSource}"
+                                    Background="{DynamicResource DepthSuccessSubtleBrush}"
+                                    CornerRadius="10"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <ic:FluentIcon Icon="Flow"
+                                                   IconVariant="Filled"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource DepthSuccessBrush}"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding BaseSourceLabel}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource DepthSuccessBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </ToggleButton>
+
+                    <!--
+                        Prominent headline readout. Always visible (even when
+                        collapsed). Shows the tide-adjusted "DEPTH NOW" or the
+                        "DEPTH (STATIC)" base depth.
+                    -->
+                    <Border Background="{DynamicResource AccentSubtleBrush}"
+                            CornerRadius="6"
+                            Margin="10,0,10,10"
+                            Padding="12,10">
+                        <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding DepthNowLabel}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="1"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       VerticalAlignment="Center" />
+                            <SelectableTextBlock Grid.Column="1"
+                                                 Text="{Binding DisplayDepthText}"
+                                                 FontSize="26"
+                                                 FontWeight="Bold"
+                                                 Foreground="{DynamicResource AccentBrush}"
+                                                 VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Collapsible detail region. -->
+                    <StackPanel Spacing="8"
+                                Margin="10,0,10,10"
+                                IsVisible="{Binding IsExpanded}">
+                        <!-- Base / tide value breakdown (only when tide overlaps). -->
+                        <StackPanel Spacing="4" IsVisible="{Binding HasTide}">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Grid.Column="0"
+                                           Text="{x:Static loc:Strings.Pick_Depth_Label_Base}"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding BaseSourceLabel}"
+                                           FontSize="11"
+                                           FontStyle="Italic"
+                                           Opacity="0.55"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Center" />
+                                <SelectableTextBlock Grid.Column="2"
+                                                     Text="{Binding BaseDepthText}"
+                                                     FontSize="13"
+                                                     FontWeight="SemiBold"
+                                                     VerticalAlignment="Center" />
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Grid.Column="0"
+                                           Text="{x:Static loc:Strings.Pick_Depth_Label_Tide}"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding TideDatasetId}"
+                                           FontSize="11"
+                                           FontStyle="Italic"
+                                           Opacity="0.55"
+                                           Margin="8,0,0,0"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                                <SelectableTextBlock Grid.Column="2"
+                                                     Text="{Binding TideNowText}"
+                                                     FontSize="13"
+                                                     VerticalAlignment="Center" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Tide-adjusted depth over time (only when an S-104 grid overlaps). -->
+                        <lvc:CartesianChart IsVisible="{Binding HasTide}"
+                                            MinHeight="200"
                                             Series="{Binding DepthSeries}"
                                             XAxes="{Binding TimeAxisArray}"
                                             YAxes="{Binding DepthAxisArray}"
                                             Sections="{Binding DepthSections}" />
-                        <!-- Now-readout: tide-adjusted depth and tide offset at the global clock. -->
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="{x:Static loc:Strings.Pick_Depth_Label_Now}"
-                                       FontSize="12"
-                                       Opacity="0.7"
-                                       VerticalAlignment="Center" />
-                            <SelectableTextBlock Grid.Column="2"
-                                                 Text="{Binding DepthNowText}"
-                                                 FontSize="13"
-                                                 FontWeight="SemiBold"
-                                                 VerticalAlignment="Center" />
-                        </Grid>
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="{x:Static loc:Strings.Pick_Depth_Label_Tide}"
-                                       FontSize="12"
-                                       Opacity="0.7"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding TideDatasetId}"
-                                       FontSize="11"
-                                       FontStyle="Italic"
-                                       Opacity="0.55"
-                                       Margin="8,0,0,0"
-                                       TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center" />
-                            <SelectableTextBlock Grid.Column="2"
-                                                 Text="{Binding TideNowText}"
-                                                 FontSize="13"
-                                                 VerticalAlignment="Center" />
-                        </Grid>
+
+                        <!-- Uncertainty caption (S-102 base only). -->
+                        <TextBlock Text="{Binding UncertaintyText}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding HasUncertainty}" />
+
+                        <!-- Empty-state caption when no tide data overlaps the point. -->
+                        <TextBlock Text="{Binding NoTideText}"
+                                   FontSize="11"
+                                   FontStyle="Italic"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !HasTide}" />
+
+                        <!-- Datum-reconciliation caveat: a prominent amber warning box. -->
+                        <Border IsVisible="{Binding HasDatumNote}"
+                                Background="{DynamicResource DepthWarningSubtleBrush}"
+                                BorderBrush="{DynamicResource DepthWarningBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="8,7">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <ic:FluentIcon Icon="Warning"
+                                               IconVariant="Filled"
+                                               FontSize="15"
+                                               Foreground="{DynamicResource DepthWarningBrush}"
+                                               VerticalAlignment="Top" />
+                                <TextBlock Text="{Binding DatumNoteText}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-
-                    <!-- Empty-state caption when no tide data overlaps the point. -->
-                    <TextBlock Text="{Binding NoTideText}"
-                               FontSize="11"
-                               FontStyle="Italic"
-                               Opacity="0.6"
-                               IsVisible="{Binding !HasTide}" />
-
-                    <!-- Datum-reconciliation caveat. -->
-                    <TextBlock Text="{Binding DatumNoteText}"
-                               FontSize="11"
-                               FontStyle="Italic"
-                               Opacity="0.6"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding HasDatumNote}" />
                 </StackPanel>
-            </Expander>
+            </Border>
 
             <!-- Hit list (visible only when more than one feature is at this point) -->
             <Border BorderBrush="{DynamicResource BorderColor}"

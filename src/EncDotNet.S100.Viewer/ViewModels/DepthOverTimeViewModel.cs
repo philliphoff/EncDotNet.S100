@@ -43,6 +43,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
     private string _depthNowText;
     private string _tideNowText;
+    private bool _isExpanded = true;
 
     /// <summary>
     /// Constructs a depth-over-time view model for a picked location.
@@ -164,6 +165,46 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     /// <summary>The formatted base depth in the mariner's depth unit.</summary>
     public string BaseDepthText => DepthFormatting.Format(_baseDepthMetres, _depthUnit);
 
+    /// <summary>
+    /// Whether the card's collapsible detail region (base/tide breakdown, chart
+    /// and datum caveat) is expanded. The headline depth readout and source
+    /// badge remain visible regardless. Defaults to expanded.
+    /// </summary>
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
+    }
+
+    /// <summary>
+    /// Headline label for the prominent depth readout: "DEPTH NOW" when a live
+    /// tide series drives it, or "DEPTH (STATIC)" when only the tide-independent
+    /// base depth is available.
+    /// </summary>
+    public string DepthNowLabel => HasTide
+        ? Strings.Pick_Depth_Label_DepthNow
+        : Strings.Pick_Depth_Label_DepthStatic;
+
+    /// <summary>
+    /// The value shown in the prominent readout: the tide-adjusted depth at the
+    /// current global time when tide data overlaps, otherwise the static base
+    /// depth.
+    /// </summary>
+    public string DisplayDepthText => HasTide ? DepthNowText : BaseDepthText;
+
+    /// <summary><c>true</c> when the base depth came from an S-102 bathymetric surface.</summary>
+    public bool IsBathymetrySource => Result.Base.Source == BaseDepthSource.Bathymetry;
+
+    /// <summary><c>true</c> when the base depth came from the nearest S-101 sounding.</summary>
+    public bool IsSoundingSource => Result.Base.Source == BaseDepthSource.Sounding;
+
+    /// <summary>
+    /// <c>true</c> when the base depth came from a charted S-101 area (a dredged
+    /// area or a depth area).
+    /// </summary>
+    public bool IsChartedAreaSource =>
+        Result.Base.Source is BaseDepthSource.DredgedArea or BaseDepthSource.DepthArea;
+
     /// <summary><c>true</c> when an S-102 uncertainty band is available.</summary>
     public bool HasUncertainty => Result.UncertaintyMeters is not null;
 
@@ -197,7 +238,14 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     public string DepthNowText
     {
         get => _depthNowText;
-        private set => SetProperty(ref _depthNowText, value);
+        private set
+        {
+            if (SetProperty(ref _depthNowText, value) && HasTide)
+            {
+                // The prominent readout mirrors DepthNowText while tide data drives it.
+                OnPropertyChanged(nameof(DisplayDepthText));
+            }
+        }
     }
 
     /// <summary>

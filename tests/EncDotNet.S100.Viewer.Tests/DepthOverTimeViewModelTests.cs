@@ -189,6 +189,79 @@ public sealed class DepthOverTimeViewModelTests
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Value_Unavailable, vm.DepthNowText);
     }
 
+    [Fact]
+    public void IsExpanded_DefaultsToTrue()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.True(vm.IsExpanded);
+
+        vm.IsExpanded = false;
+        Assert.False(vm.IsExpanded);
+    }
+
+    [Fact]
+    public void DepthNowLabel_ReflectsTidePresence()
+    {
+        var withTide = new DepthOverTimeViewModel(
+            Result(withTide: true), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var noTide = new DepthOverTimeViewModel(
+            Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Label_DepthNow, withTide.DepthNowLabel);
+        Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Label_DepthStatic, noTide.DepthNowLabel);
+    }
+
+    [Fact]
+    public void DisplayDepthText_UsesBaseWhenStatic()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(baseMetres: 10.0, withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        // Static readout mirrors the base depth regardless of the global clock.
+        Assert.Equal(vm.BaseDepthText, vm.DisplayDepthText);
+        Assert.Contains("10", vm.DisplayDepthText);
+    }
+
+    [Fact]
+    public void DisplayDepthText_TracksNowWhenTidePresent()
+    {
+        var depths = new[] { 10.0, 12.0, 14.0 };
+        var result = Result(baseMetres: 10.0, depths: depths);
+        var globalTime = GlobalTimeOver(Times(3));
+
+        var vm = new DepthOverTimeViewModel(
+            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+
+        globalTime.SetCurrentTime(T0.AddHours(2));
+
+        Assert.Equal(vm.DepthNowText, vm.DisplayDepthText);
+        Assert.Contains("14", vm.DisplayDepthText);
+    }
+
+    [Fact]
+    public void SourceKindFlags_ReflectSource()
+    {
+        AssertSourceKind(BaseDepthSource.Bathymetry, bathymetry: true, sounding: false, chartedArea: false);
+        AssertSourceKind(BaseDepthSource.Sounding, bathymetry: false, sounding: true, chartedArea: false);
+        AssertSourceKind(BaseDepthSource.DredgedArea, bathymetry: false, sounding: false, chartedArea: true);
+        AssertSourceKind(BaseDepthSource.DepthArea, bathymetry: false, sounding: false, chartedArea: true);
+    }
+
+    private static void AssertSourceKind(
+        BaseDepthSource source, bool bathymetry, bool sounding, bool chartedArea)
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(source: source), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.Equal(bathymetry, vm.IsBathymetrySource);
+        Assert.Equal(sounding, vm.IsSoundingSource);
+        Assert.Equal(chartedArea, vm.IsChartedAreaSource);
+    }
+
     private sealed class FakeTimeAware : ITimeAwareDataset
     {
         public FakeTimeAware(IReadOnlyList<DateTime> times) => AvailableTimes = times;
