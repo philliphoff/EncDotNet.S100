@@ -180,8 +180,8 @@
                 Background="{DynamicResource BackgroundColor}"
                 BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="0,1,0,0"
-                Padding="8,3"
-                Height="26"
+                Padding="8,4"
+                Height="30"
                 IsVisible="{Binding IsStatusBarVisible}">
             <DockPanel LastChildFill="False">
                 <DockPanel.Styles>
@@ -192,7 +192,7 @@
                          dividers regardless of which items are currently shown. -->
                     <Style Selector="Border.StatusSeparator">
                         <Setter Property="Width" Value="1" />
-                        <Setter Property="Height" Value="13" />
+                        <Setter Property="Height" Value="15" />
                         <Setter Property="Margin" Value="12,0" />
                         <Setter Property="VerticalAlignment" Value="Center" />
                         <Setter Property="Background" Value="{DynamicResource BorderColor}" />
