@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -214,6 +215,30 @@ internal sealed class MapInteractionController
         scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
         compassRose.UpdateForViewport(viewport.Rotation);
         _viewModel.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
+        UpdateOverscale(viewport);
+    }
+
+    /// <summary>
+    /// Recomputes the status-bar overscale indication (issue #441) for the
+    /// current <paramref name="viewport"/>: gathers the loaded, drawing,
+    /// scale-bearing cells from the loader and evaluates each cell's overscale
+    /// factor against the live resolution, pushing the worst offender + per-cell
+    /// list to the view-model.
+    /// </summary>
+    private void UpdateOverscale(Viewport viewport)
+    {
+        var cells = _loader.GetOverscaleCells();
+        if (cells.Count == 0)
+        {
+            _viewModel.UpdateOverscale(OverscaleReport.None);
+            return;
+        }
+
+        var extent = viewport.ToExtent();
+        var envelope = new NetTopologySuite.Geometries.Envelope(
+            extent.MinX, extent.MaxX, extent.MinY, extent.MaxY);
+        var report = OverscaleEvaluator.Evaluate(cells, envelope, viewport.Resolution);
+        _viewModel.UpdateOverscale(report);
     }
 
     private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)

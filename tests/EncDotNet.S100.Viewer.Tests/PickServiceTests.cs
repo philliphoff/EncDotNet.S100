@@ -5,6 +5,7 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
@@ -17,13 +18,17 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class PickServiceTests
 {
     private static PickService CreatePickService(IDatasetLoaderService loader, MainViewModel viewModel)
+        => CreatePickService(loader, viewModel, out _);
+
+    private static PickService CreatePickService(
+        IDatasetLoaderService loader,
+        MainViewModel viewModel,
+        out NotificationService notifications)
     {
-        // Pull MVM's status presenter (set via ctor) so that writes by
-        // the pick service flow through to the MVM's StatusText forward.
-        var presenter = (IStatusPresenter)typeof(MainViewModel)
-            .GetField("_statusPresenter", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .GetValue(viewModel)!;
-        return new PickService(loader, viewModel.PickReport, presenter);
+        // The pick service surfaces its picks through the view-model's shared
+        // PickReport; failed reference navigations surface as notifications.
+        notifications = Notifications.TestNotifications.Create();
+        return new PickService(loader, viewModel.PickReport, notifications);
     }
 
     private sealed class EmptyCatalogSource : IDatasetCatalogSource
@@ -66,13 +71,9 @@ public class PickServiceTests
     }
 
     private static MainViewModel CreateMainViewModel()
-        => CreateMainViewModel(out _);
-
-    private static MainViewModel CreateMainViewModel(out IStatusPresenter statusPresenter)
     {
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
-        statusPresenter = new StatusPresenter();
         var datasets = new DatasetsViewModel(new StubLoader());
         return new MainViewModel(
             settings,
@@ -92,8 +93,7 @@ public class PickServiceTests
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            notifications: Notifications.TestNotifications.Create(),
-            statusPresenter: statusPresenter);
+            notifications: Notifications.TestNotifications.Create());
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public class PickServiceTests
     }
 
     [Fact]
-    public void NavigateCommand_MissingTarget_SetsStatusText()
+    public void NavigateCommand_MissingTarget_ShowsNotification()
     {
         var viewModel = CreateMainViewModel();
         var entry = new DatasetEntry("/tmp/test.gml", "S-125");
@@ -410,12 +410,14 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = CreatePickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel, out var notifications);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
 
         viewModel.PickReport.NavigateCommand.Execute(viewModel.PickReport.References[0]);
 
-        Assert.Contains("ghost", viewModel.StatusText ?? string.Empty);
+        Assert.Contains(
+            notifications.Active,
+            n => (n.Message ?? string.Empty).Contains("ghost", StringComparison.Ordinal));
     }
 
     private sealed class StackAwareLoader : IDatasetLoaderService

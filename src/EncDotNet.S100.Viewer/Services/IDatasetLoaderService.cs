@@ -115,6 +115,23 @@ internal interface IDatasetLoaderService
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
 
     /// <summary>
+    /// Snapshot of the currently loaded, drawing, scale-bearing cells for
+    /// overscale evaluation (issue #441 / S-52 overscale indication): each
+    /// carries the cell's display name, its EPSG:3857 data-coverage footprint,
+    /// and its compilation-scale denominator
+    /// (<see cref="DatasetEntry.MaximumDisplayScale"/>). Cells that are not
+    /// drawing, declare no coverage geometry, or have no known compilation scale
+    /// are omitted. Consumed on every viewport change to drive the status-bar
+    /// overscale pill.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member returning an empty list so the
+    /// many test doubles need not override it; the production
+    /// <c>DatasetLoaderService</c> backs it with real state.
+    /// </remarks>
+    IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.OverscaleCellInput> GetOverscaleCells() => [];
+
+    /// <summary>
     /// Snapshot of the current S-98-ordered layer stack across all
     /// loaded datasets (bottom-of-paint-stack first; index 0 paints
     /// under everything else). Updated whenever a dataset is loaded,

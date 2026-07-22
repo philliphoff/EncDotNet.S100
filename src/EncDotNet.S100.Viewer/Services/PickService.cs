@@ -2,6 +2,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
@@ -13,7 +14,8 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Default <see cref="IPickService"/> implementation: locates the dataset
 /// entry and processor that own each hit feature via
 /// <see cref="IDatasetLoaderService"/> and pushes the resolved feature list
-/// into <see cref="PickReportViewModel"/> + <see cref="IStatusPresenter"/>.
+/// into <see cref="PickReportViewModel"/>. Failed reference navigations are
+/// surfaced as a transient notification.
 /// </summary>
 /// <remarks>
 /// Mapsui's <c>MapInfo</c> exposes every overlapping feature at the click
@@ -29,7 +31,7 @@ internal sealed class PickService : IPickService
 {
     private readonly IDatasetLoaderService _loader;
     private readonly PickReportViewModel _pickReport;
-    private readonly IStatusPresenter _status;
+    private readonly INotificationService _notifications;
     private readonly GlobalTimeService? _globalTime;
     private readonly ITimeFormatProvider? _timeFormat;
     private readonly IThemeService? _themeService;
@@ -37,59 +39,62 @@ internal sealed class PickService : IPickService
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
-        IStatusPresenter status)
-        : this(loader, pickReport, status, globalTime: null, timeFormat: null, themeService: null)
+        INotificationService notifications)
+        : this(loader, pickReport, notifications, globalTime: null, timeFormat: null, themeService: null)
     {
     }
 
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
-        IStatusPresenter status,
+        INotificationService notifications,
         GlobalTimeService? globalTime)
-        : this(loader, pickReport, status, globalTime, timeFormat: null, themeService: null)
+        : this(loader, pickReport, notifications, globalTime, timeFormat: null, themeService: null)
     {
     }
 
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
-        IStatusPresenter status,
+        INotificationService notifications,
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat)
-        : this(loader, pickReport, status, globalTime, timeFormat, themeService: null)
+        : this(loader, pickReport, notifications, globalTime, timeFormat, themeService: null)
     {
     }
 
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
-        IStatusPresenter status,
+        INotificationService notifications,
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat,
         IThemeService? themeService)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
-        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(notifications);
         _loader = loader;
         _pickReport = pickReport;
-        _status = status;
+        _notifications = notifications;
         _globalTime = globalTime;
         _timeFormat = timeFormat;
         _themeService = themeService;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
-        // transient status-bar message so the user knows the click
-        // registered but the target is missing.
+        // transient notification so the user knows the click registered
+        // but the target is missing.
         _pickReport.NavigateRequested += (_, reference) =>
         {
             if (!NavigateToReference(reference))
             {
-                _status.StatusText = string.Format(
-                    Resources.Strings.Status_FeatureRefNotFound,
-                    reference.TargetRef);
+                _notifications.Create(Strings.Toast_Warning)
+                    .WithSeverity(NotificationSeverity.Warning)
+                    .WithContent(string.Format(
+                        Strings.Status_FeatureRefNotFound,
+                        reference.TargetRef))
+                    .Show();
             }
         };
     }
@@ -108,10 +113,6 @@ internal sealed class PickService : IPickService
             if (dynamic.Count > 0)
             {
                 _pickReport.SetPicks(Array.Empty<PickHit>(), dynamic);
-                _status.StatusText = string.Format(
-                    Strings.Status_FeatureSummary,
-                    dynamic[0].DisplayLabel,
-                    dynamic[0].FeatureId);
                 return;
             }
             _pickReport.Clear();
@@ -128,10 +129,6 @@ internal sealed class PickService : IPickService
             if (TryCoveragePick(mapInfo, out var coverageHit))
             {
                 _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), TryGetLocation(mapInfo));
-                _status.StatusText = string.Format(
-                    Strings.Status_FeatureSummary,
-                    coverageHit.FeatureTypeName ?? coverageHit.FeatureType,
-                    coverageHit.FeatureRef);
                 return;
             }
 
@@ -143,34 +140,6 @@ internal sealed class PickService : IPickService
         }
 
         _pickReport.SetPicks(hits, dynamic, TryGetLocation(mapInfo));
-
-        // Status text follows the first hit. Dataset hits take
-        // precedence (their labels carry more dataset context); fall
-        // back to the first dynamic hit when no dataset hits are
-        // present.
-        if (hits.Count > 0)
-        {
-            var first = hits[0];
-            var primary = string.Format(
-                Strings.Status_FeatureSummary,
-                first.FeatureTypeName ?? first.FeatureType,
-                first.FeatureRef);
-            var more = hits.Count - 1 + dynamic.Count;
-            _status.StatusText = more > 0
-                ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, more)
-                : primary;
-        }
-        else
-        {
-            var first = dynamic[0];
-            var primary = string.Format(
-                Strings.Status_FeatureSummary,
-                first.DisplayLabel,
-                first.FeatureId);
-            _status.StatusText = dynamic.Count > 1
-                ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, dynamic.Count - 1)
-                : primary;
-        }
     }
 
     /// <summary>
@@ -209,15 +178,6 @@ internal sealed class PickService : IPickService
         }
 
         _pickReport.SetPicks(hits, Array.Empty<DynamicPickHit>(), new PickLocation(latitude, longitude));
-
-        var first = hits[0];
-        var primary = string.Format(
-            Strings.Status_FeatureSummary,
-            first.FeatureTypeName ?? first.FeatureType,
-            first.FeatureRef);
-        _status.StatusText = hits.Count > 1
-            ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, hits.Count - 1)
-            : primary;
     }
 
     private bool TryResolveProcessorByDisplayName(
@@ -390,11 +350,6 @@ internal sealed class PickService : IPickService
             return false;
 
         _pickReport.SetPicks(new[] { BuildHit(info, datasetFileName, processor) });
-
-        _status.StatusText = string.Format(
-            Resources.Strings.Status_FeatureSummary,
-            info.FeatureTypeName ?? info.FeatureType,
-            info.FeatureRef);
         return true;
     }
 
