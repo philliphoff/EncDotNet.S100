@@ -471,8 +471,6 @@ internal static class Strings
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
-    public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
-    public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
     public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
     public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));

@@ -486,19 +486,6 @@ internal sealed class MainViewModel : ViewModelBase
     }
 
 
-    private string? _statusText;
-    public string? StatusText
-    {
-        get => _statusPresenter?.StatusText ?? _statusText;
-        set
-        {
-            if (_statusPresenter is { } presenter)
-                presenter.StatusText = value;
-            else
-                SetProperty(ref _statusText, value);
-        }
-    }
-
     private bool _isStatusBarVisible;
     public bool IsStatusBarVisible
     {
@@ -839,7 +826,6 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
-    private readonly IStatusPresenter? _statusPresenter;
     private readonly McpServerHost? _mcpServerHost;
     private EncDotNet.S100.Mcp.S100McpServer? _attachedMcpServer;
 
@@ -1021,7 +1007,6 @@ internal sealed class MainViewModel : ViewModelBase
         Func<AboutDialogViewModel>? aboutDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
-        IStatusPresenter? statusPresenter = null,
         RoutesService? routes = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -1055,7 +1040,6 @@ internal sealed class MainViewModel : ViewModelBase
         _aboutDialogFactory = aboutDialogFactory;
         DialogManager = _dialogManager;
         _isDarkTheme = themeService.IsDarkTheme;
-        _statusPresenter = statusPresenter;
         _mcpServerHost = mcpServerHost;
         _routes = routes ?? new RoutesService();
 
@@ -1071,14 +1055,6 @@ internal sealed class MainViewModel : ViewModelBase
             host.ServerChanged += (_, _) => AttachToMcpServer();
             host.McpPortConflict += OnMcpPortConflict;
             AttachToMcpServer();
-        }
-        if (_statusPresenter is { } presenter)
-        {
-            presenter.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(IStatusPresenter.StatusText))
-                    OnPropertyChanged(nameof(StatusText));
-            };
         }
 
         _measureTool = new MeasureTool(measureAppearance);

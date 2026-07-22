@@ -558,7 +558,6 @@ public partial class App : Application
             };
             return state;
         });
-        services.AddSingleton<IStatusPresenter, StatusPresenter>();
         services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<INotificationService, NotificationService>();

@@ -1177,13 +1177,6 @@
   <data name="Status_FeatureNoDetails" xml:space="preserve">
     <value>Feature {0} (no details available)</value>
   </data>
-  <data name="Status_FeatureSummary" xml:space="preserve">
-    <value>{0} [{1}]</value>
-  </data>
-  <data name="Status_FeatureSummaryWithMore" xml:space="preserve">
-    <value>{0} (+{1} more)</value>
-    <comment>Status text for a multi-hit pick: {0} is the primary feature summary, {1} is the count of additional features at the same point.</comment>
-  </data>
   <data name="Status_FeatureRefNotFound" xml:space="preserve">
     <value>Referenced feature not found: {0}</value>
     <comment>Status text shown when a "follow reference" click resolves to a target that does not exist in the same dataset.</comment>
