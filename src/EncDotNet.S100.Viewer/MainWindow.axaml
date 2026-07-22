@@ -222,6 +222,65 @@
                                VerticalAlignment="Center"
                                Margin="10,0,0,0"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                    <Button x:Name="OverscaleButton"
+                            VerticalAlignment="Center"
+                            Margin="6,0,0,0"
+                            Padding="8,1"
+                            CornerRadius="10"
+                            BorderThickness="1"
+                            Background="#26D97706"
+                            BorderBrush="#80D97706"
+                            Foreground="#B45309"
+                            IsVisible="{Binding IsOverscaleVisible}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_Overscale}">
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                            <ic:FluentIcon Icon="Warning" IconVariant="Filled" FontSize="13"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Static loc:Strings.Status_OverscaleLabel}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="0.5"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding OverscaleFactorText}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       FontFeatures="+tnum"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <Border Padding="14,12">
+                                    <StackPanel MinWidth="220" Spacing="8">
+                                        <TextBlock Text="{x:Static loc:Strings.Status_OverscalePopupHeader}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   LetterSpacing="0.8"
+                                                   Opacity="0.7" />
+                                        <ItemsControl ItemsSource="{Binding OverscaleCells}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Name}"
+                                                                   FontSize="13"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="0,0,24,0" />
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding FactorText}"
+                                                                   FontSize="13"
+                                                                   FontWeight="SemiBold"
+                                                                   FontFeatures="+tnum"
+                                                                   Foreground="#B45309"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                     <Border Width="1" Height="13"
                             Margin="12,0"
                             Background="{DynamicResource BorderColor}"

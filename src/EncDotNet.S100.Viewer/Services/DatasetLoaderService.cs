@@ -1293,6 +1293,51 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             OverlapSuppression.Apply(cells);
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<OverscaleCellInput> GetOverscaleCells()
+    {
+        List<OverscaleCellInput>? cells = null;
+        foreach (var (entry, layers) in _entryLayers)
+        {
+            if (layers.Count == 0)
+                continue;
+
+            // The cell's compilation (finest) scale — the denominator past which
+            // zooming in is overscale (S-101 FC §3.1.1 maximumDisplayScale).
+            if (entry.MaximumDisplayScale is not int compilationScale || compilationScale <= 0)
+                continue;
+
+            // Only cells that are actually drawing contribute an indication (a
+            // hidden cell isn't being overscaled on screen). Same drawing test
+            // as ApplyOverlapSuppression.
+            var isDrawing = false;
+            foreach (var layer in layers)
+            {
+                if (layer.Enabled && layer.Opacity > 0)
+                {
+                    isDrawing = true;
+                    break;
+                }
+            }
+
+            if (!isDrawing)
+                continue;
+
+            if (!_entryCoverage.TryGetValue(entry, out var coverage)
+                || coverage.Coverage is not { IsEmpty: false })
+                continue;
+
+            (cells ??= []).Add(new OverscaleCellInput
+            {
+                Name = entry.DisplayName,
+                Coverage = coverage.Coverage,
+                CompilationScaleDenominator = compilationScale,
+            });
+        }
+
+        return (IReadOnlyList<OverscaleCellInput>?)cells ?? [];
+    }
+
     /// <summary>
     /// Applies the hole-safe per-cell zoom-out visibility window (issue #438
     /// Phase 1) to <paramref name="entry"/>'s freshly-built layers when the

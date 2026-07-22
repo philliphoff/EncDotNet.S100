@@ -179,6 +179,10 @@ internal static class Strings
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
     public static string Tooltip_MapScale => Get(nameof(Tooltip_MapScale));
     public static string Status_ScaleLabel => Get(nameof(Status_ScaleLabel));
+    public static string Status_OverscaleLabel => Get(nameof(Status_OverscaleLabel));
+    public static string Status_OverscaleFactor => Get(nameof(Status_OverscaleFactor));
+    public static string Status_OverscalePopupHeader => Get(nameof(Status_OverscalePopupHeader));
+    public static string Tooltip_Overscale => Get(nameof(Tooltip_Overscale));
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));
