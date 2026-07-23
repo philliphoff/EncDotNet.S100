@@ -101,6 +101,43 @@ public class SampleCoverageToolTests
     }
 
     [Fact]
+    public async Task Falls_through_to_second_overlapping_S102_when_first_envelope_misses_native_grid()
+    {
+        // Regression: an S-102 tile's WGS-84 bounds are an axis-aligned envelope,
+        // so a point can be inside the envelope yet outside the native grid. When
+        // datasets overlap, the first envelope hit must not mask a later tile that
+        // actually covers the point (issue #479 review follow-up).
+        var catalog = new FakeDatasetCatalog();
+
+        // Tile A: tiny 2x2 grid near the origin but an inflated envelope covering
+        // the whole unit square, so (0.5, 0.5) is inside bounds but outside grid.
+        var tileA = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 2, numCols: 2, depth: 11.0f, uncertainty: 0.1f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-a",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(tileA)));
+
+        // Tile B: grid that genuinely covers (0.5, 0.5).
+        var tileB = S102Synth.Dataset(originLat: 0.49, originLon: 0.49, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 42.0f, uncertainty: 0.4f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-b",
+            bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
+            source: new S102CoverageSource(tileB)));
+
+        var tool = new SampleCoverageTool(catalog);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-b"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(42.0, depth.DepthMeters);
+    }
+
+    [Fact]
     public async Task Returns_NoDatasetCoversPoint_when_no_S102_loaded()
     {
         var catalog = new FakeDatasetCatalog();

@@ -262,63 +262,64 @@ public sealed class SampleCoverageService
     private ToolResult<SampleCoverageResult> SampleS102(SampleCoverageRequest request)
     {
         var snapshot = _catalog.Datasets;
-        LoadedDataset? match = null;
+
+        // A projected S-102 tile's WGS-84 bounds are an axis-aligned envelope of
+        // the (rotated) native grid, so a point inside the envelope may still
+        // fall outside the grid after reprojection. When several S-102 datasets
+        // overlap we must try each candidate whose bounds contain the point and
+        // only report NoDatasetCoversPoint once every candidate fails native-grid
+        // containment — otherwise the first envelope hit could mask a later tile
+        // that actually covers the point.
         foreach (var dataset in snapshot)
         {
-            if (dataset.Data is not S102CoverageData) continue;
+            if (dataset.Data is not S102CoverageData data) continue;
             if (!Contains(dataset.Bounds, request.Latitude, request.Longitude)) continue;
-            match = dataset;
-            break;
-        }
 
-        if (match is null)
-        {
-            return ToolResult<SampleCoverageResult>.Err(
-                new NoDatasetCoversPoint(request.Latitude, request.Longitude));
-        }
+            try
+            {
+                // Delegate to the shared CoveragePickHelper so this MCP sampling
+                // path snaps to exactly the same cell as the viewer's coverage-pick
+                // and S102DatasetProcessor.SampleBaseDepth: reproject the WGS-84
+                // request into the (often projected/UTM) grid CRS, floor to the
+                // containing cell, and reject clicks outside the grid extent. Using
+                // one helper keeps every pick path in agreement near cell edges.
+                var pick = CoveragePickHelper.Sample(data.Source, _transforms, request.Latitude, request.Longitude);
+                if (pick is null)
+                {
+                    // Inside the envelope but outside the native grid; another
+                    // overlapping tile may still cover the point.
+                    continue;
+                }
 
-        var source = ((S102CoverageData)match.Data).Source;
+                var noData = pick.NoDataValue;
+                double? depthValue = pick.Values.TryGetValue("depth", out var depth) && depth != noData
+                    ? depth
+                    : null;
+                double? uncertaintyValue = pick.Values.TryGetValue("uncertainty", out var uncertainty) && uncertainty != noData
+                    ? uncertainty
+                    : null;
 
-        try
-        {
-            // Delegate to the shared CoveragePickHelper so this MCP sampling
-            // path snaps to exactly the same cell as the viewer's coverage-pick
-            // and S102DatasetProcessor.SampleBaseDepth: reproject the WGS-84
-            // request into the (often projected/UTM) grid CRS, floor to the
-            // containing cell, and reject clicks outside the grid extent. Using
-            // one helper keeps every pick path in agreement near cell edges.
-            var pick = CoveragePickHelper.Sample(source, _transforms, request.Latitude, request.Longitude);
-            if (pick is null)
+                if (depthValue is null)
+                {
+                    return ToolResult<SampleCoverageResult>.Err(
+                        new NoDataAtPoint(dataset.Id, pick.Row, pick.Col, Time: null));
+                }
+
+                return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
+                    dataset.Id,
+                    request.Latitude,
+                    request.Longitude,
+                    new DepthSample(depthValue.Value, uncertaintyValue)));
+            }
+            catch (ObjectDisposedException)
             {
                 return ToolResult<SampleCoverageResult>.Err(
-                    new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+                    new DatasetClosedDuringQuery(dataset.Id));
             }
-
-            var noData = pick.NoDataValue;
-            double? depthValue = pick.Values.TryGetValue("depth", out var depth) && depth != noData
-                ? depth
-                : null;
-            double? uncertaintyValue = pick.Values.TryGetValue("uncertainty", out var uncertainty) && uncertainty != noData
-                ? uncertainty
-                : null;
-
-            if (depthValue is null)
-            {
-                return ToolResult<SampleCoverageResult>.Err(
-                    new NoDataAtPoint(match.Id, pick.Row, pick.Col, Time: null));
-            }
-
-            return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
-                match.Id,
-                request.Latitude,
-                request.Longitude,
-                new DepthSample(depthValue.Value, uncertaintyValue)));
         }
-        catch (ObjectDisposedException)
-        {
-            return ToolResult<SampleCoverageResult>.Err(
-                new DatasetClosedDuringQuery(match.Id));
-        }
+
+        return ToolResult<SampleCoverageResult>.Err(
+            new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
     private ToolResult<SampleCoverageResult> SampleS104(SampleCoverageRequest request)

@@ -782,7 +782,7 @@
     <comment>Caption shown when the S-102 base and S-104 tide vertical datums differ or cannot be confirmed.</comment>
   </data>
   <data name="Pick_Depth_NoTide" xml:space="preserve">
-    <value>No tide station covers this location — depth is static (base value only, no time-based correction).</value>
+    <value>No tide data covers this location — depth is static (base value only, no time-based correction).</value>
     <comment>Info-bar caption in the depth card when no S-104 grid overlaps the pick, so only the tide-independent base depth is shown.</comment>
   </data>
   <data name="Pick_Depth_Value_Unavailable" xml:space="preserve">
