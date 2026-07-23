@@ -179,7 +179,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 return 2;
             }
 
-            var catalog = FileDatasetCatalog.Build(inputs);
+            var catalog = FileDatasetCatalog.Build(inputs, new ProjNetCrsTransformFactory());
             warnings.AddRange(catalog.Warnings);
             foreach (var warning in warnings)
                 Console.Error.WriteLine(warning);
