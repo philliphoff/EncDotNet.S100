@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace EncDotNet.S100.DataModel;
 
 /// <summary>
@@ -224,8 +226,8 @@ public static class VerticalDatums
     /// <param name="code">The S-100 <c>verticalDatum</c> code.</param>
     /// <param name="label">The resolved label when the code is recognised.</param>
     /// <returns><c>true</c> when the code is a defined register value.</returns>
-    public static bool TryGetLabel(int code, out string label) =>
-        Labels.TryGetValue(code, out label!);
+    public static bool TryGetLabel(int code, [MaybeNullWhen(false)] out string label) =>
+        Labels.TryGetValue(code, out label);
 
     /// <summary>
     /// Resolves a vertical datum code to a human-readable label. Unknown

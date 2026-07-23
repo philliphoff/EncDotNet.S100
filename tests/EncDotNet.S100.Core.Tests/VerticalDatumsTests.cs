@@ -38,7 +38,8 @@ public class VerticalDatumsTests
     [Fact]
     public void TryGetLabel_UnknownCode_ReturnsFalse()
     {
-        Assert.False(VerticalDatums.TryGetLabel(999, out _));
+        Assert.False(VerticalDatums.TryGetLabel(999, out var label));
+        Assert.Null(label);
     }
 
     [Fact]
