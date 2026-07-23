@@ -2,6 +2,8 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.ViewModels;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -83,6 +85,37 @@ public sealed class DepthOverTimeViewModelTests
         Assert.Equal(3, vm.DepthSeries.Length);
         Assert.True(vm.HasUncertainty);
         Assert.Contains("0.5", vm.UncertaintyText);
+    }
+
+    [Fact]
+    public void Series_NoDataStep_EmitsNullGapPointForEveryTimeStep()
+    {
+        // A NoData tide step yields a null DepthMeters; the curve must still
+        // carry a point at that time (with a null value) so the line breaks at
+        // the gap rather than bridging across it.
+        var times = Times(3);
+        var points = new List<DepthOverTimePoint>
+        {
+            new(times[0], 10.0),
+            new(times[1], null),
+            new(times[2], 12.0),
+        };
+        var result = new LocationDepthResult(
+            new BaseDepthResult(10.0, BaseDepthSource.Bathymetry, null, 23, null, "S102DS"),
+            new LocationTideSelection("S104DS", 23),
+            points,
+            UncertaintyMeters: null,
+            DatumsNotReconciled: false);
+
+        var vm = new DepthOverTimeViewModel(
+            result, "loc", 51.9, 4.4, DepthUnit.Metres, safetyDepthMetres: null, globalTime: null);
+
+        var curve = Assert.IsType<LineSeries<DateTimePoint>>(vm.DepthSeries[^1]);
+        var values = Assert.IsAssignableFrom<IEnumerable<DateTimePoint>>(curve.Values).ToList();
+        Assert.Equal(3, values.Count);
+        Assert.NotNull(values[0].Value);
+        Assert.Null(values[1].Value);
+        Assert.NotNull(values[2].Value);
     }
 
     [Fact]

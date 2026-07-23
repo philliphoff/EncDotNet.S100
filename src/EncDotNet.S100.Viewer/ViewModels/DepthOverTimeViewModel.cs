@@ -351,10 +351,12 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         var points = new List<DateTimePoint>(result.DepthOverTime.Count);
         foreach (var point in result.DepthOverTime)
         {
-            if (point.DepthMeters is { } depth)
-            {
-                points.Add(new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth, depthUnit)));
-            }
+            // Emit a point for every time step, using a null value at NoData
+            // steps so LiveCharts breaks the line at the gap rather than
+            // connecting across missing tide data.
+            points.Add(point.DepthMeters is { } depth
+                ? new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth, depthUnit))
+                : new DateTimePoint(point.Time, null));
         }
 
         series.Add(new LineSeries<DateTimePoint>
@@ -380,10 +382,11 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         var points = new List<DateTimePoint>(result.DepthOverTime.Count);
         foreach (var point in result.DepthOverTime)
         {
-            if (point.DepthMeters is { } depth)
-            {
-                points.Add(new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth + offsetMetres, depthUnit)));
-            }
+            // Match the main curve: emit a null-valued point at NoData steps so
+            // the uncertainty boundary breaks at the gap instead of bridging it.
+            points.Add(point.DepthMeters is { } depth
+                ? new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth + offsetMetres, depthUnit))
+                : new DateTimePoint(point.Time, null));
         }
 
         return new LineSeries<DateTimePoint>

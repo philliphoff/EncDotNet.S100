@@ -133,7 +133,9 @@ internal sealed class DepthAssimilationService
     /// Determines whether <paramref name="candidate"/> is preferred over
     /// <paramref name="incumbent"/>: finer resolution wins; on equal
     /// resolution the later issuance wins; a dated candidate beats an undated
-    /// one.
+    /// one. On a full tie (equal resolution and issuance) the ordinally-smaller
+    /// <see cref="S104TideCandidate.DatasetId"/> wins, so selection is stable
+    /// regardless of the order datasets were enumerated.
     /// </summary>
     private static bool IsPreferred(S104TideCandidate candidate, S104TideCandidate incumbent)
     {
@@ -147,12 +149,19 @@ internal sealed class DepthAssimilationService
             return false;
         }
 
-        return (candidate.IssueDate, incumbent.IssueDate) switch
+        switch (candidate.IssueDate, incumbent.IssueDate)
         {
-            ({ } c, { } i) => c > i,
-            (not null, null) => true,
-            _ => false,
-        };
+            case ({ } c, { } i) when c != i:
+                return c > i;
+            case (not null, null):
+                return true;
+            case (null, not null):
+                return false;
+            default:
+                // Equal resolution and issuance: break the tie deterministically
+                // on the dataset id so a true tie never depends on input order.
+                return string.CompareOrdinal(candidate.DatasetId, incumbent.DatasetId) < 0;
+        }
     }
 
     /// <summary>

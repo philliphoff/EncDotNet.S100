@@ -140,6 +140,21 @@ public class DepthAssimilationServiceTests
     }
 
     [Fact]
+    public void Assimilate_breaks_full_tie_by_dataset_id_regardless_of_order()
+    {
+        // Equal resolution and both undated: the selection must be stable and
+        // independent of enumeration order, so the ordinally-smaller id wins.
+        var alpha = new S104TideCandidate("alpha", 0.01, null, 10, Series((T0, 1.0)));
+        var bravo = new S104TideCandidate("bravo", 0.01, null, 10, Series((T0, 2.0)));
+
+        var forward = _service.Assimilate(Bathy(10.0), [alpha, bravo]);
+        var reversed = _service.Assimilate(Bathy(10.0), [bravo, alpha]);
+
+        Assert.Equal("alpha", forward!.Tide!.DatasetId);
+        Assert.Equal("alpha", reversed!.Tide!.DatasetId);
+    }
+
+    [Fact]
     public void Assimilate_flags_datum_mismatch_when_s102_and_s104_differ()
     {
         var result = _service.Assimilate(

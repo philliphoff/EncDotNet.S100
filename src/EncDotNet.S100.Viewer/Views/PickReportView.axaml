@@ -307,7 +307,10 @@
                     -->
                     <Border Classes="depthHeader"
                             Tapped="OnDepthHeaderTapped"
+                            KeyDown="OnDepthHeaderKeyDown"
+                            Focusable="True"
                             Cursor="Hand"
+                            AutomationProperties.Name="{x:Static loc:Strings.Pick_Depth_Title}"
                             ToolTip.Tip="{x:Static loc:Strings.Pick_Depth_Title}">
                         <Panel>
                             <Border Name="DepthHeaderTint"
