@@ -157,4 +157,23 @@ public sealed class CatalogProjectionTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void FileDatasetCatalog_build_falls_back_to_world_bounds_for_unsupported_s102_crs()
+    {
+        // An unsupported/malformed horizontal CRS must not break dataset load:
+        // ProjectS102 catches the transform failure and falls back to a safe
+        // world extent so the tile still loads.
+        var path = WriteProjectedS102(horizontalCrs: 9999);
+        try
+        {
+            var inputs = new[] { new FileDatasetInput(new DatasetId("s102-badcrs"), "S-102", path) };
+
+            var catalog = FileDatasetCatalog.Build(inputs, new ProjNetCrsTransformFactory());
+
+            Assert.Single(catalog.Datasets);
+            Assert.Equal(LoadedDatasetProjector.WorldBounds, catalog.Datasets[0].Bounds);
+        }
+        finally { File.Delete(path); }
+    }
 }

@@ -316,6 +316,14 @@ public sealed class SampleCoverageService
                 return ToolResult<SampleCoverageResult>.Err(
                     new DatasetClosedDuringQuery(dataset.Id));
             }
+            catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException)
+            {
+                // The tile declares an unsupported or malformed horizontal CRS,
+                // so it cannot be reprojected for sampling. Treat it as an
+                // ineligible candidate and try the next overlapping dataset
+                // rather than aborting the whole tool/CLI invocation.
+                continue;
+            }
         }
 
         return ToolResult<SampleCoverageResult>.Err(

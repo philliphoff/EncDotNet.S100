@@ -186,9 +186,25 @@ public static class LoadedDatasetProjector
         // native metres, so reproject through CoverageExtent when a transform
         // factory is available rather than treating native origin/spacing as
         // degrees. Without a factory, fall back to the naive geographic box.
-        var bounds = transforms is not null
-            ? CoverageExtent.ToWgs84Bounds(source.Metadata, transforms) ?? WorldBounds
-            : ComputeS102Bounds(dataset) ?? WorldBounds;
+        BoundingBox bounds;
+        if (transforms is not null)
+        {
+            try
+            {
+                bounds = CoverageExtent.ToWgs84Bounds(source.Metadata, transforms) ?? WorldBounds;
+            }
+            catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException)
+            {
+                // Unsupported or malformed horizontal CRS: don't fail the whole
+                // dataset load — fall back to a safe world extent so the tile
+                // still loads (and simply won't match precise picks).
+                bounds = WorldBounds;
+            }
+        }
+        else
+        {
+            bounds = ComputeS102Bounds(dataset) ?? WorldBounds;
+        }
         return new LoadedDataset(
             id,
             new SpecRef("S-102", default),

@@ -138,6 +138,58 @@ public class SampleCoverageToolTests
     }
 
     [Fact]
+    public async Task Skips_S102_tile_with_unsupported_crs_instead_of_throwing()
+    {
+        // A tile declaring an unsupported horizontal CRS cannot be reprojected;
+        // sampling must degrade to a structured NoDatasetCoversPoint rather than
+        // letting ProjNet's NotSupportedException abort the tool.
+        var catalog = new FakeDatasetCatalog();
+        var badCrs = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, horizontalCrs: 9999);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-badcrs",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(badCrs)));
+        var tool = new SampleCoverageTool(catalog);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<NoDatasetCoversPoint>(error);
+    }
+
+    [Fact]
+    public async Task Falls_through_to_valid_S102_when_earlier_tile_has_unsupported_crs()
+    {
+        // An unsupported-CRS tile must not mask a later overlapping tile that
+        // can be sampled.
+        var catalog = new FakeDatasetCatalog();
+        var badCrs = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, horizontalCrs: 9999);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-badcrs",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(badCrs)));
+
+        var good = S102Synth.Dataset(originLat: 0.49, originLon: 0.49, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 42.0f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-good",
+            bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
+            source: new S102CoverageSource(good)));
+        var tool = new SampleCoverageTool(catalog);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-good"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(42.0, depth.DepthMeters);
+    }
+
+    [Fact]
     public async Task Returns_NoDatasetCoversPoint_when_no_S102_loaded()
     {
         var catalog = new FakeDatasetCatalog();
