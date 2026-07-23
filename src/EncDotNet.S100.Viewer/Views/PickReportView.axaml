@@ -417,6 +417,8 @@
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        LetterSpacing="1"
+                                       TextTrimming="CharacterEllipsis"
+                                       Margin="0,0,8,0"
                                        Foreground="{DynamicResource AccentBrush}"
                                        VerticalAlignment="Center" />
                             <SelectableTextBlock Grid.Column="1"
