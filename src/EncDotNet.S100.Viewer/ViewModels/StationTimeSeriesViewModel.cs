@@ -101,8 +101,13 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
             _globalTime.CurrentTimeChanged += OnGlobalTimeChanged;
             if (_globalTime.CurrentTime is { } current)
             {
+                // Position the visual now-marker, but do not invoke the virtual
+                // OnNowMarkerChanged hook here: this base constructor runs before
+                // any derived constructor body, so a derived override would see
+                // uninitialised fields. Derived types pull the initial current
+                // time explicitly (via GlobalTimeService.CurrentTime); the hook
+                // fires only for subsequent CurrentTimeChanged events.
                 UpdateNowMarker(current);
-                OnNowMarkerChanged(current);
             }
         }
 
@@ -244,11 +249,12 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Called after the now-marker moves to <paramref name="time"/> (at
-    /// construction when a current time is already known, and whenever
-    /// <see cref="GlobalTimeService.CurrentTimeChanged"/> fires). Override to
-    /// refresh any "value at now" readout that tracks the global clock. The
-    /// base implementation is a no-op.
+    /// Called after the now-marker moves to <paramref name="time"/> whenever
+    /// <see cref="GlobalTimeService.CurrentTimeChanged"/> fires. It is not
+    /// invoked during construction — derived types read the initial
+    /// <see cref="GlobalTimeService.CurrentTime"/> explicitly once their own
+    /// fields are initialised. Override to refresh any "value at now" readout
+    /// that tracks the global clock. The base implementation is a no-op.
     /// </summary>
     /// <param name="time">The new current UTC time.</param>
     protected virtual void OnNowMarkerChanged(DateTime time)

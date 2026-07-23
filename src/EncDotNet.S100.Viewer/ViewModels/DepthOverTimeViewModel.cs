@@ -296,13 +296,6 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
     private void RefreshNow(DateTime? time)
     {
-        // Guarded against the base constructor's early invocation, before the
-        // subclass curve fields are initialised.
-        if (_curveTimes is null || _curveDepthsMetres is null)
-        {
-            return;
-        }
-
         var depthMetres = time is { } t ? NearestDepth(t) : null;
         if (depthMetres is { } depth)
         {

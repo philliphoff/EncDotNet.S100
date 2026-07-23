@@ -153,8 +153,8 @@ public class CoveragePickHelperTests
             Extent = new BoundingBox(
                 southLatitude: originLat,
                 westLongitude: originLon,
-                northLatitude: originLat + rows * spacing,
-                eastLongitude: originLon + cols * spacing),
+                northLatitude: originLat + (rows - 1) * spacing,
+                eastLongitude: originLon + (cols - 1) * spacing),
             GridMetadata = grid,
             HorizontalCRS = horizontalCrs,
             VerticalDatum = "MSL",
