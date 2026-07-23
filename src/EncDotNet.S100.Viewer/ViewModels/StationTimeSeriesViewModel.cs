@@ -40,6 +40,12 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Gets a value indicating whether <see cref="Dispose"/> has been called.
+    /// Exposed for tests that assert deterministic resource cleanup.
+    /// </summary>
+    internal bool IsDisposed => _disposed;
+
+    /// <summary>
     /// Constructs a view model bound to <paramref name="snapshot"/>. The
     /// <paramref name="globalTime"/> service may be <c>null</c> in unit
     /// tests; when supplied, <see cref="GlobalTimeService.CurrentTimeChanged"/>
@@ -94,7 +100,15 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         {
             _globalTime.CurrentTimeChanged += OnGlobalTimeChanged;
             if (_globalTime.CurrentTime is { } current)
+            {
+                // Position the visual now-marker, but do not invoke the virtual
+                // OnNowMarkerChanged hook here: this base constructor runs before
+                // any derived constructor body, so a derived override would see
+                // uninitialised fields. Derived types pull the initial current
+                // time explicitly (via GlobalTimeService.CurrentTime); the hook
+                // fires only for subsequent CurrentTimeChanged events.
                 UpdateNowMarker(current);
+            }
         }
 
         if (_timeFormat is not null)
@@ -228,7 +242,24 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         return points;
     }
 
-    private void OnGlobalTimeChanged(DateTime time) => UpdateNowMarker(time);
+    private void OnGlobalTimeChanged(DateTime time)
+    {
+        UpdateNowMarker(time);
+        OnNowMarkerChanged(time);
+    }
+
+    /// <summary>
+    /// Called after the now-marker moves to <paramref name="time"/> whenever
+    /// <see cref="GlobalTimeService.CurrentTimeChanged"/> fires. It is not
+    /// invoked during construction — derived types read the initial
+    /// <see cref="GlobalTimeService.CurrentTime"/> explicitly once their own
+    /// fields are initialised. Override to refresh any "value at now" readout
+    /// that tracks the global clock. The base implementation is a no-op.
+    /// </summary>
+    /// <param name="time">The new current UTC time.</param>
+    protected virtual void OnNowMarkerChanged(DateTime time)
+    {
+    }
 
     private void OnTimeFormatChanged(TimeFormat format)
     {

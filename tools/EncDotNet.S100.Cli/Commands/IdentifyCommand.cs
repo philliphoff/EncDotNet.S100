@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
@@ -178,7 +179,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 return 2;
             }
 
-            var catalog = FileDatasetCatalog.Build(inputs);
+            var catalog = FileDatasetCatalog.Build(inputs, new ProjNetCrsTransformFactory());
             warnings.AddRange(catalog.Warnings);
             foreach (var warning in warnings)
                 Console.Error.WriteLine(warning);
@@ -333,7 +334,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         SpecRef? specFilter)
     {
         var results = new List<SampleCoverageResult>();
-        var service = new SampleCoverageService(catalog);
+        var service = new SampleCoverageService(catalog, new ProjNetCrsTransformFactory());
 
         var coverageSpecs = catalog.Datasets
             .Where(d => d.Data is S102CoverageData or S104CoverageData or S104StationSeriesData

@@ -657,6 +657,45 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
     }
 
+    /// <summary>
+    /// Samples this S-104 dataset's water-level time series at a WGS-84 point
+    /// for depth assimilation, returning the nearest-cell series together with
+    /// the grid spacing, issue date and vertical datum used to rank competing
+    /// S-104 datasets. Returns <c>null</c> for station-series or non-gridded
+    /// (data coding format ≠ 2) datasets, or when the point is out of bounds
+    /// (S-104 Ed 2.0.0 §10.2 regular-grid coverage).
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <param name="from">Optional inclusive lower time bound (UTC).</param>
+    /// <param name="to">Optional inclusive upper time bound (UTC).</param>
+    /// <returns>The sampled tide probe, or <c>null</c>.</returns>
+    public S104TideProbe? SampleTide(double latitude, double longitude, DateTime? from, DateTime? to)
+    {
+        if (_data is not S104DatasetData.GriddedCoverage gridded)
+            return null;
+
+        var dataset = gridded.Dataset;
+        var series = S104TimeSeriesSampler.Sample(dataset, latitude, longitude, from, to);
+        if (series is null)
+            return null;
+
+        var geometry = dataset.Coverages[0];
+        var spacing = Math.Min(
+            Math.Abs(geometry.SpacingLatitudinal),
+            Math.Abs(geometry.SpacingLongitudinal));
+
+        DateTime? issueDate = DateTime.TryParse(
+            dataset.IssueDate,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : null;
+
+        return new S104TideProbe(spacing, issueDate, dataset.VerticalDatum, series);
+    }
+
     private FeatureInfo? GetStationInfo(
         S104StationSeriesDataset ds,
         double latitude,

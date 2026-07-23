@@ -332,6 +332,33 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             : value.ToString("0.##########", CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// Samples this S-102 bathymetric surface at a WGS-84 point and returns the
+    /// depth (and co-located uncertainty) in metres, or <c>null</c> when the
+    /// point falls outside the grid or the depth cell is NoData. Unlike
+    /// <see cref="GetCoverageInfo"/> this returns raw quantities (not a display
+    /// <see cref="FeatureInfo"/>) for the viewer's depth-assimilation pipeline
+    /// (S-102 §10.2 BathymetryCoverage; S-100 Part 4a vertical datum).
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns>The bathymetric sample, or <c>null</c>.</returns>
+    public S102DepthProbe? SampleBaseDepth(double latitude, double longitude)
+    {
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        if (!sample.Values.TryGetValue("depth", out var depth) || depth == sample.NoDataValue)
+            return null;
+
+        double? uncertainty = sample.Values.TryGetValue("uncertainty", out var u) && u != sample.NoDataValue
+            ? u
+            : null;
+
+        return new S102DepthProbe(depth, uncertainty, _dataset.VerticalDatum);
+    }
+
+    /// <summary>
     /// Runs the S-102 normative rule pack
     /// (<see cref="S102DatasetRules.Default"/>) against the parsed
     /// dataset and returns the cached report.

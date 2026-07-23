@@ -65,6 +65,13 @@ public static class LoadedDatasetProjector
     /// <c>TXTDSC</c> / <c>NTXTDS</c> attributes (S-101 Feature Catalogue);
     /// <c>null</c> for loose cells or non-S-101 specs.
     /// </param>
+    /// <param name="transforms">
+    /// Optional CRS transform factory used to reproject a projected-CRS
+    /// coverage extent (e.g. an S-102 tile in a UTM zone) into the WGS-84
+    /// bounds that <see cref="LoadedDataset.Bounds"/> contractually carries.
+    /// When <c>null</c> the native grid georeferencing is treated as
+    /// geographic degrees (correct only for datasets already in EPSG:4326).
+    /// </param>
     /// <returns>
     /// The projected dataset, or <c>null</c> when <paramref name="spec"/> is
     /// not a known S-100 product specification.
@@ -73,7 +80,8 @@ public static class LoadedDatasetProjector
         DatasetId id,
         string spec,
         Stream stream,
-        Func<string, string?>? externalTextResolver = null)
+        Func<string, string?>? externalTextResolver = null,
+        ICrsTransformFactory? transforms = null)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(stream);
@@ -81,7 +89,7 @@ public static class LoadedDatasetProjector
         return spec switch
         {
             "S-101" or "S-57" => ProjectS101(id, stream, externalTextResolver),
-            "S-102" => ProjectS102(id, stream),
+            "S-102" => ProjectS102(id, stream, transforms),
             "S-104" => ProjectS104(id, stream),
             "S-111" => ProjectS111(id, stream),
             "S-122" => ProjectGml(id, "S-122", stream, s =>
@@ -168,15 +176,39 @@ public static class LoadedDatasetProjector
             new S101DatasetData(dataset, externalTextResolver));
     }
 
-    private static LoadedDataset ProjectS102(DatasetId id, Stream stream)
+    private static LoadedDataset ProjectS102(DatasetId id, Stream stream, ICrsTransformFactory? transforms)
     {
         using var file = PureHdfFile.Open(stream);
         var dataset = S102DatasetReader.Read(file);
         var source = new S102CoverageSource(dataset);
+        // LoadedDataset.Bounds is contractually WGS-84; an S-102 tile may be
+        // in a projected CRS (e.g. UTM zone 31N) whose grid georeferencing is
+        // native metres, so reproject through CoverageExtent when a transform
+        // factory is available rather than treating native origin/spacing as
+        // degrees. Without a factory, fall back to the naive geographic box.
+        BoundingBox bounds;
+        if (transforms is not null)
+        {
+            try
+            {
+                bounds = CoverageExtent.ToWgs84Bounds(source.Metadata, transforms) ?? WorldBounds;
+            }
+            catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException)
+            {
+                // Unsupported or malformed horizontal CRS: don't fail the whole
+                // dataset load — fall back to a safe world extent so the tile
+                // still loads (and simply won't match precise picks).
+                bounds = WorldBounds;
+            }
+        }
+        else
+        {
+            bounds = ComputeS102Bounds(dataset) ?? WorldBounds;
+        }
         return new LoadedDataset(
             id,
             new SpecRef("S-102", default),
-            ComputeS102Bounds(dataset) ?? WorldBounds,
+            bounds,
             null,
             new S102CoverageData(source));
     }

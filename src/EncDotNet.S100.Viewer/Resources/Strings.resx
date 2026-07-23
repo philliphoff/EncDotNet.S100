@@ -717,6 +717,78 @@
     <value>STATION ATTRIBUTES</value>
     <comment>Header for the collapsed attribute Expander shown below a station chart.</comment>
   </data>
+  <data name="Pick_Depth_Axis_Depth" xml:space="preserve">
+    <value>Depth ({0})</value>
+    <comment>Y-axis title for the depth-over-time chart; {0} is the depth unit abbreviation (e.g. "m").</comment>
+  </data>
+  <data name="Pick_Depth_Title" xml:space="preserve">
+    <value>Depth</value>
+    <comment>Header for the location depth-assimilation card in the pick report.</comment>
+  </data>
+  <data name="Pick_Depth_Series_TideAdjusted" xml:space="preserve">
+    <value>Tide-adjusted depth</value>
+    <comment>Legend/name for the total-available-water-depth curve on the depth-over-time chart.</comment>
+  </data>
+  <data name="Pick_Depth_Series_SafetyDepth" xml:space="preserve">
+    <value>Safety depth</value>
+    <comment>Legend/name for the mariner safety-depth reference line on the depth-over-time chart.</comment>
+  </data>
+  <data name="Pick_Depth_Source_Bathymetry" xml:space="preserve">
+    <value>S-102 Bathymetry</value>
+    <comment>Base-depth source badge: sampled from an S-102 bathymetric surface.</comment>
+  </data>
+  <data name="Pick_Depth_Source_DredgedArea" xml:space="preserve">
+    <value>S-101 Dredged Area</value>
+    <comment>Base-depth source badge: minimum depth of a charted S-101 dredged area.</comment>
+  </data>
+  <data name="Pick_Depth_Source_DepthArea" xml:space="preserve">
+    <value>S-101 Depth Area</value>
+    <comment>Base-depth source badge: minimum depth of a charted S-101 depth area.</comment>
+  </data>
+  <data name="Pick_Depth_Source_Sounding" xml:space="preserve">
+    <value>S-101 Soundings</value>
+    <comment>Base-depth source badge: nearest charted S-101 sounding.</comment>
+  </data>
+  <data name="Pick_Depth_Label_Base" xml:space="preserve">
+    <value>Base</value>
+    <comment>Compact-readout label for the tide-independent base depth.</comment>
+  </data>
+  <data name="Pick_Depth_Label_Tide" xml:space="preserve">
+    <value>Tide</value>
+    <comment>Compact-readout label for the S-104 tide height at the current time.</comment>
+  </data>
+  <data name="Pick_Depth_Label_Now" xml:space="preserve">
+    <value>Now</value>
+    <comment>Compact-readout label for the tide-adjusted depth at the current time.</comment>
+  </data>
+  <data name="Pick_Depth_Label_DepthNow" xml:space="preserve">
+    <value>DEPTH AT SELECTED TIME</value>
+    <comment>Headline label for the prominent depth readout when a live S-104 tide series drives it; the value tracks the selected timeline step, not wall-clock time.</comment>
+  </data>
+  <data name="Pick_Depth_Label_DepthStatic" xml:space="preserve">
+    <value>DEPTH (STATIC)</value>
+    <comment>Headline label for the prominent depth readout when no tide data overlaps, so only the tide-independent base depth is shown.</comment>
+  </data>
+  <data name="Pick_Depth_SourceData" xml:space="preserve">
+    <value>Source data: {0}</value>
+    <comment>Hover tooltip on a base/tide label naming the source dataset file; {0} is the dataset file name.</comment>
+  </data>
+  <data name="Pick_Depth_Uncertainty" xml:space="preserve">
+    <value>± {0}</value>
+    <comment>Uncertainty band caption; {0} is the formatted vertical uncertainty (e.g. "0.3 m").</comment>
+  </data>
+  <data name="Pick_Depth_DatumNote" xml:space="preserve">
+    <value>Datums not reconciled — absolute baseline approximate</value>
+    <comment>Caption shown when the S-102 base and S-104 tide vertical datums differ or cannot be confirmed.</comment>
+  </data>
+  <data name="Pick_Depth_NoTide" xml:space="preserve">
+    <value>No tide data covers this location — depth is static (base value only, no time-based correction).</value>
+    <comment>Info-bar caption in the depth card when no S-104 grid overlaps the pick, so only the tide-independent base depth is shown.</comment>
+  </data>
+  <data name="Pick_Depth_Value_Unavailable" xml:space="preserve">
+    <value>n/a</value>
+    <comment>Placeholder shown for a depth/tide readout value that is unavailable at the current time.</comment>
+  </data>
   <data name="Pick_EggCode_Heading" xml:space="preserve">
     <value>EGG CODE</value>
     <comment>Section header for the WMO/SIGRID-3 ice egg-code diagram in the S-411 pick report.</comment>

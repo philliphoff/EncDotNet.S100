@@ -51,7 +51,8 @@ internal static class S104FixtureBuilder
         int numLon,
         bool useF64GridAttrs,
         bool useUnsignedCounts,
-        string timePoint = "20210401T000000Z")
+        string timePoint = "20210401T000000Z",
+        int? verticalDatum = null)
         where TRow : struct
     {
         var instance = new H5Group
@@ -75,14 +76,20 @@ internal static class S104FixtureBuilder
             },
         };
 
+        var rootAttributes = new Dictionary<string, object>
+        {
+            ["horizontalCRS"] = 4326,
+            ["geographicIdentifier"] = "Test",
+            ["issueDate"] = "2021-04-01",
+        };
+        if (verticalDatum is int vd)
+        {
+            rootAttributes["verticalDatum"] = vd;
+        }
+
         var file = new H5File
         {
-            Attributes = new()
-            {
-                ["horizontalCRS"] = 4326,
-                ["geographicIdentifier"] = "Test",
-                ["issueDate"] = "2021-04-01",
-            },
+            Attributes = rootAttributes,
             ["WaterLevel"] = new H5Group
             {
                 Attributes = new()

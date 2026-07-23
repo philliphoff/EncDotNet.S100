@@ -48,6 +48,148 @@ public class SampleCoverageToolTests
     }
 
     [Fact]
+    public async Task Returns_depth_for_projected_utm_tile_by_reprojecting_click()
+    {
+        // A projected S-102 tile (UTM zone 31N, EPSG:32631) stores grid
+        // georeferencing in native metres. The tool must reproject the WGS-84
+        // request point into the grid CRS before indexing — otherwise the
+        // Rotterdam UTM tile reports no_dataset_covers_point (issue #479).
+        const double originNorthing = 5_750_000.0;
+        const double originEasting = 592_000.0;
+        const double spacing = 100.0;
+        const int count = 5;
+
+        // Encode the cell index into the depth so we can assert the exact hit.
+        var dataset = S102Synth.Dataset(
+            originLat: originNorthing, originLon: originEasting,
+            spacingLat: spacing, spacingLon: spacing,
+            numRows: count, numCols: count,
+            horizontalCrs: 32631,
+            depthAt: (r, c) => r * 10 + c);
+
+        var factory = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+
+        // Reproject the native SW/NE corners to build the WGS-84 catalog bounds
+        // exactly as the viewer catalog now does (CoverageExtent).
+        var toWgs84 = factory.Create("EPSG:32631", "EPSG:4326");
+        var (swLon, swLat) = toWgs84.Transform(originEasting, originNorthing);
+        var (neLon, neLat) = toWgs84.Transform(
+            originEasting + (count - 1) * spacing, originNorthing + (count - 1) * spacing);
+        var bounds = LoadedDatasetFactory.Box(
+            Math.Min(swLat, neLat), Math.Min(swLon, neLon),
+            Math.Max(swLat, neLat), Math.Max(swLon, neLon));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S102("s102-utm", bounds: bounds,
+            source: new S102CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog);
+
+        // Aim at the interior of cell (row 2, col 3) in native metres — offset
+        // half a cell past the node so the floor-based indexing shared with the
+        // viewer's coverage-pick path (CoveragePickHelper.ToGrid) resolves
+        // deterministically to (2, 3) without fp boundary ambiguity.
+        var (lon, lat) = toWgs84.Transform(
+            originEasting + 3.5 * spacing, originNorthing + 2.5 * spacing);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-utm"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(2 * 10 + 3, depth.DepthMeters);
+    }
+
+    [Fact]
+    public async Task Falls_through_to_second_overlapping_S102_when_first_envelope_misses_native_grid()
+    {
+        // Regression: an S-102 tile's WGS-84 bounds are an axis-aligned envelope,
+        // so a point can be inside the envelope yet outside the native grid. When
+        // datasets overlap, the first envelope hit must not mask a later tile that
+        // actually covers the point (issue #479 review follow-up).
+        var catalog = new FakeDatasetCatalog();
+
+        // Tile A: tiny 2x2 grid near the origin but an inflated envelope covering
+        // the whole unit square, so (0.5, 0.5) is inside bounds but outside grid.
+        var tileA = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 2, numCols: 2, depth: 11.0f, uncertainty: 0.1f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-a",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(tileA)));
+
+        // Tile B: grid that genuinely covers (0.5, 0.5).
+        var tileB = S102Synth.Dataset(originLat: 0.49, originLon: 0.49, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 42.0f, uncertainty: 0.4f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-b",
+            bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
+            source: new S102CoverageSource(tileB)));
+
+        var tool = new SampleCoverageTool(catalog);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-b"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(42.0, depth.DepthMeters);
+    }
+
+    [Fact]
+    public async Task Skips_S102_tile_with_unsupported_crs_instead_of_throwing()
+    {
+        // A tile declaring an unsupported horizontal CRS cannot be reprojected;
+        // sampling must degrade to a structured NoDatasetCoversPoint rather than
+        // letting ProjNet's NotSupportedException abort the tool.
+        var catalog = new FakeDatasetCatalog();
+        var badCrs = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, horizontalCrs: 9999);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-badcrs",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(badCrs)));
+        var tool = new SampleCoverageTool(catalog);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<NoDatasetCoversPoint>(error);
+    }
+
+    [Fact]
+    public async Task Falls_through_to_valid_S102_when_earlier_tile_has_unsupported_crs()
+    {
+        // An unsupported-CRS tile must not mask a later overlapping tile that
+        // can be sampled.
+        var catalog = new FakeDatasetCatalog();
+        var badCrs = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, horizontalCrs: 9999);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-badcrs",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(badCrs)));
+
+        var good = S102Synth.Dataset(originLat: 0.49, originLon: 0.49, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 42.0f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-good",
+            bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
+            source: new S102CoverageSource(good)));
+        var tool = new SampleCoverageTool(catalog);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-good"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(42.0, depth.DepthMeters);
+    }
+
+    [Fact]
     public async Task Returns_NoDatasetCoversPoint_when_no_S102_loaded()
     {
         var catalog = new FakeDatasetCatalog();

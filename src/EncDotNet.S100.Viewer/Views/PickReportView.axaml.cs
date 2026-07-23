@@ -68,6 +68,31 @@ public partial class PickReportView : UserControl
         }
     }
 
+    // Depth-card header tap: toggle the collapsible detail region. Using a
+    // plain Border (rather than a ToggleButton) keeps the header flat with a
+    // hover-only background; the expand state lives on the card view-model.
+    private void OnDepthHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: DepthOverTimeViewModel depth })
+            depth.IsExpanded = !depth.IsExpanded;
+    }
+
+    // Keyboard activation for the focusable depth-card header: Enter/Space
+    // toggle the detail region, matching the pointer tap so the card is
+    // operable without a mouse and exposes a button-like interaction to
+    // assistive tech.
+    private void OnDepthHeaderKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space))
+            return;
+
+        if (sender is Control { DataContext: DepthOverTimeViewModel depth })
+        {
+            depth.IsExpanded = !depth.IsExpanded;
+            e.Handled = true;
+        }
+    }
+
     // Egg-code value hover: surface the value's meaning in the description
     // region below the egg instead of a per-cell tooltip (which would obscure
     // neighbouring values the mariner may want to compare).

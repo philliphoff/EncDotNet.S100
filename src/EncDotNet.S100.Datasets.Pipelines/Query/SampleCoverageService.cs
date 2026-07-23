@@ -5,7 +5,6 @@ using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Query;
 
@@ -202,12 +201,22 @@ public sealed class SampleCoverageService
     private const double MetresPerSecondToKnots = 1.9438444924406046;
 
     private readonly IDatasetCatalog _catalog;
+    private readonly ICrsTransformFactory _transforms;
 
     /// <summary>Creates a new <see cref="SampleCoverageService"/>.</summary>
-    public SampleCoverageService(IDatasetCatalog catalog)
+    /// <param name="catalog">The catalog of loaded datasets to sample from.</param>
+    /// <param name="transforms">
+    /// Factory used to reproject the WGS-84 request point into a coverage's
+    /// native CRS before grid indexing — required for correct sampling of
+    /// projected S-102 tiles (e.g. UTM zone 31N), whose grid georeferencing
+    /// is native metres rather than degrees.
+    /// </param>
+    public SampleCoverageService(IDatasetCatalog catalog, ICrsTransformFactory transforms)
     {
         ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(transforms);
         _catalog = catalog;
+        _transforms = transforms;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -253,56 +262,72 @@ public sealed class SampleCoverageService
     private ToolResult<SampleCoverageResult> SampleS102(SampleCoverageRequest request)
     {
         var snapshot = _catalog.Datasets;
-        LoadedDataset? match = null;
+
+        // A projected S-102 tile's WGS-84 bounds are an axis-aligned envelope of
+        // the (rotated) native grid, so a point inside the envelope may still
+        // fall outside the grid after reprojection. When several S-102 datasets
+        // overlap we must try each candidate whose bounds contain the point and
+        // only report NoDatasetCoversPoint once every candidate fails native-grid
+        // containment — otherwise the first envelope hit could mask a later tile
+        // that actually covers the point.
         foreach (var dataset in snapshot)
         {
-            if (dataset.Data is not S102CoverageData) continue;
+            if (dataset.Data is not S102CoverageData data) continue;
             if (!Contains(dataset.Bounds, request.Latitude, request.Longitude)) continue;
-            match = dataset;
-            break;
-        }
 
-        if (match is null)
-        {
-            return ToolResult<SampleCoverageResult>.Err(
-                new NoDatasetCoversPoint(request.Latitude, request.Longitude));
-        }
+            try
+            {
+                // Delegate to the shared CoveragePickHelper so this MCP sampling
+                // path snaps to exactly the same cell as the viewer's coverage-pick
+                // and S102DatasetProcessor.SampleBaseDepth: reproject the WGS-84
+                // request into the (often projected/UTM) grid CRS, floor to the
+                // containing cell, and reject clicks outside the grid extent. Using
+                // one helper keeps every pick path in agreement near cell edges.
+                var pick = CoveragePickHelper.Sample(data.Source, _transforms, request.Latitude, request.Longitude);
+                if (pick is null)
+                {
+                    // Inside the envelope but outside the native grid; another
+                    // overlapping tile may still cover the point.
+                    continue;
+                }
 
-        var source = ((S102CoverageData)match.Data).Source;
+                var noData = pick.NoDataValue;
+                double? depthValue = pick.Values.TryGetValue("depth", out var depth) && depth != noData
+                    ? depth
+                    : null;
+                double? uncertaintyValue = pick.Values.TryGetValue("uncertainty", out var uncertainty) && uncertainty != noData
+                    ? uncertainty
+                    : null;
 
-        try
-        {
-            var metadata = source.Metadata;
-            var grid = metadata.GridMetadata;
-            var (row, col) = NearestCell(grid, request.Latitude, request.Longitude);
+                if (depthValue is null)
+                {
+                    return ToolResult<SampleCoverageResult>.Err(
+                        new NoDataAtPoint(dataset.Id, pick.Row, pick.Col, Time: null));
+                }
 
-            var region = new GridRegion(row, row + 1, col, col + 1, 1, 1);
-            var sampled = source.Sample(region);
-
-            var depth = ReadScalar(sampled, "depth");
-            var uncertainty = TryReadScalar(sampled, "uncertainty");
-
-            var noData = metadata.NoDataValue;
-            double? depthValue = depth == noData ? null : depth;
-            double? uncertaintyValue = uncertainty is { } u && u != noData ? u : null;
-
-            if (depthValue is null)
+                return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
+                    dataset.Id,
+                    request.Latitude,
+                    request.Longitude,
+                    new DepthSample(depthValue.Value, uncertaintyValue)));
+            }
+            catch (ObjectDisposedException)
             {
                 return ToolResult<SampleCoverageResult>.Err(
-                    new NoDataAtPoint(match.Id, row, col, Time: null));
+                    new DatasetClosedDuringQuery(dataset.Id));
             }
+            catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException)
+            {
+                // The tile declares an unsupported or malformed horizontal CRS,
+                // so it cannot be reprojected for sampling. Treat it as an
+                // ineligible candidate and try the next overlapping dataset
+                // rather than aborting the whole tool/CLI invocation.
+                continue;
+            }
+        }
 
-            return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
-                match.Id,
-                request.Latitude,
-                request.Longitude,
-                new DepthSample(depthValue.Value, uncertaintyValue)));
-        }
-        catch (ObjectDisposedException)
-        {
-            return ToolResult<SampleCoverageResult>.Err(
-                new DatasetClosedDuringQuery(match.Id));
-        }
+        return ToolResult<SampleCoverageResult>.Err(
+            new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
     private ToolResult<SampleCoverageResult> SampleS104(SampleCoverageRequest request)
@@ -1056,15 +1081,6 @@ public sealed class SampleCoverageService
         return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
     }
 
-    private static (int Row, int Col) NearestCell(GridMetadata grid, double lat, double lon)
-    {
-        var row = (int)Math.Round((lat - grid.OriginLatitude) / grid.SpacingLatitudinal);
-        var col = (int)Math.Round((lon - grid.OriginLongitude) / grid.SpacingLongitudinal);
-        row = Math.Clamp(row, 0, grid.NumRows - 1);
-        col = Math.Clamp(col, 0, grid.NumColumns - 1);
-        return (row, col);
-    }
-
     private static (int Row, int Col) NearestCellInCoverage(WaterLevelCoverage cov, double lat, double lon)
     {
         var row = (int)Math.Round((lat - cov.OriginLatitude) / cov.SpacingLatitudinal);
@@ -1097,19 +1113,4 @@ public sealed class SampleCoverageService
         3 => "steady",
         _ => trend.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
-
-    private static float ReadScalar(SampledCoverage sampled, string field)
-    {
-        var data = sampled.GetField(field);
-        return data[0, 0];
-    }
-
-    private static float? TryReadScalar(SampledCoverage sampled, string field)
-    {
-        if (!sampled.Values.TryGetValue(field, out var data))
-        {
-            return null;
-        }
-        return data[0];
-    }
 }

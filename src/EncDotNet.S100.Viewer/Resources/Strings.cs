@@ -317,6 +317,26 @@ internal static class Strings
     public static string Pick_Chart_NoSamples => Get(nameof(Pick_Chart_NoSamples));
     public static string Pick_Chart_StationAttributes => Get(nameof(Pick_Chart_StationAttributes));
 
+    // Pick panel: location depth assimilation (S-101 + S-102 + S-104)
+    public static string Pick_Depth_Axis_Depth => Get(nameof(Pick_Depth_Axis_Depth));
+    public static string Pick_Depth_Title => Get(nameof(Pick_Depth_Title));
+    public static string Pick_Depth_Series_TideAdjusted => Get(nameof(Pick_Depth_Series_TideAdjusted));
+    public static string Pick_Depth_Series_SafetyDepth => Get(nameof(Pick_Depth_Series_SafetyDepth));
+    public static string Pick_Depth_Source_Bathymetry => Get(nameof(Pick_Depth_Source_Bathymetry));
+    public static string Pick_Depth_Source_DredgedArea => Get(nameof(Pick_Depth_Source_DredgedArea));
+    public static string Pick_Depth_Source_DepthArea => Get(nameof(Pick_Depth_Source_DepthArea));
+    public static string Pick_Depth_Source_Sounding => Get(nameof(Pick_Depth_Source_Sounding));
+    public static string Pick_Depth_Label_Base => Get(nameof(Pick_Depth_Label_Base));
+    public static string Pick_Depth_Label_Tide => Get(nameof(Pick_Depth_Label_Tide));
+    public static string Pick_Depth_Label_Now => Get(nameof(Pick_Depth_Label_Now));
+    public static string Pick_Depth_Label_DepthNow => Get(nameof(Pick_Depth_Label_DepthNow));
+    public static string Pick_Depth_Label_DepthStatic => Get(nameof(Pick_Depth_Label_DepthStatic));
+    public static string Pick_Depth_SourceData => Get(nameof(Pick_Depth_SourceData));
+    public static string Pick_Depth_Uncertainty => Get(nameof(Pick_Depth_Uncertainty));
+    public static string Pick_Depth_DatumNote => Get(nameof(Pick_Depth_DatumNote));
+    public static string Pick_Depth_NoTide => Get(nameof(Pick_Depth_NoTide));
+    public static string Pick_Depth_Value_Unavailable => Get(nameof(Pick_Depth_Value_Unavailable));
+
     // Pick panel: WMO / SIGRID-3 ice egg code (S-411)
     public static string Pick_EggCode_Heading => Get(nameof(Pick_EggCode_Heading));
     public static string Pick_EggCode_Standard => Get(nameof(Pick_EggCode_Standard));

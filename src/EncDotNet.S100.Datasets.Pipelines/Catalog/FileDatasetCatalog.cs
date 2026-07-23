@@ -1,3 +1,5 @@
+using EncDotNet.S100.Pipelines;
+
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 
 /// <summary>
@@ -75,10 +77,19 @@ public sealed class FileDatasetCatalog : IDatasetCatalog
     /// <see cref="LoadedDataset"/>.
     /// </summary>
     /// <param name="inputs">The dataset files to load, in the desired order.</param>
+    /// <param name="transforms">
+    /// Optional CRS transform factory used when projecting coverage bounds. For
+    /// projected S-102 tiles (e.g. UTM) this reprojects the native grid extent
+    /// into WGS-84 so <see cref="LoadedDataset.Bounds"/> matches the WGS-84
+    /// point-in-bounds test used when sampling; when null a naive fallback is
+    /// used, which leaves projected-tile bounds in native metres.
+    /// </param>
     /// <returns>An immutable catalog whose <see cref="Datasets"/> holds every
     /// successfully projected input and whose <see cref="Warnings"/> reports
     /// the rest.</returns>
-    public static FileDatasetCatalog Build(IEnumerable<FileDatasetInput> inputs)
+    public static FileDatasetCatalog Build(
+        IEnumerable<FileDatasetInput> inputs,
+        ICrsTransformFactory? transforms = null)
     {
         ArgumentNullException.ThrowIfNull(inputs);
 
@@ -103,7 +114,7 @@ public sealed class FileDatasetCatalog : IDatasetCatalog
             {
                 using var stream = File.OpenRead(input.Path);
                 projected = LoadedDatasetProjector.Project(
-                    input.Id, input.Spec, stream, input.ExternalTextResolver);
+                    input.Id, input.Spec, stream, input.ExternalTextResolver, transforms);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or FormatException or NotSupportedException)
             {

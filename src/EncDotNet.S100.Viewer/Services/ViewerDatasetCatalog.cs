@@ -1,5 +1,7 @@
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.ViewModels;
 using IDatasetCatalog = EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog;
 
@@ -35,6 +37,11 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
 {
+    // LoadedDataset.Bounds is contractually WGS-84; an S-102 tile may be in a
+    // projected CRS (e.g. a UTM zone) whose grid georeferencing is native
+    // metres, so the projector reprojects its extent through this factory.
+    private static readonly ICrsTransformFactory CrsTransforms = new ProjNetCrsTransformFactory();
+
     private readonly IDatasetLoaderService _loader;
     private readonly Dictionary<DatasetEntry, LoadedDataset> _cache = new();
     private readonly object _gate = new();
@@ -137,7 +144,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         // predictable.
         var spec = entry.ProductSpec;
         using var stream = OpenEntryStream(entry);
-        return LoadedDatasetProjector.Project(id, spec, stream, BuildExternalTextResolver(entry));
+        return LoadedDatasetProjector.Project(id, spec, stream, BuildExternalTextResolver(entry), CrsTransforms);
     }
 
     /// <summary>
