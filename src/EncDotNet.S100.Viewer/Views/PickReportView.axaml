@@ -213,15 +213,16 @@
         <Style Selector="Border.eggCell:pointerover">
             <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
-        <!-- Depth-card header: flat by default, subtle fill on hover only (never
-             a persistent "expanded" background). Mirrors the eggCell / accent
-             list-item pattern so the base Background comes from a style and the
-             :pointerover setter tints with the window-scoped muted accent. -->
-        <Style Selector="Border.depthHeader">
-            <Setter Property="Background" Value="Transparent" />
+        <!-- Depth-card header: flat by default with a hover tint that matches
+             the accent list-item pointer-over exactly (AccentBrush at 6%
+             opacity over a rounded tint overlay). Both the base and hover
+             opacity are set via styles so the :pointerover setter wins — a
+             locally-set Opacity would beat a style setter in Avalonia. -->
+        <Style Selector="Border.depthHeader Border#DepthHeaderTint">
+            <Setter Property="Opacity" Value="0" />
         </Style>
-        <Style Selector="Border.depthHeader:pointerover">
-            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        <Style Selector="Border.depthHeader:pointerover Border#DepthHeaderTint">
+            <Setter Property="Opacity" Value="0.06" />
         </Style>
     </UserControl.Styles>
 
@@ -300,16 +301,22 @@
                     <!--
                         Header row: chevron + "Depth" title + source badge. The
                         whole row toggles the detail region on tap; rendered flat
-                        (subtle fill on hover only) so it reads as a section
-                        header rather than a button.
+                        with a hover tint (AccentBrush at low opacity) that
+                        matches the accent list-item pointer-over exactly, so it
+                        reads as a section header rather than a button.
                     -->
                     <Border Classes="depthHeader"
                             Tapped="OnDepthHeaderTapped"
                             Cursor="Hand"
-                            Padding="0,6"
                             ToolTip.Tip="{x:Static loc:Strings.Pick_Depth_Title}">
-                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
-                            <ic:FluentIcon Grid.Column="0"
+                        <Panel>
+                            <Border Name="DepthHeaderTint"
+                                    Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="4" />
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+                                  Margin="0,6"
+                                  VerticalAlignment="Center">
+                                <ic:FluentIcon Grid.Column="0"
                                            Icon="ChevronDown"
                                            IconVariant="Regular"
                                            FontSize="14"
@@ -390,7 +397,8 @@
                                                VerticalAlignment="Center" />
                                 </StackPanel>
                             </Border>
-                        </Grid>
+                            </Grid>
+                        </Panel>
                     </Border>
 
                     <!--
