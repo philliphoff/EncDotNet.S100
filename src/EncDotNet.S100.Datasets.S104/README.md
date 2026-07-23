@@ -39,7 +39,7 @@ landing point and this catalogue will be re-wired against it.
 ### Visibility and water-area clipping (issue #483)
 
 Because the heatmap is non-normative, the **gridded surface** (data coding
-format 2 / 3) loads **hidden by default** in the viewer — the user can reveal it
+format 2) loads **hidden by default** in the viewer — the user can reveal it
 from the layer controls. Discrete **fixed-station glyphs** (data coding format 8)
 remain visible by default; they are point features and are unaffected.
 `S104DatasetProcessor.IsGriddedSurface` distinguishes the two so the loader only

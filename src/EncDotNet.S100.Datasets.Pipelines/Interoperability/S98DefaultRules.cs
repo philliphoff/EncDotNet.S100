@@ -105,12 +105,12 @@ public static class S98DefaultRules
     /// R-101-104-B (Level 2) — when both an S-101 ENC and an S-104 water-level
     /// dataset are loaded and active, clip the (non-normative) S-104 gridded
     /// surface to water areas by attaching the ENC's <c>LandArea</c> geometry to
-    /// the S-104 surface sub-layer as a land mask. The renderers then suppress
-    /// surface cells whose centre falls on land, so the surface — layered like
-    /// S-102 bathymetry, beneath ENC line work — never bleeds over land
-    /// (issue #483). Only the gridded (dcf2) surface is affected; station-glyph
-    /// (dcf8) sub-layers are discrete points and are left untouched. Cites S-98
-    /// Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6.
+    /// the S-104 surface sub-layer. The renderers then clip the rasterised
+    /// surface to those polygons at output-pixel resolution, so the surface —
+    /// layered like S-102 bathymetry, beneath ENC line work — never bleeds over
+    /// land (issue #483). Only the gridded (dcf2) surface is affected;
+    /// station-glyph (dcf8) sub-layers are discrete points and are left
+    /// untouched. Cites S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6.
     /// </summary>
     // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
     public static readonly S98InteroperabilityRule R_101_104_B_ClipSurfaceToWater = new(
@@ -203,7 +203,10 @@ public static class S98DefaultRules
         {
             if (string.Equals(ds.DatasetId, item.SourceDatasetId, StringComparison.Ordinal))
             {
-                return string.Equals(ds.ProductSpec, productSpec, StringComparison.Ordinal);
+                // Inactive datasets must not participate in rule evaluation
+                // (see LoadedDatasetInfo.Active), so an inactive S-101's
+                // LandArea can never clip an active S-104 surface.
+                return ds.Active && string.Equals(ds.ProductSpec, productSpec, StringComparison.Ordinal);
             }
         }
         return false;

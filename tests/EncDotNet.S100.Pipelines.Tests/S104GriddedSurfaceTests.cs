@@ -20,7 +20,7 @@ public class S104GriddedSurfaceTests
     [Fact]
     public void IsGriddedSurface_True_ForDcf2GriddedCoverage()
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".h5");
         try
         {
             var values = new[]
@@ -42,7 +42,7 @@ public class S104GriddedSurfaceTests
     [Fact]
     public void IsGriddedSurface_False_ForDcf8StationSeries()
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".h5");
         try
         {
             var stations = new[]

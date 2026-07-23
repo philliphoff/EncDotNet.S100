@@ -44,10 +44,12 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
 
     /// <summary>
     /// Optional land-area surface geometries (WGS84 <c>(latitude, longitude)</c>)
-    /// this surface must be clipped <em>out of</em> — i.e. cells whose centre
-    /// falls on land are suppressed so the surface only covers water. Set by the
-    /// S-98 rule that clips the S-104 water-level surface to water when an S-101
-    /// ENC is loaded alongside it (issue #483; S-98 Ed.2.0.0 Annex A §A-6.9.1).
+    /// this surface must be clipped <em>out of</em> so it only covers water. The
+    /// renderers project these polygons into destination pixel space and clip the
+    /// rasterised surface against them at output-pixel resolution (see
+    /// <c>CoverageLandClip</c>). Set by the S-98 rule that clips the S-104
+    /// water-level surface to water when an S-101 ENC is loaded alongside it
+    /// (issue #483; S-98 Ed.2.0.0 Annex A §A-6.9.1).
     /// <see langword="null"/> or empty means "draw everywhere the grid has data".
     /// </summary>
     public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }

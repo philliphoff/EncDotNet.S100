@@ -282,6 +282,29 @@ public class S98DefaultRulesTests
     }
 
     [Fact]
+    public void R_101_104_B_ignores_land_from_inactive_s101()
+    {
+        // Two S-101 cells: an active one without land, and an inactive one whose
+        // only feature is a LandArea. The rule fires (an active S-101 exists) but
+        // must not clip the active S-104 surface with the inactive cell's land.
+        var activeS101 = BuildS101ItemWithoutLand();
+        var inactiveS101 = BuildS101LandItem("s101-inactive.000");
+        var s104 = BuildCoverageGridItem("s104.h5", "S-104", S98DisplayPlane.OnDemandSurface);
+        var stack = new[] { s104, activeS101, inactiveS101 };
+
+        var ruled = _auth.ApplyRules(
+            stack,
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s101-inactive.000", "S-101", Active: false),
+                new LoadedDatasetInfo("s104.h5", "S-104", Active: true),
+            });
+
+        Assert.Null(GridSubLayerOf(ruled, "s104.h5").LandAreaMask);
+    }
+
+    [Fact]
     public void R_101_104_B_does_not_fire_without_s101_land()
     {
         // S-104 surface + an S-101 whose only feature is a Coastline (no
@@ -528,7 +551,7 @@ public class S98DefaultRulesTests
     /// feature (id 1) whose geometry provider returns a surface polygon — the
     /// input R-101-104-B collects to build the S-104 water-area mask.
     /// </summary>
-    private static SubLayerStackItem BuildS101LandItem()
+    private static SubLayerStackItem BuildS101LandItem(string datasetId = "s101-cell.000")
     {
         var tags = new Dictionary<long, VectorFeatureTag> { [1] = new VectorFeatureTag("LandArea", null) };
         var land = new FeatureGeometry
@@ -563,14 +586,14 @@ public class S98DefaultRulesTests
             GeometryProvider = new StubLandGeometryProvider("1", land),
             Product = "S-101",
             Spec = new SpecRef("S-101", default),
-            SourceDatasetId = "s101-cell.000",
+            SourceDatasetId = datasetId,
             Info = "test",
             FeatureTags = tags,
         };
 
         return new SubLayerStackItem(
             new VectorStackPayload(result, sub),
-            S98DisplayPlane.BaseChartUnder, 0, "s101-cell.000", SourceFeatureType: "area");
+            S98DisplayPlane.BaseChartUnder, 0, datasetId, SourceFeatureType: "area");
     }
 
     /// <summary>
