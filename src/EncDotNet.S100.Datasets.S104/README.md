@@ -47,12 +47,18 @@ defaults the surface hidden.
 
 When the surface is shown alongside an S-101 ENC, the S-98 interoperability rule
 `R-101-104-B` (`S98DefaultRules.R_101_104_B_ClipSurfaceToWater`) attaches the
-ENC's `LandArea` geometry to the surface sub-layer as a land mask, and the
-coverage renderers (`SkiaCoverageRenderer`, `MapsuiCoverageRenderer`, and the
-headless `CoverageHeadlessRenderer`) paint masked cells transparent. The surface
-is thus layered like S-102 bathymetry — beneath ENC line work and clipped to
-water — so it never bleeds over land. See `CoverageLandMask` (per-cell
-point-in-polygon) for the mask computation.
+ENC's `LandArea` geometry to the surface sub-layer (`GridCoverageSubLayer.LandAreaMask`).
+The coverage renderers (`MapsuiCoverageRenderer` and the headless
+`CoverageHeadlessRenderer`) then clip the rasterised surface to water at
+**output-pixel resolution**: `CoverageLandClip.BuildLandPath` projects the land
+polygons (honouring interior water rings via even–odd fill) into the destination
+pixel space and the surface is drawn under an antialiased
+`SKClipOperation.Difference` clip. Pixel-accurate clipping is essential because
+real S-104 grids are often very coarse (e.g. the Rotterdam sample is only 5×6
+cells ≈ 1 km each); an earlier per-cell mask could only toggle whole grid cells
+and so straddled piers and basins. The surface is thus layered like S-102
+bathymetry — beneath ENC line work and clipped to water — so it never bleeds
+over land.
 
 ## Validation
 

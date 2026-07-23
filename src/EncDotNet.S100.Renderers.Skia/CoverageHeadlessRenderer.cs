@@ -1,5 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
@@ -44,12 +45,15 @@ public sealed class CoverageHeadlessRenderer
     public ICrsTransform NativeToWgs84 { get; init; } = IdentityCrsTransform.Instance;
 
     /// <summary>
-    /// Optional per-cell land mask (row-major, length <c>rows * cols</c>) applied
-    /// to the colour raster so the surface is clipped to water. Set by the S-98
-    /// water-area clip rule for the S-104 gridded surface (issue #483).
-    /// <see langword="null"/> disables masking.
+    /// Optional S-101 <c>LandArea</c> surface geometries (WGS84
+    /// <c>(latitude, longitude)</c>) used to clip the colour surface to water at
+    /// output-pixel resolution: the up-scaled raster is clipped with these
+    /// polygons (even–odd, honouring interior water rings) so the surface never
+    /// bleeds over land regardless of the grid's cell resolution. Set by the
+    /// S-98 water-area clip rule for the S-104 gridded surface (issue #483).
+    /// <see langword="null"/> or empty disables clipping.
     /// </summary>
-    public bool[]? LandCellMask { get; init; }
+    public IReadOnlyList<FeatureGeometry>? LandAreas { get; init; }
 
     /// <summary>
     /// Renders the styled coverage layer to a bitmap of the requested size.
@@ -234,7 +238,7 @@ public sealed class CoverageHeadlessRenderer
     {
         if (layer.ColorScheme is not null)
         {
-            var rasterRenderer = new SkiaCoverageRenderer { NoDataColor = NoDataColor, LandCellMask = LandCellMask };
+            var rasterRenderer = new SkiaCoverageRenderer { NoDataColor = NoDataColor };
             // SkiaCoverageRenderer emits one pixel per grid cell and ignores the
             // viewport pixel size, so the viewport here only carries the extent.
             var nativeViewport = new Viewport
@@ -249,7 +253,34 @@ public sealed class CoverageHeadlessRenderer
             };
             using var raster = rasterRenderer.Render(layer, nativeViewport);
             using var rasterImage = SKImage.FromBitmap(raster);
+
+            // Clip the up-scaled surface to water at output-pixel resolution
+            // (issue #483): the land polygons are projected through the same
+            // WGS84 → EPSG:3857 → pixel path as the raster's destination corners,
+            // so the clip registers with the surface regardless of grid coarseness.
+            SKPath? landPath = LandAreas is { Count: > 0 } land
+                ? CoverageLandClip.BuildLandPath(
+                    land,
+                    (lon, lat) =>
+                    {
+                        var (px, py) = project(WebMercator.FromLonLat(lon, lat));
+                        return new SKPoint(px, py);
+                    })
+                : null;
+
+            if (landPath is not null)
+            {
+                canvas.Save();
+                canvas.ClipPath(landPath, SKClipOperation.Difference, antialias: true);
+            }
+
             canvas.DrawImage(rasterImage, colorDest, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+
+            if (landPath is not null)
+            {
+                canvas.Restore();
+                landPath.Dispose();
+            }
         }
 
         if (layer.SymbolScheme is not null && ArrowRenderer is not null)

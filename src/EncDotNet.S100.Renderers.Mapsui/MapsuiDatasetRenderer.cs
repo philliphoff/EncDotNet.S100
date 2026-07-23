@@ -5,7 +5,6 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Coverage;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -306,28 +305,9 @@ public sealed class MapsuiDatasetRenderer
         var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
         {
             LayerName = grid.LayerName,
-            LandCellMask = ComputeLandCellMask(grid),
+            LandAreas = grid.LandAreaMask,
         };
         return renderer.Render(grid.Coverage, grid.Viewport);
-    }
-
-    private bool[]? ComputeLandCellMask(GridCoverageSubLayer grid)
-    {
-        var land = grid.LandAreaMask;
-        if (land is null || land.Count == 0)
-        {
-            return null;
-        }
-
-        var georeferencer = grid.Coverage.Georeferencer;
-        var metadata = grid.Coverage.Coverage.Metadata;
-        var transform = _crsTransformFactory.Create("EPSG:4326", georeferencer.CRS);
-        return CoverageLandMask.Compute(
-            georeferencer,
-            metadata.NumRows,
-            metadata.NumColumns,
-            land,
-            transform);
     }
 
     private static MemoryLayer BuildGlyphLayer(GlyphCoverageSubLayer sub)
