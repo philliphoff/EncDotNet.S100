@@ -102,6 +102,24 @@ public static class S98DefaultRules
         Effect: Identity);
 
     /// <summary>
+    /// R-101-104-B (Level 2) — when both an S-101 ENC and an S-104 water-level
+    /// dataset are loaded and active, clip the (non-normative) S-104 gridded
+    /// surface to water areas by attaching the ENC's <c>LandArea</c> geometry to
+    /// the S-104 surface sub-layer as a land mask. The renderers then suppress
+    /// surface cells whose centre falls on land, so the surface — layered like
+    /// S-102 bathymetry, beneath ENC line work — never bleeds over land
+    /// (issue #483). Only the gridded (dcf2) surface is affected; station-glyph
+    /// (dcf8) sub-layers are discrete points and are left untouched. Cites S-98
+    /// Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_101_104_B_ClipSurfaceToWater = new(
+        RuleId: "R-101-104-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6",
+        Condition: HasActiveProductSet("S-101", "S-104"),
+        Effect: ClipS104SurfaceToWater);
+
+    /// <summary>
     /// The default rule collection in evaluation order. Declaration order is
     /// the evaluation order; each rule's output is the next rule's input.
     /// </summary>
@@ -112,6 +130,7 @@ public static class S98DefaultRules
             R_101_102_B_SuppressDepthFeatures,
             R_101_124_A,
             R_104_A,
+            R_101_104_B_ClipSurfaceToWater,
             R_111_A,
         };
 
@@ -174,18 +193,88 @@ public static class S98DefaultRules
     }
 
     private static bool IsS101Item(SubLayerStackItem item, S98RuleContext context)
+        => IsProductItem(item, context, "S-101");
+
+    private static bool IsProductItem(SubLayerStackItem item, S98RuleContext context, string productSpec)
     {
-        // Match the item back to its source dataset to confirm the S-101
-        // product. SourceDatasetId is the stable join key against
-        // LoadedDatasetInfo.
+        // Match the item back to its source dataset to confirm the product.
+        // SourceDatasetId is the stable join key against LoadedDatasetInfo.
         foreach (var ds in context.LoadedDatasets)
         {
             if (string.Equals(ds.DatasetId, item.SourceDatasetId, StringComparison.Ordinal))
             {
-                return string.Equals(ds.ProductSpec, "S-101", StringComparison.Ordinal);
+                return string.Equals(ds.ProductSpec, productSpec, StringComparison.Ordinal);
             }
         }
         return false;
+    }
+
+    private static IReadOnlyList<SubLayerStackItem> ClipS104SurfaceToWater(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        // Gather the ENC land geometry once. Distinct S-101 portrayal results
+        // may appear on many stack items (one per sub-layer); resolve each
+        // result's LandArea surfaces a single time.
+        List<FeatureGeometry>? landAreas = null;
+        var seenResults = new HashSet<VectorPortrayalResult>(ReferenceEqualityComparer.Instance);
+        foreach (var item in stack)
+        {
+            if (!IsProductItem(item, context, "S-101") || item.Payload is not VectorStackPayload vector)
+            {
+                continue;
+            }
+            if (!seenResults.Add(vector.Result))
+            {
+                continue;
+            }
+            CollectLandAreas(vector.Result, ref landAreas);
+        }
+
+        if (landAreas is null || landAreas.Count == 0)
+        {
+            return stack;
+        }
+
+        var result = new List<SubLayerStackItem>(stack.Count);
+        foreach (var item in stack)
+        {
+            if (IsProductItem(item, context, "S-104")
+                && item.Payload is CoverageStackPayload coverage
+                && coverage.SubLayer is GridCoverageSubLayer grid)
+            {
+                var masked = grid.WithLandAreaMask(landAreas);
+                result.Add(item with { Payload = coverage.WithSubLayer(masked) });
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+        return result;
+    }
+
+    private static void CollectLandAreas(VectorPortrayalResult result, ref List<FeatureGeometry>? landAreas)
+    {
+        var tags = result.FeatureTags;
+        if (tags is null || tags.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (id, tag) in tags)
+        {
+            if (!string.Equals(tag.FeatureType, "LandArea", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var geometry = result.GeometryProvider.GetGeometry(id.ToString(CultureInfo.InvariantCulture));
+            if (geometry is { Type: GeometryType.Surface } && geometry.Coordinates.Count >= 3)
+            {
+                (landAreas ??= new List<FeatureGeometry>()).Add(geometry);
+            }
+        }
     }
 
     private static VectorSubLayer FilterSubLayer(VectorStackPayload payload, double safetyContour)

@@ -44,6 +44,14 @@ public sealed class CoverageHeadlessRenderer
     public ICrsTransform NativeToWgs84 { get; init; } = IdentityCrsTransform.Instance;
 
     /// <summary>
+    /// Optional per-cell land mask (row-major, length <c>rows * cols</c>) applied
+    /// to the colour raster so the surface is clipped to water. Set by the S-98
+    /// water-area clip rule for the S-104 gridded surface (issue #483).
+    /// <see langword="null"/> disables masking.
+    /// </summary>
+    public bool[]? LandCellMask { get; init; }
+
+    /// <summary>
     /// Renders the styled coverage layer to a bitmap of the requested size.
     /// </summary>
     /// <param name="layer">The styled coverage layer (colour scheme and/or symbol scheme).</param>
@@ -226,7 +234,7 @@ public sealed class CoverageHeadlessRenderer
     {
         if (layer.ColorScheme is not null)
         {
-            var rasterRenderer = new SkiaCoverageRenderer { NoDataColor = NoDataColor };
+            var rasterRenderer = new SkiaCoverageRenderer { NoDataColor = NoDataColor, LandCellMask = LandCellMask };
             // SkiaCoverageRenderer emits one pixel per grid cell and ignores the
             // viewport pixel size, so the viewport here only carries the extent.
             var nativeViewport = new Viewport

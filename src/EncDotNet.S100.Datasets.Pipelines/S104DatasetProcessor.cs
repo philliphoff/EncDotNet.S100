@@ -116,6 +116,18 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;
 
+    /// <summary>
+    /// <see langword="true"/> when this dataset is a regularly-gridded (dcf2)
+    /// water-level <em>surface</em> — the full-tile colour-band heatmap — rather
+    /// than a fixed-station (dcf8) point series. S-104 Edition 2.0.0 defines no
+    /// official portrayal catalogue and treats water level primarily as input to
+    /// ECDIS vertical adjustment (see <see cref="S104PortrayalCatalogue"/>), so
+    /// the synthesised surface is hidden by default in interactive viewers and
+    /// shown on demand (issue #483). Fixed-station glyphs (dcf8) are discrete
+    /// symbols at genuine tide-station locations and remain visible by default.
+    /// </summary>
+    public bool IsGriddedSurface => _source is not null;
+
     public S104DatasetProcessor(
         string path,
         ICrsTransformFactory crsTransformFactory)

@@ -71,7 +71,8 @@ public static class LayerStackProjector
     /// </returns>
     public static IReadOnlyList<LayerStackEntry> Project(
         IReadOnlyList<SubLayerStackItem> ruledItems,
-        IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt)
+        IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt,
+        Func<GridCoverageSubLayer, ILayer?>? rebuildCoverage = null)
     {
         System.ArgumentNullException.ThrowIfNull(ruledItems);
         System.ArgumentNullException.ThrowIfNull(prebuilt);
@@ -82,14 +83,29 @@ public static class LayerStackProjector
             if (!prebuilt.TryGetValue(KeyOf(item), out var pre))
                 continue;
 
-            var layer = ProjectOne(item, pre);
+            var layer = ProjectOne(item, pre, rebuildCoverage);
             result.Add(new LayerStackEntry(layer, item));
         }
         return result;
     }
 
-    private static ILayer ProjectOne(SubLayerStackItem ruled, LayerStackEntry prebuilt)
+    private static ILayer ProjectOne(
+        SubLayerStackItem ruled,
+        LayerStackEntry prebuilt,
+        Func<GridCoverageSubLayer, ILayer?>? rebuildCoverage)
     {
+        // Coverage payloads are re-rasterised (not feature-filtered) when the
+        // engine replaced the sub-layer — e.g. R-101-104-B attaches a land-area
+        // mask to the S-104 surface so it can be clipped to water (issue #483).
+        if (ruled.Payload is CoverageStackPayload ruledCoverage
+            && prebuilt.Item.Payload is CoverageStackPayload originalCoverage
+            && !ReferenceEquals(ruledCoverage.SubLayer, originalCoverage.SubLayer)
+            && ruledCoverage.SubLayer is GridCoverageSubLayer ruledGrid
+            && rebuildCoverage is not null)
+        {
+            return rebuildCoverage(ruledGrid) ?? prebuilt.Layer;
+        }
+
         // Only vector payloads are suppressible (R-101-102-B). If the engine
         // left the sub-layer reference untouched, the prebuilt layer is reused
         // verbatim.

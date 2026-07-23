@@ -1,8 +1,10 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
 
@@ -214,6 +216,92 @@ public class S98DefaultRulesTests
     }
 
     // ----------------------------------------------------------------
+    // R-101-104-B — clip S-104 surface to water
+    // ----------------------------------------------------------------
+
+    [Fact]
+    public void R_101_104_B_attaches_land_mask_to_s104_surface_when_s101_loaded()
+    {
+        var s101 = BuildS101LandItem();
+        var s104 = BuildCoverageGridItem("s104.h5", "S-104", S98DisplayPlane.OnDemandSurface);
+        var stack = new[] { s104, s101 };
+
+        var ruled = _auth.ApplyRules(
+            stack,
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s104.h5", "S-104", Active: true),
+            });
+
+        var grid = GridSubLayerOf(ruled, "s104.h5");
+        Assert.NotNull(grid.LandAreaMask);
+        Assert.NotEmpty(grid.LandAreaMask!);
+    }
+
+    [Fact]
+    public void R_101_104_B_does_not_mask_s102_surface()
+    {
+        var s101 = BuildS101LandItem();
+        var s104 = BuildCoverageGridItem("s104.h5", "S-104", S98DisplayPlane.OnDemandSurface);
+        var s102 = BuildCoverageGridItem("s102.h5", "S-102", S98DisplayPlane.Bathymetry);
+        var stack = new[] { s102, s104, s101 };
+
+        var ruled = _auth.ApplyRules(
+            stack,
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s104.h5", "S-104", Active: true),
+                new LoadedDatasetInfo("s102.h5", "S-102", Active: true),
+            });
+
+        // Only the S-104 surface is clipped to water; S-102 bathymetry (water
+        // by nature) is left untouched.
+        Assert.NotNull(GridSubLayerOf(ruled, "s104.h5").LandAreaMask);
+        Assert.Null(GridSubLayerOf(ruled, "s102.h5").LandAreaMask);
+    }
+
+    [Fact]
+    public void R_101_104_B_does_not_fire_when_s104_inactive()
+    {
+        var s101 = BuildS101LandItem();
+        var s104 = BuildCoverageGridItem("s104.h5", "S-104", S98DisplayPlane.OnDemandSurface);
+        var stack = new[] { s104, s101 };
+
+        var ruled = _auth.ApplyRules(
+            stack,
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                // S-104 loaded but NOT active.
+                new LoadedDatasetInfo("s104.h5", "S-104", Active: false),
+            });
+
+        Assert.Null(GridSubLayerOf(ruled, "s104.h5").LandAreaMask);
+    }
+
+    [Fact]
+    public void R_101_104_B_does_not_fire_without_s101_land()
+    {
+        // S-104 surface + an S-101 whose only feature is a Coastline (no
+        // LandArea) → no land geometry to attach.
+        var s101 = BuildS101ItemWithoutLand();
+        var s104 = BuildCoverageGridItem("s104.h5", "S-104", S98DisplayPlane.OnDemandSurface);
+        var stack = new[] { s104, s101 };
+
+        var ruled = _auth.ApplyRules(
+            stack,
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s104.h5", "S-104", Active: true),
+            });
+
+        Assert.Null(GridSubLayerOf(ruled, "s104.h5").LandAreaMask);
+    }
+
+    // ----------------------------------------------------------------
     // Rule composition / declaration order
     // ----------------------------------------------------------------
 
@@ -267,7 +355,7 @@ public class S98DefaultRulesTests
         // S98DefaultRules.Default declaration order is part of the
         // public contract — pin it.
         Assert.Equal(
-            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-111-A" },
+            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-101-104-B", "R-111-A" },
             S98DefaultRules.Default.Select(r => r.RuleId).ToArray());
     }
 
@@ -433,5 +521,169 @@ public class S98DefaultRulesTests
     {
         public static readonly NullGeometryProvider Instance = new();
         public FeatureGeometry? GetGeometry(string featureReference) => null;
+    }
+
+    /// <summary>
+    /// Builds an S-101 area sub-layer item carrying a single <c>LandArea</c>
+    /// feature (id 1) whose geometry provider returns a surface polygon — the
+    /// input R-101-104-B collects to build the S-104 water-area mask.
+    /// </summary>
+    private static SubLayerStackItem BuildS101LandItem()
+    {
+        var tags = new Dictionary<long, VectorFeatureTag> { [1] = new VectorFeatureTag("LandArea", null) };
+        var land = new FeatureGeometry
+        {
+            Type = GeometryType.Surface,
+            Coordinates = new[]
+            {
+                new GeoPosition(0.0, 0.0),
+                new GeoPosition(0.0, 2.0),
+                new GeoPosition(2.0, 2.0),
+                new GeoPosition(2.0, 0.0),
+                new GeoPosition(0.0, 0.0),
+            },
+        };
+
+        var sub = new VectorSubLayer
+        {
+            LayerKey = "s101.areas",
+            LayerName = "S-101 (areas)",
+            Instructions = new List<DrawingInstruction>
+            {
+                new AreaInstruction { FeatureReference = "1", FillColor = "CHBRN" },
+            },
+            Plane = S98DisplayPlane.BaseChartUnder,
+            SourceFeatureType = "area",
+        };
+
+        var result = new VectorPortrayalResult
+        {
+            SubLayers = new[] { sub },
+            Palette = new ColorPalette("test", new Dictionary<string, string>()),
+            GeometryProvider = new StubLandGeometryProvider("1", land),
+            Product = "S-101",
+            Spec = new SpecRef("S-101", default),
+            SourceDatasetId = "s101-cell.000",
+            Info = "test",
+            FeatureTags = tags,
+        };
+
+        return new SubLayerStackItem(
+            new VectorStackPayload(result, sub),
+            S98DisplayPlane.BaseChartUnder, 0, "s101-cell.000", SourceFeatureType: "area");
+    }
+
+    /// <summary>
+    /// Builds an S-101 line sub-layer item with a single <c>Coastline</c>
+    /// feature and no <c>LandArea</c>, so R-101-104-B finds no land to attach.
+    /// </summary>
+    private static SubLayerStackItem BuildS101ItemWithoutLand()
+    {
+        var tags = new Dictionary<long, VectorFeatureTag> { [1] = new VectorFeatureTag("Coastline", null) };
+        var sub = new VectorSubLayer
+        {
+            LayerKey = "s101.linework",
+            LayerName = "S-101 (lines)",
+            Instructions = new List<DrawingInstruction>
+            {
+                new LineInstruction { FeatureReference = "1", LineColor = "CHBLK" },
+            },
+            Plane = S98DisplayPlane.BaseChartOver,
+            SourceFeatureType = "linework",
+        };
+
+        var result = new VectorPortrayalResult
+        {
+            SubLayers = new[] { sub },
+            Palette = new ColorPalette("test", new Dictionary<string, string>()),
+            GeometryProvider = NullGeometryProvider.Instance,
+            Product = "S-101",
+            Spec = new SpecRef("S-101", default),
+            SourceDatasetId = "s101-cell.000",
+            Info = "test",
+            FeatureTags = tags,
+        };
+
+        return new SubLayerStackItem(
+            new VectorStackPayload(result, sub),
+            S98DisplayPlane.BaseChartOver, 0, "s101-cell.000", SourceFeatureType: "linework");
+    }
+
+    /// <summary>
+    /// Builds a minimal gridded-coverage stack item (2×2 EPSG:4326 grid) for a
+    /// product, on the given plane — used to assert which surfaces R-101-104-B
+    /// clips to water.
+    /// </summary>
+    private static SubLayerStackItem BuildCoverageGridItem(string datasetId, string spec, S98DisplayPlane plane)
+    {
+        var metadata = new GridMetadata
+        {
+            NumRows = 2,
+            NumColumns = 2,
+            OriginLatitude = 0.0,
+            OriginLongitude = 0.0,
+            SpacingLatitudinal = 1.0,
+            SpacingLongitudinal = 1.0,
+        };
+        var sampled = new SampledCoverage
+        {
+            Region = GridRegion.Full,
+            Metadata = metadata,
+            Values = new Dictionary<string, float[]> { ["waterLevelHeight"] = new float[] { 0f, 0f, 0f, 0f } },
+        };
+        var styled = new StyledCoverageLayer
+        {
+            Coverage = sampled,
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
+        };
+        var viewport = new Viewport
+        {
+            MinLatitude = 0.0,
+            MaxLatitude = 2.0,
+            MinLongitude = 0.0,
+            MaxLongitude = 2.0,
+            WidthPixels = 1,
+            HeightPixels = 1,
+            ScaleDenominator = 1.0,
+        };
+        var grid = new GridCoverageSubLayer
+        {
+            LayerKey = spec.ToLowerInvariant() + ".surface",
+            LayerName = spec + " surface",
+            Plane = plane,
+            Coverage = styled,
+            Viewport = viewport,
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = new[] { grid },
+            Spec = new SpecRef(spec, default),
+            SourceDatasetId = datasetId,
+            Info = "test",
+        };
+        return new SubLayerStackItem(new CoverageStackPayload(result, grid), plane, 0, datasetId);
+    }
+
+    private static GridCoverageSubLayer GridSubLayerOf(IReadOnlyList<SubLayerStackItem> ruled, string datasetId)
+    {
+        var item = ruled.Single(i => i.SourceDatasetId == datasetId);
+        var payload = Assert.IsType<CoverageStackPayload>(item.Payload);
+        return Assert.IsType<GridCoverageSubLayer>(payload.SubLayer);
+    }
+
+    private sealed class StubLandGeometryProvider : IFeatureGeometryProvider
+    {
+        private readonly string _id;
+        private readonly FeatureGeometry _geometry;
+
+        public StubLandGeometryProvider(string id, FeatureGeometry geometry)
+        {
+            _id = id;
+            _geometry = geometry;
+        }
+
+        public FeatureGeometry? GetGeometry(string featureReference) =>
+            string.Equals(featureReference, _id, StringComparison.Ordinal) ? _geometry : null;
     }
 }

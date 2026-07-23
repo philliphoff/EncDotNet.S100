@@ -17,6 +17,16 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
     /// </summary>
     public RgbaColor NoDataColor { get; set; } = RgbaColor.Transparent;
 
+    /// <summary>
+    /// Optional per-cell land mask (row-major, length <c>rows * cols</c>). When a
+    /// cell is <see langword="true"/> it is painted transparent regardless of its
+    /// value, so the surface is clipped to water. Set by the S-98 water-area clip
+    /// rule for the S-104 gridded surface (issue #483). <see langword="null"/>
+    /// disables masking. Indexed as <c>row * cols + col</c> — the same source
+    /// orientation as the value field, before the vertical flip applied on write.
+    /// </summary>
+    public bool[]? LandCellMask { get; set; }
+
     public SKBitmap Render(StyledCoverageLayer layer, Viewport viewport)
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.frame");
@@ -54,11 +64,24 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         float noDataValue = layer.NoDataValue;
         bool noDataIsNaN = float.IsNaN(noDataValue);
 
+        var landMask = LandCellMask;
+        bool hasMask = landMask is not null && landMask.Length == rows * cols;
+        var transparent = SKColors.Transparent;
+
         for (int row = 0; row < rows; row++)
             for (int col = 0; col < cols; col++)
             {
-                float value = fieldSpan[row * cols + col];
-                var color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
+                int index = row * cols + col;
+                SKColor color;
+                if (hasMask && landMask![index])
+                {
+                    color = transparent;
+                }
+                else
+                {
+                    float value = fieldSpan[index];
+                    color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
+                }
                 // Grid row 0 is the southernmost (bottom of image), so flip vertically.
                 bitmap.SetPixel(col, rows - 1 - row, color);
             }

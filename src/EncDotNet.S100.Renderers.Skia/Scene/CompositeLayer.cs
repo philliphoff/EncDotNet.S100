@@ -99,6 +99,10 @@ public sealed class CoverageCompositeLayer : CompositeLayer
     /// <param name="northLatitude">Northern extent edge in WGS84 degrees.</param>
     /// <param name="arrowRenderer">Optional arrow renderer for symbol schemes.</param>
     /// <param name="nativeToWgs84">Transform from the grid's native CRS to WGS84; defaults to identity.</param>
+    /// <param name="landCellMask">
+    /// Optional per-cell land mask (row-major, length <c>rows * cols</c>) used to
+    /// clip the surface to water (S-98 R-101-104-B; issue #483).
+    /// </param>
     public CoverageCompositeLayer(
         StyledCoverageLayer layer,
         double westLongitude,
@@ -106,7 +110,8 @@ public sealed class CoverageCompositeLayer : CompositeLayer
         double southLatitude,
         double northLatitude,
         SkiaCoverageArrowRenderer? arrowRenderer = null,
-        ICrsTransform? nativeToWgs84 = null)
+        ICrsTransform? nativeToWgs84 = null,
+        bool[]? landCellMask = null)
     {
         ArgumentNullException.ThrowIfNull(layer);
         _layer = layer;
@@ -122,6 +127,7 @@ public sealed class CoverageCompositeLayer : CompositeLayer
             NoDataColor = RgbaColor.Transparent,
             ArrowRenderer = arrowRenderer,
             NativeToWgs84 = nativeToWgs84 ?? IdentityCrsTransform.Instance,
+            LandCellMask = landCellMask,
         };
     }
 

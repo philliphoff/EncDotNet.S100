@@ -296,7 +296,9 @@ public sealed class HeadlessCompositor
             case GridCoverageSubLayer grid:
                 {
                     var (w, e, s, n, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
-                    layer = new CoverageCompositeLayer(grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84);
+                    var landCellMask = ComputeLandCellMask(grid);
+                    layer = new CoverageCompositeLayer(
+                        grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84, landCellMask: landCellMask);
                     west = w; east = e; south = s; north = n;
                     return true;
                 }
@@ -319,6 +321,25 @@ public sealed class HeadlessCompositor
             default:
                 return false;
         }
+    }
+
+    private bool[]? ComputeLandCellMask(GridCoverageSubLayer grid)
+    {
+        var land = grid.LandAreaMask;
+        if (land is null || land.Count == 0)
+        {
+            return null;
+        }
+
+        var georeferencer = grid.Coverage.Georeferencer;
+        var metadata = grid.Coverage.Coverage.Metadata;
+        var transform = _crsTransformFactory.Create("EPSG:4326", georeferencer.CRS);
+        return CoverageLandMask.Compute(
+            georeferencer,
+            metadata.NumRows,
+            metadata.NumColumns,
+            land,
+            transform);
     }
 
     private (double West, double East, double South, double North, ICrsTransform NativeToWgs84) ReprojectExtent(

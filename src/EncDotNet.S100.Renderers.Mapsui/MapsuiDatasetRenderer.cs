@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Coverage;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -232,11 +233,7 @@ public sealed class MapsuiDatasetRenderer
             {
                 case GridCoverageSubLayer grid:
                     {
-                        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
-                        {
-                            LayerName = grid.LayerName,
-                        };
-                        layer = renderer.Render(grid.Coverage, grid.Viewport);
+                        layer = BuildGridCoverageLayer(grid);
                         break;
                     }
 
@@ -290,6 +287,47 @@ public sealed class MapsuiDatasetRenderer
             LayerNames = layerNames,
             StackEntries = stackEntries,
         };
+    }
+
+    /// <summary>
+    /// Builds the Mapsui raster layer for an S-104-style gridded coverage
+    /// surface, applying the optional S-98 land-area mask
+    /// (<see cref="GridCoverageSubLayer.LandAreaMask"/>) so the surface is
+    /// clipped to water (issue #483). Exposed so the S-98 layer-stack projector
+    /// can rebuild the raster after an inter-product rule attaches a mask that
+    /// was not present when the layer was first rasterised.
+    /// </summary>
+    /// <param name="grid">The gridded coverage sub-layer to rasterise.</param>
+    /// <returns>The rasterised layer, or <see langword="null"/> if none was produced.</returns>
+    public ILayer? BuildGridCoverageLayer(GridCoverageSubLayer grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+
+        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        {
+            LayerName = grid.LayerName,
+            LandCellMask = ComputeLandCellMask(grid),
+        };
+        return renderer.Render(grid.Coverage, grid.Viewport);
+    }
+
+    private bool[]? ComputeLandCellMask(GridCoverageSubLayer grid)
+    {
+        var land = grid.LandAreaMask;
+        if (land is null || land.Count == 0)
+        {
+            return null;
+        }
+
+        var georeferencer = grid.Coverage.Georeferencer;
+        var metadata = grid.Coverage.Coverage.Metadata;
+        var transform = _crsTransformFactory.Create("EPSG:4326", georeferencer.CRS);
+        return CoverageLandMask.Compute(
+            georeferencer,
+            metadata.NumRows,
+            metadata.NumColumns,
+            land,
+            transform);
     }
 
     private static MemoryLayer BuildGlyphLayer(GlyphCoverageSubLayer sub)

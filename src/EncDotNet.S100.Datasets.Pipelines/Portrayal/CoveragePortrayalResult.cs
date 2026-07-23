@@ -1,6 +1,7 @@
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
 
@@ -40,6 +41,35 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
 
     /// <summary>The viewport (extent + grid dimensions) the renderer fits to.</summary>
     public required Viewport Viewport { get; init; }
+
+    /// <summary>
+    /// Optional land-area surface geometries (WGS84 <c>(latitude, longitude)</c>)
+    /// this surface must be clipped <em>out of</em> — i.e. cells whose centre
+    /// falls on land are suppressed so the surface only covers water. Set by the
+    /// S-98 rule that clips the S-104 water-level surface to water when an S-101
+    /// ENC is loaded alongside it (issue #483; S-98 Ed.2.0.0 Annex A §A-6.9.1).
+    /// <see langword="null"/> or empty means "draw everywhere the grid has data".
+    /// </summary>
+    public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
+    /// Used by the S-98 water-area clip rule, which attaches the S-101 land
+    /// geometry it discovers to the (processor-produced) S-104 surface sub-layer.
+    /// </summary>
+    /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
+    public GridCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        new()
+        {
+            LayerKey = LayerKey,
+            LayerName = LayerName,
+            Plane = Plane,
+            WithinPlanePriority = WithinPlanePriority,
+            SourceFeatureType = SourceFeatureType,
+            Coverage = Coverage,
+            Viewport = Viewport,
+            LandAreaMask = landAreaMask,
+        };
 }
 
 /// <summary>

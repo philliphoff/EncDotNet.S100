@@ -36,6 +36,24 @@ If IHO publishes an official S-104 portrayal catalogue, the bundled
 `content/S104/pc/` directory (today `.gitkeep`-only by design) will be the
 landing point and this catalogue will be re-wired against it.
 
+### Visibility and water-area clipping (issue #483)
+
+Because the heatmap is non-normative, the **gridded surface** (data coding
+format 2 / 3) loads **hidden by default** in the viewer — the user can reveal it
+from the layer controls. Discrete **fixed-station glyphs** (data coding format 8)
+remain visible by default; they are point features and are unaffected.
+`S104DatasetProcessor.IsGriddedSurface` distinguishes the two so the loader only
+defaults the surface hidden.
+
+When the surface is shown alongside an S-101 ENC, the S-98 interoperability rule
+`R-101-104-B` (`S98DefaultRules.R_101_104_B_ClipSurfaceToWater`) attaches the
+ENC's `LandArea` geometry to the surface sub-layer as a land mask, and the
+coverage renderers (`SkiaCoverageRenderer`, `MapsuiCoverageRenderer`, and the
+headless `CoverageHeadlessRenderer`) paint masked cells transparent. The surface
+is thus layered like S-102 bathymetry — beneath ENC line work and clipped to
+water — so it never bleeds over land. See `CoverageLandMask` (per-cell
+point-in-polygon) for the mask computation.
+
 ## Validation
 
 A bundled rule pack

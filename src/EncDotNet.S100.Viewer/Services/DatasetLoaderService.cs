@@ -403,6 +403,19 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 }
             }
 
+            // S-104 gridded (dcf2) water-level surfaces are a synthesised,
+            // non-normative colour-band heatmap (S-104 Edition 2.0.0 defines no
+            // official portrayal catalogue and treats water level as ECDIS
+            // vertical-adjustment input, not a chart layer). Default the surface
+            // to hidden so it never dominates the display uninvited; the user
+            // opts in via the eye icon in the Datasets list (issue #483).
+            // Fixed-station (dcf8) glyphs are discrete symbols at genuine
+            // stations and stay visible.
+            if (processor is S104DatasetProcessor { IsGriddedSurface: true })
+            {
+                entry.IsVisible = false;
+            }
+
             // Surface any S-101 update-application diagnostics. Updates are
             // applied best-effort: a partial/failed apply never blocks the
             // load, but the user is warned so stale or skipped updates are
@@ -1004,7 +1017,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // prebuilt Mapsui layers (reusing cached ILayers; filtering only
         // suppressed features). Cache the FULL projected list (including
         // inactive datasets) for the Layer Stack panel.
-        var projected = LayerStackProjector.Project(ruled, prebuilt);
+        var projected = LayerStackProjector.Project(ruled, prebuilt, _mapsuiRenderer.BuildGridCoverageLayer);
         _currentStackEntries = projected;
 
         // PR-L3: filter inactive datasets out of the rendered layer

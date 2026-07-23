@@ -46,6 +46,15 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     /// <summary>Layer opacity (0.0–1.0). Defaults to 0.8.</summary>
     public double Opacity { get; set; } = 0.8;
 
+    /// <summary>
+    /// Optional per-cell land mask (row-major, length <c>srcRows * srcCols</c>).
+    /// When a cell is <see langword="true"/> it is skipped (left transparent) so
+    /// the surface is clipped to water. Set by the S-98 water-area clip rule for
+    /// the S-104 gridded surface (issue #483). <see langword="null"/> disables
+    /// masking. Indexed as <c>r * srcCols + c</c>, matching the value field.
+    /// </summary>
+    public bool[]? LandCellMask { get; set; }
+
     public MapsuiCoverageRenderer(ICrsTransformFactory transformFactory)
     {
         _transformFactory = transformFactory;
@@ -118,9 +127,14 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         for (int i = 0; i < bands.Length; i++)
             bandPacked[i] = PackRgba(bands[i].Color);
 
+        var landMask = LandCellMask;
+        bool hasMask = landMask is not null && landMask.Length == srcRows * srcCols;
+
         for (int r = 0; r < srcRows; r++)
             for (int c = 0; c < srcCols; c++)
             {
+                if (hasMask && landMask![r * srcCols + c]) continue;
+
                 float value = fieldData[r, c];
                 bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
 
