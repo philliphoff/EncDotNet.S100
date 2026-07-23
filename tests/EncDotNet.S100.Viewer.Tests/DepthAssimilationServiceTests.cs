@@ -88,6 +88,24 @@ public class DepthAssimilationServiceTests
     }
 
     [Fact]
+    public void Assimilate_falls_back_to_static_when_all_tide_steps_are_nodata()
+    {
+        // The grid overlaps (Series is non-null) but every time-step at the
+        // picked cell is NODATA — e.g. a land-masked cell. The result must be
+        // the static base-only state, not a tide selection with an all-null
+        // curve (which would render "DEPTH NOW n/a" despite a valid base).
+        var result = _service.Assimilate(
+            Bathy(0.9),
+            [new S104TideCandidate("ds1", 0.01, T0, 10, Series((T0, null), (T0.AddMinutes(10), null)))]);
+
+        Assert.NotNull(result);
+        Assert.Null(result!.Tide);
+        Assert.Empty(result.DepthOverTime);
+        Assert.Equal(0.9, result.Base.DepthMeters);
+        Assert.False(result.DatumsNotReconciled);
+    }
+
+    [Fact]
     public void Assimilate_selects_finest_resolution()
     {
         var coarse = new S104TideCandidate("coarse", 0.05, T0, 10, Series((T0, 1.0)));

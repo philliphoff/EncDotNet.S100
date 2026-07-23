@@ -57,21 +57,30 @@ internal sealed class DepthAssimilationService
         if (selected?.Series is null)
         {
             // Partial state: water + base depth, but no overlapping S-104 grid.
-            return new LocationDepthResult(
-                baseDepth,
-                Tide: null,
-                DepthOverTime: [],
-                uncertainty,
-                DatumsNotReconciled: false);
+            return NoTide(baseDepth, uncertainty);
         }
 
         var curve = new List<DepthOverTimePoint>(selected.Series.Points.Count);
+        var hasUsableTide = false;
         foreach (var point in selected.Series.Points)
         {
-            var depth = point.HeightMeters is { } height
-                ? baseDepth.DepthMeters + height
-                : (double?)null;
+            double? depth = null;
+            if (point.HeightMeters is { } height)
+            {
+                depth = baseDepth.DepthMeters + height;
+                hasUsableTide = true;
+            }
+
             curve.Add(new DepthOverTimePoint(point.Time, depth));
+        }
+
+        if (!hasUsableTide)
+        {
+            // The grid nominally overlaps, but every time-step at this cell is
+            // NODATA (e.g. a land-masked cell at a quay edge). There is no
+            // usable tide correction here, so present the base depth statically
+            // rather than a "DEPTH NOW" of n/a.
+            return NoTide(baseDepth, uncertainty);
         }
 
         return new LocationDepthResult(
@@ -81,6 +90,20 @@ internal sealed class DepthAssimilationService
             uncertainty,
             IsDatumMismatch(baseDepth, selected));
     }
+
+    /// <summary>
+    /// Builds the tide-less (static) result: the base depth stands alone with
+    /// no time series, so the card shows "DEPTH (STATIC)" and the no-tide
+    /// info-bar. Used both when no S-104 grid overlaps and when the overlapping
+    /// grid yields only NODATA at the picked cell.
+    /// </summary>
+    private static LocationDepthResult NoTide(BaseDepthResult baseDepth, double? uncertainty) =>
+        new(
+            baseDepth,
+            Tide: null,
+            DepthOverTime: [],
+            uncertainty,
+            DatumsNotReconciled: false);
 
     /// <summary>
     /// Selects the best tide candidate: finest resolution (smallest spacing),
