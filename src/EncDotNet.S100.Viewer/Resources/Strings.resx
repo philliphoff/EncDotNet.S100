@@ -1185,6 +1185,12 @@
   <data name="Tooltip_ShowOutOfScaleExtentIndicators" xml:space="preserve">
     <value>When zoomed out past a dataset's display-scale minimum (so it draws nothing), outline its extent with an accent border so you can still see where the data is and zoom toward it. Has no effect when "ignore scale minima" is enabled, since datasets then never drop out on zoom-out.</value>
   </data>
+  <data name="Settings_ShowOverscaleIndication" xml:space="preserve">
+    <value>Overscale indication</value>
+  </data>
+  <data name="Tooltip_ShowOverscaleIndication" xml:space="preserve">
+    <value>When a chart is zoomed in beyond its compilation scale, overlay a subtle vertical-line pattern (the S-52 overscale "curtain") on the overscaled area as a caution that the displayed detail exceeds the survey's accuracy. Turn off to hide the pattern.</value>
+  </data>
   <data name="Basemap_None" xml:space="preserve">
     <value>None</value>
   </data>
@@ -1249,16 +1255,9 @@
   <data name="Status_FeatureNoDetails" xml:space="preserve">
     <value>Feature {0} (no details available)</value>
   </data>
-  <data name="Status_FeatureSummary" xml:space="preserve">
-    <value>{0} [{1}]</value>
-  </data>
-  <data name="Status_FeatureSummaryWithMore" xml:space="preserve">
-    <value>{0} (+{1} more)</value>
-    <comment>Status text for a multi-hit pick: {0} is the primary feature summary, {1} is the count of additional features at the same point.</comment>
-  </data>
   <data name="Status_FeatureRefNotFound" xml:space="preserve">
     <value>Referenced feature not found: {0}</value>
-    <comment>Status text shown when a "follow reference" click resolves to a target that does not exist in the same dataset.</comment>
+    <comment>Warning notification shown when a "follow reference" click resolves to a target that does not exist in the same dataset.</comment>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
@@ -1338,6 +1337,18 @@
   </data>
   <data name="Status_ScaleLabel" xml:space="preserve">
     <value>Scale</value>
+  </data>
+  <data name="Status_OverscaleLabel" xml:space="preserve">
+    <value>OVERSCALE</value>
+  </data>
+  <data name="Status_OverscaleFactor" xml:space="preserve">
+    <value>{0:0.0}×</value>
+  </data>
+  <data name="Status_OverscalePopupHeader" xml:space="preserve">
+    <value>Overscaled cells in view</value>
+  </data>
+  <data name="Tooltip_Overscale" xml:space="preserve">
+    <value>The view is zoomed in beyond the chart's finest compilation scale; displayed detail may be less precise than it appears. Click to see each overscaled cell.</value>
   </data>
 
   <!-- ECDIS Display Controls -->

@@ -196,6 +196,7 @@ public sealed class MapsuiDisplayListRenderer
         // Ensure the custom pattern fill renderer is registered before Mapsui
         // encounters any AnchoredPatternFillStyle instances.
         AnchoredPatternFillRenderer.Register();
+        OverscaleCurtainRenderer.Register();
 
         // Ensure the vector snapshot custom layer renderer is registered before a
         // layer tagged with its CustomLayerRendererName reaches Mapsui. Without

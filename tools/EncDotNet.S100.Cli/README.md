@@ -6,7 +6,9 @@ via repeated `--layer` or by pointing at an entire exchange set / directory —
 to a PNG, JPEG, or WebP image by
 running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
 it can also report a dataset's product specification (`info`), validate a
-dataset against its specification's normative rule pack (`validate`), and
+dataset against its specification's normative rule pack (`validate`), perform a
+headless ECDIS-style "pick" of the features and coverage values at a point
+across one or more layers (`identify`), and
 convert an S-57 base cell to an S-101 dataset (`s57 convert`). It is
 intended as the basis for batch scripts (for example, generating previews of
 sea-ice or surface-current datasets, or gating a data pipeline on validation).
@@ -258,6 +260,49 @@ whose portrayal catalogue declares display modes (e.g. S-411 sea-ice) it also
 lists the available `render --display-mode` tokens. For an S-101
 base cell, sibling sequential updates are applied first (see `--no-updates`)
 so the reported model reflects the up-to-date cell.
+
+### `s100 identify --lat <lat> --lon <lon>`
+
+Performs a headless ECDIS-style **pick**: at a geographic point it identifies
+the vector features and samples the coverage products across one or more
+dataset layers — the same interaction the viewer offers on a cursor click, but
+without an open viewer or MCP server. It drives the same shared pick services
+(`IdentifyFeaturesService` / `SampleCoverageService`) the MCP
+`identify_features` / `sample_coverage` tools use, so the results match
+exactly. Features are ranked in ECDIS draw order (point before curve before
+area; nearer before farther).
+
+Three input grammars mirror `s100 render`: a single positional dataset,
+repeated `--layer` options, or an exchange set (positional directory /
+`CATALOG.XML` / `.zip`, or `--from`). Datasets whose product specification is
+unsupported, whose file is missing, or that fail to parse are skipped with a
+warning on stderr rather than failing the whole pick.
+
+| Option | Default | Description |
+|---|---|---|
+| `--lat <lat>` | _required_ | Pick latitude in decimal degrees, WGS-84 (EPSG:4326), range −90..90. |
+| `--lon <lon>` | _required_ | Pick longitude in decimal degrees, WGS-84 (EPSG:4326), range −180..180. |
+| `--layer <path>` | _none_ | Add a dataset as a pick layer (repeatable). Mutually exclusive with the exchange-set form. |
+| `--from`, `--exchange-set <path>` | _none_ | Pick across every dataset in an exchange set (directory, `CATALOG.XML`, or `.zip`). |
+| `--only <specs>` | _all_ | Comma-separated spec filter for the exchange-set form (e.g. `--only S101,S102`). |
+| `--radius <metres>` | `50` | Search radius for point/near-miss feature matching (clamped 0..100000). |
+| `--spec <spec>` | _all_ | Restrict features and samples to one specification (e.g. `S-124`). |
+| `--time <iso8601>` | _first step_ | Time step for coverage sampling of time-series products (S-104 / S-111). When omitted the first available step is used; when supplied the nearest step is selected (clamped to the dataset range). |
+| `--max-results <n>` | `20` | Maximum number of features to report (clamped 1..200). |
+| `--attributes` | off | Include each feature's full attribute set (via `DescribeFeatureService`). |
+| `--format <fmt>` | `table` | Output format: `table` (human-readable) or `json` (machine-readable). |
+| `--debug` | off | Print full stack traces on error. |
+
+```bash
+s100 identify warnings.gml --lat 51.085 --lon 1.30            # single dataset
+s100 identify --layer enc.000 --layer bathy.h5 --lat 50.1 --lon -1.4   # several layers
+s100 identify --from exchange-set.zip --lat 50.1 --lon -1.4 --format json
+s100 identify chart.000 --lat 50.1 --lon -1.4 --attributes    # include feature attributes
+```
+
+The JSON output is an object with `point`, `totalMatched`, `truncated`,
+`features` (ranked), `samples` (one per coverage layer that covers the point),
+and, when any input was skipped, a `warnings` array.
 
 ### `s100 validate <dataset>`
 

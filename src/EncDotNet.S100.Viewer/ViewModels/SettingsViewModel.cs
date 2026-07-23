@@ -922,6 +922,34 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Raised when <see cref="ShowOverscaleIndication"/> changes so the overscale
+    /// curtain overlay can be rebuilt without a relaunch.
+    /// </summary>
+    public event Action? OverscaleIndicationChanged;
+
+    private bool _showOverscaleIndication;
+    /// <summary>
+    /// Whether the on-chart overscale curtain (subtle vertical-line pattern,
+    /// S-52 / S-101 <c>AP(OVERSC01)</c>) is drawn over regions displayed beyond
+    /// their compilation scale (issue #441, Form A). Persisted to
+    /// <see cref="ViewerSettings.ShowOverscaleIndication"/>; changing it raises
+    /// <see cref="OverscaleIndicationChanged"/>.
+    /// </summary>
+    public bool ShowOverscaleIndication
+    {
+        get => _showOverscaleIndication;
+        set
+        {
+            if (SetProperty(ref _showOverscaleIndication, value))
+            {
+                _settings.ShowOverscaleIndication = value;
+                _settings.Save();
+                OverscaleIndicationChanged?.Invoke();
+            }
+        }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -1119,6 +1147,7 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         _basemapMode = settings.BasemapMode;
         _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;
+        _showOverscaleIndication = settings.ShowOverscaleIndication;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;

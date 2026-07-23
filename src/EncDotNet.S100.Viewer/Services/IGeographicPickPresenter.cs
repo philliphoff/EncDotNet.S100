@@ -4,7 +4,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// One feature an MCP <c>pick_features</c> call resolved and asked the
 /// viewer to display, identified by the same keys the user-pick path uses:
 /// the owning dataset's display name (equal to the catalog
-/// <see cref="EncDotNet.S100.Mcp.Tools.Catalog.DatasetId"/>) and the
+/// <see cref="EncDotNet.S100.Datasets.Pipelines.Catalog.DatasetId"/>) and the
 /// feature reference (the feature's <c>gml:id</c> / RCID).
 /// </summary>
 /// <param name="DatasetDisplayName">Display name of the owning dataset.</param>

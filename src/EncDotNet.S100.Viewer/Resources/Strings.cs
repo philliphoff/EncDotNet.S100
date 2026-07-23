@@ -179,6 +179,10 @@ internal static class Strings
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
     public static string Tooltip_MapScale => Get(nameof(Tooltip_MapScale));
     public static string Status_ScaleLabel => Get(nameof(Status_ScaleLabel));
+    public static string Status_OverscaleLabel => Get(nameof(Status_OverscaleLabel));
+    public static string Status_OverscaleFactor => Get(nameof(Status_OverscaleFactor));
+    public static string Status_OverscalePopupHeader => Get(nameof(Status_OverscalePopupHeader));
+    public static string Tooltip_Overscale => Get(nameof(Tooltip_Overscale));
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));
@@ -462,6 +466,8 @@ internal static class Strings
     public static string Tooltip_BasemapEnabled => Get(nameof(Tooltip_BasemapEnabled));
     public static string Settings_ShowOutOfScaleExtentIndicators => Get(nameof(Settings_ShowOutOfScaleExtentIndicators));
     public static string Tooltip_ShowOutOfScaleExtentIndicators => Get(nameof(Tooltip_ShowOutOfScaleExtentIndicators));
+    public static string Settings_ShowOverscaleIndication => Get(nameof(Settings_ShowOverscaleIndication));
+    public static string Tooltip_ShowOverscaleIndication => Get(nameof(Tooltip_ShowOverscaleIndication));
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
@@ -487,8 +493,6 @@ internal static class Strings
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
-    public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
-    public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
     public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
     public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));

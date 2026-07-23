@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
@@ -7,7 +8,6 @@ using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S131;
-using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Fakes;

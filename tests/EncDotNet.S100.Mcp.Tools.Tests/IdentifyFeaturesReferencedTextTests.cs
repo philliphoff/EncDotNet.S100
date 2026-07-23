@@ -1,12 +1,13 @@
 using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 /// <summary>
-/// Verifies that <see cref="IdentifyFeaturesTool.ResolveReferencedTexts"/>
+/// Verifies that <see cref="IdentifyFeaturesService.ResolveReferencedTexts"/>
 /// surfaces an S-101 <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c>
 /// attribute's external text to headless MCP consumers (issue #361, item 4).
 /// </summary>
@@ -28,7 +29,7 @@ public class IdentifyFeaturesReferencedTextTests
     public void Resolves_simple_file_reference()
     {
         var attrs = new Dictionary<string, string> { ["TXTDSC"] = "note.txt" };
-        var result = IdentifyFeaturesTool.ResolveReferencedTexts(
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(
             Feature(attrs), name => name == "note.txt" ? "caution text" : null);
 
         Assert.Single(result);
@@ -44,7 +45,7 @@ public class IdentifyFeaturesReferencedTextTests
             Code = "information",
             SubAttributes = new Dictionary<string, string> { ["fileReference"] = "info.txt" },
         };
-        var result = IdentifyFeaturesTool.ResolveReferencedTexts(
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(
             Feature(complex: complex), name => "body");
 
         Assert.Single(result);
@@ -61,7 +62,7 @@ public class IdentifyFeaturesReferencedTextTests
             Code = "information",
             SubAttributes = new Dictionary<string, string> { ["fileReference"] = "dup.txt" },
         };
-        var result = IdentifyFeaturesTool.ResolveReferencedTexts(
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(
             Feature(attrs, complex), _ => "x");
 
         Assert.Single(result);
@@ -71,7 +72,7 @@ public class IdentifyFeaturesReferencedTextTests
     public void Empty_when_file_missing()
     {
         var attrs = new Dictionary<string, string> { ["TXTDSC"] = "gone.txt" };
-        var result = IdentifyFeaturesTool.ResolveReferencedTexts(Feature(attrs), _ => null);
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(Feature(attrs), _ => null);
 
         Assert.Empty(result);
     }
@@ -80,7 +81,7 @@ public class IdentifyFeaturesReferencedTextTests
     public void Empty_when_no_resolver()
     {
         var attrs = new Dictionary<string, string> { ["TXTDSC"] = "note.txt" };
-        var result = IdentifyFeaturesTool.ResolveReferencedTexts(Feature(attrs), resolver: null);
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(Feature(attrs), resolver: null);
 
         Assert.Empty(result);
     }
@@ -89,7 +90,7 @@ public class IdentifyFeaturesReferencedTextTests
     public void Empty_when_no_file_reference_attribute()
     {
         var attrs = new Dictionary<string, string> { ["OBJNAM"] = "Light A" };
-        var result = IdentifyFeaturesTool.ResolveReferencedTexts(Feature(attrs), _ => "x");
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(Feature(attrs), _ => "x");
 
         Assert.Empty(result);
     }

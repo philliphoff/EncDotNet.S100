@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S124;
-using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;

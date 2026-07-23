@@ -38,6 +38,7 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
+    private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
     private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -189,6 +190,8 @@ public partial class MainWindow : ShadUI.Window
             _pickHighlightController = null;
             _extentIndicatorController?.Dispose();
             _extentIndicatorController = null;
+            _overscaleCurtainController?.Dispose();
+            _overscaleCurtainController = null;
             // Clear the late-bound accessors this window owns so panel /
             // screenshot MCP tools observe the torn-down state (UiNotReady /
             // WindowNotReady) rather than a stale controller, and so the
@@ -399,6 +402,16 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>());
+
+        // On-chart overscale curtain: paint a subtle vertical-line pattern over
+        // the region of each cell displayed beyond its compilation scale (#441).
+        _overscaleCurtainController = new EncDotNet.S100.Viewer.Services.OverscaleCurtainController(
+            mapHost,
+            _viewModel.Datasets,
+            _loader,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             App.Services.GetRequiredService<SettingsViewModel>());
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the

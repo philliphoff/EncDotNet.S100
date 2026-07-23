@@ -46,6 +46,28 @@ product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### Headless pick services and catalog (issue #480)
+
+The protocol-neutral "pick" logic — identify the vector features and
+sample the coverage values at a geographic point — lives here so it can
+be shared by the MCP tools (`EncDotNet.S100.Mcp.Tools`) and the CLI
+`s100 identify` command without either depending on the other:
+
+| Namespace | Contents |
+|---|---|
+| `.Query` | `IdentifyFeaturesService`, `SampleCoverageService`, `DescribeFeatureService` and their request / result records, plus the neutral `ToolResult<T>` / `ToolError` result types the services return. |
+| `.Catalog` | `IDatasetCatalog`, `LoadedDataset` / `LoadedDatasetData`, `DatasetId`; `LoadedDatasetProjector` (the one place a product-spec name is mapped to its per-spec `Open` reader and matching `LoadedDatasetData` variant + bounds); and `FileDatasetCatalog`, a read-only file-backed catalog. |
+| `.Geometry` | Point / polyline / bounding-box helpers used by the pick services. |
+| `.Spec` | `SpecRef` and spec-capability metadata. |
+| `.Time` | `FeatureValidity` and the time-window query helpers. |
+
+`LoadedDatasetProjector` is used by both the Avalonia viewer's
+`ViewerDatasetCatalog` and the headless `FileDatasetCatalog`, so a pick
+run from the CLI produces byte-identical catalog entries to one run in
+the viewer. The MCP `identify_features` / `sample_coverage` /
+`describe_feature` tools are thin wrappers that map `ToolResult<T>` onto
+the MCP protocol.
+
 ### Metadata as a parse byproduct (issue #467 / #460)
 
 `IDatasetProcessor.Metadata` exposes the lightweight, product-agnostic
