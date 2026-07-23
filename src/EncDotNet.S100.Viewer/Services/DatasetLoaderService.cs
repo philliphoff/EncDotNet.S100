@@ -411,7 +411,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             // opts in via the eye icon in the Datasets list (issue #483).
             // Fixed-station (dcf8) glyphs are discrete symbols at genuine
             // stations and stay visible.
-            if (processor is S104DatasetProcessor { IsGriddedSurface: true })
+            // Default the surface to hidden only on the entry's first load
+            // (not yet tracked in _entryOrder). On an evict → reload cycle the
+            // entry is preserved in _entryOrder (see UnloadEntry), so re-hiding
+            // here would silently reset a surface the user had opted into
+            // (issue #483).
+            if (processor is S104DatasetProcessor { IsGriddedSurface: true }
+                && !_entryOrder.Contains(entry))
             {
                 entry.IsVisible = false;
             }
@@ -1014,9 +1020,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
 
         // Project the ordered / suppressed neutral items back onto the
-        // prebuilt Mapsui layers (reusing cached ILayers; filtering only
-        // suppressed features). Cache the FULL projected list (including
-        // inactive datasets) for the Layer Stack panel.
+        // prebuilt Mapsui layers. Cached ILayers are reused where the S-98
+        // outcome is unchanged; the BuildGridCoverageLayer callback lets the
+        // projector rebuild a grid-coverage raster when a rule changed its
+        // payload (e.g. S-104 land clipping), so this path is no longer always
+        // rasterisation-free. Cache the FULL projected list (including inactive
+        // datasets) for the Layer Stack panel.
         var projected = LayerStackProjector.Project(ruled, prebuilt, _mapsuiRenderer.BuildGridCoverageLayer);
         _currentStackEntries = projected;
 
