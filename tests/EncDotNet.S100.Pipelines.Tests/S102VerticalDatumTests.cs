@@ -20,7 +20,7 @@ public class S102VerticalDatumTests
 
     private static string WriteFile(int? verticalDatum)
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".h5");
 
         var values = new SpecBathyRow[4];
         for (int i = 0; i < values.Length; i++)

@@ -5,7 +5,6 @@ using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Query;
 
@@ -282,43 +281,31 @@ public sealed class SampleCoverageService
 
         try
         {
-            var metadata = source.Metadata;
-            var grid = metadata.GridMetadata;
-
-            // S-102 tiles are frequently in a projected CRS (e.g. UTM zone
-            // 31N); the grid georeferencing is then native metres, so the
-            // WGS-84 request point must be reprojected before grid indexing.
-            // (Matches CoveragePickHelper, the viewer's coverage-pick path.)
-            var toNative = _transforms.Create("EPSG:4326", metadata.HorizontalCRS);
-            var (nativeX, nativeY) = toNative.IsIdentity
-                ? (request.Longitude, request.Latitude)
-                : toNative.Transform(request.Longitude, request.Latitude);
-
-            if (!GridContainsNative(grid, nativeX, nativeY))
+            // Delegate to the shared CoveragePickHelper so this MCP sampling
+            // path snaps to exactly the same cell as the viewer's coverage-pick
+            // and S102DatasetProcessor.SampleBaseDepth: reproject the WGS-84
+            // request into the (often projected/UTM) grid CRS, floor to the
+            // containing cell, and reject clicks outside the grid extent. Using
+            // one helper keeps every pick path in agreement near cell edges.
+            var pick = CoveragePickHelper.Sample(source, _transforms, request.Latitude, request.Longitude);
+            if (pick is null)
             {
                 return ToolResult<SampleCoverageResult>.Err(
                     new NoDatasetCoversPoint(request.Latitude, request.Longitude));
             }
 
-            // NearestCell indexes on (OriginLatitude/SpacingLatitudinal,
-            // OriginLongitude/SpacingLongitudinal); for a projected grid those
-            // are the native Y/X axes, so pass native (Y, X).
-            var (row, col) = NearestCell(grid, nativeY, nativeX);
-
-            var region = new GridRegion(row, row + 1, col, col + 1, 1, 1);
-            var sampled = source.Sample(region);
-
-            var depth = ReadScalar(sampled, "depth");
-            var uncertainty = TryReadScalar(sampled, "uncertainty");
-
-            var noData = metadata.NoDataValue;
-            double? depthValue = depth == noData ? null : depth;
-            double? uncertaintyValue = uncertainty is { } u && u != noData ? u : null;
+            var noData = pick.NoDataValue;
+            double? depthValue = pick.Values.TryGetValue("depth", out var depth) && depth != noData
+                ? depth
+                : null;
+            double? uncertaintyValue = pick.Values.TryGetValue("uncertainty", out var uncertainty) && uncertainty != noData
+                ? uncertainty
+                : null;
 
             if (depthValue is null)
             {
                 return ToolResult<SampleCoverageResult>.Err(
-                    new NoDataAtPoint(match.Id, row, col, Time: null));
+                    new NoDataAtPoint(match.Id, pick.Row, pick.Col, Time: null));
             }
 
             return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
@@ -1085,33 +1072,6 @@ public sealed class SampleCoverageService
         return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
     }
 
-    private static (int Row, int Col) NearestCell(GridMetadata grid, double lat, double lon)
-    {
-        var row = (int)Math.Round((lat - grid.OriginLatitude) / grid.SpacingLatitudinal);
-        var col = (int)Math.Round((lon - grid.OriginLongitude) / grid.SpacingLongitudinal);
-        row = Math.Clamp(row, 0, grid.NumRows - 1);
-        col = Math.Clamp(col, 0, grid.NumColumns - 1);
-        return (row, col);
-    }
-
-    /// <summary>
-    /// Tests whether a point already expressed in the grid's native CRS
-    /// (<paramref name="x"/> on the longitudinal/easting axis,
-    /// <paramref name="y"/> on the latitudinal/northing axis) falls within the
-    /// grid's node extent. Handles negative spacing (origin at the north/east
-    /// edge).
-    /// </summary>
-    private static bool GridContainsNative(GridMetadata grid, double x, double y)
-    {
-        var minY = grid.OriginLatitude;
-        var maxY = grid.OriginLatitude + (grid.NumRows - 1) * grid.SpacingLatitudinal;
-        var minX = grid.OriginLongitude;
-        var maxX = grid.OriginLongitude + (grid.NumColumns - 1) * grid.SpacingLongitudinal;
-        if (minY > maxY) (minY, maxY) = (maxY, minY);
-        if (minX > maxX) (minX, maxX) = (maxX, minX);
-        return y >= minY && y <= maxY && x >= minX && x <= maxX;
-    }
-
     private static (int Row, int Col) NearestCellInCoverage(WaterLevelCoverage cov, double lat, double lon)
     {
         var row = (int)Math.Round((lat - cov.OriginLatitude) / cov.SpacingLatitudinal);
@@ -1144,19 +1104,4 @@ public sealed class SampleCoverageService
         3 => "steady",
         _ => trend.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
-
-    private static float ReadScalar(SampledCoverage sampled, string field)
-    {
-        var data = sampled.GetField(field);
-        return data[0, 0];
-    }
-
-    private static float? TryReadScalar(SampledCoverage sampled, string field)
-    {
-        if (!sampled.Values.TryGetValue(field, out var data))
-        {
-            return null;
-        }
-        return data[0];
-    }
 }

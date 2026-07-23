@@ -84,10 +84,12 @@ public class SampleCoverageToolTests
             source: new S102CoverageSource(dataset)));
         var tool = new SampleCoverageTool(catalog);
 
-        // Aim at the exact node position of cell (row 2, col 3) in native
-        // metres, then project back to WGS-84 to form the click.
+        // Aim at the interior of cell (row 2, col 3) in native metres — offset
+        // half a cell past the node so the floor-based indexing shared with the
+        // viewer's coverage-pick path (CoveragePickHelper.ToGrid) resolves
+        // deterministically to (2, 3) without fp boundary ambiguity.
         var (lon, lat) = toWgs84.Transform(
-            originEasting + 3 * spacing, originNorthing + 2 * spacing);
+            originEasting + 3.5 * spacing, originNorthing + 2.5 * spacing);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon));
