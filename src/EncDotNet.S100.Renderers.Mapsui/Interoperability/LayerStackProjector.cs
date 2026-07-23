@@ -103,7 +103,18 @@ public static class LayerStackProjector
             && ruledCoverage.SubLayer is GridCoverageSubLayer ruledGrid
             && rebuildCoverage is not null)
         {
-            return rebuildCoverage(ruledGrid) ?? prebuilt.Layer;
+            var rebuilt = rebuildCoverage(ruledGrid);
+            if (rebuilt is null)
+                return prebuilt.Layer;
+
+            // The rebuilt layer is a fresh ILayer that defaults to
+            // Enabled=true / Opacity=1 with no visible range. Carry over the
+            // prebuilt layer's current display state so a rule-triggered rebuild
+            // (e.g. R-101-104-B land clipping) never re-shows a hidden surface
+            // — including the default-hidden S-104 surface (issue #483) — or
+            // resets the user's opacity / scale-window choices.
+            CopyDisplayState(prebuilt.Layer, rebuilt);
+            return rebuilt;
         }
 
         // Only vector payloads are suppressible (R-101-102-B). If the engine
@@ -129,6 +140,21 @@ public static class LayerStackProjector
             return prebuilt.Layer;
 
         return FilterFeatures(memoryLayer, dropped);
+    }
+
+    private static void CopyDisplayState(ILayer source, ILayer target)
+    {
+        target.Enabled = source.Enabled;
+        target.Opacity = source.Opacity;
+
+        // MinVisible / MaxVisible are only settable on the concrete BaseLayer
+        // (read-only on ILayer). Coverage renderers return BaseLayer-derived
+        // layers, so carry the scale window over when both sides are BaseLayers.
+        if (source is BaseLayer sourceBase && target is BaseLayer targetBase)
+        {
+            targetBase.MinVisible = sourceBase.MinVisible;
+            targetBase.MaxVisible = sourceBase.MaxVisible;
+        }
     }
 
     private static HashSet<string> ComputeDroppedRefs(VectorSubLayer original, VectorSubLayer surviving)
