@@ -86,8 +86,8 @@ public static class S104TimeSeriesSampler
     /// </param>
     /// <returns>
     /// A <see cref="S104TimeSeries"/> for the nearest cell, or <c>null</c> when
-    /// the dataset is not a supported gridded dataset, has no coverages, or the
-    /// point falls outside the grid extent.
+    /// the dataset is not a supported gridded dataset, has no coverages, has a
+    /// degenerate grid geometry, or the point falls outside the grid extent.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="dataset"/> is <c>null</c>.
@@ -114,6 +114,18 @@ public static class S104TimeSeriesSampler
         // All time-step coverages share the same grid geometry; use the first
         // as the representative grid for containment and cell selection.
         var geometry = dataset.Coverages[0];
+
+        // Reject degenerate grids from malformed producer data: a zero point
+        // count makes cell-index clamping ill-formed (min > max) and a zero
+        // spacing divides by zero during nearest-cell selection.
+        if (geometry.NumPointsLatitudinal <= 0
+            || geometry.NumPointsLongitudinal <= 0
+            || geometry.SpacingLatitudinal == 0
+            || geometry.SpacingLongitudinal == 0)
+        {
+            return null;
+        }
+
         if (!Contains(geometry, latitude, longitude))
         {
             return null;

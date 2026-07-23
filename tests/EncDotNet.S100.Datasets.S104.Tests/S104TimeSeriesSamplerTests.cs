@@ -189,4 +189,34 @@ public class S104TimeSeriesSamplerTests
         Assert.Equal(3.0, series.Points[0].HeightMeters);
         Assert.Equal(2.0, series.Points[1].HeightMeters);
     }
+
+    [Theory]
+    [InlineData(0, 2, 0.01, 0.01)]
+    [InlineData(2, 0, 0.01, 0.01)]
+    [InlineData(2, 2, 0.0, 0.01)]
+    [InlineData(2, 2, 0.01, 0.0)]
+    public void Sample_returns_null_for_degenerate_grid_geometry(
+        int numLat, int numLon, double spacingLat, double spacingLon)
+    {
+        var dataset = new S104Dataset
+        {
+            DataCodingFormat = 2,
+            Coverages =
+            [
+                new WaterLevelCoverage
+                {
+                    OriginLatitude = 50.0,
+                    OriginLongitude = -1.0,
+                    SpacingLatitudinal = spacingLat,
+                    SpacingLongitudinal = spacingLon,
+                    NumPointsLatitudinal = numLat,
+                    NumPointsLongitudinal = numLon,
+                    TimePoint = new DateTime(2021, 4, 1, 0, 0, 0, DateTimeKind.Utc),
+                    Values = [new WaterLevelValue(3.0f, 1)],
+                },
+            ],
+        };
+
+        Assert.Null(S104TimeSeriesSampler.Sample(dataset, 50.0, -1.0));
+    }
 }
