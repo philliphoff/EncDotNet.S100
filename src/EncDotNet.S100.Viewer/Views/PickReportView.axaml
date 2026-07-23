@@ -403,9 +403,9 @@
 
                     <!--
                         Prominent headline readout. Always visible (even when
-                        collapsed). Shows the tide-adjusted "DEPTH NOW" or the
-                        "DEPTH (STATIC)" base depth. The top margin separates it
-                        from the tappable header bar above.
+                        collapsed). Shows the tide-adjusted "DEPTH AT SELECTED
+                        TIME" or the "DEPTH (STATIC)" base depth. The top margin
+                        separates it from the tappable header bar above.
                     -->
                     <Border Background="{DynamicResource AccentSubtleBrush}"
                             CornerRadius="6"

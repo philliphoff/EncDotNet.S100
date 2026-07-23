@@ -194,9 +194,10 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     }
 
     /// <summary>
-    /// Headline label for the prominent depth readout: "DEPTH NOW" when a live
-    /// tide series drives it, or "DEPTH (STATIC)" when only the tide-independent
-    /// base depth is available.
+    /// Headline label for the prominent depth readout: "DEPTH AT SELECTED TIME"
+    /// when a live tide series drives it (the value follows the selected timeline
+    /// step), or "DEPTH (STATIC)" when only the tide-independent base depth is
+    /// available.
     /// </summary>
     public string DepthNowLabel => HasTide
         ? Strings.Pick_Depth_Label_DepthNow

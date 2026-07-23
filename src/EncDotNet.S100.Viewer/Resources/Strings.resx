@@ -762,8 +762,8 @@
     <comment>Compact-readout label for the tide-adjusted depth at the current time.</comment>
   </data>
   <data name="Pick_Depth_Label_DepthNow" xml:space="preserve">
-    <value>DEPTH NOW</value>
-    <comment>Headline label for the prominent depth readout when a live S-104 tide series drives it.</comment>
+    <value>DEPTH AT SELECTED TIME</value>
+    <comment>Headline label for the prominent depth readout when a live S-104 tide series drives it; the value tracks the selected timeline step, not wall-clock time.</comment>
   </data>
   <data name="Pick_Depth_Label_DepthStatic" xml:space="preserve">
     <value>DEPTH (STATIC)</value>
