@@ -214,14 +214,14 @@
             <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
         <!-- Depth-card header: flat by default, subtle fill on hover only (never
-             a persistent "expanded" background). Mirrors the eggCell pattern so
-             the base Background comes from a style and the :pointerover setter
-             can override it. -->
+             a persistent "expanded" background). Mirrors the eggCell / accent
+             list-item pattern so the base Background comes from a style and the
+             :pointerover setter tints with the window-scoped muted accent. -->
         <Style Selector="Border.depthHeader">
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Border.depthHeader:pointerover">
-            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
     </UserControl.Styles>
 
@@ -396,11 +396,12 @@
                     <!--
                         Prominent headline readout. Always visible (even when
                         collapsed). Shows the tide-adjusted "DEPTH NOW" or the
-                        "DEPTH (STATIC)" base depth.
+                        "DEPTH (STATIC)" base depth. The top margin separates it
+                        from the tappable header bar above.
                     -->
                     <Border Background="{DynamicResource AccentSubtleBrush}"
                             CornerRadius="6"
-                            Margin="0,0,0,8"
+                            Margin="0,6,0,8"
                             Padding="12,10">
                         <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                             <TextBlock Grid.Column="0"
