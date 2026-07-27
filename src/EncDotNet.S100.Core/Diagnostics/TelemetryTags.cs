@@ -72,6 +72,15 @@ public static class TelemetryTags
     /// <summary>XSLT rule name (used for compile and transform spans).</summary>
     public const string XsltRule = "s100.xslt.rule";
 
+    /// <summary>
+    /// Overview pyramid level selected for a coverage read (issue #486).
+    /// <c>0</c> = native base grid; higher values = coarser downsampled
+    /// levels (each level is 2× coarser per axis, 4× fewer cells).
+    /// Applied to the <c>s100.pipeline.coverage.stage.read</c> span
+    /// and the <c>s100.coverage.overview.level_selected</c> histogram.
+    /// </summary>
+    public const string CoverageOverviewLevel = "s100.coverage.overview.level";
+
     /// <summary>Symbol identifier used in a resolve operation.</summary>
     public const string SymbolId = "s100.symbol.id";
 

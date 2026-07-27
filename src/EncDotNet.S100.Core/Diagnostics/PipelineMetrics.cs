@@ -109,4 +109,32 @@ internal static class PipelineMetrics
             name: "s100.vector.index.returned.count",
             unit: "{features}",
             description: "Number of features returned by a vector-index extent query.");
+
+    // ── Coverage overview pyramid (issue #486) ─────────────────────────
+
+    /// <summary>
+    /// Overview pyramid level selected for a coverage read (issue #486).
+    /// <c>0</c> means the native base grid; higher values are coarser
+    /// downsampled levels (level <c>N</c> = 2^N × reduction per axis).
+    /// Tagged by <see cref="TelemetryTags.Product"/> so per-product
+    /// dashboards can show the level distribution across a session.
+    /// </summary>
+    public static readonly Histogram<int> CoverageOverviewLevelSelected =
+        Telemetry.Meter.CreateHistogram<int>(
+            name: "s100.coverage.overview.level_selected",
+            unit: "{level}",
+            description: "Overview pyramid level selected for a coverage read (0 = base grid).");
+
+    /// <summary>
+    /// Wall-clock duration of a single
+    /// <see cref="EncDotNet.S100.Pipelines.Coverage.Pyramid.CoveragePyramidBuilder.Build"/>
+    /// invocation. Recorded once per source per first-touch build so
+    /// dashboards can amortise the build cost against the render-time
+    /// saving it enables (issue #486).
+    /// </summary>
+    public static readonly Histogram<double> CoveragePyramidBuildDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.coverage.pyramid.build.duration",
+            unit: "ms",
+            description: "Wall-clock duration of an in-memory coverage overview pyramid build.");
 }
