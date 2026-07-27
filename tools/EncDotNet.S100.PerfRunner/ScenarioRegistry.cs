@@ -17,6 +17,9 @@ public static class ScenarioRegistry
         Register(() => new Scenarios.S102CoverageOpenScenario());
         Register(() => new Scenarios.S102CoverageRenderLargeScenario());
         Register(() => new Scenarios.S102CoverageRenderRepeatScenario());
+        Register(() => new Scenarios.S102CoverageViewportFitScenario());
+        Register(() => new Scenarios.S102CoverageViewportZoomedInScenario());
+        Register(() => new Scenarios.S102CoverageViewportZoomedOutScenario());
         Register(() => new Scenarios.S111ArrowRepeatScenario());
         Register(() => new Scenarios.S124VectorScenario());
         Register(() => new Scenarios.S201VectorScenario());

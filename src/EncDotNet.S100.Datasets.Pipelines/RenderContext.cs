@@ -109,8 +109,13 @@ public abstract record RenderContext
     /// <see cref="Viewport.ScaleDenominator"/>, the vector path additionally
     /// enables S-100 Part 9 scale-visibility culling when it is set (the
     /// auto-fit path leaves culling disabled, as the fitted scale is not a real
-    /// compilation scale). Coverage processors (S-102/S-104/S-111) do not yet
-    /// honour an explicit viewport and ignore this property.
+    /// compilation scale). The coverage processors (S-102/S-104/S-111) forward
+    /// the viewport (and, for non-EPSG:4326 grids, a WGS-84 → native transform)
+    /// to <see cref="EncDotNet.S100.Pipelines.Coverage.CoveragePipeline"/> so
+    /// only the cells that fall inside the viewport at the viewport's ground
+    /// resolution are sampled (issue #487). Coverage sampling applies on the
+    /// initial dataset load; live pan/zoom re-sampling of the Mapsui coverage
+    /// layer is a follow-up (see issue #486).
     /// </para>
     /// </remarks>
     public Viewport? Viewport { get; init; }

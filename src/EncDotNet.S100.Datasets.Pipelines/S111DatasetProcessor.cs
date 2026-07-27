@@ -333,7 +333,22 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         var pipeline = new PortrayalPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+
+        // Viewport-scoped sampling (issue #487).
+        int crs = _dataset!.HorizontalCRS ?? 4326;
+        ICrsTransform? wgs84ToNative = null;
+        if (context?.Viewport is not null && crs != 4326)
+        {
+            wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+        }
+
+        var layer = await pipeline.ProcessAsync(
+            source,
+            catalogue,
+            viewport: context?.Viewport,
+            wgs84ToNative: wgs84ToNative,
+            mariner: context?.Mariner ?? MarinerSettings.Default,
+            cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
@@ -342,7 +357,6 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // The symbol set is small (one entry per S-111 speed band).
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
 
-        int crs = _dataset!.HorizontalCRS ?? 4326;
         var geoId = _dataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
             ? $", time: {selectedTime:u} ({source.AvailableTimes.Count} steps)"
@@ -437,7 +451,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             source.SelectTime(source.AvailableTimes[0]);
 
         var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
-            .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);

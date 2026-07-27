@@ -81,7 +81,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         };
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
+        var layer = await pipeline.ProcessAsync(source, catalogue, mariner: mariner);
 
         // The test file has real depths 4.44–8m — all in [ShallowContour=2, SafetyContour=30) → DEPMS.
         // Walk the depth field and verify each non-fill cell maps to DEPMS via the resolved scheme.
@@ -162,7 +162,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         };
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
+        var layer = await pipeline.ProcessAsync(source, catalogue, mariner: mariner);
 
         // Two-shade: depths [0, 30) → DEPVS, ≥30 → DEPDW. All real values 4–8m → DEPVS.
         Assert.NotNull(layer.ColorScheme);
