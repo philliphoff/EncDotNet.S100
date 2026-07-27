@@ -155,9 +155,22 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         try
         {
             await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+            // Overview pyramid level selection (issue #486). When the
+            // caller supplies a viewport, pick the coarsest level whose
+            // native cell spacing still oversamples the display (i.e.
+            // ≥ 1 native cell per screen pixel by default). Levels
+            // above 0 shrink the renderer's O(srcRows*srcCols) inner
+            // loop 4× per step — this is the dominant win the pyramid
+            // buys (baseline: ~98% of frame time is render, not read).
+            // Ordering matters: SelectOverviewLevel must precede the
+            // Metadata read below so the pipeline sees the level-L
+            // geometry (rows/cols/spacing) throughout.
+            var previousLevel = _source.SelectedOverviewLevel;
+            SelectOverviewLevelForViewport(context?.Viewport);
             var metadata = _source.Metadata;
 
-            var viewport = new EncDotNet.S100.Pipelines.Viewport
+            var viewport = context?.Viewport ?? new EncDotNet.S100.Pipelines.Viewport
             {
                 MinLatitude = metadata.Extent.SouthLatitude,
                 MaxLatitude = metadata.Extent.NorthLatitude,
@@ -168,63 +181,126 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 ScaleDenominator = 50_000,
             };
 
-            var pipeline = _pipeline;
-
-            // Viewport-scoped sampling (issue #487): when the render context
-            // supplies a live map viewport, pass it (and the WGS84→native
-            // transform for non-4326 grids) through so the pipeline samples
-            // only cells that fall inside the viewport at the viewport's
-            // ground resolution. Falls back to full-grid sampling when the
-            // caller doesn't specify a viewport (e.g. RenderHeadlessAsync,
-            // CLI tools). Applies on initial load of the coverage layer; live
-            // pan/zoom re-sampling is a follow-up (see #486).
-            int crs = _dataset.HorizontalCRS ?? 4326;
-            ICrsTransform? wgs84ToNative = null;
-            if (context?.Viewport is not null && crs != 4326)
+            try
             {
-                wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
-            }
+                var pipeline = _pipeline;
 
-            var layer = await pipeline.ProcessAsync(
-                _source,
-                _catalogue,
-                viewport: context?.Viewport,
-                wgs84ToNative: wgs84ToNative,
-                mariner: context?.Mariner ?? MarinerSettings.Default,
-                cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            var styledLayer = (StyledCoverageLayer)layer;
-
-            var geoId = _dataset.GeographicIdentifier ?? _fileName;
-            var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
-
-            return new CoveragePortrayalResult
-            {
-                // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
-                // ("gridded bathymetry replaces depth area and depth
-                // contours"). S-102 always emits a single coverage layer;
-                // PR-L1 leaves WithinPlanePriority at 0.
-                SubLayers = new CoverageSubLayerBase[]
+                // Viewport-scoped sampling (issue #487): when the render context
+                // supplies a live map viewport, pass it (and the WGS84→native
+                // transform for non-4326 grids) through so the pipeline samples
+                // only cells that fall inside the viewport at the viewport's
+                // ground resolution. Falls back to full-grid sampling when the
+                // caller doesn't specify a viewport (e.g. RenderHeadlessAsync,
+                // CLI tools). Composes with the overview pyramid selection
+                // above: the region math runs against the level-L metadata
+                // exposed by _source.Metadata (issue #486).
+                int crs = _dataset.HorizontalCRS ?? 4326;
+                ICrsTransform? wgs84ToNative = null;
+                if (context?.Viewport is not null && crs != 4326)
                 {
-                    new GridCoverageSubLayer
+                    wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+                }
+
+                var layer = await pipeline.ProcessAsync(
+                    _source,
+                    _catalogue,
+                    viewport: context?.Viewport,
+                    wgs84ToNative: wgs84ToNative,
+                    mariner: context?.Mariner ?? MarinerSettings.Default,
+                    cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                var styledLayer = (StyledCoverageLayer)layer;
+
+                var geoId = _dataset.GeographicIdentifier ?? _fileName;
+                var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
+
+                return new CoveragePortrayalResult
+                {
+                    // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
+                    // ("gridded bathymetry replaces depth area and depth
+                    // contours"). S-102 always emits a single coverage layer;
+                    // PR-L1 leaves WithinPlanePriority at 0.
+                    SubLayers = new CoverageSubLayerBase[]
                     {
-                        LayerKey = "s102.surface",
-                        LayerName = $"S-102: {_fileName}",
-                        Plane = S98DisplayPlane.Bathymetry,
-                        WithinPlanePriority = 0,
-                        Coverage = styledLayer,
-                        Viewport = viewport,
+                        new GridCoverageSubLayer
+                        {
+                            LayerKey = "s102.surface",
+                            LayerName = $"S-102: {_fileName}",
+                            Plane = S98DisplayPlane.Bathymetry,
+                            WithinPlanePriority = 0,
+                            Coverage = styledLayer,
+                            Viewport = viewport,
+                        },
                     },
-                },
-                Spec = new SpecRef("S-102", default),
-                SourceDatasetId = _fileName,
-                Info = info,
-            };
+                    Spec = new SpecRef("S-102", default),
+                    SourceDatasetId = _fileName,
+                    Info = info,
+                };
+            }
+            catch
+            {
+                _source.SelectOverviewLevel(previousLevel);
+                throw;
+            }
         }
         finally
         {
             _renderGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Selects the pyramid level whose native cell spacing best matches
+    /// the viewport's pixel density (issue #486). Falls back to level 0
+    /// when no viewport is supplied (existing behaviour). Formula:
+    /// <code>
+    ///   cellsPerPixel = min(nativeCols / viewport.WidthPixels,
+    ///                       nativeRows / viewport.HeightPixels)
+    ///   level         = clamp(floor(log2(cellsPerPixel)), 0, maxLevel)
+    /// </code>
+    /// This keeps ≥ 1 native cell per screen pixel at the selected
+    /// level (never oversamples the display) while dropping resolution
+    /// as fast as the viewport allows.
+    /// </summary>
+    private void SelectOverviewLevelForViewport(EncDotNet.S100.Pipelines.Viewport? viewport)
+    {
+        if (viewport is null)
+        {
+            _source.SelectOverviewLevel(0);
+            return;
+        }
+
+        // Always start from the *native* (level-0) geometry when
+        // computing the ratio; if we've been re-entered we may
+        // currently be on a coarser level, and Metadata reflects that.
+        int nativeRows;
+        int nativeCols;
+        {
+            var previousLevel = _source.SelectedOverviewLevel;
+            _source.SelectOverviewLevel(0);
+            nativeRows = _source.Metadata.GridMetadata.NumRows;
+            nativeCols = _source.Metadata.GridMetadata.NumColumns;
+            _source.SelectOverviewLevel(previousLevel);
+        }
+
+        if (viewport.WidthPixels <= 0 || viewport.HeightPixels <= 0)
+        {
+            _source.SelectOverviewLevel(0);
+            return;
+        }
+
+        double cellsPerPx = Math.Min(
+            (double)nativeCols / viewport.WidthPixels,
+            (double)nativeRows / viewport.HeightPixels);
+
+        int desiredLevel = cellsPerPx <= 1.0
+            ? 0
+            : (int)Math.Floor(Math.Log2(cellsPerPx));
+
+        var available = _source.AvailableOverviewLevels;
+        int maxLevel = available.Count - 1;
+        int level = Math.Clamp(desiredLevel, 0, maxLevel);
+        _source.SelectOverviewLevel(level);
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;

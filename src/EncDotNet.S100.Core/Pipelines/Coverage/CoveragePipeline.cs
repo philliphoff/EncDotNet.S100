@@ -2,6 +2,7 @@ using System.Diagnostics;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Diagnostics;
+using EncDotNet.S100.Pipelines.Coverage.Pyramid;
 
 namespace EncDotNet.S100.Pipelines.Coverage;
 
@@ -105,6 +106,14 @@ public class CoveragePipeline
                 readActivity?.SetTag("s100.coverage.stride.row", region.RowStride);
                 readActivity?.SetTag("s100.coverage.stride.col", region.ColStride);
                 readActivity?.SetTag("s100.coverage.subset", viewport is not null);
+
+                // Overview level telemetry (issue #486). Tag the read span
+                // and record a per-product histogram sample so dashboards can
+                // show the distribution of levels served across a session.
+                // A source without a pyramid always reports level 0.
+                var overviewLevel = source.SelectedOverviewLevel;
+                readActivity?.SetTag(TelemetryTags.CoverageOverviewLevel, overviewLevel);
+                PipelineMetrics.CoverageOverviewLevelSelected.Record(overviewLevel, productTag);
             }
 
             long gridCells = (long)metadata.GridMetadata.NumRows * metadata.GridMetadata.NumColumns;
@@ -185,6 +194,64 @@ public interface ICoverageSource
     /// <param name="region">The grid subset and stride to sample.</param>
     /// <param name="cancellationToken">Signals that the render has been cancelled.</param>
     SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default);
+
+    // -----------------------------------------------------------------
+    // Overview pyramid (S-100 Part 10c mipmaps; issue #486)
+    //
+    // The additive members below are default-implemented so every
+    // existing ICoverageSource keeps its current behaviour (a single
+    // Level 0 "base" level and a no-op selector). Sources that expose
+    // a real pyramid override them and *also* make their Metadata and
+    // Sample honour the currently-selected level so callers do not
+    // need to change code paths — including the sibling viewport-
+    // scoping work in issue #487 which computes GridRegion.FromViewport
+    // against Metadata.GridMetadata.
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// The overview levels this source can serve, in increasing order.
+    /// Level 0 is always the native (base) grid; higher levels are
+    /// downsampled (level <c>N</c> = 2^N × coarser per axis).
+    /// Sources without an overview pyramid return a single-element
+    /// list describing the base grid.
+    /// </summary>
+    IReadOnlyList<CoverageOverviewLevel> AvailableOverviewLevels =>
+        [
+            new CoverageOverviewLevel(
+                0,
+                Metadata.GridMetadata.NumRows,
+                Metadata.GridMetadata.NumColumns,
+                Metadata.GridMetadata.SpacingLatitudinal,
+                Metadata.GridMetadata.SpacingLongitudinal),
+        ];
+
+    /// <summary>
+    /// The level index currently selected by <see cref="SelectOverviewLevel"/>.
+    /// Defaults to <c>0</c> (base grid).
+    /// </summary>
+    int SelectedOverviewLevel => 0;
+
+    /// <summary>
+    /// Selects the overview level to serve on subsequent
+    /// <see cref="Metadata"/> reads and <see cref="Sample"/> calls.
+    /// After the call, <see cref="Metadata"/>'s
+    /// <see cref="CoverageMetadata.GridMetadata"/> reflects the
+    /// level's rows/cols/spacing so viewport-derived
+    /// <see cref="GridRegion"/>s pick up the correct geometry
+    /// automatically. Sources without a pyramid must accept
+    /// <paramref name="level"/> == 0 as a no-op; other values may
+    /// throw or be silently clamped (see the source's documentation).
+    /// </summary>
+    /// <param name="level">
+    /// Zero-based level index, expected to be in
+    /// <c>[0, AvailableOverviewLevels.Count - 1]</c>.
+    /// </param>
+    void SelectOverviewLevel(int level)
+    {
+        if (level != 0)
+            throw new ArgumentOutOfRangeException(nameof(level), level,
+                "This coverage source has no overview pyramid; only level 0 is valid.");
+    }
 }
 
 public class CoverageMetadata
