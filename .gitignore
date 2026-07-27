@@ -55,3 +55,4 @@ nunit-*.xml
 
 # Mac OS Files
 .DS_Store
+perf-runs/

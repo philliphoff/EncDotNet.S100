@@ -158,6 +158,18 @@ public sealed class IdentifyFeaturesService
         var lonScale = Math.Cos(request.Latitude * Math.PI / 180.0);
         var lonPad = radius / (MetersPerDegreeLatitude * (Math.Abs(lonScale) < 1e-6 ? 1e-6 : Math.Abs(lonScale)));
 
+        // Spatial pre-filter passed down to FeatureAccessor: skips
+        // features whose MBR doesn't touch the pick box before we
+        // compute per-feature containment / distance. Index-backed
+        // sources (S-101) answer this in sub-linear time; other
+        // products fall back to a linear MBR scan (still cheaper than
+        // resolving distance for every feature). See issue #490.
+        var pickExtent = new BoundingBox(
+            Math.Clamp(request.Latitude - latPad, -90.0, 90.0),
+            request.Longitude - lonPad,
+            Math.Clamp(request.Latitude + latPad, -90.0, 90.0),
+            request.Longitude + lonPad);
+
         var snapshot = _catalog.Datasets;
         var hits = new List<Hit>();
 
@@ -175,7 +187,7 @@ public sealed class IdentifyFeaturesService
                 continue;
             }
 
-            var features = FeatureAccessor.GetFeatures(dataset);
+            var features = FeatureAccessor.GetFeatures(dataset, pickExtent);
             if (features is null)
             {
                 continue;
