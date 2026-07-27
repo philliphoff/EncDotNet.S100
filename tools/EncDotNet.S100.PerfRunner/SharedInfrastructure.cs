@@ -228,7 +228,7 @@ internal static class SharedInfrastructure
             {
                 throw new ArgumentException(
                     $"Constructor parameter '{parameters[i].Name}' at position {i} has no default value.",
-                    nameof(ctor));
+                    nameof(providedArgs));
             }
             args[i] = parameters[i].DefaultValue;
         }
