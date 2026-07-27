@@ -23,6 +23,7 @@ public static class ScenarioRegistry
         Register(() => new Scenarios.ExchangeSetOpenScenario());
         Register(() => new Scenarios.S101RealColdScenario());
         Register(() => new Scenarios.S101RealWarmScenario());
+        Register(() => new Scenarios.S101PickWarmScenario());
         Register(() => new Scenarios.S102RealWarmScenario());
         Register(() => new Scenarios.S111RealWarmScenario());
     }

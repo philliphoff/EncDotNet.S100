@@ -1,7 +1,9 @@
+using System.Runtime.CompilerServices;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Spatial;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -9,7 +11,7 @@ namespace EncDotNet.S100.Datasets.S101;
 /// Adapts an <see cref="S101Dataset"/> to the pipeline's <see cref="IVectorSource"/>
 /// interface, projecting S-101 feature records into the generic feature model.
 /// </summary>
-public sealed class S101VectorSource : IVectorSource
+public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
 {
     private const byte RcnmPoint = 110;
     private const byte RcnmMultiPoint = 115;
@@ -19,12 +21,31 @@ public sealed class S101VectorSource : IVectorSource
     private const byte OrientationReverse = 2;
     private const byte UsageExterior = 1;
 
+    private const string ProductTag = "S-101";
+
+    /// <summary>
+    /// Cache of per-dataset feature materialisation + spatial index,
+    /// keyed by <see cref="S101Dataset"/>. Weak-keyed so a dataset
+    /// eligible for GC takes its <see cref="FeatureCache"/> with it —
+    /// no artificial lifetime extension for the cache to leak.
+    /// </summary>
+    /// <remarks>
+    /// This lets the identify path
+    /// (<c>FeatureAccessor.GetFeatures(dataset) → new S101VectorSource(dataset)</c>)
+    /// pay the geometry-resolution + index-build cost exactly once per
+    /// dataset instance, even though each call constructs a fresh
+    /// <see cref="S101VectorSource"/>. See issue #490.
+    /// </remarks>
+    private static readonly ConditionalWeakTable<S101Dataset, FeatureCache> s_caches = new();
+
     private readonly S101Dataset _dataset;
+    private readonly FeatureCache _cache;
 
     public S101VectorSource(S101Dataset dataset)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         _dataset = dataset;
+        _cache = s_caches.GetValue(dataset, static ds => new FeatureCache(ds));
     }
 
     public VectorMetadata Metadata => new()
@@ -34,6 +55,9 @@ public sealed class S101VectorSource : IVectorSource
         HorizontalCRS = "EPSG:4326",
         CompilationScaleDenominator = 0, // S-101 doesn't encode scale in DSSI the same way as S-57
     };
+
+    /// <inheritdoc />
+    public IVectorSpatialIndex Index => _cache.Index;
 
     private static SpecRef BuildSpec(S101Document doc)
     {
@@ -46,10 +70,50 @@ public sealed class S101VectorSource : IVectorSource
         return new SpecRef("S-101", default);
     }
 
+    /// <summary>
+    /// Returns all features (when <paramref name="extent"/> is
+    /// <see langword="null"/>) or every feature whose geometry MBR
+    /// overlaps <paramref name="extent"/>. Extent queries are answered
+    /// from the lazily-built spatial index (see <see cref="Index"/>);
+    /// the whole-dataset case returns the cached feature list without
+    /// touching the tree.
+    /// </summary>
     public IReadOnlyList<Feature> GetFeatures(BoundingBox? extent = null)
     {
-        var doc = _dataset.Document;
-        var features = new List<Feature>();
+        return extent is null
+            ? _cache.Features
+            : _cache.Index.Query(extent);
+    }
+
+    /// <summary>
+    /// Per-dataset cache of the materialised feature list and its
+    /// spatial index. Both are built lazily and only once per
+    /// <see cref="S101Dataset"/> instance; concurrent callers race
+    /// once and then share the result via <see cref="Lazy{T}"/>.
+    /// </summary>
+    private sealed class FeatureCache
+    {
+        private readonly Lazy<IReadOnlyList<Feature>> _features;
+        private readonly Lazy<IVectorSpatialIndex> _index;
+
+        public FeatureCache(S101Dataset dataset)
+        {
+            _features = new Lazy<IReadOnlyList<Feature>>(
+                () => MaterialiseFeatures(dataset),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            _index = new Lazy<IVectorSpatialIndex>(
+                () => IVectorSpatialIndex.Build(Features, ProductTag),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+        }
+
+        public IReadOnlyList<Feature> Features => _features.Value;
+        public IVectorSpatialIndex Index => _index.Value;
+    }
+
+    private static IReadOnlyList<Feature> MaterialiseFeatures(S101Dataset dataset)
+    {
+        var doc = dataset.Document;
+        var features = new List<Feature>(doc.Features.Count);
 
         foreach (var feat in doc.Features)
         {
@@ -59,7 +123,6 @@ public sealed class S101VectorSource : IVectorSource
             // Determine geometry type and resolve coordinates from spatial associations
             var (geomType, coords) = ResolveSpatialGeometry(feat, doc);
             if (coords.Count == 0) continue;
-            if (extent is not null && !IntersectsExtent(coords, extent)) continue;
 
             var interiorRings = geomType == GeometryType.Surface
                 ? ResolveSurfaceInteriorRings(feat, doc)
@@ -343,20 +406,5 @@ public sealed class S101VectorSource : IVectorSource
         }
 
         return new BoundingBox(minLat, minLon, maxLat, maxLon);
-    }
-
-    private static bool IntersectsExtent(
-        IReadOnlyList<GeoPosition> coords,
-        BoundingBox extent)
-    {
-        foreach (var (lat, lon) in coords)
-        {
-            if (lat >= extent.SouthLatitude && lat <= extent.NorthLatitude
-                && lon >= extent.WestLongitude && lon <= extent.EastLongitude)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 }
