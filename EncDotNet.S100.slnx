@@ -68,6 +68,7 @@
     <Project Path="tests/EncDotNet.S100.Mcp.Tools.Tests/EncDotNet.S100.Mcp.Tools.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Mcp.Tests/EncDotNet.S100.Mcp.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfReport.Tests/EncDotNet.S100.PerfReport.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.PerfRunner.Tests/EncDotNet.S100.PerfRunner.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Viewer.Tests/EncDotNet.S100.Viewer.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
