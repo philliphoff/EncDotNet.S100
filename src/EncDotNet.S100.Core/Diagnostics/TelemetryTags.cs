@@ -88,4 +88,12 @@ public static class TelemetryTags
 
     /// <inheritdoc cref="GcGen0Delta"/>
     public const string GcGen2Delta = "gc.gen2.delta";
+
+    /// <summary>
+    /// Selected line-LOD pyramid level index for the current paint (0 =
+    /// coarsest). Attached to
+    /// <c>s100.geometry.vertices.out</c> and to renderer LOD-cache
+    /// counters so hit/miss ratios can be attributed per zoom band.
+    /// </summary>
+    public const string LodBucket = "s100.geometry.lod.bucket";
 }

@@ -238,6 +238,60 @@ hold a reference outside the lock); they are reclaimed by GC finalization.
   lines onto NTS DP is documented as a possible future micro-opt in
   `docs/design/mapsui-performance.md`.
 
+### Precomputed line LOD (opt-in)
+
+An **opt-in** precomputed line-LOD pyramid replaces the inline radial-distance
+filter with a small pyramid of Douglas-Peucker levels
+(`LineLodTolerances.HalfOctaveDefault = [256, 64, 16]` metres) built once
+per feature on first paint and cached in-process. At paint time the
+renderer picks the level whose tolerance is ≤ half a screen pixel at the
+current ground resolution — coarser zooms pick coarser levels — so pans
+inside a zoom band re-key against the same LOD bucket, absorbing float
+noise from the caller's resolution and eliminating the cold rebuild after
+a band change.
+
+Enable it by setting `RenderingOptimizations.PrecomputedLineLodEnabled`
+= `true` (or the `S100_VECTOR_LINE_LOD` env var). It is **off by default**;
+when off, lines fall back to the inline radial-distance filter and the
+raw-resolution cache key described above (no behaviour change vs.
+earlier releases).
+
+Measured on the dense S-101 trial cell `101GB00GB302045` (2.35 MB,
+11 589 drawing instructions, viewer + Skia + Metal):
+
+| metric (rolling window, palette-flip stress) | Off | On   | Delta   |
+|---|---|---|---|
+| vector paint **max** (spike)                 | 139 ms | 15 ms | **-89%** |
+| whole-frame max                              | 394 ms | 68 ms | **-83%** |
+| vector paint **mean**                        | ~2 ms  | ~1 ms | -50%   |
+| vector paint **P95**                         | 7.6 ms | 3.7 ms | -51%   |
+
+Screenshot A/B at each scale band (bbox / z13 / z14 / z15 / z16) is
+**pixel-identical** to the flag-off output — the LOD tolerances are
+sub-pixel per band by design.
+
+Under multi-cell stress (six overlapping UKHO trial cells, palette
+flips + cross-cell z14/z15 pans) the LOD path improves warm vecMean
+(0.87 → 0.63 ms) and vecP95 (3.3 → 1.9 ms) but adds a +13 ms tax to the
+first-paint vecMax while pyramids are built for every visible line
+feature. That tax is the reason the flag ships default-off: on the
+dense single-cell workload LOD dominates; under a shallow-detail
+multi-cell workload the pyramid-build cost is paid once and *not
+amortized* across the very cheap paints that dominate that regime.
+A future S-101 reader hook that pre-builds pyramids at dataset open
+would move the tax off the first paint.
+
+Telemetry (in addition to the existing `s100.simplify.cache.*`
+counters):
+
+| Instrument | Unit | Purpose |
+|---|---|---|
+| `s100.geometry.lod.build.duration` | ms | Time to build a pyramid on cache miss |
+| `s100.geometry.vertices.in` | count | Input vertices per pyramid build |
+| `s100.geometry.vertices.out` | count | Output vertices per LOD level (tagged `s100.lod.bucket`) |
+| `s100.geometry.lod.cache.hit.count` | count | LOD-level path served from `SKPath` cache |
+| `s100.geometry.lod.cache.miss.count` | count | LOD-level path (re)built (tagged `s100.lod.bucket`) |
+
 ### Pattern-fill clip generalization
 
 Independently of the resolution-aware line simplification above,

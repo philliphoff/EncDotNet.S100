@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using EncDotNet.S100.Diagnostics;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -86,8 +89,20 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     private readonly ISkiaStyleRenderer _inner;
     private readonly double _simplifyOverridePx;
     private double _lastSimplifyPx = double.NaN;
+    private bool _lastLodEnabled;
     private readonly object _sync = new();
     private readonly PathCache _cache;
+
+    /// <summary>
+    /// Per-feature pyramid cache. Keyed by <c>(featureId, position)</c> so
+    /// each part of a <c>MultiLineString</c> has its own pyramid. Concurrent
+    /// so the offscreen-render / tile threads can share it with the on-screen
+    /// paint. Bounded implicitly by the number of distinct line features
+    /// painted in this renderer's lifetime, which is small for a single
+    /// dataset — the underlying <see cref="CartesianLineLodPyramid"/> stores
+    /// at most three tolerance-simplified copies plus the passthrough.
+    /// </summary>
+    private readonly ConcurrentDictionary<(long FeatureId, int Position), CartesianLineLodPyramid> _pyramids = new();
 
     /// <summary>
     /// Effective line-simplification tolerance, in screen pixels. When an
@@ -303,25 +318,66 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             return;
         }
 
-        var key = new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
+        // When the precomputed line LOD pyramid is enabled, key the SKPath
+        // cache by the LOD bucket (level index) instead of the raw
+        // resolution bits. Pans within a zoom band still hit; a band change
+        // misses and rebuilds an SKPath from the pyramid level's coordinates
+        // (which are already simplified — no per-frame simplification pass).
+        // When the flag is off we fall back to the original raw-resolution
+        // key and the inline radial-distance simplification.
+        var lodEnabled = RenderingOptimizations.PrecomputedLineLodEnabled;
+        CartesianLineLodPyramid? pyramid = null;
+        var lodBucket = -1;
+        if (lodEnabled)
+        {
+            pyramid = GetOrBuildPyramid(featureId, position, lineString);
+            lodBucket = pyramid.SelectLevelIndex(resolution);
+        }
+
+        var key = lodEnabled
+            ? new PathKey(featureId, position, lodBucket)
+            : new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
 
         var tol = EffectiveSimplifyPx;
 
         PathEntry? entry;
         lock (_sync)
         {
-            EnsureToleranceCurrent(tol);
+            EnsureToleranceAndModeCurrent(tol, lodEnabled);
             entry = _cache.Get(key);
         }
 
         if (entry is not null)
         {
             S100Diag.Telemetry.SimplifyCacheHit.Add(1);
+            if (lodEnabled)
+            {
+                GeometryLodMetrics.CacheHits.Add(1,
+                    new KeyValuePair<string, object?>(TelemetryTags.LodBucket, lodBucket));
+            }
         }
         else
         {
             S100Diag.Telemetry.SimplifyCacheMiss.Add(1);
-            var built = BuildLineEntry(lineString, resolution, tol);
+            if (lodEnabled)
+            {
+                GeometryLodMetrics.CacheMisses.Add(1,
+                    new KeyValuePair<string, object?>(TelemetryTags.LodBucket, lodBucket));
+            }
+
+            PathEntry built;
+            if (lodEnabled && pyramid is not null)
+            {
+                var selected = pyramid.Levels[lodBucket];
+                built = BuildLineEntryFromLod(selected.Coordinates, resolution);
+                GeometryLodMetrics.VerticesOut.Record(selected.Coordinates.Length,
+                    new KeyValuePair<string, object?>(TelemetryTags.LodBucket, lodBucket));
+            }
+            else
+            {
+                built = BuildLineEntry(lineString, resolution, tol);
+            }
+
             lock (_sync)
             {
                 var again = _cache.Get(key);
@@ -351,6 +407,74 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         {
             canvas.RestoreToCount(restore);
         }
+    }
+
+    /// <summary>
+    /// Fetches — or lazily builds — the LOD pyramid for one line part. The
+    /// pyramid is scoped to this <see cref="CachedVectorStyleRenderer"/>
+    /// instance so tests get a clean slate per fixture and the shared
+    /// <see cref="Instance"/> holds a single process-scoped table.
+    /// </summary>
+    /// <remarks>
+    /// Built directly from the NTS <see cref="LineString"/>'s already-projected
+    /// coordinates (EPSG:3857 metres in this renderer's world), which is
+    /// pragmatic for PR-2. When the reproject-once work (issue #488) lands
+    /// with a <c>ProjectedGeometry</c> shape that also exposes the WGS-84
+    /// full-resolution coords, this can migrate to the Core WGS-84
+    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid"/>
+    /// and share disk-cache storage across processes.
+    /// </remarks>
+    private CartesianLineLodPyramid GetOrBuildPyramid(long featureId, int position, LineString lineString)
+    {
+        var key = (featureId, position);
+        if (_pyramids.TryGetValue(key, out var existing))
+        {
+            return existing;
+        }
+
+        var coords = lineString.Coordinates;
+        var cartesian = new CartesianPoint[coords.Length];
+        for (var i = 0; i < coords.Length; i++)
+        {
+            cartesian[i] = new CartesianPoint(coords[i].X, coords[i].Y);
+        }
+
+        var built = CartesianLineLodPyramid.Build(cartesian, LineLodTolerances.HalfOctaveDefault);
+        return _pyramids.GetOrAdd(key, built);
+    }
+
+    /// <summary>
+    /// Same as <see cref="BuildLineEntry"/> but consumes a pre-simplified
+    /// coordinate array from a <see cref="CartesianLineLodPyramid"/> level.
+    /// No inline sub-pixel dropping: the pyramid already guarantees dropped
+    /// detail is sub-pixel at the resolution that selected this level.
+    /// </summary>
+    private static PathEntry BuildLineEntryFromLod(CartesianPoint[] coordinates, double resolution)
+    {
+        var minX = coordinates[0].X;
+        var minY = coordinates[0].Y;
+        for (var i = 1; i < coordinates.Length; i++)
+        {
+            if (coordinates[i].X < minX) minX = coordinates[i].X;
+            if (coordinates[i].Y < minY) minY = coordinates[i].Y;
+        }
+
+        var anchorX = minX;
+        var anchorY = minY;
+
+        var path = new SKPath();
+        var px0 = (float)((coordinates[0].X - anchorX) / resolution);
+        var py0 = (float)((anchorY - coordinates[0].Y) / resolution);
+        path.MoveTo(px0, py0);
+
+        for (var i = 1; i < coordinates.Length; i++)
+        {
+            path.LineTo(
+                (float)((coordinates[i].X - anchorX) / resolution),
+                (float)((anchorY - coordinates[i].Y) / resolution));
+        }
+
+        return new PathEntry(path, anchorX, anchorY, coordinates.Length);
     }
 
     /// <summary>
@@ -404,21 +528,39 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     }
 
     /// <summary>
-    /// Clears the shared path cache when the line simplification tolerance
-    /// changes (e.g. a live Settings → Map toggle): cached paths were built at
-    /// the previous tolerance and must be rebuilt. Callers must hold
-    /// <see cref="_sync"/>.
+    /// Clears the shared path cache when either the line simplification
+    /// tolerance or the precomputed LOD flag changes (e.g. a live Settings →
+    /// Map toggle): cached paths were built under the previous configuration
+    /// — including under a different cache-key shape (LOD bucket vs raw
+    /// resolution bits) — and must be rebuilt. Also drops the pyramid cache
+    /// on a LOD toggle so tests and live re-flip scenarios pick up freshly
+    /// built pyramids. Callers must hold <see cref="_sync"/>.
     /// </summary>
-    private void EnsureToleranceCurrent(double lineTol)
+    private void EnsureToleranceAndModeCurrent(double lineTol, bool lodEnabled)
     {
-        if (_lastSimplifyPx.Equals(lineTol))
+        var tolChanged = !_lastSimplifyPx.Equals(lineTol);
+        var lodChanged = _lastLodEnabled != lodEnabled;
+        if (!tolChanged && !lodChanged)
         {
             return;
         }
 
         _cache.Clear();
         _lastSimplifyPx = lineTol;
+        if (lodChanged)
+        {
+            _pyramids.Clear();
+            _lastLodEnabled = lodEnabled;
+        }
     }
+
+    /// <summary>
+    /// Legacy tolerance-only invalidation retained for the polygon path.
+    /// Delegates to <see cref="EnsureToleranceAndModeCurrent"/> with the
+    /// current LOD flag so both entry points invalidate consistently.
+    /// </summary>
+    private void EnsureToleranceCurrent(double lineTol)
+        => EnsureToleranceAndModeCurrent(lineTol, _lastLodEnabled);
 
     /// <summary>
     /// Reproduces Mapsui's <c>LineStringRenderer</c> stroke paint exactly,

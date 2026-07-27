@@ -78,6 +78,7 @@ public static class RenderingOptimizations
     private static bool s_vectorSnapshotPrebuildEnabled;
     private static bool s_vectorPathCacheEnabled;
     private static bool s_geometrySimplificationEnabled;
+    private static bool s_precomputedLineLodEnabled;
     private static RenderSubsystemKind s_renderSubsystem;
     private static VectorSceneMode s_sceneMode;
     private static double s_tileGutterDip;
@@ -106,6 +107,14 @@ public static class RenderingOptimizations
 
         (s_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
             SeedSimplification();
+
+        // Precomputed line LOD pyramid (issue #489). Default OFF; the seven-gate
+        // measurement pass in docs/design/mapsui-performance.md must clear
+        // "≥50% cold-rebuild spike reduction, zero warm regression, no visual
+        // regression" on both the dense S-101 cell and the multi-cell AU IC-ENC
+        // set before we consider flipping this default.
+        (s_precomputedLineLodEnabled, PrecomputedLineLodEnvExplicit) =
+            SeedBool("S100_VECTOR_LINE_LOD", defaultValue: false);
 
         (s_renderSubsystem, RenderSubsystemEnvExplicit) = SeedRenderSubsystem();
         (s_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
@@ -207,6 +216,29 @@ public static class RenderingOptimizations
 
     /// <summary>True when geometry simplification is pinned by an explicit <c>S100_VECTOR_SIMPLIFY_PX</c>.</summary>
     public static bool GeometrySimplificationEnvExplicit { get; }
+
+    /// <summary>
+    /// Whether the precomputed line LOD pyramid (issue #489) is consumed at
+    /// SKPath-build time inside <see cref="CachedVectorStyleRenderer"/>. When
+    /// on, each line's coordinates are simplified once per feature into a
+    /// small tolerance-tagged pyramid (see
+    /// <c>EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid</c>) and the
+    /// pyramid level whose dropped detail is guaranteed sub-pixel at the
+    /// current viewport is used to build the <c>SKPath</c>. Pans within a
+    /// zoom band re-use the SKPath as today; the cold spike at a band change
+    /// no longer pays a full-resolution simplification pass because the
+    /// pyramid was built once. Seeded from <c>S100_VECTOR_LINE_LOD</c>;
+    /// default <b>off</b> until the seven-gate perf pass in the design doc
+    /// clears (see <c>docs/design/mapsui-performance.md</c>).
+    /// </summary>
+    public static bool PrecomputedLineLodEnabled
+    {
+        get => s_precomputedLineLodEnabled;
+        set { if (!PrecomputedLineLodEnvExplicit) s_precomputedLineLodEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="PrecomputedLineLodEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool PrecomputedLineLodEnvExplicit { get; }
 
     /// <summary>
     /// Selects the active base-plane chart render subsystem (the A/B switch for
