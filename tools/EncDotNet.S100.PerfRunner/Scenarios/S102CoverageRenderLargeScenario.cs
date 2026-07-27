@@ -17,7 +17,13 @@ internal sealed class S102CoverageRenderLargeScenario : IPerfScenario
     public string Name => "s102-coverage-render-large";
     public string Description => "S-102 HDF5: warm Render() on a synthetic ~1000×1000 grid.";
 
-    private const int SyntheticDim = 1000;
+    public const int SyntheticDim = 1000;
+    // Grid origin and spacing that match EnsureSyntheticFixture below.
+    // Kept public so viewport-scoped sibling scenarios can construct
+    // viewports that hit meaningful subsets of this same fixture.
+    public const double OriginLat = 50.0;
+    public const double OriginLon = -1.0;
+    public const double Spacing = 0.0001;
 
     private Datasets.Pipelines.IDatasetProcessor? _processor;
     private string? _fixturePath;
@@ -46,7 +52,7 @@ internal sealed class S102CoverageRenderLargeScenario : IPerfScenario
     /// iterations (so we time the warm Render path, not the cold open) but
     /// large enough that per-cell allocations dominate the cost profile.
     /// </summary>
-    private static string EnsureSyntheticFixture(int dim)
+    public static string EnsureSyntheticFixture(int dim)
     {
         var path = Path.Combine(
             Path.GetTempPath(),

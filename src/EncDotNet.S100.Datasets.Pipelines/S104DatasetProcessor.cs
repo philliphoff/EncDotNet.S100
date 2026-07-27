@@ -232,12 +232,26 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         var pipeline = new PortrayalPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+
+        // Viewport-scoped sampling (issue #487).
+        int crs = ((S104DatasetData.GriddedCoverage)_data).Dataset.HorizontalCRS ?? 4326;
+        ICrsTransform? wgs84ToNative = null;
+        if (context?.Viewport is not null && crs != 4326)
+        {
+            wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+        }
+
+        var layer = await pipeline.ProcessAsync(
+            source,
+            catalogue,
+            viewport: context?.Viewport,
+            wgs84ToNative: wgs84ToNative,
+            mariner: context?.Mariner ?? MarinerSettings.Default,
+            cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
         var griddedDataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
-        int crs = griddedDataset.HorizontalCRS ?? 4326;
         var geoId = griddedDataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
             ? $", time: {selectedTime:u} ({source.AvailableTimes.Count} steps)"
@@ -312,7 +326,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             source.SelectTime(source.AvailableTimes[0]);
 
         var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
-            .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var extent = source.Metadata.Extent;

@@ -169,11 +169,32 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             };
 
             var pipeline = _pipeline;
-            var layer = await pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+
+            // Viewport-scoped sampling (issue #487): when the render context
+            // supplies a live map viewport, pass it (and the WGS84→native
+            // transform for non-4326 grids) through so the pipeline samples
+            // only cells that fall inside the viewport at the viewport's
+            // ground resolution. Falls back to full-grid sampling when the
+            // caller doesn't specify a viewport (e.g. RenderHeadlessAsync,
+            // CLI tools). Applies on initial load of the coverage layer; live
+            // pan/zoom re-sampling is a follow-up (see #486).
+            int crs = _dataset.HorizontalCRS ?? 4326;
+            ICrsTransform? wgs84ToNative = null;
+            if (context?.Viewport is not null && crs != 4326)
+            {
+                wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+            }
+
+            var layer = await pipeline.ProcessAsync(
+                _source,
+                _catalogue,
+                viewport: context?.Viewport,
+                wgs84ToNative: wgs84ToNative,
+                mariner: context?.Mariner ?? MarinerSettings.Default,
+                cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var styledLayer = (StyledCoverageLayer)layer;
 
-            int crs = _dataset.HorizontalCRS ?? 4326;
             var geoId = _dataset.GeographicIdentifier ?? _fileName;
             var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
 
@@ -235,7 +256,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         var styledLayer = (StyledCoverageLayer)await _pipeline
-            .ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ProcessAsync(_source, _catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var extent = _source.Metadata.Extent;
