@@ -33,4 +33,18 @@ public static class FeatureTagKeys
     /// must remain visible even when S-102 replaces depth shading.
     /// </summary>
     public const string DepthContourValue = "S100.DepthContourValue";
+
+    /// <summary>
+    /// Precomputed <see cref="EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid"/>
+    /// for a line feature, attached at dataset open by the S-101 processor
+    /// (issue #489, PR-3). The Mapsui renderer reads this tag in its fast-line
+    /// path to skip the per-frame Douglas–Peucker pass entirely, projecting
+    /// the pre-simplified WGS-84 levels to EPSG:3857 on demand instead.
+    /// Absent when the feature is not a line, or when the S-101 processor
+    /// was constructed without a shared
+    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache"/>
+    /// available at open — the renderer's fast-line path then falls back to
+    /// today's inline Douglas–Peucker simplification.
+    /// </summary>
+    public const string LineLodPyramid = "S100.LineLodPyramid";
 }

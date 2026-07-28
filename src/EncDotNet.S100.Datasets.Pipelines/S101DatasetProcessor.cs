@@ -43,6 +43,20 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // algorithm / serialization-format qualifiers. Constant for the lifetime of
     // this processor.
     private readonly string _patternClipScope;
+
+    // Lowercase hex SHA-256 of the raw dataset bytes (including any applied
+    // updates), used as the dataset-scoped prefix in the process-shared
+    // ILineLodCache keys (issue #489, PR-3). Computed once during ctor; the
+    // hashing cost is intentionally paid on open so the tax is visible in the
+    // open-time measurement rather than hidden at first paint.
+    private readonly string _datasetContentHash;
+
+    // Precomputed line-LOD pyramids for line features in this dataset, keyed
+    // by feature id (FRID). Populated in the ctor when
+    // <see cref="RenderingOptimizations.LineLodCache"/> is present; null
+    // otherwise. Surfaced through <see cref="VectorPortrayalResult"/> so the
+    // Mapsui layer builder can attach each pyramid to its owning IFeature.
+    private readonly IReadOnlyDictionary<long, LineLodPyramid>? _lineLodPyramids;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -142,8 +156,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPortrayalInstructionCache? sharedInstructionCache = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache, CreateFileSystemResolver(path))
+        IPortrayalInstructionCache? sharedInstructionCache = null,
+        ILineLodCache? sharedLineLodCache = null)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache, CreateFileSystemResolver(path), sharedLineLodCache)
     {
     }
 
@@ -159,7 +174,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        IReadOnlyDictionary<string, string>? supportFiles = null)
+        IReadOnlyDictionary<string, string>? supportFiles = null,
+        ILineLodCache? sharedLineLodCache = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
@@ -167,7 +183,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            new ExternalTextFileResolver(source, relativePath, supportFiles).AsDelegate())
+            new ExternalTextFileResolver(source, relativePath, supportFiles).AsDelegate(),
+            sharedLineLodCache)
     {
     }
 
@@ -187,7 +204,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        IReadOnlyDictionary<string, string>? supportFiles = null)
+        IReadOnlyDictionary<string, string>? supportFiles = null,
+        ILineLodCache? sharedLineLodCache = null)
         : this(
             PrepareWithUpdates(source, baseRelativePath, updateRelativePaths),
             AssetSourceHelpers.GetFileName(baseRelativePath),
@@ -195,7 +213,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            new ExternalTextFileResolver(source, baseRelativePath, supportFiles).AsDelegate())
+            new ExternalTextFileResolver(source, baseRelativePath, supportFiles).AsDelegate(),
+            sharedLineLodCache)
     {
     }
 
@@ -206,7 +225,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache,
-        Func<string, string?>? externalTextResolver = null)
+        Func<string, string?>? externalTextResolver = null,
+        ILineLodCache? sharedLineLodCache = null)
         : this(
             PrepareFromStream(datasetStream),
             fileName,
@@ -214,7 +234,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            externalTextResolver)
+            externalTextResolver,
+            sharedLineLodCache)
     {
     }
 
@@ -225,7 +246,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache,
-        Func<string, string?>? externalTextResolver = null)
+        Func<string, string?>? externalTextResolver = null,
+        ILineLodCache? sharedLineLodCache = null)
     {
         _fileName = fileName;
         _luaEngine = luaEngine;
@@ -246,7 +268,25 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             ? new SpecRef("S-101", s101Edition)
             : new SpecRef("S-101", default);
 
-        _patternClipScope = BuildDatasetScopeKey(prepared.ScopeBytes, _dataset);
+        // Content-addressed hash of the raw dataset bytes (including any
+        // applied updates). Reused as (a) the dataset scope prefix in the
+        // pattern-clip cache key and (b) the dataset prefix in the shared
+        // line-LOD cache keys — one SHA-256 pass in PrepareFromStream /
+        // PrepareWithUpdates, not two. The cost is intentionally paid here
+        // so the open-time measurement in issue #489 includes it.
+        _datasetContentHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(prepared.ScopeBytes)).ToLowerInvariant();
+        _patternClipScope = BuildDatasetScopeKey(_datasetContentHash, _dataset);
+
+        // Awaited (blocking) pre-build of line-LOD pyramids for every line
+        // feature. Runs synchronously in ctor so the Douglas–Peucker cost is
+        // moved to open-time (issue #489, PR-3 gate ii) — never fire-and-
+        // forget, so first paint is deterministically warm. Null when no
+        // shared cache is available; the renderer's fast-line path falls
+        // back to today's on-demand simplification.
+        _lineLodPyramids = sharedLineLodCache is null
+            ? null
+            : PrebuildLineLodPyramids(sharedLineLodCache);
 
         // When a shared instruction cache is injected use it (persistent,
         // cross-cell, process-global); otherwise fall back to a bounded
@@ -426,13 +466,88 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
         var contentHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(datasetBytes)).ToLowerInvariant();
+        return BuildDatasetScopeKey(contentHash, dataset);
+    }
+
+    /// <summary>
+    /// Overload that consumes an already-computed lowercase hex content
+    /// hash, so the ctor can share a single SHA-256 pass with the line-LOD
+    /// cache key rather than hashing the raw bytes twice.
+    /// </summary>
+    internal static string BuildDatasetScopeKey(string contentHashHex, S101Dataset dataset)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(contentHashHex);
+        ArgumentNullException.ThrowIfNull(dataset);
 
         var id = dataset.Document.Identification;
         var sb = new StringBuilder();
-        sb.Append("ds:").Append(contentHash);
+        sb.Append("ds:").Append(contentHashHex);
         sb.Append("|name:").Append(id.DatasetName);
         sb.Append("|ed:").Append(id.ProductSpecificationEdition);
         sb.Append("|crs:EPSG:3857");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds every line feature's precomputed <see cref="LineLodPyramid"/>
+    /// and stores each one in <paramref name="cache"/> so future opens skip
+    /// the Douglas–Peucker pass entirely. Runs synchronously in the ctor —
+    /// see the class comment on <c>_lineLodPyramids</c> — so the tax is
+    /// visible in the open-time measurement rather than hidden at first
+    /// paint (#489 gate ii). Non-line features and features without at
+    /// least two coordinates are silently skipped; a pyramid-build failure
+    /// for one feature does not fail the whole open.
+    /// </summary>
+    private IReadOnlyDictionary<long, LineLodPyramid> PrebuildLineLodPyramids(ILineLodCache cache)
+    {
+        var pyramids = new Dictionary<long, LineLodPyramid>();
+        var vectorSource = new S101VectorSource(_dataset);
+        foreach (var feature in vectorSource.GetFeatures())
+        {
+            if (feature.GeometryType != GeometryType.Curve)
+            {
+                continue;
+            }
+
+            if (feature.Coordinates is null || feature.Coordinates.Count < 2)
+            {
+                continue;
+            }
+
+            var key = BuildLineLodKey(_datasetContentHash, feature.Id);
+            var coords = feature.Coordinates;
+            try
+            {
+                var pyramid = cache.GetOrCompute(
+                    key,
+                    () => LineLodPyramid.Build(coords, LineLodTolerances.HalfOctaveDefault));
+                pyramids[feature.Id] = pyramid;
+            }
+            catch
+            {
+                // Best-effort — a single feature's pre-build failure must
+                // never abort the dataset open. The renderer's fast-line
+                // path will fall back to on-demand simplification for any
+                // feature without an attached pyramid.
+            }
+        }
+
+        return pyramids;
+    }
+
+    /// <summary>
+    /// Composes the content-addressed cache key for one line feature's
+    /// pyramid: dataset content hash + feature reference (FRID) + tolerance
+    /// ladder version. Version-stamped so a change to
+    /// <see cref="LineLodTolerances.HalfOctaveDefault"/> or the simplifier
+    /// forces a cold rebuild rather than serving stale entries.
+    /// </summary>
+    internal static string BuildLineLodKey(string datasetContentHash, long featureId)
+    {
+        var sb = new StringBuilder(96);
+        sb.Append("ds:").Append(datasetContentHash);
+        sb.Append("|frid:").Append(featureId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append("|tol:").Append(LineLodTolerances.ToleranceLadderVersion);
         return sb.ToString();
     }
 
@@ -794,6 +909,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             LayerNames = new[] { "s101.areas", "s101.linework" },
             FeatureTags = featureTags,
+            LineLodPyramids = _lineLodPyramids,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
             CoverageAreas = coverageAreas,

@@ -174,6 +174,17 @@ public sealed class LineLodPyramid
     public LineLodLevel SelectLevel(
         double groundResolutionMetresPerPixel,
         double targetPixels = 0.5)
+        => Levels[SelectLevelIndex(groundResolutionMetresPerPixel, targetPixels)];
+
+    /// <summary>
+    /// Index-returning variant of <see cref="SelectLevel"/>. Callers that
+    /// key downstream caches by LOD band (e.g. an SKPath cache in the Mapsui
+    /// renderer) use the returned index directly as the cache key instead of
+    /// hashing the whole level.
+    /// </summary>
+    public int SelectLevelIndex(
+        double groundResolutionMetresPerPixel,
+        double targetPixels = 0.5)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(
             groundResolutionMetresPerPixel);
@@ -188,13 +199,13 @@ public sealed class LineLodPyramid
             var level = Levels[i];
             if (level.IsPassthrough || level.ToleranceMetres <= budget)
             {
-                return level;
+                return i;
             }
         }
 
         // Should be unreachable because the passthrough level always matches;
         // returning the finest level defensively.
-        return Levels[^1];
+        return Levels.Count - 1;
     }
 }
 
@@ -258,4 +269,14 @@ public static class LineLodTolerances
     /// exact — matching today's behaviour above the finest LOD band.
     /// </summary>
     public static IReadOnlyList<double> HalfOctaveDefault { get; } = [256.0, 64.0, 16.0];
+
+    /// <summary>
+    /// Opaque version tag folded into <see cref="ILineLodCache"/> keys so
+    /// changing the built-in ladder (or the simplifier algorithm) forces a
+    /// cold rebuild of every persisted pyramid rather than serving stale
+    /// entries whose input contract has shifted. Bump this string whenever
+    /// <see cref="HalfOctaveDefault"/> or
+    /// <see cref="DouglasPeuckerLineSimplifier"/> semantics change.
+    /// </summary>
+    public const string ToleranceLadderVersion = "v1-half-octave-256-64-16";
 }

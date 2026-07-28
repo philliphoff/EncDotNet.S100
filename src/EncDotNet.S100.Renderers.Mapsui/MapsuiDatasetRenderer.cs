@@ -160,6 +160,7 @@ public sealed class MapsuiDatasetRenderer
             var layer = renderer.Render(sub.Instructions, result.GeometryProvider);
 
             TagFeatures(layer, result.FeatureTags);
+            TagLineLodPyramids(layer, result.LineLodPyramids);
 
             if (sub.ApplyOutOfBandCap
                 && result.OutOfBandMinDisplayScale is int denom
@@ -364,6 +365,36 @@ public sealed class MapsuiDatasetRenderer
             + "|tol:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.SimplifyToleranceMetres.ToString("R", c)
             + "|gate:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.MinPointsToSimplify.ToString(c)
             + "|fmt:" + DiskPatternClipCache.FormatVersion.ToString(c);
+    }
+
+    /// <summary>
+    /// Copies pre-built line-LOD pyramids onto each Mapsui feature so the
+    /// fast-line paint path (<c>CachedVectorStyleRenderer.DrawLine</c>) can
+    /// skip the per-frame Douglas–Peucker pass. Runs after
+    /// <see cref="TagFeatures"/> and follows the same feature-ref join key
+    /// (<see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>). No-op when
+    /// no pyramids were pre-built at open (issue #489, PR-3).
+    /// </summary>
+    private static void TagLineLodPyramids(
+        ILayer layer,
+        IReadOnlyDictionary<long, EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid>? pyramids)
+    {
+        if (pyramids is null || pyramids.Count == 0)
+            return;
+        if (layer is not MemoryLayer memoryLayer)
+            return;
+
+        foreach (var feature in memoryLayer.Features)
+        {
+            if (feature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
+                continue;
+            if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id))
+                continue;
+            if (!pyramids.TryGetValue(id, out var pyramid))
+                continue;
+
+            feature[FeatureTagKeys.LineLodPyramid] = pyramid;
+        }
     }
 
     /// <summary>
