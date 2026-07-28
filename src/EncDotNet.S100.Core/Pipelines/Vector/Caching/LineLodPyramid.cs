@@ -156,36 +156,41 @@ public sealed class LineLodPyramid
     /// caller. The input coordinates are still WGS-84
     /// <see cref="GeoPosition"/> (so the pyramid remains unprojected and
     /// composes with the future reproject-once cache tracked by #488), but
-    /// the tolerance ladder is interpreted as Mercator metres and internally
-    /// scaled by <c>cos(featureMidLatitude)</c> before Douglas-Peucker is
-    /// applied in the equirectangular real-metre frame. Each returned level
-    /// then records the <em>original</em> Mercator-equivalent tolerance so
-    /// <see cref="SelectLevelIndex"/> can compare a Mercator budget to a
-    /// Mercator tolerance apples-to-apples.
+    /// Douglas–Peucker runs against the vertices <em>projected to true
+    /// EPSG:3857 metres</em> — bit-identical to the projection the renderer
+    /// applies at draw time via <c>Mapsui.Projections.SphericalMercator.FromLonLat</c>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Why this exists.</b> Web Mercator inflates linear distance by
-    /// <c>1/cos φ</c>, so a Cartesian DP applied in EPSG:3857 with tolerance
-    /// <c>T</c> keeps points whose real perpendicular deviation exceeds
-    /// <c>T·cos φ</c>. Applying an equirectangular real-metre DP with the
-    /// same <c>T</c> would instead keep points whose real deviation exceeds
-    /// <c>T</c>, dropping more vertices than the Cartesian path and
-    /// silently violating the sub-pixel-on-screen guarantee at
-    /// non-equatorial latitudes (the higher the latitude, the larger the
-    /// gap: 1.4× at 45°N, 1.7× at 54°N, 2× at 60°N). This overload closes
-    /// that gap so the flag-on renderer path is visually parity-equivalent
-    /// with the pre-#489 (PR-2) Cartesian pyramid.
+    /// <b>Why projected DP, not equirect-with-cos-scaling.</b> An earlier
+    /// version of this method ran DP in an equirectangular real-metre frame
+    /// with the ladder scaled by <c>cos(featureMidLatitude)</c>. That kept
+    /// the DP threshold isotropically consistent with the renderer's
+    /// Mercator ladder at the feature's mid-latitude, but the two DP paths
+    /// still tie-broke "farthest-point" picks differently at sine-apex-
+    /// adjacent vertices (a floating-point residual measured at ~one input-
+    /// vertex spacing on bounded S-101 features, and up to 1.3 km on
+    /// 1°-latitude-span stress geometry). Projecting to true Web Mercator
+    /// before DP eliminates the residual: this method now executes the same
+    /// two operations, in the same order, as the renderer's pre-#489 inline
+    /// Cartesian pyramid — <c>SphericalMercator.FromLonLat</c> then DP at
+    /// tolerance <c>T</c> Mercator metres — so the kept vertex set is
+    /// bit-identical to the Cartesian pyramid the renderer would build at
+    /// draw time.
     /// </para>
     /// <para>
-    /// <b>Residual.</b> The equirectangular frame anchors at a single
-    /// mid-latitude, whereas real Mercator scale varies continuously along
-    /// a feature that spans a latitude range. For typical S-101 line
-    /// features (edge geometries, contours, coastline segments) the span is
-    /// small enough that the residual is well under a pixel; for very long
-    /// features that cross more than a degree of latitude the residual can
-    /// become measurable but is still bounded by the second-order cos-Taylor
-    /// term.
+    /// <b>Storage is still unprojected.</b> The projected coordinates are
+    /// used only for the DP selection; the kept vertices are then extracted
+    /// from the original <see cref="GeoPosition"/> input, so on-disk
+    /// pyramids remain lat/lon and compose with the future reproject-once
+    /// cache tracked by #488.
+    /// </para>
+    /// <para>
+    /// <b>Pole safety.</b> Web Mercator diverges as latitude approaches
+    /// ±90°. Any input latitude beyond the standard EPSG:3857 clip
+    /// (±85.05112878°) falls back to <see cref="Build"/> — accepting the
+    /// equirectangular residual there rather than emitting infinities. This
+    /// bound is well outside S-101 chart coverage.
     /// </para>
     /// </remarks>
     /// <param name="coordinates">
@@ -202,7 +207,7 @@ public sealed class LineLodPyramid
     /// <returns>
     /// A pyramid with <c>mercatorTolerancesMetres.Count + 1</c> levels: one
     /// per requested tolerance (with <c>Level.ToleranceMetres</c> recording
-    /// the original Mercator number), then a passthrough level carrying the
+    /// the Mercator-metre number), then a passthrough level carrying the
     /// input coordinates unchanged.
     /// </returns>
     /// <exception cref="ArgumentException">
@@ -246,26 +251,31 @@ public sealed class LineLodPyramid
                 coordinates.Count);
         }
 
-        // Compute the feature's mid-latitude in radians once; the DP frame
-        // is equirectangular anchored here, so cos(midLat) is the correct
-        // one-shot scaling factor for the whole feature.
-        var minLat = coordinates[0].Latitude;
-        var maxLat = minLat;
-        for (var i = 1; i < coordinates.Count; i++)
+        // Pole safety: Web Mercator diverges near ±90°. Bail to the
+        // equirect real-metre path rather than emit infinities. The
+        // standard EPSG:3857 clip is ±85.05112878°; anything at or beyond
+        // that is well outside S-101 chart coverage.
+        for (var i = 0; i < coordinates.Count; i++)
         {
             var lat = coordinates[i].Latitude;
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
+            if (lat >= WebMercatorLatitudeLimit || lat <= -WebMercatorLatitudeLimit)
+            {
+                return Build(coordinates, mercatorTolerancesMetres);
+            }
         }
-        var midLatRadians = (minLat + maxLat) * 0.5 * (Math.PI / 180.0);
-        var cosMidLat = Math.Cos(midLatRadians);
 
-        // Defensive: cos is 0 exactly at the poles. Fall back to the
-        // real-metre semantics rather than build a pyramid that would
-        // collapse to a single vertex.
-        if (cosMidLat <= 0.0)
+        // Project once to Web Mercator EPSG:3857 metres. Formula matches
+        // Mapsui.Projections.SphericalMercator.FromLonLat byte-for-byte so
+        // the DP that runs against these coordinates picks the same vertex
+        // set the renderer's pre-#489 inline Cartesian pyramid picks.
+        var projected = new (double X, double Y)[coordinates.Count];
+        for (var i = 0; i < coordinates.Count; i++)
         {
-            return Build(coordinates, mercatorTolerancesMetres);
+            var lonRadians = WebMercatorD2R * coordinates[i].Longitude;
+            var latRadians = WebMercatorD2R * coordinates[i].Latitude;
+            var x = WebMercatorRadius * lonRadians;
+            var y = WebMercatorRadius * Math.Log(Math.Tan((Math.PI * 0.25) + (latRadians * 0.5)));
+            projected[i] = (x, y);
         }
 
         var buildStopwatch = Stopwatch.StartNew();
@@ -273,15 +283,17 @@ public sealed class LineLodPyramid
         var levels = new List<LineLodLevel>(mercatorTolerancesMetres.Count + 1);
         foreach (var mercatorTolerance in mercatorTolerancesMetres)
         {
-            // DP consumes real metres; scale down by cos(midLat) so the
-            // dropped-vertex threshold matches what a Cartesian DP with
-            // this Mercator tolerance would drop.
-            var realTolerance = mercatorTolerance * cosMidLat;
-            var simplified = DouglasPeuckerLineSimplifier.Simplify(
-                coordinates, realTolerance);
-            // Record the ORIGINAL Mercator tolerance so
-            // SelectLevelIndex(mercatorBudget) is apples-to-apples.
-            levels.Add(new LineLodLevel(mercatorTolerance, simplified, isPassthrough: false));
+            var keep = DouglasPeuckerLineSimplifier.ComputeKeepMask(
+                projected, mercatorTolerance);
+            var kept = new List<GeoPosition>(coordinates.Count);
+            for (var i = 0; i < coordinates.Count; i++)
+            {
+                if (keep[i])
+                {
+                    kept.Add(coordinates[i]);
+                }
+            }
+            levels.Add(new LineLodLevel(mercatorTolerance, kept, isPassthrough: false));
         }
 
         levels.Add(LineLodLevel.CreatePassthrough(coordinates));
@@ -292,6 +304,30 @@ public sealed class LineLodPyramid
 
         return new LineLodPyramid(levels, coordinates.Count);
     }
+
+    /// <summary>
+    /// WGS-84 semi-major axis (metres) used by
+    /// <c>Mapsui.Projections.SphericalMercator.FromLonLat</c>. Reproduced
+    /// here so <see cref="BuildForMercatorSelection"/> can project without
+    /// taking a compile-time dependency on the renderer's Mapsui package,
+    /// but the constant must stay in lock-step with Mapsui's value —
+    /// otherwise the "bit-identical to the renderer" guarantee is broken.
+    /// </summary>
+    private const double WebMercatorRadius = 6_378_137.0;
+
+    /// <summary>
+    /// Degrees-to-radians constant matching
+    /// <c>Mapsui.Projections.SphericalMercator</c>'s <c>D2R</c>.
+    /// </summary>
+    private const double WebMercatorD2R = Math.PI / 180.0;
+
+    /// <summary>
+    /// Standard EPSG:3857 latitude clip beyond which
+    /// <c>ln(tan(π/4 + φ/2))</c> diverges to infinity. Values outside
+    /// <c>±</c> this bound fall back to the equirectangular real-metre
+    /// simplifier.
+    /// </summary>
+    private const double WebMercatorLatitudeLimit = 85.05112878;
 
     /// <summary>
     /// Selects the coarsest level whose tolerance is at or below
@@ -423,15 +459,17 @@ public static class LineLodTolerances
     /// <see cref="DouglasPeuckerLineSimplifier"/> semantics change.
     /// </summary>
     /// <remarks>
-    /// <b>v2 (this repo, post-#489 tolerance-unit fix):</b> the S-101
-    /// pre-build now invokes
-    /// <see cref="LineLodPyramid.BuildForMercatorSelection"/>, which
-    /// scales the ladder by <c>cos(featureMidLatitude)</c> so DP output
-    /// matches what a Cartesian EPSG:3857 DP would drop for the same
-    /// Mercator tolerance. On-disk pyramids from v1 (which applied the
-    /// ladder directly as real metres) would produce coarser vertex sets
-    /// than the renderer's fallback path expects; the version bump forces
-    /// a cold rebuild rather than serving stale entries.
+    /// <b>v3 (this repo, post-#489 Mercator-DP fix):</b> the S-101 pre-build
+    /// projects each vertex with
+    /// <c>Mapsui.Projections.SphericalMercator.FromLonLat</c>-equivalent
+    /// math and runs Douglas-Peucker directly in Web Mercator metres — the
+    /// same two operations, in the same order, the renderer's pre-#489
+    /// inline Cartesian pyramid did at draw time. This produces bit-identical
+    /// kept-vertex sets. On-disk pyramids from v1 (equirectangular real-metre
+    /// DP) and v2 (equirectangular with <c>×cos φ</c> scaled ladder) would
+    /// each produce visibly different vertex sets from the renderer's
+    /// fallback path; the version bump forces a cold rebuild rather than
+    /// serving stale entries.
     /// </remarks>
-    public const string ToleranceLadderVersion = "v2-half-octave-256-64-16-mercator-equiv";
+    public const string ToleranceLadderVersion = "v3-half-octave-256-64-16-mercator-dp";
 }

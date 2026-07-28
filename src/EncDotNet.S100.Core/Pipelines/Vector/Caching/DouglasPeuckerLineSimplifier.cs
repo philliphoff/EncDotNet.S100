@@ -75,12 +75,52 @@ public static class DouglasPeuckerLineSimplifier
 
         _ = midLatRadians;
 
-        var keep = new bool[coordinates.Count];
+        var keep = ComputeKeepMask(projected, toleranceMetres);
+
+        var kept = new List<GeoPosition>(coordinates.Count);
+        for (var i = 0; i < coordinates.Count; i++)
+        {
+            if (keep[i])
+            {
+                kept.Add(coordinates[i]);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// Runs the Douglas-Peucker inner loop against pre-projected Cartesian
+    /// coordinates and returns a boolean keep-mask parallel to
+    /// <paramref name="projected"/>. Extracted from <see cref="Simplify"/> so
+    /// alternative callers can substitute a different planar frame — in
+    /// particular <see cref="LineLodPyramid.BuildForMercatorSelection"/>,
+    /// which projects to true Web Mercator (EPSG:3857) so its DP output is
+    /// bit-identical to the renderer's pre-#489 Cartesian pyramid.
+    /// The DP maths (iterative, endpoint-preserving, cross-product-squared
+    /// perpendicular distance) is byte-for-byte identical to
+    /// <c>EncDotNet.S100.Renderers.Mapsui.CartesianDouglasPeucker.Simplify</c>.
+    /// </summary>
+    internal static bool[] ComputeKeepMask(
+        ReadOnlySpan<(double X, double Y)> projected,
+        double toleranceMetres)
+    {
+        var keep = new bool[projected.Length];
+        if (projected.Length == 0)
+        {
+            return keep;
+        }
+
         keep[0] = true;
         keep[^1] = true;
 
+        if (projected.Length < 3)
+        {
+            return keep;
+        }
+
         var stack = new Stack<(int First, int Last)>();
-        stack.Push((0, coordinates.Count - 1));
+        stack.Push((0, projected.Length - 1));
 
         var toleranceSquared = toleranceMetres * toleranceMetres;
 
@@ -142,16 +182,7 @@ public static class DouglasPeuckerLineSimplifier
             }
         }
 
-        var kept = new List<GeoPosition>(coordinates.Count);
-        for (var i = 0; i < coordinates.Count; i++)
-        {
-            if (keep[i])
-            {
-                kept.Add(coordinates[i]);
-            }
-        }
-
-        return kept;
+        return keep;
     }
 
     private static (double MidLatRadians, double MetresPerDegreeLatitude, double MetresPerDegreeLongitude)

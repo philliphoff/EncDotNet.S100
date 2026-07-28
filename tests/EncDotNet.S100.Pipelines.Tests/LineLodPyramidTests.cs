@@ -170,53 +170,23 @@ public class LineLodPyramidTests
     }
 
     /// <summary>
-    /// Core parity property (#489, PR-3 tolerance-unit fix): at any
-    /// non-equatorial latitude, running Douglas-Peucker over the WGS-84
-    /// coordinates via <see cref="LineLodPyramid.BuildForMercatorSelection"/>
-    /// at Mercator tolerance <c>T</c> must produce the same kept vertex
-    /// set as running it over the equirectangular-projected coordinates at
-    /// real-metre tolerance <c>T · cos(midLat)</c>. This is what makes the
-    /// consumed pyramid pixel-parity-equivalent with the renderer's
-    /// Cartesian-DP fallback path (PR-2 baseline) at that feature's
-    /// latitude.
+    /// <see cref="LineLodLevel.ToleranceMetres"/> on each non-passthrough
+    /// level records the Mercator-metre tolerance so
+    /// <see cref="LineLodPyramid.SelectLevelIndex"/> can compare a Mercator
+    /// budget to a Mercator tolerance apples-to-apples.
     /// </summary>
-    [Theory]
-    [InlineData(30.0)]
-    [InlineData(45.0)]
-    [InlineData(54.0)]
-    [InlineData(60.0)]
-    public void BuildForMercatorSelection_KeptVertexCountMatchesCosScaledRealBuild(
-        double midLatDegrees)
+    [Fact]
+    public void BuildForMercatorSelection_LevelToleranceMetresRecordsInputLadder()
     {
-        var line = MakeSyntheticLine(midLatDegrees, vertexCount: 200);
-        var cosMidLat = Math.Cos(midLatDegrees * Math.PI / 180.0);
-        var scaledRealLadder = LineLodTolerances.HalfOctaveDefault
-            .Select(t => t * cosMidLat)
-            .ToArray();
-
-        var mercatorPyramid = LineLodPyramid.BuildForMercatorSelection(
+        var line = MakeSyntheticLine(midLatDegrees: 45.0, vertexCount: 200);
+        var pyramid = LineLodPyramid.BuildForMercatorSelection(
             line, LineLodTolerances.HalfOctaveDefault);
-        var scaledRealPyramid = LineLodPyramid.Build(line, scaledRealLadder);
 
-        // Same kept vertex SET per level -> DP outcome is bit-identical.
-        // GeoPosition is a value-equatable record, so exact coordinate
-        // equality is the strictest possible algorithmic-equivalence bar.
-        Assert.Equal(scaledRealPyramid.Levels.Count, mercatorPyramid.Levels.Count);
-        for (var i = 0; i < scaledRealPyramid.Levels.Count; i++)
-        {
-            Assert.Equal(
-                scaledRealPyramid.Levels[i].Coordinates,
-                mercatorPyramid.Levels[i].Coordinates);
-        }
-
-        // ToleranceMetres on each non-passthrough level records the
-        // ORIGINAL Mercator tolerance so SelectLevelIndex(mercatorBudget)
-        // is apples-to-apples.
         for (var i = 0; i < LineLodTolerances.HalfOctaveDefault.Count; i++)
         {
             Assert.Equal(
                 LineLodTolerances.HalfOctaveDefault[i],
-                mercatorPyramid.Levels[i].ToleranceMetres);
+                pyramid.Levels[i].ToleranceMetres);
         }
     }
 
@@ -273,30 +243,21 @@ public class LineLodPyramidTests
     /// "0-pixel at bounded feature" evidence. Anything else needs re-visit.
     /// </summary>
     /// <summary>
-    /// Documents the observed cross-frame residual between PR-2's Mercator
-    /// DP and PR-3's equirectangular <see cref="LineLodPyramid.BuildForMercatorSelection"/>
-    /// on a bounded S-101 line envelope (lat span ~0.001°, 200 vertices over
-    /// 0.1° longitude — one-vertex spacing ≈ 56 m Mercator).
-    ///
-    /// Measured on 8eea4cdd: kept-vertex COUNTS match exactly at every latitude
-    /// and every ladder band. Kept-vertex POSITIONS differ by ≤ 1 input-vertex
-    /// spacing (≤ 62 m Mercator) because the two Douglas–Peucker
-    /// implementations tie-break "farthest-point" picks differently at sine-
-    /// wave apex-adjacent vertices — a numerical-tie phenomenon, NOT a
-    /// projection-anchor residual (identical offset pattern across 30/45/54/60°N).
-    ///
-    /// Coordinator instruction: "if the short-line case is NOT exact at
-    /// 54/60°N, stop and show me the deviation before merging." That
-    /// condition is triggered — this test currently locks the observed bar
-    /// so any regression beyond it is caught, and the DiagnosticDump above
-    /// reproduces the raw numbers on demand.
+    /// Cross-frame equivalence gate: <see cref="LineLodPyramid.BuildForMercatorSelection"/>
+    /// must produce bit-identical kept-vertex sets to the renderer's pre-#489
+    /// inline Cartesian pyramid (PR-2's algorithm). Since both paths now
+    /// project each vertex via
+    /// <c>Mapsui.Projections.SphericalMercator.FromLonLat</c> and run the
+    /// same Douglas-Peucker inner loop, this is a strict equality bar — any
+    /// deviation would indicate a drift between the two projection formulas
+    /// (a bug we must fix, not paper over).
     /// </summary>
     [Theory]
     [InlineData(30.0)]
     [InlineData(45.0)]
     [InlineData(54.0)]
     [InlineData(60.0)]
-    public void BuildForMercatorSelection_CrossFrame_ShortLine_ResidualBoundedByOneVertexSpacing(
+    public void BuildForMercatorSelection_CrossFrame_ShortLine_IsBitIdenticalToPr2InlineDp(
         double midLatDegrees)
     {
         var line = MakeBoundedFeatureLine(midLatDegrees, vertexCount: 200);
@@ -311,54 +272,34 @@ public class LineLodPyramidTests
                 .Select(g => ProjectSingle(g))
                 .ToArray();
 
-            // Bounded features: kept counts must match exactly across all
-            // bands and latitudes.
             Assert.Equal(pr2Kept.Length, pr3KeptMerc.Length);
-
-            // Positional deviation must stay ≤ ~1 input-vertex spacing.
-            // Input vertex spacing at 30–60°N is ~56 m Mercator (0.0005°
-            // longitude × R × π/180); bar 70 m tolerates the equirect-vs-
-            // Mercator second-order latitude correction at 60°N.
-            var maxDeviation = MaxNearestNeighbourDistance(pr2Kept, pr3KeptMerc);
-            Assert.True(
-                maxDeviation < 70.0,
-                $"Lat {midLatDegrees}°N · tol={tolerance} merc-m: " +
-                $"max positional Δ={maxDeviation:F2} m exceeds one-vertex bar.");
+            for (var i = 0; i < pr2Kept.Length; i++)
+            {
+                Assert.Equal(pr2Kept[i].X, pr3KeptMerc[i].X);
+                Assert.Equal(pr2Kept[i].Y, pr3KeptMerc[i].Y);
+            }
         }
     }
 
     /// <summary>
-    /// Wide-latitude-span stress case (per coordinator §2): documents the
-    /// equirectangular mid-latitude anchor residual bound in real numbers.
-    /// Line spans ~1° of latitude at 54°N — well outside the typical S-101
-    /// feature envelope. Asserts kept-vertex count within ±1 per level and
-    /// reports the max Mercator-metre positional deviation between the two
-    /// kept sets, which is the pixel-equivalent residual to divide by
-    /// <c>viewport.Resolution</c>.
-    ///
-    /// SKIPPED until the anchor-residual behaviour on wide-latitude-span
-    /// lines is resolved (coordinator review pending — see PR #501 report).
-    /// The measured behaviour on 8eea4cdd is:
-    ///   • tol=256 (band 0): identical (endpoints only, no interior vertices
-    ///     survive at either projection);
-    ///   • tol=64  (band 1): PR-3 keeps ONLY 2 vertices vs PR-2's 7 (54°N)
-    ///     or 11 (30°N) — a significant under-simplification miss where the
-    ///     equirect DP fails to detect deviations that Mercator DP does;
-    ///   • tol=16  (band 2): kept counts match (14/14 at both latitudes) but
-    ///     positional deviation reaches 469 m (30°N) and 1324 m (54°N).
-    /// This is the fixed-anchor residual — worth documenting but not shipping
-    /// as-is.
+    /// Wide-latitude-span stress case: proves the fix holds at scale — a
+    /// 1°-latitude-span line at 30°N and 54°N still produces bit-identical
+    /// output between PR-2's inline Cartesian DP and PR-3's open-hook
+    /// pre-build. The v2 <c>×cos φ</c> approach failed this case badly
+    /// (equirect DP dropped down to 2 vertices at band 1 where the
+    /// Mercator DP kept 7–11); this v3 test locks the fix.
     /// </summary>
-    [Fact(Skip = "wide-latitude-span anchor residual > pixel bar — coordinator review pending")]
-    public void BuildForMercatorSelection_CrossFrame_WideLine_ResidualBoundedAt54N()
+    [Theory]
+    [InlineData(30.0)]
+    [InlineData(54.0)]
+    public void BuildForMercatorSelection_CrossFrame_WideLine_IsBitIdenticalToPr2InlineDp(
+        double midLatDegrees)
     {
-        var line = MakeWideLatitudeSpanLine(midLatDegrees: 54.0, vertexCount: 300);
+        var line = MakeWideLatitudeSpanLine(midLatDegrees, vertexCount: 300);
         var mercatorInput = ProjectToMercator(line);
 
-        for (var band = 0; band < LineLodTolerances.HalfOctaveDefault.Count; band++)
+        foreach (var tolerance in LineLodTolerances.HalfOctaveDefault)
         {
-            var tolerance = LineLodTolerances.HalfOctaveDefault[band];
-
             var pr2Kept = CartesianDouglasPeucker.Simplify(mercatorInput, tolerance);
             var pr3Pyramid = LineLodPyramid.BuildForMercatorSelection(
                 line, new[] { tolerance });
@@ -366,43 +307,12 @@ public class LineLodPyramidTests
                 .Select(g => ProjectSingle(g))
                 .ToArray();
 
-            var countDelta = Math.Abs(pr2Kept.Length - pr3KeptMerc.Length);
-            Assert.True(
-                countDelta <= 1,
-                $"Band {band} (tol={tolerance} merc-m): count delta {countDelta} " +
-                $"> 1 (PR-2={pr2Kept.Length}, PR-3={pr3KeptMerc.Length}).");
-
-            // Positional deviation: for each kept vertex from PR-3 find the
-            // nearest kept vertex from PR-2 and record the Mercator distance.
-            // Since DP is subset-selecting on the same input, when the same
-            // vertex is chosen the distance is 0; when the two paths tie-
-            // break to adjacent vertices, the distance is that inter-vertex
-            // spacing (~10-100 m in this stress geometry).
-            var maxDeviation = 0.0;
-            foreach (var b in pr3KeptMerc)
+            Assert.Equal(pr2Kept.Length, pr3KeptMerc.Length);
+            for (var i = 0; i < pr2Kept.Length; i++)
             {
-                var best = double.MaxValue;
-                foreach (var a in pr2Kept)
-                {
-                    var dx = a.X - b.X;
-                    var dy = a.Y - b.Y;
-                    var d2 = dx * dx + dy * dy;
-                    if (d2 < best) best = d2;
-                }
-                var d = Math.Sqrt(best);
-                if (d > maxDeviation) maxDeviation = d;
+                Assert.Equal(pr2Kept[i].X, pr3KeptMerc[i].X);
+                Assert.Equal(pr2Kept[i].Y, pr3KeptMerc[i].Y);
             }
-
-            // At a typical S-101 large-scale viewport (Resolution ~1-10 m/px
-            // in Web Mercator terms at these latitudes) the anchor-residual
-            // deviation must stay well under a pixel. Bar: 50 m Mercator ==
-            // ~30 m real at 54N, comfortably under the coarsest ladder
-            // tolerance (256 merc-m). Anything larger would mean the anchor
-            // approximation is broken.
-            Assert.True(
-                maxDeviation < 50.0,
-                $"Band {band} (tol={tolerance}): max Mercator-metre residual " +
-                $"{maxDeviation:F2} exceeds anchor bound.");
         }
     }
 
