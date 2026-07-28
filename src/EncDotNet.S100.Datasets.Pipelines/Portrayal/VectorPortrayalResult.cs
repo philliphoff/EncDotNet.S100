@@ -92,9 +92,9 @@ public sealed class VectorPortrayalResult
     /// <summary>
     /// Precomputed line-LOD pyramids keyed by feature id, produced at dataset
     /// open by S-101 (issue #489, PR-3). The Mapsui renderer copies each
-    /// pyramid onto its owning <c>IFeature</c> via
-    /// <see cref="Interoperability.FeatureTagKeys.LineLodPyramid"/> so the
-    /// fast-line paint path can skip the per-frame Douglas–Peucker pass.
+    /// pyramid onto its owning <c>IFeature</c> under the typed key
+    /// <c>CachedVectorStyleRenderer.LineLodPyramidKey</c> so the fast-line
+    /// paint path can skip the per-frame Douglas–Peucker pass.
     /// Null / empty when no line pyramids were pre-built (feature is a
     /// non-line, or the S-101 processor was constructed without an
     /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache"/>

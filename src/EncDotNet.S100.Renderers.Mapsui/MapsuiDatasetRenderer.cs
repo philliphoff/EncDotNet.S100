@@ -393,7 +393,7 @@ public sealed class MapsuiDatasetRenderer
             if (!pyramids.TryGetValue(id, out var pyramid))
                 continue;
 
-            feature[FeatureTagKeys.LineLodPyramid] = pyramid;
+            feature[CachedVectorStyleRenderer.LineLodPyramidKey] = pyramid;
         }
     }
 
