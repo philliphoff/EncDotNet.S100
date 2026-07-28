@@ -196,13 +196,15 @@ public class LineLodPyramidTests
             line, LineLodTolerances.HalfOctaveDefault);
         var scaledRealPyramid = LineLodPyramid.Build(line, scaledRealLadder);
 
-        // Same kept vertex counts per level -> same DP outcome.
+        // Same kept vertex SET per level -> DP outcome is bit-identical.
+        // GeoPosition is a value-equatable record, so exact coordinate
+        // equality is the strictest possible algorithmic-equivalence bar.
         Assert.Equal(scaledRealPyramid.Levels.Count, mercatorPyramid.Levels.Count);
         for (var i = 0; i < scaledRealPyramid.Levels.Count; i++)
         {
             Assert.Equal(
-                scaledRealPyramid.Levels[i].Coordinates.Count,
-                mercatorPyramid.Levels[i].Coordinates.Count);
+                scaledRealPyramid.Levels[i].Coordinates,
+                mercatorPyramid.Levels[i].Coordinates);
         }
 
         // ToleranceMetres on each non-passthrough level records the
