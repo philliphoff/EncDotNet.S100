@@ -518,9 +518,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             var coords = feature.Coordinates;
             try
             {
+                // BuildForMercatorSelection (not Build): interprets the
+                // ladder as Mercator metres and internally scales by
+                // cos(featureMidLat), matching what the renderer's
+                // Cartesian-DP fallback would drop for the same tolerance.
+                // See LineLodPyramid.BuildForMercatorSelection XML docs for
+                // the tolerance-unit derivation.
                 var pyramid = cache.GetOrCompute(
                     key,
-                    () => LineLodPyramid.Build(coords, LineLodTolerances.HalfOctaveDefault));
+                    () => LineLodPyramid.BuildForMercatorSelection(coords, LineLodTolerances.HalfOctaveDefault));
                 pyramids[feature.Id] = pyramid;
             }
             catch

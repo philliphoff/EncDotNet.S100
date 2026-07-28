@@ -139,4 +139,143 @@ public class LineLodPyramidTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             pyramid.SelectLevel(100.0, targetPixels: 0));
     }
+
+    /// <summary>
+    /// At latitude 0 the equirectangular-real-metre DP and a
+    /// Web-Mercator-metre DP produce the same tolerance in real terms
+    /// (<c>cos(0) = 1</c>), so <see cref="LineLodPyramid.BuildForMercatorSelection"/>
+    /// should degenerate to the same output as
+    /// <see cref="LineLodPyramid.Build"/> at the same numerical tolerance.
+    /// This is the sanity anchor for the higher-latitude parity property.
+    /// </summary>
+    [Fact]
+    public void BuildForMercatorSelection_AtEquator_MatchesBuildVertexCounts()
+    {
+        var line = MakeSyntheticLine(midLatDegrees: 0.0, vertexCount: 200);
+
+        var mercatorPyramid = LineLodPyramid.BuildForMercatorSelection(
+            line, LineLodTolerances.HalfOctaveDefault);
+        var realPyramid = LineLodPyramid.Build(
+            line, LineLodTolerances.HalfOctaveDefault);
+
+        Assert.Equal(realPyramid.Levels.Count, mercatorPyramid.Levels.Count);
+        for (var i = 0; i < realPyramid.Levels.Count; i++)
+        {
+            Assert.Equal(
+                realPyramid.Levels[i].Coordinates.Count,
+                mercatorPyramid.Levels[i].Coordinates.Count);
+        }
+    }
+
+    /// <summary>
+    /// Core parity property (#489, PR-3 tolerance-unit fix): at any
+    /// non-equatorial latitude, running Douglas-Peucker over the WGS-84
+    /// coordinates via <see cref="LineLodPyramid.BuildForMercatorSelection"/>
+    /// at Mercator tolerance <c>T</c> must produce the same kept vertex
+    /// set as running it over the equirectangular-projected coordinates at
+    /// real-metre tolerance <c>T · cos(midLat)</c>. This is what makes the
+    /// consumed pyramid pixel-parity-equivalent with the renderer's
+    /// Cartesian-DP fallback path (PR-2 baseline) at that feature's
+    /// latitude.
+    /// </summary>
+    [Theory]
+    [InlineData(30.0)]
+    [InlineData(45.0)]
+    [InlineData(54.0)]
+    [InlineData(60.0)]
+    public void BuildForMercatorSelection_KeptVertexCountMatchesCosScaledRealBuild(
+        double midLatDegrees)
+    {
+        var line = MakeSyntheticLine(midLatDegrees, vertexCount: 200);
+        var cosMidLat = Math.Cos(midLatDegrees * Math.PI / 180.0);
+        var scaledRealLadder = LineLodTolerances.HalfOctaveDefault
+            .Select(t => t * cosMidLat)
+            .ToArray();
+
+        var mercatorPyramid = LineLodPyramid.BuildForMercatorSelection(
+            line, LineLodTolerances.HalfOctaveDefault);
+        var scaledRealPyramid = LineLodPyramid.Build(line, scaledRealLadder);
+
+        // Same kept vertex counts per level -> same DP outcome.
+        Assert.Equal(scaledRealPyramid.Levels.Count, mercatorPyramid.Levels.Count);
+        for (var i = 0; i < scaledRealPyramid.Levels.Count; i++)
+        {
+            Assert.Equal(
+                scaledRealPyramid.Levels[i].Coordinates.Count,
+                mercatorPyramid.Levels[i].Coordinates.Count);
+        }
+
+        // ToleranceMetres on each non-passthrough level records the
+        // ORIGINAL Mercator tolerance so SelectLevelIndex(mercatorBudget)
+        // is apples-to-apples.
+        for (var i = 0; i < LineLodTolerances.HalfOctaveDefault.Count; i++)
+        {
+            Assert.Equal(
+                LineLodTolerances.HalfOctaveDefault[i],
+                mercatorPyramid.Levels[i].ToleranceMetres);
+        }
+    }
+
+    /// <summary>
+    /// Ladder-validation must reject the same inputs on the new overload
+    /// as on <see cref="LineLodPyramid.Build"/>: empty ladders, non-positive
+    /// values, and non-strictly-descending ladders.
+    /// </summary>
+    [Fact]
+    public void BuildForMercatorSelection_RejectsBadLadder()
+    {
+        var line = MakeSyntheticLine(midLatDegrees: 45.0, vertexCount: 100);
+
+        Assert.Throws<ArgumentException>(() =>
+            LineLodPyramid.BuildForMercatorSelection(line, Array.Empty<double>()));
+        Assert.Throws<ArgumentException>(() =>
+            LineLodPyramid.BuildForMercatorSelection(line, [64.0, 0.0]));
+        Assert.Throws<ArgumentException>(() =>
+            LineLodPyramid.BuildForMercatorSelection(line, [64.0, 64.0]));
+        Assert.Throws<ArgumentException>(() =>
+            LineLodPyramid.BuildForMercatorSelection(line, [16.0, 64.0]));
+    }
+
+    /// <summary>
+    /// Degenerate short input is passed straight through as a single
+    /// passthrough level, mirroring
+    /// <see cref="LineLodPyramid.Build"/>'s behaviour.
+    /// </summary>
+    [Fact]
+    public void BuildForMercatorSelection_DegenerateInputReturnsPassthroughOnly()
+    {
+        var shortLine = new List<GeoPosition>
+        {
+            new(45.0, -0.5),
+            new(45.001, -0.499),
+        };
+
+        var pyramid = LineLodPyramid.BuildForMercatorSelection(
+            shortLine, LineLodTolerances.HalfOctaveDefault);
+
+        Assert.Single(pyramid.Levels);
+        Assert.True(pyramid.Levels[0].IsPassthrough);
+    }
+
+    /// <summary>
+    /// A wiggly synthetic line centred on <paramref name="midLatDegrees"/>
+    /// with a controlled amplitude so Douglas-Peucker at the default
+    /// tolerance ladder actually drops vertices at every level.
+    /// </summary>
+    private static IReadOnlyList<GeoPosition> MakeSyntheticLine(
+        double midLatDegrees, int vertexCount)
+    {
+        var coords = new List<GeoPosition>(vertexCount);
+        for (var i = 0; i < vertexCount; i++)
+        {
+            var t = i / (double)(vertexCount - 1);
+            // 0.2° of longitude span (~22 km near equator, less at higher
+            // latitudes) with a ~150 m amplitude sinusoidal wiggle in
+            // latitude so DP has real work to do at 16/64/256 m tolerances.
+            var lat = midLatDegrees + Math.Sin(t * Math.PI * 8) * 0.0015;
+            var lon = -1.0 + t * 0.2;
+            coords.Add(new GeoPosition(lat, lon));
+        }
+        return coords;
+    }
 }

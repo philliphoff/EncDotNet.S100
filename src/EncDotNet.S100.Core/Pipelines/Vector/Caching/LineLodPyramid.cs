@@ -150,6 +150,150 @@ public sealed class LineLodPyramid
     }
 
     /// <summary>
+    /// Builds a pyramid for a line whose downstream consumer will select
+    /// levels against a viewport whose ground-resolution is expressed in
+    /// EPSG:3857 (Web Mercator) metres per pixel — i.e. every current
+    /// caller. The input coordinates are still WGS-84
+    /// <see cref="GeoPosition"/> (so the pyramid remains unprojected and
+    /// composes with the future reproject-once cache tracked by #488), but
+    /// the tolerance ladder is interpreted as Mercator metres and internally
+    /// scaled by <c>cos(featureMidLatitude)</c> before Douglas-Peucker is
+    /// applied in the equirectangular real-metre frame. Each returned level
+    /// then records the <em>original</em> Mercator-equivalent tolerance so
+    /// <see cref="SelectLevelIndex"/> can compare a Mercator budget to a
+    /// Mercator tolerance apples-to-apples.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this exists.</b> Web Mercator inflates linear distance by
+    /// <c>1/cos φ</c>, so a Cartesian DP applied in EPSG:3857 with tolerance
+    /// <c>T</c> keeps points whose real perpendicular deviation exceeds
+    /// <c>T·cos φ</c>. Applying an equirectangular real-metre DP with the
+    /// same <c>T</c> would instead keep points whose real deviation exceeds
+    /// <c>T</c>, dropping more vertices than the Cartesian path and
+    /// silently violating the sub-pixel-on-screen guarantee at
+    /// non-equatorial latitudes (the higher the latitude, the larger the
+    /// gap: 1.4× at 45°N, 1.7× at 54°N, 2× at 60°N). This overload closes
+    /// that gap so the flag-on renderer path is visually parity-equivalent
+    /// with the pre-#489 (PR-2) Cartesian pyramid.
+    /// </para>
+    /// <para>
+    /// <b>Residual.</b> The equirectangular frame anchors at a single
+    /// mid-latitude, whereas real Mercator scale varies continuously along
+    /// a feature that spans a latitude range. For typical S-101 line
+    /// features (edge geometries, contours, coastline segments) the span is
+    /// small enough that the residual is well under a pixel; for very long
+    /// features that cross more than a degree of latitude the residual can
+    /// become measurable but is still bounded by the second-order cos-Taylor
+    /// term.
+    /// </para>
+    /// </remarks>
+    /// <param name="coordinates">
+    /// The input line's vertices in lat/lon order. Must have at least two
+    /// points; degenerate inputs are returned as a single passthrough level.
+    /// </param>
+    /// <param name="mercatorTolerancesMetres">
+    /// Simplification tolerances in <b>Mercator metres</b>, largest first —
+    /// the same numbers a Cartesian DP over already-projected EPSG:3857
+    /// coordinates would consume (typically
+    /// <see cref="LineLodTolerances.HalfOctaveDefault"/>). Values must be
+    /// positive and strictly descending.
+    /// </param>
+    /// <returns>
+    /// A pyramid with <c>mercatorTolerancesMetres.Count + 1</c> levels: one
+    /// per requested tolerance (with <c>Level.ToleranceMetres</c> recording
+    /// the original Mercator number), then a passthrough level carrying the
+    /// input coordinates unchanged.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="mercatorTolerancesMetres"/> is empty or not strictly
+    /// descending, or contains a non-positive value.
+    /// </exception>
+    public static LineLodPyramid BuildForMercatorSelection(
+        IReadOnlyList<GeoPosition> coordinates,
+        IReadOnlyList<double> mercatorTolerancesMetres)
+    {
+        ArgumentNullException.ThrowIfNull(coordinates);
+        ArgumentNullException.ThrowIfNull(mercatorTolerancesMetres);
+
+        if (mercatorTolerancesMetres.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one tolerance is required.", nameof(mercatorTolerancesMetres));
+        }
+
+        for (var i = 0; i < mercatorTolerancesMetres.Count; i++)
+        {
+            if (mercatorTolerancesMetres[i] <= 0)
+            {
+                throw new ArgumentException(
+                    "Tolerances must be positive.", nameof(mercatorTolerancesMetres));
+            }
+
+            if (i > 0 && mercatorTolerancesMetres[i] >= mercatorTolerancesMetres[i - 1])
+            {
+                throw new ArgumentException(
+                    "Tolerances must be strictly descending (coarsest first).",
+                    nameof(mercatorTolerancesMetres));
+            }
+        }
+
+        if (coordinates.Count < 3)
+        {
+            GeometryLodMetrics.VerticesIn.Record(coordinates.Count);
+            return new LineLodPyramid(
+                [LineLodLevel.CreatePassthrough(coordinates)],
+                coordinates.Count);
+        }
+
+        // Compute the feature's mid-latitude in radians once; the DP frame
+        // is equirectangular anchored here, so cos(midLat) is the correct
+        // one-shot scaling factor for the whole feature.
+        var minLat = coordinates[0].Latitude;
+        var maxLat = minLat;
+        for (var i = 1; i < coordinates.Count; i++)
+        {
+            var lat = coordinates[i].Latitude;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+        }
+        var midLatRadians = (minLat + maxLat) * 0.5 * (Math.PI / 180.0);
+        var cosMidLat = Math.Cos(midLatRadians);
+
+        // Defensive: cos is 0 exactly at the poles. Fall back to the
+        // real-metre semantics rather than build a pyramid that would
+        // collapse to a single vertex.
+        if (cosMidLat <= 0.0)
+        {
+            return Build(coordinates, mercatorTolerancesMetres);
+        }
+
+        var buildStopwatch = Stopwatch.StartNew();
+
+        var levels = new List<LineLodLevel>(mercatorTolerancesMetres.Count + 1);
+        foreach (var mercatorTolerance in mercatorTolerancesMetres)
+        {
+            // DP consumes real metres; scale down by cos(midLat) so the
+            // dropped-vertex threshold matches what a Cartesian DP with
+            // this Mercator tolerance would drop.
+            var realTolerance = mercatorTolerance * cosMidLat;
+            var simplified = DouglasPeuckerLineSimplifier.Simplify(
+                coordinates, realTolerance);
+            // Record the ORIGINAL Mercator tolerance so
+            // SelectLevelIndex(mercatorBudget) is apples-to-apples.
+            levels.Add(new LineLodLevel(mercatorTolerance, simplified, isPassthrough: false));
+        }
+
+        levels.Add(LineLodLevel.CreatePassthrough(coordinates));
+
+        buildStopwatch.Stop();
+        GeometryLodMetrics.VerticesIn.Record(coordinates.Count);
+        GeometryLodMetrics.BuildDuration.Record(buildStopwatch.Elapsed.TotalMilliseconds);
+
+        return new LineLodPyramid(levels, coordinates.Count);
+    }
+
+    /// <summary>
     /// Selects the coarsest level whose tolerance is at or below
     /// <paramref name="groundResolutionMetresPerPixel"/> multiplied by
     /// <paramref name="targetPixels"/> — i.e. the level whose dropped detail
@@ -278,5 +422,16 @@ public static class LineLodTolerances
     /// <see cref="HalfOctaveDefault"/> or
     /// <see cref="DouglasPeuckerLineSimplifier"/> semantics change.
     /// </summary>
-    public const string ToleranceLadderVersion = "v1-half-octave-256-64-16";
+    /// <remarks>
+    /// <b>v2 (this repo, post-#489 tolerance-unit fix):</b> the S-101
+    /// pre-build now invokes
+    /// <see cref="LineLodPyramid.BuildForMercatorSelection"/>, which
+    /// scales the ladder by <c>cos(featureMidLatitude)</c> so DP output
+    /// matches what a Cartesian EPSG:3857 DP would drop for the same
+    /// Mercator tolerance. On-disk pyramids from v1 (which applied the
+    /// ladder directly as real metres) would produce coarser vertex sets
+    /// than the renderer's fallback path expects; the version bump forces
+    /// a cold rebuild rather than serving stale entries.
+    /// </remarks>
+    public const string ToleranceLadderVersion = "v2-half-octave-256-64-16-mercator-equiv";
 }
