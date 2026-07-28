@@ -260,6 +260,70 @@ public class LineLodPyramidTests
     }
 
     /// <summary>
+    /// Documents the equirectangular mid-latitude anchor residual bound
+    /// (per coordinator §2 review). A wide-latitude-span line at 54°N
+    /// (spanning ~1° of latitude, well outside the "typical S-101 line
+    /// feature" envelope) can in principle expose the DP-in-equirect
+    /// vs DP-in-Mercator difference because Mercator scale varies
+    /// along the line while the anchor is fixed at midLat. This test
+    /// asserts kept-vertex counts stay within ±1 per level rather than
+    /// exact — documenting the residual bound instead of over-asserting.
+    /// If this ever fails, it means the anchor residual grew large
+    /// enough at some latitude/span to flip more than one DP tie-break
+    /// per level, which would warrant re-visiting the fixed-anchor
+    /// approximation in <see cref="DouglasPeuckerLineSimplifier"/>.
+    /// </summary>
+    [Fact]
+    public void BuildForMercatorSelection_WideLatitudeSpan_KeptCountResidualBounded()
+    {
+        var line = MakeWideLatitudeSpanLine(midLatDegrees: 54.0, vertexCount: 300);
+        var cosMidLat = Math.Cos(54.0 * Math.PI / 180.0);
+        var scaledRealLadder = LineLodTolerances.HalfOctaveDefault
+            .Select(t => t * cosMidLat)
+            .ToArray();
+
+        var mercatorPyramid = LineLodPyramid.BuildForMercatorSelection(
+            line, LineLodTolerances.HalfOctaveDefault);
+        var scaledRealPyramid = LineLodPyramid.Build(line, scaledRealLadder);
+
+        Assert.Equal(scaledRealPyramid.Levels.Count, mercatorPyramid.Levels.Count);
+        for (var i = 0; i < scaledRealPyramid.Levels.Count; i++)
+        {
+            var delta = Math.Abs(
+                scaledRealPyramid.Levels[i].Coordinates.Count -
+                mercatorPyramid.Levels[i].Coordinates.Count);
+            Assert.True(
+                delta <= 1,
+                $"Level {i} kept-count residual {delta} > 1 " +
+                $"(scaledReal={scaledRealPyramid.Levels[i].Coordinates.Count}, " +
+                $"mercatorEquiv={mercatorPyramid.Levels[i].Coordinates.Count}).");
+        }
+    }
+
+    /// <summary>
+    /// Wide-span (~1° latitude) synthetic line for the residual-bound
+    /// test above. Intentionally outside the typical S-101 line-feature
+    /// envelope (which is usually well under 0.1° of latitude).
+    /// </summary>
+    private static IReadOnlyList<GeoPosition> MakeWideLatitudeSpanLine(
+        double midLatDegrees, int vertexCount)
+    {
+        var coords = new List<GeoPosition>(vertexCount);
+        for (var i = 0; i < vertexCount; i++)
+        {
+            var t = i / (double)(vertexCount - 1);
+            // Sweep ~1° of latitude with a slower longitude sweep and a
+            // moderate sinusoidal wiggle so DP still has real work at
+            // every ladder level.
+            var lat = (midLatDegrees - 0.5) + t * 1.0
+                      + Math.Sin(t * Math.PI * 12) * 0.0008;
+            var lon = -1.0 + t * 0.5;
+            coords.Add(new GeoPosition(lat, lon));
+        }
+        return coords;
+    }
+
+    /// <summary>
     /// A wiggly synthetic line centred on <paramref name="midLatDegrees"/>
     /// with a controlled amplitude so Douglas-Peucker at the default
     /// tolerance ladder actually drops vertices at every level.
