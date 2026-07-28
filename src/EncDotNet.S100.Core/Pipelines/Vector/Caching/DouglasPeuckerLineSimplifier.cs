@@ -97,10 +97,21 @@ public static class DouglasPeuckerLineSimplifier
     /// particular <see cref="LineLodPyramid.BuildForMercatorSelection"/>,
     /// which projects to true Web Mercator (EPSG:3857) so its DP output is
     /// bit-identical to the renderer's pre-#489 Cartesian pyramid.
-    /// The DP maths (iterative, endpoint-preserving, cross-product-squared
-    /// perpendicular distance) is byte-for-byte identical to
-    /// <c>EncDotNet.S100.Renderers.Mapsui.CartesianDouglasPeucker.Simplify</c>.
     /// </summary>
+    /// <remarks>
+    /// <b>DUPLICATE — keep in lock-step.</b> The DP maths (iterative,
+    /// endpoint-preserving, cross-product-squared perpendicular distance)
+    /// is byte-for-byte identical to
+    /// <c>EncDotNet.S100.Renderers.Mapsui.CartesianDouglasPeucker.Simplify</c>.
+    /// Core can't take a compile-time dependency on the renderer, so the
+    /// algorithm is copied verbatim. The
+    /// <c>LineLodPyramidTests.BuildForMercatorSelection_CrossFrame_*_
+    /// IsBitIdenticalToPr2InlineDp</c> tests are the CI guarantor: they
+    /// project a synthetic S-101 line via <c>SphericalMercator.FromLonLat</c>,
+    /// run <c>CartesianDouglasPeucker.Simplify</c> on it, and assert exact
+    /// coordinate equality with the pyramid this method backs. Any
+    /// divergence between the two copies fails those tests.
+    /// </remarks>
     internal static bool[] ComputeKeepMask(
         ReadOnlySpan<(double X, double Y)> projected,
         double toleranceMetres)
