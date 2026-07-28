@@ -9,6 +9,19 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// Identical algorithm otherwise: iterative, endpoint-preserving,
 /// tolerance-monotonic Douglas-Peucker.
 /// </summary>
+/// <remarks>
+/// <b>DUPLICATE — keep in lock-step.</b> This is byte-for-byte identical
+/// to <c>EncDotNet.S100.Pipelines.Vector.Caching.DouglasPeuckerLineSimplifier.ComputeKeepMask</c>.
+/// The renderer can't take a compile-time dependency on Core internals for
+/// this hot path, and Core can't reference the renderer, so the algorithm
+/// is copied. The
+/// <c>LineLodPyramidTests.BuildForMercatorSelection_CrossFrame_*_
+/// IsBitIdenticalToPr2InlineDp</c> tests are the CI guarantor: they run
+/// this method against the same synthetic geometry the Core
+/// <see cref="LineLodPyramid.BuildForMercatorSelection"/> processes, and
+/// assert exact coordinate equality. Any divergence between the two copies
+/// fails those tests.
+/// </remarks>
 internal static class CartesianDouglasPeucker
 {
     /// <summary>

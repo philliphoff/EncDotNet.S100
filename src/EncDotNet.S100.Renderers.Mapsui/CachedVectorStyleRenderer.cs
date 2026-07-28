@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Diagnostics;
-using EncDotNet.S100.Pipelines.Vector.Caching;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Nts;
+using Mapsui.Projections;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using Mapsui.Rendering.Skia.Extensions;
@@ -12,6 +13,7 @@ using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using SkiaSharp;
+using CoreLineLodPyramid = EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid;
 using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -86,6 +88,20 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     /// </summary>
     public static CachedVectorStyleRenderer Instance { get; } = new(new VectorStyleRenderer());
 
+    /// <summary>
+    /// Well-known feature-tag key under which the S-101 dataset processor
+    /// stashes each line feature's pre-built WGS-84
+    /// <see cref="CoreLineLodPyramid"/> (issue #489, PR-3). Reading the tag
+    /// is the sole bridge between "attached at open" and "consumed at draw":
+    /// no static registry, no cross-dataset globals. Value type is
+    /// <see cref="CoreLineLodPyramid"/>; the tag is written by the Mapsui
+    /// dataset renderer's <c>TagLineLodPyramids</c> helper and read only by
+    /// <see cref="DrawLine"/>. Absent when no shared LOD cache was seeded
+    /// or when a feature is not a line — the fast-line path falls through
+    /// to inline Douglas–Peucker as before.
+    /// </summary>
+    public const string LineLodPyramidKey = "S100.LineLodPyramid";
+
     private readonly ISkiaStyleRenderer _inner;
     private readonly double _simplifyOverridePx;
     private double _lastSimplifyPx = double.NaN;
@@ -94,13 +110,24 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     private readonly PathCache _cache;
 
     /// <summary>
-    /// Per-feature pyramid cache. Keyed by <c>(featureId, position)</c> so
-    /// each part of a <c>MultiLineString</c> has its own pyramid. Concurrent
-    /// so the offscreen-render / tile threads can share it with the on-screen
-    /// paint. Bounded implicitly by the number of distinct line features
-    /// painted in this renderer's lifetime, which is small for a single
-    /// dataset — the underlying <see cref="CartesianLineLodPyramid"/> stores
-    /// at most three tolerance-simplified copies plus the passthrough.
+    /// Per-renderer memo of the fully projected (EPSG:3857 metres) LOD
+    /// pyramid for each line feature. Populated lazily on the first band
+    /// change that touches a feature and reused across every subsequent
+    /// band change for the same feature — so re-projection is amortised
+    /// over the lifetime of the renderer instance, not paid once per SKPath
+    /// cache miss. Cleared by <see cref="EnsureToleranceAndModeCurrent"/>
+    /// on a tolerance or LOD-mode change (so live-toggle tests observe
+    /// re-population). Two population sources:
+    /// <list type="bullet">
+    /// <item>PR-3 fast path: attached
+    /// <see cref="CoreLineLodPyramid"/> (unprojected, built at open) is
+    /// projected level-by-level with <see cref="SphericalMercator.FromLonLat"/>
+    /// — no Douglas-Peucker.</item>
+    /// <item>PR-3 fallback (attached pyramid absent — non-S-101 feature,
+    /// multi-part position, or vertex-count mismatch): PR-2 on-demand
+    /// Douglas-Peucker over the already-Cartesian NTS coordinates,
+    /// preserving the flag-off visual + no-regression guarantee.</item>
+    /// </list>
     /// </summary>
     private readonly ConcurrentDictionary<(long FeatureId, int Position), CartesianLineLodPyramid> _pyramids = new();
 
@@ -243,7 +270,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
                 }
             case LineString lineString when CanFastLine(vectorStyle):
                 {
-                    DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, 0, lineString, opacity);
+                    DrawLine(canvas, viewport, vectorStyle, feature, geometryFeature.Id, 0, lineString, opacity);
                     return true;
                 }
             case MultiLineString multiLineString when CanFastLine(vectorStyle):
@@ -252,7 +279,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
                     {
                         if (multiLineString[i] is LineString part)
                         {
-                            DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                            DrawLine(canvas, viewport, vectorStyle, feature, geometryFeature.Id, i, part, opacity);
                         }
                     }
                     return true;
@@ -310,7 +337,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     }
 
     private void DrawLine(SKCanvas canvas, Viewport viewport, VectorStyle style,
-        long featureId, int position, LineString lineString, float opacity)
+        IFeature feature, long featureId, int position, LineString lineString, float opacity)
     {
         var resolution = viewport.Resolution;
         if (resolution <= 0 || lineString.IsEmpty || lineString.NumPoints < 2)
@@ -318,23 +345,55 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             return;
         }
 
-        // When the precomputed line LOD pyramid is enabled, key the SKPath
-        // cache by the LOD bucket (level index) instead of the raw
-        // resolution bits. Pans within a zoom band still hit; a band change
-        // misses and rebuilds an SKPath from the pyramid level's coordinates
-        // (which are already simplified — no per-frame simplification pass).
-        // When the flag is off we fall back to the original raw-resolution
-        // key and the inline radial-distance simplification.
+        // PR-3 (#489): the LOD path is active only when the flag is on. When
+        // the flag is off, no attachment lookup, no pyramid materialisation,
+        // and _pyramids stays empty — the code path is byte-identical to the
+        // pre-PR-3 baseline. When the flag is on we consult _pyramids first
+        // (per-renderer projected memo). On miss we either project the
+        // feature's attached WGS-84 pyramid (S-101 fast path, DP done at
+        // open) or fall back to PR-2's on-demand Cartesian DP (non-S-101 or
+        // multi-part / mismatched features). The projected pyramid is
+        // memoised so subsequent band changes on the same feature skip both
+        // projection and DP entirely.
         var lodEnabled = RenderingOptimizations.PrecomputedLineLodEnabled;
-        CartesianLineLodPyramid? pyramid = null;
-        var lodBucket = -1;
+        CoreLineLodPyramid? attached = null;
         if (lodEnabled)
         {
-            pyramid = GetOrBuildPyramid(featureId, position, lineString);
-            lodBucket = pyramid.SelectLevelIndex(resolution);
+            attached = feature[LineLodPyramidKey] as CoreLineLodPyramid;
+
+            // Multi-part safety: the pyramid was built from the feature's
+            // whole WGS-84 coordinate list, which corresponds to the *first*
+            // NTS LineString of a MultiLineString. Additional parts share
+            // the feature id but not the coord sequence, so LOD-keying them
+            // would collide with the first part. Fall back on position > 0.
+            if (position != 0)
+            {
+                attached = null;
+            }
+
+            // Also fall back when the attached pyramid was built from a
+            // different vertex count than the LineString we're painting (a
+            // signal that the reader's WGS-84 → Cartesian projection
+            // reshaped the feature between build and render). Rare in
+            // practice; when it happens we don't want to paint the wrong
+            // shape.
+            if (attached is not null && !TryMatchPassthroughVertexCount(attached, lineString))
+            {
+                attached = null;
+            }
         }
 
-        var key = lodEnabled
+        CartesianLineLodPyramid? projectedPyramid = null;
+        if (lodEnabled)
+        {
+            projectedPyramid = GetOrBuildProjectedPyramid(featureId, position, lineString, attached);
+        }
+
+        var lodBucket = projectedPyramid is not null
+            ? projectedPyramid.SelectLevelIndex(resolution)
+            : -1;
+
+        var key = projectedPyramid is not null
             ? new PathKey(featureId, position, lodBucket)
             : new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
 
@@ -350,7 +409,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         if (entry is not null)
         {
             S100Diag.Telemetry.SimplifyCacheHit.Add(1);
-            if (lodEnabled)
+            if (projectedPyramid is not null)
             {
                 GeometryLodMetrics.CacheHits.Add(1,
                     new KeyValuePair<string, object?>(TelemetryTags.LodBucket, lodBucket));
@@ -359,16 +418,16 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         else
         {
             S100Diag.Telemetry.SimplifyCacheMiss.Add(1);
-            if (lodEnabled)
+            if (projectedPyramid is not null)
             {
                 GeometryLodMetrics.CacheMisses.Add(1,
                     new KeyValuePair<string, object?>(TelemetryTags.LodBucket, lodBucket));
             }
 
             PathEntry built;
-            if (lodEnabled && pyramid is not null)
+            if (projectedPyramid is not null)
             {
-                var selected = pyramid.Levels[lodBucket];
+                var selected = projectedPyramid.Levels[lodBucket];
                 built = BuildLineEntryFromLod(selected.Coordinates, resolution);
                 GeometryLodMetrics.VerticesOut.Record(selected.Coordinates.Length,
                     new KeyValuePair<string, object?>(TelemetryTags.LodBucket, lodBucket));
@@ -410,21 +469,19 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     }
 
     /// <summary>
-    /// Fetches — or lazily builds — the LOD pyramid for one line part. The
-    /// pyramid is scoped to this <see cref="CachedVectorStyleRenderer"/>
-    /// instance so tests get a clean slate per fixture and the shared
-    /// <see cref="Instance"/> holds a single process-scoped table.
+    /// Look up the projected LOD pyramid for one line feature in the
+    /// per-renderer memo, populating it on first miss from either the
+    /// attached WGS-84 pyramid (project each level with
+    /// <see cref="SphericalMercator.FromLonLat"/>) or PR-2's inline
+    /// Cartesian Douglas-Peucker fallback. The memo survives SKPath-cache
+    /// eviction so subsequent band changes on the same feature skip both
+    /// projection and DP.
     /// </summary>
-    /// <remarks>
-    /// Built directly from the NTS <see cref="LineString"/>'s already-projected
-    /// coordinates (EPSG:3857 metres in this renderer's world), which is
-    /// pragmatic for PR-2. When the reproject-once work (issue #488) lands
-    /// with a <c>ProjectedGeometry</c> shape that also exposes the WGS-84
-    /// full-resolution coords, this can migrate to the Core WGS-84
-    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid"/>
-    /// and share disk-cache storage across processes.
-    /// </remarks>
-    private CartesianLineLodPyramid GetOrBuildPyramid(long featureId, int position, LineString lineString)
+    private CartesianLineLodPyramid GetOrBuildProjectedPyramid(
+        long featureId,
+        int position,
+        LineString lineString,
+        CoreLineLodPyramid? attached)
     {
         var key = (featureId, position);
         if (_pyramids.TryGetValue(key, out var existing))
@@ -432,15 +489,95 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             return existing;
         }
 
-        var coords = lineString.Coordinates;
-        var cartesian = new CartesianPoint[coords.Length];
-        for (var i = 0; i < coords.Length; i++)
+        CartesianLineLodPyramid built;
+        if (attached is not null)
         {
-            cartesian[i] = new CartesianPoint(coords[i].X, coords[i].Y);
+            built = ProjectCorePyramidToCartesian(attached);
+        }
+        else
+        {
+            var coords = lineString.Coordinates;
+            var cartesian = new CartesianPoint[coords.Length];
+            for (var i = 0; i < coords.Length; i++)
+            {
+                cartesian[i] = new CartesianPoint(coords[i].X, coords[i].Y);
+            }
+            built = CartesianLineLodPyramid.Build(cartesian, EncDotNet.S100.Pipelines.Vector.Caching.LineLodTolerances.HalfOctaveDefault);
         }
 
-        var built = CartesianLineLodPyramid.Build(cartesian, LineLodTolerances.HalfOctaveDefault);
         return _pyramids.GetOrAdd(key, built);
+    }
+
+    /// <summary>
+    /// Sanity check: the pyramid's passthrough level records the source
+    /// (WGS-84) coordinate count; the NTS <see cref="LineString"/> is the
+    /// projected form of that same coordinate list. When they match we know
+    /// they refer to the same feature. Mismatch means projection reshaped the
+    /// geometry (dateline splitting, deduplication, etc.) and the LOD key
+    /// would be unsound — fall back to the raw path in that case.
+    /// </summary>
+    private static bool TryMatchPassthroughVertexCount(
+        CoreLineLodPyramid pyramid,
+        LineString lineString)
+    {
+        for (var i = pyramid.Levels.Count - 1; i >= 0; i--)
+        {
+            var level = pyramid.Levels[i];
+            if (!level.IsPassthrough)
+            {
+                continue;
+            }
+            return level.Coordinates.Count == lineString.NumPoints;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Materialises a <see cref="CartesianLineLodPyramid"/> from an already
+    /// pre-simplified WGS-84 <see cref="CoreLineLodPyramid"/> by projecting
+    /// each level's coordinates to EPSG:3857 metres. No Douglas-Peucker is
+    /// re-run — the source pyramid was built at open with the same tolerance
+    /// ladder — so the cost is purely
+    /// <see cref="SphericalMercator.FromLonLat"/> calls, one per vertex per
+    /// level. Runs exactly once per <c>(feature, position)</c> per renderer
+    /// lifetime thanks to the <see cref="_pyramids"/> memo.
+    /// </summary>
+    private static CartesianLineLodPyramid ProjectCorePyramidToCartesian(CoreLineLodPyramid source)
+    {
+        var levels = new List<CartesianLineLodLevel>(source.Levels.Count);
+        var inputVertexCount = 0;
+        for (var i = 0; i < source.Levels.Count; i++)
+        {
+            var level = source.Levels[i];
+            var projected = ProjectLevelToWebMercator(level.Coordinates);
+            if (level.IsPassthrough)
+            {
+                inputVertexCount = projected.Length;
+                levels.Add(CartesianLineLodLevel.CreatePassthrough(projected));
+            }
+            else
+            {
+                levels.Add(new CartesianLineLodLevel(level.ToleranceMetres, projected, isPassthrough: false));
+            }
+        }
+
+        return new CartesianLineLodPyramid(levels, inputVertexCount);
+    }
+
+    /// <summary>
+    /// Projects one pyramid level's WGS-84 <c>(lat, lon)</c> coordinates to
+    /// EPSG:3857 metres (the Mapsui world frame).
+    /// </summary>
+    private static CartesianPoint[] ProjectLevelToWebMercator(IReadOnlyList<GeoPosition> source)
+    {
+        var result = new CartesianPoint[source.Count];
+        for (var i = 0; i < source.Count; i++)
+        {
+            var (lat, lon) = source[i];
+            var (x, y) = SphericalMercator.FromLonLat(lon, lat);
+            result[i] = new CartesianPoint(x, y);
+        }
+        return result;
     }
 
     /// <summary>
@@ -546,12 +683,9 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         }
 
         _cache.Clear();
+        _pyramids.Clear();
         _lastSimplifyPx = lineTol;
-        if (lodChanged)
-        {
-            _pyramids.Clear();
-            _lastLodEnabled = lodEnabled;
-        }
+        _lastLodEnabled = lodEnabled;
     }
 
     /// <summary>
