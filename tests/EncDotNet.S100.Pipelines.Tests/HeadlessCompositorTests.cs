@@ -4,6 +4,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using SkiaSharp;
 
@@ -164,6 +165,65 @@ public class HeadlessCompositorTests
             "Expected a painted feature in the right half of the composite.");
     }
 
+    // ----------------------------------------------------------------
+    // Issue #483 — S-104 water-level surface clipped to water areas.
+    // End-to-end proof through the production compositor: the S-98 rule
+    // R-101-104-B attaches the ENC's LandArea geometry to the S-104
+    // surface, and TryLowerCoverage rasterises the per-cell land mask so
+    // land cells paint transparent — revealing the ENC land beneath.
+    // ----------------------------------------------------------------
+
+    [Fact]
+    public void Render_clips_S104_surface_to_water_when_S101_land_is_present()
+    {
+        var compositor = NewCompositor();
+
+        // 8×4 EPSG:4326 grid, all cells one value → a solid red surface.
+        var surface = S104Surface();
+        // ENC land covering the WEST half (native lon < 3.5), painted green.
+        var land = S101Land("#00FF00", west: -1.0, east: 3.5, south: -1.0, north: 5.0);
+
+        var viewport = new Viewport
+        {
+            MinLongitude = 0,
+            MaxLongitude = 8,
+            MinLatitude = 0,
+            MaxLatitude = 4,
+            WidthPixels = 160,
+            HeightPixels = 80,
+            ScaleDenominator = 50_000,
+        };
+
+        using var composite = compositor.Render(
+            new[] { land, surface },
+            new HeadlessCompositeOptions
+            {
+                Viewport = viewport,
+                Background = new RgbaColor(255, 255, 255, 255),
+            });
+
+        // West half (over land): the surface is masked away, so the green
+        // ENC land shows through — proving the S-104 surface was clipped.
+        var westPixel = composite.GetPixel(30, 40);
+        Assert.Equal(new SKColor(0x00, 0xFF, 0x00), westPixel);
+
+        // East half (over water): the red surface paints normally.
+        var eastPixel = composite.GetPixel(130, 40);
+        Assert.Equal(new SKColor(0xFF, 0x00, 0x00), eastPixel);
+
+        // Control: with no ENC alongside it, the SAME west cell paints the
+        // red surface — confirming the mask (not some other effect) removed
+        // it above.
+        using var surfaceOnly = compositor.Render(
+            new[] { S104Surface() },
+            new HeadlessCompositeOptions
+            {
+                Viewport = viewport,
+                Background = new RgbaColor(255, 255, 255, 255),
+            });
+        Assert.Equal(new SKColor(0xFF, 0x00, 0x00), surfaceOnly.GetPixel(30, 40));
+    }
+
     private static bool HasRedPixel(SKBitmap bitmap, int xStart, int xEnd)
     {
         for (int y = 0; y < bitmap.Height; y++)
@@ -264,5 +324,109 @@ public class HeadlessCompositorTests
             => string.Equals(featureReference, _featureRef, System.StringComparison.Ordinal)
                 ? _geometry
                 : null;
+    }
+
+    /// <summary>
+    /// Builds an S-104 gridded-surface coverage input: an 8×4 EPSG:4326 grid
+    /// (native lon 0..7, lat 0..3) whose every cell holds the same value, styled
+    /// with a single red band so the whole surface paints solid red.
+    /// </summary>
+    private static HeadlessCompositeInput S104Surface()
+    {
+        var metadata = new GridMetadata
+        {
+            NumRows = 4,
+            NumColumns = 8,
+            OriginLatitude = 0.0,
+            OriginLongitude = 0.0,
+            SpacingLatitudinal = 1.0,
+            SpacingLongitudinal = 1.0,
+        };
+        var values = new float[metadata.NumRows * metadata.NumColumns];
+        System.Array.Fill(values, 5.0f);
+        var sampled = new SampledCoverage
+        {
+            Region = GridRegion.Full,
+            Metadata = metadata,
+            Values = new Dictionary<string, float[]> { ["waterLevelHeight"] = values },
+        };
+        var styled = new StyledCoverageLayer
+        {
+            Coverage = sampled,
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
+            ColorScheme = new CoverageColorScheme
+            {
+                FieldName = "waterLevelHeight",
+                Bands = new[]
+                {
+                    new ColorBand { MinValue = 0f, MaxValue = 10f, Color = "#FF0000" },
+                },
+            },
+        };
+        var grid = new GridCoverageSubLayer
+        {
+            LayerKey = "s104.surface",
+            LayerName = "S-104 surface",
+            Plane = S98DisplayPlane.OnDemandSurface,
+            Coverage = styled,
+            Viewport = new Viewport
+            {
+                MinLatitude = 0.0,
+                MaxLatitude = 4.0,
+                MinLongitude = 0.0,
+                MaxLongitude = 8.0,
+                WidthPixels = 8,
+                HeightPixels = 4,
+                ScaleDenominator = 50_000,
+            },
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = new[] { grid },
+            Spec = new SpecRef("S-104", default),
+            SourceDatasetId = "s104.h5",
+            Info = "test",
+        };
+        return HeadlessCompositeInput.ForCoverage(result);
+    }
+
+    /// <summary>
+    /// Builds an S-101 vector input with a single <c>LandArea</c> surface over
+    /// the given WGS84 box, filled with <paramref name="fillHex"/>. The feature
+    /// tag + geometry provider are what R-101-104-B reads to derive the land
+    /// mask; the fill lets the test see the land beneath the clipped surface.
+    /// </summary>
+    private static HeadlessCompositeInput S101Land(
+        string fillHex, double west, double east, double south, double north)
+    {
+        const string token = "LNDFILL";
+        const string featureRef = "1";
+
+        var sub = new VectorSubLayer
+        {
+            LayerKey = "s101.areas",
+            LayerName = "S-101 (areas)",
+            Instructions = new DrawingInstruction[]
+            {
+                new AreaInstruction { FeatureReference = featureRef, FillColor = token },
+            },
+            Plane = S98DisplayPlane.BaseChartUnder,
+            SourceFeatureType = "area",
+        };
+
+        var result = new VectorPortrayalResult
+        {
+            SubLayers = new[] { sub },
+            Palette = new ColorPalette("test", new Dictionary<string, string> { [token] = fillHex }),
+            GeometryProvider = new SingleSurfaceGeometryProvider(featureRef, west, east, south, north),
+            Product = "S-101",
+            Spec = new SpecRef("S-101", default),
+            SourceDatasetId = "s101-cell.000",
+            Info = "test",
+            FeatureTags = new Dictionary<long, VectorFeatureTag> { [1] = new VectorFeatureTag("LandArea", null) },
+        };
+
+        return HeadlessCompositeInput.ForVector(result);
     }
 }

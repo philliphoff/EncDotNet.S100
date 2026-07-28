@@ -71,7 +71,8 @@ public static class LayerStackProjector
     /// </returns>
     public static IReadOnlyList<LayerStackEntry> Project(
         IReadOnlyList<SubLayerStackItem> ruledItems,
-        IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt)
+        IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt,
+        Func<GridCoverageSubLayer, ILayer?>? rebuildCoverage = null)
     {
         System.ArgumentNullException.ThrowIfNull(ruledItems);
         System.ArgumentNullException.ThrowIfNull(prebuilt);
@@ -82,14 +83,40 @@ public static class LayerStackProjector
             if (!prebuilt.TryGetValue(KeyOf(item), out var pre))
                 continue;
 
-            var layer = ProjectOne(item, pre);
+            var layer = ProjectOne(item, pre, rebuildCoverage);
             result.Add(new LayerStackEntry(layer, item));
         }
         return result;
     }
 
-    private static ILayer ProjectOne(SubLayerStackItem ruled, LayerStackEntry prebuilt)
+    private static ILayer ProjectOne(
+        SubLayerStackItem ruled,
+        LayerStackEntry prebuilt,
+        Func<GridCoverageSubLayer, ILayer?>? rebuildCoverage)
     {
+        // Coverage payloads are re-rasterised (not feature-filtered) when the
+        // engine replaced the sub-layer — e.g. R-101-104-B attaches a land-area
+        // mask to the S-104 surface so it can be clipped to water (issue #483).
+        if (ruled.Payload is CoverageStackPayload ruledCoverage
+            && prebuilt.Item.Payload is CoverageStackPayload originalCoverage
+            && !ReferenceEquals(ruledCoverage.SubLayer, originalCoverage.SubLayer)
+            && ruledCoverage.SubLayer is GridCoverageSubLayer ruledGrid
+            && rebuildCoverage is not null)
+        {
+            var rebuilt = rebuildCoverage(ruledGrid);
+            if (rebuilt is null)
+                return prebuilt.Layer;
+
+            // The rebuilt layer is a fresh ILayer that defaults to
+            // Enabled=true / Opacity=1 with no visible range. Carry over the
+            // prebuilt layer's current display state so a rule-triggered rebuild
+            // (e.g. R-101-104-B land clipping) never re-shows a hidden surface
+            // — including the default-hidden S-104 surface (issue #483) — or
+            // resets the user's opacity / scale-window choices.
+            CopyDisplayState(prebuilt.Layer, rebuilt);
+            return rebuilt;
+        }
+
         // Only vector payloads are suppressible (R-101-102-B). If the engine
         // left the sub-layer reference untouched, the prebuilt layer is reused
         // verbatim.
@@ -113,6 +140,21 @@ public static class LayerStackProjector
             return prebuilt.Layer;
 
         return FilterFeatures(memoryLayer, dropped);
+    }
+
+    private static void CopyDisplayState(ILayer source, ILayer target)
+    {
+        target.Enabled = source.Enabled;
+        target.Opacity = source.Opacity;
+
+        // MinVisible / MaxVisible are only settable on the concrete BaseLayer
+        // (read-only on ILayer). Coverage renderers return BaseLayer-derived
+        // layers, so carry the scale window over when both sides are BaseLayers.
+        if (source is BaseLayer sourceBase && target is BaseLayer targetBase)
+        {
+            targetBase.MinVisible = sourceBase.MinVisible;
+            targetBase.MaxVisible = sourceBase.MaxVisible;
+        }
     }
 
     private static HashSet<string> ComputeDroppedRefs(VectorSubLayer original, VectorSubLayer surviving)

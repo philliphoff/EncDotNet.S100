@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Skia;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
@@ -45,6 +47,18 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
 
     /// <summary>Layer opacity (0.0–1.0). Defaults to 0.8.</summary>
     public double Opacity { get; set; } = 0.8;
+
+    /// <summary>
+    /// Optional S-101 <c>LandArea</c> surface geometries (WGS84
+    /// <c>(latitude, longitude)</c>) used to clip the surface to water. When set,
+    /// the surface raster is up-sampled and clipped with these polygons
+    /// (even–odd, honouring interior water rings) at output-pixel resolution, so
+    /// it never bleeds over land regardless of how coarse the grid is (a real
+    /// S-104 grid can be a handful of ~1&#160;km cells). Set by the S-98
+    /// water-area clip rule for the S-104 gridded surface (issue #483).
+    /// <see langword="null"/> or empty disables clipping.
+    /// </summary>
+    public IReadOnlyList<FeatureGeometry>? LandAreas { get; set; }
 
     public MapsuiCoverageRenderer(ICrsTransformFactory transformFactory)
     {
@@ -154,12 +168,14 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         var pixelSpan = MemoryMarshal.AsBytes(pixels.AsSpan());
         pixelSpan.CopyTo(new Span<byte>((void*)bmp.GetPixels(), pixelCount * 4));
 
-        // Encode to PNG
-        using var image = SKImage.FromBitmap(bmp);
-        using var data0 = image.Encode(SKEncodedImageFormat.Png, 100);
-        byte[] pngBytes = data0.ToArray();
-
         var mercatorExtent = new MRect(layout.MercMinX, layout.MercMinY, layout.MercMaxX, layout.MercMaxY);
+
+        // Encode to PNG. When land polygons are supplied (S-98 water-area clip,
+        // issue #483), up-sample the surface and clip it to water at output-pixel
+        // resolution so the (often very coarse) grid does not paint over land.
+        byte[] pngBytes = LandAreas is { Count: > 0 } land
+            ? EncodeClippedToWater(bmp, land, outCols, outRows, layout)
+            : EncodePng(bmp);
 
         // Build the Mapsui layer
         var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
@@ -174,6 +190,80 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             Style = null,
             Opacity = Opacity,
         };
+    }
+
+    private static byte[] EncodePng(SKBitmap bitmap)
+    {
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// Up-samples the coarse node raster and clips it to water using the S-101
+    /// land polygons, projected into the same Web-Mercator extent so the clip
+    /// registers with the surface. Even–odd fill keeps the surface over interior
+    /// water rings; the land region is removed with
+    /// <see cref="SKClipOperation.Difference"/>. Antialiased so the coastline is
+    /// smooth even though the underlying grid is blocky.
+    /// </summary>
+    private static byte[] EncodeClippedToWater(
+        SKBitmap source,
+        IReadOnlyList<FeatureGeometry> landAreas,
+        int outCols,
+        int outRows,
+        LayoutCacheEntry layout)
+    {
+        // Up-sample so the clip has enough resolution to follow the coastline
+        // (the node raster can be only a handful of cells across). Never shrink
+        // below native and never exceed the output-size cap.
+        int longSide = Math.Max(outCols, outRows);
+        int targetLong = longSide >= 1024 ? Math.Min(longSide, MaxDim) : Math.Min(1024, MaxDim);
+        double factor = (double)targetLong / longSide;
+        int tCols = Math.Max(1, (int)Math.Round(outCols * factor));
+        int tRows = Math.Max(1, (int)Math.Round(outRows * factor));
+
+        double spanX = layout.MercMaxX - layout.MercMinX;
+        double spanY = layout.MercMaxY - layout.MercMinY;
+
+        using var target = new SKBitmap(new SKImageInfo(tCols, tRows, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(target))
+        {
+            canvas.Clear(SKColors.Transparent);
+
+            using var landPath = CoverageLandClip.BuildLandPath(
+                landAreas,
+                (lon, lat) =>
+                {
+                    var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+                    float px = (float)((mx - layout.MercMinX) / spanX * tCols);
+                    // Row 0 of the source raster is north (top); flip Y so the
+                    // clip matches the raster's north-up orientation.
+                    float py = (float)((1.0 - (my - layout.MercMinY) / spanY) * tRows);
+                    return new SKPoint(px, py);
+                });
+
+            if (landPath is not null)
+            {
+                canvas.Save();
+                canvas.ClipPath(landPath, SKClipOperation.Difference, antialias: true);
+            }
+
+            using (var image = SKImage.FromBitmap(source))
+            {
+                canvas.DrawImage(
+                    image,
+                    new SKRect(0, 0, tCols, tRows),
+                    new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+            }
+
+            if (landPath is not null)
+            {
+                canvas.Restore();
+            }
+        }
+
+        return EncodePng(target);
     }
 
     /// <summary>

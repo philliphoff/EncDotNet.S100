@@ -37,6 +37,30 @@ If IHO publishes an official S-104 portrayal catalogue, the bundled
 `content/S104/pc/` directory (today `.gitkeep`-only by design) will be the
 landing point and this catalogue will be re-wired against it.
 
+### Visibility and water-area clipping (issue #483)
+
+Because the heatmap is non-normative, the **gridded surface** (data coding
+format 2) loads **hidden by default** in the viewer — the user can reveal it
+from the layer controls. Discrete **fixed-station glyphs** (data coding format 8)
+remain visible by default; they are point features and are unaffected.
+`S104DatasetProcessor.IsGriddedSurface` distinguishes the two so the loader only
+defaults the surface hidden.
+
+When the surface is shown alongside an S-101 ENC, the S-98 interoperability rule
+`R-101-104-B` (`S98DefaultRules.R_101_104_B_ClipSurfaceToWater`) attaches the
+ENC's `LandArea` geometry to the surface sub-layer (`GridCoverageSubLayer.LandAreaMask`).
+The coverage renderers (`MapsuiCoverageRenderer` and the headless
+`CoverageHeadlessRenderer`) then clip the rasterised surface to water at
+**output-pixel resolution**: `CoverageLandClip.BuildLandPath` projects the land
+polygons (honouring interior water rings via even–odd fill) into the destination
+pixel space and the surface is drawn under an antialiased
+`SKClipOperation.Difference` clip. Pixel-accurate clipping is essential because
+real S-104 grids are often very coarse (e.g. the Rotterdam sample is only 5×6
+cells ≈ 1 km each); an earlier per-cell mask could only toggle whole grid cells
+and so straddled piers and basins. The surface is thus layered like S-102
+bathymetry — beneath ENC line work and clipped to water — so it never bleeds
+over land.
+
 ## Validation
 
 A bundled rule pack

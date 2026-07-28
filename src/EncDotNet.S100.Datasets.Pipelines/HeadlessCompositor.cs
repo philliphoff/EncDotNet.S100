@@ -296,7 +296,8 @@ public sealed class HeadlessCompositor
             case GridCoverageSubLayer grid:
                 {
                     var (w, e, s, n, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
-                    layer = new CoverageCompositeLayer(grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84);
+                    layer = new CoverageCompositeLayer(
+                        grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84, landAreas: grid.LandAreaMask);
                     west = w; east = e; south = s; north = n;
                     return true;
                 }

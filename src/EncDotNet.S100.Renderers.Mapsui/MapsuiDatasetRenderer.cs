@@ -233,11 +233,7 @@ public sealed class MapsuiDatasetRenderer
             {
                 case GridCoverageSubLayer grid:
                     {
-                        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
-                        {
-                            LayerName = grid.LayerName,
-                        };
-                        layer = renderer.Render(grid.Coverage, grid.Viewport);
+                        layer = BuildGridCoverageLayer(grid);
                         break;
                     }
 
@@ -291,6 +287,28 @@ public sealed class MapsuiDatasetRenderer
             LayerNames = layerNames,
             StackEntries = stackEntries,
         };
+    }
+
+    /// <summary>
+    /// Builds the Mapsui raster layer for an S-104-style gridded coverage
+    /// surface, applying the optional S-98 land-area mask
+    /// (<see cref="GridCoverageSubLayer.LandAreaMask"/>) so the surface is
+    /// clipped to water (issue #483). Exposed so the S-98 layer-stack projector
+    /// can rebuild the raster after an inter-product rule attaches a mask that
+    /// was not present when the layer was first rasterised.
+    /// </summary>
+    /// <param name="grid">The gridded coverage sub-layer to rasterise.</param>
+    /// <returns>The rasterised layer, or <see langword="null"/> if none was produced.</returns>
+    public ILayer? BuildGridCoverageLayer(GridCoverageSubLayer grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+
+        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        {
+            LayerName = grid.LayerName,
+            LandAreas = grid.LandAreaMask,
+        };
+        return renderer.Render(grid.Coverage, grid.Viewport);
     }
 
     private static MemoryLayer BuildGlyphLayer(GlyphCoverageSubLayer sub)
