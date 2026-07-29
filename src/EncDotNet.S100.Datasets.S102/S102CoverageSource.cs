@@ -344,8 +344,7 @@ public class S102CoverageSource : ICoverageSource
     {
         int sourceLength = sourceEnd - sourceStart;
         int start = sourceStart + (int)((long)outputIndex * sourceLength / outputCount);
-        int end = sourceStart + (int)(
-            ((long)(outputIndex + 1) * sourceLength + outputCount - 1) / outputCount);
+        int end = sourceStart + (int)((long)(outputIndex + 1) * sourceLength / outputCount);
         return (start, end);
     }
 

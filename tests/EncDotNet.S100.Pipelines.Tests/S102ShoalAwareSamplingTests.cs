@@ -61,6 +61,25 @@ public sealed class S102ShoalAwareSamplingTests
     }
 
     [Fact]
+    public void Sample_StridedBaseGrid_DoesNotOverlapBalancedWindows()
+    {
+        var source = CreateSource(
+            rows: 5,
+            cols: 5,
+            (row, col) => new BathymetryValue(
+                row == 2 && col == 2 ? 2f : 40f,
+                0.5f));
+        var region = new GridRegion(0, 5, 0, 5, rowStride: 3, colStride: 3);
+
+        var sampled = source.Sample(region);
+
+        Assert.Equal(40f, sampled.GetField("depth")[0, 0]);
+        Assert.Equal(40f, sampled.GetField("depth")[0, 1]);
+        Assert.Equal(40f, sampled.GetField("depth")[1, 0]);
+        Assert.Equal(2f, sampled.GetField("depth")[1, 1]);
+    }
+
+    [Fact]
     public void Sample_StridedOverview_PreservesShoalBetweenNearestSamples()
     {
         var source = CreateSource(
