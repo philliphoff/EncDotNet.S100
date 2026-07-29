@@ -100,6 +100,7 @@ public class CoveragePipeline
             using (var readActivity = Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.stage.read"))
             {
                 var stageStart = Stopwatch.GetTimestamp();
+                readActivity?.SetTag(TelemetryTags.CoverageReducer, "nearest");
                 sampled = source.Sample(region, cancellationToken);
                 RecordCoverageStageDuration(stageStart, "read");
 
@@ -401,18 +402,21 @@ public class GridRegion
         var (viewportNativeXMin, viewportNativeXMax, viewportNativeYMin, viewportNativeYMax) =
             ProjectViewportCorners(viewport, gridIsWgs84, wgs84ToNative);
 
-        // 2. Compute grid extent in native coordinates. Cell 0 is at
-        //    Origin*; cell (N-1) is at Origin* + (N-1) * Spacing*. Either
-        //    axis's spacing may be negative (image-style top-down grids),
-        //    so use min/max rather than assuming a direction.
+        // 2. Compute the node-centred grid's outer footprint in native
+        //    coordinates. Cell 0 is at Origin* and extends half a spacing
+        //    beyond it; the final cell does the same at the opposite edge.
+        //    Either axis's spacing may be negative (image-style top-down
+        //    grids), so use min/max rather than assuming a direction.
         double gridXStart = grid.OriginLongitude;
         double gridXEnd = grid.OriginLongitude + (grid.NumColumns - 1) * grid.SpacingLongitudinal;
         double gridYStart = grid.OriginLatitude;
         double gridYEnd = grid.OriginLatitude + (grid.NumRows - 1) * grid.SpacingLatitudinal;
-        double gridXMin = Math.Min(gridXStart, gridXEnd);
-        double gridXMax = Math.Max(gridXStart, gridXEnd);
-        double gridYMin = Math.Min(gridYStart, gridYEnd);
-        double gridYMax = Math.Max(gridYStart, gridYEnd);
+        double gridXHalfCell = Math.Abs(grid.SpacingLongitudinal) / 2;
+        double gridYHalfCell = Math.Abs(grid.SpacingLatitudinal) / 2;
+        double gridXMin = Math.Min(gridXStart, gridXEnd) - gridXHalfCell;
+        double gridXMax = Math.Max(gridXStart, gridXEnd) + gridXHalfCell;
+        double gridYMin = Math.Min(gridYStart, gridYEnd) - gridYHalfCell;
+        double gridYMax = Math.Max(gridYStart, gridYEnd) + gridYHalfCell;
 
         // 3. Intersect.
         double interXMin = Math.Max(viewportNativeXMin, gridXMin);

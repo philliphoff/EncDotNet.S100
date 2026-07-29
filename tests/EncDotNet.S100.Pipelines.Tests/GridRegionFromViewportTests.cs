@@ -133,6 +133,28 @@ public class GridRegionFromViewportTests
     }
 
     [Fact]
+    public void ViewportIntersectingOuterHalfCell_IncludesBoundaryCell()
+    {
+        var viewport = new Viewport
+        {
+            MinLatitude = -0.00004,
+            MaxLatitude = 0.00004,
+            MinLongitude = -0.00004,
+            MaxLongitude = 0.00004,
+            WidthPixels = 10,
+            HeightPixels = 10,
+            ScaleDenominator = 50_000,
+        };
+
+        var region = GridRegion.FromViewport(viewport, Wgs84Grid);
+
+        Assert.Equal(0, region.RowStart);
+        Assert.Equal(1, region.RowEnd);
+        Assert.Equal(0, region.ColStart);
+        Assert.Equal(1, region.ColEnd);
+    }
+
+    [Fact]
     public void ViewportPartiallyOffGrid_ClampsToGridBounds()
     {
         // Viewport hangs off the north-east corner. Bounds must clamp

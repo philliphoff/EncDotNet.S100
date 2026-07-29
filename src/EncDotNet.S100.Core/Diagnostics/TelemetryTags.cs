@@ -81,6 +81,14 @@ public static class TelemetryTags
     /// </summary>
     public const string CoverageOverviewLevel = "s100.coverage.overview.level";
 
+    /// <summary>
+    /// Reduction policy applied while downsampling a coverage grid, such as
+    /// <c>nearest</c> or <c>min</c>. Applied to the coverage read span so
+    /// safety-critical products can prove that viewport stride does not use
+    /// point sampling.
+    /// </summary>
+    public const string CoverageReducer = "s100.coverage.reducer";
+
     /// <summary>Symbol identifier used in a resolve operation.</summary>
     public const string SymbolId = "s100.symbol.id";
 
