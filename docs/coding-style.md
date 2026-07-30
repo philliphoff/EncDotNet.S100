@@ -13,17 +13,14 @@ code is migrated toward it opportunistically.
 
 > **Enforcement.** The mechanically-checkable rules below are encoded in the
 > repository [`.editorconfig`](../.editorconfig) and can be checked/applied with
-> `dotnet format`. CI gates two subsets (the *Format check* job): the
-> **whitespace/formatting** rules via `dotnet format whitespace
-> --verify-no-changes`, and the **using-directive** rules (System-first
+> `dotnet format`. CI's *Format check* job uses one targeted invocation to
+> verify **whitespace/formatting**, **using directives** (IDE0005: System-first
 > ordering, placement outside the file-scoped namespace, and removal of
-> unnecessary directives) via `dotnet format style --diagnostics IDE0005
-> --verify-no-changes`. Broader style and **naming** rules (e.g. IDE1006) are
-> **not** machine-gated: `dotnet format` cannot Fix-All naming, and its
+> unnecessary directives), and **naming** (IDE1006). IDE1006 is verification
+> only because `dotnet format` cannot Fix-All naming; naming failures must be
+> corrected manually. Other style diagnostics remain ungated because the
 > solution-wide style fix-all is unreliable on the multi-targeted
-> (`net8.0;net10.0`) projects — so those rules are followed by hand (the
-> `.editorconfig` surfaces them in the IDE). Imports are safe to gate because
-> IDE0005 is identical across both target frameworks here.
+> (`net8.0;net10.0`) projects.
 > `EnforceCodeStyleInBuild` is left off so `dotnet build` stays fast and does
 > not turn style suggestions into build errors. When this document and the
 > `.editorconfig` disagree, the encoded rule wins and this document should be
@@ -204,6 +201,6 @@ code is migrated toward it opportunistically.
 *This guide was delivered in phases: Phase 1 ("Define") wrote it, Phase 2
 ("Encode") captured the mechanically-checkable rules in `.editorconfig`,
 Phase 3 ("Enforce") added the CI format gates, and Phase 4 ("Refactor")
-brought existing code into whitespace and using-directive compliance. CI now
-gates whitespace and using directives; broader style and naming rules remain
+brought existing code into whitespace, using-directive, and naming compliance.
+CI now gates whitespace, IDE0005, and IDE1006; other style rules remain
 hand-followed due to the multi-target constraint noted above.*
