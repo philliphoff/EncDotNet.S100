@@ -33,7 +33,7 @@ public sealed class S101FeatureAttributeBindings
 {
     private readonly FrozenDictionary<string, FrozenSet<string>> _featureCodesByAttribute;
 
-    private static readonly Lazy<S101FeatureAttributeBindings> _default = new(LoadDefault);
+    private static readonly Lazy<S101FeatureAttributeBindings> LazyDefault = new(LoadDefault);
 
     private S101FeatureAttributeBindings(FrozenDictionary<string, FrozenSet<string>> featureCodesByAttribute)
     {
@@ -44,7 +44,7 @@ public sealed class S101FeatureAttributeBindings
     /// Lazily-loaded singleton built from the S-101 Feature Catalogue embedded
     /// in <see cref="Specification"/>.
     /// </summary>
-    public static S101FeatureAttributeBindings Default => _default.Value;
+    public static S101FeatureAttributeBindings Default => LazyDefault.Value;
 
     /// <summary>
     /// Builds an instance from a parsed S-101 <see cref="FeatureCatalogue"/>.

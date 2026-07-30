@@ -30,7 +30,7 @@ internal static class Telemetry
         public long LastReadTimestamp = Stopwatch.GetTimestamp();
     }
 
-    private static readonly ConcurrentDictionary<string, CallStats> _callStats =
+    private static readonly ConcurrentDictionary<string, CallStats> CallStatistics =
         new ConcurrentDictionary<string, CallStats>();
 
     /// <summary>
@@ -42,7 +42,7 @@ internal static class Telemetry
     internal static void RecordGetFeaturesCall(string? product)
     {
         var key = product ?? string.Empty;
-        var stats = _callStats.GetOrAdd(key, static _ => new CallStats());
+        var stats = CallStatistics.GetOrAdd(key, static _ => new CallStats());
         Interlocked.Increment(ref stats.Count);
     }
 
@@ -455,8 +455,8 @@ internal static class Telemetry
 
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
-        var measurements = new List<Measurement<double>>(_callStats.Count);
-        foreach (var pair in _callStats)
+        var measurements = new List<Measurement<double>>(CallStatistics.Count);
+        foreach (var pair in CallStatistics)
         {
             var stats = pair.Value;
             var nowTimestamp = Stopwatch.GetTimestamp();

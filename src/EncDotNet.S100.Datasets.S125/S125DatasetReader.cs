@@ -187,7 +187,7 @@ internal static class S125DatasetReader
         // in the S-125 1.0.0 model. Pass an empty id-set so any xlink child
         // (if encountered) falls through to the information-reference branch
         // for backwards compatibility.
-        var (simpleAttrs, complexAttrs, _, _) = ParseAttributes(element, s100Ns, _emptyIdSet);
+        var (simpleAttrs, complexAttrs, _, _) = ParseAttributes(element, s100Ns, EmptyIdSet);
 
         return new S125InformationType
         {
@@ -198,7 +198,7 @@ internal static class S125DatasetReader
         };
     }
 
-    private static readonly HashSet<string> _emptyIdSet = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> EmptyIdSet = new(StringComparer.OrdinalIgnoreCase);
 
     // ── Geometry ───────────────────────────────────────────────────────
 

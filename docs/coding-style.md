@@ -109,8 +109,8 @@ code is migrated toward it opportunistically.
   thread-static fields) are **not** used here: a private field is `_camelCase`
   regardless of whether it is instance or static, and a `static readonly` /
   `const` field is `PascalCase`. When a `static readonly` field backs a
-  same-named property, method, or type, keep the `_camelCase` form for the
-  field (the accessor owns the `PascalCase` name).
+  same-named property, method, or type, give the field a distinct descriptive
+  `PascalCase` name (for example, `LazyDefault` backing `Default`).
 - Do **not** prefix with `this.` to disambiguate fields — the `_` field prefix
   already makes fields visually distinct, and `this.` is effectively unused in
   the codebase.

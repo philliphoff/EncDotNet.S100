@@ -448,7 +448,7 @@ public static class S100VectorTileRenderer
     // Stateless, render-thread-only label declutter for the live overlay. S-100
     // Part 9 makes overlap avoidance the portrayal engine's job; this resolves it
     // deterministically each frame from the ops' drawing priority / SCAMIN.
-    private static readonly LabelDeclutterer _labelDeclutterer = new();
+    private static readonly LabelDeclutterer OverlayLabelDeclutterer = new();
 
     private static readonly Lazy<TileDiskCache?> DiskCache = new(CreateSharedDiskCache);
 
@@ -2227,7 +2227,7 @@ public static class S100VectorTileRenderer
         // on-screen space (anchors rotated by the same angle as the overlay), so
         // collisions are correct under rotation. Points reserve space first;
         // lower-priority labels that overlap an occupied footprint are skipped.
-        var suppressed = _labelDeclutterer.Declutter(
+        var suppressed = OverlayLabelDeclutterer.Declutter(
             scene, viewport, screenCull, OverlayRenderer.HonorScaleVisibility,
             rotationDeg, cx, cy);
 
