@@ -185,7 +185,7 @@ public class PortrayalCatalogueManagerTests
             // Every thread must see the same provider instance.
             var first = results[0];
             Assert.NotNull(first);
-            for (int i = 1; i < Threads; i++)
+            for (int i = 1; i < threads; i++)
             {
                 Assert.Same(first, results[i]);
             }

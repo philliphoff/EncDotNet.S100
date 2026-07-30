@@ -36,7 +36,7 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
     /// dataset instance, even though each call constructs a fresh
     /// <see cref="S101VectorSource"/>. See issue #490.
     /// </remarks>
-    private static readonly ConditionalWeakTable<S101Dataset, FeatureCache> s_caches = new();
+    private static readonly ConditionalWeakTable<S101Dataset, FeatureCache> FeatureCaches = new();
 
     private readonly S101Dataset _dataset;
     private readonly FeatureCache _cache;
@@ -45,7 +45,7 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
     {
         ArgumentNullException.ThrowIfNull(dataset);
         _dataset = dataset;
-        _cache = s_caches.GetValue(dataset, static ds => new FeatureCache(ds));
+        _cache = FeatureCaches.GetValue(dataset, static ds => new FeatureCache(ds));
     }
 
     public VectorMetadata Metadata => new()
