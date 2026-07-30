@@ -100,7 +100,7 @@ code is migrated toward it opportunistically.
 | Namespace, type, method, property, event, enum member | `PascalCase` | `CoveragePipeline`, `TryParse` |
 | Interface | `PascalCase` prefixed with `I` | `IAssetSource` |
 | Type parameter | `PascalCase` prefixed with `T` | `TModel`, `TKey` |
-| Local variable, parameter | `camelCase` | `versionPart`, `edition` |
+| Local variable, local constant, parameter | `camelCase` | `versionPart`, `tolerance`, `edition` |
 | Private / internal field (instance or mutable static) | `_camelCase` | `_assetSource`, `_tileWorkerCount` |
 | Constant, `static readonly` | `PascalCase` | `MaxDepthBands`, `Sampling` |
 | Async method | `PascalCase` suffixed `Async` | `OpenFeatureCatalogueAsync` |

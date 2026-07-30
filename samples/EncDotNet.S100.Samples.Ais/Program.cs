@@ -17,14 +17,14 @@ using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 using EncDotNet.S100.Pipelines;
 
-const string EnvVarName = "ENCDOTNET_AIS_STREAM_KEY";
+const string envVarName = "ENCDOTNET_AIS_STREAM_KEY";
 
-var apiKey = Environment.GetEnvironmentVariable(EnvVarName);
+var apiKey = Environment.GetEnvironmentVariable(envVarName);
 if (string.IsNullOrWhiteSpace(apiKey))
 {
-    Console.Error.WriteLine($"error: environment variable '{EnvVarName}' is not set.");
+    Console.Error.WriteLine($"error: environment variable '{envVarName}' is not set.");
     Console.Error.WriteLine($"Get a free API key from https://aisstream.io and run:");
-    Console.Error.WriteLine($"  export {EnvVarName}=<key>");
+    Console.Error.WriteLine($"  export {envVarName}=<key>");
     return 1;
 }
 

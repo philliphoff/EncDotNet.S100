@@ -238,9 +238,9 @@ internal static class MarineGeodesy
     {
         // Wrap the longitude difference into (-π, π] so we always traverse
         // the short way around the globe.
-        const double TwoPi = 2.0 * Math.PI;
-        if (dlamRadians > Math.PI) dlamRadians -= TwoPi;
-        else if (dlamRadians < -Math.PI) dlamRadians += TwoPi;
+        const double twoPi = 2.0 * Math.PI;
+        if (dlamRadians > Math.PI) dlamRadians -= twoPi;
+        else if (dlamRadians < -Math.PI) dlamRadians += twoPi;
         return dlamRadians;
     }
 }

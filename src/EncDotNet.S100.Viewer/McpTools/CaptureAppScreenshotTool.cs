@@ -91,9 +91,9 @@ internal sealed class CaptureAppScreenshotTool
     {
         // 8-byte signature, 4-byte length, 4-byte "IHDR", then width/height
         // (each a big-endian uint32) at offsets 16 and 20.
-        const int WidthOffset = 16;
-        const int HeightOffset = 20;
-        if (bytes.Length < HeightOffset + 4)
+        const int widthOffset = 16;
+        const int heightOffset = 20;
+        if (bytes.Length < heightOffset + 4)
         {
             return (0, 0);
         }
@@ -114,8 +114,8 @@ internal sealed class CaptureAppScreenshotTool
             return (0, 0);
         }
 
-        var width = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(WidthOffset, 4));
-        var height = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(HeightOffset, 4));
+        var width = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(widthOffset, 4));
+        var height = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(heightOffset, 4));
         if (width == 0 || height == 0 || width > int.MaxValue || height > int.MaxValue)
         {
             return (0, 0);

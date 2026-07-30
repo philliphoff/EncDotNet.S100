@@ -201,9 +201,13 @@ dotnet_naming_symbols.type_parameters.applicable_accessibilities = *
 dotnet_naming_symbols.members.applicable_kinds = property, method, event, namespace
 dotnet_naming_symbols.members.applicable_accessibilities = *
 
-dotnet_naming_symbols.constants.applicable_kinds = field, local
-dotnet_naming_symbols.constants.applicable_accessibilities = *
-dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_symbols.constant_fields.applicable_kinds = field
+dotnet_naming_symbols.constant_fields.applicable_accessibilities = *
+dotnet_naming_symbols.constant_fields.required_modifiers = const
+
+dotnet_naming_symbols.local_constants.applicable_kinds = local
+dotnet_naming_symbols.local_constants.applicable_accessibilities = *
+dotnet_naming_symbols.local_constants.required_modifiers = const
 
 dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
 dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = *
@@ -249,9 +253,13 @@ dotnet_naming_rule.members_pascal.symbols = members
 dotnet_naming_rule.members_pascal.style = pascal_case
 dotnet_naming_rule.members_pascal.severity = warning
 
-dotnet_naming_rule.constants_pascal.symbols = constants
-dotnet_naming_rule.constants_pascal.style = pascal_case
-dotnet_naming_rule.constants_pascal.severity = warning
+dotnet_naming_rule.constant_fields_pascal.symbols = constant_fields
+dotnet_naming_rule.constant_fields_pascal.style = pascal_case
+dotnet_naming_rule.constant_fields_pascal.severity = warning
+
+dotnet_naming_rule.local_constants_camel.symbols = local_constants
+dotnet_naming_rule.local_constants_camel.style = camel_case
+dotnet_naming_rule.local_constants_camel.severity = warning
 
 dotnet_naming_rule.static_readonly_pascal.symbols = static_readonly_fields
 dotnet_naming_rule.static_readonly_pascal.style = pascal_case

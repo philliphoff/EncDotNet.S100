@@ -223,14 +223,14 @@ public static class S102DatasetReader
     /// </summary>
     private static CoverageGeoref ReadCoverageGeoref(IHdf5Group instance, string instancePath)
     {
-        const string Spec = "S-100 Part 10c §10.2.1.2";
+        const string spec = "S-100 Part 10c §10.2.1.2";
         return new CoverageGeoref(
-            instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-102", null, instancePath, Spec),
-            instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-102", null, instancePath, Spec),
-            instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-102", null, instancePath, Spec),
-            instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-102", null, instancePath, Spec),
-            (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-102", null, instancePath, Spec),
-            (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-102", null, instancePath, Spec));
+            instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-102", null, instancePath, spec),
+            instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-102", null, instancePath, spec),
+            instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-102", null, instancePath, spec),
+            instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-102", null, instancePath, spec),
+            (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-102", null, instancePath, spec),
+            (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-102", null, instancePath, spec));
     }
 
     /// <summary>Grid-georef of a single bathymetry coverage instance.</summary>

@@ -96,12 +96,12 @@ public abstract record GeoQuery
         // Equirectangular approximation. 1° lat ≈ 111 320 m; longitude
         // shrinks with latitude. Use the polewards-most latitude so the
         // inflated box never under-covers the corridor.
-        const double MetersPerDegreeLat = 111_320.0;
-        var latPad = half / MetersPerDegreeLat;
+        const double metersPerDegreeLatitude = 111_320.0;
+        var latPad = half / metersPerDegreeLatitude;
         var refLat = Math.Max(Math.Abs(box.SouthLatitude), Math.Abs(box.NorthLatitude));
         var cosLat = Math.Cos(refLat * Math.PI / 180.0);
         var lonPad = cosLat > 1e-9
-            ? half / (MetersPerDegreeLat * cosLat)
+            ? half / (metersPerDegreeLatitude * cosLat)
             : 180.0;
 
         return new GeoBoundingBox(

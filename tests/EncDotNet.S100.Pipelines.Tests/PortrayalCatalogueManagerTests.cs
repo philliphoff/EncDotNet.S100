@@ -167,11 +167,11 @@ public class PortrayalCatalogueManagerTests
             File.WriteAllText(Path.Combine(tmp, "portrayal_catalogue.xml"), MinimalPcXml);
             mgr.SetPath("S-101", tmp);
 
-            const int Threads = 16;
-            using var ready = new Barrier(Threads);
-            var results = new PortrayalCatalogueProvider[Threads];
-            var tasks = new Task[Threads];
-            for (int i = 0; i < Threads; i++)
+            const int threads = 16;
+            using var ready = new Barrier(threads);
+            var results = new PortrayalCatalogueProvider[threads];
+            var tasks = new Task[threads];
+            for (int i = 0; i < threads; i++)
             {
                 int idx = i;
                 tasks[idx] = Task.Run(() =>
