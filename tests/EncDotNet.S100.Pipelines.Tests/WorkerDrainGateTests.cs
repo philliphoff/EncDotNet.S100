@@ -45,7 +45,7 @@ public class WorkerDrainGateTests
     }
 
     [Fact]
-    public async Task DrainAndWait_BlocksUntilRegisteredWorkerCompletes()
+    public void DrainAndWait_BlocksUntilRegisteredWorkerCompletes()
     {
         var gate = new WorkerDrainGate();
         Assert.True(gate.TryRegister());
@@ -54,14 +54,15 @@ public class WorkerDrainGateTests
         Assert.False(gate.DrainAndWait(TimeSpan.FromMilliseconds(100)));
 
         // Complete the worker on another thread, then a fresh wait succeeds.
-        var completer = Task.Run(() =>
+        var completer = new Thread(() =>
         {
             Thread.Sleep(50);
             gate.Complete();
         });
+        completer.Start();
 
         Assert.True(gate.DrainAndWait(TimeSpan.FromSeconds(5)));
-        await completer;
+        completer.Join();
         Assert.Equal(0, gate.ActiveWorkers);
     }
 
