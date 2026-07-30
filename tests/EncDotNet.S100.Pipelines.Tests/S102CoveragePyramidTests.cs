@@ -1,7 +1,13 @@
 using System.Reflection;
+using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Specifications;
 using PureHDF;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -134,6 +140,8 @@ public class S102CoveragePyramidTests
             var meta = source.Metadata;
             Assert.Equal(4, meta.GridMetadata.NumRows);
             Assert.Equal(4, meta.GridMetadata.NumColumns);
+            Assert.Equal(50.005, meta.GridMetadata.OriginLatitude, precision: 6);
+            Assert.Equal(-0.995, meta.GridMetadata.OriginLongitude, precision: 6);
             Assert.Equal(0.02, meta.GridMetadata.SpacingLatitudinal, precision: 6);
 
             var sampled = source.Sample(GridRegion.Full);
@@ -160,6 +168,56 @@ public class S102CoveragePyramidTests
             // All base uncertainties = 0.1; max = 0.1 for every pool.
             foreach (var u in sampled.Values["uncertainty"])
                 Assert.Equal(0.1f, u, precision: 5);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(-1.004, -0.999)]
+    [InlineData(-0.989, -0.986)]
+    public void SelectOverviewLevel_BoundaryViewportIncludesIntersectingPool(
+        double minLongitude,
+        double maxLongitude)
+    {
+        var path = WriteSyntheticGrid();
+        try
+        {
+            var source = OpenSource(path);
+            source.Coverage.Values[1] = new BathymetryValue(1f, 0.1f);
+            source.SelectOverviewLevel(1);
+            var metadata = source.Metadata;
+            var viewport = new Viewport
+            {
+                MinLatitude = 49.999,
+                MaxLatitude = 50.011,
+                MinLongitude = minLongitude,
+                MaxLongitude = maxLongitude,
+                WidthPixels = 100,
+                HeightPixels = 100,
+                ScaleDenominator = 50_000,
+            };
+
+            var region = GridRegion.FromViewport(
+                viewport,
+                metadata.GridMetadata,
+                metadata.HorizontalCRS);
+            var sampled = source.Sample(region);
+
+            Assert.Equal(0, region.ColStart);
+            Assert.Equal(1f, sampled.GetField("depth")[0, 0]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void AvailableOverviewLevels_OddGridStopsBeforePartialPools()
+    {
+        var path = WriteSyntheticGrid(rows: 5, cols: 5);
+        try
+        {
+            var source = OpenSource(path);
+
+            Assert.Single(source.AvailableOverviewLevels);
         }
         finally { File.Delete(path); }
     }
@@ -197,5 +255,58 @@ public class S102CoveragePyramidTests
             Assert.Equal(10.0f, sampled.Values["depth"][0]);
         }
         finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task Processor_ZoomedOutViewport_SelectsShoalBiasedOverview()
+    {
+        var path = WriteSyntheticGrid();
+        using var manager = CreateCatalogueManager();
+        using var processor = new S102DatasetProcessor(
+            path,
+            manager,
+            new MoonSharpLuaEngine(),
+            new ProjNetCrsTransformFactory());
+
+        try
+        {
+            var context = new S102RenderContext
+            {
+                Viewport = new Viewport
+                {
+                    MinLatitude = 49.9,
+                    MaxLatitude = 50.18,
+                    MinLongitude = -1.1,
+                    MaxLongitude = -0.82,
+                    WidthPixels = 4,
+                    HeightPixels = 4,
+                    ScaleDenominator = 200_000,
+                },
+            };
+
+            var result = await processor.BuildCoveragePortrayalAsync(context);
+
+            var subLayer = Assert.IsType<GridCoverageSubLayer>(Assert.Single(result.SubLayers));
+            Assert.Equal(2, subLayer.Coverage.Coverage.Metadata.NumRows);
+            Assert.Equal(2, subLayer.Coverage.Coverage.Metadata.NumColumns);
+            Assert.Equal(10f, subLayer.Coverage.Coverage.GetField("depth")[0, 0]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static PortrayalCatalogueManager CreateCatalogueManager()
+    {
+        var manager = new PortrayalCatalogueManager();
+        foreach (var spec in Specification.AvailableSpecs)
+        {
+            if (Specification.HasPortrayalCatalogue(spec))
+            {
+                manager.SetSource(spec, Specification.CreatePortrayalCatalogueSource(spec));
+            }
+        }
+        return manager;
     }
 }

@@ -156,18 +156,23 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         {
             await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
-            // Overview pyramid level selection (issue #486). When the
-            // caller supplies a viewport, pick the coarsest level whose
-            // native cell spacing still oversamples the display (i.e.
-            // ≥ 1 native cell per screen pixel by default). Levels
-            // above 0 shrink the renderer's O(srcRows*srcCols) inner
-            // loop 4× per step — this is the dominant win the pyramid
-            // buys (baseline: ~98% of frame time is render, not read).
-            // Ordering matters: SelectOverviewLevel must precede the
-            // Metadata read below so the pipeline sees the level-L
-            // geometry (rows/cols/spacing) throughout.
             var previousLevel = _source.SelectedOverviewLevel;
-            SelectOverviewLevelForViewport(context?.Viewport);
+
+            int crs = _dataset.HorizontalCRS ?? 4326;
+            ICrsTransform? wgs84ToNative = null;
+            if (context?.Viewport is not null && crs != 4326)
+            {
+                wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+            }
+
+            // Select the coarsest shoal-biased overview that does not exceed
+            // the viewport's cells-per-pixel ratio. Deriving the ratio through
+            // GridRegion accounts for how much of the viewport the tile
+            // occupies; comparing only full-grid dimensions to viewport pixels
+            // would incorrectly choose level 0 when zoomed beyond the tile.
+            // Ordering matters: selection precedes this Metadata read so the
+            // pipeline computes its residual region against level-L geometry.
+            SelectOverviewLevelForViewport(context?.Viewport, wgs84ToNative);
             var metadata = _source.Metadata;
 
             var viewport = context?.Viewport ?? new EncDotNet.S100.Pipelines.Viewport
@@ -194,13 +199,6 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 // CLI tools). Composes with the overview pyramid selection
                 // above: the region math runs against the level-L metadata
                 // exposed by _source.Metadata (issue #486).
-                int crs = _dataset.HorizontalCRS ?? 4326;
-                ICrsTransform? wgs84ToNative = null;
-                if (context?.Viewport is not null && crs != 4326)
-                {
-                    wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
-                }
-
                 var layer = await pipeline.ProcessAsync(
                     _source,
                     _catalogue,
@@ -250,37 +248,26 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Selects the pyramid level whose native cell spacing best matches
-    /// the viewport's pixel density (issue #486). Falls back to level 0
-    /// when no viewport is supplied (existing behaviour). Formula:
+    /// Selects the pyramid level whose native cell spacing best matches the
+    /// viewport's ground resolution (issues #486 and #496). Falls back to
+    /// level 0 when no viewport is supplied. Formula:
     /// <code>
-    ///   cellsPerPixel = min(nativeCols / viewport.WidthPixels,
-    ///                       nativeRows / viewport.HeightPixels)
+    ///   nativeRegion  = GridRegion.FromViewport(viewport, nativeMetadata)
+    ///   cellsPerPixel = min(nativeRegion.RowStride, nativeRegion.ColStride)
     ///   level         = clamp(floor(log2(cellsPerPixel)), 0, maxLevel)
     /// </code>
-    /// This keeps ≥ 1 native cell per screen pixel at the selected
-    /// level (never oversamples the display) while dropping resolution
-    /// as fast as the viewport allows.
+    /// The selected overview has already min-pooled depth and max-pooled
+    /// uncertainty. Any non-power-of-two remainder is handled by the source's
+    /// residual block reducer, so no stride lattice can skip a shoal.
     /// </summary>
-    private void SelectOverviewLevelForViewport(EncDotNet.S100.Pipelines.Viewport? viewport)
+    private void SelectOverviewLevelForViewport(
+        EncDotNet.S100.Pipelines.Viewport? viewport,
+        ICrsTransform? wgs84ToNative)
     {
         if (viewport is null)
         {
             _source.SelectOverviewLevel(0);
             return;
-        }
-
-        // Always start from the *native* (level-0) geometry when
-        // computing the ratio; if we've been re-entered we may
-        // currently be on a coarser level, and Metadata reflects that.
-        int nativeRows;
-        int nativeCols;
-        {
-            var previousLevel = _source.SelectedOverviewLevel;
-            _source.SelectOverviewLevel(0);
-            nativeRows = _source.Metadata.GridMetadata.NumRows;
-            nativeCols = _source.Metadata.GridMetadata.NumColumns;
-            _source.SelectOverviewLevel(previousLevel);
         }
 
         if (viewport.WidthPixels <= 0 || viewport.HeightPixels <= 0)
@@ -289,13 +276,18 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             return;
         }
 
-        double cellsPerPx = Math.Min(
-            (double)nativeCols / viewport.WidthPixels,
-            (double)nativeRows / viewport.HeightPixels);
+        _source.SelectOverviewLevel(0);
+        var nativeMetadata = _source.Metadata;
+        var nativeRegion = GridRegion.FromViewport(
+            viewport,
+            nativeMetadata.GridMetadata,
+            nativeMetadata.HorizontalCRS,
+            wgs84ToNative);
+        int cellsPerPixel = Math.Min(nativeRegion.RowStride, nativeRegion.ColStride);
 
-        int desiredLevel = cellsPerPx <= 1.0
+        int desiredLevel = cellsPerPixel <= 1
             ? 0
-            : (int)Math.Floor(Math.Log2(cellsPerPx));
+            : (int)Math.Floor(Math.Log2(cellsPerPixel));
 
         var available = _source.AvailableOverviewLevels;
         int maxLevel = available.Count - 1;

@@ -20,6 +20,13 @@ This library reads S-102 datasets from HDF5 files and provides coverage data (de
   georeferencing attributes alone, without reading any `depth` / `uncertainty`
   `values` arrays.
 - **`S102CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
+  Its overview pyramid and residual viewport-stride sampling both min-pool
+  depth and max-pool uncertainty. Every source cell belongs to an output
+  block, and residual blocks are balanced across the sampled footprint so
+  their regular-grid georeferencing remains exact. Overview levels stop before
+  either axis would require a partial 2×2 edge pool. Small-scale sampling
+  therefore cannot skip a narrow shoal that falls between stride lattice
+  points. Coverage read spans report `s100.coverage.reducer=min`.
 - **`S102PortrayalCatalogue`** — coverage portrayal catalogue for depth shading.
 - **`BathymetryCoverage`**, **`BathymetryValue`** — bathymetric data models. `BathymetryCoverage.GroupPath` carries the HDF5 instance path (e.g. `/BathymetryCoverage/BathymetryCoverage.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
 

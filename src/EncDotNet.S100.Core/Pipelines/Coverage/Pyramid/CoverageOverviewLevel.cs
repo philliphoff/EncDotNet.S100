@@ -23,8 +23,10 @@ namespace EncDotNet.S100.Pipelines.Coverage.Pyramid;
 /// <remarks>
 /// Overview levels share the source grid's geographic extent and CRS;
 /// only <see cref="Rows"/>, <see cref="Cols"/>, and the spacings change.
-/// The origin (south-west corner for S-102 grids) stays anchored to the
-/// base grid's origin. See S-100 Part 10c §11 for grid conventions.
+/// A source serving pooled overview cells is responsible for placing the
+/// overview origin at each first pooling block's centre rather than reusing
+/// the first source node as the pooled cell's centre. See S-100 Part 10c §11
+/// for grid conventions.
 /// </remarks>
 public sealed record CoverageOverviewLevel(
     int Level,

@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Coverage.Pyramid;
@@ -12,8 +14,9 @@ namespace EncDotNet.S100.Datasets.S102;
 /// pyramid (issue #486): when a level &gt; 0 is selected via
 /// <see cref="SelectOverviewLevel"/> the pyramid is built lazily on
 /// first access with <see cref="MinReducer"/> for depth (shoal-biased)
-/// and <see cref="MaxReducer"/> for uncertainty (worst-case). Level 0
-/// preserves today's behaviour bit-for-bit.
+/// and <see cref="MaxReducer"/> for uncertainty (worst-case). Residual
+/// viewport stride applies equivalent reductions over balanced blocks
+/// that preserve the sampled footprint's regular georeferencing.
 /// </summary>
 public class S102CoverageSource : ICoverageSource
 {
@@ -78,6 +81,8 @@ public class S102CoverageSource : ICoverageSource
                     _coverage.SpacingLatitudinal,
                     _coverage.SpacingLongitudinal)
                 : _pyramid.Value.GetLevel(_selectedLevel);
+            var (levelOriginLatitude, levelOriginLongitude) =
+                GetLevelOrigin(_selectedLevel);
 
             return new CoverageMetadata
             {
@@ -91,8 +96,8 @@ public class S102CoverageSource : ICoverageSource
                 {
                     NumRows = level.Rows,
                     NumColumns = level.Cols,
-                    OriginLatitude = _coverage.OriginLatitude,
-                    OriginLongitude = _coverage.OriginLongitude,
+                    OriginLatitude = levelOriginLatitude,
+                    OriginLongitude = levelOriginLongitude,
                     SpacingLatitudinal = level.SpacingLatitudinal,
                     SpacingLongitudinal = level.SpacingLongitudinal,
                 },
@@ -126,10 +131,12 @@ public class S102CoverageSource : ICoverageSource
 
     public virtual SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
     {
+        Activity.Current?.SetTag(TelemetryTags.CoverageReducer, "min");
+
         // Level > 0 sources sample from the pre-reduced pyramid arrays,
         // which are already flat row-major float[]. Level 0 keeps the
-        // original per-cell copy path over the compound BathymetryValue[]
-        // (unchanged behaviour for callers that never touch the pyramid).
+        // compound BathymetryValue[] as its source. Both paths apply the
+        // same shoal-safe reduction for residual viewport stride.
         return _selectedLevel == 0
             ? SampleLevel0(region, cancellationToken)
             : SamplePyramidLevel(_selectedLevel, region, cancellationToken);
@@ -145,30 +152,63 @@ public class S102CoverageSource : ICoverageSource
         var (rowStart, rowEnd, colStart, colEnd) =
             region.Resolve(gridRows, gridCols);
 
-        var rows = (rowEnd - rowStart) / region.RowStride;
-        var cols = (colEnd - colStart) / region.ColStride;
+        var rows = DivideRoundUp(rowEnd - rowStart, region.RowStride);
+        var cols = DivideRoundUp(colEnd - colStart, region.ColStride);
 
         // Flat row-major storage (PR-F): a 1000×1000 grid is 4 MB per field
         // on the LOH as float[,]; flat float[] avoids the 2-D bracket header
         // allocation and lets consumers iterate via Span<float>.
         var depth = new float[rows * cols];
         var uncertainty = new float[rows * cols];
-
         for (int r = 0; r < rows; r++)
         {
-            // Per-row (not per-cell) cancellation check keeps the inner copy
-            // loop branch-free while still bounding cancellation latency.
             cancellationToken.ThrowIfCancellationRequested();
             int dstRowBase = r * cols;
-            int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
+            var (sourceRowStart, sourceRowEnd) =
+                GetWindowBounds(r, rows, rowStart, rowEnd);
+
             for (int c = 0; c < cols; c++)
             {
-                int srcIdx = srcRowBase + c * region.ColStride;
-                depth[dstRowBase + c] = values[srcIdx].Depth;
-                uncertainty[dstRowBase + c] = values[srcIdx].Uncertainty;
+                var (sourceColStart, sourceColEnd) =
+                    GetWindowBounds(c, cols, colStart, colEnd);
+                int destinationIndex = dstRowBase + c;
+                if (region.RowStride == 1 && region.ColStride == 1)
+                {
+                    var value = values[sourceRowStart * gridCols + sourceColStart];
+                    depth[destinationIndex] = value.Depth;
+                    uncertainty[destinationIndex] = value.Uncertainty;
+                    continue;
+                }
+
+                float minimumDepth = float.PositiveInfinity;
+                float maximumUncertainty = float.NegativeInfinity;
+                bool hasDepth = false;
+                bool hasUncertainty = false;
+                for (int sourceRow = sourceRowStart; sourceRow < sourceRowEnd; sourceRow++)
+                {
+                    int sourceRowBase = sourceRow * gridCols;
+                    for (int sourceCol = sourceColStart; sourceCol < sourceColEnd; sourceCol++)
+                    {
+                        var value = values[sourceRowBase + sourceCol];
+                        if (value.Depth != FillValue)
+                        {
+                            minimumDepth = Math.Min(minimumDepth, value.Depth);
+                            hasDepth = true;
+                        }
+                        if (value.Uncertainty != FillValue)
+                        {
+                            maximumUncertainty = Math.Max(maximumUncertainty, value.Uncertainty);
+                            hasUncertainty = true;
+                        }
+                    }
+                }
+                depth[destinationIndex] = hasDepth ? minimumDepth : FillValue;
+                uncertainty[destinationIndex] = hasUncertainty ? maximumUncertainty : FillValue;
             }
         }
 
+        double rowCellSpan = GetOutputCellSpan(rowStart, rowEnd, rows);
+        double colCellSpan = GetOutputCellSpan(colStart, colEnd, cols);
         return new SampledCoverage
         {
             Region = region,
@@ -176,10 +216,18 @@ public class S102CoverageSource : ICoverageSource
             {
                 NumRows = rows,
                 NumColumns = cols,
-                OriginLatitude = _coverage.OriginLatitude + rowStart * _coverage.SpacingLatitudinal,
-                OriginLongitude = _coverage.OriginLongitude + colStart * _coverage.SpacingLongitudinal,
-                SpacingLatitudinal = _coverage.SpacingLatitudinal * region.RowStride,
-                SpacingLongitudinal = _coverage.SpacingLongitudinal * region.ColStride,
+                OriginLatitude = GetSampleOrigin(
+                    _coverage.OriginLatitude,
+                    _coverage.SpacingLatitudinal,
+                    rowStart,
+                    rowCellSpan),
+                OriginLongitude = GetSampleOrigin(
+                    _coverage.OriginLongitude,
+                    _coverage.SpacingLongitudinal,
+                    colStart,
+                    colCellSpan),
+                SpacingLatitudinal = _coverage.SpacingLatitudinal * rowCellSpan,
+                SpacingLongitudinal = _coverage.SpacingLongitudinal * colCellSpan,
             },
             Values = new Dictionary<string, float[]>
             {
@@ -200,25 +248,63 @@ public class S102CoverageSource : ICoverageSource
         var uncSrc = pyramid.GetField(level, "uncertainty");
 
         var (rowStart, rowEnd, colStart, colEnd) = region.Resolve(gridRows, gridCols);
-        var rows = (rowEnd - rowStart) / region.RowStride;
-        var cols = (colEnd - colStart) / region.ColStride;
+        var rows = DivideRoundUp(rowEnd - rowStart, region.RowStride);
+        var cols = DivideRoundUp(colEnd - colStart, region.ColStride);
 
         var depth = new float[rows * cols];
         var uncertainty = new float[rows * cols];
-
         for (int r = 0; r < rows; r++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             int dstRowBase = r * cols;
-            int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
+            var (sourceRowStart, sourceRowEnd) =
+                GetWindowBounds(r, rows, rowStart, rowEnd);
+
             for (int c = 0; c < cols; c++)
             {
-                int srcIdx = srcRowBase + c * region.ColStride;
-                depth[dstRowBase + c] = depthSrc[srcIdx];
-                uncertainty[dstRowBase + c] = uncSrc[srcIdx];
+                var (sourceColStart, sourceColEnd) =
+                    GetWindowBounds(c, cols, colStart, colEnd);
+                int destinationIndex = dstRowBase + c;
+                if (region.RowStride == 1 && region.ColStride == 1)
+                {
+                    int sourceIndex = sourceRowStart * gridCols + sourceColStart;
+                    depth[destinationIndex] = depthSrc[sourceIndex];
+                    uncertainty[destinationIndex] = uncSrc[sourceIndex];
+                    continue;
+                }
+
+                float minimumDepth = float.PositiveInfinity;
+                float maximumUncertainty = float.NegativeInfinity;
+                bool hasDepth = false;
+                bool hasUncertainty = false;
+                for (int sourceRow = sourceRowStart; sourceRow < sourceRowEnd; sourceRow++)
+                {
+                    int sourceRowBase = sourceRow * gridCols;
+                    for (int sourceCol = sourceColStart; sourceCol < sourceColEnd; sourceCol++)
+                    {
+                        int sourceIndex = sourceRowBase + sourceCol;
+                        float sourceDepth = depthSrc[sourceIndex];
+                        if (sourceDepth != FillValue)
+                        {
+                            minimumDepth = Math.Min(minimumDepth, sourceDepth);
+                            hasDepth = true;
+                        }
+                        float sourceUncertainty = uncSrc[sourceIndex];
+                        if (sourceUncertainty != FillValue)
+                        {
+                            maximumUncertainty = Math.Max(maximumUncertainty, sourceUncertainty);
+                            hasUncertainty = true;
+                        }
+                    }
+                }
+                depth[destinationIndex] = hasDepth ? minimumDepth : FillValue;
+                uncertainty[destinationIndex] = hasUncertainty ? maximumUncertainty : FillValue;
             }
         }
 
+        var (levelOriginLatitude, levelOriginLongitude) = GetLevelOrigin(level);
+        double rowCellSpan = GetOutputCellSpan(rowStart, rowEnd, rows);
+        double colCellSpan = GetOutputCellSpan(colStart, colEnd, cols);
         return new SampledCoverage
         {
             Region = region,
@@ -226,10 +312,18 @@ public class S102CoverageSource : ICoverageSource
             {
                 NumRows = rows,
                 NumColumns = cols,
-                OriginLatitude = _coverage.OriginLatitude + rowStart * levelInfo.SpacingLatitudinal,
-                OriginLongitude = _coverage.OriginLongitude + colStart * levelInfo.SpacingLongitudinal,
-                SpacingLatitudinal = levelInfo.SpacingLatitudinal * region.RowStride,
-                SpacingLongitudinal = levelInfo.SpacingLongitudinal * region.ColStride,
+                OriginLatitude = GetSampleOrigin(
+                    levelOriginLatitude,
+                    levelInfo.SpacingLatitudinal,
+                    rowStart,
+                    rowCellSpan),
+                OriginLongitude = GetSampleOrigin(
+                    levelOriginLongitude,
+                    levelInfo.SpacingLongitudinal,
+                    colStart,
+                    colCellSpan),
+                SpacingLatitudinal = levelInfo.SpacingLatitudinal * rowCellSpan,
+                SpacingLongitudinal = levelInfo.SpacingLongitudinal * colCellSpan,
             },
             Values = new Dictionary<string, float[]>
             {
@@ -238,6 +332,40 @@ public class S102CoverageSource : ICoverageSource
             },
         };
     }
+
+    private static int DivideRoundUp(int value, int divisor) =>
+        value == 0 ? 0 : (value - 1) / divisor + 1;
+
+    private static (int Start, int End) GetWindowBounds(
+        int outputIndex,
+        int outputCount,
+        int sourceStart,
+        int sourceEnd)
+    {
+        int sourceLength = sourceEnd - sourceStart;
+        int start = sourceStart + (int)((long)outputIndex * sourceLength / outputCount);
+        int end = sourceStart + (int)((long)(outputIndex + 1) * sourceLength / outputCount);
+        return (start, end);
+    }
+
+    private static double GetOutputCellSpan(int start, int end, int outputCount) =>
+        outputCount == 0 ? 1 : (end - start) / (double)outputCount;
+
+    private (double Latitude, double Longitude) GetLevelOrigin(int level)
+    {
+        int poolingFactor = 1 << level;
+        double centreOffset = (poolingFactor - 1) / 2.0;
+        return (
+            _coverage.OriginLatitude + centreOffset * _coverage.SpacingLatitudinal,
+            _coverage.OriginLongitude + centreOffset * _coverage.SpacingLongitudinal);
+    }
+
+    private static double GetSampleOrigin(
+        double sourceOrigin,
+        double sourceSpacing,
+        int start,
+        double cellSpan) =>
+        sourceOrigin + (start + (cellSpan - 1) / 2.0) * sourceSpacing;
 
     /// <summary>
     /// Reifies the compound <see cref="BathymetryValue"/>[] into two
@@ -270,12 +398,26 @@ public class S102CoverageSource : ICoverageSource
             ["uncertainty"] = (uncBase, MaxReducer.Instance, FillValue),
         };
 
+        int uniformLevelCount = 1;
+        int levelRows = rows;
+        int levelColumns = cols;
+        while (uniformLevelCount < MaxPyramidLevels &&
+               levelRows > 1 &&
+               levelColumns > 1 &&
+               levelRows % 2 == 0 &&
+               levelColumns % 2 == 0)
+        {
+            uniformLevelCount++;
+            levelRows /= 2;
+            levelColumns /= 2;
+        }
+
         return CoveragePyramidBuilder.Build(
             rows,
             cols,
             _coverage.SpacingLatitudinal,
             _coverage.SpacingLongitudinal,
             fields,
-            MaxPyramidLevels);
+            uniformLevelCount);
     }
 }
