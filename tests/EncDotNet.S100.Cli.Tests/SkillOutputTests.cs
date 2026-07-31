@@ -1,5 +1,7 @@
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Updates;
+using Spectre.Console;
+using Spectre.Console.Cli.Help;
 
 namespace EncDotNet.S100.Cli.Tests;
 

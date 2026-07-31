@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

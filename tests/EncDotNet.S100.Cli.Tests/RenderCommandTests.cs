@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EncDotNet.S100.Cli.Infrastructure;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Cli.Tests;
 
