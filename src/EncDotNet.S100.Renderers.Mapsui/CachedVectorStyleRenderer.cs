@@ -217,7 +217,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     /// disabled or when the build/fill split measurement is active (so that
     /// measurement characterises Mapsui's un-cached cost).
     /// </summary>
-    public static void Register()
+    internal static void Register()
     {
         var measuring = (Environment.GetEnvironmentVariable("S100_MEASURE_VECTOR_SPLIT") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";

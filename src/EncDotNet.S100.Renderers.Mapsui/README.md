@@ -24,6 +24,20 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 > package (`ProjNetCrsTransformFactory`) so headless consumers can reproject
 > coverage products without linking a map renderer.
 
+## Initialization
+
+Call `S100MapsuiRendering.Register()` once during application startup, before
+installing any diagnostics that wrap Mapsui's renderer registry:
+
+```csharp
+S100MapsuiRendering.Register();
+```
+
+The method registers every S-100 style and custom-layer renderer in dependency
+order and is safe to call repeatedly. Applications must call this entry point
+before rendering S-100 layers; render operations do not mutate Mapsui's global
+renderer registry implicitly.
+
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
 `EncDotNet.S100.Rendering.Scene` (`VectorSceneBuilder` → `VectorScene` of

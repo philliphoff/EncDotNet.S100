@@ -86,6 +86,7 @@ public sealed class RenderHarness : IDisposable
             new ProjNetCrsTransformFactory(),
             featureCatalogueManager,
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
+        S100MapsuiRendering.Register();
         _mapsuiRenderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
     }
 

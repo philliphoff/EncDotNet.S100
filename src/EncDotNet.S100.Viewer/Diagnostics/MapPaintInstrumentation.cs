@@ -103,13 +103,6 @@ internal static class MapPaintInstrumentation
             if (_installed) return;
             _installed = true;
 
-            // Make sure our pattern-fill renderer is in the dict
-            // before we wrap. Subsequent registrations of the same
-            // style type overwrite, so this is safe even if Render()
-            // hasn't run yet.
-            EncDotNet.S100.Renderers.Mapsui.AnchoredPatternFillRenderer.Register();
-            EncDotNet.S100.Renderers.Mapsui.OverscaleCurtainRenderer.Register();
-
             var dictField = typeof(MapRenderer).GetField(
                 "_styleRenderers",
                 BindingFlags.NonPublic | BindingFlags.Static);
