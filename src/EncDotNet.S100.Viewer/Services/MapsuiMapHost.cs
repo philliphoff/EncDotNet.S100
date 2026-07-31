@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
 using Mapsui;
 using Mapsui.Extensions;
@@ -20,31 +21,16 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class MapsuiMapHost : IMapHost
 {
     private readonly MapControl _mapControl;
-
-    /// <summary>
-    /// Tracks which layers are dataset layers (as opposed to the basemap
-    /// or tool overlays). Used to compute the correct insertion point
-    /// when a new dataset layer is added and to identify which subset
-    /// of <c>Map.Layers</c> to shuffle on reorder.
-    /// </summary>
-    private readonly HashSet<ILayer> _datasetLayers = new();
-
-    /// <summary>
-    /// Tracks overlay-tier layers added via
-    /// <see cref="AddOverlayLayer"/> — distinct from tool overlays
-    /// (e.g. measure chrome) which the viewer adds straight to
-    /// <c>Map.Layers</c>. Overlay-tier layers sit above the
-    /// dataset slice but below any subsequently-added tool overlays.
-    /// Held separately from <see cref="_datasetLayers"/> so
-    /// <see cref="ReorderDatasetLayers"/> never moves or removes
-    /// overlays.
-    /// </summary>
-    private readonly HashSet<ILayer> _overlayLayers = new();
+    private readonly MapsuiLayerBands _layerBands;
 
     public MapsuiMapHost(MapControl mapControl)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         _mapControl = mapControl;
+        _layerBands = new MapsuiLayerBands(
+            mapControl.Map
+            ?? throw new InvalidOperationException(
+                "The Mapsui map control must have a map before creating its host."));
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();
     }
@@ -54,71 +40,24 @@ internal sealed class MapsuiMapHost : IMapHost
 
     public void AddLayer(ILayer layer)
     {
-        ArgumentNullException.ThrowIfNull(layer);
-        var map = _mapControl.Map;
-        if (map is null) return;
-        if (!_datasetLayers.Add(layer)) return;
-
-        var insertAt = ComputeDatasetInsertIndex(map.Layers);
-        map.Layers.Insert(insertAt, layer, 0);
+        _layerBands.AddDatasetLayer(layer);
     }
 
     public void RemoveLayer(ILayer layer)
     {
-        ArgumentNullException.ThrowIfNull(layer);
-        _datasetLayers.Remove(layer);
-        _mapControl.Map?.Layers.Remove(layer);
+        _layerBands.RemoveDatasetLayer(layer);
     }
 
     public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
     {
-        ArgumentNullException.ThrowIfNull(orderedDatasetLayers);
-        var map = _mapControl.Map;
-        if (map is null) return;
-
-        // Find the lowest index currently occupied by any dataset layer;
-        // that is the slot immediately above the basemap (or below the
-        // first overlay if datasets and overlays already coexist).
-        int insertAt = -1;
-        int i = 0;
-        foreach (var existing in map.Layers)
-        {
-            if (_datasetLayers.Contains(existing))
-            {
-                insertAt = i;
-                break;
-            }
-            i++;
-        }
-        if (insertAt < 0) insertAt = Math.Min(1, map.Layers.Count);
-
-        // PR-L3 fix: treat the supplied list as the **authoritative**
-        // dataset-layer slice of <c>map.Layers</c>.
-        //
-        // 1. Any previously-known dataset layer that is NOT in the new
-        //    list must be removed from the map (e.g. a dataset whose
-        //    Active flag was just toggled off, or whose original layer
-        //    instance was just replaced by a rule-filtered MemoryLayer
-        //    such as the one produced by R-101-102-B).
-        // 2. Conversely, layers in the new list that the host has not
-        //    seen before — typically the rule-filtered replicas — must
-        //    be inserted *and* tracked so the next reorder cycle treats
-        //    them correctly.
-        foreach (var existing in _datasetLayers)
-        {
-            map.Layers.Remove(existing);
-        }
-        _datasetLayers.Clear();
-
-        int idx = insertAt;
-        foreach (var l in orderedDatasetLayers)
-        {
-            if (l is null) continue;
-            if (idx > map.Layers.Count) idx = map.Layers.Count;
-            map.Layers.Insert(idx++, l, 0);
-            _datasetLayers.Add(l);
-        }
+        _layerBands.ReplaceDatasetLayers(orderedDatasetLayers);
     }
+
+    public void SetBasemapLayer(ILayer? layer) => _layerBands.SetBasemapLayer(layer);
+
+    public void AddToolLayer(ILayer layer) => _layerBands.AddToolLayer(layer);
+
+    public void RemoveToolLayer(ILayer layer) => _layerBands.RemoveToolLayer(layer);
 
     public void ZoomToExtent(MRect extent)
     {
@@ -271,24 +210,12 @@ internal sealed class MapsuiMapHost : IMapHost
 
     public void AddOverlayLayer(ILayer layer)
     {
-        ArgumentNullException.ThrowIfNull(layer);
-        var map = _mapControl.Map;
-        if (map is null) return;
-        if (!_overlayLayers.Add(layer)) return;
-
-        // Insert above the dataset slice but below any subsequently-
-        // added tool overlays. We compute the slot as "after the last
-        // tracked dataset layer", which keeps the overlay stable even
-        // if the dataset slice is reordered later.
-        var insertAt = ComputeOverlayInsertIndex(map.Layers);
-        map.Layers.Insert(insertAt, layer, 0);
+        _layerBands.AddOverlayLayer(layer);
     }
 
     public void RemoveOverlayLayer(ILayer layer)
     {
-        ArgumentNullException.ThrowIfNull(layer);
-        if (!_overlayLayers.Remove(layer)) return;
-        _mapControl.Map?.Layers.Remove(layer);
+        _layerBands.RemoveOverlayLayer(layer);
     }
 
     /// <inheritdoc />
@@ -409,45 +336,4 @@ internal sealed class MapsuiMapHost : IMapHost
         }).GetTask().ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Returns the index at which a new dataset layer should be
-    /// inserted: just after the last existing dataset layer, or — when
-    /// no dataset layer has been added yet — immediately above the
-    /// basemap (index 1). Tool overlays added later via
-    /// <c>Map.Layers.Add</c> sort above this band naturally.
-    /// </summary>
-    private int ComputeDatasetInsertIndex(LayerCollection layers)
-    {
-        int last = -1;
-        int i = 0;
-        foreach (var l in layers)
-        {
-            if (_datasetLayers.Contains(l)) last = i;
-            i++;
-        }
-        if (last >= 0) return last + 1;
-        return Math.Min(1, layers.Count);
-    }
-
-    /// <summary>
-    /// Returns the index at which a new overlay-tier layer should be
-    /// inserted: just after the last existing dataset or overlay
-    /// layer the host tracks, or — when no such layer is present —
-    /// immediately above the basemap (index 1). Layers added straight
-    /// to <c>Map.Layers</c> by callers other than the host
-    /// (e.g. tool chrome) sort above this band naturally because
-    /// they were added later.
-    /// </summary>
-    private int ComputeOverlayInsertIndex(LayerCollection layers)
-    {
-        int last = -1;
-        int i = 0;
-        foreach (var l in layers)
-        {
-            if (_datasetLayers.Contains(l) || _overlayLayers.Contains(l)) last = i;
-            i++;
-        }
-        if (last >= 0) return last + 1;
-        return Math.Min(1, layers.Count);
-    }
 }
