@@ -58,11 +58,14 @@ public class WorkerDrainGateTests
         {
             Thread.Sleep(50);
             gate.Complete();
-        });
+        })
+        {
+            IsBackground = true,
+        };
         completer.Start();
 
         Assert.True(gate.DrainAndWait(TimeSpan.FromSeconds(5)));
-        completer.Join();
+        Assert.True(completer.Join(TimeSpan.FromSeconds(5)));
         Assert.Equal(0, gate.ActiveWorkers);
     }
 
