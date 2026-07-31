@@ -276,6 +276,33 @@ public class ExchangeCatalogueReaderTests
         Assert.Equal(1, dataset.EditionNumber);
         Assert.Equal(DateOnly.Parse("2023-01-16"), dataset.IssueDate);
         Assert.Equal("ISO/IEC 8211", dataset.EncodingFormat);
+        Assert.Null( dataset.FilePath);
+        Assert.Null(dataset.Description);
+        Assert.Equal("urn:mrn:iho:hash:sha256:76c743c91679c9220947cd8c4940a2922056648cfe0b3ebb6665af2a553e5ac3", dataset.DatasetId);
+        Assert.False(dataset.CompressionFlag);
+        Assert.False(dataset.DataProtection );
+        Assert.Null(dataset.ProtectionScheme);
+        Assert.Equal(EncDotNet.S100.ExchangeSets.DigitalSignatureAlgorithm.DSA, dataset.DigitalSignatureAlgorithm );
+       // Assert.Equal({EncDotNet.S100.ExchangeSets.DigitalSignatureValue}, dataset.DigitalSignatureValue );
+        Assert.Null(dataset.ExpectedHash);
+        Assert.False( dataset.Copyright);
+        Assert.Null(dataset.Classification);
+        Assert.True(dataset.NotForNavigation);
+        Assert.Null(dataset.SpecificUsage);
+        Assert.Null(dataset.UpdateNumber);
+        Assert.Null(dataset.UpdateApplicationDate);
+        Assert.Null(dataset.ReferenceId );
+        Assert.Null(dataset.BoundingBox);
+        Assert.Null(dataset.TemporalExtent);
+       // Assert.Equal({EncDotNet.S100.ExchangeSets.ProductSpecification}, dataset.ProductSpecification);
+        Assert.Equal("AA00", dataset.ProducingAgency);
+        Assert.Empty(dataset.DataCoverages);
+        Assert.Null(dataset.Comment );
+        Assert.Null(dataset.DefaultLocale);
+        Assert.Empty(dataset.OtherLocales);
+        Assert.Null(dataset.MetadataPointOfContact );
+        Assert.Null(dataset.MetadataDateStamp );
+        Assert.False(dataset.ReplaceData);
     }
 
     [Fact]

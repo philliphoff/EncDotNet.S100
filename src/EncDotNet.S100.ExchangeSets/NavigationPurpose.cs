@@ -1,10 +1,9 @@
 ﻿
-namespace EncDotNet.S100.ExchangeSets
+namespace EncDotNet.S100.ExchangeSets;
+
+public enum NavigationPurpose
 {
-    public enum NavigationPurpose
-    {
-        Port = 1,
-        Transit = 2,
-        Overview = 3
-    }
+    Port = 1,
+    Transit = 2,
+    Overview = 3
 }

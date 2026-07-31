@@ -960,7 +960,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         {
             var s = d.IssueDate;
             if (s == null) continue;
-            if (latest is null || ((DateOnly)s).CompareTo(latest) > 0)
+            if (latest is null || (s.Value).CompareTo(latest.Value) > 0)
                 latest = s;
         }
         return latest;

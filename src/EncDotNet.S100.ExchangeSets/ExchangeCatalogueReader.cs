@@ -549,8 +549,6 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var country = (string?)countryCode?.Attribute("codeListValue");
-        if (country == null)
-            country = "";
 
         var charEncode = moreLocal?
            .Elements(lan + "characterEncoding")
@@ -635,7 +633,7 @@ public static class ExchangeCatalogueReader
             return null;
         }
 
-        // Permit times are xs:date and may carry a trailing 'Z' (e.g. 13:45:30Z).
+        // Permit times are xs:time and may carry a trailing 'Z' (e.g. 13:45:30Z).
         string trimmed = value.Trim().TrimEnd('Z', 'z');
         return TimeOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly time)
             ? time
