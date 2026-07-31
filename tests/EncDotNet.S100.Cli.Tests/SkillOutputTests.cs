@@ -71,6 +71,11 @@ public sealed class SkillOutputTests
         var model = Assert.IsAssignableFrom<ICommandModel>(capture.Model);
         var document = SkillDocumentRenderer.Render(model);
 
+        Assert.Contains("s100 render [input] [output] [options]", document);
+        Assert.Contains("s100 validate <dataset> [options]", document);
+        Assert.DoesNotContain("[[input]]", document);
+        Assert.DoesNotContain("<<dataset>>", document);
+
         foreach (var (path, command) in WalkCommands(model.Commands, []))
         {
             Assert.Contains($"### `s100 {path}`", document);
