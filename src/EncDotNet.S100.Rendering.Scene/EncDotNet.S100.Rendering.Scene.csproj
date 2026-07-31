@@ -4,9 +4,13 @@
     <TargetFramework />
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
-    <Description>Backend-neutral vector scene intermediate representation (IR) for the IHO S-100 portrayal pipeline: VectorScene and the PaintOp hierarchy (point/line/area/pattern/text), VectorSceneBuilder, ColorResolver, ScaleVisibility, and WebMercator projection. Depends only on EncDotNet.S100.Core and EncDotNet.S100.Portrayals — no SkiaSharp, Mapsui, or GUI framework — so any rendering backend can consume the same resolved scene. Pairs with EncDotNet.S100.Renderers.Skia for headless rasterisation without the EncDotNet.S100 facade.</Description>
+    <Description>Backend-neutral vector scene intermediate representation (IR) for the IHO S-100 portrayal pipeline: VectorScene and the PaintOp hierarchy (point/line/area/pattern/text), VectorSceneBuilder, ColorResolver, ScaleVisibility, WebMercator projection, and PatternPriorityClipper (NetTopologySuite priority-clipping of pattern area fills). Depends only on EncDotNet.S100.Core, EncDotNet.S100.Portrayals, and NetTopologySuite — no SkiaSharp, Mapsui, or GUI framework — so any rendering backend can consume the same resolved scene. Pairs with EncDotNet.S100.Renderers.Skia for headless rasterisation without the EncDotNet.S100 facade.</Description>
     <PackageTags>S-100;portrayal;rendering;IR;VectorScene;headless;IHO;hydrography;ECDIS</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetTopologySuite" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />

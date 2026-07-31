@@ -84,7 +84,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// because tiles rasterise on background threads while the overlay draws on
     /// the render thread.
     /// </remarks>
-    private static readonly ConcurrentDictionary<string, SKSvg?> s_symbolPictureCache =
+    private static readonly ConcurrentDictionary<string, SKSvg?> SymbolPictureCache =
         new(StringComparer.Ordinal);
 
     /// <summary>
@@ -99,14 +99,14 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// so the 1:1 blit through the canvas's HiDPI matrix is crisp; a different
     /// device scale (e.g. moving the window to another monitor) keys a fresh
     /// sprite. <see cref="SKImage"/> is immutable and its CPU pixels are safe to
-    /// share across threads, so — like <see cref="s_symbolPictureCache"/> — this
+    /// share across threads, so — like <see cref="SymbolPictureCache"/> — this
     /// is a never-evicted <see cref="ConcurrentDictionary{TKey,TValue}"/> bounded
     /// by the small number of distinct symbols in a cell. A <see langword="null"/>
     /// value caches "do not atlas this symbol" (unparseable, or larger than
     /// <see cref="MaxSpriteDimensionPx"/>) so the miss is not re-probed each frame.
     /// </para>
     /// </summary>
-    private static readonly ConcurrentDictionary<(string Svg, int ScaleMilli, int DeviceMilli), SymbolSprite?> s_symbolSpriteCache = new();
+    private static readonly ConcurrentDictionary<(string Svg, int ScaleMilli, int DeviceMilli), SymbolSprite?> SymbolSpriteCache = new();
 
     /// <summary>
     /// Sampling for the atlas blit. The sprite is rasterised at device resolution
@@ -114,7 +114,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// fractional sub-pixel anchor placement; it matches the antialiased vector
     /// edge to within a pixel.
     /// </summary>
-    private static readonly SKSamplingOptions s_spriteSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+    private static readonly SKSamplingOptions SpriteSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
     /// <summary>
     /// Maximum width/height (device px) of a cached symbol sprite. Symbols larger
@@ -146,7 +146,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// <see cref="ConcurrentDictionary{TKey,TValue}"/> because tiles and the
     /// overlay may probe coverage from different threads.
     /// </summary>
-    private static readonly ConcurrentDictionary<(SKTypeface Face, string Text), bool> s_primaryCoverageCache = new();
+    private static readonly ConcurrentDictionary<(SKTypeface Face, string Text), bool> PrimaryCoverageCache = new();
 
     /// <summary>
     /// Process-wide cache of fallback typefaces resolved via
@@ -154,27 +154,27 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// codepoint. <c>MatchCharacter</c> enumerates the platform font set and is
     /// expensive, so this must outlive any single frame: held for the app
     /// lifetime (entries never evicted, faces never disposed), mirroring
-    /// <see cref="s_symbolPictureCache"/>. A <see langword="null"/> value caches
+    /// <see cref="SymbolPictureCache"/>. A <see langword="null"/> value caches
     /// "no platform fallback exists" so the miss is not re-probed every frame.
     /// </summary>
-    private static readonly ConcurrentDictionary<int, SKTypeface?> s_fallbackFaceCache = new();
+    private static readonly ConcurrentDictionary<int, SKTypeface?> FallbackFaceCache = new();
 
     /// <summary>
     /// Process-wide cache of fallback <see cref="SKFont"/>s keyed by their
     /// typeface and pixel size, so a non-ASCII label does not allocate and
     /// destroy a native font handle every frame. App-lifetime, like
-    /// <see cref="s_fallbackFaceCache"/>.
+    /// <see cref="FallbackFaceCache"/>.
     /// </summary>
-    private static readonly ConcurrentDictionary<(SKTypeface Face, float SizePx), SKFont> s_fallbackFontCache = new();
+    private static readonly ConcurrentDictionary<(SKTypeface Face, float SizePx), SKFont> FallbackFontCache = new();
 
     /// <summary>
     /// Returns whether <paramref name="face"/> can render every glyph in
     /// <paramref name="text"/>, caching the result per (face, text) so the
     /// allocating full-string probe runs at most once per distinct string. See
-    /// <see cref="s_primaryCoverageCache"/>.
+    /// <see cref="PrimaryCoverageCache"/>.
     /// </summary>
     private static bool PrimaryRendersAll(SKTypeface face, string text) =>
-        s_primaryCoverageCache.GetOrAdd((face, text), static key => key.Face.ContainsGlyphs(key.Text));
+        PrimaryCoverageCache.GetOrAdd((face, text), static key => key.Face.ContainsGlyphs(key.Text));
 
     /// <summary>
     /// Half-extent, in display pixels, by which the point/text cull rectangle is
@@ -193,7 +193,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// </summary>
     internal static SKPicture? GetSymbolPicture(string processedSvg)
     {
-        var svg = s_symbolPictureCache.GetOrAdd(processedSvg, static content =>
+        var svg = SymbolPictureCache.GetOrAdd(processedSvg, static content =>
         {
             try
             {
@@ -330,6 +330,10 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         // share a size), disposed once when the render completes.
         TextDrawScratch? textScratch = null;
 
+        // Per-render reusable line resources; see LineDrawScratch. Lazily
+        // created because text/point-only overlay passes draw no lines.
+        LineDrawScratch? lineScratch = null;
+
         try
         {
             foreach (var op in scene.Ops)
@@ -347,7 +351,8 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                         DrawPatternArea(canvas, pattern, transform, patternImages);
                         break;
                     case LinePaintOp line:
-                        DrawLine(canvas, line, transform);
+                        lineScratch ??= new LineDrawScratch();
+                        DrawLine(canvas, line, transform, cullBounds, lineScratch);
                         break;
                     case PointPaintOp point when options.DrawPoints:
                         DrawPoint(canvas, point, transform, cullBounds,
@@ -371,6 +376,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                     img?.Dispose();
             }
             textScratch?.Dispose();
+            lineScratch?.Dispose();
         }
     }
 
@@ -457,42 +463,70 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         canvas.Restore();
     }
 
-    private static void DrawLine(SKCanvas canvas, LinePaintOp op, WorldToScreen t)
+    private static void DrawLine(
+        SKCanvas canvas, LinePaintOp op, WorldToScreen t, SKRect cullBounds, LineDrawScratch scratch)
     {
-        if (op.World.Count < 2)
+        int count = op.World.Count;
+        if (count < 2)
             return;
 
-        using var path = new SKPath();
-        var (sx, sy) = t.Project(op.World[0]);
-        path.MoveTo(sx, sy);
-        for (int i = 1; i < op.World.Count; i++)
+        // Project every vertex once, into the scratch buffer, tracking the
+        // polyline's screen-space bounding box so an off-view line can be culled
+        // before the (native) DrawPath — matching DrawPoint's cull discipline.
+        var points = scratch.RentPoints(count);
+        float minX = float.MaxValue, minY = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue;
+        for (int i = 0; i < count; i++)
         {
             var (px, py) = t.Project(op.World[i]);
-            path.LineTo(px, py);
+            points[i] = new SKPoint(px, py);
+            if (px < minX) minX = px;
+            if (px > maxX) maxX = px;
+            if (py < minY) minY = py;
+            if (py > maxY) maxY = py;
         }
 
-        using var paint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Stroke,
-            Color = op.Color.ToSkia(),
-            StrokeWidth = (float)op.WidthPx,
-            StrokeCap = SKStrokeCap.Round,
-            StrokeJoin = SKStrokeJoin.Round,
-        };
+        float width = (float)op.WidthPx;
 
-        if (op.DashArrayPx is { Count: > 0 })
+        // Pad the bbox by half the stroke width so a wide line whose centreline
+        // sits just outside the cull rectangle (but whose stroke would still
+        // paint inside it) is not wrongly culled. Round joins/caps stay within
+        // half the stroke width of the geometry.
+        float pad = width * 0.5f;
+        if (maxX + pad < cullBounds.Left || minX - pad > cullBounds.Right ||
+            maxY + pad < cullBounds.Top || minY - pad > cullBounds.Bottom)
         {
-            paint.PathEffect = SKPathEffect.CreateDash(op.DashArrayPx.ToArray(), 0f);
+            return;
+        }
+
+        var path = scratch.Path;
+        path.Rewind();
+        path.AddPoly(points.AsSpan(0, count), close: false);
+
+        var paint = scratch.Paint;
+        paint.Color = op.Color.ToSkia();
+        paint.StrokeWidth = width;
+
+        if (op.DashArrayPx is { Count: > 0 } dashArray)
+        {
+            int n = dashArray.Count;
+            Span<float> intervals = n <= 16 ? stackalloc float[n] : new float[n];
+            for (int i = 0; i < n; i++)
+                intervals[i] = dashArray[i];
+            paint.PathEffect = scratch.DashFor(intervals, 0f);
         }
         else if (op.DefaultDash)
         {
             float d = (float)Math.Max(op.WidthPx * 3.0, 3.0);
-            paint.PathEffect = SKPathEffect.CreateDash([d, d], 0f);
+            Span<float> intervals = [d, d];
+            paint.PathEffect = scratch.DashFor(intervals, 0f);
+        }
+        else
+        {
+            paint.PathEffect = null;
         }
 
         canvas.DrawPath(path, paint);
-        paint.PathEffect?.Dispose();
     }
 
     private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds,
@@ -554,7 +588,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                             destLeft, destTop,
                             destLeft + bounds.Width * scale,
                             destTop + bounds.Height * scale);
-                        canvas.DrawImage(sprite.Image, dest, s_spriteSampling);
+                        canvas.DrawImage(sprite.Image, dest, SpriteSampling);
                         return;
                     }
                 }
@@ -596,7 +630,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             (int)MathF.Round(scale * 1000f),
             (int)MathF.Round(deviceScale * 1000f));
 
-        return s_symbolSpriteCache.GetOrAdd(key, _ =>
+        return SymbolSpriteCache.GetOrAdd(key, _ =>
         {
             float r = scale * deviceScale;
             if (!(r > 0) || bounds.Width <= 0 || bounds.Height <= 0)
@@ -854,11 +888,11 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         /// Returns a typeface that can render <paramref name="codepoint"/> when
         /// the primary face cannot, or <see langword="null"/> when the platform
         /// font manager has no match. Resolved via the app-lifetime
-        /// <see cref="s_fallbackFaceCache"/> (the platform lookup is expensive
+        /// <see cref="FallbackFaceCache"/> (the platform lookup is expensive
         /// and must not re-run per frame).
         /// </summary>
         public SKTypeface? FallbackFor(int codepoint) =>
-            s_fallbackFaceCache.GetOrAdd(codepoint, static cp =>
+            FallbackFaceCache.GetOrAdd(codepoint, static cp =>
             {
                 try
                 {
@@ -870,9 +904,9 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                 }
             });
 
-        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/> from the app-lifetime <see cref="s_fallbackFontCache"/>.</summary>
+        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/> from the app-lifetime <see cref="FallbackFontCache"/>.</summary>
         public SKFont FallbackFontFor(SKTypeface face, float sizePx) =>
-            s_fallbackFontCache.GetOrAdd((face, sizePx), static key => new SKFont(key.Face, key.SizePx));
+            FallbackFontCache.GetOrAdd((face, sizePx), static key => new SKFont(key.Face, key.SizePx));
 
         public void Dispose()
         {
@@ -880,6 +914,125 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             foreach (var font in _fonts.Values)
                 font.Dispose();
             _fonts.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Per-render reusable resources for <see cref="DrawLine"/>. A full S-57
+    /// exchange set emits thousands of line ops per tile; allocating a fresh
+    /// <see cref="SKPath"/>, <see cref="SKPaint"/>, and dash
+    /// <see cref="SKPathEffect"/> per op (the previous implementation) churned
+    /// native handles and dominated pan/zoom CPU (finalizer/GC pressure plus the
+    /// per-op interop). This scratch reuses one path (reset via
+    /// <see cref="SKPath.Rewind"/>), one stroke paint (only colour/width/effect
+    /// mutated per op), a growable projection buffer fed to
+    /// <see cref="SKPath.AddPoly(ReadOnlySpan{SKPoint}, bool)"/> in a single
+    /// interop call, and caches dash effects by pattern so shared dashes are
+    /// created once.
+    /// </summary>
+    /// <remarks>
+    /// Instances are per-<c>RenderOnto</c> locals (like
+    /// <see cref="TextDrawScratch"/>), never shared statics or instance fields:
+    /// the tiled subsystem's overlay renderer is a shared instance, and tile
+    /// base-plane workers each rasterise on their own thread, so per-invocation
+    /// scoping keeps the mutable scratch confined to a single thread.
+    /// </remarks>
+    private sealed class LineDrawScratch : IDisposable
+    {
+        private readonly Dictionary<DashKey, SKPathEffect> _dashEffects = new();
+        private SKPoint[] _points = new SKPoint[64];
+
+        /// <summary>The reusable stroke path; call <see cref="SKPath.Rewind"/> before reuse.</summary>
+        public SKPath Path { get; } = new();
+
+        /// <summary>
+        /// The reusable stroke paint. Round cap/join and antialiasing are fixed;
+        /// only <see cref="SKPaint.Color"/>, <see cref="SKPaint.StrokeWidth"/>,
+        /// and <see cref="SKPaint.PathEffect"/> are mutated per op.
+        /// </summary>
+        public SKPaint Paint { get; } = new()
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+
+        /// <summary>Returns a projection buffer with capacity for at least <paramref name="count"/> points.</summary>
+        public SKPoint[] RentPoints(int count)
+        {
+            if (_points.Length < count)
+            {
+                int size = _points.Length;
+                while (size < count)
+                    size *= 2;
+                _points = new SKPoint[size];
+            }
+            return _points;
+        }
+
+        /// <summary>
+        /// Returns a cached dash effect for <paramref name="intervals"/> and
+        /// <paramref name="phase"/>, creating it on first use. The returned
+        /// effect is owned by the scratch and must not be disposed by the caller.
+        /// </summary>
+        public SKPathEffect DashFor(ReadOnlySpan<float> intervals, float phase)
+        {
+            // Materialize the pattern once and share it between the cache key and
+            // the created effect, so a cache miss allocates a single array rather
+            // than one for the key and another for CreateDash.
+            float[] pattern = intervals.ToArray();
+            var key = new DashKey(pattern, phase);
+            if (!_dashEffects.TryGetValue(key, out var effect))
+            {
+                effect = SKPathEffect.CreateDash(pattern, phase);
+                _dashEffects[key] = effect;
+            }
+            return effect;
+        }
+
+        public void Dispose()
+        {
+            Path.Dispose();
+            Paint.Dispose();
+            foreach (var effect in _dashEffects.Values)
+                effect.Dispose();
+            _dashEffects.Clear();
+        }
+
+        /// <summary>Value-equal key over a dash interval pattern and phase, so distinct op instances sharing a pattern reuse one effect.</summary>
+        private readonly struct DashKey : IEquatable<DashKey>
+        {
+            private readonly float[] _intervals;
+            private readonly float _phase;
+            private readonly int _hash;
+
+            public DashKey(float[] intervals, float phase)
+            {
+                _intervals = intervals;
+                _phase = phase;
+                var hash = new HashCode();
+                foreach (var value in intervals)
+                    hash.Add(value);
+                hash.Add(phase);
+                _hash = hash.ToHashCode();
+            }
+
+            public bool Equals(DashKey other)
+            {
+                if (_phase != other._phase || _intervals.Length != other._intervals.Length)
+                    return false;
+                for (int i = 0; i < _intervals.Length; i++)
+                {
+                    if (_intervals[i] != other._intervals[i])
+                        return false;
+                }
+                return true;
+            }
+
+            public override bool Equals(object? obj) => obj is DashKey other && Equals(other);
+
+            public override int GetHashCode() => _hash;
         }
     }
 

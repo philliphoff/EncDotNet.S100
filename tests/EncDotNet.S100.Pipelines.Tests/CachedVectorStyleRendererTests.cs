@@ -1,5 +1,4 @@
 using EncDotNet.S100.Renderers.Mapsui;
-using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Rendering;
@@ -8,7 +7,6 @@ using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using SkiaSharp;
-using System.Threading;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -91,14 +89,14 @@ public class CachedVectorStyleRendererTests
     {
         var count = 0;
         for (var y = 0; y < bitmap.Height; y++)
-        for (var x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Alpha > 128 && p.Red < 80 && p.Green < 80 && p.Blue < 80)
+            for (var x = 0; x < bitmap.Width; x++)
             {
-                count++;
+                var p = bitmap.GetPixel(x, y);
+                if (p.Alpha > 128 && p.Red < 80 && p.Green < 80 && p.Blue < 80)
+                {
+                    count++;
+                }
             }
-        }
         return count;
     }
 

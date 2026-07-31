@@ -16,17 +16,17 @@ public class AisVesselRendererTests
         double lat = 50.8, double lon = -1.3,
         double? headingDeg = 0.0, double sogKn = 10.0,
         DynamicVesselGeometry? geometry = null) => new()
-    {
-        Id = "ais:123456789",
-        Kind = kind,
-        GeometryType = GeometryType.Point,
-        Coordinates = new[] { new GeoPosition(lat, lon) },
-        Motion = headingDeg is null && sogKn == 0
+        {
+            Id = "ais:123456789",
+            Kind = kind,
+            GeometryType = GeometryType.Point,
+            Coordinates = new[] { new GeoPosition(lat, lon) },
+            Motion = headingDeg is null && sogKn == 0
             ? null
             : new DynamicMotion { Heading = headingDeg is { } h ? Angle.FromDegrees(h) : null, SpeedOverGround = Speed.FromKnots(sogKn) },
-        VesselGeometry = geometry,
-        LastUpdated = DateTimeOffset.UtcNow,
-    };
+            VesselGeometry = geometry,
+            LastUpdated = DateTimeOffset.UtcNow,
+        };
 
     private static DynamicVesselGeometry DefaultGeom() => new()
     {
@@ -45,7 +45,8 @@ public class AisVesselRendererTests
         Assert.False(r.CanRender(MakeFeature(kind: "ownship")));
         Assert.False(r.CanRender(new DynamicFeature
         {
-            Id = "ais:1", Kind = "vessel.ais.cargo",
+            Id = "ais:1",
+            Kind = "vessel.ais.cargo",
             GeometryType = GeometryType.Curve,
             Coordinates = new[] { new GeoPosition(0.0, 0.0), new GeoPosition(1.0, 1.0) },
             LastUpdated = DateTimeOffset.UtcNow,
@@ -139,7 +140,8 @@ public class AisVesselRendererTests
     {
         var feature = new DynamicFeature
         {
-            Id = "ais:1", Kind = "vessel.ais.cargo",
+            Id = "ais:1",
+            Kind = "vessel.ais.cargo",
             GeometryType = GeometryType.Point,
             Coordinates = Array.Empty<GeoPosition>(),
             LastUpdated = DateTimeOffset.UtcNow,

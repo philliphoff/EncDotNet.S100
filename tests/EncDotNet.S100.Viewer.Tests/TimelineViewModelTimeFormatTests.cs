@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

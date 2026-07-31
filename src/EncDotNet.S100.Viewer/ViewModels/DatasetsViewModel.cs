@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Core;
@@ -86,6 +82,42 @@ internal sealed class DatasetEntry : ViewModelBase
     /// (issue #438 Phase 2).
     /// </remarks>
     public int? MaximumDisplayScale { get; }
+
+    /// <summary>
+    /// The cell's geographic (EPSG:4326) footprint as declared in the
+    /// exchange-set catalogue, known <em>before</em> the dataset is parsed.
+    /// <see langword="null"/> for plain file loads and catalogues that omit
+    /// coverage (e.g. container-style features). Drives viewport-driven lazy
+    /// loading: the coordinator culls out-of-view cells by this box without
+    /// touching their bytes. See issue #458.
+    /// </summary>
+    public ExchangeSets.BoundingBox? GeographicBounds { get; }
+
+    /// <summary>
+    /// The ENC navigational-purpose band (1&#160;Overview .. 6&#160;Berthing)
+    /// parsed from the cell name (S-57 Ed 3.1 App&#160;B.1 / S-101 §5.5), or
+    /// <see langword="null"/> when the name is not a recognised ENC cell.
+    /// Used as a load-free scale proxy for lazy loading (issue #458).
+    /// </summary>
+    public int? UsageBand { get; }
+
+    private bool _isDeferred;
+    /// <summary>
+    /// True when this entry has been <em>registered</em> from a large exchange
+    /// set but its bytes have not yet been loaded — it appears in the Datasets
+    /// panel (dimmed) and as a map extent outline, and is loaded on demand when
+    /// it enters the viewport at a relevant scale. Cleared once the cell loads.
+    /// See issue #458.
+    /// </summary>
+    public bool IsDeferred
+    {
+        get => _isDeferred;
+        set
+        {
+            if (SetProperty(ref _isDeferred, value))
+                OnPropertyChanged(nameof(RowOpacity));
+        }
+    }
 
     private Mapsui.MRect? _mercatorExtent;
     /// <summary>
@@ -209,9 +241,10 @@ internal sealed class DatasetEntry : ViewModelBase
     }
 
     /// <summary>
-    /// UI helper: dims the row text when the dataset is hidden.
+    /// UI helper: dims the row text when the dataset is hidden or still
+    /// deferred (registered from a large exchange set but not yet loaded).
     /// </summary>
-    public double RowOpacity => _isVisible ? 1.0 : 0.5;
+    public double RowOpacity => (!_isVisible || _isDeferred) ? 0.5 : 1.0;
 
     /// <summary>
     /// Flips <see cref="IsVisible"/>. Bound to the eye-icon button in
@@ -460,7 +493,8 @@ internal sealed class DatasetEntry : ViewModelBase
         string? displayName,
         IReadOnlyList<string>? updateRelativePaths = null,
         int? minimumDisplayScale = null,
-        int? maximumDisplayScale = null)
+        int? maximumDisplayScale = null,
+        ExchangeSets.BoundingBox? geographicBounds = null)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
@@ -469,8 +503,11 @@ internal sealed class DatasetEntry : ViewModelBase
         UpdateRelativePaths = updateRelativePaths ?? Array.Empty<string>();
         MinimumDisplayScale = minimumDisplayScale;
         MaximumDisplayScale = maximumDisplayScale;
+        GeographicBounds = geographicBounds;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
+        UsageBand = Services.LazyLoading.CellUsageBand.TryParse(DisplayName)
+            ?? Services.LazyLoading.CellUsageBand.TryParse(relativePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
 
         _subLayers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSubLayers));
@@ -533,7 +570,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
 {
     private readonly IDatasetLoaderService _loader;
 
-    public ObservableCollection<DatasetEntry> Entries { get; } = new();
+    public BulkObservableCollection<DatasetEntry> Entries { get; } = new();
 
     /// <summary>
     /// Header rows surfaced above <see cref="Entries"/> in the Datasets
@@ -897,7 +934,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
         string? displayName = null,
         IReadOnlyList<string>? updateRelativePaths = null,
         int? minimumDisplayScale = null,
-        int? maximumDisplayScale = null)
+        int? maximumDisplayScale = null,
+        ExchangeSets.BoundingBox? geographicBounds = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -915,13 +953,76 @@ internal sealed class DatasetsViewModel : ViewModelBase
             displayName: displayName,
             updateRelativePaths: updateRelativePaths,
             minimumDisplayScale: minimumDisplayScale,
-            maximumDisplayScale: maximumDisplayScale);
+            maximumDisplayScale: maximumDisplayScale,
+            geographicBounds: geographicBounds);
         Entries.Insert(0, entry);
         return entry;
     }
 
     /// <summary>
-    /// Registers a header row for a freshly-opened exchange set. The
+    /// Registers many exchange-set cells in a single batch, raising one
+    /// collection-changed notification for the whole set rather than one per
+    /// cell. Used by the lazy-loading path (issue #458) so opening a very large
+    /// exchange set does not incur O(N²) rebuild work in the grouping / extent
+    /// overlay subscribers and freeze the UI. Each entry is created deferred
+    /// (bytes unloaded) with its catalogue footprint; the returned list is in
+    /// the same order as <paramref name="registrations"/>.
+    /// </summary>
+    /// <param name="registrations">The per-cell registration descriptors.</param>
+    /// <returns>The created (registered, not-yet-loaded) entries.</returns>
+    public IReadOnlyList<DatasetEntry> AddRangeFromExchangeSet(
+        IReadOnlyList<ExchangeSetCellRegistration> registrations)
+    {
+        ArgumentNullException.ThrowIfNull(registrations);
+
+        var created = new List<DatasetEntry>(registrations.Count);
+        foreach (var reg in registrations)
+        {
+            // Validate each registration up front for parity with
+            // AddFromExchangeSet, so a caller that accidentally supplies a null
+            // source or empty RelativePath/ProductSpec fails fast here rather
+            // than creating a DatasetEntry in an invalid state that surfaces as
+            // a harder-to-diagnose failure later. See issue #458.
+            ArgumentNullException.ThrowIfNull(reg);
+            ArgumentNullException.ThrowIfNull(reg.Source);
+            ArgumentException.ThrowIfNullOrEmpty(reg.RelativePath);
+            ArgumentException.ThrowIfNullOrEmpty(reg.ProductSpec);
+
+            var entry = new DatasetEntry(
+                filePath: reg.RelativePath,
+                productSpec: reg.ProductSpec,
+                source: reg.Source,
+                relativePath: reg.RelativePath,
+                displayName: reg.DisplayName,
+                updateRelativePaths: reg.UpdateRelativePaths,
+                minimumDisplayScale: reg.MinimumDisplayScale,
+                maximumDisplayScale: reg.MaximumDisplayScale,
+                geographicBounds: reg.GeographicBounds);
+
+            // Mark the entry deferred *before* it is inserted (and therefore
+            // before the extent-overlay / grouping subscribers attach to it).
+            // The coordinator's later Register call sets IsDeferred = true again,
+            // but because the value is unchanged that set is a no-op and raises
+            // no PropertyChanged — avoiding an O(N²) rebuild storm when a very
+            // large set (thousands of cells) is registered. See issue #458.
+            entry.IsDeferred = true;
+
+            // The bulk insert raises a Reset (no NewItems), so wire the zoom
+            // dispatcher here rather than relying on the collection handler.
+            if (_zoomDispatcher is not null)
+                entry.ZoomDispatcher = _zoomDispatcher;
+
+            created.Add(entry);
+        }
+
+        // Newest datasets sit at the top of the paint stack (index 0), matching
+        // AddFromExchangeSet's single-item semantics.
+        Entries.InsertRange(0, created);
+        return created;
+    }
+
+    /// <summary>
+    /// Registers a header for an opened exchange set. The
     /// supplied <paramref name="closeAction"/> is invoked when the user
     /// clicks the header's Close button and is responsible for removing
     /// every <see cref="DatasetEntry"/> that came from this set

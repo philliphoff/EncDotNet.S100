@@ -1,10 +1,9 @@
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S201.DataModel;
 using EncDotNet.S100.Datasets.S201.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S201.Tests.Validation;
 
@@ -24,19 +23,19 @@ public class S201AtonRulesTests
         string id,
         string featureType = "LateralBuoy",
         params S201FeatureReference[] featureReferences) => new()
-    {
-        Id = id,
-        FeatureType = featureType,
-        GeometryType = S100GeometryType.Point,
-        Points = [],
-        Curves = [],
-        ExteriorRing = [],
-        InteriorRings = [],
-        Attributes = ReadOnlyDictionary<string, string>.Empty,
-        ComplexAttributes = [],
-        InformationReferences = [],
-        FeatureReferences = featureReferences.ToArray(),
-    };
+        {
+            Id = id,
+            FeatureType = featureType,
+            GeometryType = S100GeometryType.Point,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            InformationReferences = [],
+            FeatureReferences = featureReferences.ToArray(),
+        };
 
     private static S201StructureObject Structure(
         string id,

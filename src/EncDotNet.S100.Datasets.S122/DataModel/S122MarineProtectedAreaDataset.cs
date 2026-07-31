@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -264,7 +263,7 @@ public sealed class S122MarineProtectedAreaDataset
                 Status = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("status"), ctx, f.Id, "status"),
                 References = f.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes,
-                    [..baseKeys, "categoryOfRestrictedArea", "restriction", "status"]),
+                    [.. baseKeys, "categoryOfRestrictedArea", "restriction", "status"]),
             },
             "VesselTrafficServiceArea" => new S122VesselTrafficServiceArea
             {
@@ -299,7 +298,7 @@ public sealed class S122MarineProtectedAreaDataset
                 ActionOrActivity = f.Attributes.GetValueOrDefault("actionOrActivity"),
                 References = f.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes,
-                    [..baseKeys, "categoryOfRelationship", "actionOrActivity"]),
+                    [.. baseKeys, "categoryOfRelationship", "actionOrActivity"]),
             },
             "DataCoverage" => new S122DataCoverage
             {
@@ -319,7 +318,7 @@ public sealed class S122MarineProtectedAreaDataset
                 OptimumDisplayScale = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("optimumDisplayScale"), ctx, f.Id, "optimumDisplayScale"),
                 References = f.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes,
-                    [..baseKeys, "maximumDisplayScale", "minimumDisplayScale", "optimumDisplayScale"]),
+                    [.. baseKeys, "maximumDisplayScale", "minimumDisplayScale", "optimumDisplayScale"]),
             },
             "QualityOfNonBathymetricData" => new S122QualityOfNonBathymetricData
             {
@@ -365,7 +364,7 @@ public sealed class S122MarineProtectedAreaDataset
                 TextType = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("textType"), ctx, f.Id, "textType"),
                 References = f.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes,
-                    [..baseKeys, "textOffsetBearing", "textOffsetDistance", "textRotation", "textType"]),
+                    [.. baseKeys, "textOffsetBearing", "textOffsetDistance", "textRotation", "textType"]),
             },
             _ => new S122OtherFeature(f.FeatureType)
             {
@@ -413,7 +412,7 @@ public sealed class S122MarineProtectedAreaDataset
                 TextContent = i.Attributes.GetValueOrDefault("textContent"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "categoryOfAuthority", "textContent"]),
+                    [.. baseKeys, "categoryOfAuthority", "textContent"]),
             },
             "ContactDetails" => new S122ContactDetails
             {
@@ -483,7 +482,7 @@ public sealed class S122MarineProtectedAreaDataset
                 Information = i.Attributes.GetValueOrDefault("information"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "dateFixed", "dateVariable", "information"]),
+                    [.. baseKeys, "dateFixed", "dateVariable", "information"]),
             },
             "Recommendations" => ProjectRxN(new S122Recommendations { Id = i.Id }, i, ctx, baseKeys),
             "Regulations" => ProjectRxN(new S122Regulations { Id = i.Id }, i, ctx, baseKeys),
@@ -499,7 +498,7 @@ public sealed class S122MarineProtectedAreaDataset
                 Information = i.Attributes.GetValueOrDefault("information"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "information"]),
+                    [.. baseKeys, "information"]),
             },
             "SpatialQuality" => new S122SpatialQuality
             {
@@ -513,7 +512,7 @@ public sealed class S122MarineProtectedAreaDataset
                 SpatialAccuracy = AttributeParser.TryParseDouble(i.Attributes.GetValueOrDefault("spatialAccuracy"), ctx, i.Id, "spatialAccuracy"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "qualityOfHorizontalMeasurement", "spatialAccuracy"]),
+                    [.. baseKeys, "qualityOfHorizontalMeasurement", "spatialAccuracy"]),
             },
             _ => new S122OtherInformationType(i.TypeCode)
             {
@@ -546,7 +545,7 @@ public sealed class S122MarineProtectedAreaDataset
                 TextContent = i.Attributes.GetValueOrDefault("textContent"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "categoryOfAuthority", "rxNCode", "textContent"]),
+                    [.. baseKeys, "categoryOfAuthority", "rxNCode", "textContent"]),
             },
             S122Regulations => new S122Regulations
             {
@@ -556,7 +555,7 @@ public sealed class S122MarineProtectedAreaDataset
                 TextContent = i.Attributes.GetValueOrDefault("textContent"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "categoryOfAuthority", "rxNCode", "textContent"]),
+                    [.. baseKeys, "categoryOfAuthority", "rxNCode", "textContent"]),
             },
             S122Restrictions => new S122Restrictions
             {
@@ -566,7 +565,7 @@ public sealed class S122MarineProtectedAreaDataset
                 TextContent = i.Attributes.GetValueOrDefault("textContent"),
                 References = i.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    [..baseKeys, "categoryOfAuthority", "rxNCode", "textContent"]),
+                    [.. baseKeys, "categoryOfAuthority", "rxNCode", "textContent"]),
             },
             _ => throw new InvalidOperationException("Unexpected RxN concrete type."),
         });

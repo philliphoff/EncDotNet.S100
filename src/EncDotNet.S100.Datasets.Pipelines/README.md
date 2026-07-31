@@ -46,6 +46,48 @@ product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### Headless pick services and catalog (issue #480)
+
+The protocol-neutral "pick" logic — identify the vector features and
+sample the coverage values at a geographic point — lives here so it can
+be shared by the MCP tools (`EncDotNet.S100.Mcp.Tools`) and the CLI
+`s100 identify` command without either depending on the other:
+
+| Namespace | Contents |
+|---|---|
+| `.Query` | `IdentifyFeaturesService`, `SampleCoverageService`, `DescribeFeatureService` and their request / result records, plus the neutral `ToolResult<T>` / `ToolError` result types the services return. |
+| `.Catalog` | `IDatasetCatalog`, `LoadedDataset` / `LoadedDatasetData`, `DatasetId`; `LoadedDatasetProjector` (the one place a product-spec name is mapped to its per-spec `Open` reader and matching `LoadedDatasetData` variant + bounds); and `FileDatasetCatalog`, a read-only file-backed catalog. |
+| `.Geometry` | Point / polyline / bounding-box helpers used by the pick services. |
+| `.Spec` | `SpecRef` and spec-capability metadata. |
+| `.Time` | `FeatureValidity` and the time-window query helpers. |
+
+`LoadedDatasetProjector` is used by both the Avalonia viewer's
+`ViewerDatasetCatalog` and the headless `FileDatasetCatalog`, so a pick
+run from the CLI produces byte-identical catalog entries to one run in
+the viewer. The MCP `identify_features` / `sample_coverage` /
+`describe_feature` tools are thin wrappers that map `ToolResult<T>` onto
+the MCP protocol.
+
+### Metadata as a parse byproduct (issue #467 / #460)
+
+`IDatasetProcessor.Metadata` exposes the lightweight, product-agnostic
+`Core.DatasetMetadata` (declared spec, geographic extent, horizontal CRS,
+display-scale window, time coverage) **derived once from the dataset the
+processor already parsed** — never a second parse or a separate
+`ReadMetadata(path)` call. Hosts that need to frame a viewport, register a
+layer, draw an out-of-scale indicator, or gate visibility read it from the
+open processor rather than re-reading the file.
+
+The value is memoized per processor. GML processors compute the raw
+(unpadded) WGS-84 envelope with a single feature scan that is **shared**
+with the padded render extent (`ComputeGeographicExtent`), so repeated
+renders no longer re-walk every coordinate. HDF5 (S-102/104/111) derive
+the extent + CRS from the coverage source's already-read georeferencing
+metadata (no `values` payload is re-read); S-104/S-111 fixed-station
+(dcf8) datasets union their station coordinates. The default interface
+implementation carries only `Spec`, so a processor that cannot cheaply
+supply an extent still compiles.
+
 ### Declared-edition assessment (issue #248)
 
 Every processor populates `IDatasetProcessor.Spec` with the dataset's
@@ -112,8 +154,11 @@ portrayal-output seam:
 - `IVectorPortrayalSource.BuildVectorPortrayalAsync(...)` →
   `VectorPortrayalResult` — immutable drawing-instruction slices,
   geometry provider, resolved palette / asset snapshot, EPSG:3857
-  extent, layer keys, the out-of-scale-band cutoff *value*, and
-  Mapsui-free S-98 display-plane metadata.
+  extent, layer keys, the out-of-scale-band cutoff *value*, the cell's
+  data-coverage footprints (`CoverageAreas`, a `CoverageArea` list in
+  EPSG:4326 resolved from `DataCoverage` surfaces — used for cross-cell
+  overlap suppression, issue #438 Phase 2), and Mapsui-free S-98
+  display-plane metadata.
 - `ICoveragePortrayalSource.BuildCoveragePortrayalAsync(...)` →
   `CoveragePortrayalResult` — materialized `StyledCoverageLayer`(s)
   plus viewport/georef, info, layer keys, and (S-111) the arrow symbol

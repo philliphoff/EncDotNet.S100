@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Viewer.Routing;
 
 namespace EncDotNet.S100.Viewer.Services;

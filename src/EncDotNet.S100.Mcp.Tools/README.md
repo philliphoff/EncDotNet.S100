@@ -9,6 +9,15 @@ wire protocol on top of it.
 > **Packaging:** this library is not currently published to NuGet.
 > Consume it via project reference.
 
+> **Shared pick foundation (issue #480):** the protocol-neutral catalog,
+> geometry, spec, time, and query types (`IDatasetCatalog`,
+> `LoadedDataset`, `SpecRef`, `BoundingBox`, `IdentifyFeaturesService`,
+> `SampleCoverageService`, `DescribeFeatureService`, `ToolResult<T>`, …)
+> now live in `EncDotNet.S100.Datasets.Pipelines` (namespaces
+> `…Datasets.Pipelines.{Catalog,Geometry,Spec,Time,Query}`) so they can
+> be shared with the headless `s100 identify` CLI command. The MCP tools
+> in this library are thin wrappers over those services.
+
 ## Field conventions
 
 Every public property on every record that crosses the MCP wire —
@@ -223,8 +232,8 @@ return `SpecNotSupportedForTool`.
 
 ```csharp
 using EncDotNet.S100.Mcp.Tools;
-using EncDotNet.S100.Mcp.Tools.Catalog;
-using EncDotNet.S100.Mcp.Tools.Geometry;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 
 // A host (e.g. the viewer) implements IDatasetCatalog and publishes
 // LoadedDataset instances whenever its loaded set changes.

@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Validation;
@@ -88,6 +83,57 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
+
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the already-parsed dataset: for gridded (dcf2) surfaces
+    /// from the coverage source's georeferencing metadata; for fixed-station
+    /// (dcf8) series from the union of station coordinates. No HDF5 payload is
+    /// re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    private DatasetMetadata BuildMetadata()
+    {
+        if (_source is not null && _dataset is not null)
+        {
+            var extent = _source.Metadata.Extent;
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(
+                    extent.SouthLatitude,
+                    extent.WestLongitude,
+                    extent.NorthLatitude,
+                    extent.EastLongitude),
+                HorizontalCrsEpsg = _dataset.HorizontalCRS,
+            };
+        }
+
+        if (_stationSeries is { Stations.Count: > 0 } series)
+        {
+            double minLat = double.MaxValue, minLon = double.MaxValue;
+            double maxLat = double.MinValue, maxLon = double.MinValue;
+            foreach (var station in series.Stations)
+            {
+                if (station.Latitude < minLat) minLat = station.Latitude;
+                if (station.Latitude > maxLat) maxLat = station.Latitude;
+                if (station.Longitude < minLon) minLon = station.Longitude;
+                if (station.Longitude > maxLon) maxLon = station.Longitude;
+            }
+
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(minLat, minLon, maxLat, maxLon),
+                HorizontalCrsEpsg = series.HorizontalCRS,
+            };
+        }
+
+        return new DatasetMetadata { Spec = Spec };
+    }
 
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes =>
@@ -287,7 +333,22 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         var pipeline = new PortrayalPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+
+        // Viewport-scoped sampling (issue #487).
+        int crs = _dataset!.HorizontalCRS ?? 4326;
+        ICrsTransform? wgs84ToNative = null;
+        if (context?.Viewport is not null && crs != 4326)
+        {
+            wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+        }
+
+        var layer = await pipeline.ProcessAsync(
+            source,
+            catalogue,
+            viewport: context?.Viewport,
+            wgs84ToNative: wgs84ToNative,
+            mariner: context?.Mariner ?? MarinerSettings.Default,
+            cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
@@ -296,7 +357,6 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // The symbol set is small (one entry per S-111 speed band).
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
 
-        int crs = _dataset!.HorizontalCRS ?? 4326;
         var geoId = _dataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
             ? $", time: {selectedTime:u} ({source.AvailableTimes.Count} steps)"
@@ -391,7 +451,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             source.SelectTime(source.AvailableTimes[0]);
 
         var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
-            .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);

@@ -1,18 +1,16 @@
-using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using SkiaSharp;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using CoreViewport = EncDotNet.S100.Pipelines.Viewport;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using SceneRgbaColor = EncDotNet.S100.Pipelines.RgbaColor;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -111,11 +109,11 @@ public static class S100VectorSceneRenderer
     /// </summary>
     public static Action? RequestRedraw { get; set; }
 
-    private static readonly ConditionalWeakTable<ILayer, SceneState> s_states = new();
+    private static readonly ConditionalWeakTable<ILayer, SceneState> States = new();
 
-    private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+    private static readonly SKSamplingOptions Sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
-    private static readonly bool s_diag =
+    private static readonly bool Diag =
         (Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_DIAG") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";
 
@@ -156,7 +154,7 @@ public static class S100VectorSceneRenderer
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
 
-        var state = s_states.GetValue(layer, static _ => new SceneState());
+        var state = States.GetValue(layer, static _ => new SceneState());
         lock (state.Sync)
         {
             state.Scene = scene;
@@ -207,7 +205,7 @@ public static class S100VectorSceneRenderer
             return;
         }
 
-        var state = s_states.GetValue(layer, static _ => new SceneState());
+        var state = States.GetValue(layer, static _ => new SceneState());
 
         var deviceScale = canvas.TotalMatrix.ScaleX;
         if (deviceScale <= 0 || float.IsNaN(deviceScale))
@@ -259,7 +257,7 @@ public static class S100VectorSceneRenderer
         if (toBlit is not null)
         {
             var compositeStart = Stopwatch.GetTimestamp();
-            canvas.DrawImage(toBlit, dest, s_sampling);
+            canvas.DrawImage(toBlit, dest, Sampling);
             S100Diag.Telemetry.SceneCompositeDuration.Record(
                 Stopwatch.GetElapsedTime(compositeStart).TotalMilliseconds);
         }
@@ -377,7 +375,7 @@ public static class S100VectorSceneRenderer
                     state.Pending = null;
                     published = true;
 
-                    if (s_diag)
+                    if (Diag)
                     {
                         Console.Error.WriteLine(
                             $"[VecScene] published res={request.Resolution:G6} img={image.Width}x{image.Height}");

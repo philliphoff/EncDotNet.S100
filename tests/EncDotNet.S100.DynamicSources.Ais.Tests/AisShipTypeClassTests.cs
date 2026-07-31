@@ -1,5 +1,3 @@
-using EncDotNet.S100.DynamicSources.Ais;
-
 namespace EncDotNet.S100.DynamicSources.Ais.Tests;
 
 public class AisShipTypeClassTests

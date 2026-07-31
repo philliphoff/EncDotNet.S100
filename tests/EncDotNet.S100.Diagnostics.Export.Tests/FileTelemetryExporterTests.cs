@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using EncDotNet.S100.Diagnostics.Export;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
 

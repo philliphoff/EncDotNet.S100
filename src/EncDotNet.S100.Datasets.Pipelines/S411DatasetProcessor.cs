@@ -1,14 +1,11 @@
-using System;
 using System.Collections.Immutable;
 using System.Globalization;
-using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;

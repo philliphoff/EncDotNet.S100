@@ -1,13 +1,9 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

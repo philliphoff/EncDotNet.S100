@@ -8,6 +8,15 @@ public sealed class S104Dataset
     /// <summary>EPSG code of the horizontal coordinate reference system.</summary>
     public int? HorizontalCRS { get; init; }
 
+    /// <summary>
+    /// The S-100 <c>verticalDatum</c> code declared on the dataset root, or
+    /// <c>null</c> when the attribute is absent. This is the reference level
+    /// for the coverage's water-level heights (S-104 Ed 2.0.0 §10.2.4;
+    /// S-100 register codelist, source identifier 996). Resolve to a label
+    /// with <c>EncDotNet.S100.DataModel.VerticalDatums.GetLabel</c>.
+    /// </summary>
+    public int? VerticalDatum { get; init; }
+
     /// <summary>Epoch of the coordinate reference system (e.g. "G1762").</summary>
     public string? Epoch { get; init; }
 

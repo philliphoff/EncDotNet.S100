@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Viewer;
 using Mapsui.Layers;
 using Mapsui.Nts;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

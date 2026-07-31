@@ -487,27 +487,42 @@ public sealed class S131HarbourInfrastructureDataset
         {
             S131HarbourInfrastructure h => new S131HarbourInfrastructure
             {
-                Id = h.Id, FeatureType = h.FeatureType, Kind = h.Kind,
-                Geometry = h.Geometry, ResolvedReferences = resolved,
-                ExtraAttributes = h.ExtraAttributes, Source = h.Source,
+                Id = h.Id,
+                FeatureType = h.FeatureType,
+                Kind = h.Kind,
+                Geometry = h.Geometry,
+                ResolvedReferences = resolved,
+                ExtraAttributes = h.ExtraAttributes,
+                Source = h.Source,
             },
             S131LayoutFeature l => new S131LayoutFeature
             {
-                Id = l.Id, FeatureType = l.FeatureType, Kind = l.Kind,
-                Geometry = l.Geometry, ResolvedReferences = resolved,
-                ExtraAttributes = l.ExtraAttributes, Source = l.Source,
+                Id = l.Id,
+                FeatureType = l.FeatureType,
+                Kind = l.Kind,
+                Geometry = l.Geometry,
+                ResolvedReferences = resolved,
+                ExtraAttributes = l.ExtraAttributes,
+                Source = l.Source,
             },
             S131MetadataFeature m => new S131MetadataFeature
             {
-                Id = m.Id, FeatureType = m.FeatureType, Kind = m.Kind,
-                Geometry = m.Geometry, ResolvedReferences = resolved,
-                ExtraAttributes = m.ExtraAttributes, Source = m.Source,
+                Id = m.Id,
+                FeatureType = m.FeatureType,
+                Kind = m.Kind,
+                Geometry = m.Geometry,
+                ResolvedReferences = resolved,
+                ExtraAttributes = m.ExtraAttributes,
+                Source = m.Source,
             },
             S131OtherFeature o => new S131OtherFeature
             {
-                Id = o.Id, FeatureType = o.FeatureType,
-                Geometry = o.Geometry, ResolvedReferences = resolved,
-                ExtraAttributes = o.ExtraAttributes, Source = o.Source,
+                Id = o.Id,
+                FeatureType = o.FeatureType,
+                Geometry = o.Geometry,
+                ResolvedReferences = resolved,
+                ExtraAttributes = o.ExtraAttributes,
+                Source = o.Source,
             },
             _ => typed,
         };
@@ -571,50 +586,69 @@ public sealed class S131HarbourInfrastructureDataset
             },
             S131ContactDetails c => new S131ContactDetails
             {
-                Id = c.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = c.ExtraAttributes, Source = c.Source,
+                Id = c.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = c.ExtraAttributes,
+                Source = c.Source,
             },
             S131Applicability ap => new S131Applicability
             {
-                Id = ap.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = ap.ExtraAttributes, Source = ap.Source,
+                Id = ap.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = ap.ExtraAttributes,
+                Source = ap.Source,
             },
             S131AvailablePortServices aps => new S131AvailablePortServices
             {
-                Id = aps.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = aps.ExtraAttributes, Source = aps.Source,
+                Id = aps.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = aps.ExtraAttributes,
+                Source = aps.Source,
             },
             S131Entrance e => new S131Entrance
             {
-                Id = e.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = e.ExtraAttributes, Source = e.Source,
+                Id = e.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = e.ExtraAttributes,
+                Source = e.Source,
             },
             S131ServiceHours s => new S131ServiceHours
             {
-                Id = s.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = s.ExtraAttributes, Source = s.Source,
+                Id = s.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = s.ExtraAttributes,
+                Source = s.Source,
             },
             S131NonStandardWorkingDay n => new S131NonStandardWorkingDay
             {
-                Id = n.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = n.ExtraAttributes, Source = n.Source,
+                Id = n.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = n.ExtraAttributes,
+                Source = n.Source,
             },
             S131SpatialQuality q => new S131SpatialQuality
             {
-                Id = q.Id, ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = q.ExtraAttributes, Source = q.Source,
+                Id = q.Id,
+                ResolvedReferences = resolvedSnapshot,
+                ExtraAttributes = q.ExtraAttributes,
+                Source = q.Source,
             },
             S131RxNInformation rx => new S131RxNInformation
             {
-                Id = rx.Id, TypeCode = rx.TypeCode, Kind = rx.Kind,
+                Id = rx.Id,
+                TypeCode = rx.TypeCode,
+                Kind = rx.Kind,
                 ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = rx.ExtraAttributes, Source = rx.Source,
+                ExtraAttributes = rx.ExtraAttributes,
+                Source = rx.Source,
             },
             S131OtherInformationType o => new S131OtherInformationType
             {
-                Id = o.Id, TypeCode = o.TypeCode,
+                Id = o.Id,
+                TypeCode = o.TypeCode,
                 ResolvedReferences = resolvedSnapshot,
-                ExtraAttributes = o.ExtraAttributes, Source = o.Source,
+                ExtraAttributes = o.ExtraAttributes,
+                Source = o.Source,
             },
             _ => typed,
         };

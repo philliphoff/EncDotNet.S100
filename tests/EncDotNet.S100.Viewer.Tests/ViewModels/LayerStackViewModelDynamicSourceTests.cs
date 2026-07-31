@@ -1,12 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
-using Xunit;
 using ControllableLoader = EncDotNet.S100.Viewer.Tests.LayerStackViewModelTests.ControllableLoader;
 
 namespace EncDotNet.S100.Viewer.Tests.ViewModels;

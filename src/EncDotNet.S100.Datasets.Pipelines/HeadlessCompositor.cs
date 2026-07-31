@@ -3,9 +3,9 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
-using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -188,22 +188,22 @@ public sealed class HeadlessCompositor
             switch (item.Payload)
             {
                 case VectorStackPayload vector:
-                {
-                    var scene = LowerVector(vector, options.HiddenCategories);
-                    lowered.Add(new VectorCompositeLayer(scene, honorScaleVisibility: false));
-                    bounds.AddScene(scene);
-                    break;
-                }
+                    {
+                        var scene = LowerVector(vector, options.HiddenCategories);
+                        lowered.Add(new VectorCompositeLayer(scene, honorScaleVisibility: false));
+                        bounds.AddScene(scene);
+                        break;
+                    }
 
                 case CoverageStackPayload coverage:
-                {
-                    if (TryLowerCoverage(coverage, out var layer, out var west, out var east, out var south, out var north))
                     {
-                        lowered.Add(layer);
-                        bounds.AddLonLatBox(west, east, south, north);
+                        if (TryLowerCoverage(coverage, out var layer, out var west, out var east, out var south, out var north))
+                        {
+                            lowered.Add(layer);
+                            bounds.AddLonLatBox(west, east, south, north);
+                        }
+                        break;
                     }
-                    break;
-                }
             }
         }
 
@@ -239,7 +239,10 @@ public sealed class HeadlessCompositor
                     sub.Plane,
                     sub.WithinPlanePriority,
                     vector.SourceDatasetId,
-                    sub.SourceFeatureType));
+                    sub.SourceFeatureType)
+                {
+                    SourceScaleDenominator = vector.CellMinimumDisplayScale,
+                });
             }
             return (items, vector.Spec.Name, vector.SourceDatasetId);
         }
@@ -291,25 +294,26 @@ public sealed class HeadlessCompositor
         switch (payload.SubLayer)
         {
             case GridCoverageSubLayer grid:
-            {
-                var (w, e, s, n, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
-                layer = new CoverageCompositeLayer(grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84);
-                west = w; east = e; south = s; north = n;
-                return true;
-            }
+                {
+                    var (w, e, s, n, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
+                    layer = new CoverageCompositeLayer(
+                        grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84, landAreas: grid.LandAreaMask);
+                    west = w; east = e; south = s; north = n;
+                    return true;
+                }
 
             case ArrowCoverageSubLayer arrow:
-            {
-                var (w, e, s, n, nativeToWgs84) = ReprojectExtent(arrow.Coverage, arrow.Viewport);
-                var arrowRenderer = new SkiaCoverageArrowRenderer
                 {
-                    SymbolProvider = arrow.SymbolProvider,
-                    BaseSymbolScale = arrow.BaseSymbolScale,
-                };
-                layer = new CoverageCompositeLayer(arrow.Coverage, w, e, s, n, arrowRenderer, nativeToWgs84);
-                west = w; east = e; south = s; north = n;
-                return true;
-            }
+                    var (w, e, s, n, nativeToWgs84) = ReprojectExtent(arrow.Coverage, arrow.Viewport);
+                    var arrowRenderer = new SkiaCoverageArrowRenderer
+                    {
+                        SymbolProvider = arrow.SymbolProvider,
+                        BaseSymbolScale = arrow.BaseSymbolScale,
+                    };
+                    layer = new CoverageCompositeLayer(arrow.Coverage, w, e, s, n, arrowRenderer, nativeToWgs84);
+                    west = w; east = e; south = s; north = n;
+                    return true;
+                }
 
             // Pre-projected point-glyph sub-layers (fixed-station variants) are
             // not yet supported in the headless composite path.

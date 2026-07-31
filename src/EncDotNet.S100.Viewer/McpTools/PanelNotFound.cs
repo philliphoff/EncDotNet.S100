@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 

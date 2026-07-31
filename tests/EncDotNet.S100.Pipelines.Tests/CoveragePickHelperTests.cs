@@ -1,10 +1,7 @@
-using System;
 using EncDotNet.S100.Core;
-using System.Collections.Generic;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -65,12 +62,79 @@ public class CoveragePickHelperTests
         Assert.Equal(fill, result.NoDataValue);
     }
 
+    /// <summary>
+    /// A projected (UTM zone 31N, EPSG:32631) S-102 grid stores its origin
+    /// and spacing in native metres, not degrees. The helper must reproject
+    /// the WGS84 click into the grid CRS before snapping to a cell — the
+    /// exact path the depth-assimilation base-depth resolver depends on for
+    /// UTM tiles (e.g. the Rotterdam S-102 tile). Uses the real
+    /// <see cref="ProjNetCrsTransformFactory"/> rather than an identity stub.
+    /// </summary>
+    [Fact]
+    public void Sample_ProjectedUtmGrid_ReprojectsClickToExpectedCell()
+    {
+        // Native UTM 31N grid: origin at (easting 592000, northing 5750000),
+        // 100 m spacing, 5×5 — a synthetic stand-in for the Rotterdam tile.
+        const double originNorthing = 5_750_000.0;
+        const double originEasting = 592_000.0;
+        const double spacing = 100.0;
+        var depths = new float[5, 5];
+        for (int r = 0; r < 5; r++)
+            for (int c = 0; c < 5; c++)
+                depths[r, c] = r * 10 + c;
+
+        var source = BuildStubSource(
+            originLat: originNorthing, originLon: originEasting, spacing: spacing,
+            depths: depths, horizontalCrs: "EPSG:32631");
+
+        var factory = new ProjNetCrsTransformFactory();
+
+        // Aim at the centre of cell (row 2, col 3) in native metres, then
+        // project that native point back to WGS84 to obtain the click.
+        double targetEasting = originEasting + (3 + 0.5) * spacing;
+        double targetNorthing = originNorthing + (2 + 0.5) * spacing;
+        var toWgs84 = factory.Create("EPSG:32631", "EPSG:4326");
+        var (lon, lat) = toWgs84.Transform(targetEasting, targetNorthing);
+
+        var result = CoveragePickHelper.Sample(source, factory, latitude: lat, longitude: lon);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Row);
+        Assert.Equal(3, result.Col);
+        Assert.Equal(depths[2, 3], result.Values["depth"]);
+    }
+
+    /// <summary>
+    /// A WGS84 click that reprojects to a point outside a projected (UTM)
+    /// grid's native extent must be rejected (returns null), not clamped to
+    /// an edge cell.
+    /// </summary>
+    [Fact]
+    public void Sample_ProjectedUtmGrid_ClickOutsideExtent_ReturnsNull()
+    {
+        const double originNorthing = 5_750_000.0;
+        const double originEasting = 592_000.0;
+        const double spacing = 100.0;
+        var source = BuildStubSource(
+            originLat: originNorthing, originLon: originEasting, spacing: spacing,
+            depths: new float[3, 3], horizontalCrs: "EPSG:32631");
+
+        var factory = new ProjNetCrsTransformFactory();
+
+        // A native point well south-west of the origin → outside the grid.
+        var toWgs84 = factory.Create("EPSG:32631", "EPSG:4326");
+        var (lon, lat) = toWgs84.Transform(originEasting - 5_000.0, originNorthing - 5_000.0);
+
+        Assert.Null(CoveragePickHelper.Sample(source, factory, latitude: lat, longitude: lon));
+    }
+
     private static StubCoverageSource BuildStubSource(
         double originLat,
         double originLon,
         double spacing,
         float[,] depths,
-        float fill = 1_000_000f)
+        float fill = 1_000_000f,
+        string horizontalCrs = "EPSG:4326")
     {
         var rows = depths.GetLength(0);
         var cols = depths.GetLength(1);
@@ -89,10 +153,10 @@ public class CoveragePickHelperTests
             Extent = new BoundingBox(
                 southLatitude: originLat,
                 westLongitude: originLon,
-                northLatitude: originLat + rows * spacing,
-                eastLongitude: originLon + cols * spacing),
+                northLatitude: originLat + (rows - 1) * spacing,
+                eastLongitude: originLon + (cols - 1) * spacing),
             GridMetadata = grid,
-            HorizontalCRS = "EPSG:4326",
+            HorizontalCRS = horizontalCrs,
             VerticalDatum = "MSL",
             NoDataValue = fill,
             ValueFields =

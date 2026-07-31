@@ -1,12 +1,11 @@
 using System.Reflection;
-using EncDotNet.S100.Core;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
-using EncDotNet.S100.Crs.ProjNet;
 using PureHDF;
 using SkiaSharp;
 
@@ -139,6 +138,40 @@ public class S102Edition21Tests
         }
     }
 
+    [Fact]
+    public void Metadata_Edition21Utm_SurfacesCrsAndExtent_WithoutReReadingPayload()
+    {
+        var path = WriteEdition21Utm();
+        using var manager = CreateCatalogueManager();
+        var processor = new S102DatasetProcessor(
+            path,
+            manager,
+            new MoonSharpLuaEngine(),
+            new ProjNetCrsTransformFactory());
+
+        try
+        {
+            var metadata = processor.Metadata;
+
+            Assert.Equal("S-102", metadata.Spec.Name);
+            Assert.Equal(32617, metadata.HorizontalCrsEpsg);
+            Assert.NotNull(metadata.Extent);
+
+            var extent = metadata.Extent!;
+            Assert.True(extent.SouthLatitude <= extent.NorthLatitude);
+            Assert.True(extent.WestLongitude <= extent.EastLongitude);
+
+            // Metadata is memoized: the same instance is returned on repeat
+            // access (no second derivation, issue #467 WS1).
+            Assert.Same(metadata, processor.Metadata);
+        }
+        finally
+        {
+            processor.Dispose();
+            File.Delete(path);
+        }
+    }
+
     private static PortrayalCatalogueManager CreateCatalogueManager()
     {
         var manager = new PortrayalCatalogueManager();
@@ -153,12 +186,12 @@ public class S102Edition21Tests
     private static void AssertNonBlank(SKBitmap bitmap)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
-                return;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+                    return;
+            }
 
         Assert.Fail("Edition 2.1 S-102 cell rendered a blank (all-white) bitmap.");
     }

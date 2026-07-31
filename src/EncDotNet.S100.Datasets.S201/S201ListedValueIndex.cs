@@ -26,7 +26,7 @@ internal static class S201ListedValueIndex
 {
     private const string FcNamespace = "http://www.iho.int/S100FC/5.0";
 
-    private static readonly Lazy<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>> _index =
+    private static readonly Lazy<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>> ListedValuesByAttribute =
         new(BuildIndex);
 
     /// <summary>
@@ -40,7 +40,7 @@ internal static class S201ListedValueIndex
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(value))
             return value;
 
-        if (_index.Value.TryGetValue(code, out var labelToCode) &&
+        if (ListedValuesByAttribute.Value.TryGetValue(code, out var labelToCode) &&
             labelToCode.TryGetValue(value, out var numeric))
         {
             return numeric;

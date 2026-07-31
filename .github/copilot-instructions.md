@@ -108,9 +108,12 @@ docs/                                # DocFX documentation source; specs PDF liv
 - Conceptual guides live under `docs/` in DocFX Markdown. Add or update pages there for user-facing features.
 
 ### Naming and style
-- Follow existing C# conventions: `PascalCase` for types/methods/properties, `camelCase` for locals and parameters, `_camelCase` for private fields.
+- **The normative C# style guide is [`docs/coding-style.md`](../docs/coding-style.md); read it and make generated code comply.** It is encoded in the repository [`.editorconfig`](../.editorconfig). Because `EnforceCodeStyleInBuild` is off (nearly every project multi-targets `net8.0;net10.0`), a plain `dotnet build` does **not** flag most style rules — so you must apply the guide yourself rather than assume the build will catch violations.
+- Key rules (see the guide for the full set): `PascalCase` for types/methods/properties, `camelCase` for locals and parameters, `_camelCase` for private fields; file-scoped namespaces, 4-space indents, Allman braces; `System.*` usings first with no unused usings.
 - Nullable reference types are enabled everywhere — avoid `!` suppression; prefer null-checks or `ArgumentNullException.ThrowIfNull`.
 - All public APIs must carry XML doc comments (`<summary>`, `<param>`, `<returns>`).
+- Before finishing a change, normalize whitespace and usings with `dotnet format whitespace EncDotNet.S100.slnx` and `dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005`, then run `dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn --verify-no-changes`; CI's **Format check** job runs that combined verification and fails on whitespace, using-directive, or naming drift.
+- For API-shape conventions (collection return types, `class` vs `record`, quantity types) follow [`docs/design/api-conventions.md`](../docs/design/api-conventions.md).
 
 ### Package dependencies
 - All NuGet versions are managed centrally in `Directory.Packages.props`. Do not add `Version` attributes to individual `.csproj` files.

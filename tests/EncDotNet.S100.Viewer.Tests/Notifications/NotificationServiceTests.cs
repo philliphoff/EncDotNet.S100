@@ -1,8 +1,5 @@
-using System;
-using System.Linq;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using Microsoft.Extensions.Time.Testing;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.Notifications;
 

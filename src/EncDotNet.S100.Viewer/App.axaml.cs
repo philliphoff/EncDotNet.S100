@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -28,7 +23,7 @@ public partial class App : Application
 {
     internal static ViewerCommandSettings? StartupOptions { get; set; }
 
-    private static IServiceProvider? s_services;
+    private static IServiceProvider? _services;
 
     /// <summary>
     /// Records the most recent unhandled error so the feedback reporter
@@ -36,7 +31,7 @@ public partial class App : Application
     /// global exception handlers funnel through <see cref="LogCrash"/>
     /// which forwards here.
     /// </summary>
-    private static EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker? s_lastErrorTracker;
+    private static EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker? _lastErrorTracker;
 
     /// <summary>
     /// Previous viewer sessions that terminated without a clean shutdown
@@ -55,7 +50,7 @@ public partial class App : Application
     /// before the framework is initialized.
     /// </summary>
     internal static IServiceProvider Services =>
-        s_services ?? throw new InvalidOperationException(
+        _services ?? throw new InvalidOperationException(
             "Service provider has not been initialized yet.");
 
     public override void Initialize()
@@ -116,12 +111,12 @@ public partial class App : Application
             e.Handled = true;
         };
 
-        s_services = ConfigureServices();
+        _services = ConfigureServices();
 
         // Now that the container exists, route recorded crashes into the
         // feedback reporter's last-error tracker (the global handlers above
         // funnel through LogCrash).
-        s_lastErrorTracker = s_services.GetRequiredService<
+        _lastErrorTracker = _services.GetRequiredService<
             EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker>();
 
         // Re-root the warm tile disk cache under the active data directory
@@ -130,7 +125,7 @@ public partial class App : Application
         // S100_VECTOR_TILE_DISK_DIR env var still wins (the setter is a
         // no-op when env-pinned). Must run before the tile renderer creates
         // its shared disk cache below.
-        if (s_services.GetRequiredService<ViewerDataPaths>().TileDiskCacheDirectory is { } tileDir)
+        if (_services.GetRequiredService<ViewerDataPaths>().TileDiskCacheDirectory is { } tileDir)
         {
             EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.TileDiskDirectory = tileDir;
         }
@@ -147,9 +142,9 @@ public partial class App : Application
         // view/context-view-model registration on the DialogManager (a
         // DataTemplate alone is not sufficient). Register the feedback
         // dialog now that the singleton manager exists.
-        s_services.GetRequiredService<ShadUI.DialogManager>()
+        _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.FeedbackDialogView, ViewModels.FeedbackDialogViewModel>();
-        s_services.GetRequiredService<ShadUI.DialogManager>()
+        _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
 
         // Interpose the translation-invariant vector path cache (solid
@@ -184,13 +179,13 @@ public partial class App : Application
         // would ever subscribe. Resolving them here forces construction
         // and wires up the OTel pipeline before any instrumented code
         // runs (dataset open, pipeline process, render, etc.).
-        _ = s_services.GetService(typeof(OpenTelemetry.Trace.TracerProvider));
-        _ = s_services.GetService(typeof(OpenTelemetry.Metrics.MeterProvider));
+        _ = _services.GetService(typeof(OpenTelemetry.Trace.TracerProvider));
+        _ = _services.GetService(typeof(OpenTelemetry.Metrics.MeterProvider));
 
         // Hook the logger factory into the static BeginCommand path so
         // each viewer command also emits a structured log entry.
         ViewerObservability.AttachLoggerFactory(
-            s_services.GetRequiredService<ILoggerFactory>());
+            _services.GetRequiredService<ILoggerFactory>());
 
         // Emit a startup span + log so the viewer always shows up in
         // a connected OpenTelemetry collector even before the user
@@ -202,7 +197,7 @@ public partial class App : Application
         {
             startup?.SetTag("s100.viewer.version",
                 typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0");
-            var logger = s_services
+            var logger = _services
                 .GetRequiredService<ILoggerFactory>()
                 .CreateLogger("EncDotNet.S100.Viewer");
             logger.LogInformation(
@@ -212,13 +207,13 @@ public partial class App : Application
 
         // Wire the S-128 catalog source into the aggregator. Done here (and
         // not in MainWindow) so the registration is independent of the view.
-        s_services.GetRequiredService<DatasetCatalogAggregator>()
-            .Add(s_services.GetRequiredService<S128DatasetCatalogSource>());
+        _services.GetRequiredService<DatasetCatalogAggregator>()
+            .Add(_services.GetRequiredService<S128DatasetCatalogSource>());
 
         // Start (or leave disabled) the MCP server based on persisted settings.
         // Failures are logged but never block app startup.
-        var mcpHost = s_services.GetRequiredService<McpServerHost>();
-        var settingsVm = s_services.GetRequiredService<SettingsViewModel>();
+        var mcpHost = _services.GetRequiredService<McpServerHost>();
+        var settingsVm = _services.GetRequiredService<SettingsViewModel>();
         settingsVm.McpSettingsChanged += () =>
         {
             _ = mcpHost.Apply().ContinueWith(t =>
@@ -234,8 +229,8 @@ public partial class App : Application
         // pick.
         settingsVm.ExaminerSettingsChanged += () =>
         {
-            s_services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
-            s_services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
+            _services.GetService<FeatureCataloguesViewModel>()?.RefreshExaminerAvailability();
+            _services.GetService<PickReportViewModel>()?.RefreshExaminerAvailability();
         };
         _ = mcpHost.Apply().ContinueWith(t =>
         {
@@ -250,7 +245,7 @@ public partial class App : Application
         // follows (per docs/design/s100-chrome-theme-spike.md §5)
         // unless the user subsequently overrides SelectedPalette
         // independently.
-        var themeService = s_services.GetRequiredService<IThemeService>();
+        var themeService = _services.GetRequiredService<IThemeService>();
         themeService.SetTheme(settingsVm.SelectedChromeTheme);
         settingsVm.ChromeThemeChanged += chromeTheme =>
         {
@@ -262,7 +257,7 @@ public partial class App : Application
         // the concrete settings-backed provider directly: the public
         // IOwnShipVesselGeometryProvider is now the overridable wrapper
         // (pirate mode), so the cast would otherwise miss.
-        var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
+        var ownShipGeom = _services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
         if (ownShipGeom is not null)
         {
             settingsVm.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
@@ -272,7 +267,7 @@ public partial class App : Application
         // source's IsEnabled gate empties (or republishes) the feature,
         // so flipping the checkbox shows/hides the glyph without a
         // restart.
-        var ownShipSource = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
+        var ownShipSource = _services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
         if (ownShipSource is not null)
         {
             settingsVm.OwnShipOverlayEnabledChanged += enabled => ownShipSource.IsEnabled = enabled;
@@ -283,14 +278,14 @@ public partial class App : Application
         // the visibility gates, persists the source selection, and starts
         // the controller following. Routing the overlay-enable through
         // settingsVm keeps the checkbox + persisted flag in sync.
-        var pirateController = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>();
-        var pickReport = s_services.GetService<PickReportViewModel>();
+        var pirateController = _services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>();
+        var pickReport = _services.GetService<PickReportViewModel>();
         if (pirateController is not null)
         {
             var pirateCoordinator = new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeCoordinator(
                 pirateController,
-                s_services.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(),
-                s_services.GetRequiredService<ViewerSettings>(),
+                _services.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(),
+                _services.GetRequiredService<ViewerSettings>(),
                 enabled => settingsVm.OwnShipOverlayEnabled = enabled);
 
             if (pickReport is not null)
@@ -302,7 +297,7 @@ public partial class App : Application
             // followed target, so after engaging refresh the list and select
             // the own-ship row (HandleHelmEngaged) to keep the Release button
             // reachable; disengage just refreshes the label/command state.
-            var vesselList = s_services.GetService<VesselListViewModel>();
+            var vesselList = _services.GetService<VesselListViewModel>();
             if (vesselList is not null)
             {
                 vesselList.TakeHelmRequested += (_, mmsi) =>
@@ -338,10 +333,10 @@ public partial class App : Application
             // overlay / panel) are built so they observe the saved set on
             // first render; the coordinator then writes changes back.
             var routePersistence =
-                s_services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
+                _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
             routePersistence.Initialize();
 
-            desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
+            desktop.MainWindow = _services.GetRequiredService<MainWindow>();
 
             // Drain the tiled renderer's background Skia workers before the
             // process tears down. Avalonia raises ShutdownRequested on every
@@ -432,6 +427,43 @@ public partial class App : Application
             const long maxBytes = 256L * 1024 * 1024;
             return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, maxBytes);
         });
+        services.AddSingleton<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>(sp =>
+        {
+            // One process-wide disk cache of per-dataset "peek" metadata so a
+            // previously-probed dataset (e.g. framing a loose-cell folder) costs
+            // zero parse on a later session. Entries key on the source file's
+            // mtime + size, so editing or replacing a dataset auto-invalidates.
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().DatasetMetadataCacheDirectory;
+            const long maxBytes = 16L * 1024 * 1024;
+            return new EncDotNet.S100.Core.Metadata.DiskDatasetMetadataCache(cacheDir, maxBytes);
+        });
+        services.AddSingleton<IDatasetMetadataReader>(sp =>
+            new CachingDatasetMetadataReader(
+                sp.GetRequiredService<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>()));
+        services.AddSingleton<Services.Caching.IS57CatalogCache>(sp =>
+        {
+            // Cross-session cache of an S-57 exchange set's base-cell
+            // descriptor list, keyed by the CATALOG.031 file's mtime + size,
+            // so a large set re-opens (and feeds lazy registration) without
+            // re-parsing the binary ISO 8211 catalogue. Descriptors are tiny,
+            // so a modest cap holds many sets.
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().S57CatalogCacheDirectory;
+            const long maxBytes = 16L * 1024 * 1024;
+            return new Services.Caching.DiskS57CatalogCache(cacheDir, maxBytes);
+        });
+        services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>(sp =>
+        {
+            // One process-wide disk cache shared by every S-101 processor so
+            // the Douglas–Peucker LOD pyramid built for a line feature at
+            // dataset open (issue #489, PR-3) survives across restarts and
+            // across sibling processor instances. Key is
+            // (datasetContentHash, featureRef, toleranceLadderVersion) so
+            // entries auto-invalidate when the .000 bytes or the tolerance
+            // ladder change.
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().LineLodCacheDirectory;
+            const long maxBytes = 128L * 1024 * 1024;
+            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskLineLodCache(cacheDir, maxBytes);
+        });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
@@ -439,7 +471,8 @@ public partial class App : Application
                 new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>()));
+                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>()));
 
         // The Mapsui renderer owns the processor -> ILayer conversion (issue
         // #189): it holds the process-wide pattern-clip cache and the CRS
@@ -539,7 +572,6 @@ public partial class App : Application
             };
             return state;
         });
-        services.AddSingleton<IStatusPresenter, StatusPresenter>();
         services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<INotificationService, NotificationService>();
@@ -588,6 +620,22 @@ public partial class App : Application
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
+
+        // Viewport-driven lazy loading of large exchange sets (issue #458):
+        // registers cells without loading them and loads only what is in view.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            var loader = sp.GetRequiredService<IDatasetLoaderService>();
+            var notifier = sp.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.IMapViewportNotifier>();
+            return new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
+                notifier,
+                (entry, _) => datasets.RequestLoadAsync(entry),
+                loader.UnloadEntry,
+                logger: sp.GetService<ILogger<
+                    EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>>());
+        });
 
         // Own-ship dynamic source. The steerable driver dead-reckons a
         // moving point seeded at Solent (50.8°N 1.3°W) tracking due east
@@ -892,7 +940,7 @@ public partial class App : Application
     {
         Console.Error.WriteLine($"[{label}] {message}");
         CrashLog.Append(label, message);
-        s_lastErrorTracker?.Record(label, message);
+        _lastErrorTracker?.Record(label, message);
     }
 
     /// <summary>
@@ -922,7 +970,7 @@ public partial class App : Application
 
         // Route crash markers under the active data directory so an
         // isolated --data-dir instance keeps them self-contained.
-        var markersDir = s_services?.GetService<ViewerDataPaths>()?.CrashMarkersDirectory;
+        var markersDir = _services?.GetService<ViewerDataPaths>()?.CrashMarkersDirectory;
         EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.Configure(enabled, markersDir);
         var crashed =
             EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.BeginSession(version);
@@ -935,7 +983,7 @@ public partial class App : Application
         // sticky crash history so the feedback report always includes it,
         // independent of any runtime errors recorded later this session.
         var tail = CrashLog.ReadTail(8000);
-        s_services?.GetService<EncDotNet.S100.Viewer.Diagnostics.ICrashHistory>()
+        _services?.GetService<EncDotNet.S100.Viewer.Diagnostics.ICrashHistory>()
             ?.Capture(crashed, tail);
     }
 }

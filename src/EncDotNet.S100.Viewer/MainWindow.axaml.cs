@@ -1,11 +1,3 @@
-using EncDotNet.S100.DataModel;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,9 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using Mapsui.Extensions;
-using Mapsui.Manipulations;
-using Microsoft.Extensions.DependencyInjection;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
@@ -24,8 +14,10 @@ using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
+using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Projections;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Viewer;
 
@@ -46,6 +38,7 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
+    private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
     private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -197,6 +190,8 @@ public partial class MainWindow : ShadUI.Window
             _pickHighlightController = null;
             _extentIndicatorController?.Dispose();
             _extentIndicatorController = null;
+            _overscaleCurtainController?.Dispose();
+            _overscaleCurtainController = null;
             // Clear the late-bound accessors this window owns so panel /
             // screenshot MCP tools observe the torn-down state (UiNotReady /
             // WindowNotReady) rather than a stale controller, and so the
@@ -407,6 +402,16 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>());
+
+        // On-chart overscale curtain: paint a subtle vertical-line pattern over
+        // the region of each cell displayed beyond its compilation scale (#441).
+        _overscaleCurtainController = new EncDotNet.S100.Viewer.Services.OverscaleCurtainController(
+            mapHost,
+            _viewModel.Datasets,
+            _loader,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             App.Services.GetRequiredService<SettingsViewModel>());
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the
@@ -810,14 +815,14 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private static async Task WaitForRenderQuiesceAsync(long[] lastEventTicks, bool expectWork)
     {
-        const int QuietWindowMs = 600;
-        const int PollMs = 100;
-        const int MaxWaitMs = 30_000;
+        const int quietWindowMs = 600;
+        const int pollMs = 100;
+        const int maxWaitMs = 30_000;
 
         var startedAt = Environment.TickCount64;
         while (true)
         {
-            await Task.Delay(PollMs);
+            await Task.Delay(pollMs);
 
             var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
             var now = Environment.TickCount64;
@@ -827,12 +832,12 @@ public partial class MainWindow : ShadUI.Window
                 // No events yet. When we expected work, keep waiting up
                 // to the cap; otherwise (e.g. a time-step that produced
                 // no re-render) return promptly.
-                if (!expectWork || now - startedAt >= MaxWaitMs) return;
+                if (!expectWork || now - startedAt >= maxWaitMs) return;
                 continue;
             }
 
-            if (now - lastEvent >= QuietWindowMs) return;
-            if (now - startedAt >= MaxWaitMs) return;
+            if (now - lastEvent >= quietWindowMs) return;
+            if (now - startedAt >= maxWaitMs) return;
         }
     }
 
@@ -1368,31 +1373,31 @@ public partial class MainWindow : ShadUI.Window
         // events stop arriving for a short window — at that point
         // every dispatched dataset has either completed or errored,
         // and the accumulated union extent is final.
-        const int QuietWindowMs = 600;
-        const int PollMs = 100;
-        const int MaxWaitMs = 30_000;
+        const int quietWindowMs = 600;
+        const int pollMs = 100;
+        const int maxWaitMs = 30_000;
 
         var startedAt = Environment.TickCount64;
         while (true)
         {
-            await Task.Delay(PollMs);
+            await Task.Delay(pollMs);
 
             var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
             var now = Environment.TickCount64;
 
-            // No events yet — keep waiting up to MaxWaitMs from start.
+            // No events yet — keep waiting up to maxWaitMs from start.
             if (lastEvent == 0)
             {
-                if (now - startedAt >= MaxWaitMs) return;
+                if (now - startedAt >= maxWaitMs) return;
                 continue;
             }
 
             // We've seen at least one event; trigger as soon as the
-            // bus is quiet for QuietWindowMs.
-            if (now - lastEvent >= QuietWindowMs)
+            // bus is quiet for quietWindowMs.
+            if (now - lastEvent >= quietWindowMs)
                 break;
 
-            if (now - startedAt >= MaxWaitMs)
+            if (now - startedAt >= maxWaitMs)
                 break;
         }
 

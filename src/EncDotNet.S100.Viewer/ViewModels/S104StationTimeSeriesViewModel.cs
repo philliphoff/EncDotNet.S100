@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;

@@ -1,20 +1,12 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Interoperability;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
@@ -102,6 +94,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// supply per-layer names (single-layer products).
     /// </summary>
     private readonly Dictionary<DatasetEntry, IReadOnlyList<string>?> _entryLayerKeys = new();
+    /// <summary>
+    /// Per-entry data-coverage footprint (EPSG:3857) and scale-band denominator
+    /// used for cross-cell scale-band overlap suppression (issue #438 Phase 2).
+    /// Populated from <see cref="DatasetResult.CoverageGeometry"/> and the
+    /// entry's coarsest display scale on each render; consumed by
+    /// <see cref="ApplyOverlapSuppression"/>.
+    /// </summary>
+    private readonly Dictionary<DatasetEntry, (NetTopologySuite.Geometries.Geometry Coverage, int ScaleDenominator)> _entryCoverage = new();
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
     /// <summary>
     /// Canonical paint-order of dataset entries. Mirrors the order the
@@ -403,6 +403,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 }
             }
 
+            // S-104 gridded (dcf2) water-level surfaces are a synthesised,
+            // non-normative colour-band heatmap (S-104 Edition 2.0.0 defines no
+            // official portrayal catalogue and treats water level as ECDIS
+            // vertical-adjustment input, not a chart layer). Default the surface
+            // to hidden so it never dominates the display uninvited; the user
+            // opts in via the eye icon in the Datasets list (issue #483).
+            // Fixed-station (dcf8) glyphs are discrete symbols at genuine
+            // stations and stay visible.
+            // Default the surface to hidden only on the entry's first load
+            // (not yet tracked in _entryOrder). On an evict → reload cycle the
+            // entry is preserved in _entryOrder (see UnloadEntry), so re-hiding
+            // here would silently reset a surface the user had opted into
+            // (issue #483).
+            if (processor is S104DatasetProcessor { IsGriddedSurface: true }
+                && !_entryOrder.Contains(entry))
+            {
+                entry.IsVisible = false;
+            }
+
             // Surface any S-101 update-application diagnostics. Updates are
             // applied best-effort: a partial/failed apply never blocks the
             // load, but the user is warned so stale or skipped updates are
@@ -460,7 +479,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale, result.CoverageGeometry);
                 // Record the dataset's mercator extent so the panel can zoom to
                 // it (double-click reveal) and the out-of-scale extent indicator
                 // can outline it, even for exchange-set entries that opt out of
@@ -756,7 +775,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale, result.CoverageGeometry);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
             }
@@ -797,7 +816,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, CancellationToken.None));
 
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale, result.CoverageGeometry);
                 entry.Info = result.Info;
             }
             catch (Exception ex)
@@ -821,6 +840,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         entry.SubLayers.Clear();
         _entryLayerKeys.Remove(entry);
         _entryStackEntries.Remove(entry);
+        _entryCoverage.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
         if (_processors.Remove(entry, out var removedProcessor)
@@ -839,7 +859,60 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // anyone else who cares drops references to the removed layers.
         if (_mapHost is not null)
             _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        // Recompute overlap-suppression clips now this cell's coverage is gone,
+        // so a coarser cell it used to suppress paints in full again (#438 Ph2).
+        ApplyOverlapSuppression();
         DatasetRemoved?.Invoke(entry);
+    }
+
+    /// <summary>
+    /// Unloads a lazily-loaded exchange-set cell's <em>bytes</em> (layers,
+    /// sub-layers, and processor) while leaving the <see cref="DatasetEntry"/>
+    /// registered in the Datasets panel, and marks it
+    /// <see cref="DatasetEntry.IsDeferred"/> again so it reverts to an extent
+    /// outline that can be reloaded when it next enters the viewport. This is
+    /// the LRU-eviction counterpart to <see cref="LoadAsync"/>; unlike
+    /// <see cref="RemoveEntry"/> it does not fire <see cref="DatasetRemoved"/>
+    /// or drop the entry from the collection. No-op for an entry that owns no
+    /// layers. See issue #458.
+    /// </summary>
+    /// <param name="entry">The exchange-set cell entry to unload.</param>
+    public void UnloadEntry(DatasetEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        RemoveEntryLayers(entry);
+        UnsubscribeSubLayers(entry);
+        entry.SubLayers.Clear();
+        _entryLayerKeys.Remove(entry);
+        _entryStackEntries.Remove(entry);
+        _entryCoverage.Remove(entry);
+        if (_subscribedEntries.Remove(entry))
+            entry.PropertyChanged -= OnEntryPropertyChanged;
+        if (_processors.Remove(entry, out var removedProcessor)
+            && removedProcessor is IDisposable disposableProcessor)
+        {
+            disposableProcessor.Dispose();
+        }
+        // NB: unlike RemoveEntry, do NOT drop the entry from _entryOrder here.
+        // Eviction keeps the DatasetEntry registered; FlattenLayerOrder already
+        // skips entries with no layers (RemoveEntryLayers cleared _entryLayers
+        // above), so its slot is inert while unloaded but preserved. Removing it
+        // would make the next reload look like a first load and re-insert it at
+        // index 0, reshuffling cross-dataset paint order on every evict/reload
+        // cycle. See issue #458.
+        // NB: unlike RemoveEntry, do NOT clear _activeFlags here. Eviction
+        // keeps the DatasetEntry registered, so its user-set active/inactive
+        // state must survive the unload → reload cycle; dropping the flag would
+        // silently reset an inactive cell back to active (the GetActive
+        // default) when it next loads. See issue #458.
+        _globalTime.Unregister(entry);
+        entry.IsDeferred = true;
+        if (_mapHost is not null)
+            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        // Recompute overlap-suppression clips now this cell's coverage is gone
+        // (evicted), so any coarser cell it suppressed paints in full (#438 Ph2).
+        ApplyOverlapSuppression();
     }
 
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
@@ -947,10 +1020,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
 
         // Project the ordered / suppressed neutral items back onto the
-        // prebuilt Mapsui layers (reusing cached ILayers; filtering only
-        // suppressed features). Cache the FULL projected list (including
-        // inactive datasets) for the Layer Stack panel.
-        var projected = LayerStackProjector.Project(ruled, prebuilt);
+        // prebuilt Mapsui layers. Cached ILayers are reused where the S-98
+        // outcome is unchanged; the BuildGridCoverageLayer callback lets the
+        // projector rebuild a grid-coverage raster when a rule changed its
+        // payload (e.g. S-104 land clipping), so this path is no longer always
+        // rasterisation-free. Cache the FULL projected list (including inactive
+        // datasets) for the Layer Stack panel.
+        var projected = LayerStackProjector.Project(ruled, prebuilt, _mapsuiRenderer.BuildGridCoverageLayer);
         _currentStackEntries = projected;
 
         // PR-L3: filter inactive datasets out of the rendered layer
@@ -1103,13 +1179,24 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         IReadOnlyList<ILayer> layers,
         IReadOnlyList<string>? layerKeys,
         IReadOnlyList<LayerStackEntry>? stackEntries,
-        int? cellMinimumDisplayScale = null)
+        int? cellMinimumDisplayScale = null,
+        NetTopologySuite.Geometries.Geometry? coverageGeometry = null)
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
 
         RemoveEntryLayers(entry);
         _entryLayers[entry] = layers;
         _entryLayerKeys[entry] = layerKeys;
+
+        // Record this cell's coverage footprint + scale band for cross-cell
+        // overlap suppression (issue #438 Phase 2). The suppression band prefers
+        // the exchange-set catalogue scale, falling back to the processor-derived
+        // cell scale (same precedence as the Phase 1 zoom-out window below).
+        var suppressionScale = entry.MinimumDisplayScale ?? cellMinimumDisplayScale;
+        if (coverageGeometry is { IsEmpty: false } && suppressionScale is int band)
+            _entryCoverage[entry] = (coverageGeometry, band);
+        else
+            _entryCoverage.Remove(entry);
         // Keep _entryStackEntries in sync with _entryLayers. If the
         // processor didn't supply StackEntries, FlattenLayerOrder will
         // synthesise defaults below — but we still clear any stale
@@ -1161,6 +1248,116 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             _entryOrder.Insert(0, entry);
         }
         _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
+
+        // Cross-cell scale-band overlap suppression (issue #438 Phase 2):
+        // recompute every loaded cell's clip region now that this cell's layers
+        // (and coverage) have changed, so a coarser cell stops drawing where a
+        // finer overlapping cell provides coverage.
+        ApplyOverlapSuppression();
+    }
+
+    /// <summary>
+    /// Recomputes and attaches cross-cell scale-band overlap-suppression clip
+    /// regions (issue #438 Phase 2) across every loaded cell: each coarser cell
+    /// is clipped to its data coverage minus the union of finer, overlapping
+    /// in-band cells' coverage. Skipped (and all clips cleared) when the mariner
+    /// has opted to ignore scale minima — consistent with the Phase 1 zoom-out
+    /// window (<see cref="ApplyCellScaleWindow"/>) — so an override still shows
+    /// every cell in full. Recomputed on every load / unload / re-render because
+    /// each build produces fresh <see cref="ILayer"/> instances and the finer/
+    /// coarser overlap set changes as cells come and go, and on every
+    /// visibility/opacity change (a cell that is not currently drawing is
+    /// excluded as a suppressor so hiding a finer cell does not leave a hole).
+    /// </summary>
+    private void ApplyOverlapSuppression()
+    {
+        var cells = new List<OverlapSuppressionCell>(_entryLayers.Count);
+        foreach (var (entry, layers) in _entryLayers)
+        {
+            if (layers.Count == 0)
+                continue;
+
+            // A cell that is not currently drawing (parent hidden, opacity 0, or
+            // all its sub-layers toggled off) must not suppress coarser cells —
+            // otherwise hiding a finer cell would leave the "blank hole" its own
+            // content used to fill. ApplyDisplayState (run before this on load,
+            // and on every visibility/opacity change) has already folded the
+            // composed state into each layer's Enabled/Opacity, so a cell is
+            // drawing iff any of its layers is enabled with non-zero opacity.
+            // Non-drawing entries stay in the set with null Coverage so their own
+            // clip attachments are cleared (they paint in full when re-shown).
+            var isDrawing = false;
+            foreach (var layer in layers)
+            {
+                if (layer.Enabled && layer.Opacity > 0)
+                {
+                    isDrawing = true;
+                    break;
+                }
+            }
+
+            _entryCoverage.TryGetValue(entry, out var coverage);
+            var effectiveCoverage = isDrawing ? coverage.Coverage : null;
+            cells.Add(new OverlapSuppressionCell
+            {
+                Layers = layers,
+                Coverage = effectiveCoverage,
+                ScaleDenominator = effectiveCoverage is null ? null : coverage.ScaleDenominator,
+            });
+        }
+
+        if (cells.Count == 0)
+            return;
+
+        if (_marinerSettings.Current.IgnoreScaleMinimum)
+            OverlapSuppression.ClearAll(cells);
+        else
+            OverlapSuppression.Apply(cells);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<OverscaleCellInput> GetOverscaleCells()
+    {
+        List<OverscaleCellInput>? cells = null;
+        foreach (var (entry, layers) in _entryLayers)
+        {
+            if (layers.Count == 0)
+                continue;
+
+            // The cell's compilation (finest) scale — the denominator past which
+            // zooming in is overscale (S-101 FC §3.1.1 maximumDisplayScale).
+            if (entry.MaximumDisplayScale is not int compilationScale || compilationScale <= 0)
+                continue;
+
+            // Only cells that are actually drawing contribute an indication (a
+            // hidden cell isn't being overscaled on screen). Same drawing test
+            // as ApplyOverlapSuppression.
+            var isDrawing = false;
+            foreach (var layer in layers)
+            {
+                if (layer.Enabled && layer.Opacity > 0)
+                {
+                    isDrawing = true;
+                    break;
+                }
+            }
+
+            if (!isDrawing)
+                continue;
+
+            if (!_entryCoverage.TryGetValue(entry, out var coverage)
+                || coverage.Coverage is not { IsEmpty: false })
+                continue;
+
+            (cells ??= []).Add(new OverscaleCellInput
+            {
+                Name = entry.DisplayName,
+                Coverage = coverage.Coverage,
+                CompilationScaleDenominator = compilationScale,
+            });
+        }
+
+        return (IReadOnlyList<OverscaleCellInput>?)cells ?? [];
     }
 
     /// <summary>
@@ -1324,6 +1521,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         if (e.PropertyName is not (nameof(DatasetEntry.IsVisible) or nameof(DatasetEntry.Opacity)))
             return;
         ApplyDisplayState(entry);
+        // Visibility/opacity feeds the suppression set (a hidden finer cell must
+        // stop clipping coarser cells), so keep the clip attachments in sync.
+        ApplyOverlapSuppression();
     }
 
     private void OnSubLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1340,6 +1540,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             if (entry.SubLayers.Contains(sub))
             {
                 ApplyDisplayState(entry);
+                // Toggling all of a cell's sub-layers off makes it non-drawing,
+                // so refresh suppression to release any clip it imposed.
+                ApplyOverlapSuppression();
                 break;
             }
         }

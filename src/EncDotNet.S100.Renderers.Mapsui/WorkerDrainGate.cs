@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>

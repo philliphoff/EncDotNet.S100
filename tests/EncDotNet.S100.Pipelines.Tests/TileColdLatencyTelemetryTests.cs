@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using EncDotNet.S100.Renderers.Mapsui.Diagnostics;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

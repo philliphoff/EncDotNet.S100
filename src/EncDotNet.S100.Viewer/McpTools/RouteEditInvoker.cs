@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using Avalonia.Threading;
 
 namespace EncDotNet.S100.Viewer.McpTools;

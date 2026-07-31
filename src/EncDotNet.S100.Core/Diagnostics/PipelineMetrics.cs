@@ -60,4 +60,81 @@ internal static class PipelineMetrics
             name: "s100.xslt.compile.duration",
             unit: "ms",
             description: "Wall-clock duration of compiling an XSLT rule (first load only).");
+
+    // ── Vector spatial index (issue #490) ──────────────────────────────
+
+    /// <summary>
+    /// Wall-clock duration of building a persistent spatial index over
+    /// a vector source's features. Emitted once per source; tagged with
+    /// <see cref="TelemetryTags.Product"/>.
+    /// </summary>
+    public static readonly Histogram<double> VectorIndexBuildDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.vector.index.build.duration",
+            unit: "ms",
+            description: "Wall-clock duration of building a spatial index over a vector source's features.");
+
+    /// <summary>
+    /// Wall-clock duration of a single extent query answered by a
+    /// vector spatial index. Tagged with
+    /// <see cref="TelemetryTags.Product"/> and
+    /// <see cref="TelemetryTags.Result"/> (<c>hit</c> when the query
+    /// returned at least one feature, <c>empty</c> otherwise).
+    /// </summary>
+    public static readonly Histogram<double> VectorIndexQueryDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.vector.index.query.duration",
+            unit: "ms",
+            description: "Wall-clock duration of a spatial-index-answered extent query.");
+
+    /// <summary>
+    /// Number of features indexed by a vector spatial index. Recorded
+    /// once per build; a static-cardinality proxy for dataset
+    /// complexity.
+    /// </summary>
+    public static readonly Histogram<long> VectorIndexFeatureCount =
+        Telemetry.Meter.CreateHistogram<long>(
+            name: "s100.vector.index.features.count",
+            unit: "{features}",
+            description: "Number of features indexed by a spatial index at build time.");
+
+    /// <summary>
+    /// Number of features returned by a vector-index extent query.
+    /// Combined with <see cref="VectorIndexFeatureCount"/> this
+    /// exposes the culling ratio and lets dashboards flag
+    /// linear-scan-equivalent queries (returned ≈ indexed).
+    /// </summary>
+    public static readonly Histogram<long> VectorIndexReturnedCount =
+        Telemetry.Meter.CreateHistogram<long>(
+            name: "s100.vector.index.returned.count",
+            unit: "{features}",
+            description: "Number of features returned by a vector-index extent query.");
+
+    // ── Coverage overview pyramid (issue #486) ─────────────────────────
+
+    /// <summary>
+    /// Overview pyramid level selected for a coverage read (issue #486).
+    /// <c>0</c> means the native base grid; higher values are coarser
+    /// downsampled levels (level <c>N</c> = 2^N × reduction per axis).
+    /// Tagged by <see cref="TelemetryTags.Product"/> so per-product
+    /// dashboards can show the level distribution across a session.
+    /// </summary>
+    public static readonly Histogram<int> CoverageOverviewLevelSelected =
+        Telemetry.Meter.CreateHistogram<int>(
+            name: "s100.coverage.overview.level_selected",
+            unit: "{level}",
+            description: "Overview pyramid level selected for a coverage read (0 = base grid).");
+
+    /// <summary>
+    /// Wall-clock duration of a single
+    /// <see cref="EncDotNet.S100.Pipelines.Coverage.Pyramid.CoveragePyramidBuilder.Build"/>
+    /// invocation. Recorded once per source per first-touch build so
+    /// dashboards can amortise the build cost against the render-time
+    /// saving it enables (issue #486).
+    /// </summary>
+    public static readonly Histogram<double> CoveragePyramidBuildDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.coverage.pyramid.build.duration",
+            unit: "ms",
+            description: "Wall-clock duration of an in-memory coverage overview pyramid build.");
 }

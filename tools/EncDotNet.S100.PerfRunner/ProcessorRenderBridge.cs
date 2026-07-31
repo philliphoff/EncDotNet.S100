@@ -1,5 +1,3 @@
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using EncDotNet.S100.Datasets.Pipelines;
 
@@ -39,7 +37,7 @@ namespace EncDotNet.S100.PerfRunner;
 /// </remarks>
 internal static class ProcessorRenderBridge
 {
-    private static readonly Func<IDatasetProcessor, RenderContext?, CancellationToken, DatasetResult> s_render = Create();
+    private static readonly Func<IDatasetProcessor, RenderContext?, CancellationToken, DatasetResult> RenderDelegate = Create();
 
     /// <summary>
     /// Renders the dataset synchronously, dispatching to whichever render
@@ -49,7 +47,7 @@ internal static class ProcessorRenderBridge
         IDatasetProcessor processor,
         RenderContext? context = null,
         CancellationToken cancellationToken = default)
-        => s_render(processor, context, cancellationToken);
+        => RenderDelegate(processor, context, cancellationToken);
 
     private static Func<IDatasetProcessor, RenderContext?, CancellationToken, DatasetResult> Create()
     {

@@ -1,7 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.VisualRegression;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
 

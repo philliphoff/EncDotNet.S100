@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Specifications;
 

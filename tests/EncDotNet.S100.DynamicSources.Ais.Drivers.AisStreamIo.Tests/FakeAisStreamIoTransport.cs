@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-using EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 
 namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests;
 

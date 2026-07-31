@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S104.Validation;
@@ -66,9 +61,72 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the already-parsed dataset: for gridded (dcf2) surfaces
+    /// from the coverage source's georeferencing metadata; for fixed-station
+    /// (dcf8) series from the union of station coordinates. No HDF5 payload is
+    /// re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    private DatasetMetadata BuildMetadata()
+    {
+        if (_source is not null && _data is S104DatasetData.GriddedCoverage gridded)
+        {
+            var extent = _source.Metadata.Extent;
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(
+                    extent.SouthLatitude,
+                    extent.WestLongitude,
+                    extent.NorthLatitude,
+                    extent.EastLongitude),
+                HorizontalCrsEpsg = gridded.Dataset.HorizontalCRS,
+            };
+        }
+
+        if (_stationSeries is { Stations.Count: > 0 } series)
+        {
+            double minLat = double.MaxValue, minLon = double.MaxValue;
+            double maxLat = double.MinValue, maxLon = double.MinValue;
+            foreach (var station in series.Stations)
+            {
+                if (station.Latitude < minLat) minLat = station.Latitude;
+                if (station.Latitude > maxLat) maxLat = station.Latitude;
+                if (station.Longitude < minLon) minLon = station.Longitude;
+                if (station.Longitude > maxLon) maxLon = station.Longitude;
+            }
+
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(minLat, minLon, maxLat, maxLon),
+                HorizontalCrsEpsg = series.HorizontalCRS,
+            };
+        }
+
+        return new DatasetMetadata { Spec = Spec };
+    }
+
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;
+
+    /// <summary>
+    /// <see langword="true"/> when this dataset is a regularly-gridded (dcf2)
+    /// water-level <em>surface</em> — the full-tile colour-band heatmap — rather
+    /// than a fixed-station (dcf8) point series. S-104 Edition 2.0.0 defines no
+    /// official portrayal catalogue and treats water level primarily as input to
+    /// ECDIS vertical adjustment (see <see cref="S104PortrayalCatalogue"/>), so
+    /// the synthesised surface is hidden by default in interactive viewers and
+    /// shown on demand (issue #483). Fixed-station glyphs (dcf8) are discrete
+    /// symbols at genuine tide-station locations and remain visible by default.
+    /// </summary>
+    public bool IsGriddedSurface => _source is not null;
 
     public S104DatasetProcessor(
         string path,
@@ -186,12 +244,26 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         var pipeline = new PortrayalPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+
+        // Viewport-scoped sampling (issue #487).
+        int crs = ((S104DatasetData.GriddedCoverage)_data).Dataset.HorizontalCRS ?? 4326;
+        ICrsTransform? wgs84ToNative = null;
+        if (context?.Viewport is not null && crs != 4326)
+        {
+            wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+        }
+
+        var layer = await pipeline.ProcessAsync(
+            source,
+            catalogue,
+            viewport: context?.Viewport,
+            wgs84ToNative: wgs84ToNative,
+            mariner: context?.Mariner ?? MarinerSettings.Default,
+            cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
         var griddedDataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
-        int crs = griddedDataset.HorizontalCRS ?? 4326;
         var geoId = griddedDataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
             ? $", time: {selectedTime:u} ({source.AvailableTimes.Count} steps)"
@@ -266,7 +338,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             source.SelectTime(source.AvailableTimes[0]);
 
         var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
-            .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var extent = source.Metadata.Extent;
@@ -609,6 +681,45 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             FeatureTypeName = "Water Level",
             Attributes = attrs,
         };
+    }
+
+    /// <summary>
+    /// Samples this S-104 dataset's water-level time series at a WGS-84 point
+    /// for depth assimilation, returning the nearest-cell series together with
+    /// the grid spacing, issue date and vertical datum used to rank competing
+    /// S-104 datasets. Returns <c>null</c> for station-series or non-gridded
+    /// (data coding format ≠ 2) datasets, or when the point is out of bounds
+    /// (S-104 Ed 2.0.0 §10.2 regular-grid coverage).
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <param name="from">Optional inclusive lower time bound (UTC).</param>
+    /// <param name="to">Optional inclusive upper time bound (UTC).</param>
+    /// <returns>The sampled tide probe, or <c>null</c>.</returns>
+    public S104TideProbe? SampleTide(double latitude, double longitude, DateTime? from, DateTime? to)
+    {
+        if (_data is not S104DatasetData.GriddedCoverage gridded)
+            return null;
+
+        var dataset = gridded.Dataset;
+        var series = S104TimeSeriesSampler.Sample(dataset, latitude, longitude, from, to);
+        if (series is null)
+            return null;
+
+        var geometry = dataset.Coverages[0];
+        var spacing = Math.Min(
+            Math.Abs(geometry.SpacingLatitudinal),
+            Math.Abs(geometry.SpacingLongitudinal));
+
+        DateTime? issueDate = DateTime.TryParse(
+            dataset.IssueDate,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : null;
+
+        return new S104TideProbe(spacing, issueDate, dataset.VerticalDatum, series);
     }
 
     private FeatureInfo? GetStationInfo(

@@ -1,5 +1,4 @@
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Projections;
@@ -175,15 +174,15 @@ public sealed class SkiaDisplayListRendererTests
         // Measure the painted (non-white) bounding box.
         int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+            for (int x = 0; x < bitmap.Width; x++)
             {
-                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
-                minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+                {
+                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                    minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                }
             }
-        }
         Assert.True(maxX >= 0, "Symbol rendered nothing.");
 
         int paintedWidth = maxX - minX + 1;
@@ -254,11 +253,11 @@ public sealed class SkiaDisplayListRendererTests
         // Red-square centroid.
         long sx = 0, sy = 0, n = 0;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red > 150 && p.Green < 100 && p.Blue < 100) { sx += x; sy += y; n++; }
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red > 150 && p.Green < 100 && p.Blue < 100) { sx += x; sy += y; n++; }
+            }
         Assert.True(n > 0, "Symbol rendered nothing.");
 
         double cx = sx / (double)n, cy = sy / (double)n;
@@ -394,12 +393,12 @@ public sealed class SkiaDisplayListRendererTests
 
         int foreground = 0;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
-                foreground++;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                    foreground++;
+            }
 
         Assert.True(foreground > 20,
             $"Text-only scene produced too few foreground pixels ({foreground}); labels did not render.");
@@ -436,12 +435,12 @@ public sealed class SkiaDisplayListRendererTests
 
         int red = 0, blue = 0;
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red > 200 && p.Green < 80 && p.Blue < 80) red++;
-            if (p.Blue > 200 && p.Red < 80 && p.Green < 80) blue++;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red > 200 && p.Green < 80 && p.Blue < 80) red++;
+                if (p.Blue > 200 && p.Red < 80 && p.Green < 80) blue++;
+            }
 
         Assert.True(red > 50, $"label background did not paint (red pixels={red}).");
         Assert.True(blue > 20, $"label foreground did not paint (blue pixels={blue}).");
@@ -469,17 +468,17 @@ public sealed class SkiaDisplayListRendererTests
             using var bitmap = Render(scene, MakeViewport(denom: 25_000));
             int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
             for (int y = 0; y < bitmap.Height; y++)
-            for (int x = 0; x < bitmap.Width; x++)
-            {
-                var p = bitmap.GetPixel(x, y);
-                if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                for (int x = 0; x < bitmap.Width; x++)
                 {
-                    if (x < minX) minX = x;
-                    if (y < minY) minY = y;
-                    if (x > maxX) maxX = x;
-                    if (y > maxY) maxY = y;
+                    var p = bitmap.GetPixel(x, y);
+                    if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                    {
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
                 }
-            }
             return maxX < 0 ? 0 : (maxY - minY + 1);
         }
 
@@ -489,6 +488,127 @@ public sealed class SkiaDisplayListRendererTests
         Assert.True(small > 0, "12 px label did not render.");
         Assert.True(large > small * 1.5,
             $"40 px label ({large}px tall) was not clearly larger than the 12 px label ({small}px tall).");
+    }
+
+
+    // ── Line screen-bounds culling & path/paint reuse ──────────────────
+
+    [Fact]
+    public void Render_LineFullyOutsideCullBounds_DrawsNothing()
+    {
+        // The cull rectangle is the 200 px viewport inflated by
+        // PointCullMarginPx (256 px), so its right edge is ~456 px. A line at
+        // lon 0.05–0.06 projects to ~x 1000–1200 px — comfortably beyond the
+        // cull rectangle — and must be skipped before DrawPath (matching
+        // DrawPoint's cull discipline).
+        var scene = new VectorScene([
+            new LinePaintOp
+            {
+                FeatureReference = "offscreen",
+                World = [Project(0.05, 0.005), Project(0.06, 0.005)],
+                Color = Black,
+                WidthPx = 3.0,
+            },
+        ]);
+
+        using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+        Assert.True(IsBlank(bitmap, White), "A fully off-bounds line should be culled, not drawn.");
+    }
+
+    [Fact]
+    public void Render_LineWithinBounds_StillDraws()
+    {
+        // The on-screen counterpart of the cull test: a line across the middle
+        // of the viewport must still paint after the cull check.
+        var scene = new VectorScene([
+            new LinePaintOp
+            {
+                FeatureReference = "line",
+                World = [Project(0.001, 0.005), Project(0.009, 0.005)],
+                Color = Black,
+                WidthPx = 3.0,
+            },
+        ]);
+
+        using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+        Assert.False(IsBlank(bitmap, White), "An on-bounds line should still be drawn.");
+    }
+
+    [Fact]
+    public void Render_DashedLine_LeavesGapsVersusSolid()
+    {
+        // Solid vs dashed must still select the right path effect: a solid
+        // stroke fills the centre row continuously, while a dashed stroke of the
+        // same geometry leaves gaps, so materially fewer centre-row pixels paint.
+        int CentreRowPainted(bool dashed)
+        {
+            var scene = new VectorScene([
+                new LinePaintOp
+                {
+                    FeatureReference = "line",
+                    World = [Project(0.001, 0.005), Project(0.009, 0.005)],
+                    Color = Black,
+                    WidthPx = 2.0,
+                    DefaultDash = dashed,
+                },
+            ]);
+
+            using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+            int y = bitmap.Height / 2;
+            int painted = 0;
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red < 200 || p.Green < 200 || p.Blue < 200)
+                    painted++;
+            }
+            return painted;
+        }
+
+        int solid = CentreRowPainted(dashed: false);
+        int dashedCount = CentreRowPainted(dashed: true);
+
+        Assert.True(solid > 0, "Solid line painted nothing on the centre row.");
+        Assert.True(dashedCount > 0, "Dashed line painted nothing on the centre row.");
+        Assert.True(dashedCount < solid * 0.75,
+            $"Dashed line ({dashedCount}px) should leave gaps versus solid ({solid}px).");
+    }
+
+    [Fact]
+    public void Render_ManyLines_ReusesScratchAndMatchesSingleLineOutput()
+    {
+        // Drawing many line ops through the reused per-render path/paint scratch
+        // must produce the same pixels as drawing one — guarding that reuse
+        // (Rewind + mutated paint fields) leaves no state bleeding between ops.
+        LinePaintOp Line(string id) => new()
+        {
+            FeatureReference = id,
+            World = [Project(0.001, 0.005), Project(0.009, 0.005)],
+            Color = Black,
+            WidthPx = 3.0,
+        };
+
+        var single = new VectorScene([Line("a")]);
+        var many = new VectorScene([Line("a"), Line("b"), Line("c"), Line("d")]);
+
+        using var singleBitmap = Render(single, MakeViewport(denom: 25_000));
+        using var manyBitmap = Render(many, MakeViewport(denom: 25_000));
+
+        int Painted(SKBitmap bitmap)
+        {
+            int count = 0;
+            for (int y = 0; y < bitmap.Height; y++)
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    var p = bitmap.GetPixel(x, y);
+                    if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+                        count++;
+                }
+            return count;
+        }
+
+        // Identical coincident lines paint the same coverage as one.
+        Assert.Equal(Painted(singleBitmap), Painted(manyBitmap));
     }
 
 
@@ -531,12 +651,12 @@ public sealed class SkiaDisplayListRendererTests
     private static bool IsBlank(SKBitmap bitmap, RgbaColor background)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != background.R || p.Green != background.G || p.Blue != background.B)
-                return false;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != background.R || p.Green != background.G || p.Blue != background.B)
+                    return false;
+            }
         return true;
     }
 }

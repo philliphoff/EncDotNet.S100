@@ -1,6 +1,3 @@
-using SkiaSharp;
-using VerifyTests;
-
 namespace EncDotNet.S100.VisualRegression;
 
 /// <summary>

@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
-using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 
 namespace EncDotNet.S100.Datasets.S411.Tests;

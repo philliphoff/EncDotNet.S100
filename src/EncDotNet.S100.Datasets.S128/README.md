@@ -38,7 +38,7 @@ upstream sample (`DistributorInformation`, `ProducerInformation`,
 
 | Type | Purpose |
 |---|---|
-| `S128Dataset` | Root data model: `Features`, `InformationTypes`, lazy `Entries` projection |
+| `S128Dataset` | Root data model: `Features`, `InformationTypes`, lazy `Entries` projection. `ReadMetadata()` / static `ReadMetadata(path)` / `ReadMetadata(stream)` is the phased-loading "peek" path (issue #460): declared spec + raw WGS-84 extent from feature geometry (`null` when geometry-less), skipping XSLT portrayal |
 | `S128DatasetReader` | GML parser. Use `S128Dataset.Open(path)` for the typical case |
 | `S128Feature`, `S128InformationType` | FC-faithful feature/information instances |
 | `S128ProductEntry` | Façade over an `S128Feature` whose type is one of the navigational product classes; surfaces strongly-typed accessors (`ProductSpecificationName`, `Status`, `CoverageRing`, etc.) |

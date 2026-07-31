@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.Pipelines.Tests;

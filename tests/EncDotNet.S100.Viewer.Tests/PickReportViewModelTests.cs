@@ -1,8 +1,7 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -237,9 +236,88 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void SetPicks_WithLocationDepth_ExposesSeriesAndFlag()
+    {
+        var vm = new PickReportViewModel();
+
+        var depth = MakeDepthViewModel();
+
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9035, 4.395),
+            depth);
+
+        Assert.True(vm.HasLocationDepthSeries);
+        Assert.Same(depth, vm.LocationDepthSeries);
+    }
+
+    [Fact]
+    public void SetPicks_ReplacingDepth_DisposesPriorSeries()
+    {
+        var vm = new PickReportViewModel();
+
+        var first = MakeDepthViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "1" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9, 4.4),
+            first);
+
+        var second = MakeDepthViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "2" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9, 4.4),
+            second);
+
+        Assert.True(first.IsDisposed);
+        Assert.Same(second, vm.LocationDepthSeries);
+    }
+
+    [Fact]
+    public void Clear_DisposesAndClearsDepthSeries()
+    {
+        var vm = new PickReportViewModel();
+
+        var depth = MakeDepthViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9, 4.4),
+            depth);
+
+        vm.Clear();
+
+        Assert.False(vm.HasLocationDepthSeries);
+        Assert.Null(vm.LocationDepthSeries);
+        Assert.True(depth.IsDisposed);
+    }
+
+    private static DepthOverTimeViewModel MakeDepthViewModel()
+    {
+        var result = new LocationDepthResult(
+            new BaseDepthResult(10.0, BaseDepthSource.Bathymetry, null, 23, null),
+            null,
+            new[] { new DepthOverTimePoint(new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Utc), 10.0) },
+            null,
+            DatumsNotReconciled: false);
+
+        return new DepthOverTimeViewModel(
+            result,
+            "51.9 N, 4.4 E",
+            51.9,
+            4.4,
+            DepthUnit.Metres,
+            safetyDepthMetres: null,
+            globalTime: null);
+    }
+
+    [Fact]
     public void Clear_ResetsLocation()
     {
         var vm = new PickReportViewModel();
+
         vm.SetPicks(
             new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
             System.Array.Empty<DynamicPickHit>(),
@@ -473,7 +551,9 @@ public class PickReportViewModelTests
         var vm = new PickReportViewModel();
         var hit = new PickHit
         {
-            FeatureType = "LightLateral", FeatureTypeName = "Lateral Light", FeatureRef = "L1",
+            FeatureType = "LightLateral",
+            FeatureTypeName = "Lateral Light",
+            FeatureRef = "L1",
             References = new[] { Ref("AtonStatus", "S1"), Ref("SpatialAccuracy", "A2") },
         };
 

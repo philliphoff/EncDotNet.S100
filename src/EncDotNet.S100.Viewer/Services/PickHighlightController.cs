@@ -1,11 +1,9 @@
-using EncDotNet.S100.DataModel;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using Avalonia.Threading;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Mcp.Tools.Catalog;
-using EncDotNet.S100.Mcp.Tools.Spec;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;

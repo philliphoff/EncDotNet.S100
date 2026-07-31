@@ -1,5 +1,5 @@
 using System.Net;
-using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 using ModelContextProtocol.Client;
 

@@ -1,11 +1,5 @@
-using System;
 using System.ComponentModel;
-using System.Linq;
 using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
-using EncDotNet.S100.Mcp.Tools.Catalog;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Mcp.Tests;

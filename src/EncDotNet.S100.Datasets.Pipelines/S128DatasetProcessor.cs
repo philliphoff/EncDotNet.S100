@@ -1,5 +1,5 @@
-using System.IO;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S128.DataModel;
 using EncDotNet.S100.Datasets.S128.Validation;
@@ -7,7 +7,6 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;
-using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 

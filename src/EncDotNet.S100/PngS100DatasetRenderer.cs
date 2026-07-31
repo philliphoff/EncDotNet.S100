@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -147,22 +143,22 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
                 switch (processor)
                 {
                     case IVectorPortrayalSource vectorSource:
-                    {
-                        var result = await vectorSource
-                            .BuildVectorPortrayalAsync(context, cancellationToken)
-                            .ConfigureAwait(false);
-                        inputs.Add(HeadlessCompositeInput.ForVector(result));
-                        break;
-                    }
+                        {
+                            var result = await vectorSource
+                                .BuildVectorPortrayalAsync(context, cancellationToken)
+                                .ConfigureAwait(false);
+                            inputs.Add(HeadlessCompositeInput.ForVector(result));
+                            break;
+                        }
 
                     case ICoveragePortrayalSource coverageSource:
-                    {
-                        var result = await coverageSource
-                            .BuildCoveragePortrayalAsync(context, cancellationToken)
-                            .ConfigureAwait(false);
-                        inputs.Add(HeadlessCompositeInput.ForCoverage(result));
-                        break;
-                    }
+                        {
+                            var result = await coverageSource
+                                .BuildCoveragePortrayalAsync(context, cancellationToken)
+                                .ConfigureAwait(false);
+                            inputs.Add(HeadlessCompositeInput.ForCoverage(result));
+                            break;
+                        }
 
                     default:
                         throw new NotSupportedException(

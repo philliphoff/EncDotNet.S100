@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Viewer.Tools;
 
 namespace EncDotNet.S100.Viewer.Tests;

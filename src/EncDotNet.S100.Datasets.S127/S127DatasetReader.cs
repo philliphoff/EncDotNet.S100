@@ -1,7 +1,7 @@
-using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
-using S100Diag = EncDotNet.S100.Datasets.S127.Diagnostics;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using S100Diag = EncDotNet.S100.Datasets.S127.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S127;
 
@@ -182,7 +182,8 @@ internal static class S127DatasetReader
                 (e.Name.Namespace == S100Ns5 ||
                  e.Name.Namespace == S100Ns1 ||
                  e.Name.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase)));
-    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S127ComplexAttribute>, IReadOnlyList<S127FeatureReference>) ParseAttributes(XElement element)
+    }
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S127ComplexAttribute>, IReadOnlyList<S127FeatureReference>) ParseAttributes(XElement element)
     {
         var simple = new Dictionary<string, string>();
         var complex = new List<S127ComplexAttribute>();

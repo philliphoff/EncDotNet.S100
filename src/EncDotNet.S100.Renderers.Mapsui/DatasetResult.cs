@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using Mapsui;
@@ -64,4 +63,16 @@ public sealed class DatasetResult
     /// product carries no cell-wide scale.
     /// </summary>
     public int? CellMinimumDisplayScale { get; init; }
+
+    /// <summary>
+    /// The rendered cell's declared data-coverage footprint in EPSG:3857
+    /// (Web Mercator), projected from the processor's EPSG:4326
+    /// <c>DataCoverage</c> polygons (S-101 FC §3.1.1; S-57 <c>M_COVR</c>). The
+    /// viewer's dataset loader unions the footprints of finer, overlapping
+    /// in-band cells and clips this cell to its coverage minus that union,
+    /// suppressing coarse-under-fine overdraw for overlapping multi-scale ENC
+    /// cells (issue #438 Phase 2). Null when the cell declares no usable
+    /// coverage geometry.
+    /// </summary>
+    public NetTopologySuite.Geometries.Geometry? CoverageGeometry { get; init; }
 }

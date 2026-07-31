@@ -1,7 +1,5 @@
-using System.Linq;
-using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S125.DataModel;
 using System.Collections.ObjectModel;
+using EncDotNet.S100.Datasets.S125.DataModel;
 
 namespace EncDotNet.S100.Datasets.S125.Tests;
 

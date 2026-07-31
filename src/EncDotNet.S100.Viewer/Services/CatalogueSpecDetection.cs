@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.RegularExpressions;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics.Metrics;
 using System.Text.Json;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;

@@ -1,5 +1,5 @@
-using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S124.Diagnostics;
 
@@ -197,7 +197,8 @@ internal static class S124DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S124ComplexAttribute>, IReadOnlyList<GmlReference>) ParseAttributes(XElement element)
+    }
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S124ComplexAttribute>, IReadOnlyList<GmlReference>) ParseAttributes(XElement element)
     {
         var simple = new Dictionary<string, string>();
         var complex = new List<S124ComplexAttribute>();

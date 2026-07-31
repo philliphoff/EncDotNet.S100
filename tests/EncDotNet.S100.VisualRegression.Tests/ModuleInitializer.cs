@@ -1,6 +1,4 @@
 using System.Runtime.CompilerServices;
-using EncDotNet.S100.VisualRegression;
-using VerifyTests;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
 

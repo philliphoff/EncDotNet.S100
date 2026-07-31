@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using EncDotNet.S100.Core;
@@ -37,7 +36,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 /// </remarks>
 public static class CatalogueResolutionDiagnostics
 {
-    private static readonly Counter<long> _matchCounter = Telemetry.Meter.CreateCounter<long>(
+    private static readonly Counter<long> MatchCounter = Telemetry.Meter.CreateCounter<long>(
         "s100.catalogue.match.count",
         unit: "{events}",
         description: "Counts catalogue resolutions, tagged by spec/catalogue versions and match kind.");
@@ -77,7 +76,7 @@ public static class CatalogueResolutionDiagnostics
         if (catalogueRef is not { } catRef) return;
 
         var key = (datasetSpec, catRef, catalogueKind);
-        var entries = _seen.GetOrCreateValue(dedupScope);
+        var entries = SeenResolutions.GetOrCreateValue(dedupScope);
         if (!entries.Add(key))
         {
             // Already emitted for this scope/spec/cat tuple.
@@ -86,7 +85,7 @@ public static class CatalogueResolutionDiagnostics
 
         var match = SpecCompatibility.Classify(datasetSpec.Edition, catRef.Version);
 
-        _matchCounter.Add(1,
+        MatchCounter.Add(1,
             new KeyValuePair<string, object?>("s100.spec.name", datasetSpec.Name),
             new KeyValuePair<string, object?>("s100.spec.edition", datasetSpec.Edition.ToString()),
             new KeyValuePair<string, object?>("s100.catalogue.version", catRef.Version.ToString()),
@@ -107,5 +106,5 @@ public static class CatalogueResolutionDiagnostics
         }
     }
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, HashSet<(SpecRef, CatalogueRef, string)>> _seen = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, HashSet<(SpecRef, CatalogueRef, string)>> SeenResolutions = new();
 }

@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;

@@ -1,6 +1,4 @@
-using EncDotNet.S100.Viewer;
 using Mapsui;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -1,4 +1,3 @@
-using System.Linq;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;

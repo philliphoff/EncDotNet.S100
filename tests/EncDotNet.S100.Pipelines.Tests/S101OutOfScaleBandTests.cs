@@ -1,12 +1,10 @@
 using EncDotNet.S100.DataModel;
-using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

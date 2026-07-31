@@ -2,7 +2,6 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
-using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
@@ -162,23 +161,23 @@ public sealed class HeadlessVectorRendererFilterTests
     private static bool HasPixelMatching(SKBitmap bitmap, Func<SKColor, bool> predicate)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            if (predicate(bitmap.GetPixel(x, y)))
-                return true;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                if (predicate(bitmap.GetPixel(x, y)))
+                    return true;
+            }
         return false;
     }
 
     private static bool IsBlank(SKBitmap bitmap, RgbaColor background)
     {
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != background.R || p.Green != background.G || p.Blue != background.B)
-                return false;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != background.R || p.Green != background.G || p.Blue != background.B)
+                    return false;
+            }
         return true;
     }
 }

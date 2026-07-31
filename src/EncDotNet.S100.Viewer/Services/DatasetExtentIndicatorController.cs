@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Threading;
@@ -133,6 +131,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         if (e.PropertyName is nameof(DatasetEntry.MercatorExtent)
             or nameof(DatasetEntry.ContentMaxVisibleResolution)
             or nameof(DatasetEntry.IsLoaded)
+            or nameof(DatasetEntry.IsDeferred)
             or nameof(DatasetEntry.IsVisible))
         {
             _marshal(Rebuild);
@@ -153,6 +152,22 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         {
             foreach (var entry in _datasets.Entries)
             {
+                // A cell registered for lazy loading but not yet loaded (issue
+                // #458): outline its catalogue footprint at every zoom
+                // (MinVisible 0) so the mariner sees where unloaded data lies
+                // and that panning/zooming there will pull it in. Honour the
+                // visibility toggle here too — a hidden deferred cell shows no
+                // outline, consistent with a hidden loaded dataset.
+                if (entry.IsDeferred)
+                {
+                    if (entry.IsVisible && entry.GeographicBounds is { } bounds)
+                    {
+                        foreach (var deferredExtent in ToMercatorExtents(bounds))
+                            indicators.Add(new DatasetExtentIndicator(deferredExtent, 0.0));
+                    }
+                    continue;
+                }
+
                 if (!entry.IsLoaded || !entry.IsVisible)
                     continue;
                 if (entry.MercatorExtent is not { } extent)
@@ -165,6 +180,60 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         }
 
         DatasetExtentIndicatorOverlayLayer.Update(_layer, indicators, _appearance.Current.Accent);
+    }
+
+    /// <summary>
+    /// Projects an EPSG:4326 catalogue footprint to one or two EPSG:3857
+    /// (web-mercator) rectangles for the overlay. A footprint that crosses the
+    /// ±180° antimeridian seam (west &gt; east) is split into two non-wrapping
+    /// boxes — <c>[west, +180]</c> and <c>[-180, east]</c> — so seam-crossing
+    /// deferred cells still show an outline. Yields nothing for a degenerate or
+    /// unprojectable box.
+    /// </summary>
+    private static IEnumerable<Mapsui.MRect> ToMercatorExtents(ExchangeSets.BoundingBox bounds)
+    {
+        var west = bounds.WestBoundLongitude;
+        var east = bounds.EastBoundLongitude;
+        var south = bounds.SouthBoundLatitude;
+        var north = bounds.NorthBoundLatitude;
+
+        if (!double.IsNaN(west) && !double.IsNaN(east) && west > east)
+        {
+            if (ToMercatorExtent(west, 180.0, south, north) is { } eastSegment)
+                yield return eastSegment;
+            if (ToMercatorExtent(-180.0, east, south, north) is { } westSegment)
+                yield return westSegment;
+            yield break;
+        }
+
+        if (ToMercatorExtent(west, east, south, north) is { } extent)
+            yield return extent;
+    }
+
+    /// <summary>
+    /// Projects a single non-wrapping EPSG:4326 rectangle to an EPSG:3857
+    /// (web-mercator) rectangle for the overlay. Returns <see langword="null"/>
+    /// for a degenerate or unprojectable box.
+    /// </summary>
+    private static Mapsui.MRect? ToMercatorExtent(
+        double west, double east, double south, double north)
+    {
+        if (double.IsNaN(west) || double.IsNaN(east)
+            || double.IsNaN(south) || double.IsNaN(north))
+        {
+            return null;
+        }
+
+        // Mercator is undefined at the poles; clamp to the projection's limit.
+        south = Math.Clamp(south, -85.05112878, 85.05112878);
+        north = Math.Clamp(north, -85.05112878, 85.05112878);
+
+        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(west, south);
+        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(east, north);
+        if (maxX <= minX || maxY <= minY)
+            return null;
+
+        return new Mapsui.MRect(minX, minY, maxX, maxY);
     }
 
     private static void DispatcherMarshal(Action action)

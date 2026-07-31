@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
 using SkiaSharp;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

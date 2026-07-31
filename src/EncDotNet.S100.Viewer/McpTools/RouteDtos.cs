@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;

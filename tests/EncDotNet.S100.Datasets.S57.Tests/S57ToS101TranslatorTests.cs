@@ -1,5 +1,4 @@
 using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;
 
@@ -137,7 +136,9 @@ public class S57ToS101TranslatorTests
     // S-57 where FFPT names carry rcnm=0/rcid=0 and identify the target by LNAM.
     private static EncDotNet.S57.S57FeaturePointer Ffpt(
         ushort producingAgency, uint featureIdentificationNumber,
-        ushort featureIdentificationSubdivision = 0)
+        ushort featureIdentificationSubdivision = 0,
+        EncDotNet.S57.S57RelationshipIndicator relationship
+            = EncDotNet.S57.S57RelationshipIndicator.Peer)
         => new()
         {
             Name = new EncDotNet.S57.S57RecordName
@@ -148,7 +149,7 @@ public class S57ToS101TranslatorTests
                 FeatureId = (int)featureIdentificationNumber,
                 FeatureSubdivision = (int)featureIdentificationSubdivision,
             },
-            Relationship = EncDotNet.S57.S57RelationshipIndicator.Peer,
+            Relationship = relationship,
         };
 
     // ── Tests ──────────────────────────────────────────────────────────
@@ -219,6 +220,113 @@ public class S57ToS101TranslatorTests
         Assert.Equal("Coastline", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
         var sa = Assert.Single(feat.SpatialAssociations);
         Assert.Equal(120, sa.RecordName);
+    }
+
+    [Fact]
+    public void Translate_MCovr_CoverageAvailable_BecomesDataCoverage()
+    {
+        // M_COVR (OBJL 302) with CATCOV = 1 (coverage available) converts to a
+        // DataCoverage feature (S-57 → S-101 Conversion Guidance).
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 302, // M_COVR
+            attributes: new[] { Attr(18, "1") },          // CATCOV = coverage available
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { feature });
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+    }
+
+    [Fact]
+    public void Translate_MCovr_NoCoverageAvailable_IsDropped()
+    {
+        // M_COVR (OBJL 302) with CATCOV = 2 (no coverage available) has no
+        // S-101 equivalent — S-101 represents the absence of data by the
+        // absence of a DataCoverage feature. Emitting it as DataCoverage would
+        // falsely assert coverage over the cell's no-data region and drive
+        // cross-cell overlap suppression to blank the coarser overlapping cell
+        // there (issue #438). It must be dropped.
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 302, // M_COVR
+            attributes: new[] { Attr(18, "2") },          // CATCOV = no coverage available
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { feature });
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        Assert.Empty(s101.Features);
+    }
+
+    [Fact]
+    public void Translate_MCovr_MixedCoverage_KeepsOnlyCoverageAvailable()
+    {
+        // A cell commonly carries both a coverage-available M_COVR (CATCOV = 1)
+        // and a no-coverage M_COVR (CATCOV = 2). Only the former survives.
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
+
+        var available = Feat(
+            recordId: 1, primitive: 3, objectClass: 302,
+            featureIdentificationNumber: 1,
+            attributes: new[] { Attr(18, "1") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+        var noCoverage = Feat(
+            recordId: 2, primitive: 3, objectClass: 302,
+            featureIdentificationNumber: 2,
+            attributes: new[] { Attr(18, "2") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { available, noCoverage });
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
     }
 
     [Fact]
@@ -808,6 +916,173 @@ public class S57ToS101TranslatorTests
             var info = NauticalInformationOf(s101, feat);
             Assert.NotNull(info);
         }
+    }
+
+    // ── TOPMAR slave → parent `topmark` complex attribute ───────────────
+
+    // Builds a buoy/beacon master feature (with geometry) that references a
+    // TOPMAR slave via an FFPT with the S-57 master/slave relationship, plus
+    // the TOPMAR feature carrying the topmark shape/colour attributes.
+    private static EncDotNet.S57.S57Document TopmarkScenario(
+        ushort masterObjl,
+        IEnumerable<EncDotNet.S57.S57AttributeValue> topmarkAttrs,
+        EncDotNet.S57.S57RelationshipIndicator relationship
+            = EncDotNet.S57.S57RelationshipIndicator.Slave,
+        IEnumerable<EncDotNet.S57.S57AttributeValue>? masterAttrs = null)
+    {
+        var n1 = Node(1, 1000, 2000);
+        var master = Feat(
+            recordId: 1, primitive: 1, objectClass: masterObjl,
+            featureIdentificationNumber: 10,
+            attributes: masterAttrs,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 20, relationship: relationship) });
+        var topmar = Feat(
+            recordId: 2, primitive: 1, objectClass: 144, // TOPMAR
+            featureIdentificationNumber: 20,
+            attributes: topmarkAttrs);
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { master, topmar });
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_FoldsIntoParentTopmarkComplex()
+    {
+        // BOYSAW (OBJL 18) → SafeWaterBuoy, which binds the `topmark` complex.
+        // The TOPMAR slave carries TOPSHP + COLOUR + COLPAT, which fold into the
+        // parent's topmark instance (topmarkDaymarkShape / colour / colourPattern).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "1"),  // TOPSHP → topmarkDaymarkShape (mandatory)
+                Attr(75, "3"),   // COLOUR → colour (Red)
+                Attr(76, "1"),   // COLPAT → colourPattern
+            }), diag);
+
+        Assert.Equal(1, diag.TopmarksAbsorbed);
+
+        // Only the master buoy survives; the TOPMAR is absorbed, not standalone.
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("SafeWaterBuoy", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.DoesNotContain((ushort)144, diag.UnmappedObjectClasses.Keys);
+
+        var topmark = ComplexInstance(s101, feat.Attributes, "topmark", 1).ToList();
+        Assert.NotEmpty(topmark);
+        Assert.Equal("1", GetSubAttribute(s101, topmark, "topmarkDaymarkShape"));
+        Assert.Equal("3", GetSubAttribute(s101, topmark, "colour"));
+        Assert.Equal("1", GetSubAttribute(s101, topmark, "colourPattern"));
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_MultiValuedColour_SplitsIntoOccurrences()
+    {
+        // A comma-separated COLOUR list becomes multiple colour occurrences
+        // within the single topmark instance.
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "1"),   // TOPSHP → topmarkDaymarkShape
+                Attr(75, "1,3"),  // COLOUR → colour (White, Red)
+            }));
+
+        var feat = Assert.Single(s101.Features);
+        var topmark = ComplexInstance(s101, feat.Attributes, "topmark", 1).ToList();
+
+        ushort? colourCode = null;
+        foreach (var (c, n) in s101.AttributeTypeCatalogue)
+            if (string.Equals(n, "colour", StringComparison.OrdinalIgnoreCase)) colourCode = c;
+        var colours = topmark.Where(a => a.NumericCode == colourCode).Select(a => a.Value).ToList();
+        Assert.Equal(new[] { "1", "3" }, colours);
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_MissingShape_DropsTopmarkInstance()
+    {
+        // topmarkDaymarkShape is mandatory; with no valid TOPSHP the whole
+        // topmark instance is rolled back (recorded for corpus audits).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "99"), // invalid TOPSHP
+                Attr(75, "3"),   // COLOUR
+            }), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "topmark", 1).ToList());
+        var attributeNames = feat.Attributes
+            .Select(a => s101.AttributeTypeCatalogue[a.NumericCode])
+            .ToList();
+        Assert.DoesNotContain("topmark", attributeNames);
+    }
+
+    [Fact]
+    public void Translate_TopmarPeerRelationship_StaysUnmapped()
+    {
+        // A Peer (not Slave) relationship is not a topmark master/slave binding,
+        // so the TOPMAR is left unmapped and no topmark is folded in.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[] { Attr(171, "1"), Attr(75, "3") },
+            relationship: EncDotNet.S57.S57RelationshipIndicator.Peer), diag);
+
+        Assert.Equal(0, diag.TopmarksAbsorbed);
+        var buoy = FeatureOfClass(s101, "SafeWaterBuoy");
+        Assert.NotNull(buoy);
+        Assert.Empty(ComplexInstance(s101, buoy!.Attributes, "topmark", 1).ToList());
+        Assert.Contains((ushort)144, diag.UnmappedObjectClasses.Keys);
+    }
+
+    [Fact]
+    public void Translate_TopmarSlave_OnNonTopmarkBindingMaster_StaysUnmapped()
+    {
+        // DEPARE (OBJL 42) → DepthArea does not bind `topmark`; a Slave FFPT to a
+        // TOPMAR must not fold in, and the TOPMAR is left unmapped.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 42,
+            topmarkAttrs: new[] { Attr(171, "1"), Attr(75, "3") }), diag);
+
+        Assert.Equal(0, diag.TopmarksAbsorbed);
+        Assert.Contains((ushort)144, diag.UnmappedObjectClasses.Keys);
+    }
+
+    [Fact]
+    public void Translate_SharedTopmarSlave_FoldsIntoOnlyOneMaster()
+    {
+        // Two masters whose FFPTs both reference the same TOPMAR slave must not
+        // both fold it in (which would duplicate the topmark attributes); the
+        // TOPMAR is consumed by a single master only.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var masterA = Feat(
+            recordId: 1, primitive: 1, objectClass: 18, // BOYSAW → SafeWaterBuoy
+            featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 30, relationship: EncDotNet.S57.S57RelationshipIndicator.Slave) });
+        var masterB = Feat(
+            recordId: 2, primitive: 1, objectClass: 18,
+            featureIdentificationNumber: 20,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 30, relationship: EncDotNet.S57.S57RelationshipIndicator.Slave) });
+        var topmar = Feat(
+            recordId: 3, primitive: 1, objectClass: 144,
+            featureIdentificationNumber: 30,
+            attributes: new[] { Attr(171, "1"), Attr(75, "3") });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 },
+                features: new[] { masterA, masterB, topmar }), diag);
+
+        Assert.Equal(1, diag.TopmarksAbsorbed);
+        var withTopmark = s101.Features
+            .Count(f => ComplexInstance(s101, f.Attributes, "topmark", 1).Any());
+        Assert.Equal(1, withTopmark);
     }
 
     // ── C_AGGR → RangeSystemAggregation (synthesised RangeSystem) ────────
@@ -2552,5 +2827,100 @@ public class S57ToS101TranslatorTests
         Assert.Equal("natureOfSurface", s101.AttributeTypeCatalogue[attr.NumericCode]);
         Assert.Equal("4", attr.Value);
         Assert.DoesNotContain("surfaceCharacteristics", s101.AttributeTypeCatalogue.Values);
+    }
+
+    // ── Area ring chaining (multi-hole "spike" regression) ─────────────
+
+    // Builds a LandArea (LNDARE, OBJL 71) with a square exterior ring and two
+    // disjoint square holes. Boundary pointers are deliberately shuffled, with
+    // the first edge for each ring referenced in reverse orientation, so chaining
+    // must use node identity and FSPT orientation instead of input order.
+    private static EncDotNet.S57.S57Document BuildTwoHoleArea()
+    {
+        // Exterior square 0..1000.
+        var ext = new[]
+        {
+            Node(1, 0, 0), Node(2, 0, 1000), Node(3, 1000, 1000), Node(4, 1000, 0),
+            Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 4), Edge(13, 4, 1),
+        };
+        // Hole A square 100..200.
+        var holeA = new[]
+        {
+            Node(101, 100, 100), Node(102, 100, 200), Node(103, 200, 200), Node(104, 200, 100),
+            Edge(20, 101, 102), Edge(21, 102, 103), Edge(22, 103, 104), Edge(23, 104, 101),
+        };
+        // Hole B square 700..800 (far from hole A).
+        var holeB = new[]
+        {
+            Node(201, 700, 700), Node(202, 700, 800), Node(203, 800, 800), Node(204, 800, 700),
+            Edge(30, 201, 202), Edge(31, 202, 203), Edge(32, 203, 204), Edge(33, 204, 201),
+        };
+
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 71, // LNDARE → LandArea
+            spatialPointers: new[]
+            {
+                // Exterior ring (USAG = 1), shuffled and seeded in reverse.
+                Sp(RcnmEdge, 12, 2, 1, 0), Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 13, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0),
+                // Both holes' edges remain one USAG = 2 pool, but each hole's
+                // order is shuffled and each first edge is referenced in reverse.
+                Sp(RcnmEdge, 22, 2, 2, 0), Sp(RcnmEdge, 32, 2, 2, 0),
+                Sp(RcnmEdge, 20, 1, 2, 0), Sp(RcnmEdge, 33, 1, 2, 0),
+                Sp(RcnmEdge, 23, 1, 2, 0), Sp(RcnmEdge, 30, 1, 2, 0),
+                Sp(RcnmEdge, 21, 1, 2, 0), Sp(RcnmEdge, 31, 1, 2, 0),
+            });
+
+        return BuildDocument(
+            vectorRecords: ext.Concat(holeA).Concat(holeB).ToArray(),
+            features: new[] { feature });
+    }
+
+    [Fact]
+    public void Translate_AreaWithTwoHoles_ProducesSeparateInteriorRings()
+    {
+        // The two disjoint holes must resolve to two distinct interior rings,
+        // not one merged ring that jumps between them.
+        var s101 = new S57ToS101Translator().Translate(BuildTwoHoleArea());
+        var source = new S101VectorSource(S101Dataset.FromDocument(s101));
+
+        var feature = Assert.Single(source.GetFeatures());
+        Assert.Equal("LandArea", feature.FeatureType);
+        Assert.Equal(2, feature.InteriorRings.Count);
+    }
+
+    [Fact]
+    public void Translate_AreaWithTwoHoles_HasNoCrossHoleSpike()
+    {
+        // Every segment within each resolved ring must stay local to its hole;
+        // a merged ring would contain a long jump between the two holes (the
+        // spike artifact). Hole edges span ~1e-5 deg; the inter-hole jump would
+        // be ~8e-5 deg, so a 3e-5 deg ceiling cleanly distinguishes them.
+        const double spikeThresholdDegrees = 3e-5;
+
+        var s101 = new S57ToS101Translator().Translate(BuildTwoHoleArea());
+        var source = new S101VectorSource(S101Dataset.FromDocument(s101));
+        var feature = Assert.Single(source.GetFeatures());
+
+        static double MaxSegment(IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> ring)
+        {
+            double max = 0;
+            for (var i = 0; i < ring.Count - 1; i++)
+            {
+                var dLat = ring[i + 1].Latitude - ring[i].Latitude;
+                var dLon = ring[i + 1].Longitude - ring[i].Longitude;
+                max = Math.Max(max, Math.Sqrt((dLat * dLat) + (dLon * dLon)));
+            }
+
+            return max;
+        }
+
+        foreach (var ring in feature.InteriorRings)
+        {
+            var maxSegment = MaxSegment(ring);
+            Assert.True(
+                maxSegment < spikeThresholdDegrees,
+                $"Interior ring contains a cross-hole spike segment of {maxSegment:G4} degrees.");
+        }
     }
 }

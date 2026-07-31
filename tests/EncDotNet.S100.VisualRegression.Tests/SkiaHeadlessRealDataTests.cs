@@ -1,4 +1,3 @@
-using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
@@ -53,12 +52,12 @@ public sealed class SkiaHeadlessRealDataTests
     {
         // White background — assert at least one non-white pixel was painted.
         for (int y = 0; y < bitmap.Height; y++)
-        for (int x = 0; x < bitmap.Width; x++)
-        {
-            var p = bitmap.GetPixel(x, y);
-            if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
-                return;
-        }
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+                    return;
+            }
         Assert.Fail("Headless Skia render produced a blank (all-white) bitmap.");
     }
 

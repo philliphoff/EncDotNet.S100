@@ -1,5 +1,3 @@
-using System;
-
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
@@ -75,77 +73,86 @@ public static class RenderingOptimizations
     /// <inheritdoc cref="MinTileWorkers"/>
     public const int MaxTileWorkers = 8;
 
-    private static PerformanceProfile s_resolvedProfile;
-    private static bool s_vectorSnapshotEnabled;
-    private static bool s_vectorSnapshotPrebuildEnabled;
-    private static bool s_vectorPathCacheEnabled;
-    private static bool s_geometrySimplificationEnabled;
-    private static RenderSubsystemKind s_renderSubsystem;
-    private static VectorSceneMode s_sceneMode;
-    private static double s_tileGutterDip;
-    private static double s_tileBudgetMb;
-    private static bool s_tilePredictionEnabled;
-    private static bool s_tileCrossBandPrewarmEnabled;
-    private static bool s_tileDiskCacheEnabled;
-    private static double s_tileDiskMb;
-    private static bool s_tileGpuResidencyEnabled;
-    private static double s_tileGpuBudgetMb;
-    private static int s_tileWorkerCount;
-    private static string? s_tileDiskDirectory;
-    private static PerformanceProfile s_profile;
+    private static PerformanceProfile _resolvedProfile;
+    private static bool _vectorSnapshotEnabled;
+    private static bool _vectorSnapshotPrebuildEnabled;
+    private static bool _vectorPathCacheEnabled;
+    private static bool _geometrySimplificationEnabled;
+    private static bool _precomputedLineLodEnabled;
+    private static RenderSubsystemKind _renderSubsystem;
+    private static VectorSceneMode _sceneMode;
+    private static double _tileGutterDip;
+    private static double _tileBudgetMb;
+    private static bool _tilePredictionEnabled;
+    private static bool _tileCrossBandPrewarmEnabled;
+    private static bool _tileDiskCacheEnabled;
+    private static double _tileDiskMb;
+    private static bool _tileGpuResidencyEnabled;
+    private static double _tileGpuBudgetMb;
+    private static int _tileWorkerCount;
+    private static string? _tileDiskDirectory;
+    private static PerformanceProfile _profile;
 
     static RenderingOptimizations()
     {
-        (s_profile, ProfileEnvExplicit) = SeedProfile("S100_PERF_PROFILE", PerformanceProfile.Auto);
-        (s_vectorSnapshotEnabled, VectorSnapshotEnvExplicit) =
+        (_profile, ProfileEnvExplicit) = SeedProfile("S100_PERF_PROFILE", PerformanceProfile.Auto);
+        (_vectorSnapshotEnabled, VectorSnapshotEnvExplicit) =
             SeedBool("S100_VECTOR_PICTURE_SNAPSHOT", defaultValue: true);
 
-        (s_vectorSnapshotPrebuildEnabled, VectorSnapshotPrebuildEnvExplicit) =
+        (_vectorSnapshotPrebuildEnabled, VectorSnapshotPrebuildEnvExplicit) =
             SeedBool("S100_VECTOR_SNAPSHOT_PREBUILD", defaultValue: true);
 
-        (s_vectorPathCacheEnabled, VectorPathCacheEnvExplicit) =
+        (_vectorPathCacheEnabled, VectorPathCacheEnvExplicit) =
             SeedBool("S100_VECTOR_PATH_CACHE", defaultValue: true);
 
-        (s_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
+        (_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
             SeedSimplification();
 
-        (s_renderSubsystem, RenderSubsystemEnvExplicit) = SeedRenderSubsystem();
-        (s_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
+        // Precomputed line LOD pyramid (issue #489). Default OFF; the seven-gate
+        // measurement pass in docs/design/mapsui-performance.md must clear
+        // "≥50% cold-rebuild spike reduction, zero warm regression, no visual
+        // regression" on both the dense S-101 cell and the multi-cell AU IC-ENC
+        // set before we consider flipping this default.
+        (_precomputedLineLodEnabled, PrecomputedLineLodEnvExplicit) =
+            SeedBool("S100_VECTOR_LINE_LOD", defaultValue: false);
+
+        (_renderSubsystem, RenderSubsystemEnvExplicit) = SeedRenderSubsystem();
+        (_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
 
         // The performance profile sets the *defaults* for the per-layer tile
         // budgets; Auto derives the tier from cores + RAM so a constrained host
         // gets smaller caches. Explicit env vars or persisted slider values
         // still override any of these.
         var tier = MachineProfile.Resolve(Profile);
-        s_resolvedProfile = tier;
+        _resolvedProfile = tier;
 
-        (s_tileGutterDip, TileGutterDipEnvExplicit) =
+        (_tileGutterDip, TileGutterDipEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_GUTTER", DefaultTileGutterDip, MinTileGutterDip, MaxTileGutterDip);
-        (s_tileBudgetMb, TileBudgetMbEnvExplicit) =
+        (_tileBudgetMb, TileBudgetMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_BUDGET_MB", MachineProfile.TileBudgetMb(tier), MinTileBudgetMb, MaxTileBudgetMb);
-        (s_tilePredictionEnabled, TilePredictionEnvExplicit) =
+        (_tilePredictionEnabled, TilePredictionEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_PREDICT", defaultValue: true);
         // Idle cross-band (±1) pre-warm (issue #428): seed default on except on
         // the LowEnd tier, where the extra speculative raster/cache pressure is not
         // worth it on a constrained host. This governs only the default seed (and
         // the profile-switch default in ApplyProfile); an explicit opt-in via
         // env var or the setter is still honoured on any tier.
-        (s_tileCrossBandPrewarmEnabled, TileCrossBandPrewarmEnvExplicit) =
+        (_tileCrossBandPrewarmEnabled, TileCrossBandPrewarmEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_XBAND", defaultValue: tier != PerformanceProfile.LowEnd);
-        (s_tileDiskCacheEnabled, TileDiskCacheEnvExplicit) =
+        (_tileDiskCacheEnabled, TileDiskCacheEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_DISK", defaultValue: true);
-        (s_tileDiskMb, TileDiskMbEnvExplicit) =
+        (_tileDiskMb, TileDiskMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_DISK_MB", MachineProfile.TileDiskMb(tier), MinTileDiskMb, MaxTileDiskMb);
-        (s_tileGpuResidencyEnabled, TileGpuResidencyEnvExplicit) =
+        (_tileGpuResidencyEnabled, TileGpuResidencyEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_GPU", defaultValue: true);
-        (s_tileGpuBudgetMb, TileGpuBudgetMbEnvExplicit) =
+        (_tileGpuBudgetMb, TileGpuBudgetMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_GPU_MB", MachineProfile.TileGpuBudgetMb(tier), MinTileGpuBudgetMb, MaxTileGpuBudgetMb);
-        (s_tileWorkerCount, TileWorkerCountEnvExplicit) =
+        (_tileWorkerCount, TileWorkerCountEnvExplicit) =
             SeedInt("S100_VECTOR_TILE_WORKERS", MachineProfile.TileWorkers(tier), MinTileWorkers, MaxTileWorkers);
 
         var diskDir = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
         TileDiskDirectoryEnvExplicit = !string.IsNullOrEmpty(diskDir);
-        s_tileDiskDirectory = TileDiskDirectoryEnvExplicit ? diskDir : null;
+        _tileDiskDirectory = TileDiskDirectoryEnvExplicit ? diskDir : null;
     }
 
     /// <summary>
@@ -156,8 +163,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool VectorSnapshotEnabled
     {
-        get => s_vectorSnapshotEnabled;
-        set { if (!VectorSnapshotEnvExplicit) s_vectorSnapshotEnabled = value; }
+        get => _vectorSnapshotEnabled;
+        set { if (!VectorSnapshotEnvExplicit) _vectorSnapshotEnabled = value; }
     }
 
     /// <summary>True when <see cref="VectorSnapshotEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -171,8 +178,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool VectorSnapshotPrebuildEnabled
     {
-        get => s_vectorSnapshotPrebuildEnabled;
-        set { if (!VectorSnapshotPrebuildEnvExplicit) s_vectorSnapshotPrebuildEnabled = value; }
+        get => _vectorSnapshotPrebuildEnabled;
+        set { if (!VectorSnapshotPrebuildEnvExplicit) _vectorSnapshotPrebuildEnabled = value; }
     }
 
     /// <summary>True when <see cref="VectorSnapshotPrebuildEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -186,8 +193,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool VectorPathCacheEnabled
     {
-        get => s_vectorPathCacheEnabled;
-        set { if (!VectorPathCacheEnvExplicit) s_vectorPathCacheEnabled = value; }
+        get => _vectorPathCacheEnabled;
+        set { if (!VectorPathCacheEnvExplicit) _vectorPathCacheEnabled = value; }
     }
 
     /// <summary>True when <see cref="VectorPathCacheEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -203,12 +210,35 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool GeometrySimplificationEnabled
     {
-        get => s_geometrySimplificationEnabled;
-        set { if (!GeometrySimplificationEnvExplicit) s_geometrySimplificationEnabled = value; }
+        get => _geometrySimplificationEnabled;
+        set { if (!GeometrySimplificationEnvExplicit) _geometrySimplificationEnabled = value; }
     }
 
     /// <summary>True when geometry simplification is pinned by an explicit <c>S100_VECTOR_SIMPLIFY_PX</c>.</summary>
     public static bool GeometrySimplificationEnvExplicit { get; }
+
+    /// <summary>
+    /// Whether the precomputed line LOD pyramid (issue #489) is consumed at
+    /// SKPath-build time inside <see cref="CachedVectorStyleRenderer"/>. When
+    /// on, each line's coordinates are simplified once per feature into a
+    /// small tolerance-tagged pyramid (see
+    /// <c>EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid</c>) and the
+    /// pyramid level whose dropped detail is guaranteed sub-pixel at the
+    /// current viewport is used to build the <c>SKPath</c>. Pans within a
+    /// zoom band re-use the SKPath as today; the cold spike at a band change
+    /// no longer pays a full-resolution simplification pass because the
+    /// pyramid was built once. Seeded from <c>S100_VECTOR_LINE_LOD</c>;
+    /// default <b>off</b> until the seven-gate perf pass in the design doc
+    /// clears (see <c>docs/design/mapsui-performance.md</c>).
+    /// </summary>
+    public static bool PrecomputedLineLodEnabled
+    {
+        get => _precomputedLineLodEnabled;
+        set { if (!PrecomputedLineLodEnvExplicit) _precomputedLineLodEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="PrecomputedLineLodEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool PrecomputedLineLodEnvExplicit { get; }
 
     /// <summary>
     /// Selects the active base-plane chart render subsystem (the A/B switch for
@@ -220,8 +250,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static RenderSubsystemKind RenderSubsystem
     {
-        get => s_renderSubsystem;
-        set { if (!RenderSubsystemEnvExplicit) s_renderSubsystem = value; }
+        get => _renderSubsystem;
+        set { if (!RenderSubsystemEnvExplicit) _renderSubsystem = value; }
     }
 
     /// <summary>True when <see cref="RenderSubsystem"/> is pinned by an explicit environment variable.</summary>
@@ -236,8 +266,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static VectorSceneMode SceneMode
     {
-        get => s_sceneMode;
-        set { if (!SceneModeEnvExplicit) s_sceneMode = value; }
+        get => _sceneMode;
+        set { if (!SceneModeEnvExplicit) _sceneMode = value; }
     }
 
     /// <summary>True when <see cref="SceneMode"/> is pinned by an explicit environment variable.</summary>
@@ -253,8 +283,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static double TileGutterDip
     {
-        get => s_tileGutterDip;
-        set { if (!TileGutterDipEnvExplicit) s_tileGutterDip = Clamp(value, MinTileGutterDip, MaxTileGutterDip); }
+        get => _tileGutterDip;
+        set { if (!TileGutterDipEnvExplicit) _tileGutterDip = Clamp(value, MinTileGutterDip, MaxTileGutterDip); }
     }
 
     /// <summary>True when <see cref="TileGutterDip"/> is pinned by an explicit environment variable.</summary>
@@ -269,8 +299,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static double TileBudgetMb
     {
-        get => s_tileBudgetMb;
-        set { if (!TileBudgetMbEnvExplicit) s_tileBudgetMb = Clamp(value, MinTileBudgetMb, MaxTileBudgetMb); }
+        get => _tileBudgetMb;
+        set { if (!TileBudgetMbEnvExplicit) _tileBudgetMb = Clamp(value, MinTileBudgetMb, MaxTileBudgetMb); }
     }
 
     /// <summary>True when <see cref="TileBudgetMb"/> is pinned by an explicit environment variable.</summary>
@@ -283,8 +313,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool TilePredictionEnabled
     {
-        get => s_tilePredictionEnabled;
-        set { if (!TilePredictionEnvExplicit) s_tilePredictionEnabled = value; }
+        get => _tilePredictionEnabled;
+        set { if (!TilePredictionEnvExplicit) _tilePredictionEnabled = value; }
     }
 
     /// <summary>True when <see cref="TilePredictionEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -308,8 +338,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool TileCrossBandPrewarmEnabled
     {
-        get => s_tileCrossBandPrewarmEnabled;
-        set { if (!TileCrossBandPrewarmEnvExplicit) s_tileCrossBandPrewarmEnabled = value; }
+        get => _tileCrossBandPrewarmEnabled;
+        set { if (!TileCrossBandPrewarmEnvExplicit) _tileCrossBandPrewarmEnabled = value; }
     }
 
     /// <summary>True when <see cref="TileCrossBandPrewarmEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -322,8 +352,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool TileDiskCacheEnabled
     {
-        get => s_tileDiskCacheEnabled;
-        set { if (!TileDiskCacheEnvExplicit) s_tileDiskCacheEnabled = value; }
+        get => _tileDiskCacheEnabled;
+        set { if (!TileDiskCacheEnvExplicit) _tileDiskCacheEnabled = value; }
     }
 
     /// <summary>True when <see cref="TileDiskCacheEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -337,8 +367,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static double TileDiskMb
     {
-        get => s_tileDiskMb;
-        set { if (!TileDiskMbEnvExplicit) s_tileDiskMb = Clamp(value, MinTileDiskMb, MaxTileDiskMb); }
+        get => _tileDiskMb;
+        set { if (!TileDiskMbEnvExplicit) _tileDiskMb = Clamp(value, MinTileDiskMb, MaxTileDiskMb); }
     }
 
     /// <summary>True when <see cref="TileDiskMb"/> is pinned by an explicit environment variable.</summary>
@@ -354,8 +384,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static string? TileDiskDirectory
     {
-        get => s_tileDiskDirectory;
-        set { if (!TileDiskDirectoryEnvExplicit) s_tileDiskDirectory = value; }
+        get => _tileDiskDirectory;
+        set { if (!TileDiskDirectoryEnvExplicit) _tileDiskDirectory = value; }
     }
 
     /// <summary>True when <see cref="TileDiskDirectory"/> is pinned by an explicit environment variable.</summary>
@@ -368,8 +398,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static bool TileGpuResidencyEnabled
     {
-        get => s_tileGpuResidencyEnabled;
-        set { if (!TileGpuResidencyEnvExplicit) s_tileGpuResidencyEnabled = value; }
+        get => _tileGpuResidencyEnabled;
+        set { if (!TileGpuResidencyEnvExplicit) _tileGpuResidencyEnabled = value; }
     }
 
     /// <summary>True when <see cref="TileGpuResidencyEnabled"/> is pinned by an explicit environment variable.</summary>
@@ -383,8 +413,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static double TileGpuBudgetMb
     {
-        get => s_tileGpuBudgetMb;
-        set { if (!TileGpuBudgetMbEnvExplicit) s_tileGpuBudgetMb = Clamp(value, MinTileGpuBudgetMb, MaxTileGpuBudgetMb); }
+        get => _tileGpuBudgetMb;
+        set { if (!TileGpuBudgetMbEnvExplicit) _tileGpuBudgetMb = Clamp(value, MinTileGpuBudgetMb, MaxTileGpuBudgetMb); }
     }
 
     /// <summary>True when <see cref="TileGpuBudgetMb"/> is pinned by an explicit environment variable.</summary>
@@ -400,8 +430,8 @@ public static class RenderingOptimizations
     /// </summary>
     public static int TileWorkerCount
     {
-        get => s_tileWorkerCount;
-        set { if (!TileWorkerCountEnvExplicit) s_tileWorkerCount = ClampInt(value, MinTileWorkers, MaxTileWorkers); }
+        get => _tileWorkerCount;
+        set { if (!TileWorkerCountEnvExplicit) _tileWorkerCount = ClampInt(value, MinTileWorkers, MaxTileWorkers); }
     }
 
     /// <summary>True when <see cref="TileWorkerCount"/> is pinned by an explicit environment variable.</summary>
@@ -416,15 +446,15 @@ public static class RenderingOptimizations
     /// </summary>
     public static PerformanceProfile Profile
     {
-        get => s_profile;
-        set { if (!ProfileEnvExplicit) { s_profile = value; ApplyProfile(value); } }
+        get => _profile;
+        set { if (!ProfileEnvExplicit) { _profile = value; ApplyProfile(value); } }
     }
 
     /// <summary>True when <see cref="Profile"/> is pinned by an explicit environment variable.</summary>
     public static bool ProfileEnvExplicit { get; }
 
     /// <summary>The concrete tier <see cref="Profile"/> resolves to on this host.</summary>
-    public static PerformanceProfile ResolvedProfile => s_resolvedProfile;
+    public static PerformanceProfile ResolvedProfile => _resolvedProfile;
 
     /// <summary>
     /// Recomputes profile-derived budgets for non-env-pinned knobs.
@@ -432,12 +462,12 @@ public static class RenderingOptimizations
     private static void ApplyProfile(PerformanceProfile profile)
     {
         var tier = MachineProfile.Resolve(profile);
-        s_resolvedProfile = tier;
-        if (!TileBudgetMbEnvExplicit) s_tileBudgetMb = MachineProfile.TileBudgetMb(tier);
-        if (!TileGpuBudgetMbEnvExplicit) s_tileGpuBudgetMb = MachineProfile.TileGpuBudgetMb(tier);
-        if (!TileDiskMbEnvExplicit) s_tileDiskMb = MachineProfile.TileDiskMb(tier);
-        if (!TileWorkerCountEnvExplicit) s_tileWorkerCount = MachineProfile.TileWorkers(tier);
-        if (!TileCrossBandPrewarmEnvExplicit) s_tileCrossBandPrewarmEnabled = tier != PerformanceProfile.LowEnd;
+        _resolvedProfile = tier;
+        if (!TileBudgetMbEnvExplicit) _tileBudgetMb = MachineProfile.TileBudgetMb(tier);
+        if (!TileGpuBudgetMbEnvExplicit) _tileGpuBudgetMb = MachineProfile.TileGpuBudgetMb(tier);
+        if (!TileDiskMbEnvExplicit) _tileDiskMb = MachineProfile.TileDiskMb(tier);
+        if (!TileWorkerCountEnvExplicit) _tileWorkerCount = MachineProfile.TileWorkers(tier);
+        if (!TileCrossBandPrewarmEnvExplicit) _tileCrossBandPrewarmEnabled = tier != PerformanceProfile.LowEnd;
     }
 
 

@@ -1,14 +1,12 @@
-using System;
 using System.Diagnostics;
+using EncDotNet.S100.Diagnostics.Export;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using EncDotNet.S100.Diagnostics.Export;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EncDotNet.S100.Viewer.Diagnostics;
 
@@ -29,7 +27,7 @@ internal static class ViewerObservability
     private const string ServiceName = "EncDotNet.S100.Viewer";
     private const string SourceWildcard = "EncDotNet.S100.*";
 
-    private static ILogger s_commandLogger = NullLogger.Instance;
+    private static ILogger _commandLogger = NullLogger.Instance;
 
     /// <summary>
     /// Wires an <see cref="ILoggerFactory"/> into the static
@@ -41,7 +39,7 @@ internal static class ViewerObservability
     public static void AttachLoggerFactory(ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
-        s_commandLogger = loggerFactory.CreateLogger("EncDotNet.S100.Viewer.Command");
+        _commandLogger = loggerFactory.CreateLogger("EncDotNet.S100.Viewer.Command");
     }
 
     public static IServiceCollection AddS100Observability(this IServiceCollection services)
@@ -139,7 +137,7 @@ internal static class ViewerObservability
         var activity = Telemetry.ActivitySource.StartActivity(
             "s100.viewer.command", ActivityKind.Internal);
         activity?.SetTag("s100.viewer.command", commandName);
-        s_commandLogger.LogInformation(
+        _commandLogger.LogInformation(
             "Viewer command starting: {Command}", commandName);
         return new CommandScope(activity, commandName);
     }
@@ -163,7 +161,7 @@ internal static class ViewerObservability
             _activity.SetStatus(ok ? ActivityStatusCode.Ok : ActivityStatusCode.Error, description);
             if (!ok)
             {
-                s_commandLogger.LogWarning(
+                _commandLogger.LogWarning(
                     "Viewer command failed: {Command} ({Description})",
                     _commandName, description ?? "(no description)");
             }
@@ -185,7 +183,7 @@ internal static class ViewerObservability
             Telemetry.CommandDuration.Record(elapsedMs,
                 new System.Collections.Generic.KeyValuePair<string, object?>(
                     "s100.viewer.command", _commandName));
-            s_commandLogger.LogInformation(
+            _commandLogger.LogInformation(
                 "Viewer command completed: {Command} in {ElapsedMs:F1}ms",
                 _commandName, elapsedMs);
             _activity?.Dispose();

@@ -363,6 +363,15 @@ internal static class DefaultRules
         yield return A(13, "CATCAM", "categoryOfCardinalMark");
         yield return A(14, "CATCHP", "categoryOfCheckpoint");
         yield return A(15, "CATCOA", "categoryOfCoastline");
+        // CATCOV (attribute code 18 in the EncDotNet.S57 catalogue): S-57
+        // M_COVR coverage indicator. S-101 has no categoryOfCoverage attribute
+        // (its DataCoverage feature always means "coverage available"), so this
+        // maps to null — it is never emitted as an S-101 attribute. It is
+        // registered here only so the acronym is visible to BuildAcronymView,
+        // letting the translator drop M_COVR records flagged "no coverage
+        // available" (CATCOV = 2) rather than converting them to spurious
+        // DataCoverage features (issue #438).
+        yield return A(18, "CATCOV", null);
         // CATCTR: appears on CTRPNT only, which is dropped in S-101 unless
         // redirected to Landmark (see CTRPNT feature rule). The default
         // mapping is therefore null; the redirect supplies the override.

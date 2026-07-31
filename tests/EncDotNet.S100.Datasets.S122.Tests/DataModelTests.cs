@@ -1,7 +1,6 @@
 using System.Text;
-using EncDotNet.S100.Datasets.S122;
-using EncDotNet.S100.Datasets.S122.DataModel;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.S122.DataModel;
 
 namespace EncDotNet.S100.Datasets.S122.Tests;
 

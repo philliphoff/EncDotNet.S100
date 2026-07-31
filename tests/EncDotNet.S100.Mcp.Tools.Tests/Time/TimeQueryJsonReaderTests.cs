@@ -1,4 +1,4 @@
-using EncDotNet.S100.Mcp.Tools.Time;
+using EncDotNet.S100.Datasets.Pipelines.Time;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Time;
 

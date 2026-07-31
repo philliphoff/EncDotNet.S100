@@ -1,8 +1,6 @@
 using System.Globalization;
 using Avalonia.Media;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Viewer;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

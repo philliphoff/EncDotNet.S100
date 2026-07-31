@@ -96,13 +96,43 @@ group paths.
 
 ## Coding style
 
-- Follow existing C# conventions: `PascalCase` for types/methods/properties,
-  `camelCase` for locals and parameters, `_camelCase` for private fields.
+The normative style rules live in the
+[C# coding style guide](docs/coding-style.md) — read it before submitting
+code. In brief:
+
+- `PascalCase` for types/methods/properties, `camelCase` for locals and
+  parameters, `_camelCase` for private fields.
+- File-scoped namespaces, 4-space indents, Allman braces.
 - Nullable reference types are enabled everywhere — avoid `!` suppression;
   prefer null-checks or `ArgumentNullException.ThrowIfNull`.
 - All public APIs must carry XML doc comments (`<summary>`, `<param>`,
   `<returns>`).
 - Only comment code that genuinely needs clarification.
+
+For API-shape conventions (collection return types, `class` vs `record`,
+quantity types) see [API design conventions](docs/design/api-conventions.md).
+
+The formatting rules are encoded in [`.editorconfig`](.editorconfig) and
+enforced in CI (the **Format check** job). Before pushing, apply and verify
+formatting locally:
+
+```bash
+# Auto-fix whitespace/formatting across the solution
+dotnet format whitespace EncDotNet.S100.slnx
+
+# Auto-fix using directives (System-first ordering + remove unused)
+dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005
+
+# Verify whitespace, usings, and naming with no changes (what CI runs)
+dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn --verify-no-changes
+```
+
+> CI gates *whitespace/formatting*, *using directives* (ordering +
+> unused-directive removal), and *naming*. `dotnet format` cannot Fix-All
+> IDE1006 naming violations, so fix those manually. Other style diagnostics
+> are not machine-enforced solution-wide because style fix-all is unreliable
+> on the multi-targeted (`net8.0;net10.0`) projects; follow those rules by hand
+> (the `.editorconfig` still flags them in your IDE).
 
 ## Documentation
 

@@ -1,7 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Mapsui;
@@ -206,31 +203,31 @@ public static class S100VectorSnapshotRenderer
     /// </summary>
     public static double PanRefreshFraction { get; } = ReadPanRefresh();
 
-    private static readonly bool s_diag =
+    private static readonly bool Diag =
         (Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_DIAG") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";
 
-    private static readonly ConditionalWeakTable<ILayer, SnapshotState> s_states = new();
+    private static readonly ConditionalWeakTable<ILayer, SnapshotState> States = new();
 
-    private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+    private static readonly SKSamplingOptions Sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
-    private static IDictionary<Type, IStyleRenderer>? s_styleRenderers;
-    private static long s_iteration;
+    private static IDictionary<Type, IStyleRenderer>? _styleRenderers;
+    private static long _iteration;
 
     /// <summary>Maximum number of per-resolution images retained per layer (LRU).</summary>
     private const int MaxEntries = 6;
 
     /// <summary>Serialises background rasterisation so prebuilds never oversubscribe the CPU.</summary>
-    private static readonly System.Threading.SemaphoreSlim s_backgroundGate = new(1, 1);
+    private static readonly System.Threading.SemaphoreSlim BackgroundGate = new(1, 1);
 
     /// <summary>
     /// A dedicated <see cref="RenderService"/> for off-thread records so the live
     /// render thread's service caches are never mutated concurrently.
     /// </summary>
-    private static readonly Lazy<RenderService> s_backgroundRenderService = new(() => new RenderService());
+    private static readonly Lazy<RenderService> BackgroundRenderService = new(() => new RenderService());
 
     /// <summary>Monotonic counter used as the LRU recency stamp on cache entries.</summary>
-    private static long s_tick;
+    private static long _tick;
 
     private static double ReadMargin()
     {
@@ -295,6 +292,47 @@ public static class S100VectorSnapshotRenderer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(layer);
 
+        // Cross-cell overlap suppression (issue #438 Phase 2): remove from this
+        // coarser cell's output the coverage of every finer overlapping cell that
+        // is still visible at the live resolution (screen-space; see
+        // CoverageClip). Applied around every draw path; zoom-aware so a finer
+        // cell that has dropped out of its band leaves no blank hole.
+        var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, viewport.Resolution);
+        if (clipPaths.Count == 0)
+        {
+            RenderCore(canvas, viewport, layer, renderService);
+            return;
+        }
+
+        var clipApplied = false;
+        try
+        {
+            // Apply the clip inside the try so that if ClipPath throws (e.g. a
+            // degenerate path) the finally still restores the canvas and disposes
+            // every path.
+            canvas.Save();
+            clipApplied = true;
+            foreach (var clipPath in clipPaths)
+                canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+
+            RenderCore(canvas, viewport, layer, renderService);
+        }
+        finally
+        {
+            // Restore only if Save() actually ran, so a throw between Save() and
+            // the first ClipPath still balances the stack.
+            if (clipApplied)
+                canvas.Restore();
+            foreach (var clipPath in clipPaths)
+                clipPath.Dispose();
+        }
+    }
+
+    private static void RenderCore(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(layer);
+
         if (!viewport.HasSize())
         {
             return;
@@ -329,7 +367,7 @@ public static class S100VectorSnapshotRenderer
             return;
         }
 
-        var state = s_states.GetValue(layer, static _ => new SnapshotState());
+        var state = States.GetValue(layer, static _ => new SnapshotState());
         lock (state.Sync)
         {
             var featureCount = TotalFeatureCount(layer);
@@ -341,7 +379,7 @@ public static class S100VectorSnapshotRenderer
             {
                 Record(canvas, viewport, layer, renderService, state, featureCount);
             }
-            else if (s_diag)
+            else if (Diag)
             {
                 var (dx, dy) = PanOffsetPixels(snap, viewport.CenterX, viewport.CenterY, resolution);
                 Console.Error.WriteLine($"[VecSnapshot] replay res={resolution:G6} dxPx={Math.Abs(dx):F0} dyPx={Math.Abs(dy):F0} feats={featureCount}");
@@ -366,7 +404,7 @@ public static class S100VectorSnapshotRenderer
                 (float)(tx + state.RecordWidth),
                 (float)(ty + state.RecordHeight));
 
-            canvas.DrawImage(image, dest, s_sampling);
+            canvas.DrawImage(image, dest, Sampling);
         }
     }
 
@@ -377,7 +415,7 @@ public static class S100VectorSnapshotRenderer
     /// </summary>
     private static void RenderPrebuild(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService, double resolution)
     {
-        var state = s_states.GetValue(layer, static _ => new SnapshotState());
+        var state = States.GetValue(layer, static _ => new SnapshotState());
         var featureCount = TotalFeatureCount(layer);
 
         var scale = canvas.TotalMatrix.ScaleX;
@@ -407,10 +445,10 @@ public static class S100VectorSnapshotRenderer
             var exact = FindUsableEntry(state, viewport, resolution, featureCount);
             if (exact is not null)
             {
-                exact.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                exact.LastUsedTick = System.Threading.Interlocked.Increment(ref _tick);
                 (toBlit, dest) = BlitOf(exact, viewport, resolution);
 
-                if (s_diag)
+                if (Diag)
                 {
                     var (dx, dy) = PanOffsetPixels(exact.ToAnchor(), viewport.CenterX, viewport.CenterY, resolution);
                     Console.Error.WriteLine($"[VecSnapshot] replay res={resolution:G6} dxPx={Math.Abs(dx):F0} dyPx={Math.Abs(dy):F0} feats={featureCount} entries={state.Entries.Count}");
@@ -444,7 +482,7 @@ public static class S100VectorSnapshotRenderer
                         dest = default;
                         drawLive = true;
 
-                        if (s_diag)
+                        if (Diag)
                         {
                             Console.Error.WriteLine($"[VecSnapshot] LIVE (scale-band) res={resolution:G6} from={stale.Resolution:G6} feats={featureCount} entries={state.Entries.Count}");
                         }
@@ -453,10 +491,10 @@ public static class S100VectorSnapshotRenderer
                     }
                     else
                     {
-                        stale.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                        stale.LastUsedTick = System.Threading.Interlocked.Increment(ref _tick);
                         (toBlit, dest) = BlitOf(stale, viewport, resolution);
 
-                        if (s_diag)
+                        if (Diag)
                         {
                             Console.Error.WriteLine($"[VecSnapshot] STALE blit res={resolution:G6} from={stale.Resolution:G6} feats={featureCount} entries={state.Entries.Count}");
                         }
@@ -472,10 +510,10 @@ public static class S100VectorSnapshotRenderer
                     // basemap — and ensure a recentred pan record is in flight,
                     // rather than freezing the render thread on a synchronous
                     // re-record (the old jitter source).
-                    nearest.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                    nearest.LastUsedTick = System.Threading.Interlocked.Increment(ref _tick);
                     (toBlit, dest) = BlitOf(nearest, viewport, resolution);
 
-                    if (s_diag)
+                    if (Diag)
                     {
                         var (dx, dy) = PanOffsetPixels(nearest.ToAnchor(), viewport.CenterX, viewport.CenterY, resolution);
                         Console.Error.WriteLine($"[VecSnapshot] PAN-UNCOVERED blit res={resolution:G6} dxPx={Math.Abs(dx):F0} dyPx={Math.Abs(dy):F0} feats={featureCount} entries={state.Entries.Count}");
@@ -490,10 +528,10 @@ public static class S100VectorSnapshotRenderer
                     // first frame is correct rather than blank.
                     var entry = BuildSnapshotEntry(viewport, layer, scale, renderService, featureCount);
                     AddEntry(state, entry);
-                    entry.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                    entry.LastUsedTick = System.Threading.Interlocked.Increment(ref _tick);
                     (toBlit, dest) = BlitOf(entry, viewport, resolution);
 
-                    if (s_diag)
+                    if (Diag)
                     {
                         Console.Error.WriteLine($"[VecSnapshot] COLD record res={resolution:G6} feats={featureCount}");
                     }
@@ -509,7 +547,7 @@ public static class S100VectorSnapshotRenderer
         }
         else if (toBlit is not null)
         {
-            canvas.DrawImage(toBlit, dest, s_sampling);
+            canvas.DrawImage(toBlit, dest, Sampling);
         }
     }
 
@@ -915,7 +953,7 @@ public static class S100VectorSnapshotRenderer
         state.RecordHeight = recordHeight;
         state.FeatureCount = featureCount;
 
-        if (s_diag)
+        if (Diag)
         {
             Console.Error.WriteLine($"[VecSnapshot] RECORD res={viewport.Resolution:G6} feats={featureCount} rW={recordWidth:F0} rH={recordHeight:F0} scale={scale:F2} px={pixelWidth}x{pixelHeight}");
         }
@@ -1069,7 +1107,7 @@ public static class S100VectorSnapshotRenderer
         // a just-prebuilt entry could be evicted before the next frame sees it,
         // causing SchedulePrebuilds to re-request it endlessly (a repaint loop
         // that never reaches idle).
-        entry.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+        entry.LastUsedTick = System.Threading.Interlocked.Increment(ref _tick);
 
         for (var i = state.Entries.Count - 1; i >= 0; i--)
         {
@@ -1134,14 +1172,14 @@ public static class S100VectorSnapshotRenderer
             SnapshotEntry? built = null;
             try
             {
-                s_backgroundGate.Wait();
+                BackgroundGate.Wait();
                 try
                 {
-                    built = BuildSnapshotEntry(captured, layer, scale, s_backgroundRenderService.Value, featureCount);
+                    built = BuildSnapshotEntry(captured, layer, scale, BackgroundRenderService.Value, featureCount);
                 }
                 finally
                 {
-                    s_backgroundGate.Release();
+                    BackgroundGate.Release();
                 }
 
                 lock (state.Sync)
@@ -1151,7 +1189,7 @@ public static class S100VectorSnapshotRenderer
                     state.InFlight.Remove(resolution);
                 }
 
-                if (s_diag)
+                if (Diag)
                 {
                     Console.Error.WriteLine($"[VecSnapshot] PUBLISH res={resolution:G6} feats={featureCount}");
                 }
@@ -1166,7 +1204,7 @@ public static class S100VectorSnapshotRenderer
                     state.InFlight.Remove(resolution);
                 }
 
-                if (s_diag)
+                if (Diag)
                 {
                     Console.Error.WriteLine($"[VecSnapshot] PREBUILD FAILED res={resolution:G6}: {ex.Message}");
                 }
@@ -1225,7 +1263,7 @@ public static class S100VectorSnapshotRenderer
         state.PanRecordInFlight = true;
         var captured = viewport;
 
-        if (s_diag)
+        if (Diag)
         {
             Console.Error.WriteLine($"[VecSnapshot] PAN-REFRESH res={resolution:G6} cx={captured.CenterX:F1} cy={captured.CenterY:F1} margin={PanMarginPx:F0} feats={featureCount}");
         }
@@ -1235,14 +1273,14 @@ public static class S100VectorSnapshotRenderer
             SnapshotEntry? built = null;
             try
             {
-                s_backgroundGate.Wait();
+                BackgroundGate.Wait();
                 try
                 {
-                    built = BuildSnapshotEntry(captured, layer, scale, s_backgroundRenderService.Value, featureCount, PanMarginPx);
+                    built = BuildSnapshotEntry(captured, layer, scale, BackgroundRenderService.Value, featureCount, PanMarginPx);
                 }
                 finally
                 {
-                    s_backgroundGate.Release();
+                    BackgroundGate.Release();
                 }
 
                 lock (state.Sync)
@@ -1252,7 +1290,7 @@ public static class S100VectorSnapshotRenderer
                     state.PanRecordInFlight = false;
                 }
 
-                if (s_diag)
+                if (Diag)
                 {
                     Console.Error.WriteLine($"[VecSnapshot] PAN-PUBLISH res={resolution:G6} feats={featureCount}");
                 }
@@ -1267,7 +1305,7 @@ public static class S100VectorSnapshotRenderer
                     state.PanRecordInFlight = false;
                 }
 
-                if (s_diag)
+                if (Diag)
                 {
                     Console.Error.WriteLine($"[VecSnapshot] PAN-RECORD FAILED res={resolution:G6}: {ex.Message}");
                 }
@@ -1327,7 +1365,7 @@ public static class S100VectorSnapshotRenderer
         }
 
         var resolution = viewport.Resolution;
-        var iteration = System.Threading.Interlocked.Increment(ref s_iteration);
+        var iteration = System.Threading.Interlocked.Increment(ref _iteration);
         var features = layer.SortFeatures(layer.GetFeatures(queryExtent, resolution)).ToList();
 
         // The one-shot snapshot record races Mapsui's asynchronous image-source
@@ -1427,7 +1465,7 @@ public static class S100VectorSnapshotRenderer
         }
         catch (Exception ex)
         {
-            if (s_diag)
+            if (Diag)
             {
                 Console.Error.WriteLine($"[VecSnapshot] image source fetch failed: {ex.Message}");
             }
@@ -1457,7 +1495,7 @@ public static class S100VectorSnapshotRenderer
     {
         get
         {
-            var cached = s_styleRenderers;
+            var cached = _styleRenderers;
             if (cached is not null)
             {
                 return cached;
@@ -1466,7 +1504,7 @@ public static class S100VectorSnapshotRenderer
             var rendererField = typeof(MapRenderer).GetField("_styleRenderers", BindingFlags.NonPublic | BindingFlags.Static);
             if (rendererField?.GetValue(null) is IDictionary<Type, IStyleRenderer> dict)
             {
-                s_styleRenderers = dict;
+                _styleRenderers = dict;
                 return dict;
             }
 

@@ -1,4 +1,3 @@
-using System.Reflection;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Skia.Scene;

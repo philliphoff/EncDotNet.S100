@@ -1,12 +1,9 @@
-using EncDotNet.S100.DataModel;
-using System;
-using System.Collections.Generic;
-using EncDotNet.S100.Quantities;
 using System.Globalization;
-using System.Linq;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
@@ -14,7 +11,6 @@ using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 using EncDotNet.S100.Viewer.Tests.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.ViewModels;
 

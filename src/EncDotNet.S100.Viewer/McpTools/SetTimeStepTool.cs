@@ -1,10 +1,6 @@
-using System;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Threading;
-using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.McpTools;

@@ -1,6 +1,5 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -91,6 +90,19 @@ public sealed class VectorPortrayalResult
     public IReadOnlyDictionary<long, VectorFeatureTag>? FeatureTags { get; init; }
 
     /// <summary>
+    /// Precomputed line-LOD pyramids keyed by feature id, produced at dataset
+    /// open by S-101 (issue #489, PR-3). The Mapsui renderer copies each
+    /// pyramid onto its owning <c>IFeature</c> under the typed key
+    /// <c>CachedVectorStyleRenderer.LineLodPyramidKey</c> so the fast-line
+    /// paint path can skip the per-frame Douglas–Peucker pass.
+    /// Null / empty when no line pyramids were pre-built (feature is a
+    /// non-line, or the S-101 processor was constructed without an
+    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache"/>
+    /// available at open).
+    /// </summary>
+    public IReadOnlyDictionary<long, EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid>? LineLodPyramids { get; init; }
+
+    /// <summary>
     /// The most-permissive (largest) <c>DataCoverage.minimumDisplayScale</c>
     /// denominator across the cell, or null when no out-of-scale-band cap
     /// applies (e.g. the mariner's IgnoreScaleMinimum is set, or no usable
@@ -115,6 +127,17 @@ public sealed class VectorPortrayalResult
     /// scale (e.g. no <c>DataCoverage</c> band or no CSCL present).
     /// </summary>
     public int? CellMinimumDisplayScale { get; init; }
+
+    /// <summary>
+    /// The cell's declared data-coverage polygons in EPSG:4326 (lat/lon),
+    /// resolved from its <c>DataCoverage</c> surface features (S-101 FC §3.1.1;
+    /// the S-57 <c>M_COVR</c> meta-object translated to <c>DataCoverage</c>).
+    /// Drives cross-cell scale-band overlap suppression (issue #438 Phase 2):
+    /// the renderer projects these to EPSG:3857 so a coarser cell can be
+    /// clipped to its coverage minus the union of finer overlapping cells'
+    /// coverage. Empty when the cell declares no usable coverage geometry.
+    /// </summary>
+    public IReadOnlyList<CoverageArea> CoverageAreas { get; init; } = [];
 
     /// <summary>
     /// Optional pre-padded geographic extent (lat / lon) that is used

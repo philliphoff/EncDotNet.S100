@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;

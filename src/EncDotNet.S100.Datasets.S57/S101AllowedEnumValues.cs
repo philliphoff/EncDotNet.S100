@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Collections.Generic;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Specifications;
 
@@ -36,7 +35,7 @@ public sealed class S101AllowedEnumValues
 {
     private readonly FrozenDictionary<string, FrozenSet<string>> _byAttributeCode;
 
-    private static readonly Lazy<S101AllowedEnumValues> _default = new(LoadDefault);
+    private static readonly Lazy<S101AllowedEnumValues> LazyDefault = new(LoadDefault);
 
     private S101AllowedEnumValues(FrozenDictionary<string, FrozenSet<string>> byAttributeCode)
     {
@@ -47,7 +46,7 @@ public sealed class S101AllowedEnumValues
     /// Lazily-loaded singleton built from the S-101 Feature Catalogue
     /// embedded in <see cref="Specification"/>.
     /// </summary>
-    public static S101AllowedEnumValues Default => _default.Value;
+    public static S101AllowedEnumValues Default => LazyDefault.Value;
 
     /// <summary>
     /// Builds an instance from a parsed S-101 <see cref="FeatureCatalogue"/>.

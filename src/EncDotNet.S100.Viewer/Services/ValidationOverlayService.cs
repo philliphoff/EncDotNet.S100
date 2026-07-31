@@ -1,6 +1,4 @@
-using System;
 using System.ComponentModel;
-using System.Linq;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 

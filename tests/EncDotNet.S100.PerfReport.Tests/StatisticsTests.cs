@@ -1,5 +1,3 @@
-using EncDotNet.S100.PerfReport;
-
 namespace EncDotNet.S100.PerfReport.Tests;
 
 public class StatisticsTests

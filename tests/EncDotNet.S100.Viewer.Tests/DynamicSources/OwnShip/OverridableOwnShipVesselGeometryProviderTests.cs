@@ -1,6 +1,5 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources.OwnShip;
 

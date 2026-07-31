@@ -1,4 +1,3 @@
-using EncDotNet.S100.PerfReport;
 using static EncDotNet.S100.PerfReport.GateCommand;
 
 namespace EncDotNet.S100.PerfReport.Tests;

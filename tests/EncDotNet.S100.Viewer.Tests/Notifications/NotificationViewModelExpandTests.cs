@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels.Notifications;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.Notifications;
 

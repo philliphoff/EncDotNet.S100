@@ -1,6 +1,5 @@
-using EncDotNet.S100.DataModel;
-using System.Collections.Generic;
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Geodesy;
 using Mapsui;
 using Mapsui.Layers;

@@ -6,12 +6,27 @@ Reader and coverage portrayal pipeline for S-102 Bathymetric Surface datasets.
 
 This library reads S-102 datasets from HDF5 files and provides coverage data (depth and uncertainty grids) for the portrayal pipeline. Key types include:
 
-- **`S102Dataset`** — root model containing horizontal CRS and bathymetric coverages.
+- **`S102Dataset`** — root model containing horizontal CRS, vertical datum, and bathymetric coverages.
 - **`S102DatasetReader`** — reads an S-102 dataset from an `IHdf5File`. The
   horizontal CRS is resolved from the Edition 3.0.0 `horizontalCRS` root
   attribute, falling back to the Edition 2.1 `horizontalDatumValue` attribute
-  when the former is absent, so both editions georeference correctly.
+  when the former is absent, so both editions georeference correctly. The
+  `verticalDatum` root attribute (S-102 Ed 3.0.0 §12.3) is surfaced as
+  `S102Dataset.VerticalDatum` (an S-100 register code) and resolved to a label
+  by `S102CoverageSource` via `EncDotNet.S100.DataModel.VerticalDatums`.
+  `ReadMetadata(file)` is the phased-loading "peek" path (issue #460): it
+  returns a `DatasetMetadata` (declared spec, grid extent, and
+  `HorizontalCrsEpsg` for correct UTM reprojection) computed from the grid
+  georeferencing attributes alone, without reading any `depth` / `uncertainty`
+  `values` arrays.
 - **`S102CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
+  Its overview pyramid and residual viewport-stride sampling both min-pool
+  depth and max-pool uncertainty. Every source cell belongs to an output
+  block, and residual blocks are balanced across the sampled footprint so
+  their regular-grid georeferencing remains exact. Overview levels stop before
+  either axis would require a partial 2×2 edge pool. Small-scale sampling
+  therefore cannot skip a narrow shoal that falls between stride lattice
+  points. Coverage read spans report `s100.coverage.reducer=min`.
 - **`S102PortrayalCatalogue`** — coverage portrayal catalogue for depth shading.
 - **`BathymetryCoverage`**, **`BathymetryValue`** — bathymetric data models. `BathymetryCoverage.GroupPath` carries the HDF5 instance path (e.g. `/BathymetryCoverage/BathymetryCoverage.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
 

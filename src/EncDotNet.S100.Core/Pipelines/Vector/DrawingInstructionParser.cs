@@ -1,8 +1,6 @@
-using EncDotNet.S100.DataModel;
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Geodesy;
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 

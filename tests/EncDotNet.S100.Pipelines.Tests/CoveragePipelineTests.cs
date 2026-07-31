@@ -1,7 +1,6 @@
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -58,6 +57,140 @@ public class CoveragePipelineTests
     }
 
     [Fact]
+    public async Task ProcessAsync_GeoreferencerReflectsSampledSubset()
+    {
+        // Regression guard for issue #487: the georeferencer on the
+        // returned layer must be built from the *sampled* subset's
+        // metadata, not from the source's full-grid metadata. Otherwise
+        // a subset+stride sample from GridRegion.FromViewport would be
+        // painted in the wrong geographic location.
+        var source = new SubsettingCoverageSource(
+            fullGridOriginLat: 47.5,
+            fullGridOriginLon: -122.3,
+            fullGridSpacingLat: 0.001,
+            fullGridSpacingLon: 0.001,
+            fullGridRows: 100,
+            fullGridCols: 100,
+            // Emit a "sampled" coverage that pretends we asked for
+            // rows/cols starting at (10, 20) with stride 2.
+            sampledRowStart: 10,
+            sampledColStart: 20,
+            sampledRowStride: 2,
+            sampledColStride: 2,
+            sampledRows: 40,
+            sampledCols: 30);
+
+        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var pipeline = new CoveragePipeline();
+
+        var layer = await pipeline.ProcessAsync(source, catalogue);
+
+        // Georeferencer's metadata should match the sampled subset (origin
+        // shifted by rowStart*Spacing, spacing scaled by stride).
+        var geoMeta = layer.Georeferencer.Metadata;
+        Assert.Equal(47.5 + 10 * 0.001, geoMeta.OriginLatitude, 9);
+        Assert.Equal(-122.3 + 20 * 0.001, geoMeta.OriginLongitude, 9);
+        Assert.Equal(0.001 * 2, geoMeta.SpacingLatitudinal, 12);
+        Assert.Equal(0.001 * 2, geoMeta.SpacingLongitudinal, 12);
+        Assert.Equal(40, geoMeta.NumRows);
+        Assert.Equal(30, geoMeta.NumColumns);
+    }
+
+    /// <summary>
+    /// A coverage source whose <see cref="Sample"/> returns a
+    /// <see cref="SampledCoverage"/> whose <see cref="GridMetadata"/>
+    /// is deliberately DIFFERENT from the source's full-grid metadata
+    /// — mimicking what S102/S104/S111 sources do when given a subset+stride
+    /// <see cref="GridRegion"/>. Used only by
+    /// <see cref="ProcessAsync_GeoreferencerReflectsSampledSubset"/>.
+    /// </summary>
+    private sealed class SubsettingCoverageSource : ICoverageSource
+    {
+        private readonly double _originLat, _originLon, _spacingLat, _spacingLon;
+        private readonly int _rows, _cols;
+        private readonly double _sampledOriginLat, _sampledOriginLon;
+        private readonly double _sampledSpacingLat, _sampledSpacingLon;
+        private readonly int _sampledRows, _sampledCols;
+
+        public SubsettingCoverageSource(
+            double fullGridOriginLat, double fullGridOriginLon,
+            double fullGridSpacingLat, double fullGridSpacingLon,
+            int fullGridRows, int fullGridCols,
+            int sampledRowStart, int sampledColStart,
+            int sampledRowStride, int sampledColStride,
+            int sampledRows, int sampledCols)
+        {
+            _originLat = fullGridOriginLat;
+            _originLon = fullGridOriginLon;
+            _spacingLat = fullGridSpacingLat;
+            _spacingLon = fullGridSpacingLon;
+            _rows = fullGridRows;
+            _cols = fullGridCols;
+            _sampledOriginLat = fullGridOriginLat + sampledRowStart * fullGridSpacingLat;
+            _sampledOriginLon = fullGridOriginLon + sampledColStart * fullGridSpacingLon;
+            _sampledSpacingLat = fullGridSpacingLat * sampledRowStride;
+            _sampledSpacingLon = fullGridSpacingLon * sampledColStride;
+            _sampledRows = sampledRows;
+            _sampledCols = sampledCols;
+        }
+
+        public CoverageMetadata Metadata => new()
+        {
+            Spec = new SpecRef("S-102", default),
+            Extent = new BoundingBox(
+                _originLat, _originLon,
+                _originLat + _spacingLat * _rows,
+                _originLon + _spacingLon * _cols),
+            GridMetadata = new GridMetadata
+            {
+                NumRows = _rows,
+                NumColumns = _cols,
+                OriginLatitude = _originLat,
+                OriginLongitude = _originLon,
+                SpacingLatitudinal = _spacingLat,
+                SpacingLongitudinal = _spacingLon,
+            },
+            HorizontalCRS = "EPSG:4326",
+            VerticalDatum = "MSL",
+            NoDataValue = float.NaN,
+            ValueFields = new List<CoverageValueField>
+            {
+                new()
+                {
+                    Name = "depth",
+                    Type = CoverageValueType.Float,
+                    Units = "metres",
+                    FillValue = float.NaN,
+                },
+            },
+        };
+
+        public IReadOnlyList<DateTime> AvailableTimes => [];
+        public void SelectTime(DateTime time) { }
+
+        public SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
+        {
+            return new SampledCoverage
+            {
+                Region = region,
+                Metadata = new GridMetadata
+                {
+                    NumRows = _sampledRows,
+                    NumColumns = _sampledCols,
+                    OriginLatitude = _sampledOriginLat,
+                    OriginLongitude = _sampledOriginLon,
+                    SpacingLatitudinal = _sampledSpacingLat,
+                    SpacingLongitudinal = _sampledSpacingLon,
+                },
+                Values = new Dictionary<string, float[]>
+                {
+                    ["depth"] = new float[_sampledRows * _sampledCols],
+                },
+            };
+        }
+    }
+
+    [Fact]
     public async Task ProcessAsync_WithSymbolScheme_PopulatesSymbolScheme()
     {
         var source = new FakeCoverageSource(
@@ -101,7 +234,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
 
         var pipeline = new CoveragePipeline();
-        await pipeline.ProcessAsync(source, catalogue, mariner);
+        await pipeline.ProcessAsync(source, catalogue, mariner: mariner);
 
         Assert.Same(mariner, catalogue.LastSettings);
     }

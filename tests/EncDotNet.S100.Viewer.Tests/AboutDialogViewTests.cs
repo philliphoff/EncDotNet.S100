@@ -1,13 +1,9 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Updates;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

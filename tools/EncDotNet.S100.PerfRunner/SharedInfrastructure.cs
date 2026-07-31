@@ -1,10 +1,11 @@
+using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
-using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
-using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.PerfRunner;
 
@@ -15,17 +16,17 @@ namespace EncDotNet.S100.PerfRunner;
 /// </summary>
 internal static class SharedInfrastructure
 {
-    private static readonly Lazy<PortrayalCatalogueManager> s_catalogueManager = new(CreateCatalogueManager);
-    private static readonly Lazy<MoonSharpLuaEngine> s_luaEngine = new(() => new MoonSharpLuaEngine());
-    private static readonly Lazy<ProjNetCrsTransformFactory> s_crsFactory = new(() => new ProjNetCrsTransformFactory());
-    private static readonly Lazy<FeatureCatalogueManager> s_featureCatalogueManager =
+    private static readonly Lazy<PortrayalCatalogueManager> LazyCatalogueManager = new(CreateCatalogueManager);
+    private static readonly Lazy<MoonSharpLuaEngine> LazyLuaEngine = new(() => new MoonSharpLuaEngine());
+    private static readonly Lazy<ProjNetCrsTransformFactory> LazyCrsFactory = new(() => new ProjNetCrsTransformFactory());
+    private static readonly Lazy<FeatureCatalogueManager> LazyFeatureCatalogueManager =
         new(() => new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
 
-    public static PortrayalCatalogueManager CatalogueManager => s_catalogueManager.Value;
-    public static MoonSharpLuaEngine LuaEngine => s_luaEngine.Value;
-    public static ProjNetCrsTransformFactory CrsFactory => s_crsFactory.Value;
+    public static PortrayalCatalogueManager CatalogueManager => LazyCatalogueManager.Value;
+    public static MoonSharpLuaEngine LuaEngine => LazyLuaEngine.Value;
+    public static ProjNetCrsTransformFactory CrsFactory => LazyCrsFactory.Value;
     public static FeatureCatalogueManager FeatureCatalogueManager =>
-        s_featureCatalogueManager.Value;
+        LazyFeatureCatalogueManager.Value;
 
     public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory()
     {
@@ -35,12 +36,19 @@ internal static class SharedInfrastructure
         // Newest shape (issue #189 PR2): the Mapsui-free factory takes an
         // IDisplayPlaneAuthorityProvider in place of the former
         // IInteroperabilityAuthorityProvider (which moved to the Mapsui package).
+        //
+        // Note: the live constructor may carry additional *optional* trailing
+        // parameters (e.g. a shared portrayal-instruction cache). We match by
+        // leading prefix and let default values fill the rest, so this probe
+        // survives future optional-parameter additions instead of throwing
+        // MissingMethodException (see issue #491).
         var displayPlaneProviderType = pipelinesAssembly.GetType(
             "EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider",
             throwOnError: false);
         if (displayPlaneProviderType is not null)
         {
-            var displayPlaneCtor = factoryType.GetConstructor(
+            var displayPlaneCtor = FindConstructorMatchingPrefix(
+                factoryType,
                 [
                     typeof(PortrayalCatalogueManager),
                     typeof(ILuaEngine),
@@ -54,7 +62,8 @@ internal static class SharedInfrastructure
             if (displayPlaneCtor is not null && displayPlaneImplType is not null)
             {
                 var displayPlaneProvider = Activator.CreateInstance(displayPlaneImplType)!;
-                return (Datasets.Pipelines.DatasetPipelineFactory)displayPlaneCtor.Invoke(
+                return (Datasets.Pipelines.DatasetPipelineFactory)InvokeWithDefaults(
+                    displayPlaneCtor,
                     [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager, displayPlaneProvider]);
             }
         }
@@ -68,7 +77,8 @@ internal static class SharedInfrastructure
             throwOnError: false);
         if (providerInterfaceType is not null)
         {
-            var providerCtor = factoryType.GetConstructor(
+            var providerCtor = FindConstructorMatchingPrefix(
+                factoryType,
                 [
                     typeof(PortrayalCatalogueManager),
                     typeof(ILuaEngine),
@@ -88,42 +98,142 @@ internal static class SharedInfrastructure
                 {
                     var authority = Activator.CreateInstance(authorityType)!;
                     var provider = Activator.CreateInstance(providerImplType, authority)!;
-                    return (Datasets.Pipelines.DatasetPipelineFactory)providerCtor.Invoke(
+                    return (Datasets.Pipelines.DatasetPipelineFactory)InvokeWithDefaults(
+                        providerCtor,
                         [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager, provider]);
                 }
             }
         }
 
-        var managerCtor = factoryType.GetConstructor(
+        var managerCtor = FindConstructorMatchingPrefix(
+            factoryType,
             [
                 typeof(PortrayalCatalogueManager),
                 typeof(ILuaEngine),
                 typeof(ICrsTransformFactory),
-                typeof(FeatureCatalogueManager)
+                typeof(FeatureCatalogueManager),
             ]);
         if (managerCtor is not null)
         {
-            return (Datasets.Pipelines.DatasetPipelineFactory)managerCtor.Invoke(
+            return (Datasets.Pipelines.DatasetPipelineFactory)InvokeWithDefaults(
+                managerCtor,
                 [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager]);
         }
 
-        var resolverCtor = factoryType.GetConstructor(
+        var resolverCtor = FindConstructorMatchingPrefix(
+            factoryType,
             [
                 typeof(PortrayalCatalogueManager),
                 typeof(ILuaEngine),
                 typeof(ICrsTransformFactory),
-                typeof(Func<string, Stream?>)
+                typeof(Func<string, Stream?>),
             ]);
         if (resolverCtor is not null)
         {
             Func<string, Stream?> resolver = Specification.TryOpenFeatureCatalogue;
-            return (Datasets.Pipelines.DatasetPipelineFactory)resolverCtor.Invoke(
+            return (Datasets.Pipelines.DatasetPipelineFactory)InvokeWithDefaults(
+                resolverCtor,
                 [CatalogueManager, LuaEngine, CrsFactory, resolver]);
         }
 
         throw new MissingMethodException(
             nameof(Datasets.Pipelines.DatasetPipelineFactory),
             ".ctor(PortrayalCatalogueManager, ILuaEngine, ICrsTransformFactory, ...)");
+    }
+
+    /// <summary>
+    /// Finds a constructor on <paramref name="type"/> whose leading parameter
+    /// types match <paramref name="requiredLeadingTypes"/> exactly. Additional
+    /// trailing parameters are permitted only when each has a compile-time
+    /// default value (i.e. <see cref="ParameterInfo.HasDefaultValue"/> is
+    /// <see langword="true"/>).
+    /// </summary>
+    /// <remarks>
+    /// This is the tolerant replacement for <see cref="Type.GetConstructor(Type[])"/>,
+    /// which requires an exact arity/type match and therefore misses constructors
+    /// that gain optional trailing parameters over time (issue #491).
+    /// </remarks>
+    internal static ConstructorInfo? FindConstructorMatchingPrefix(
+        Type type,
+        IReadOnlyList<Type> requiredLeadingTypes)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(requiredLeadingTypes);
+
+        foreach (var ctor in type.GetConstructors())
+        {
+            var parameters = ctor.GetParameters();
+            if (parameters.Length < requiredLeadingTypes.Count)
+            {
+                continue;
+            }
+
+            var prefixMatches = true;
+            for (var i = 0; i < requiredLeadingTypes.Count; i++)
+            {
+                if (parameters[i].ParameterType != requiredLeadingTypes[i])
+                {
+                    prefixMatches = false;
+                    break;
+                }
+            }
+            if (!prefixMatches)
+            {
+                continue;
+            }
+
+            var trailingAllOptional = true;
+            for (var i = requiredLeadingTypes.Count; i < parameters.Length; i++)
+            {
+                if (!parameters[i].HasDefaultValue)
+                {
+                    trailingAllOptional = false;
+                    break;
+                }
+            }
+            if (!trailingAllOptional)
+            {
+                continue;
+            }
+
+            return ctor;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Invokes <paramref name="ctor"/> supplying <paramref name="providedArgs"/>
+    /// for the leading parameters and each trailing parameter's compile-time
+    /// default value for the remainder.
+    /// </summary>
+    internal static object InvokeWithDefaults(ConstructorInfo ctor, object?[] providedArgs)
+    {
+        ArgumentNullException.ThrowIfNull(ctor);
+        ArgumentNullException.ThrowIfNull(providedArgs);
+
+        var parameters = ctor.GetParameters();
+        if (providedArgs.Length > parameters.Length)
+        {
+            throw new ArgumentException(
+                $"Provided {providedArgs.Length} arguments for a constructor that takes {parameters.Length}.",
+                nameof(providedArgs));
+        }
+
+        var args = new object?[parameters.Length];
+        Array.Copy(providedArgs, args, providedArgs.Length);
+        for (var i = providedArgs.Length; i < parameters.Length; i++)
+        {
+            if (!parameters[i].HasDefaultValue)
+            {
+                throw new ArgumentException(
+                    $"Constructor parameter '{parameters[i].Name}' at position {i} has no default value.",
+                    nameof(providedArgs));
+            }
+            args[i] = parameters[i].DefaultValue;
+        }
+
+        return ctor.Invoke(args);
     }
 
     private static PortrayalCatalogueManager CreateCatalogueManager()

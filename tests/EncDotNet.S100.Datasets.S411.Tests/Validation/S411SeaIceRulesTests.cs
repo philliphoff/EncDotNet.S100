@@ -1,10 +1,8 @@
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S411.Tests.Validation;
 
@@ -40,15 +38,15 @@ public class S411SeaIceRulesTests
         S411GeometryKind kind = S411GeometryKind.Surface,
         IReadOnlyList<GeoPosition>? coordinates = null,
         S411EggCode? eggCode = null) => new()
-    {
-        Id = id,
-        NormalizedFeatureType = "SeaIce",
-        SourceFeatureType = "SeaIce",
-        GeometryKind = kind,
-        Coordinates = coordinates ?? [],
-        EggCode = eggCode,
-        Source = DummySource,
-    };
+        {
+            Id = id,
+            NormalizedFeatureType = "SeaIce",
+            SourceFeatureType = "SeaIce",
+            GeometryKind = kind,
+            Coordinates = coordinates ?? [],
+            EggCode = eggCode,
+            Source = DummySource,
+        };
 
     private static S411LakeIce LakeIce(string id, S411EggCode? eggCode = null) => new()
     {
@@ -110,12 +108,12 @@ public class S411SeaIceRulesTests
         IEnumerable<S411IceFeature>? ice = null,
         IEnumerable<S411DataCoverage>? coverages = null,
         IEnumerable<S411OtherFeature>? others = null) => new()
-    {
-        IceFeatures = ice?.ToArray() ?? [],
-        DataCoverages = coverages?.ToArray() ?? [],
-        OtherFeatures = others?.ToArray() ?? [],
-        Source = EmptyDataset,
-    };
+        {
+            IceFeatures = ice?.ToArray() ?? [],
+            DataCoverages = coverages?.ToArray() ?? [],
+            OtherFeatures = others?.ToArray() ?? [],
+            Source = EmptyDataset,
+        };
 
     // ── S411-R-3.1 — WGS-84 lat/lon range ────────────────────────
 

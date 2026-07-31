@@ -1,9 +1,9 @@
 using System.Globalization;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
-using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S102;
 
@@ -383,32 +383,32 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
                 switch (key)
                 {
                     case "CoverageColor":
-                    {
-                        // CoverageColor:TOKEN,transparency
-                        var parts = value.Split(',');
-                        currentToken = parts[0];
-                        break;
-                    }
+                        {
+                            // CoverageColor:TOKEN,transparency
+                            var parts = value.Split(',');
+                            currentToken = parts[0];
+                            break;
+                        }
                     case "LookupEntry":
-                    {
-                        // LookupEntry:label,min,max,intervalType
-                        // min/max may be empty for semi-intervals.
-                        var parts = value.Split(',');
-                        label = parts.Length > 0 ? parts[0] : null;
+                        {
+                            // LookupEntry:label,min,max,intervalType
+                            // min/max may be empty for semi-intervals.
+                            var parts = value.Split(',');
+                            label = parts.Length > 0 ? parts[0] : null;
 
-                        if (parts.Length > 1 && !string.IsNullOrEmpty(parts[1]))
-                            minValue = float.Parse(parts[1], CultureInfo.InvariantCulture);
+                            if (parts.Length > 1 && !string.IsNullOrEmpty(parts[1]))
+                                minValue = float.Parse(parts[1], CultureInfo.InvariantCulture);
 
-                        if (parts.Length > 2 && !string.IsNullOrEmpty(parts[2]))
-                            maxValue = float.Parse(parts[2], CultureInfo.InvariantCulture);
+                            if (parts.Length > 2 && !string.IsNullOrEmpty(parts[2]))
+                                maxValue = float.Parse(parts[2], CultureInfo.InvariantCulture);
 
-                        break;
-                    }
+                            break;
+                        }
                     case "CoverageFill":
-                    {
-                        fieldName = value;
-                        break;
-                    }
+                        {
+                            fieldName = value;
+                            break;
+                        }
                 }
             }
 

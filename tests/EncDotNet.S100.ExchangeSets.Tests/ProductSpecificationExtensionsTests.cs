@@ -1,5 +1,4 @@
 using EncDotNet.S100.Core;
-using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.ExchangeSets.Tests;
 

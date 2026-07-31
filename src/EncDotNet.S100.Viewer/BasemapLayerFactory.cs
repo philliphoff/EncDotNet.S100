@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using BruTile.Cache;
 using BruTile.Predefined;
-using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
