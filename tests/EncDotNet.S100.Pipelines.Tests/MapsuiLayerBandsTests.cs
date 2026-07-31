@@ -86,5 +86,40 @@ public sealed class MapsuiLayerBandsTests
         Assert.Equal([dataset2, overlay2, tool2], map.Layers);
     }
 
+    [Fact]
+    public void AddLayers_LayerAlreadyPresentInMap_ThrowsWithoutDuplicatingLayer()
+    {
+        Action<MapsuiLayerBands, ILayer>[] additions =
+        [
+            (bands, layer) => bands.SetBasemapLayer(layer),
+            (bands, layer) => bands.AddDatasetLayer(layer),
+            (bands, layer) => bands.AddOverlayLayer(layer),
+            (bands, layer) => bands.AddToolLayer(layer),
+        ];
+
+        foreach (var add in additions)
+        {
+            using var map = new Map();
+            var bands = new MapsuiLayerBands(map);
+            var layer = Layer("external");
+            map.Layers.Add(layer);
+
+            Assert.Throws<ArgumentException>(() => add(bands, layer));
+            Assert.Equal([layer], map.Layers);
+        }
+    }
+
+    [Fact]
+    public void ReplaceDatasetLayers_UnmanagedLayerAlreadyPresentInMap_Throws()
+    {
+        using var map = new Map();
+        var bands = new MapsuiLayerBands(map);
+        var external = Layer("external");
+        map.Layers.Add(external);
+
+        Assert.Throws<ArgumentException>(() => bands.ReplaceDatasetLayers([external]));
+        Assert.Equal([external], map.Layers);
+    }
+
     private static MemoryLayer Layer(string name) => new() { Name = name };
 }

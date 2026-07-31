@@ -39,7 +39,8 @@ public sealed class MapsuiLayerBands
     /// </summary>
     /// <param name="layer">The new basemap layer, or <see langword="null"/>.</param>
     /// <exception cref="ArgumentException">
-    /// <paramref name="layer"/> belongs to another managed band.
+    /// <paramref name="layer"/> belongs to another managed band or is already
+    /// present in the map.
     /// </exception>
     public void SetBasemapLayer(ILayer? layer)
     {
@@ -70,7 +71,8 @@ public sealed class MapsuiLayerBands
     /// <paramref name="layer"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="layer"/> belongs to another managed band.
+    /// <paramref name="layer"/> belongs to another managed band or is already
+    /// present in the map.
     /// </exception>
     public void AddDatasetLayer(ILayer layer)
     {
@@ -113,7 +115,8 @@ public sealed class MapsuiLayerBands
     /// <paramref name="orderedDatasetLayers"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="ArgumentException">
-    /// The sequence contains a null, duplicate, basemap, overlay, or tool layer.
+    /// The sequence contains a null, duplicate, basemap, overlay, tool, or
+    /// unmanaged layer already present in the map.
     /// </exception>
     public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
     {
@@ -162,7 +165,8 @@ public sealed class MapsuiLayerBands
     /// <paramref name="layer"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="layer"/> belongs to another managed band.
+    /// <paramref name="layer"/> belongs to another managed band or is already
+    /// present in the map.
     /// </exception>
     public void AddOverlayLayer(ILayer layer)
     {
@@ -202,7 +206,8 @@ public sealed class MapsuiLayerBands
     /// <paramref name="layer"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="layer"/> belongs to another managed band.
+    /// <paramref name="layer"/> belongs to another managed band or is already
+    /// present in the map.
     /// </exception>
     public void AddToolLayer(ILayer layer)
     {
@@ -302,7 +307,8 @@ public sealed class MapsuiLayerBands
         if (ReferenceEquals(layer, _basemapLayer)
             || _datasetLayers.Contains(layer)
             || _overlayLayers.Contains(layer)
-            || _toolLayers.Contains(layer))
+            || _toolLayers.Contains(layer)
+            || _map.Layers.Contains(layer))
         {
             throw new ArgumentException(
                 "A layer can belong to only one managed layer band.",
@@ -316,7 +322,8 @@ public sealed class MapsuiLayerBands
     {
         if (ReferenceEquals(layer, _basemapLayer)
             || _overlayLayers.Contains(layer)
-            || _toolLayers.Contains(layer))
+            || _toolLayers.Contains(layer)
+            || (_map.Layers.Contains(layer) && !_datasetLayers.Contains(layer)))
         {
             throw new ArgumentException(
                 "A layer can belong to only one managed layer band.",
