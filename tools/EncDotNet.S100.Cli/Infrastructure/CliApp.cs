@@ -1,4 +1,5 @@
 using EncDotNet.S100.Cli.Commands;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
@@ -9,12 +10,20 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// </summary>
 internal static class CliApp
 {
-    public static CommandApp Build()
+    public static CommandApp Build(
+        string? applicationVersion = null,
+        IAnsiConsole? console = null)
     {
         var app = new CommandApp();
         app.Configure(config =>
         {
             config.SetApplicationName("s100");
+            config.SetApplicationVersion(
+                applicationVersion ?? CliVersionInfo.FromAssembly(typeof(CliApp).Assembly).InformationalVersion);
+            if (console is not null)
+            {
+                config.ConfigureConsole(console);
+            }
 
             config.AddCommand<RenderCommand>("render")
                 .WithDescription("Render one S-100 dataset — or composite several (with --layer, or an entire exchange set) — to an image (PNG, JPEG, or WebP).")

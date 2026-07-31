@@ -15,6 +15,29 @@ sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
 The command name is **`s100`**.
 
+## Version and update notifications
+
+Run `s100 --version` to print the CLI's assembly informational version:
+
+```text
+$ s100 --version
+0.24.0+a1f9c20
+```
+
+Official builds also check the repository's latest GitHub Release. When a newer
+version is known, every invocation writes a single notice to **standard error**:
+
+```text
+Update available: s100 0.25.0 (current 0.24.0): https://github.com/philliphoff/EncDotNet.S100/releases/tag/v0.25.0
+```
+
+Standard output and the command's exit code are unchanged, so JSON and other
+machine-readable output can still be redirected or parsed normally. The latest
+release and check timestamp are cached in the user's local application-data
+directory; GitHub is contacted at most once every 24 hours. Development builds
+(`0.0.0-dev`) do not check. Network, API, and cache failures are silent and
+never prevent a command from running.
+
 ## Distribution
 
 The `s100` CLI is distributed two ways, both produced by CI on each release:
