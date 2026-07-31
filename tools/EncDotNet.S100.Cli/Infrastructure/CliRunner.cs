@@ -35,7 +35,16 @@ internal static class CliRunner
                 .ConfigureAwait(false);
             if (notice is not null)
             {
-                await standardError.WriteLineAsync(notice.Message).ConfigureAwait(false);
+                try
+                {
+                    await standardError.WriteLineAsync(notice.Message).ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                }
+                catch (ObjectDisposedException)
+                {
+                }
             }
         }
         catch (TimeoutException)

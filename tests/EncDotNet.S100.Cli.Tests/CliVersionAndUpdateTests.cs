@@ -70,6 +70,24 @@ public sealed class CliVersionAndUpdateTests
         Assert.Equal(string.Empty, standardError.ToString());
     }
 
+    [Fact]
+    public async Task UnavailableStderrDoesNotChangeCommandResult()
+    {
+        var version = new CliVersionInfo("2.4.1", "2.4.1");
+        var notice = new CliUpdateNotice("2.4.1", "2.5.0", "https://example.test/v2.5.0");
+        var standardOut = new StringWriter();
+
+        var exitCode = await CliRunner.RunAsync(
+            ["--version"],
+            version,
+            new FixedUpdateChecker(notice),
+            new ThrowingTextWriter(),
+            CreateConsole(standardOut));
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal($"2.4.1{Environment.NewLine}", standardOut.ToString());
+    }
+
     [Theory]
     [InlineData("v2.5.0", "2.4.1", true)]
     [InlineData("2.5.0+abc1234", "2.4.1", true)]
@@ -363,5 +381,13 @@ public sealed class CliVersionAndUpdateTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class ThrowingTextWriter : StringWriter
+    {
+        public override Task WriteLineAsync(string? value)
+        {
+            return Task.FromException(new IOException("Standard error is unavailable."));
+        }
     }
 }
