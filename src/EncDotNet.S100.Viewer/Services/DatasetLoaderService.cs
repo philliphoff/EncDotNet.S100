@@ -58,7 +58,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// Per-entry S-98 layer-stack entries produced by the processor's
     /// most recent render. Each entry's <see cref="LayerStackEntry.Layer"/>
     /// also appears in <see cref="_entryLayers"/>. Populated from
-    /// <see cref="DatasetResult.StackEntries"/> when available; otherwise
+    /// <see cref="MapsuiDatasetResult.StackEntries"/> when available; otherwise
     /// synthesised through the active <see cref="IInteroperabilityAuthority"/>.
     /// </summary>
     private readonly Dictionary<DatasetEntry, IReadOnlyList<LayerStackEntry>> _entryStackEntries = new();
@@ -97,7 +97,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// <summary>
     /// Per-entry data-coverage footprint (EPSG:3857) and scale-band denominator
     /// used for cross-cell scale-band overlap suppression (issue #438 Phase 2).
-    /// Populated from <see cref="DatasetResult.CoverageGeometry"/> and the
+    /// Populated from <see cref="MapsuiDatasetResult.CoverageGeometry"/> and the
     /// entry's coarsest display scale on each render; consumed by
     /// <see cref="ApplyOverlapSuppression"/>.
     /// </summary>
@@ -466,7 +466,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             // on the minimum-quiet floor before any paint occurred.
             var paintsBeforeRender = _renderActivityMonitor?.PaintCount ?? 0;
 
-            DatasetResult? result = null;
+            MapsuiDatasetResult? result = null;
             if (gatedHidden)
             {
                 // Present but empty: registers in the panel / timeline and

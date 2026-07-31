@@ -3,7 +3,7 @@ namespace EncDotNet.S100.PerfRunner.Scenarios;
 /// <summary>
 /// Burst-render variant of <see cref="S101RenderWarmScenario"/> introduced
 /// for issue #488: opens an S-101 dataset once and invokes
-/// <see cref="ProcessorRenderBridge.Render"/> <see cref="RepeatCount"/>
+/// <see cref="ProcessorRenderBridge.RenderLayerCount"/> <see cref="RepeatCount"/>
 /// times per iteration on a cached processor. Isolates steady-state
 /// projection cost from open + first-frame cost, so a reproject-once
 /// cache (PR #2) shows up as (1 miss + N-1 hits) / N per iteration
@@ -35,8 +35,7 @@ internal sealed class S101RenderRepeatScenario : IPerfScenario
         int layerCount = 0;
         for (int i = 0; i < RepeatCount; i++)
         {
-            var result = ProcessorRenderBridge.Render(_processor);
-            layerCount = result.Layers.Count;
+            layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
         }
 
         if (layerCount == 0)

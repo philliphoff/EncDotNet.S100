@@ -26,9 +26,9 @@ internal sealed class S201VectorScenario : IPerfScenario
             _processor = factory.CreateProcessor(files[0]);
         }
 
-        var result = ProcessorRenderBridge.Render(_processor);
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
 
-        if (result.Layers.Count == 0)
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-201 render.");
 
         return Task.CompletedTask;

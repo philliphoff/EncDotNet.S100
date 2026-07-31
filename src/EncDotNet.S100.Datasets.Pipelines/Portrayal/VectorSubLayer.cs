@@ -20,7 +20,7 @@ public sealed class VectorSubLayer
     /// Stable sub-layer key used by the viewer to preserve per-sub-layer
     /// visibility / opacity across re-renders (e.g. <c>"s101.areas"</c>,
     /// <c>"s101.linework"</c>). This is the value placed into
-    /// <c>DatasetResult.LayerNames</c>; it is NOT the Mapsui layer's
+    /// <c>MapsuiDatasetResult.LayerNames</c>; it is NOT the Mapsui layer's
     /// display name.
     /// </summary>
     public required string LayerKey { get; init; }

@@ -6,7 +6,7 @@ namespace EncDotNet.S100.PerfRunner.Scenarios;
 /// <summary>
 /// Burst-render variant of <see cref="S102CoverageRenderLargeScenario"/>
 /// introduced for issue #488: opens a synthetic ~1000×1000 S-102 grid
-/// once and invokes <see cref="ProcessorRenderBridge.Render"/>
+/// once and invokes <see cref="ProcessorRenderBridge.RenderLayerCount"/>
 /// <see cref="RepeatCount"/> times per iteration on the cached
 /// processor. Isolates steady-state per-render projection cost from
 /// open + first-frame cost, so a reproject-once cache (PR #2) shows
@@ -38,8 +38,7 @@ internal sealed class S102CoverageRenderRepeatScenario : IPerfScenario
         int layerCount = 0;
         for (int i = 0; i < RepeatCount; i++)
         {
-            var result = ProcessorRenderBridge.Render(_processor);
-            layerCount = result.Layers.Count;
+            layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
         }
 
         if (layerCount == 0)

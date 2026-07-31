@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// Converts a dataset processor's Mapsui-free portrayal output
 /// (<see cref="IVectorPortrayalSource"/> / <see cref="ICoveragePortrayalSource"/>)
-/// into a Mapsui-typed <see cref="DatasetResult"/>. This is the Mapsui-aware
+/// into a Mapsui-typed <see cref="MapsuiDatasetResult"/>. This is the Mapsui-aware
 /// half of the portrayal-output seam: the processor (in the headless-facing
 /// <c>EncDotNet.S100.Datasets.Pipelines</c> assembly) builds an immutable
 /// snapshot of the dataset's portrayal, and this renderer rasterises it into
@@ -86,7 +86,7 @@ public sealed class MapsuiDatasetRenderer
     /// <exception cref="NotSupportedException">
     /// Thrown when the processor exposes neither portrayal-output capability.
     /// </exception>
-    public async Task<DatasetResult> RenderAsync(
+    public async Task<MapsuiDatasetResult> RenderAsync(
         IDatasetProcessor processor,
         RenderContext? context = null,
         CancellationToken cancellationToken = default)
@@ -120,7 +120,7 @@ public sealed class MapsuiDatasetRenderer
         }
     }
 
-    private DatasetResult ConvertVector(IDatasetProcessor processor, VectorPortrayalResult result)
+    private MapsuiDatasetResult ConvertVector(IDatasetProcessor processor, VectorPortrayalResult result)
     {
         var assetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache());
 
@@ -204,7 +204,7 @@ public sealed class MapsuiDatasetRenderer
             ?? ToMercator(result.FallbackGeographicExtent)
             ?? new MRect(0, 0, 0, 0);
 
-        return new DatasetResult
+        return new MapsuiDatasetResult
         {
             Layers = layers,
             Extent = extent,
@@ -217,7 +217,7 @@ public sealed class MapsuiDatasetRenderer
         };
     }
 
-    private DatasetResult ConvertCoverage(CoveragePortrayalResult result)
+    private MapsuiDatasetResult ConvertCoverage(CoveragePortrayalResult result)
     {
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
@@ -278,7 +278,7 @@ public sealed class MapsuiDatasetRenderer
 
         var extent = union ?? fallback ?? new MRect(0, 0, 0, 0);
 
-        return new DatasetResult
+        return new MapsuiDatasetResult
         {
             Layers = layers,
             Extent = extent,

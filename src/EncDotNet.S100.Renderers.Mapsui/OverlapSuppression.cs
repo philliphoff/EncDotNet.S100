@@ -19,7 +19,7 @@ public sealed class OverlapSuppressionCell
 
     /// <summary>
     /// The cell's data-coverage footprint in EPSG:3857 (from
-    /// <see cref="DatasetResult.CoverageGeometry"/>), or <see langword="null"/>
+    /// <see cref="MapsuiDatasetResult.CoverageGeometry"/>), or <see langword="null"/>
     /// when the cell declares no usable coverage (never suppresses or is
     /// suppressed).
     /// </summary>

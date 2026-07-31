@@ -31,9 +31,9 @@ internal abstract class S102CoverageViewportScenarioBase : IPerfScenario
 
         var viewport = BuildViewport();
         var context = new S102RenderContext { Viewport = viewport };
-        var result = ProcessorRenderBridge.Render(_processor, context, ct);
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor, context, ct);
 
-        if (result.Layers.Count == 0)
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-102 render.");
 
         return Task.CompletedTask;

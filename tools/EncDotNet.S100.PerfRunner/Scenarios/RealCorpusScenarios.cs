@@ -49,9 +49,9 @@ internal sealed class S101RealColdScenario : IPerfScenario
 
         var factory = SharedInfrastructure.CreatePipelineFactory();
         var processor = factory.CreateProcessor(path);
-        var result = ProcessorRenderBridge.Render(processor);
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(processor);
 
-        if (result.Layers.Count == 0)
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-101 render.");
 
         return Task.CompletedTask;
@@ -79,8 +79,8 @@ internal sealed class S101RealWarmScenario : IPerfScenario
             _processor = factory.CreateProcessor(path);
         }
 
-        var result = ProcessorRenderBridge.Render(_processor);
-        if (result.Layers.Count == 0)
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-101 render.");
 
         return Task.CompletedTask;
@@ -108,8 +108,8 @@ internal sealed class S102RealWarmScenario : IPerfScenario
             _processor = factory.CreateProcessor(path);
         }
 
-        var result = ProcessorRenderBridge.Render(_processor);
-        if (result.Layers.Count == 0)
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-102 render.");
 
         return Task.CompletedTask;
@@ -137,8 +137,8 @@ internal sealed class S111RealWarmScenario : IPerfScenario
             _processor = factory.CreateProcessor(path);
         }
 
-        var result = ProcessorRenderBridge.Render(_processor);
-        if (result.Layers.Count == 0)
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-111 render.");
 
         return Task.CompletedTask;
