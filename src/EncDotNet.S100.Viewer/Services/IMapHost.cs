@@ -12,13 +12,12 @@ namespace EncDotNet.S100.Viewer.Services;
 /// supply a fake.
 /// </summary>
 /// <remarks>
-/// The host carves the Mapsui layer collection into three implicit
-/// tiers. The viewer's basemap is added to the live <c>Map.Layers</c>
-/// before the host sees any traffic; map-tool overlays are appended to
-/// the same collection on demand. Layers added via <see cref="AddLayer"/>
-/// are treated as <em>dataset</em> layers and inserted strictly above
-/// the basemap and below any overlays. <see cref="ReorderDatasetLayers"/>
-/// preserves that invariant — overlays never move when datasets reorder.
+/// The implementation delegates layer ownership to
+/// <see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiLayerBands"/>, which
+/// maintains explicit basemap, dataset, overlay, and tool bands on the live
+/// <see cref="Map"/>. Layers added via <see cref="AddLayer"/> belong to the
+/// dataset band. <see cref="ReorderDatasetLayers"/> preserves the surrounding
+/// bands while authoritatively replacing that dataset band.
 /// </remarks>
 internal interface IMapHost
 {

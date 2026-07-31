@@ -38,6 +38,26 @@ order and is safe to call repeatedly. Applications must call this entry point
 before rendering S-100 layers; render operations do not mutate Mapsui's global
 renderer registry implicitly.
 
+## Layer-band composition
+
+`MapsuiLayerBands` owns the ordered S-100 layer bands of an existing
+`Mapsui.Map` without depending on a UI-framework map control:
+
+```csharp
+var bands = new MapsuiLayerBands(map);
+bands.SetBasemapLayer(basemap);
+bands.AddDatasetLayer(datasetLayer);
+bands.AddOverlayLayer(validationLayer);
+bands.AddToolLayer(measureLayer);
+```
+
+The resulting order is always basemap → datasets → overlays → tools.
+`ReplaceDatasetLayers` authoritatively replaces or reorders only the dataset
+band, leaving the other bands in place. Each corresponding remove method
+removes only layers owned by that band. Calls mutate `Map.Layers` immediately;
+Avalonia, MAUI, and other UI hosts remain responsible for thread dispatch and
+redraw invalidation.
+
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
 `EncDotNet.S100.Rendering.Scene` (`VectorSceneBuilder` → `VectorScene` of

@@ -16,7 +16,6 @@ using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
-using Mapsui.Layers;
 using Mapsui.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,6 +33,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private readonly CancellationTokenSource _windowLifetimeCancellation = new();
+    private readonly MapsuiMapHost _mapHost;
     private ValidationOverlayService? _validationOverlay;
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
     private Map? _renderActivityMap;
@@ -42,7 +42,6 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
-    private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
     private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
@@ -135,8 +134,8 @@ public partial class MainWindow : ShadUI.Window
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally.
-        var mapHost = new MapsuiMapHost(MapControl);
-        App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
+        _mapHost = new MapsuiMapHost(MapControl);
+        App.Services.GetRequiredService<IMapHostAccessor>().Current = _mapHost;
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
@@ -151,15 +150,15 @@ public partial class MainWindow : ShadUI.Window
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
             new ViewerUiController(_viewModel);
-        _loader.Initialize(mapHost, options);
+        _loader.Initialize(_mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
-        _viewModel.Datasets.ZoomDispatcher = mapHost.ZoomToExtent;
+        _viewModel.Datasets.ZoomDispatcher = _mapHost.ZoomToExtent;
         // Build the validation findings overlay layer that draws above
         // all dataset layers for the currently-selected dataset. The
         // service subscribes to the datasets view-model and lives for
         // the lifetime of the window.
-        _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
+        _validationOverlay = new ValidationOverlayService(_mapHost, _viewModel.Datasets);
 
         Closed += (_, _) =>
         {
@@ -268,11 +267,8 @@ public partial class MainWindow : ShadUI.Window
         // land — zero network); the user can switch to None or Online in
         // Settings (or via --basemap). Keep a reference so swapping mode
         // can replace it live. Always sits at index 0, beneath datasets.
-        _basemapLayer = BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode);
-        if (_basemapLayer is not null)
-        {
-            MapControl.Map?.Layers.Add(_basemapLayer);
-        }
+        _mapHost.SetBasemapLayer(
+            BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode));
         _viewModel.Settings.BasemapModeChanged += OnBasemapModeChanged;
 
         // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
@@ -357,7 +353,7 @@ public partial class MainWindow : ShadUI.Window
         // the overlay above the OSM tile layer rather than at index 0
         // (where the subsequently-added basemap would cover it).
         _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
-            mapHost,
+            _mapHost,
             App.Services,
             logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
 
@@ -395,7 +391,7 @@ public partial class MainWindow : ShadUI.Window
         // on the overlay tier in sync with the current pick report, so the
         // pick stays visible as the user (or an MCP agent) pans the map.
         _pickHighlightController = new EncDotNet.S100.Viewer.Services.PickHighlightController(
-            mapHost,
+            _mapHost,
             App.Services.GetRequiredService<PickReportViewModel>(),
             App.Services.GetRequiredService<ViewerDatasetCatalog>(),
             App.Services.GetRequiredService<
@@ -406,7 +402,7 @@ public partial class MainWindow : ShadUI.Window
         // datasets that have zoomed out past their display-scale minimum, so a
         // wide-spread exchange set still shows where its members are (#446).
         _extentIndicatorController = new EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController(
-            mapHost,
+            _mapHost,
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
@@ -415,7 +411,7 @@ public partial class MainWindow : ShadUI.Window
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).
         _overscaleCurtainController = new EncDotNet.S100.Viewer.Services.OverscaleCurtainController(
-            mapHost,
+            _mapHost,
             _viewModel.Datasets,
             _loader,
             App.Services.GetRequiredService<
@@ -705,20 +701,7 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void OnBasemapModeChanged(BasemapMode mode)
     {
-        if (MapControl.Map is not { } map) return;
-
-        if (_basemapLayer is not null)
-        {
-            map.Layers.Remove(_basemapLayer);
-            _basemapLayer = null;
-        }
-
-        _basemapLayer = BasemapLayerFactory.TryCreate(mode);
-        if (_basemapLayer is not null)
-        {
-            map.Layers.Insert(0, _basemapLayer);
-        }
-
+        _mapHost.SetBasemapLayer(BasemapLayerFactory.TryCreate(mode));
         MapControl.RefreshGraphics();
     }
 
@@ -1001,8 +984,8 @@ public partial class MainWindow : ShadUI.Window
 
         var context = new MapToolContext(
             mapControl: MapControl,
-            addLayer: layer => MapControl.Map?.Layers.Add(layer),
-            removeLayer: layer => MapControl.Map?.Layers.Remove(layer),
+            addLayer: _mapHost.AddToolLayer,
+            removeLayer: _mapHost.RemoveToolLayer,
             setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
             refreshGraphics: () => MapControl.RefreshGraphics(),
             screenToLatLon: ScreenToLatLon,
@@ -1038,7 +1021,7 @@ public partial class MainWindow : ShadUI.Window
             EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>();
 
         _routeOverlayLayer = EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Create();
-        MapControl.Map?.Layers.Add(_routeOverlayLayer);
+        _mapHost.AddToolLayer(_routeOverlayLayer);
 
         _routeStore.Changed += OnRouteStoreChanged;
         _routeAppearance.Changed += OnRouteStoreChanged;
@@ -1052,15 +1035,12 @@ public partial class MainWindow : ShadUI.Window
     /// <summary>
     /// Rebuilds the persistent route overlay from the current
     /// <see cref="EncDotNet.S100.Viewer.Services.RoutesService"/> state and
-    /// schedules a redraw. Re-adds the layer if a map rebuild dropped it.
+    /// schedules a redraw.
     /// </summary>
     private void RebuildRouteOverlay()
     {
         if (_routeOverlayLayer is null || _routeStore is null || _routeAppearance is null)
             return;
-
-        if (MapControl.Map is { } map && !map.Layers.Contains(_routeOverlayLayer))
-            map.Layers.Add(_routeOverlayLayer);
 
         EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Update(
             _routeOverlayLayer,
