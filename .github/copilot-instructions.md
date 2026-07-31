@@ -65,7 +65,8 @@ tests/
   EncDotNet.S100.Datasets.S421.Tests/
   EncDotNet.S100.ExchangeSets.Tests/
   EncDotNet.S100.Pipelines.Tests/    # Pipeline integration tests (S-101, S-102, coverage, vector, Skia)
-tools/                               # CLI tools (RenderS102, TestS101Lua)
+tools/EncDotNet.S100.Cli/            # `s100` CLI; exposes complete agent guidance via `s100 --skill`
+tools/                               # Other CLI and performance tools
 docs/                                # DocFX documentation source; specs PDF lives here
 ```
 
@@ -162,9 +163,12 @@ them by task signal regardless of which spec you are touching:
 
 | Signal in task | Load skill |
 |---|---|
+| Choosing or invoking an `s100` CLI command; changes to `tools/EncDotNet.S100.Cli/**`; maintaining `s100 --skill` | `s100-cli` |
 | Verifying a rendering/portrayal change in the viewer, designing or reproducing integration/regression scenarios, capturing reference images, measuring load/render performance, deriving fixtures from real datasets — driving the viewer headlessly via its CLI + MCP server | `viewer-evaluation` |
 | Chart composition independent of a single spec: layer/draw-order & display priority, scale-dependent generalization & declutter, label placement, day/dusk/night palette & contrast, CRS/projection pitfalls, rendering-performance strategy (geometry simplification, caching, vertex-bound cost reasoning) | `chart-cartography` |
 
+- Before choosing `s100` commands or arguments, run `s100 --skill` and treat
+  its comprehensive Markdown as authoritative for the installed build.
 - `viewer-evaluation` applies even when you are **not** editing the
   Viewer project — renderer, Core pipeline, and `Datasets.SXXX` work
   often needs end-to-end visual verification. The MCP tool catalogue
