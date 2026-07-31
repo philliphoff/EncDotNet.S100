@@ -62,6 +62,9 @@ public sealed class DecryptingAssetSource : IAssetSource
     }
 
     /// <inheritdoc />
+    /// <exception cref="DatasetPermitException">
+    /// The requested protected dataset is not authorized by its permit.
+    /// </exception>
     public async Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(relativePath);

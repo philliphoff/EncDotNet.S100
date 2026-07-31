@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using EncDotNet.S100.ExchangeSets.Protection;
 
@@ -250,13 +252,13 @@ public class ProtectionTests
     [Fact]
     public void DataPermit_AppliesTo_ExtensionRules()
     {
-        var noExt = new DataPermit("ABC123", new byte[16]);
+        var noExt = new DataPermit("ABC123", new byte[16], new DateOnly(2099, 12, 31));
         Assert.True(noExt.AppliesTo("ABC123"));
         Assert.True(noExt.AppliesTo("ABC123.000"));
         Assert.True(noExt.AppliesTo("abc123.001"));
         Assert.False(noExt.AppliesTo("ABC124.000"));
 
-        var withExt = new DataPermit("ABC123.h5", new byte[16]);
+        var withExt = new DataPermit("ABC123.h5", new byte[16], new DateOnly(2099, 12, 31));
         Assert.True(withExt.AppliesTo("ABC123.h5"));
         Assert.False(withExt.AppliesTo("ABC123.000"));
     }
@@ -273,13 +275,15 @@ public class ProtectionTests
         // A permit whose encryptedKey unwraps (with the HW_ID) to our cell key.
         byte[] encryptedKey = S100Cipher.EncryptBlock(cellKey, hardwareId);
         string permitXml = BuildPermitXml("101AA00000000001", Convert.ToHexString(encryptedKey));
-        PermitFile permitFile;
-        using (var ps = new MemoryStream(Encoding.UTF8.GetBytes(permitXml)))
-        {
-            permitFile = PermitFile.Read(ps);
-        }
+        var permitFile = await AuthenticatePermitAsync(permitXml);
 
-        var keyProvider = new PermitKeyProvider(permitFile, HardwareId.FromBytes(hardwareId));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000001.000",
+            issueDate: "2026-01-01");
+        var keyProvider = new PermitKeyProvider(
+            permitFile,
+            HardwareId.FromBytes(hardwareId),
+            catalogue);
 
         var inner = new InMemoryAssetSource();
         inner.AddFile("S-101/101AA00000000001.000", S100Cipher.EncryptDataset(payload, cellKey));
@@ -303,13 +307,15 @@ public class ProtectionTests
 
         byte[] encryptedKey = S100Cipher.EncryptBlock(cellKey, hardwareId);
         string permitXml = BuildPermitXml("101AA00000000002", Convert.ToHexString(encryptedKey));
-        PermitFile permitFile;
-        using (var ps = new MemoryStream(Encoding.UTF8.GetBytes(permitXml)))
-        {
-            permitFile = PermitFile.Read(ps);
-        }
+        var permitFile = await AuthenticatePermitAsync(permitXml);
 
-        var keyProvider = new PermitKeyProvider(permitFile, HardwareId.FromBytes(hardwareId));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000002.000",
+            issueDate: "2026-01-01");
+        var keyProvider = new PermitKeyProvider(
+            permitFile,
+            HardwareId.FromBytes(hardwareId),
+            catalogue);
         var inner = new InMemoryAssetSource();
         inner.AddFile("101AA00000000002.000", encrypted);
 
@@ -336,6 +342,30 @@ public class ProtectionTests
         </Permit>
         """;
 
+    private static ExchangeCatalogue CreateProtectedCatalogue(
+        string fileName,
+        int? editionNumber = null,
+        string? issueDate = null,
+        bool dataProtection = true) =>
+        new()
+        {
+            Identifier = new ExchangeCatalogueIdentifier
+            {
+                Identifier = "TEST",
+                DateTime = "2026-01-01",
+            },
+            DatasetDiscoveryMetadata =
+            [
+                new DatasetDiscoveryMetadata
+                {
+                    FileName = fileName,
+                    DataProtection = dataProtection,
+                    EditionNumber = editionNumber,
+                    IssueDate = issueDate,
+                },
+            ],
+        };
+
     private static byte[] ZipSingleEntry(string entryName, byte[] content)
     {
         using var buffer = new MemoryStream();
@@ -355,6 +385,272 @@ public class ProtectionTests
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
         return ms.ToArray();
+    }
+
+    // --- Permit policy -------------------------------------------------------
+
+    [Fact]
+    public async Task PermitKeyProvider_AllowsDatasetIssuedOnExpiryDate()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000003",
+            editionNumber: 2,
+            issueDate: null,
+            expiry: new DateOnly(2026, 6, 30));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000003.000",
+            editionNumber: 2,
+            issueDate: "2026-06-30");
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var result = provider.Evaluate("101AA00000000003.000");
+
+        Assert.True(result.IsAllowed);
+        Assert.Equal(PermitEvaluationOutcome.Allowed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_RejectsDatasetIssuedAfterExpiry()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000004",
+            editionNumber: 2,
+            issueDate: null,
+            expiry: new DateOnly(2026, 6, 30));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000004.001",
+            editionNumber: 2,
+            issueDate: "2026-07-01");
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var exception = Assert.Throws<DatasetPermitException>(
+            () => provider.TryGetCellKey("101AA00000000004.001", out _));
+
+        Assert.Equal(PermitEvaluationOutcome.IssuedAfterExpiry, exception.Evaluation.Outcome);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_RejectsEditionMismatch()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000005",
+            editionNumber: 2,
+            issueDate: null,
+            expiry: new DateOnly(2099, 12, 31));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000005.000",
+            editionNumber: 3,
+            issueDate: "2026-01-01");
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var result = provider.Evaluate("101AA00000000005.000");
+
+        Assert.Equal(PermitEvaluationOutcome.EditionMismatch, result.Outcome);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_RejectsMissingRequiredEdition()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000008",
+            editionNumber: 2,
+            issueDate: null,
+            expiry: new DateOnly(2099, 12, 31));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000008.000",
+            issueDate: "2026-01-01");
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var result = provider.Evaluate("101AA00000000008.000");
+
+        Assert.Equal(PermitEvaluationOutcome.EditionNumberMissing, result.Outcome);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_UsesIssueDateWhenPermitHasNoEdition()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000006",
+            editionNumber: null,
+            issueDate: new DateOnly(2026, 2, 1),
+            expiry: new DateOnly(2099, 12, 31));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000006.000",
+            issueDate: "2026-02-02");
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var result = provider.Evaluate("101AA00000000006.000");
+
+        Assert.Equal(PermitEvaluationOutcome.IssueDateMismatch, result.Outcome);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_AppliesBaseIssueDateAndUpdateExpiryToIncrement()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000010",
+            editionNumber: null,
+            issueDate: new DateOnly(2026, 1, 1),
+            expiry: new DateOnly(2026, 6, 30));
+        var catalogue = new ExchangeCatalogue
+        {
+            Identifier = new ExchangeCatalogueIdentifier
+            {
+                Identifier = "TEST",
+                DateTime = "2026-01-01",
+            },
+            DatasetDiscoveryMetadata =
+            [
+                new DatasetDiscoveryMetadata
+                {
+                    FileName = "101AA00000000010.000",
+                    DataProtection = true,
+                    UpdateNumber = 0,
+                    IssueDate = "2026-01-01",
+                },
+                new DatasetDiscoveryMetadata
+                {
+                    FileName = "101AA00000000010.001",
+                    DataProtection = true,
+                    UpdateNumber = 1,
+                    IssueDate = "2026-06-30",
+                },
+            ],
+        };
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var result = provider.Evaluate("101AA00000000010.001");
+
+        Assert.True(result.IsAllowed);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_RejectsMissingIssueDateNeededForExpiry()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000009",
+            editionNumber: 2,
+            issueDate: null,
+            expiry: new DateOnly(2026, 12, 31));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000009.000",
+            editionNumber: 2);
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var result = provider.Evaluate("101AA00000000009.000");
+
+        Assert.Equal(PermitEvaluationOutcome.IssueDateMissing, result.Outcome);
+    }
+
+    [Fact]
+    public async Task PermitKeyProvider_PassesThroughUnprotectedDataset()
+    {
+        var permit = await ReadPermitAsync(
+            "101AA00000000007",
+            editionNumber: null,
+            issueDate: null,
+            expiry: new DateOnly(2099, 12, 31));
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000007.000",
+            dataProtection: false);
+        var provider = new PermitKeyProvider(
+            permit,
+            HardwareId.Parse(ExampleHardwareId),
+            catalogue);
+
+        var found = provider.TryGetCellKey("101AA00000000007.000", out var key);
+
+        Assert.False(found);
+        Assert.Null(key);
+    }
+
+    private static async Task<PermitFile> ReadPermitAsync(
+        string fileName,
+        int? editionNumber,
+        DateOnly? issueDate,
+        DateOnly expiry)
+    {
+        var cellKey = Hex("000102030405060708090A0B0C0D0E0F");
+        var encryptedKey = S100Cipher.EncryptBlock(cellKey, Hex(ExampleHardwareId));
+        var editionElement = editionNumber is null
+            ? string.Empty
+            : $"<editionNumber>{editionNumber}</editionNumber>";
+        var issueDateElement = issueDate is null
+            ? string.Empty
+            : $"<issueDate>{issueDate:yyyy-MM-dd}</issueDate>";
+        var expiryElement = $"<expiry>{expiry:yyyy-MM-dd}</expiry>";
+        var xml = $"""
+            <Permit xmlns="http://www.iho.int/s100/se/5.1">
+                <header><dataServerName>Test</dataServerName></header>
+                <products>
+                    <product id="S-101">
+                        <datasetPermit>
+                            <filename>{fileName}</filename>
+                            {editionElement}
+                            {issueDateElement}
+                            {expiryElement}
+                            <encryptedKey>{Convert.ToHexString(encryptedKey)}</encryptedKey>
+                        </datasetPermit>
+                    </product>
+                </products>
+            </Permit>
+            """;
+        return await AuthenticatePermitAsync(xml);
+    }
+
+    private static async Task<PermitFile> AuthenticatePermitAsync(string permitXml)
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        var request = new CertificateRequest("CN=Test Data Server", ecdsa, HashAlgorithmName.SHA384);
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(1));
+        var permitBytes = Encoding.UTF8.GetBytes(permitXml);
+        var signature = ecdsa.SignHash(
+            SHA384.HashData(permitBytes),
+            DSASignatureFormat.Rfc3279DerSequence);
+        var certificateId = "urn:test:data-server";
+        var signatureXml = $"""
+            <StandaloneDigitalSignature xmlns="http://www.iho.int/s100/se/5.1">
+                <filename>PERMIT.XML</filename>
+                <certificates>
+                    <schemeAdministrator id="TEST"/>
+                    <certificate id="{certificateId}" issuer="TEST">{Convert.ToBase64String(certificate.RawData)}</certificate>
+                </certificates>
+                <digitalSignature id="permit-signature" certificateRef="{certificateId}">{Convert.ToBase64String(signature)}</digitalSignature>
+            </StandaloneDigitalSignature>
+            """;
+        using var permitStream = new MemoryStream(permitBytes);
+        using var signatureStream = new MemoryStream(Encoding.UTF8.GetBytes(signatureXml));
+        var result = await PermitSignatureVerifier.AuthenticateAsync(
+            permitStream,
+            signatureStream,
+            "PERMIT.XML",
+            new TrustAnchorOptions { TrustedRoots = [certificate] });
+
+        Assert.True(result.IsAuthenticated, result.Verification.Detail);
+        return Assert.IsType<PermitFile>(result.PermitFile);
     }
 
     // --- DecryptingAssetSource: disposal ownership --------------------------
