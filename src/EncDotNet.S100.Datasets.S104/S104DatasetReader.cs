@@ -94,7 +94,7 @@ public static class S104DatasetReader
             : null;
 
         var wlGroup = root.OpenGroup("WaterLevel");
-        const string WaterLevelPath = "/WaterLevel";
+        const string waterLevelPath = "/WaterLevel";
 
         // S-104 Edition 2.0.0 §10.2 — every WaterLevel container carries
         // a dataCodingFormat enum that selects the per-instance layout.
@@ -103,7 +103,7 @@ public static class S104DatasetReader
                 "dataCodingFormat",
                 product: "S-104",
                 file: null,
-                groupPath: WaterLevelPath,
+                groupPath: waterLevelPath,
                 specReference: "S-100 Part 10c §10.2.1")
             : 2;
 
@@ -192,11 +192,11 @@ public static class S104DatasetReader
             : null;
 
         var wlGroup = root.OpenGroup("WaterLevel");
-        const string WaterLevelPath = "/WaterLevel";
+        const string waterLevelPath = "/WaterLevel";
 
         int dataCodingFormat = wlGroup.AttributeExists("dataCodingFormat")
             ? (int)wlGroup.ReadRequiredInt64Attribute(
-                "dataCodingFormat", "S-104", null, WaterLevelPath, "S-100 Part 10c §10.2.1")
+                "dataCodingFormat", "S-104", null, waterLevelPath, "S-100 Part 10c §10.2.1")
             : 2;
 
         BoundingBox? extent;
@@ -241,14 +241,14 @@ public static class S104DatasetReader
 
             var instance = wlGroup.OpenGroup(instanceName);
             var instancePath = $"/WaterLevel/{instanceName}";
-            const string Spec = "S-100 Part 10c §10.2.1.2";
+            const string spec = "S-100 Part 10c §10.2.1.2";
 
-            double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-104", null, instancePath, Spec);
-            double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-104", null, instancePath, Spec);
-            double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-104", null, instancePath, Spec);
-            double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-104", null, instancePath, Spec);
-            int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-104", null, instancePath, Spec);
-            int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-104", null, instancePath, Spec);
+            double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-104", null, instancePath, spec);
+            double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-104", null, instancePath, spec);
+            double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-104", null, instancePath, spec);
+            double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-104", null, instancePath, spec);
+            int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-104", null, instancePath, spec);
+            int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-104", null, instancePath, spec);
 
             double latA = originLat, latB = originLat + spacingLat * numLat;
             double lonA = originLon, lonB = originLon + spacingLon * numLon;
@@ -465,13 +465,13 @@ public static class S104DatasetReader
     {
         // S-100 Part 10c §10.2.1.2 — the grid-georef attributes are
         // required on every dcf2 WaterLevel.NN instance group.
-        const string Spec = "S-100 Part 10c §10.2.1.2";
-        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-104", null, instancePath, Spec);
-        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-104", null, instancePath, Spec);
-        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-104", null, instancePath, Spec);
-        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-104", null, instancePath, Spec);
-        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-104", null, instancePath, Spec);
-        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-104", null, instancePath, Spec);
+        const string spec = "S-100 Part 10c §10.2.1.2";
+        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-104", null, instancePath, spec);
+        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-104", null, instancePath, spec);
+        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-104", null, instancePath, spec);
+        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-104", null, instancePath, spec);
+        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-104", null, instancePath, spec);
+        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-104", null, instancePath, spec);
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
@@ -751,7 +751,7 @@ public static class S104DatasetReader
         IReadOnlyList<GeoPosition> positions,
         List<WaterLevelStation> stations)
     {
-        const string Spec = "S-104 Edition 2.0.0 §10.2.7";
+        const string spec = "S-104 Edition 2.0.0 §10.2.7";
 
         int numberOfStations = instance.AttributeExists("numberOfStations")
             ? (int)instance.ReadInt64Attribute("numberOfStations")
@@ -773,17 +773,17 @@ public static class S104DatasetReader
                 : groupName;
 
             string startStr = group.ReadRequiredStringAttribute(
-                "startDateTime", "S-104", null, groupPath, Spec);
+                "startDateTime", "S-104", null, groupPath, spec);
             string endStr = group.ReadRequiredStringAttribute(
-                "endDateTime", "S-104", null, groupPath, Spec);
+                "endDateTime", "S-104", null, groupPath, spec);
 
             DateTime startTime = ParseTimestamp(startStr);
             DateTime endTime = ParseTimestamp(endStr);
 
             int numberOfTimes = (int)group.ReadRequiredInt64Attribute(
-                "numberOfTimes", "S-104", null, groupPath, Spec);
+                "numberOfTimes", "S-104", null, groupPath, spec);
             long intervalSeconds = group.ReadRequiredInt64Attribute(
-                "timeRecordInterval", "S-104", null, groupPath, Spec);
+                "timeRecordInterval", "S-104", null, groupPath, spec);
             var interval = TimeSpan.FromSeconds(intervalSeconds);
 
             var (heights, trends) = ReadStationValues(group, numberOfTimes);

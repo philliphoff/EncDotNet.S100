@@ -227,8 +227,8 @@ internal static class VesselSymbology
     public static GeoPosition GeodeticDestination(
         double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
     {
-        const double R = 6_371_008.8;
-        var δ = distanceMetres / R;
+        const double earthRadiusMeters = 6_371_008.8;
+        var δ = distanceMetres / earthRadiusMeters;
         var θ = bearingDeg * Math.PI / 180.0;
         var φ1 = latDeg * Math.PI / 180.0;
         var λ1 = lonDeg * Math.PI / 180.0;

@@ -32,20 +32,20 @@ public sealed class TelemetryFileReader
             // duplicated here as string literals because PerfReport must
             // not take a project reference on PerfRunner (one is a
             // standalone .NET tool, the other an executable).
-            const string IterationActivityName = "perf.iteration";
-            const string ScenarioTag = "perf.scenario";
-            const string RoundTag = "perf.round";
-            const string IterTag = "perf.iter";
-            const string SideTag = "perf.side";
+            const string iterationActivityName = "perf.iteration";
+            const string scenarioTag = "perf.scenario";
+            const string roundTag = "perf.round";
+            const string iterTag = "perf.iter";
+            const string sideTag = "perf.side";
 
             var samples = new List<IterationSample>(Spans.Count);
             foreach (var span in Spans)
             {
-                if (span.Name != IterationActivityName) continue;
-                var scenario = span.Tags.GetValueOrDefault(ScenarioTag) ?? "";
-                int round = ParseInt(span.Tags.GetValueOrDefault(RoundTag), 1);
-                int index = ParseInt(span.Tags.GetValueOrDefault(IterTag), 0);
-                var side = span.Tags.GetValueOrDefault(SideTag);
+                if (span.Name != iterationActivityName) continue;
+                var scenario = span.Tags.GetValueOrDefault(scenarioTag) ?? "";
+                int round = ParseInt(span.Tags.GetValueOrDefault(roundTag), 1);
+                int index = ParseInt(span.Tags.GetValueOrDefault(iterTag), 0);
+                var side = span.Tags.GetValueOrDefault(sideTag);
                 samples.Add(new IterationSample(scenario, round, index, side, span.DurationMs));
             }
             return samples;

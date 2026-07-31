@@ -214,10 +214,10 @@ public static class DouglasPeuckerLineSimplifier
         // WGS-84 nominal metres per degree of latitude and longitude. The
         // latitude value varies < 1% across the ellipsoid so a constant is
         // fine here; the longitude value scales with cos(latitude).
-        const double MetresPerDegreeLatitude = 111_320.0;
-        var metresPerDegreeLongitude = MetresPerDegreeLatitude * Math.Cos(midLatRadians);
+        const double metresPerDegreeLatitude = 111_320.0;
+        var metresPerDegreeLongitude = metresPerDegreeLatitude * Math.Cos(midLatRadians);
 
-        return (midLatRadians, MetresPerDegreeLatitude, metresPerDegreeLongitude);
+        return (midLatRadians, metresPerDegreeLatitude, metresPerDegreeLongitude);
     }
 
     private static (double X, double Y) Project(

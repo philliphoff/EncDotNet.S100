@@ -51,7 +51,7 @@ internal readonly record struct FinerCoverage(Geometry Coverage, double CutoffRe
 /// </remarks>
 internal static class CoverageClip
 {
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ILayer, FinerCoverage[]> s_regions = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ILayer, FinerCoverage[]> Regions = new();
 
     /// <summary>
     /// Attaches the set of finer overlapping coverages that clip
@@ -62,9 +62,9 @@ internal static class CoverageClip
     {
         ArgumentNullException.ThrowIfNull(layer);
 
-        s_regions.Remove(layer);
+        Regions.Remove(layer);
         if (finerCoverages is { Count: > 0 })
-            s_regions.Add(layer, finerCoverages as FinerCoverage[] ?? [.. finerCoverages]);
+            Regions.Add(layer, finerCoverages as FinerCoverage[] ?? [.. finerCoverages]);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ internal static class CoverageClip
     public static FinerCoverage[]? Get(ILayer layer)
     {
         ArgumentNullException.ThrowIfNull(layer);
-        return s_regions.TryGetValue(layer, out var regions) ? regions : null;
+        return Regions.TryGetValue(layer, out var regions) ? regions : null;
     }
 
     /// <summary>

@@ -741,10 +741,10 @@ public sealed class DatasetPipelineFactory
                 stream,
                 System.Text.Encoding.UTF8,
                 detectEncodingFromByteOrderMarks: true);
-            const int MaxSniffPrefixChars = 64 * 1024;
-            var buffer = new char[MaxSniffPrefixChars];
+            const int maxSniffPrefixChars = 64 * 1024;
+            var buffer = new char[maxSniffPrefixChars];
             int read = await streamReader.ReadBlockAsync(
-                    buffer.AsMemory(0, MaxSniffPrefixChars),
+                    buffer.AsMemory(0, maxSniffPrefixChars),
                     cancellationToken)
                 .ConfigureAwait(false);
             var xml = new string(buffer, 0, read).TrimStart();

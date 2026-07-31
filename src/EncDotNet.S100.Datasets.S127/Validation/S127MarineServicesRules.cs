@@ -247,7 +247,7 @@ public static class S127MarineServicesRules
             })
             .Build();
 
-    private static readonly (string Min, string Max)[] s_vesselSizeLimitPairs =
+    private static readonly (string Min, string Max)[] VesselSizeLimitPairs =
     {
         ("minimumVesselsLength",  "maximumVesselsLength"),
         ("minimumVesselsDraught", "maximumVesselsDraught"),
@@ -281,7 +281,7 @@ public static class S127MarineServicesRules
                     var attrs = feature.Source.Attributes;
                     if (attrs.Count == 0) continue;
 
-                    foreach (var (minKey, maxKey) in s_vesselSizeLimitPairs)
+                    foreach (var (minKey, maxKey) in VesselSizeLimitPairs)
                     {
                         if (!attrs.TryGetValue(minKey, out var minStr)
                             || !attrs.TryGetValue(maxKey, out var maxStr))

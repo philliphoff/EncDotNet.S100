@@ -31,7 +31,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
     private HashSet<ushort>? _complexAttrNumericCodes;
     private Dictionary<ushort, HashSet<ushort>>? _nestedChildComplexCodes;
-    private static readonly HashSet<ushort> s_emptyComplexCodes = new();
+    private static readonly HashSet<ushort> EmptyComplexCodes = new();
 
     // Collected drawing instruction output
     private readonly List<EmittedInstruction> _emitted = new();
@@ -699,7 +699,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
         return _nestedChildComplexCodes.TryGetValue(parentCode, out var set)
             ? set
-            : s_emptyComplexCodes;
+            : EmptyComplexCodes;
     }
 
     /// <summary>

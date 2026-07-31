@@ -112,7 +112,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 - Key rules (see the guide for the full set): `PascalCase` for types/methods/properties, `camelCase` for locals and parameters, `_camelCase` for private fields; file-scoped namespaces, 4-space indents, Allman braces; `System.*` usings first with no unused usings.
 - Nullable reference types are enabled everywhere — avoid `!` suppression; prefer null-checks or `ArgumentNullException.ThrowIfNull`.
 - All public APIs must carry XML doc comments (`<summary>`, `<param>`, `<returns>`).
-- Before finishing a change, run `dotnet format whitespace EncDotNet.S100.slnx` and `dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005` to normalize formatting and using directives; CI's **Format check** job verifies both (`--verify-no-changes`) and will fail on any drift.
+- Before finishing a change, normalize whitespace and usings with `dotnet format whitespace EncDotNet.S100.slnx` and `dotnet format style EncDotNet.S100.slnx --diagnostics IDE0005`, then run `dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn --verify-no-changes`; CI's **Format check** job runs that combined verification and fails on whitespace, using-directive, or naming drift.
 - For API-shape conventions (collection return types, `class` vs `record`, quantity types) follow [`docs/design/api-conventions.md`](../docs/design/api-conventions.md).
 
 ### Package dependencies

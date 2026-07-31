@@ -173,8 +173,8 @@ public sealed class S111ArrowRenderingTests : IDisposable
     {
         // 1×3 coverage with speeds chosen to hit bands 1, 5, 9 and
         // directions covering 0°, 90°, 180°.
-        const string ValueField = "surfaceCurrentSpeed";
-        const string RotationField = "surfaceCurrentDirection";
+        const string valueField = "surfaceCurrentSpeed";
+        const string rotationField = "surfaceCurrentDirection";
 
         var metadata = new GridMetadata
         {
@@ -192,8 +192,8 @@ public sealed class S111ArrowRenderingTests : IDisposable
             Metadata = metadata,
             Values = new Dictionary<string, float[]>
             {
-                [ValueField] = new float[] { 0.25f, 3.5f, 15.0f },
-                [RotationField] = new float[] { 0f, 90f, 180f },
+                [valueField] = new float[] { 0.25f, 3.5f, 15.0f },
+                [rotationField] = new float[] { 0f, 90f, 180f },
             },
         };
 

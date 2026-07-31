@@ -5,7 +5,7 @@ namespace EncDotNet.S100.PerfRunner;
 /// </summary>
 public static class ScenarioRegistry
 {
-    private static readonly Dictionary<string, Func<IPerfScenario>> s_factories = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Func<IPerfScenario>> Factories = new(StringComparer.OrdinalIgnoreCase);
 
     static ScenarioRegistry()
     {
@@ -35,13 +35,13 @@ public static class ScenarioRegistry
     public static void Register(Func<IPerfScenario> factory)
     {
         var instance = factory();
-        s_factories[instance.Name] = factory;
+        Factories[instance.Name] = factory;
     }
 
     /// <summary>Returns a new instance of the named scenario, or <c>null</c> if not found.</summary>
     public static IPerfScenario? Create(string name) =>
-        s_factories.TryGetValue(name, out var factory) ? factory() : null;
+        Factories.TryGetValue(name, out var factory) ? factory() : null;
 
     /// <summary>All registered scenario names.</summary>
-    public static IEnumerable<string> Names => s_factories.Keys;
+    public static IEnumerable<string> Names => Factories.Keys;
 }

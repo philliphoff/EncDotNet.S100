@@ -109,7 +109,7 @@ public static class S111DatasetReader
             : null;
 
         var scGroup = root.OpenGroup("SurfaceCurrent");
-        const string SurfaceCurrentPath = "/SurfaceCurrent";
+        const string surfaceCurrentPath = "/SurfaceCurrent";
 
         // S-111 Edition 2.0.0 §12.2 — every SurfaceCurrent container
         // carries a dataCodingFormat enum that selects the per-instance
@@ -119,7 +119,7 @@ public static class S111DatasetReader
                 "dataCodingFormat",
                 product: "S-111",
                 file: null,
-                groupPath: SurfaceCurrentPath,
+                groupPath: surfaceCurrentPath,
                 specReference: "S-100 Part 10c §10.2.1")
             : 2;
 
@@ -210,11 +210,11 @@ public static class S111DatasetReader
             : null;
 
         var scGroup = root.OpenGroup("SurfaceCurrent");
-        const string SurfaceCurrentPath = "/SurfaceCurrent";
+        const string surfaceCurrentPath = "/SurfaceCurrent";
 
         int dataCodingFormat = scGroup.AttributeExists("dataCodingFormat")
             ? (int)scGroup.ReadRequiredInt64Attribute(
-                "dataCodingFormat", "S-111", null, SurfaceCurrentPath, "S-100 Part 10c §10.2.1")
+                "dataCodingFormat", "S-111", null, surfaceCurrentPath, "S-100 Part 10c §10.2.1")
             : 2;
 
         BoundingBox? extent;
@@ -264,14 +264,14 @@ public static class S111DatasetReader
 
             var instance = scGroup.OpenGroup(instanceName);
             var instancePath = $"/SurfaceCurrent/{instanceName}";
-            const string Spec = "S-100 Part 10c §10.2.1.2";
+            const string spec = "S-100 Part 10c §10.2.1.2";
 
-            double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, Spec);
-            double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, Spec);
-            double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, Spec);
-            double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, Spec);
-            int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, Spec);
-            int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, Spec);
+            double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, spec);
+            double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, spec);
+            double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, spec);
+            double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, spec);
+            int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, spec);
+            int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, spec);
 
             double latA = originLat, latB = originLat + spacingLat * numLat;
             double lonA = originLon, lonB = originLon + spacingLon * numLon;
@@ -400,13 +400,13 @@ public static class S111DatasetReader
     {
         // S-100 Part 10c §10.2.1.2 — the grid-georef attributes are
         // required on every dcf2 SurfaceCurrent.NN instance group.
-        const string Spec = "S-100 Part 10c §10.2.1.2";
-        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, Spec);
-        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, Spec);
-        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, Spec);
-        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, Spec);
-        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, Spec);
-        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, Spec);
+        const string spec = "S-100 Part 10c §10.2.1.2";
+        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, spec);
+        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, spec);
+        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, spec);
+        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, spec);
+        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, spec);
+        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, spec);
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
@@ -598,7 +598,7 @@ public static class S111DatasetReader
         string instancePath,
         List<SurfaceCurrentStation> stations)
     {
-        const string Spec = "S-100 Part 10c §10.2.1";
+        const string spec = "S-100 Part 10c §10.2.1";
 
         // Read per-node positions from Positioning/geometryValues under this instance.
         var positions = ReadInstancePositions(instance, instancePath);
@@ -615,14 +615,14 @@ public static class S111DatasetReader
 
         // Parse time info from the instance.
         string firstTimeStr = instance.ReadRequiredStringAttribute(
-            "dateTimeOfFirstRecord", "S-111", null, instancePath, Spec);
+            "dateTimeOfFirstRecord", "S-111", null, instancePath, spec);
         string lastTimeStr = instance.ReadRequiredStringAttribute(
-            "dateTimeOfLastRecord", "S-111", null, instancePath, Spec);
+            "dateTimeOfLastRecord", "S-111", null, instancePath, spec);
         DateTime firstTime = ParseTimestamp(firstTimeStr);
         DateTime lastTime = ParseTimestamp(lastTimeStr);
 
         long intervalSeconds = instance.ReadRequiredInt64Attribute(
-            "timeRecordInterval", "S-111", null, instancePath, Spec);
+            "timeRecordInterval", "S-111", null, instancePath, spec);
         var interval = TimeSpan.FromSeconds(intervalSeconds);
 
         int numberOfTimes = timeGroupNames.Count;
@@ -898,7 +898,7 @@ public static class S111DatasetReader
         IReadOnlyList<GeoPosition> positions,
         List<SurfaceCurrentStation> stations)
     {
-        const string Spec = "S-111 Edition 2.0.0 §10.2.7";
+        const string spec = "S-111 Edition 2.0.0 §10.2.7";
 
         int numberOfStations = instance.AttributeExists("numberOfStations")
             ? (int)instance.ReadInt64Attribute("numberOfStations")
@@ -918,17 +918,17 @@ public static class S111DatasetReader
                 : groupName;
 
             string startStr = group.ReadRequiredStringAttribute(
-                "startDateTime", "S-111", null, groupPath, Spec);
+                "startDateTime", "S-111", null, groupPath, spec);
             string endStr = group.ReadRequiredStringAttribute(
-                "endDateTime", "S-111", null, groupPath, Spec);
+                "endDateTime", "S-111", null, groupPath, spec);
 
             DateTime startTime = ParseTimestamp(startStr);
             DateTime endTime = ParseTimestamp(endStr);
 
             int numberOfTimes = (int)group.ReadRequiredInt64Attribute(
-                "numberOfTimes", "S-111", null, groupPath, Spec);
+                "numberOfTimes", "S-111", null, groupPath, spec);
             long intervalSeconds = group.ReadRequiredInt64Attribute(
-                "timeRecordInterval", "S-111", null, groupPath, Spec);
+                "timeRecordInterval", "S-111", null, groupPath, spec);
             var interval = TimeSpan.FromSeconds(intervalSeconds);
 
             var (speeds, directions) = ReadStationValues(group, numberOfTimes);
