@@ -59,6 +59,7 @@ public sealed class SkillOutputTests
         Assert.Equal(0, exitCode);
         Assert.Contains("--skill", output.ToString());
         Assert.Contains("agent-oriented CLI guide", output.ToString());
+        Assert.Contains("Standalone", output.ToString());
     }
 
     [Fact]

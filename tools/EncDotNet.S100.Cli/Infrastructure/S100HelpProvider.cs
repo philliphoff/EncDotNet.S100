@@ -29,7 +29,7 @@ internal sealed class S100HelpProvider(ICommandAppSettings settings) : HelpProvi
         grid.AddColumn(new GridColumn { Padding = new Padding(0, 0) });
         grid.AddRow(
             new Text("--skill"),
-            new Text("Show the complete agent-oriented CLI guide as Markdown."));
+            new Text("Standalone: show the complete agent-oriented CLI guide as Markdown."));
         yield return grid;
     }
 }
