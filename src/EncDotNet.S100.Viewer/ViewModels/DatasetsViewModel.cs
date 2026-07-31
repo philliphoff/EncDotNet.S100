@@ -122,7 +122,7 @@ internal sealed class DatasetEntry : ViewModelBase
     private Mapsui.MRect? _mercatorExtent;
     /// <summary>
     /// The dataset's EPSG:3857 (web-mercator) extent, captured from the
-    /// renderer's <c>DatasetResult.Extent</c> the first time the dataset is
+    /// renderer's <c>MapsuiDatasetResult.Extent</c> the first time the dataset is
     /// rendered. <see langword="null"/> until the dataset has been loaded (and
     /// for out-of-range time-gated entries that produced no layers). Used to
     /// zoom/pan the map to this dataset (double-click reveal) and to draw the

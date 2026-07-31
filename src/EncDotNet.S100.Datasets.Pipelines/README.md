@@ -166,8 +166,9 @@ portrayal-output seam:
 
 Both build methods run under the processor's render gate and snapshot
 everything so the result is safe to convert in another assembly. The
-`payload → ILayer` conversion — and the Mapsui-typed `DatasetResult` —
-live in **`EncDotNet.S100.Renderers.Mapsui`** (`MapsuiDatasetRenderer`),
+`payload → ILayer` conversion — and the Mapsui-owned
+`MapsuiDatasetResult` — live in **`EncDotNet.S100.Renderers.Mapsui`**
+(`MapsuiDatasetRenderer`),
 which references this package (not the other way round). The map-free
 S-98 concepts (`IDisplayPlaneAuthority`, `DisplayPlaneAuthorityProvider`)
 stay here; the Mapsui-typed stack entries moved to the renderer.

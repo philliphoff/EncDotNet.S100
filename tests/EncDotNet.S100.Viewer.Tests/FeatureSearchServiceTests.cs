@@ -20,7 +20,6 @@ public class FeatureSearchServiceTests
         }
         public string ProductSpec { get; }
         public SpecRef Spec { get; }
-        public Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public FeatureInfo? GetFeatureInfo(string featureRef) => null;
         public IEnumerable<FeatureSummary> EnumerateFeatures() => _features;
     }

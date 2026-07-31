@@ -3,20 +3,18 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using Mapsui;
 using Mapsui.Layers;
 
-namespace EncDotNet.S100.Datasets.Pipelines;
+namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Result of converting a dataset processor's Mapsui-free portrayal output
 /// (<c>IVectorPortrayalSource</c> / <c>ICoveragePortrayalSource</c>) into
-/// Mapsui layers. Produced by <see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer"/>.
+/// Mapsui layers. Produced by <see cref="MapsuiDatasetRenderer"/>.
 /// </summary>
 /// <remarks>
-/// This type lives in the Mapsui renderer assembly (it carries Mapsui
-/// <see cref="ILayer"/> / <see cref="MRect"/> types) but keeps the
-/// <c>EncDotNet.S100.Datasets.Pipelines</c> namespace so existing Mapsui-aware
-/// consumers (the viewer, the pipeline tests) resolve it without churn.
+/// This type is owned by the Mapsui renderer because it carries Mapsui
+/// <see cref="ILayer"/> and <see cref="MRect"/> types.
 /// </remarks>
-public sealed class DatasetResult
+public sealed class MapsuiDatasetResult
 {
     /// <summary>The Mapsui layers to draw, in paint order.</summary>
     public required IReadOnlyList<ILayer> Layers { get; init; }

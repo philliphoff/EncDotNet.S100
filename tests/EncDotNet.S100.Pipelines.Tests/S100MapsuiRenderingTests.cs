@@ -18,6 +18,21 @@ public class S100MapsuiRenderingTests
     }
 
     [Fact]
+    public void MapsuiDatasetResult_IsOwnedByMapsuiRenderer()
+    {
+        var assembly = typeof(MapsuiDatasetResult).Assembly;
+
+        Assert.Equal(
+            "EncDotNet.S100.Renderers.Mapsui",
+            typeof(MapsuiDatasetResult).Namespace);
+        Assert.Same(
+            typeof(MapsuiDatasetRenderer).Assembly,
+            assembly);
+        Assert.Null(
+            assembly.GetType("EncDotNet.S100.Datasets.Pipelines.DatasetResult"));
+    }
+
+    [Fact]
     public async Task MapsuiDatasetRenderer_ConvertsProcessorWithoutViewerOrAvalonia()
     {
         S100MapsuiRendering.Register();
