@@ -40,7 +40,11 @@ internal static class CliRunner
         }
         catch (TimeoutException)
         {
-            // Update discovery must never delay a completed CLI command.
+            _ = updateTask.ContinueWith(
+                static task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
         catch (OperationCanceledException)
         {

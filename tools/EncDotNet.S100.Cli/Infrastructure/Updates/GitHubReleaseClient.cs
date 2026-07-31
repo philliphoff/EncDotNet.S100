@@ -57,6 +57,10 @@ internal sealed class GitHubReleaseClient : ICliReleaseClient
         {
             return null;
         }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
         catch (JsonException)
         {
             return null;

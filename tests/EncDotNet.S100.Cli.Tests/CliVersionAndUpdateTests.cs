@@ -207,6 +207,16 @@ public sealed class CliVersionAndUpdateTests
     }
 
     [Fact]
+    public async Task DisposedHttpClientFailsSilently()
+    {
+        var httpClient = new HttpClient();
+        httpClient.Dispose();
+        var client = new GitHubReleaseClient(httpClient);
+
+        Assert.Null(await client.GetLatestReleaseAsync());
+    }
+
+    [Fact]
     public async Task JsonCacheIgnoresCorruptOrUnwritablePaths()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"s100-update-{Guid.NewGuid():N}");
