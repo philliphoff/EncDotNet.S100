@@ -1,7 +1,10 @@
-﻿
+
 
 namespace EncDotNet.S100.ExchangeSets;
 
+/// <summary>
+/// Enum for Compliancy Category, representing the compliancy level of a dataset.
+/// </summary>
 public enum CompliancyCategory
 {
     Category1 = 1,

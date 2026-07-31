@@ -283,7 +283,6 @@ public class ExchangeCatalogueReaderTests
         Assert.False(dataset.DataProtection);
         Assert.Null(dataset.ProtectionScheme);
         Assert.Equal(EncDotNet.S100.ExchangeSets.DigitalSignatureAlgorithm.DSA, dataset.DigitalSignatureAlgorithm);
-       // Assert.Equal({EncDotNet.S100.ExchangeSets.DigitalSignatureValue}, dataset.DigitalSignatureValue );
         Assert.Null(dataset.ExpectedHash);
         Assert.False(dataset.Copyright);
         Assert.Null(dataset.Classification);
@@ -294,7 +293,6 @@ public class ExchangeCatalogueReaderTests
         Assert.Null(dataset.ReferenceId);
         Assert.Null(dataset.BoundingBox);
         Assert.Null(dataset.TemporalExtent);
-       // Assert.Equal({EncDotNet.S100.ExchangeSets.ProductSpecification}, dataset.ProductSpecification);
         Assert.Equal("AA00", dataset.ProducingAgency);
         Assert.Empty(dataset.DataCoverages);
         Assert.Null(dataset.Comment);

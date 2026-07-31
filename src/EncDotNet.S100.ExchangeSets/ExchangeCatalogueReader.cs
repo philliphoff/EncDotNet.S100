@@ -564,7 +564,7 @@ public static class ExchangeCatalogueReader
         {
             Language = lang,
             Country = country,
-            CharacterEncoding =encoding,
+            CharacterEncoding = encoding,
         };
     }
 
@@ -590,8 +590,6 @@ public static class ExchangeCatalogueReader
            .FirstOrDefault();
 
         var country = (string?)countryCode?.Attribute("codeListValue");
-        if (country == null)
-            country = "";
 
         var charEncode = moreLocal?
            .Elements(lan + "characterEncoding")
