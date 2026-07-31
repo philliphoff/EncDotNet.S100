@@ -107,4 +107,18 @@ public class S104CoverageSourceTests : IDisposable
         Assert.Equal(coverage.NumPointsLatitudinal, trend.GetLength(0));
         Assert.Equal(coverage.NumPointsLongitudinal, trend.GetLength(1));
     }
+
+    [SkippableFact]
+    public void Sample_StrideLargerThanSubset_RetainsIntersectingCell()
+    {
+        SkipIfNoTestData();
+
+        var source = new S104CoverageSource(_dataset!);
+        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3));
+
+        Assert.Equal(1, sampled.Metadata.NumRows);
+        Assert.Equal(1, sampled.Metadata.NumColumns);
+        Assert.Single(sampled.Values["waterLevelHeight"]);
+        Assert.Single(sampled.Values["waterLevelTrend"]);
+    }
 }

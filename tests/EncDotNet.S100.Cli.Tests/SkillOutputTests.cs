@@ -1,7 +1,5 @@
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Updates;
-using Spectre.Console;
-using Spectre.Console.Cli.Help;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -37,6 +35,12 @@ public sealed class SkillOutputTests
         Assert.Equal(firstOutput.ToString(), secondOutput.ToString());
         Assert.StartsWith("---\nname: s100\n", firstOutput.ToString());
         Assert.Contains("# s100 CLI", firstOutput.ToString());
+        Assert.Contains(
+            "Gridded S-102, S-104, and S-111 products\nsample only the intersecting region",
+            firstOutput.ToString());
+        Assert.DoesNotContain(
+            "viewport forms are rejected for single coverage",
+            firstOutput.ToString());
         Assert.Equal(-1, firstOutput.ToString().IndexOf('\u001b'));
         Assert.DoesNotContain('\r', firstOutput.ToString());
         Assert.Equal(string.Empty, standardError.ToString());

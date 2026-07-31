@@ -34,6 +34,8 @@
     <Content Include="..\datasets\S124\navwarn_surface.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\navwarn_surface.gml" />
     <Content Include="..\datasets\S125\aton_point.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S125\aton_point.gml" />
     <Content Include="..\datasets\S102\102US004MI1CI262227.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\S102\102US004MI1CI262227.h5" />
+    <Content Include="..\datasets\S104\104US004SC1CO_20251217T12Z.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\S104\104US004SC1CO_20251217T12Z.h5" />
+    <Content Include="..\datasets\S111\111US00_DBOFS_20260320T18Z_US4DE1BB.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\S111\111US00_DBOFS_20260320T18Z_US4DE1BB.h5" />
     <Content Include="..\datasets\ExchangeSets\Synthetic-Renderable\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\ExchangeSet\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 

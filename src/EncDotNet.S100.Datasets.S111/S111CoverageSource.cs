@@ -107,8 +107,8 @@ public class S111CoverageSource : ICoverageSource
         var (rowStart, rowEnd, colStart, colEnd) =
             region.Resolve(gridRows, gridCols);
 
-        var rows = (rowEnd - rowStart) / region.RowStride;
-        var cols = (colEnd - colStart) / region.ColStride;
+        var rows = DivideRoundUp(rowEnd - rowStart, region.RowStride);
+        var cols = DivideRoundUp(colEnd - colStart, region.ColStride);
 
         // Flat row-major storage (PR-F).
         var speed = new float[rows * cols];
@@ -146,4 +146,7 @@ public class S111CoverageSource : ICoverageSource
             },
         };
     }
+
+    private static int DivideRoundUp(int value, int divisor) =>
+        (value + divisor - 1) / divisor;
 }

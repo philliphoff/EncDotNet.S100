@@ -155,6 +155,32 @@ public sealed class FacadeTests
     }
 
     [SkippableFact]
+    public void PngRenderer_Composite_PropagatesExplicitViewportToRenderContext()
+    {
+        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+
+        using var dataset = S100Dataset.Open(S124Surface);
+        var viewport = new Pipelines.Viewport
+        {
+            MinLongitude = -80,
+            MaxLongitude = -60,
+            MinLatitude = 30,
+            MaxLatitude = 45,
+            WidthPixels = 400,
+            HeightPixels = 300,
+            ScaleDenominator = 20_000_000,
+        };
+        var options = new S100CompositeOptions { Viewport = viewport };
+
+        var context = PngS100DatasetRenderer.BuildCompositeContext(
+            dataset.Processor,
+            options,
+            Pipelines.Coverage.MarinerSettings.Default);
+
+        Assert.Same(viewport, context.Viewport);
+    }
+
+    [SkippableFact]
     public async Task PngRenderer_Composite_HiddenCategories_ChangesOutput()
     {
         Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),

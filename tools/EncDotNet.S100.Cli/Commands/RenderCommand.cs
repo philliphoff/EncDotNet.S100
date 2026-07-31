@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Hdf5;
@@ -76,15 +77,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         public string? OutputOption { get; init; }
 
         [CommandOption("--bbox <BBOX>")]
-        [Description("Explicit viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the single-dataset form auto-fits the dataset extent and the composite form auto-fits the union of all layers. For a single vector dataset this also enables S-100 Part 9 scale-visibility culling. Not supported for coverage products (S-102/S-104/S-111). Rejected with --format json (a display list has no viewport).")]
+        [Description("Explicit viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the single-dataset form auto-fits the dataset extent and the composite form auto-fits the union of all layers. For a single vector dataset this also enables S-100 Part 9 scale-visibility culling. Coverage products (S-102/S-104/S-111) sample and render only the intersecting grid region. Rejected with --format json (a display list has no viewport).")]
         public string? BoundingBox { get; init; }
 
         [CommandOption("--center <CENTER>")]
-        [Description("Explicit viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale. Not supported for coverage products (S-102/S-104/S-111). Rejected with --format json (a display list has no viewport).")]
+        [Description("Explicit viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale. Coverage products sample and render only the intersecting grid region. Rejected with --format json (a display list has no viewport).")]
         public string? Center { get; init; }
 
         [CommandOption("--scale <DENOMINATOR>")]
-        [Description("Explicit viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center. Not supported for coverage products (S-102/S-104/S-111). Rejected with --format json (a display list has no viewport).")]
+        [Description("Explicit viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center. Coverage products sample and render only the intersecting grid region. Rejected with --format json (a display list has no viewport).")]
         public double? Scale { get; init; }
 
         [CommandOption("--format")]
@@ -419,12 +420,6 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             }
 
             Viewport? viewport = ResolveViewport(settings);
-            if (viewport is not null && processor is not IVectorPortrayalSource)
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]An explicit viewport (--bbox/--center/--scale) is not yet supported for {spec}; it applies to vector products (their headless render honours the exact window).[/]");
-                return 3;
-            }
 
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
@@ -460,9 +455,14 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return 3;
             }
 
-            using var bitmap = headless
-                .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
-                .GetAwaiter().GetResult();
+            using var bitmap = RenderSingleImage(
+                processor,
+                headless,
+                settings.Width,
+                settings.Height,
+                renderContext,
+                viewport,
+                background);
 
             WriteImage(bitmap, outputPath, imageFormat, settings.Quality);
 
@@ -478,6 +478,45 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         {
             catalogueManager.Dispose();
         }
+    }
+
+    private static SKBitmap RenderSingleImage(
+        IDatasetProcessor processor,
+        IHeadlessImageRenderer headless,
+        int width,
+        int height,
+        RenderContext renderContext,
+        Viewport? viewport,
+        RgbaColor? background)
+    {
+        if (viewport is not null && processor is ICoveragePortrayalSource coverageSource)
+        {
+            var portrayal = coverageSource.BuildCoveragePortrayalAsync(renderContext)
+                .GetAwaiter().GetResult();
+
+            bool hasRenderableCoverage = portrayal.SubLayers.Any(
+                subLayer => subLayer is GridCoverageSubLayer or ArrowCoverageSubLayer);
+            if (hasRenderableCoverage)
+            {
+                var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
+                return compositor.Render(
+                    [HeadlessCompositeInput.ForCoverage(portrayal)],
+                    new HeadlessCompositeOptions
+                    {
+                        Width = width,
+                        Height = height,
+                        Background = background ?? new RgbaColor(255, 255, 255, 255),
+                        Viewport = viewport,
+                        Mariner = renderContext.Mariner,
+                        HiddenCategories = renderContext.HiddenInstructionCategories,
+                        Basemap = renderContext.Basemap,
+                    });
+            }
+        }
+
+        return headless
+            .RenderHeadlessAsync(width, height, renderContext, background)
+            .GetAwaiter().GetResult();
     }
 
     private static int ExecuteComposite(Settings settings)
