@@ -131,12 +131,12 @@ public class PermitSignatureTests
     }
 
     [Fact]
-    public async Task AuthenticateAsync_InvalidXmlSchemaExpiry_ReturnsError()
+    public async Task AuthenticateAsync_OutOfRangeNegativeXmlSchemaOffset_ReturnsError()
     {
         var permitText = Encoding.UTF8.GetString(SignatureFixture.CreatePermitBytes())
             .Replace(
                 "2026-12-31",
-                "2026-12-31ZZ",
+                "2026-12-31-15:00",
                 StringComparison.Ordinal);
         using var fixture = new SignatureFixture(
             permitBytes: Encoding.UTF8.GetBytes(permitText));

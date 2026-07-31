@@ -221,7 +221,7 @@ public sealed class PermitFile
     private static string? ChildValue(XElement parent, string localName) =>
         parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Value?.Trim();
 
-    private static DateOnly? ParseDate(string? value)
+    internal static DateOnly? ParseDate(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -258,13 +258,11 @@ public sealed class PermitFile
             return null;
         }
 
-        if (!TimeSpan.TryParseExact(
-                value[11..],
-                "hh\\:mm",
-                CultureInfo.InvariantCulture,
-                out var offset) ||
-            offset > TimeSpan.FromHours(14) ||
-            offset == TimeSpan.FromHours(14) && offset.Minutes != 0)
+        if (!int.TryParse(value.AsSpan(11, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var hours) ||
+            !int.TryParse(value.AsSpan(14, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) ||
+            hours > 14 ||
+            minutes > 59 ||
+            hours == 14 && minutes != 0)
         {
             return null;
         }

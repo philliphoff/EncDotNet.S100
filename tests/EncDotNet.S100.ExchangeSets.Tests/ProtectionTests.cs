@@ -400,7 +400,7 @@ public class ProtectionTests
         var catalogue = CreateProtectedCatalogue(
             "101AA00000000003.000",
             editionNumber: 2,
-            issueDate: "2026-06-30");
+            issueDate: "2026-06-30+05:30");
         var provider = new PermitKeyProvider(
             permit,
             HardwareId.Parse(ExampleHardwareId),

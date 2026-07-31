@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace EncDotNet.S100.ExchangeSets.Protection;
 
 /// <summary>
@@ -111,7 +109,7 @@ public sealed class PermitKeyProvider : IDatasetKeyProvider
             }
         }
 
-        var identityIssueDate = ParseDate(identityDataset.IssueDate);
+        var identityIssueDate = PermitFile.ParseDate(identityDataset.IssueDate);
         if (permit.EditionNumber is null && permit.IssueDate is DateOnly permittedIssueDate)
         {
             if (identityIssueDate is null)
@@ -133,7 +131,7 @@ public sealed class PermitKeyProvider : IDatasetKeyProvider
             }
         }
 
-        var issueDate = ParseDate(dataset.IssueDate);
+        var issueDate = PermitFile.ParseDate(dataset.IssueDate);
         if (issueDate is null)
         {
             return Reject(
@@ -195,24 +193,6 @@ public sealed class PermitKeyProvider : IDatasetKeyProvider
         return _datasets.Values.FirstOrDefault(candidate =>
             candidate.UpdateNumber is null or 0 &&
             permit.AppliesTo(GetFileName(candidate.RelativePath)));
-    }
-
-    private static DateOnly? ParseDate(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim().TrimEnd('Z', 'z');
-        return DateOnly.TryParseExact(
-            trimmed,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.None,
-            out var date)
-            ? date
-            : null;
     }
 
     private static string GetFileName(string path)
