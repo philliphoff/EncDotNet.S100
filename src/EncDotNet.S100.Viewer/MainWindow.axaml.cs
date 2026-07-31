@@ -11,6 +11,7 @@ using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Services.Updates;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -29,8 +30,10 @@ public partial class MainWindow : ShadUI.Window
     private readonly IPickService _pickService;
     private readonly IFileDialogService _fileDialog;
     private readonly IExchangeSetService _exchangeSetService;
+    private readonly IUpdateNotificationCoordinator? _updateNotificationCoordinator;
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
+    private readonly CancellationTokenSource _windowLifetimeCancellation = new();
     private ValidationOverlayService? _validationOverlay;
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
     private Map? _renderActivityMap;
@@ -74,7 +77,8 @@ public partial class MainWindow : ShadUI.Window
                 "IPickService cannot be resolved without the application service provider.")),
             ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()),
             ResolveOrFallback<IExchangeSetService>(static () => throw new InvalidOperationException(
-                "IExchangeSetService cannot be resolved without the application service provider.")))
+                "IExchangeSetService cannot be resolved without the application service provider.")),
+            null)
     {
     }
 
@@ -99,7 +103,8 @@ public partial class MainWindow : ShadUI.Window
         IDatasetLoaderService loader,
         IPickService pickService,
         IFileDialogService fileDialog,
-        IExchangeSetService exchangeSetService)
+        IExchangeSetService exchangeSetService,
+        IUpdateNotificationCoordinator? updateNotificationCoordinator)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(catalogAggregator);
@@ -125,6 +130,7 @@ public partial class MainWindow : ShadUI.Window
         _pickService = pickService;
         _fileDialog = fileDialog;
         _exchangeSetService = exchangeSetService;
+        _updateNotificationCoordinator = updateNotificationCoordinator;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
@@ -157,6 +163,8 @@ public partial class MainWindow : ShadUI.Window
 
         Closed += (_, _) =>
         {
+            _windowLifetimeCancellation.Cancel();
+            _windowLifetimeCancellation.Dispose();
             _validationOverlay?.Dispose();
             _validationOverlay = null;
             // Detach render-activity wiring so the static hub does not
@@ -525,6 +533,12 @@ public partial class MainWindow : ShadUI.Window
         // without a clean shutdown (a native crash, FailFast, kill, …).
         Opened += (_, _) => ReportPreviousUncleanShutdown();
 
+        if (_updateNotificationCoordinator is not null)
+        {
+            Opened += async (_, _) => await _updateNotificationCoordinator
+                .CheckAndNotifyAsync(_windowLifetimeCancellation.Token);
+        }
+
         // Developer aid (--demo-notifications): seed a representative set of
         // notification cards so the overlay's styling and behaviour can be
         // verified on-screen without loading real data.
@@ -574,6 +588,9 @@ public partial class MainWindow : ShadUI.Window
             .WithSeverity(NotificationSeverity.Warning)
             .WithContent("Some cells reference updates that were not applied.")
             .WithAction("Details", () => { })
+            .WithAction("Remind me later", () => { })
+            .WithAction("Skip this version", () => { })
+            .WithAction("Stop checking", () => { })
             .Persistent()
             .Show();
 

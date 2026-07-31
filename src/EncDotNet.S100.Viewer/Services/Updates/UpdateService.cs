@@ -87,6 +87,12 @@ internal sealed record UpdateStatus
     /// </summary>
     public bool IsSkipped { get; init; }
 
+    /// <summary>
+    /// True when this result was reconstructed from a recent persisted check
+    /// rather than a network request performed by the current call.
+    /// </summary>
+    public bool IsCached { get; init; }
+
     /// <summary>A disabled result (checks off or dev build).</summary>
     public static UpdateStatus Disabled { get; } =
         new() { Availability = UpdateAvailability.Disabled };
@@ -145,6 +151,7 @@ internal sealed class UpdateService : IUpdateService
     private readonly IAppVersionProvider _versionProvider;
     private readonly ViewerSettings _settings;
     private readonly TimeProvider _timeProvider;
+    private readonly SemaphoreSlim _checkGate = new(1, 1);
     private readonly bool _forceCheck =
         Environment.GetEnvironmentVariable(ForceCheckEnvVar) == "1";
     private UpdateStatus? _lastStatus;
@@ -167,6 +174,21 @@ internal sealed class UpdateService : IUpdateService
     /// <inheritdoc />
     public async Task<UpdateStatus> CheckForUpdatesAsync(bool force, CancellationToken cancellationToken = default)
     {
+        await _checkGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await CheckForUpdatesCoreAsync(force, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _checkGate.Release();
+        }
+    }
+
+    private async Task<UpdateStatus> CheckForUpdatesCoreAsync(
+        bool force,
+        CancellationToken cancellationToken)
+    {
         var current = _versionProvider.Current;
 
         // No meaningful comparison for an unversioned local build, unless the
@@ -178,14 +200,19 @@ internal sealed class UpdateService : IUpdateService
 
         var now = _timeProvider.GetUtcNow();
 
-        // Throttle: reuse the last computed status when a check ran recently,
-        // unless the caller forces a fresh check (e.g. "Check now").
+        // Throttle across both repeated calls and application launches. Cached
+        // results remain useful to the About dialog, but proactive notification
+        // callers can distinguish them through UpdateStatus.IsCached.
         if (!force
-            && _lastStatus is { } cached
             && _settings.LastUpdateCheckUtc is { } last
             && now - last < ThrottleWindow)
         {
-            return cached;
+            if (_lastStatus is { } cached)
+            {
+                return _lastStatus = cached with { IsCached = true };
+            }
+
+            return _lastStatus = CreateCachedStatus(current, last);
         }
 
         GitHubRelease? release;
@@ -199,26 +226,16 @@ internal sealed class UpdateService : IUpdateService
         }
         catch
         {
-            return _lastStatus = new UpdateStatus
-            {
-                Availability = UpdateAvailability.CheckFailed,
-                CheckedAtUtc = now,
-            };
+            return _lastStatus = RecordFailedCheck(now);
         }
-
-        _settings.LastUpdateCheckUtc = now;
 
         if (release is null)
         {
-            TrySaveSettings();
-            return _lastStatus = new UpdateStatus
-            {
-                Availability = UpdateAvailability.CheckFailed,
-                CheckedAtUtc = now,
-            };
+            return _lastStatus = RecordFailedCheck(now);
         }
 
         var latestVersion = NormalizeTag(release.TagName);
+        _settings.LastUpdateCheckUtc = now;
         _settings.LastKnownLatestVersion = latestVersion;
         TrySaveSettings();
 
@@ -247,6 +264,47 @@ internal sealed class UpdateService : IUpdateService
             CheckedAtUtc = now,
             LatestRelease = release,
             LatestVersion = latestVersion,
+        };
+    }
+
+    private UpdateStatus CreateCachedStatus(AppVersionInfo current, DateTimeOffset checkedAtUtc)
+    {
+        var latestVersion = _settings.LastKnownLatestVersion;
+        if (string.IsNullOrWhiteSpace(latestVersion))
+        {
+            return new UpdateStatus
+            {
+                Availability = UpdateAvailability.CheckFailed,
+                CheckedAtUtc = checkedAtUtc,
+                IsCached = true,
+            };
+        }
+
+        var isSkipped = !string.IsNullOrEmpty(_settings.SkippedUpdateVersion)
+            && !ReleaseVersion.IsNewer(latestVersion, _settings.SkippedUpdateVersion);
+
+        return new UpdateStatus
+        {
+            Availability = ReleaseVersion.IsNewer(latestVersion, current.Version)
+                ? UpdateAvailability.UpdateAvailable
+                : UpdateAvailability.UpToDate,
+            CheckedAtUtc = checkedAtUtc,
+            LatestVersion = latestVersion,
+            IsSkipped = isSkipped,
+            IsCached = true,
+        };
+    }
+
+    private UpdateStatus RecordFailedCheck(DateTimeOffset checkedAtUtc)
+    {
+        _settings.LastUpdateCheckUtc = checkedAtUtc;
+        _settings.LastKnownLatestVersion = null;
+        TrySaveSettings();
+
+        return new UpdateStatus
+        {
+            Availability = UpdateAvailability.CheckFailed,
+            CheckedAtUtc = checkedAtUtc,
         };
     }
 

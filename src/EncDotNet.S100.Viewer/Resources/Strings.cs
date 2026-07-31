@@ -660,6 +660,12 @@ internal static class Strings
     public static string Toast_PreviousCrashBody => Get(nameof(Toast_PreviousCrashBody));
     public static string Toast_PreviousCrashBodyMultiple => Get(nameof(Toast_PreviousCrashBodyMultiple));
     public static string Toast_PreviousCrashAction => Get(nameof(Toast_PreviousCrashAction));
+    public static string Toast_UpdateAvailableTitle => Get(nameof(Toast_UpdateAvailableTitle));
+    public static string Toast_UpdateAvailableBodyFormat => Get(nameof(Toast_UpdateAvailableBodyFormat));
+    public static string Toast_UpdateViewRelease => Get(nameof(Toast_UpdateViewRelease));
+    public static string Toast_UpdateRemindLater => Get(nameof(Toast_UpdateRemindLater));
+    public static string Toast_UpdateSkipVersion => Get(nameof(Toast_UpdateSkipVersion));
+    public static string Toast_UpdateStopChecking => Get(nameof(Toast_UpdateStopChecking));
 
     // Notification centre (custom notification mechanism)
     public static string Notification_Close => Get(nameof(Notification_Close));

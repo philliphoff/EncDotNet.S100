@@ -1799,6 +1799,24 @@
   <data name="Toast_PreviousCrashAction" xml:space="preserve">
     <value>Send feedback</value>
   </data>
+  <data name="Toast_UpdateAvailableTitle" xml:space="preserve">
+    <value>Viewer update available</value>
+  </data>
+  <data name="Toast_UpdateAvailableBodyFormat" xml:space="preserve">
+    <value>Version {0} is available to download from GitHub.</value>
+  </data>
+  <data name="Toast_UpdateViewRelease" xml:space="preserve">
+    <value>View release</value>
+  </data>
+  <data name="Toast_UpdateRemindLater" xml:space="preserve">
+    <value>Remind me later</value>
+  </data>
+  <data name="Toast_UpdateSkipVersion" xml:space="preserve">
+    <value>Skip this version</value>
+  </data>
+  <data name="Toast_UpdateStopChecking" xml:space="preserve">
+    <value>Stop checking</value>
+  </data>
 
   <!-- MCP server -->
   <data name="Status_McpRunning" xml:space="preserve">
