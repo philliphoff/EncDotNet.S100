@@ -15,6 +15,15 @@ sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
 The command name is **`s100`**.
 
+## Agent skill document
+
+Run `s100 --skill` to print a complete, plain-Markdown description of the
+command hierarchy, arguments, options, examples, workflows, output contracts,
+exit codes, and operational limitations. Unlike progressive `--help` output,
+the skill document covers every command in one invocation and is intended for
+automated agents. It is written to standard output without ANSI styling and
+does not perform the automatic release update check.
+
 ## Version and update notifications
 
 Run `s100 --version` to print the CLI's assembly informational version:

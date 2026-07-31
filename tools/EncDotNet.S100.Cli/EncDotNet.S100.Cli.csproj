@@ -26,6 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Skill\**\*.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.Cli.Tests" />
   </ItemGroup>
 

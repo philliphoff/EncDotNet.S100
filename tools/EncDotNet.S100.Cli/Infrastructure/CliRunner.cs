@@ -16,12 +16,23 @@ internal static class CliRunner
         ICliUpdateChecker updateChecker,
         TextWriter standardError,
         IAnsiConsole? commandConsole = null,
-        TimeSpan? updateCompletionGracePeriod = null)
+        TimeSpan? updateCompletionGracePeriod = null,
+        TextWriter? standardOutput = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(updateChecker);
         ArgumentNullException.ThrowIfNull(standardError);
+
+        if (args is ["--skill"])
+        {
+            return await WriteSkillAsync(
+                    version,
+                    standardOutput ?? Console.Out,
+                    standardError,
+                    commandConsole)
+                .ConfigureAwait(false);
+        }
 
         var updateTask = updateChecker.CheckAsync();
         var exitCode = CliApp
@@ -61,5 +72,35 @@ internal static class CliRunner
         }
 
         return exitCode;
+    }
+
+    private static async Task<int> WriteSkillAsync(
+        CliVersionInfo version,
+        TextWriter standardOutput,
+        TextWriter standardError,
+        IAnsiConsole? commandConsole)
+    {
+        var capture = new SkillModelCaptureHelpProvider();
+        var exitCode = CliApp
+            .Build(version.InformationalVersion, commandConsole, capture)
+            .Run(["--help"]);
+
+        if (exitCode != 0)
+        {
+            return exitCode;
+        }
+
+        if (capture.Model is null)
+        {
+            await standardError
+                .WriteLineAsync("Could not build the s100 command model.")
+                .ConfigureAwait(false);
+            return 1;
+        }
+
+        await standardOutput
+            .WriteAsync(SkillDocumentRenderer.Render(capture.Model))
+            .ConfigureAwait(false);
+        return 0;
     }
 }
