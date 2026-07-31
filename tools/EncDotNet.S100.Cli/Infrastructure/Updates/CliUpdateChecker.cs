@@ -36,9 +36,13 @@ internal sealed class CliUpdateChecker : ICliUpdateChecker
 
         var now = _timeProvider.GetUtcNow();
         var cached = await _cache.LoadAsync(cancellationToken).ConfigureAwait(false);
-        if (cached is not null && now - cached.CheckedAtUtc < ThrottleWindow)
+        if (cached is not null)
         {
-            return CreateNotice(cached);
+            var cacheAge = now - cached.CheckedAtUtc;
+            if (cacheAge >= TimeSpan.Zero && cacheAge < ThrottleWindow)
+            {
+                return CreateNotice(cached);
+            }
         }
 
         var release = await _releaseClient

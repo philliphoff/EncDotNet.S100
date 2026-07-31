@@ -167,6 +167,28 @@ public sealed class CliVersionAndUpdateTests
     }
 
     [Fact]
+    public async Task FutureCacheTimestampForcesRefresh()
+    {
+        var now = new DateTimeOffset(2026, 7, 30, 12, 0, 0, TimeSpan.Zero);
+        var cache = new MemoryUpdateCache
+        {
+            Entry = new CliUpdateCacheEntry(
+                now + TimeSpan.FromDays(1),
+                null,
+                null),
+        };
+        var client = new FakeReleaseClient(
+            new GitHubReleaseInfo("v2.5.0", "https://example.test/v2.5.0"));
+        var checker = CreateChecker("2.4.1", client, cache, now);
+
+        var notice = await checker.CheckAsync();
+
+        Assert.NotNull(notice);
+        Assert.Equal(1, client.CallCount);
+        Assert.Equal(now, cache.Entry?.CheckedAtUtc);
+    }
+
+    [Fact]
     public async Task FailedRefreshPreservesCachedNoticeAndThrottlesNextAttempt()
     {
         var now = new DateTimeOffset(2026, 7, 30, 12, 0, 0, TimeSpan.Zero);
