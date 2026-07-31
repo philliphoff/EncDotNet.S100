@@ -151,7 +151,7 @@ unless `--format` is given.
 | `--exchange-set`, `--from <path>` | _none_ | Composite an entire exchange set (directory / `CATALOG.XML` / `.zip`). A directory / `CATALOG.XML` / `.zip` passed positionally is also auto-detected. Mutually exclusive with `--layer`. |
 | `--only <specs>` | _all_ | **Exchange-set only.** Restrict compositing to a comma-separated list of product specifications (e.g. `--only S101,S128`; hyphenation and case are ignored). |
 | `-o`, `--output <path>` | _positional_ | Output image path. Required (or given positionally) for the composite forms; an alternative to the positional `<output>` for the single form. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | auto-fit | Explicit viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. Applies to the single-dataset **vector** form and both composite forms; on a single vector dataset it also enables S-100 Part 9 scale-visibility culling. **Not supported for coverage products (S-102/S-104/S-111)**, nor with `--format json`. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | auto-fit | Explicit viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. Applies to single-dataset and composite image renders; on a single vector dataset it also enables S-100 Part 9 scale-visibility culling, while S-102/S-104/S-111 sample only the intersecting grid region. Not supported with `--format json`. |
 | `--center <lon,lat>` | auto-fit | Explicit viewport centre. Must be used with `--scale`. Same applicability as `--bbox`. |
 | `--scale <denominator>` | auto-fit | Explicit viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. Same applicability as `--bbox`. |
 | `-w`, `--width` | `1024` | Output image width in pixels. |
@@ -182,8 +182,9 @@ s100 render warnings.gml warnings.jpg --quality 85         # JPEG (format inferr
 s100 render warnings.gml preview.webp                      # WebP preview
 s100 render warnings.gml warnings.json                     # display list (not an image)
 s100 render warnings.gml list.txt --format json           # display list, explicit format
-s100 render enc.000 window.png --bbox -1.5,50.0,-1.0,50.5  # exact viewport (vector only)
+s100 render enc.000 window.png --bbox -1.5,50.0,-1.0,50.5  # exact vector viewport
 s100 render enc.000 window.png --center -1.25,50.25 --scale 50000  # centre + scale
+s100 render bathy.h5 window.png --bbox -1.5,50.0,-1.0,50.5  # crop/sample coverage
 
 # Composite several products into one chart:
 s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
@@ -419,12 +420,10 @@ and attribute mapping, allowed-value enforcement) are owned by
 
 ## Limitations
 
-- **Explicit viewport is vector-only.** `--bbox` / `--center`+`--scale` frame an
-  exact window (and enable scale-visibility culling) for a single **vector**
-  dataset and for composites, but are **not** yet honoured for a single coverage
-  dataset (S-102/S-104/S-111); the CLI reports a clear "not supported" error
-  rather than silently ignoring them. Without them, a single dataset auto-fits
-  its extent (padded 10%) with scale-visibility culling disabled.
+- **Explicit coverage viewports require gridded data.** `--bbox` /
+  `--center`+`--scale` crop S-102/S-104/S-111 sampling to the requested WGS-84
+  window and reproject projected grids from their native CRS. Fixed-station
+  S-104/S-111 datasets remain unsupported by the headless renderer.
 - **Coverage fixed-station datasets are not supported.** S-104 / S-111 datasets
   using data coding format 3 or 8 (time series at fixed stations) emit point
   glyphs through the Mapsui path only; the CLI reports a clear "not supported"

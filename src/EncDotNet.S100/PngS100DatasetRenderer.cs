@@ -213,7 +213,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         return _bundledHost ??= S100PipelineHost.Create();
     }
 
-    private static RenderContext BuildCompositeContext(
+    internal static RenderContext BuildCompositeContext(
         IDatasetProcessor processor,
         S100CompositeOptions options,
         MarinerSettings mariner)
@@ -230,7 +230,11 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             HiddenCategories = options.HiddenCategories,
             DisplayModeId = options.DisplayModeId,
         };
-        return FacadeRenderContextBuilder.Build(processor, rendererOptions) with { Mariner = mariner };
+        return FacadeRenderContextBuilder.Build(processor, rendererOptions) with
+        {
+            Mariner = mariner,
+            Viewport = options.Viewport,
+        };
     }
 
     private static byte[] EncodePng(SKBitmap bitmap)

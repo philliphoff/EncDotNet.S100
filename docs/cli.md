@@ -107,6 +107,8 @@ stack is involved, so it runs anywhere .NET does.
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--format <fmt>` | inferred from extension (else `png`) | Output image format: `png`, `jpeg` (`jpg`), or `webp`. |
 | `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | auto-fit | Explicit WGS-84 viewport for a single dataset or composite image. Mutually exclusive with `--center`/`--scale`. Gridded coverages sample only the intersecting region. |
+| `--center <lon,lat>` + `--scale <denominator>` | auto-fit | Explicit viewport by centre and scale denominator. Gridded coverages sample only the intersecting region. |
 | `--no-text` | off | Suppress text/label drawing instructions (shorthand for `--hide text`). |
 | `--hide <list>` | _none_ | Suppress drawing-instruction categories — any of `text`, `points`, `lines`, `areas` — useful for clean fills on label-dense products such as S-411 sea-ice. |
 | `--basemap <mode>` | `none` | Draw a basemap beneath the chart data: `none` (default) or `offline`. `offline` composites the bundled Natural Earth 1:10m land layer (public domain, parchment tone `238,232,220`) under all chart layers, projected with the chart's own viewport. Applies to both forms. Online tile basemaps are not available headlessly. |
@@ -123,6 +125,20 @@ s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
 s100 render --layer enc.000 --layer bathy.h5 -o chart.png --bbox -1.5,50.0,-1.0,50.5
 s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --scale 50000
 ```
+
+The same viewport options apply to a single gridded S-102, S-104, or S-111
+dataset:
+
+```bash
+s100 render bathy.h5 window.png --bbox -1.5,50.0,-1.0,50.5
+```
+
+Coverage viewport coordinates are WGS-84. For projected grids, the sampler
+transforms the requested window into the dataset's native CRS before selecting
+cells, then reprojects the sampled subset for output. A viewport that extends
+beyond the dataset paints only the intersecting coverage; the remaining image
+uses the selected background or basemap. Omitting viewport options preserves the
+existing dataset auto-fit.
 
 The `--palette`, `--symbol-scale`, `--text-scale`, `--time-step`,
 `--background`, `--width`/`--height`, `--format`/`--quality`,

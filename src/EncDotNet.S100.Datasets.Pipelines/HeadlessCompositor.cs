@@ -295,7 +295,11 @@ public sealed class HeadlessCompositor
         {
             case GridCoverageSubLayer grid:
                 {
-                    var (w, e, s, n, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
+                    var extent = ReprojectExtent(grid.Coverage);
+                    if (extent is null)
+                        return false;
+
+                    var (w, e, s, n, nativeToWgs84) = extent.Value;
                     layer = new CoverageCompositeLayer(
                         grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84, landAreas: grid.LandAreaMask);
                     west = w; east = e; south = s; north = n;
@@ -304,7 +308,11 @@ public sealed class HeadlessCompositor
 
             case ArrowCoverageSubLayer arrow:
                 {
-                    var (w, e, s, n, nativeToWgs84) = ReprojectExtent(arrow.Coverage, arrow.Viewport);
+                    var extent = ReprojectExtent(arrow.Coverage);
+                    if (extent is null)
+                        return false;
+
+                    var (w, e, s, n, nativeToWgs84) = extent.Value;
                     var arrowRenderer = new SkiaCoverageArrowRenderer
                     {
                         SymbolProvider = arrow.SymbolProvider,
@@ -322,24 +330,46 @@ public sealed class HeadlessCompositor
         }
     }
 
-    private (double West, double East, double South, double North, ICrsTransform NativeToWgs84) ReprojectExtent(
-        StyledCoverageLayer coverage, Viewport nativeViewport)
+    private (double West, double East, double South, double North, ICrsTransform NativeToWgs84)? ReprojectExtent(
+        StyledCoverageLayer coverage)
     {
-        // The sub-layer's Viewport carries the grid extent in the grid's NATIVE
-        // CRS (labelled lat/lon but, for projected UTM grids, actually
-        // easting/northing). Reproject the corners to WGS84 so the coverage
-        // registers in the shared viewport's pixel space.
+        var metadata = coverage.Georeferencer.Metadata;
+        if (metadata.NumRows <= 0 || metadata.NumColumns <= 0)
+            return null;
+
+        // Sampled grid nodes are cell centres. Derive the native bounds from the
+        // sampled metadata and add the half-cell pad before reprojection so a
+        // viewport subset is neither stretched to the source extent nor clipped
+        // through its outer cells.
+        double xEnd = metadata.OriginLongitude
+            + (metadata.NumColumns - 1) * metadata.SpacingLongitudinal;
+        double yEnd = metadata.OriginLatitude
+            + (metadata.NumRows - 1) * metadata.SpacingLatitudinal;
+        double halfCellX = Math.Abs(metadata.SpacingLongitudinal) / 2.0;
+        double halfCellY = Math.Abs(metadata.SpacingLatitudinal) / 2.0;
+        double minX = Math.Min(metadata.OriginLongitude, xEnd) - halfCellX;
+        double maxX = Math.Max(metadata.OriginLongitude, xEnd) + halfCellX;
+        double minY = Math.Min(metadata.OriginLatitude, yEnd) - halfCellY;
+        double maxY = Math.Max(metadata.OriginLatitude, yEnd) + halfCellY;
+
         var crs = coverage.Georeferencer.CRS;
         var nativeToWgs84 = _crsTransformFactory.Create(crs, "EPSG:4326");
 
-        var (west, south) = nativeToWgs84.IsIdentity
-            ? (nativeViewport.MinLongitude, nativeViewport.MinLatitude)
-            : nativeToWgs84.Transform(nativeViewport.MinLongitude, nativeViewport.MinLatitude);
-        var (east, north) = nativeToWgs84.IsIdentity
-            ? (nativeViewport.MaxLongitude, nativeViewport.MaxLatitude)
-            : nativeToWgs84.Transform(nativeViewport.MaxLongitude, nativeViewport.MaxLatitude);
+        var corners = new (double Longitude, double Latitude)[4];
+        corners[0] = Transform(minX, minY);
+        corners[1] = Transform(minX, maxY);
+        corners[2] = Transform(maxX, minY);
+        corners[3] = Transform(maxX, maxY);
+
+        double west = corners.Min(corner => corner.Longitude);
+        double east = corners.Max(corner => corner.Longitude);
+        double south = corners.Min(corner => corner.Latitude);
+        double north = corners.Max(corner => corner.Latitude);
 
         return (west, east, south, north, nativeToWgs84);
+
+        (double Longitude, double Latitude) Transform(double x, double y) =>
+            nativeToWgs84.IsIdentity ? (x, y) : nativeToWgs84.Transform(x, y);
     }
 
     private static Viewport BuildUnionViewport(

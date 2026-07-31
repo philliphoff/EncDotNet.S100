@@ -424,16 +424,97 @@ public sealed class RenderCommandTests
     }
 
     [Fact]
-    public void Render_viewport_flags_rejected_for_coverage_product_returns_nonzero()
+    public void Render_projected_coverage_with_partially_overlapping_bbox_writes_png()
     {
         var dataset = FixturePath(Path.Combine("S102", "102US004MI1CI262227.h5"));
         Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(
-            ["render", dataset, output, "--bbox", "-76,38,-75,39", "--width", "200", "--height", "200"]);
-        Assert.NotEqual(0, exit);
-        Assert.False(File.Exists(output));
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output,
+                 "--bbox", "-83.1620,42.2990,-83.1580,42.3030",
+                 "--width", "300", "--height", "300",
+                 "--background", "#FF00FF"]);
+
+            Assert.Equal(0, exit);
+            using var bitmap = SKBitmap.Decode(output);
+            Assert.NotNull(bitmap);
+            Assert.Equal(300, bitmap!.Width);
+            Assert.Equal(300, bitmap.Height);
+
+            var background = new SKColor(0xFF, 0x00, 0xFF);
+            Assert.Equal(background, bitmap.GetPixel(10, 150));
+            Assert.True(HasPixelOtherThan(bitmap, background, 150, bitmap.Width),
+                "Expected the intersecting S-102 subset to paint in the eastern half.");
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_s104_coverage_with_center_scale_writes_png()
+    {
+        var dataset = FixturePath(Path.Combine("S104", "104US004SC1CO_20251217T12Z.h5"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        AssertCoverageRenderSucceeds(
+            dataset,
+            ["--center", "-79.95,32.85", "--scale", "200000"]);
+    }
+
+    [Fact]
+    public void Render_s111_coverage_with_bbox_writes_png()
+    {
+        var dataset = FixturePath(Path.Combine("S111", "111US00_DBOFS_20260320T18Z_US4DE1BB.h5"));
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        AssertCoverageRenderSucceeds(
+            dataset,
+            ["--bbox", "-75.7,38.6,-75.2,39.1"]);
+    }
+
+    private static void AssertCoverageRenderSucceeds(string dataset, string[] viewportArguments)
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        var background = new SKColor(0xFF, 0x00, 0xFF);
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, .. viewportArguments,
+                 "--width", "240", "--height", "180", "--background", "#FF00FF"]);
+
+            Assert.Equal(0, exit);
+            using var bitmap = SKBitmap.Decode(output);
+            Assert.NotNull(bitmap);
+            Assert.Equal(240, bitmap!.Width);
+            Assert.Equal(180, bitmap.Height);
+            Assert.True(HasPixelOtherThan(bitmap, background, 0, bitmap.Width),
+                "Expected the requested coverage viewport to paint at least one data pixel.");
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    private static bool HasPixelOtherThan(SKBitmap bitmap, SKColor color, int xStart, int xEnd)
+    {
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = xStart; x < xEnd; x++)
+            {
+                if (bitmap.GetPixel(x, y) != color)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

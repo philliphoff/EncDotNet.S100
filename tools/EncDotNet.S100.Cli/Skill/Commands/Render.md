@@ -12,10 +12,13 @@ The S-98 authority determines cross-product display-plane order; repeated
 S-101 sequential updates. Unsupported, missing, or protected exchange-set
 members are skipped with warnings.
 
-Use `--bbox` or the `--center` plus `--scale` pair for an explicit vector or
-composite viewport. Those viewport forms are rejected for single coverage
-products and for display-list JSON. `--format json` is single-dataset vector
-output describing portrayal instructions, not pixels.
+Use `--bbox` or the `--center` plus `--scale` pair for an explicit
+single-dataset or composite viewport. Gridded S-102, S-104, and S-111 products
+sample only the intersecting region; projected grids transform the WGS-84
+request into their native CRS before sampling. Fixed-station S-104/S-111
+datasets remain unsupported for headless images. Viewport options are rejected
+for display-list JSON because `--format json` describes vector portrayal
+instructions, not pixels.
 
 Use `info` first to discover time-step indices and S-411 display modes.
 `ice-navigational` is only a provisional visual preview and is not a
