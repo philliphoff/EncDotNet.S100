@@ -88,9 +88,9 @@ public sealed class DatasetDiscoveryMetadata
 
     public string? Comment { get; init; }
 
-    public PT_Locale? DefaultLocale { get; init; }
+    public PtLocale? DefaultLocale { get; init; }
 
-    public IReadOnlyList<PT_Locale> OtherLocales { get; init; } = [];
+    public IReadOnlyList<PtLocale> OtherLocales { get; init; } = [];
 
 
     public string? MetadataPointOfContact { get; init; }

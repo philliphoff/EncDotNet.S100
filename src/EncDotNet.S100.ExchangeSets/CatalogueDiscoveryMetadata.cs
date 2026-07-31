@@ -52,7 +52,7 @@ public sealed class CatalogueDiscoveryMetadata
 
     public bool CompressionFlag { get; init; }
 
-    public PT_Locale? DefaultLocale { get; init; }
+    public PtLocale? DefaultLocale { get; init; }
 
-    public IReadOnlyList<PT_Locale> OtherLocales { get; init; } = [];
+    public IReadOnlyList<PtLocale> OtherLocales { get; init; } = [];
 }

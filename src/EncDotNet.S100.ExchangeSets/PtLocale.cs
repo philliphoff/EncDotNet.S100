@@ -1,6 +1,6 @@
 namespace EncDotNet.S100.ExchangeSets;
 
-public sealed class PT_Locale
+public sealed class PtLocale
 {
     public required string Language { get; init; }
 

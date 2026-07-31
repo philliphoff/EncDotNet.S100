@@ -950,7 +950,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     }
 
     /// <summary>
-    /// Returns the Date of the latest issue date among the supplied datasets, or <c>null</c>
+    /// Returns the Date of the latest issue date among the supplied datasets, or null
     /// </summary>
     private static DateOnly? ResolveLatestIssueDate(
         IReadOnlyList<DatasetDiscoveryMetadata> datasets)

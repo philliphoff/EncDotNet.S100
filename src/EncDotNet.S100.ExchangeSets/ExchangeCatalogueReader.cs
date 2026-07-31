@@ -525,7 +525,7 @@ public static class ExchangeCatalogueReader
     }
 
 
-    private static PT_Locale? ReadPTLocale(XElement? localeElement, XNamespace lan)
+    private static PtLocale? ReadPTLocale(XElement? localeElement, XNamespace lan)
     {  
         if (localeElement is null) return null;
 
@@ -560,7 +560,7 @@ public static class ExchangeCatalogueReader
         if (encoding == null)
             encoding = "";
        
-        return new PT_Locale
+        return new PtLocale
         {
             Language = lang,
             Country = country,
@@ -568,7 +568,7 @@ public static class ExchangeCatalogueReader
         };
     }
 
-    private static PT_Locale ReadPTLocales(XElement localeElement, XNamespace lan)
+    private static PtLocale ReadPTLocales(XElement localeElement, XNamespace lan)
     {
         XElement? moreLocal = localeElement.Element(lan + "PT_Locale");
 
@@ -603,7 +603,7 @@ public static class ExchangeCatalogueReader
         if (encoding == null)
             encoding = "";
 
-        return new PT_Locale
+        return new PtLocale
         {
             Language = lang,
             Country = country,
