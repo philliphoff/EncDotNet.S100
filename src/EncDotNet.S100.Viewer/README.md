@@ -566,13 +566,20 @@ release:
   — the About dialog still truthfully shows the update so you can install
   it later, and you're still notified of *later* releases. The skipped
   version is remembered in your settings (`SkippedUpdateVersion`).
-- Update checks are throttled to roughly once per day and can be turned
-  off entirely; dev builds never check (so `0.0.0-dev` shows a neutral
-  "update checks unavailable" panel). To exercise the live check against
-  the real GitHub API from a dev build, launch with `S100_UPDATE_FORCE=1`
-  — it bypasses the dev-build gate for manual/agent verification only and
-  must never be set in shipped builds. See issue #379 for the broader
-  update-notification design.
+- After startup, a non-modal notification announces a newly available,
+  unskipped release. **View release** opens GitHub, **Remind me later**
+  dismisses the card until the next scheduled check, **Skip this version**
+  suppresses that release but not later ones, and **Stop checking**
+  disables automatic checks.
+- Update checks are throttled to roughly once per day across Viewer
+  launches and can be turned off entirely. Offline failures, throttled
+  checks, skipped releases, and development builds remain silent at
+  startup; `0.0.0-dev` shows a neutral "update checks unavailable" panel
+  in About. To exercise the live check against the real GitHub API from a
+  dev build, launch with `S100_UPDATE_FORCE=1` — it bypasses the dev-build
+  gate for manual/agent verification only and must never be set in shipped
+  builds. The Viewer links to GitHub but does not download or install an
+  update itself.
 
 ### Crash recovery (next-startup reporting)
 

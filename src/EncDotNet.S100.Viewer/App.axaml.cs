@@ -9,6 +9,7 @@ using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Services.Updates;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using EncDotNet.S100.Viewer.Views;
@@ -606,6 +607,7 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(),
                 sp.GetRequiredService<ViewerSettings>(),
                 sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IUpdateNotificationCoordinator, UpdateNotificationCoordinator>();
         services.AddTransient<AboutDialogViewModel>();
         services.AddSingleton<Func<AboutDialogViewModel>>(sp =>
             sp.GetRequiredService<AboutDialogViewModel>);
@@ -931,7 +933,8 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<IPickService>(),
             sp.GetRequiredService<IFileDialogService>(),
-            sp.GetRequiredService<IExchangeSetService>()));
+            sp.GetRequiredService<IExchangeSetService>(),
+            sp.GetRequiredService<IUpdateNotificationCoordinator>()));
 
         return services.BuildServiceProvider();
     }
