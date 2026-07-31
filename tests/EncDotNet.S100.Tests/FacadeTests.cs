@@ -175,7 +175,7 @@ public sealed class FacadeTests
         var context = PngS100DatasetRenderer.BuildCompositeContext(
             dataset.Processor,
             options,
-            Pipelines.Coverage.MarinerSettings.Default);
+            Pipelines.MarinerSettings.Default);
 
         Assert.Same(viewport, context.Viewport);
     }
