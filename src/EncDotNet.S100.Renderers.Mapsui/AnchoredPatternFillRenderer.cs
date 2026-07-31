@@ -27,7 +27,7 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
     /// Ensures the renderer is registered with <see cref="Mapsui.Rendering.Skia.MapRenderer"/>.
     /// Safe to call multiple times.
     /// </summary>
-    public static void Register()
+    internal static void Register()
     {
         global::Mapsui.Rendering.Skia.MapRenderer.RegisterStyleRenderer(
             typeof(AnchoredPatternFillStyle), Instance);

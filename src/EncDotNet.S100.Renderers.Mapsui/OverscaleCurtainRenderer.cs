@@ -43,7 +43,7 @@ public sealed class OverscaleCurtainRenderer : ISkiaStyleRenderer
     /// Ensures the renderer is registered with
     /// <see cref="Mapsui.Rendering.Skia.MapRenderer"/>. Safe to call repeatedly.
     /// </summary>
-    public static void Register()
+    internal static void Register()
     {
         global::Mapsui.Rendering.Skia.MapRenderer.RegisterStyleRenderer(
             typeof(OverscaleCurtainStyle), Instance);

@@ -1,0 +1,123 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Mapsui;
+
+namespace EncDotNet.S100.Pipelines.Tests;
+
+public class S100MapsuiRenderingTests
+{
+    [Fact]
+    public void Register_CanBeCalledRepeatedly()
+    {
+        S100MapsuiRendering.Register();
+        S100MapsuiRendering.Register();
+    }
+
+    [Fact]
+    public async Task MapsuiDatasetRenderer_ConvertsProcessorWithoutViewerOrAvalonia()
+    {
+        S100MapsuiRendering.Register();
+        var renderer = new MapsuiDatasetRenderer(new IdentityCrsTransformFactory());
+
+        var result = await renderer.RenderAsync(new StubVectorProcessor());
+
+        var layer = Assert.Single(result.Layers);
+        Assert.Equal("Test layer", layer.Name);
+        Assert.NotNull(layer.Extent);
+    }
+
+    [Fact]
+    public void RendererAssembly_DoesNotReferenceViewerOrAvalonia()
+    {
+        var references = typeof(S100MapsuiRendering).Assembly
+            .GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .OfType<string>()
+            .ToArray();
+
+        Assert.DoesNotContain(
+            references,
+            name => name.StartsWith("EncDotNet.S100.Viewer", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            references,
+            name => name.StartsWith("Avalonia", StringComparison.Ordinal));
+    }
+
+    private sealed class IdentityCrsTransformFactory : ICrsTransformFactory
+    {
+        public ICrsTransform Create(string sourceCrs, string targetCrs) =>
+            IdentityCrsTransform.Instance;
+    }
+
+    private sealed class StubVectorProcessor : IDatasetProcessor, IVectorPortrayalSource
+    {
+        public SpecRef Spec { get; } = new("S-101", default);
+
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+        public Task<VectorPortrayalResult> BuildVectorPortrayalAsync(
+            RenderContext? context = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var subLayer = new VectorSubLayer
+            {
+                LayerKey = "test.area",
+                LayerName = "Test layer",
+                Instructions =
+                [
+                    new AreaInstruction
+                    {
+                        FeatureReference = StubGeometryProvider.FeatureReference,
+                        FillColor = "TEST_FILL",
+                    },
+                ],
+                Plane = S98DisplayPlane.BaseChartUnder,
+            };
+
+            var result = new VectorPortrayalResult
+            {
+                SubLayers = [subLayer],
+                Palette = new ColorPalette(
+                    "Test",
+                    new Dictionary<string, string>
+                    {
+                        ["TEST_FILL"] = "#336699",
+                    }),
+                GeometryProvider = new StubGeometryProvider(),
+                Product = "S-101",
+                Spec = Spec,
+                SourceDatasetId = "test-dataset",
+                Info = "Test dataset",
+            };
+
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class StubGeometryProvider : IFeatureGeometryProvider
+    {
+        public const string FeatureReference = "feature-1";
+
+        public FeatureGeometry? GetGeometry(string featureReference) =>
+            featureReference == FeatureReference
+                ? new FeatureGeometry
+                {
+                    Type = GeometryType.Surface,
+                    Coordinates =
+                    [
+                        new GeoPosition(0.0, 0.0),
+                        new GeoPosition(0.0, 1.0),
+                        new GeoPosition(1.0, 1.0),
+                        new GeoPosition(1.0, 0.0),
+                        new GeoPosition(0.0, 0.0),
+                    ],
+                }
+                : null;
+    }
+}

@@ -277,7 +277,7 @@ public static class S100VectorSnapshotRenderer
     /// flag is turned off — see <see cref="Render"/>). Call once at startup
     /// (after the style renderers are registered).
     /// </summary>
-    public static void Register()
+    internal static void Register()
     {
         MapRenderer.RegisterLayerRenderer(RendererName, Render);
     }

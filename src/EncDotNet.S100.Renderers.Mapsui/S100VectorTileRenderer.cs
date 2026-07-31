@@ -506,7 +506,7 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>Registers this renderer under <see cref="RendererName"/>. Idempotent.</summary>
-    public static void Register()
+    internal static void Register()
     {
         MapRenderer.RegisterLayerRenderer(RendererName, Render);
     }

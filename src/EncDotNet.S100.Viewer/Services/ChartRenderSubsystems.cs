@@ -63,8 +63,6 @@ internal sealed class TiledSceneChartRenderSubsystem : IChartRenderSubsystem
     public void Activate()
     {
         IsActive = true;
-        S100VectorSceneRenderer.Register();
-        S100VectorTileRenderer.Register();
         Console.Error.WriteLine(
             "[RENDER-SUBSYSTEM] TiledScene active: base plane rasterises from the " +
             "VectorScene IR on workers and composites cached tiles on the UI thread " +

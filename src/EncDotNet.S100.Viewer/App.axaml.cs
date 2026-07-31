@@ -148,28 +148,10 @@ public partial class App : Application
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
 
-        // Interpose the translation-invariant vector path cache (solid
-        // polygons + solid-stroked, resolution-simplified lines) before
-        // instrumentation wraps the renderer dictionary, so the cache sits
-        // inside the counting wrapper and pans reuse projected paths instead
-        // of rebuilding and re-stroking them every frame.
-        EncDotNet.S100.Renderers.Mapsui.CachedVectorStyleRenderer.Register();
-
-        // Register the picture-snapshot custom layer renderer (registration is
-        // unconditional; the fast path is gated live by
-        // RenderingOptimizations.VectorSnapshotEnabled, default on, bound by the
-        // Settings → Map section). It resolves Mapsui's style renderers by
-        // reflection, so it must register after the cached vector renderer is in
-        // place; it reads the renderer dictionary lazily on first paint, by which
-        // time instrumentation (below) has also wrapped it.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.Register();
-
-        // Register the TiledScene ("B") custom layer renderer too, so a layer
-        // tagged for it portrays when that subsystem is the active
-        // RenderingOptimizations.RenderSubsystem. Idempotent; the takeover is
-        // gated by the flag at layer-build time, not by registration.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.Register();
-        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.Register();
+        // Register every S-100 style and layer renderer before instrumentation
+        // wraps Mapsui's style registry. The renderer package owns the required
+        // dependency order so hosts do not have to reproduce it.
+        EncDotNet.S100.Renderers.Mapsui.S100MapsuiRendering.Register();
 
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 

@@ -135,7 +135,7 @@ public static class S100VectorSceneRenderer
     /// <c>MapRenderer</c>. Idempotent; call once at startup (after the style
     /// renderers are registered).
     /// </summary>
-    public static void Register()
+    internal static void Register()
     {
         MapRenderer.RegisterLayerRenderer(RendererName, Render);
     }
