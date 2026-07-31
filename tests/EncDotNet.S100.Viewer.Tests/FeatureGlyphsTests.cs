@@ -1,5 +1,4 @@
 using EncDotNet.S100.Viewer.Services;
-using Xunit;
 using Icon = FluentIcons.Common.Icon;
 
 namespace EncDotNet.S100.Viewer.Tests;

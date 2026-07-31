@@ -1,10 +1,8 @@
-using System;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

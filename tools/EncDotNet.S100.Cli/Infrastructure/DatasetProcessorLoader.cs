@@ -1,7 +1,6 @@
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S100.Pipelines;
 using Spectre.Console;
 
 namespace EncDotNet.S100.Cli.Infrastructure;

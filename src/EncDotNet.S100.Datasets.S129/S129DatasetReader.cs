@@ -1,8 +1,7 @@
-using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
-using System.Collections.ObjectModel;
-using S100Diag = EncDotNet.S100.Datasets.S129.Diagnostics;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using S100Diag = EncDotNet.S100.Datasets.S129.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S129;
 
@@ -165,7 +164,8 @@ internal static class S129DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S129ComplexAttribute>, IReadOnlyList<S129Reference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S129ComplexAttribute>, IReadOnlyList<S129Reference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
         var simple = new Dictionary<string, string>();
         var complex = new List<S129ComplexAttribute>();

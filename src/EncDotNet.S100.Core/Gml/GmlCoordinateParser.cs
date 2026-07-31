@@ -1,6 +1,6 @@
-using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Features;
 

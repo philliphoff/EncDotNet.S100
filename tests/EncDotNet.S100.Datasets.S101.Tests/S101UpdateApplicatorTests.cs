@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;

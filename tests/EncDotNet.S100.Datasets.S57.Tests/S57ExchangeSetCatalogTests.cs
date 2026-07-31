@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S57.ExchangeSets;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;

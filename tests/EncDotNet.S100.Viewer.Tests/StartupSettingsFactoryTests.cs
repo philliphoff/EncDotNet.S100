@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using EncDotNet.S100.Viewer;
-using Xunit;
-
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>

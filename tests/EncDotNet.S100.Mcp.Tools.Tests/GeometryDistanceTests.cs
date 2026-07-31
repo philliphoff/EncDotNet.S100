@@ -1,9 +1,8 @@
-using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
-using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Mcp.Tools.Geometry;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 

@@ -1,6 +1,3 @@
-using EncDotNet.S100.ExchangeSets;
-using Xunit;
-
 namespace EncDotNet.S100.ExchangeSets.Tests;
 
 /// <summary>

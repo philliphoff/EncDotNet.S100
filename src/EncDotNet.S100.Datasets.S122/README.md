@@ -15,7 +15,7 @@ S-122 provides a standard data model for distributing information about marine p
 
 Key types include:
 
-- **`S122Dataset`** — root model containing parsed features, information types, and dataset identification.
+- **`S122Dataset`** — root model containing parsed features, information types, and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S122Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S122InformationType`** — a non-geographic information type instance (e.g. `Authority`, `Regulations`, `SpatialQuality`).
 - **`S122ComplexAttribute`** — a complex attribute instance containing sub-attribute values.

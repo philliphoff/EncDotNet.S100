@@ -1,7 +1,6 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Viewer.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 

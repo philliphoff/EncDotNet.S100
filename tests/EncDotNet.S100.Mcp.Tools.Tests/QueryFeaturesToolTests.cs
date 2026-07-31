@@ -1,12 +1,13 @@
-using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Mcp.Tools.Catalog;
-using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
@@ -129,7 +130,7 @@ public class QueryFeaturesToolTests
             LoadedDatasetFactory.S122Spec,
             LoadedDatasetFactory.Box(0, 0, 10, 10),
             null,
-            new EncDotNet.S100.Mcp.Tools.Catalog.S122DatasetData(s122)));
+            new EncDotNet.S100.Datasets.Pipelines.Catalog.S122DatasetData(s122)));
 
         var tool = new QueryFeaturesTool(catalog);
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
@@ -157,7 +158,7 @@ public class QueryFeaturesToolTests
             LoadedDatasetFactory.S131Spec,
             LoadedDatasetFactory.Box(0, 0, 10, 10),
             null,
-            new EncDotNet.S100.Mcp.Tools.Catalog.S131DatasetData(s131)));
+            new EncDotNet.S100.Datasets.Pipelines.Catalog.S131DatasetData(s131)));
 
         var tool = new QueryFeaturesTool(catalog);
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
@@ -186,7 +187,7 @@ public class QueryFeaturesToolTests
             LoadedDatasetFactory.S122Spec,
             LoadedDatasetFactory.Box(0, 0, 10, 10),
             null,
-            new EncDotNet.S100.Mcp.Tools.Catalog.S122DatasetData(s122)));
+            new EncDotNet.S100.Datasets.Pipelines.Catalog.S122DatasetData(s122)));
 
         var tool = new QueryFeaturesTool(catalog);
 

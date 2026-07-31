@@ -1,11 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
-using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -165,6 +160,7 @@ public sealed class MapsuiDatasetRenderer
             var layer = renderer.Render(sub.Instructions, result.GeometryProvider);
 
             TagFeatures(layer, result.FeatureTags);
+            TagLineLodPyramids(layer, result.LineLodPyramids);
 
             if (sub.ApplyOutOfBandCap
                 && result.OutOfBandMinDisplayScale is int denom
@@ -189,7 +185,10 @@ public sealed class MapsuiDatasetRenderer
                     sub.Plane,
                     sub.WithinPlanePriority,
                     result.SourceDatasetId,
-                    sub.SourceFeatureType)));
+                    sub.SourceFeatureType)
+                {
+                    SourceScaleDenominator = result.CellMinimumDisplayScale,
+                }));
 
             union = Union(union, layer.Extent);
         }
@@ -214,6 +213,7 @@ public sealed class MapsuiDatasetRenderer
             LayerNames = result.LayerNames,
             StackEntries = stackEntries,
             CellMinimumDisplayScale = result.CellMinimumDisplayScale,
+            CoverageGeometry = ToMercatorCoverage(result.CoverageAreas),
         };
     }
 
@@ -232,35 +232,31 @@ public sealed class MapsuiDatasetRenderer
             switch (sub)
             {
                 case GridCoverageSubLayer grid:
-                {
-                    var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
                     {
-                        LayerName = grid.LayerName,
-                    };
-                    layer = renderer.Render(grid.Coverage, grid.Viewport);
-                    break;
-                }
+                        layer = BuildGridCoverageLayer(grid);
+                        break;
+                    }
 
                 case ArrowCoverageSubLayer arrow:
-                {
-                    var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
                     {
-                        LayerName = arrow.LayerName,
-                        Palette = arrow.Palette,
-                        BaseSymbolScale = arrow.BaseSymbolScale,
-                        SymbolProvider = arrow.SymbolProvider,
-                    };
-                    layer = renderer.Render(arrow.Coverage, arrow.Viewport);
-                    fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
-                    break;
-                }
+                        var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
+                        {
+                            LayerName = arrow.LayerName,
+                            Palette = arrow.Palette,
+                            BaseSymbolScale = arrow.BaseSymbolScale,
+                            SymbolProvider = arrow.SymbolProvider,
+                        };
+                        layer = renderer.Render(arrow.Coverage, arrow.Viewport);
+                        fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
+                        break;
+                    }
 
                 case GlyphCoverageSubLayer glyph:
-                {
-                    layer = BuildGlyphLayer(glyph);
-                    fallback = Union(fallback, ToMercator(glyph.Extent));
-                    break;
-                }
+                    {
+                        layer = BuildGlyphLayer(glyph);
+                        fallback = Union(fallback, ToMercator(glyph.Extent));
+                        break;
+                    }
             }
 
             if (layer is null)
@@ -291,6 +287,28 @@ public sealed class MapsuiDatasetRenderer
             LayerNames = layerNames,
             StackEntries = stackEntries,
         };
+    }
+
+    /// <summary>
+    /// Builds the Mapsui raster layer for an S-104-style gridded coverage
+    /// surface, applying the optional S-98 land-area mask
+    /// (<see cref="GridCoverageSubLayer.LandAreaMask"/>) so the surface is
+    /// clipped to water (issue #483). Exposed so the S-98 layer-stack projector
+    /// can rebuild the raster after an inter-product rule attaches a mask that
+    /// was not present when the layer was first rasterised.
+    /// </summary>
+    /// <param name="grid">The gridded coverage sub-layer to rasterise.</param>
+    /// <returns>The rasterised layer, or <see langword="null"/> if none was produced.</returns>
+    public ILayer? BuildGridCoverageLayer(GridCoverageSubLayer grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+
+        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        {
+            LayerName = grid.LayerName,
+            LandAreas = grid.LandAreaMask,
+        };
+        return renderer.Render(grid.Coverage, grid.Viewport);
     }
 
     private static MemoryLayer BuildGlyphLayer(GlyphCoverageSubLayer sub)
@@ -362,9 +380,39 @@ public sealed class MapsuiDatasetRenderer
     {
         var c = CultureInfo.InvariantCulture;
         return identityKey
-            + "|tol:" + MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres.ToString("R", c)
-            + "|gate:" + MapsuiDisplayListRenderer.MinPointsToSimplifyForClip.ToString(c)
+            + "|tol:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.SimplifyToleranceMetres.ToString("R", c)
+            + "|gate:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.MinPointsToSimplify.ToString(c)
             + "|fmt:" + DiskPatternClipCache.FormatVersion.ToString(c);
+    }
+
+    /// <summary>
+    /// Copies pre-built line-LOD pyramids onto each Mapsui feature so the
+    /// fast-line paint path (<c>CachedVectorStyleRenderer.DrawLine</c>) can
+    /// skip the per-frame Douglas–Peucker pass. Runs after
+    /// <see cref="TagFeatures"/> and follows the same feature-ref join key
+    /// (<see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>). No-op when
+    /// no pyramids were pre-built at open (issue #489, PR-3).
+    /// </summary>
+    private static void TagLineLodPyramids(
+        ILayer layer,
+        IReadOnlyDictionary<long, EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid>? pyramids)
+    {
+        if (pyramids is null || pyramids.Count == 0)
+            return;
+        if (layer is not MemoryLayer memoryLayer)
+            return;
+
+        foreach (var feature in memoryLayer.Features)
+        {
+            if (feature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
+                continue;
+            if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id))
+                continue;
+            if (!pyramids.TryGetValue(id, out var pyramid))
+                continue;
+
+            feature[CachedVectorStyleRenderer.LineLodPyramidKey] = pyramid;
+        }
     }
 
     /// <summary>
@@ -491,6 +539,99 @@ public sealed class MapsuiDatasetRenderer
         if (bounds is not { } b)
             return null;
         return new MRect(b.MinX, b.MinY, b.MaxX, b.MaxY);
+    }
+
+    /// <summary>
+    /// Projects a cell's EPSG:4326 <c>DataCoverage</c> polygons (S-101 FC §3.1.1;
+    /// S-57 <c>M_COVR</c>) into a single EPSG:3857 (Web Mercator) geometry — the
+    /// union of the individual coverage polygons, holes preserved — for
+    /// cross-cell overlap suppression (issue #438 Phase 2). Returns
+    /// <see langword="null"/> when the cell declares no usable coverage geometry
+    /// or the projected rings are degenerate.
+    /// </summary>
+    private static Geometry? ToMercatorCoverage(IReadOnlyList<CoverageArea> areas)
+    {
+        if (areas.Count == 0)
+            return null;
+
+        var polygons = new List<Polygon>(areas.Count);
+        foreach (var area in areas)
+        {
+            var shell = ToMercatorRing(area.ExteriorRing);
+            if (shell is null)
+                continue;
+
+            LinearRing[]? holes = null;
+            if (area.InteriorRings.Count > 0)
+            {
+                var holeList = new List<LinearRing>(area.InteriorRings.Count);
+                foreach (var interior in area.InteriorRings)
+                {
+                    var hole = ToMercatorRing(interior);
+                    if (hole is not null)
+                        holeList.Add(hole);
+                }
+
+                if (holeList.Count > 0)
+                    holes = holeList.ToArray();
+            }
+
+            polygons.Add(new Polygon(shell, holes));
+        }
+
+        if (polygons.Count == 0)
+            return null;
+
+        Geometry geometry = polygons.Count == 1
+            ? polygons[0]
+            : new MultiPolygon(polygons.ToArray());
+
+        // Coverage rings can be self-touching or slightly non-simple after
+        // projection; a zero-width buffer normalises them and unions the parts
+        // into a clean footprint for reliable clip algebra.
+        try
+        {
+            var normalized = geometry.Buffer(0);
+            // A degenerate / zero-area coverage normalises to an empty geometry;
+            // treat that as "no usable coverage" (return null so suppression is
+            // simply disabled for the cell) rather than propagating the raw,
+            // possibly non-simple geometry into Intersects / SKPath clipping,
+            // where it risks TopologyExceptions or incorrect clipping.
+            return normalized.IsEmpty ? null : normalized;
+        }
+        catch (NetTopologySuite.Geometries.TopologyException)
+        {
+            // Normalisation failed outright — disable suppression for this cell
+            // rather than feed an invalid geometry downstream.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Projects a single EPSG:4326 coverage ring (lat/lon per S-100 Part 10b
+    /// §6.2) to a closed EPSG:3857 <see cref="LinearRing"/>, or
+    /// <see langword="null"/> when it has fewer than three distinct positions.
+    /// </summary>
+    private static LinearRing? ToMercatorRing(IReadOnlyList<GeoPosition> ring)
+    {
+        if (ring.Count < 3)
+            return null;
+
+        var coordinates = new List<Coordinate>(ring.Count + 1);
+        foreach (var position in ring)
+        {
+            var (x, y) = SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
+            coordinates.Add(new Coordinate(x, y));
+        }
+
+        // Ensure the ring is explicitly closed for NTS.
+        if (!coordinates[0].Equals2D(coordinates[^1]))
+            coordinates.Add(coordinates[0].Copy());
+
+        if (coordinates.Count < 4)
+            return null;
+
+        return new LinearRing(coordinates.ToArray());
     }
 
     private static Color ToMapsuiColor(CoreRgbaColor c) => new(c.R, c.G, c.B, c.A);

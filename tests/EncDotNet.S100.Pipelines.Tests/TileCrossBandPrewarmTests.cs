@@ -1,6 +1,4 @@
-using System.Linq;
 using EncDotNet.S100.Renderers.Mapsui;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

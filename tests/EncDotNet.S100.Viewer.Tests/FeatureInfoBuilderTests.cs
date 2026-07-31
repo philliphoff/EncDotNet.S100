@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Specifications;

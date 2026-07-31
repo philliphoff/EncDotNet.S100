@@ -179,6 +179,10 @@ internal static class Strings
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
     public static string Tooltip_MapScale => Get(nameof(Tooltip_MapScale));
     public static string Status_ScaleLabel => Get(nameof(Status_ScaleLabel));
+    public static string Status_OverscaleLabel => Get(nameof(Status_OverscaleLabel));
+    public static string Status_OverscaleFactor => Get(nameof(Status_OverscaleFactor));
+    public static string Status_OverscalePopupHeader => Get(nameof(Status_OverscalePopupHeader));
+    public static string Tooltip_Overscale => Get(nameof(Tooltip_Overscale));
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));
@@ -313,6 +317,26 @@ internal static class Strings
     public static string Pick_Chart_NoSamples => Get(nameof(Pick_Chart_NoSamples));
     public static string Pick_Chart_StationAttributes => Get(nameof(Pick_Chart_StationAttributes));
 
+    // Pick panel: location depth assimilation (S-101 + S-102 + S-104)
+    public static string Pick_Depth_Axis_Depth => Get(nameof(Pick_Depth_Axis_Depth));
+    public static string Pick_Depth_Title => Get(nameof(Pick_Depth_Title));
+    public static string Pick_Depth_Series_TideAdjusted => Get(nameof(Pick_Depth_Series_TideAdjusted));
+    public static string Pick_Depth_Series_SafetyDepth => Get(nameof(Pick_Depth_Series_SafetyDepth));
+    public static string Pick_Depth_Source_Bathymetry => Get(nameof(Pick_Depth_Source_Bathymetry));
+    public static string Pick_Depth_Source_DredgedArea => Get(nameof(Pick_Depth_Source_DredgedArea));
+    public static string Pick_Depth_Source_DepthArea => Get(nameof(Pick_Depth_Source_DepthArea));
+    public static string Pick_Depth_Source_Sounding => Get(nameof(Pick_Depth_Source_Sounding));
+    public static string Pick_Depth_Label_Base => Get(nameof(Pick_Depth_Label_Base));
+    public static string Pick_Depth_Label_Tide => Get(nameof(Pick_Depth_Label_Tide));
+    public static string Pick_Depth_Label_Now => Get(nameof(Pick_Depth_Label_Now));
+    public static string Pick_Depth_Label_DepthNow => Get(nameof(Pick_Depth_Label_DepthNow));
+    public static string Pick_Depth_Label_DepthStatic => Get(nameof(Pick_Depth_Label_DepthStatic));
+    public static string Pick_Depth_SourceData => Get(nameof(Pick_Depth_SourceData));
+    public static string Pick_Depth_Uncertainty => Get(nameof(Pick_Depth_Uncertainty));
+    public static string Pick_Depth_DatumNote => Get(nameof(Pick_Depth_DatumNote));
+    public static string Pick_Depth_NoTide => Get(nameof(Pick_Depth_NoTide));
+    public static string Pick_Depth_Value_Unavailable => Get(nameof(Pick_Depth_Value_Unavailable));
+
     // Pick panel: WMO / SIGRID-3 ice egg code (S-411)
     public static string Pick_EggCode_Heading => Get(nameof(Pick_EggCode_Heading));
     public static string Pick_EggCode_Standard => Get(nameof(Pick_EggCode_Standard));
@@ -442,6 +466,8 @@ internal static class Strings
     public static string Tooltip_BasemapEnabled => Get(nameof(Tooltip_BasemapEnabled));
     public static string Settings_ShowOutOfScaleExtentIndicators => Get(nameof(Settings_ShowOutOfScaleExtentIndicators));
     public static string Tooltip_ShowOutOfScaleExtentIndicators => Get(nameof(Tooltip_ShowOutOfScaleExtentIndicators));
+    public static string Settings_ShowOverscaleIndication => Get(nameof(Settings_ShowOverscaleIndication));
+    public static string Tooltip_ShowOverscaleIndication => Get(nameof(Tooltip_ShowOverscaleIndication));
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
@@ -467,12 +493,11 @@ internal static class Strings
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
-    public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
-    public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
     public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
     public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));
     public static string Status_ExchangeSetLoadedWithErrors => Get(nameof(Status_ExchangeSetLoadedWithErrors));
+    public static string Status_ExchangeSetRegistered => Get(nameof(Status_ExchangeSetRegistered));
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
     public static string Status_S57ExchangeSetNoCells => Get(nameof(Status_S57ExchangeSetNoCells));
@@ -623,6 +648,7 @@ internal static class Strings
     public static string Toast_Success => Get(nameof(Toast_Success));
     public static string Toast_Info => Get(nameof(Toast_Info));
     public static string Toast_ExchangeSetLoaded => Get(nameof(Toast_ExchangeSetLoaded));
+    public static string Toast_ExchangeSetRegistered => Get(nameof(Toast_ExchangeSetRegistered));
     public static string Toast_ExchangeSetFailed => Get(nameof(Toast_ExchangeSetFailed));
     public static string Toast_DatasetError => Get(nameof(Toast_DatasetError));
     public static string Toast_Loading => Get(nameof(Toast_Loading));

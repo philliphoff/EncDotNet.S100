@@ -1,6 +1,7 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S104;
 
@@ -53,7 +54,7 @@ public class S104CoverageSource : ICoverageSource
                     SpacingLongitudinal = coverage.SpacingLongitudinal,
                 },
                 HorizontalCRS = _dataset.HorizontalCRS?.ToString() ?? "EPSG:4326",
-                VerticalDatum = "MSL",
+                VerticalDatum = VerticalDatums.GetLabel(_dataset.VerticalDatum),
                 NoDataValue = FillValue,
                 ValueFields =
                 [

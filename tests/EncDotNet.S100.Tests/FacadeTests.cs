@@ -1,11 +1,4 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using EncDotNet.S100;
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Specifications;
-using Xunit;
 
 namespace EncDotNet.S100.Tests;
 

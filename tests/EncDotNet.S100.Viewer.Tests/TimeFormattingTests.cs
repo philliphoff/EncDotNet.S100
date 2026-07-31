@@ -1,7 +1,4 @@
-using System;
 using System.Globalization;
-using EncDotNet.S100.Viewer;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

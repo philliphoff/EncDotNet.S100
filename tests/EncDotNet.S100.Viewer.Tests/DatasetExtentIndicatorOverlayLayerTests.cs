@@ -1,9 +1,6 @@
-using System.Collections.Generic;
-using System.Linq;
 using EncDotNet.S100.Viewer.Tools;
 using Mapsui;
 using Mapsui.Styles;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

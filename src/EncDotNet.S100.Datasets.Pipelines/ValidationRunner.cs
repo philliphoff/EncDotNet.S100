@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;

@@ -22,7 +22,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </remarks>
 public static class SupportedSpecEditions
 {
-    private static readonly IReadOnlyDictionary<string, IReadOnlyList<SpecVersion>> _byName =
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<SpecVersion>> EditionsBySpecName =
         new Dictionary<string, IReadOnlyList<SpecVersion>>(StringComparer.Ordinal)
         {
             // The bundled S-101 Feature and Portrayal Catalogues are Edition
@@ -55,7 +55,7 @@ public static class SupportedSpecEditions
     {
         if (!string.IsNullOrWhiteSpace(specName)
             && SpecName.TryNormalize(specName, out var canonical)
-            && _byName.TryGetValue(canonical, out var editions))
+            && EditionsBySpecName.TryGetValue(canonical, out var editions))
         {
             return editions;
         }

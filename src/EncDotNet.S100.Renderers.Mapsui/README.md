@@ -43,6 +43,7 @@ collection / priority-clip / insert phase here.
 - `LineStyleProvider`, `SymbolProvider`, and `AreaFillProvider` callbacks let the host project plug in a portrayal catalogue without coupling the renderer to a specific dataset library.
 - **Scale-visibility limits are latitude-corrected.** S-100 Part 9 §11.1 scale denominators (per-feature `ScaleMinimum`/`ScaleMaximum`, and the cell-wide out-of-band cap derived from `DataCoverage.minimumDisplayScale`) are *true-scale* values, whereas a Mapsui `resolution` is metres/pixel at the EPSG:3857 equator. Because web-mercator inflates ground distance by `1/cos φ`, the equator-referenced resolution for a denominator is `denom × 0.00028 / cos φ` (`MapsuiDisplayListRenderer.DenominatorToResolution`). Per-feature limits convert at the feature's extent-centre latitude; the cell-wide cap converts at the layer's extent-centre latitude. Omitting the `cos φ` term (the prior behaviour) was only correct on the equator and suppressed detail roughly `1/cos φ` zoom levels too early — at φ ≈ 50.8° (≈ 1.58×) a cell's linework vanished about two-thirds of a zoom level before it should. This now matches the Skia headless backend, which already applies `cos(midLat)`.
 - **Cell-wide zoom-out window from the exchange-set catalogue (`ApplyCellScaleWindow`).** Independent of the in-file per-feature cap above, `MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale)` clamps every layer's `MaxVisible` to `DenominatorToResolution(minimumDisplayScale, φ)` at the layer's extent-centre latitude, where `minimumDisplayScale` is the *coarsest permitted* denominator resolved from the cell's `CATALOG.XML` `DataCoverage` entries (max of the per-coverage `minimumDisplayScale` values). It only ever **tightens** an existing `MaxVisible`. Unlike the M_COVR-derived per-feature cap (which applies to the linework sub-layer only), this window suppresses the **whole cell — area fills included** — once you zoom out past the cell's smallest-scale edge, so a finer cell drops out entirely and the coarser cell nested beneath it shows through. This is *hole-safe*: as you zoom out, finer cells (smaller `minimumDisplayScale`) drop first, always leaving a coarser cell underneath (issue #438, Phase 1). The zoom-*in* overlap edge (`maximumDisplayScale`) is **not** wired here because a finer cell usually covers only part of a coarser footprint; suppressing the coarser cell on zoom-in would leave open water blank between finer cells, so that is deferred to a coverage-polygon-clipping phase. The caller (`DatasetLoaderService`) gates this on the mariner `IgnoreScaleMinimum` setting and re-applies it on every re-render. For a **standalone-loaded cell** (no `CATALOG.XML`), the caller falls back to a `minimumDisplayScale` the processor derives from the dataset's own content (`DatasetResult.CellMinimumDisplayScale` — S-101 in-file `DataCoverage.minimumDisplayScale`, or the S-57 DSPM compilation scale), so an individually opened `.000` cell hides — with its out-of-scale extent border (issue #446) — exactly as it would inside an exchange set (issue #450 follow-up).
+- **Cross-cell coverage clip / "larger-scale-in" overlap suppression (`OverlapSuppression` + `CoverageClip`, issue #438 Phase 2).** The zoom-*in* seam Phase 1 deferred: where a finer, overlapping in-band cell provides coverage, the coarser cell must stop contributing (no depth-area / fill bleed under the harbour cell). This is done as a **true geometry clip** in screen space, not a scale cap, and it is **zoom-aware** — a finer cell only suppresses a coarser cell while the finer cell is itself visible at the current resolution, so zooming out (which drops the finer cell via the Phase 1 window) never leaves a blank hole in the coarser cell. Each cell's EPSG:4326 data-coverage footprint (`VectorPortrayalResult.CoverageAreas`) is projected to EPSG:3857 and carried on `DatasetResult.CoverageGeometry` (`MapsuiDatasetRenderer.ToMercatorCoverage`, `Buffer(0)`-normalized). `DatasetLoaderService` builds an `OverlapSuppressionCell` per loaded cell (`Layers`, `Coverage`, `ScaleDenominator` from `MinimumDisplayScale ?? CellMinimumDisplayScale`, and `CutoffResolution` = the cell's Phase 1 `ContentMaxVisibleResolution` drop-out) and calls `OverlapSuppression.Apply(cells)`, which for each cell gathers every **strictly finer** (smaller denominator) overlapping cell `F` as a `FinerCoverage(coverage(F), cutoff(F))` and attaches the list via `CoverageClip.Set(layer, finerCoverages)`. Equal-band siblings never mutually clip (that would erase shared borders); a cell with no finer overlap gets **no** entry (paints in full). Rather than pre-computing `coverage(C) − union(...)` in NTS (expensive per-zoom and `TopologyException`-prone), the custom layer renderers (`S100VectorTileRenderer`, `S100VectorSnapshotRenderer`) call `CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution)`, which projects an even-odd screen-space `SKPath` for **only** those finer coverages still visible at the live `resolution` (`cutoff is null || resolution <= cutoff`); the renderer then wraps its drawing in `SKCanvas.Save()` + one `ClipPath(path, SKClipOperation.Difference, antialias: true)` per active path + `Restore()`. Successive difference clips compose the union naturally, and each even-odd path preserves the finer cell's no-coverage holes so the coarser cell shows through them (*hole-safe*). The clip is **screen-space** so it never invalidates a cached tile — only the composite clip region varies per frame — and it stores world coordinates so a constant-zoom pan needs no recompute. `DatasetLoaderService` re-runs `Apply` on every load / unload / removal and gates the whole feature on `IgnoreScaleMinimum`.
 
 ### Sharing processed-SVG and pattern-tile work across renders
 
@@ -236,6 +237,60 @@ hold a reference outside the lock); they are reclaimed by GC finalization.
   the difference is visually negligible at sub-pixel tolerance. Unifying
   lines onto NTS DP is documented as a possible future micro-opt in
   `docs/design/mapsui-performance.md`.
+
+### Precomputed line LOD (opt-in)
+
+An **opt-in** precomputed line-LOD pyramid replaces the inline radial-distance
+filter with a small pyramid of Douglas-Peucker levels
+(`LineLodTolerances.HalfOctaveDefault = [256, 64, 16]` metres) built once
+per feature on first paint and cached in-process. At paint time the
+renderer picks the level whose tolerance is ≤ half a screen pixel at the
+current ground resolution — coarser zooms pick coarser levels — so pans
+inside a zoom band re-key against the same LOD bucket, absorbing float
+noise from the caller's resolution and eliminating the cold rebuild after
+a band change.
+
+Enable it by setting `RenderingOptimizations.PrecomputedLineLodEnabled`
+= `true` (or the `S100_VECTOR_LINE_LOD` env var). It is **off by default**;
+when off, lines fall back to the inline radial-distance filter and the
+raw-resolution cache key described above (no behaviour change vs.
+earlier releases).
+
+Measured on the dense S-101 trial cell `101GB00GB302045` (2.35 MB,
+11 589 drawing instructions, viewer + Skia + Metal):
+
+| metric (rolling window, palette-flip stress) | Off | On   | Delta   |
+|---|---|---|---|
+| vector paint **max** (spike)                 | 139 ms | 15 ms | **-89%** |
+| whole-frame max                              | 394 ms | 68 ms | **-83%** |
+| vector paint **mean**                        | ~2 ms  | ~1 ms | -50%   |
+| vector paint **P95**                         | 7.6 ms | 3.7 ms | -51%   |
+
+Screenshot A/B at each scale band (bbox / z13 / z14 / z15 / z16) is
+**pixel-identical** to the flag-off output — the LOD tolerances are
+sub-pixel per band by design.
+
+Under multi-cell stress (six overlapping UKHO trial cells, palette
+flips + cross-cell z14/z15 pans) the LOD path improves warm vecMean
+(0.87 → 0.63 ms) and vecP95 (3.3 → 1.9 ms) but adds a +13 ms tax to the
+first-paint vecMax while pyramids are built for every visible line
+feature. That tax is the reason the flag ships default-off: on the
+dense single-cell workload LOD dominates; under a shallow-detail
+multi-cell workload the pyramid-build cost is paid once and *not
+amortized* across the very cheap paints that dominate that regime.
+A future S-101 reader hook that pre-builds pyramids at dataset open
+would move the tax off the first paint.
+
+Telemetry (in addition to the existing `s100.simplify.cache.*`
+counters):
+
+| Instrument | Unit | Purpose |
+|---|---|---|
+| `s100.geometry.lod.build.duration` | ms | Time to build a pyramid on cache miss |
+| `s100.geometry.vertices.in` | count | Input vertices per pyramid build |
+| `s100.geometry.vertices.out` | count | Output vertices per LOD level (tagged `s100.lod.bucket`) |
+| `s100.geometry.lod.cache.hit.count` | count | LOD-level path served from `SKPath` cache |
+| `s100.geometry.lod.cache.miss.count` | count | LOD-level path (re)built (tagged `s100.lod.bucket`) |
 
 ### Pattern-fill clip generalization
 

@@ -81,6 +81,15 @@ public sealed class CoverageStackPayload : StackPayload
 
     /// <summary>The coverage sub-layer slice.</summary>
     public CoverageSubLayerBase SubLayer { get; }
+
+    /// <summary>
+    /// Returns a copy of this payload with <see cref="SubLayer"/> replaced — used
+    /// by the S-98 water-area clip rule to substitute a surface sub-layer that
+    /// carries a land-area mask (issue #483), mirroring
+    /// <see cref="VectorStackPayload.WithSubLayer"/>.
+    /// </summary>
+    /// <param name="subLayer">The replacement coverage sub-layer.</param>
+    public CoverageStackPayload WithSubLayer(CoverageSubLayerBase subLayer) => new(Result, subLayer);
 }
 
 /// <summary>

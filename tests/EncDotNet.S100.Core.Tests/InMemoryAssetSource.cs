@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Core.Tests;
 

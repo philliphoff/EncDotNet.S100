@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -8,26 +5,30 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Manipulations;
 using Mapsui.Rendering;
 using Mapsui.Styles;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
 public class PickServiceTests
 {
     private static PickService CreatePickService(IDatasetLoaderService loader, MainViewModel viewModel)
+        => CreatePickService(loader, viewModel, out _);
+
+    private static PickService CreatePickService(
+        IDatasetLoaderService loader,
+        MainViewModel viewModel,
+        out NotificationService notifications)
     {
-        // Pull MVM's status presenter (set via ctor) so that writes by
-        // the pick service flow through to the MVM's StatusText forward.
-        var presenter = (IStatusPresenter)typeof(MainViewModel)
-            .GetField("_statusPresenter", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .GetValue(viewModel)!;
-        return new PickService(loader, viewModel.PickReport, presenter);
+        // The pick service surfaces its picks through the view-model's shared
+        // PickReport; failed reference navigations surface as notifications.
+        notifications = Notifications.TestNotifications.Create();
+        return new PickService(loader, viewModel.PickReport, notifications);
     }
 
     private sealed class EmptyCatalogSource : IDatasetCatalogSource
@@ -70,13 +71,9 @@ public class PickServiceTests
     }
 
     private static MainViewModel CreateMainViewModel()
-        => CreateMainViewModel(out _);
-
-    private static MainViewModel CreateMainViewModel(out IStatusPresenter statusPresenter)
     {
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
-        statusPresenter = new StatusPresenter();
         var datasets = new DatasetsViewModel(new StubLoader());
         return new MainViewModel(
             settings,
@@ -96,8 +93,7 @@ public class PickServiceTests
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            notifications: Notifications.TestNotifications.Create(),
-            statusPresenter: statusPresenter);
+            notifications: Notifications.TestNotifications.Create());
     }
 
     [Fact]
@@ -199,12 +195,16 @@ public class PickServiceTests
             "S-101",
             new FeatureInfo
             {
-                FeatureRef = "1", FeatureType = "DepthArea", FeatureTypeName = "Depth Area",
+                FeatureRef = "1",
+                FeatureType = "DepthArea",
+                FeatureTypeName = "Depth Area",
                 Attributes = new[] { new PickAttribute { Code = "DRVAL1", RawValue = "10", Children = [] } },
             },
             new FeatureInfo
             {
-                FeatureRef = "2", FeatureType = "LandArea", FeatureTypeName = "Land Area",
+                FeatureRef = "2",
+                FeatureType = "LandArea",
+                FeatureTypeName = "Land Area",
                 Attributes = Array.Empty<PickAttribute>(),
             });
         var layer = new MemoryLayer("layer-a");
@@ -236,7 +236,9 @@ public class PickServiceTests
             "S-101",
             new FeatureInfo
             {
-                FeatureRef = "1", FeatureType = "DepthArea", FeatureTypeName = "Depth Area",
+                FeatureRef = "1",
+                FeatureType = "DepthArea",
+                FeatureTypeName = "Depth Area",
                 Attributes = Array.Empty<PickAttribute>(),
             });
         var lineLayer = new MemoryLayer("lines");
@@ -291,13 +293,17 @@ public class PickServiceTests
             "S-125",
             new FeatureInfo
             {
-                FeatureRef = "L1", FeatureType = "LightLateral", FeatureTypeName = "Lateral Light",
+                FeatureRef = "L1",
+                FeatureType = "LightLateral",
+                FeatureTypeName = "Lateral Light",
                 Attributes = Array.Empty<PickAttribute>(),
                 References = new[] { new FeatureReference { Role = "AtonStatus", TargetRef = "S1" } },
             },
             new FeatureInfo
             {
-                FeatureRef = "S1", FeatureType = "AtonStatus", FeatureTypeName = "AtoN Status",
+                FeatureRef = "S1",
+                FeatureType = "AtonStatus",
+                FeatureTypeName = "AtoN Status",
                 Attributes = Array.Empty<PickAttribute>(),
             });
         var layer = new MemoryLayer("layer-a");
@@ -327,7 +333,9 @@ public class PickServiceTests
             "S-125",
             new FeatureInfo
             {
-                FeatureRef = "L1", FeatureType = "LightLateral", FeatureTypeName = "Lateral Light",
+                FeatureRef = "L1",
+                FeatureType = "LightLateral",
+                FeatureTypeName = "Lateral Light",
                 Attributes = Array.Empty<PickAttribute>(),
                 References = new[] { new FeatureReference { Role = "Missing", TargetRef = "ghost" } },
             });
@@ -354,13 +362,17 @@ public class PickServiceTests
             "S-421",
             new FeatureInfo
             {
-                FeatureRef = "RTE", FeatureType = "Route", FeatureTypeName = "Route",
+                FeatureRef = "RTE",
+                FeatureType = "Route",
+                FeatureTypeName = "Route",
                 Attributes = Array.Empty<PickAttribute>(),
                 References = new[] { new FeatureReference { Role = "routeWaypoints", TargetRef = "RTE.WPTS" } },
             },
             new FeatureInfo
             {
-                FeatureRef = "RTE.WPTS", FeatureType = "RouteWaypoints", FeatureTypeName = "Route Waypoints",
+                FeatureRef = "RTE.WPTS",
+                FeatureType = "RouteWaypoints",
+                FeatureTypeName = "Route Waypoints",
                 Attributes = Array.Empty<PickAttribute>(),
             });
         var layer = new MemoryLayer("layer-a");
@@ -379,7 +391,7 @@ public class PickServiceTests
     }
 
     [Fact]
-    public void NavigateCommand_MissingTarget_SetsStatusText()
+    public void NavigateCommand_MissingTarget_ShowsNotification()
     {
         var viewModel = CreateMainViewModel();
         var entry = new DatasetEntry("/tmp/test.gml", "S-125");
@@ -387,7 +399,9 @@ public class PickServiceTests
             "S-125",
             new FeatureInfo
             {
-                FeatureRef = "L1", FeatureType = "LightLateral", FeatureTypeName = "Lateral Light",
+                FeatureRef = "L1",
+                FeatureType = "LightLateral",
+                FeatureTypeName = "Lateral Light",
                 Attributes = Array.Empty<PickAttribute>(),
                 References = new[] { new FeatureReference { Role = "X", TargetRef = "ghost" } },
             });
@@ -396,12 +410,14 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = CreatePickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel, out var notifications);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
 
         viewModel.PickReport.NavigateCommand.Execute(viewModel.PickReport.References[0]);
 
-        Assert.Contains("ghost", viewModel.StatusText ?? string.Empty);
+        Assert.Contains(
+            notifications.Active,
+            n => (n.Message ?? string.Empty).Contains("ghost", StringComparison.Ordinal));
     }
 
     private sealed class StackAwareLoader : IDatasetLoaderService
@@ -447,17 +463,23 @@ public class PickServiceTests
 
         var procA = new StubProcessor("S-101", new FeatureInfo
         {
-            FeatureRef = "fa", FeatureType = "DepthArea", FeatureTypeName = "Depth Area",
+            FeatureRef = "fa",
+            FeatureType = "DepthArea",
+            FeatureTypeName = "Depth Area",
             Attributes = Array.Empty<PickAttribute>(),
         });
         var procB = new StubProcessor("S-102", new FeatureInfo
         {
-            FeatureRef = "fb", FeatureType = "BathyCell", FeatureTypeName = "Bathy",
+            FeatureRef = "fb",
+            FeatureType = "BathyCell",
+            FeatureTypeName = "Bathy",
             Attributes = Array.Empty<PickAttribute>(),
         });
         var procC = new StubProcessor("S-124", new FeatureInfo
         {
-            FeatureRef = "fc", FeatureType = "Warning", FeatureTypeName = "Warning",
+            FeatureRef = "fc",
+            FeatureType = "Warning",
+            FeatureTypeName = "Warning",
             Attributes = Array.Empty<PickAttribute>(),
         });
 
@@ -471,7 +493,9 @@ public class PickServiceTests
         var loader = new StackAwareLoader(
             new Dictionary<DatasetEntry, IDatasetProcessor>
             {
-                [entryA] = procA, [entryB] = procB, [entryC] = procC,
+                [entryA] = procA,
+                [entryB] = procB,
+                [entryC] = procC,
             },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>
             {
@@ -516,12 +540,16 @@ public class PickServiceTests
 
         var procS101 = new StubProcessor("S-101", new FeatureInfo
         {
-            FeatureRef = "land-1", FeatureType = "LandArea", FeatureTypeName = "Land Area",
+            FeatureRef = "land-1",
+            FeatureType = "LandArea",
+            FeatureTypeName = "Land Area",
             Attributes = Array.Empty<PickAttribute>(),
         });
         var procS102 = new StubProcessor("S-102", new FeatureInfo
         {
-            FeatureRef = "bathy-1", FeatureType = "BathymetryCoverage", FeatureTypeName = "Bathymetry",
+            FeatureRef = "bathy-1",
+            FeatureType = "BathymetryCoverage",
+            FeatureTypeName = "Bathymetry",
             Attributes = Array.Empty<PickAttribute>(),
         });
 
@@ -569,7 +597,9 @@ public class PickServiceTests
             "S-101",
             new FeatureInfo
             {
-                FeatureRef = "1", FeatureType = "DepthArea", FeatureTypeName = "Depth Area",
+                FeatureRef = "1",
+                FeatureType = "DepthArea",
+                FeatureTypeName = "Depth Area",
                 Attributes = Array.Empty<PickAttribute>(),
             });
         var loader = new LoaderWithEntries(

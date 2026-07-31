@@ -1,7 +1,5 @@
-using System;
 using Avalonia.Controls;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace EncDotNet.S100.Viewer.Services.Updates;
 
 /// <summary>

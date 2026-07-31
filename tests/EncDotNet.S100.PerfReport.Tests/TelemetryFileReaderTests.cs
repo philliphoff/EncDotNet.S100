@@ -1,6 +1,3 @@
-using System.Text.Json;
-using EncDotNet.S100.PerfReport;
-
 namespace EncDotNet.S100.PerfReport.Tests;
 
 public class TelemetryFileReaderTests : IDisposable

@@ -1,12 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
@@ -455,19 +448,19 @@ internal sealed class MainViewModel : ViewModelBase
         switch (tab.Dock)
         {
             case TabDock.Left when ReferenceEquals(_selectedLeftTab, tab):
-            {
-                var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
-                if (next is not null)
                 {
-                    SetLeftSelectionSystem(next);
+                    var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
+                    if (next is not null)
+                    {
+                        SetLeftSelectionSystem(next);
+                    }
+                    else
+                    {
+                        SetLeftSelectionSystem(null);
+                        IsLeftDockOpen = false;
+                    }
+                    break;
                 }
-                else
-                {
-                    SetLeftSelectionSystem(null);
-                    IsLeftDockOpen = false;
-                }
-                break;
-            }
             case TabDock.Right when ReferenceEquals(_selectedRightTab, tab):
                 SelectedRightTab = RightTabs.FirstOrDefault(t => t.IsVisible);
                 break;
@@ -492,19 +485,6 @@ internal sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(LeftDockTitle));
     }
 
-
-    private string? _statusText;
-    public string? StatusText
-    {
-        get => _statusPresenter?.StatusText ?? _statusText;
-        set
-        {
-            if (_statusPresenter is { } presenter)
-                presenter.StatusText = value;
-            else
-                SetProperty(ref _statusText, value);
-        }
-    }
 
     private bool _isStatusBarVisible;
     public bool IsStatusBarVisible
@@ -578,6 +558,70 @@ internal sealed class MainViewModel : ViewModelBase
 
     /// <summary>True when a map scale is available to display.</summary>
     public bool IsMapScaleVisible => _mapScaleText.Length > 0;
+
+    private bool _isOverscaleVisible;
+    /// <summary>
+    /// True when at least one loaded cell in the current view is overscaled
+    /// (the view is zoomed in past the cell's finest compilation scale). Drives
+    /// the status-bar overscale pill (issue #441; S-52 / S-101 overscale
+    /// indication).
+    /// </summary>
+    public bool IsOverscaleVisible
+    {
+        get => _isOverscaleVisible;
+        private set => SetProperty(ref _isOverscaleVisible, value);
+    }
+
+    private string _overscaleFactorText = string.Empty;
+    /// <summary>
+    /// The worst-offender overscale factor formatted for the pill (e.g.
+    /// <c>"4.6×"</c>). Empty when nothing in view is overscaled.
+    /// </summary>
+    public string OverscaleFactorText
+    {
+        get => _overscaleFactorText;
+        private set => SetProperty(ref _overscaleFactorText, value);
+    }
+
+    private IReadOnlyList<OverscaleCellItemViewModel> _overscaleCells = [];
+    /// <summary>
+    /// The overscaled cells in view, worst first, shown in the pill's popup.
+    /// Each carries the cell name and its formatted overscale factor.
+    /// </summary>
+    public IReadOnlyList<OverscaleCellItemViewModel> OverscaleCells
+    {
+        get => _overscaleCells;
+        private set => SetProperty(ref _overscaleCells, value);
+    }
+
+    /// <summary>
+    /// Applies a freshly-computed overscale <paramref name="report"/> to the
+    /// status-bar indicator state. Called on every viewport change.
+    /// </summary>
+    /// <param name="report">The overscale report (never <see langword="null"/>).</param>
+    public void UpdateOverscale(Renderers.Mapsui.OverscaleReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        if (!report.IsOverscaled)
+        {
+            IsOverscaleVisible = false;
+            OverscaleFactorText = string.Empty;
+            OverscaleCells = [];
+            return;
+        }
+
+        OverscaleFactorText = FormatOverscaleFactor(report.WorstFactor);
+        OverscaleCells = [.. report.OverscaledCells.Select(
+            c => new OverscaleCellItemViewModel(c.Name, FormatOverscaleFactor(c.Factor)))];
+        IsOverscaleVisible = true;
+    }
+
+    private static string FormatOverscaleFactor(double factor)
+        => string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            Strings.Status_OverscaleFactor,
+            factor);
 
     /// <summary>
     /// Toggles the right dock open/closed. Kept for the existing
@@ -782,7 +826,6 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
-    private readonly IStatusPresenter? _statusPresenter;
     private readonly McpServerHost? _mcpServerHost;
     private EncDotNet.S100.Mcp.S100McpServer? _attachedMcpServer;
 
@@ -964,7 +1007,6 @@ internal sealed class MainViewModel : ViewModelBase
         Func<AboutDialogViewModel>? aboutDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
-        IStatusPresenter? statusPresenter = null,
         RoutesService? routes = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -998,7 +1040,6 @@ internal sealed class MainViewModel : ViewModelBase
         _aboutDialogFactory = aboutDialogFactory;
         DialogManager = _dialogManager;
         _isDarkTheme = themeService.IsDarkTheme;
-        _statusPresenter = statusPresenter;
         _mcpServerHost = mcpServerHost;
         _routes = routes ?? new RoutesService();
 
@@ -1014,14 +1055,6 @@ internal sealed class MainViewModel : ViewModelBase
             host.ServerChanged += (_, _) => AttachToMcpServer();
             host.McpPortConflict += OnMcpPortConflict;
             AttachToMcpServer();
-        }
-        if (_statusPresenter is { } presenter)
-        {
-            presenter.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(IStatusPresenter.StatusText))
-                    OnPropertyChanged(nameof(StatusText));
-            };
         }
 
         _measureTool = new MeasureTool(measureAppearance);

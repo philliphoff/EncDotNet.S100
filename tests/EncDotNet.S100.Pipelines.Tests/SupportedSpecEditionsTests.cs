@@ -1,6 +1,5 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

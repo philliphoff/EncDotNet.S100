@@ -1,7 +1,7 @@
-namespace EncDotNet.S100.Pipelines;
 
 using EncDotNet.S100.Quantities;
 
+namespace EncDotNet.S100.Pipelines;
 /// <summary>
 /// Mariner-configurable display preferences used by S-100 portrayal rules
 /// (S-100 Part 9 §4.2 — "Mariner Selections"). These values are independent

@@ -1,6 +1,6 @@
-using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S411.Diagnostics;
 
@@ -418,7 +418,9 @@ internal static class S411DatasetReader
     {
         return (name.Namespace == datasetNs || name.Namespace == XNamespace.None) &&
                FeatureTypeCodes.Contains(name.LocalName);
-    }    /// <summary>
+    }
+
+    /// <summary>
     /// Parses an xs:dateTime or xs:date timestamp into UTC, accepting any
     /// of the formats S-100 Part 17 / Part 10b allow for dataset metadata.
     /// </summary>

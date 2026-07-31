@@ -1,6 +1,3 @@
-using System.IO;
-using EncDotNet.S100.Features;
-
 namespace EncDotNet.S100.Features.Tests;
 
 /// <summary>

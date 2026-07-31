@@ -1,6 +1,4 @@
 using System.Xml.Linq;
-using EncDotNet.S100.Datasets.S421;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;

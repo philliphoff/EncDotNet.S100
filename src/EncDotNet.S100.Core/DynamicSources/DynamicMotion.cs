@@ -1,7 +1,7 @@
-namespace EncDotNet.S100.DynamicSources;
 
 using EncDotNet.S100.Quantities;
 
+namespace EncDotNet.S100.DynamicSources;
 /// <summary>
 /// Optional motion sidecar for a moving point feature (own-ship, AIS
 /// target). Static features (waypoints, weather contours, sensor

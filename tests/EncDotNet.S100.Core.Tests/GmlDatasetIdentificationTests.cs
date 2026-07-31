@@ -1,6 +1,5 @@
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
-using Xunit;
 
 namespace EncDotNet.S100.Core.Tests;
 

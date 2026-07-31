@@ -1,5 +1,3 @@
-using EncDotNet.S100.DynamicSources.Ais;
-using EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests;

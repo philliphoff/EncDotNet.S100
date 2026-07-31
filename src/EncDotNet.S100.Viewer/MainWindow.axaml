@@ -180,25 +180,45 @@
                 Background="{DynamicResource BackgroundColor}"
                 BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="0,1,0,0"
-                Padding="8,3"
-                Height="26"
+                Padding="8,4"
+                Height="30"
                 IsVisible="{Binding IsStatusBarVisible}">
-            <DockPanel LastChildFill="True">
-                <TextBlock DockPanel.Dock="Right"
-                           Text="{Binding McpStatusText}"
-                           IsVisible="{Binding IsMcpRunning}"
-                           FontSize="12"
-                           FontFeatures="+tnum"
-                           Opacity="0.7"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0"
-                           ToolTip.Tip="{Binding McpTooltipText}" />
-                <!-- Cursor lat/lon then scale, fixed to the right edge.
-                     Scale is right-most so it never shifts when the lat/lon
-                     readout disappears (cursor off the map). -->
+            <DockPanel LastChildFill="False">
+                <DockPanel.Styles>
+                    <!-- Shared vertical divider between status-bar items. Each
+                         item carries a *leading* separator bound to the same
+                         visibility as the item, so the row always reads as
+                         evenly divided cells with no dangling or missing
+                         dividers regardless of which items are currently shown. -->
+                    <Style Selector="Border.StatusSeparator">
+                        <Setter Property="Width" Value="1" />
+                        <Setter Property="Height" Value="15" />
+                        <Setter Property="Margin" Value="12,0" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+                    </Style>
+                </DockPanel.Styles>
+
+                <!-- Right-aligned status items, in a single cluster so the
+                     separators between them stay consistent. Scale (with its
+                     overscale pill) and the MCP readout sit to the right of the
+                     cursor lat/lon so they don't shift when the cursor leaves
+                     the map. -->
                 <StackPanel DockPanel.Dock="Right"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
+
+                    <!-- Measure / route-edit tool summary -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding IsToolSummaryVisible}" />
+                    <TextBlock Text="{Binding MeasureSummary}"
+                               IsVisible="{Binding IsToolSummaryVisible}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.85"
+                               VerticalAlignment="Center" />
+
+                    <!-- Cursor latitude / longitude -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding IsMouseLatLonVisible}" />
                     <ic:FluentIcon Icon="MyLocation" IconVariant="Regular" FontSize="14"
                                    Opacity="0.6"
                                    VerticalAlignment="Center"
@@ -206,6 +226,7 @@
                                    IsVisible="{Binding IsMouseLatLonVisible}"
                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
                     <TextBlock Text="{Binding MouseLatText}"
+                               IsVisible="{Binding IsMouseLatLonVisible}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.75"
@@ -214,6 +235,7 @@
                                VerticalAlignment="Center"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
                     <TextBlock Text="{Binding MouseLonText}"
+                               IsVisible="{Binding IsMouseLatLonVisible}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.75"
@@ -222,10 +244,9 @@
                                VerticalAlignment="Center"
                                Margin="10,0,0,0"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
-                    <Border Width="1" Height="13"
-                            Margin="12,0"
-                            Background="{DynamicResource BorderColor}"
-                            IsVisible="{Binding IsMapScaleVisible}" />
+
+                    <!-- Map scale, with the overscale pill immediately after -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding IsMapScaleVisible}" />
                     <TextBlock Text="{x:Static loc:Strings.Status_ScaleLabel}"
                                FontSize="12"
                                Opacity="0.5"
@@ -240,21 +261,79 @@
                                MinWidth="92"
                                TextAlignment="Right"
                                VerticalAlignment="Center"
+                               IsVisible="{Binding IsMapScaleVisible}"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
+                    <Button x:Name="OverscaleButton"
+                            VerticalAlignment="Center"
+                            Margin="10,0,0,0"
+                            Padding="8,1"
+                            CornerRadius="10"
+                            BorderThickness="1"
+                            Background="#26D97706"
+                            BorderBrush="#80D97706"
+                            Foreground="#B45309"
+                            IsVisible="{Binding IsOverscaleVisible}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_Overscale}">
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                            <ic:FluentIcon Icon="Warning" IconVariant="Filled" FontSize="13"
+                                           Foreground="{Binding $parent[Button].Foreground}"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Static loc:Strings.Status_OverscaleLabel}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="0.5"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding OverscaleFactorText}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       FontFeatures="+tnum"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <Border Padding="14,12">
+                                    <StackPanel MinWidth="220" Spacing="8">
+                                        <TextBlock Text="{x:Static loc:Strings.Status_OverscalePopupHeader}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   LetterSpacing="0.8"
+                                                   Opacity="0.7" />
+                                        <ItemsControl ItemsSource="{Binding OverscaleCells}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Name}"
+                                                                   FontSize="13"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="0,0,24,0" />
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding FactorText}"
+                                                                   FontSize="13"
+                                                                   FontWeight="SemiBold"
+                                                                   FontFeatures="+tnum"
+                                                                   Foreground="#B45309"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
+                    <!-- MCP server -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding IsMcpRunning}" />
+                    <TextBlock Text="{Binding McpStatusText}"
+                               IsVisible="{Binding IsMcpRunning}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.7"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding McpTooltipText}" />
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right"
-                           Text="{Binding MeasureSummary}"
-                           IsVisible="{Binding IsToolSummaryVisible}"
-                           FontSize="12"
-                           FontFeatures="+tnum"
-                           Opacity="0.85"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0" />
-                <TextBlock Text="{Binding StatusText}"
-                           FontSize="12"
-                           Opacity="0.7"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
             </DockPanel>
         </Border>
 

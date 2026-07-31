@@ -254,7 +254,8 @@ public class S104Dcf8ReaderTests
         var s = new WaterLevelStation
         {
             Identifier = "X",
-            Latitude = 0, Longitude = 0,
+            Latitude = 0,
+            Longitude = 0,
             StartTime = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             EndTime = new DateTime(2024, 1, 1, 3, 0, 0, DateTimeKind.Utc),
             TimeRecordInterval = TimeSpan.FromHours(1),

@@ -1,7 +1,6 @@
-using SkiaSharp;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Skia;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -9,9 +8,12 @@ public class SkiaCoverageRendererTests
 {
     private static readonly Viewport DefaultViewport = new()
     {
-        MinLatitude = 0, MaxLatitude = 1,
-        MinLongitude = 0, MaxLongitude = 1,
-        WidthPixels = 100, HeightPixels = 100,
+        MinLatitude = 0,
+        MaxLatitude = 1,
+        MinLongitude = 0,
+        MaxLongitude = 1,
+        WidthPixels = 100,
+        HeightPixels = 100,
         ScaleDenominator = 50_000,
     };
 
@@ -177,8 +179,8 @@ public class SkiaCoverageRendererTests
     {
         var depths = new float[rows, cols];
         for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
-            depths[r, c] = fill;
+            for (int c = 0; c < cols; c++)
+                depths[r, c] = fill;
 
         return MakeStyledLayer(depths, noDataValue);
     }

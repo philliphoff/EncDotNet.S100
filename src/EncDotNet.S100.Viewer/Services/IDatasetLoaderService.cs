@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -83,6 +79,28 @@ internal interface IDatasetLoaderService
     void RemoveEntry(DatasetEntry entry);
 
     /// <summary>
+    /// Unloads a lazily-loaded exchange-set cell's bytes (layers and
+    /// processor) but keeps the <see cref="DatasetEntry"/> registered and
+    /// re-marks it <see cref="DatasetEntry.IsDeferred"/> so it can reload
+    /// when it next enters the viewport. The LRU-eviction counterpart to
+    /// <see cref="LoadAsync"/>. See issue #458.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member so existing test doubles need
+    /// not override it. A bare interface cannot preserve collection
+    /// membership, so the fallback re-marks the entry
+    /// <see cref="DatasetEntry.IsDeferred"/> (honouring that half of the
+    /// contract) and then removes its layers via <see cref="RemoveEntry"/>;
+    /// the production loader (<c>DatasetLoaderService</c>) overrides this to
+    /// keep the entry registered in the panel.
+    /// </remarks>
+    void UnloadEntry(DatasetEntry entry)
+    {
+        entry.IsDeferred = true;
+        RemoveEntry(entry);
+    }
+
+    /// <summary>
     /// Reorders the dataset layers on the map to match the supplied
     /// entry sequence. Lowest-indexed entry paints first (bottom of
     /// the dataset stack). Entries not currently bound to layers are
@@ -95,6 +113,23 @@ internal interface IDatasetLoaderService
 
     /// <summary>Read-only view of the layers each entry currently owns.</summary>
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
+
+    /// <summary>
+    /// Snapshot of the currently loaded, drawing, scale-bearing cells for
+    /// overscale evaluation (issue #441 / S-52 overscale indication): each
+    /// carries the cell's display name, its EPSG:3857 data-coverage footprint,
+    /// and its compilation-scale denominator
+    /// (<see cref="DatasetEntry.MaximumDisplayScale"/>). Cells that are not
+    /// drawing, declare no coverage geometry, or have no known compilation scale
+    /// are omitted. Consumed on every viewport change to drive the status-bar
+    /// overscale pill.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member returning an empty list so the
+    /// many test doubles need not override it; the production
+    /// <c>DatasetLoaderService</c> backs it with real state.
+    /// </remarks>
+    IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.OverscaleCellInput> GetOverscaleCells() => [];
 
     /// <summary>
     /// Snapshot of the current S-98-ordered layer stack across all

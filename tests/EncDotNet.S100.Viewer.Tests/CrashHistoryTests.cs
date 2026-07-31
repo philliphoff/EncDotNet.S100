@@ -1,6 +1,4 @@
-using System;
 using EncDotNet.S100.Viewer.Diagnostics;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

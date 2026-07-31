@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-
 namespace EncDotNet.S100.Viewer;
 
 /// <summary>
@@ -24,12 +21,12 @@ internal static class CrashLog
     public static string DefaultPath { get; } =
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "viewer-crash.log");
 
-    private static string s_path = DefaultPath;
+    private static string _path = DefaultPath;
 
     /// <summary>The active crash-log file path.</summary>
     public static string Path
     {
-        get { lock (Gate) return s_path; }
+        get { lock (Gate) return _path; }
     }
 
     /// <summary>
@@ -40,7 +37,7 @@ internal static class CrashLog
     {
         lock (Gate)
         {
-            s_path = string.IsNullOrWhiteSpace(path) ? DefaultPath : path;
+            _path = string.IsNullOrWhiteSpace(path) ? DefaultPath : path;
         }
     }
 
@@ -51,7 +48,7 @@ internal static class CrashLog
     public static void Append(string label, string message)
     {
         string path;
-        lock (Gate) path = s_path;
+        lock (Gate) path = _path;
         try
         {
             var dir = System.IO.Path.GetDirectoryName(path);
@@ -79,7 +76,7 @@ internal static class CrashLog
             return null;
 
         string path;
-        lock (Gate) path = s_path;
+        lock (Gate) path = _path;
         try
         {
             if (!File.Exists(path))

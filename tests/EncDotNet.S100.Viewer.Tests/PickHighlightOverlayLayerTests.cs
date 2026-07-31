@@ -1,11 +1,8 @@
 using EncDotNet.S100.DataModel;
-using System.Collections.Generic;
-using System.Linq;
 using EncDotNet.S100.Viewer.Tools;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Styles;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using EncDotNet.S100.Diagnostics;
-using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf.Diagnostics;
 using PureHDF;
 

@@ -1,9 +1,7 @@
-using System;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tools;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

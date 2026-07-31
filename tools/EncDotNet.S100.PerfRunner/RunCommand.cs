@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using EncDotNet.S100.Diagnostics.Export;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;

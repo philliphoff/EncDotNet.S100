@@ -192,6 +192,12 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOutOfScaleExtentIndicators}" />
             </Grid>
 
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowOverscaleIndication}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShowOverscaleIndication}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOverscaleIndication}" />
+            </Grid>
+
             <!-- Render subsystem A/B + tiled knobs (issue #331) -->
             <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
                        FontSize="12"

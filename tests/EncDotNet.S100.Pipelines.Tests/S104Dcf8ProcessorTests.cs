@@ -1,7 +1,5 @@
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S104.Tests.Fixtures;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
 
@@ -139,6 +137,35 @@ public class S104Dcf8ProcessorTests
 
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station-ref"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Metadata_Dcf8_DerivesExtentFromStationCoordinates()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            var metadata = p.Metadata;
+
+            Assert.Equal("S-104", metadata.Spec.Name);
+            Assert.NotNull(metadata.Extent);
+
+            // Fixture stations: Alpha (51.5, -0.1), Bravo (51.6, -0.2).
+            var extent = metadata.Extent!;
+            Assert.Equal(51.5, extent.SouthLatitude, 4);
+            Assert.Equal(51.6, extent.NorthLatitude, 4);
+            Assert.Equal(-0.2, extent.WestLongitude, 4);
+            Assert.Equal(-0.1, extent.EastLongitude, 4);
+
+            // Memoized: repeat access returns the same instance (issue #467 WS1).
+            Assert.Same(metadata, p.Metadata);
         }
         finally
         {

@@ -102,6 +102,11 @@ The viewer accepts:
   holds loose base cells (`.000`) with no `CATALOG.031`/`CATALOG.XML`
   and it loads every base cell, sniffing S-57 vs S-101 per cell and
   applying each cell's sibling filesystem updates (`.001`, `.002`, …).
+  Each S-101 cell's extent is read once via the cross-session
+  dataset-metadata sidecar cache and unioned, so the map frames the
+  folder up front (subsequent opens reuse the cached extents with no
+  re-parse); S-57 cells, which have no cheap extent reader, are skipped
+  from that union and framed when they load.
   A dropped folder that yields no renderable cells raises a
   notification instead of being silently ignored.
 - **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
@@ -116,6 +121,36 @@ S-57 base cells are auto-detected by inspecting the ISO 8211 header
 and translated to the in-memory S-101 model so they render through
 the S-101 portrayal pipeline. This is best-effort, not an S-52
 implementation.
+
+### Lazy loading of very large exchange sets
+
+Opening a large S-57 exchange set (thousands of cells) no longer loads
+every cell up front. Above a threshold (default 50 cells) the viewer
+**registers** every cell — the Datasets panel lists them immediately
+(dimmed) and their footprints are drawn as extent outlines — but
+**defers** reading and portraying a cell's bytes until it actually
+enters the viewport at a relevant scale. Cells are selected by
+viewport intersection plus a usage-band → scale gate, loaded through a
+bounded-concurrency gate, and evicted (LRU, beyond a retention budget)
+when they leave the view. This keeps the open non-blocking and bounds
+peak memory regardless of set size (issue #458). The relevant types
+live under `Services/LazyLoading/`
+(`ExchangeSetLazyLoadCoordinator`, `LazyCellGate`, `LruEvictionPolicy`,
+`CellUsageBand`). Cells are registered in a single batch via
+`DatasetsViewModel.AddRangeFromExchangeSet(IReadOnlyList<ExchangeSetCellRegistration>)`
+(backed by `BulkObservableCollection`) so a set of thousands of cells
+registers with one collection notification rather than one per cell.
+
+The base-cell descriptor list a set registers from is read once from the
+binary `CATALOG.031` and then cached across sessions (keyed by that
+catalogue file's modified-time and size, under `caches/S57CatalogCache`).
+Re-opening the same large set — the common case when it is closed and
+reopened, or reopened in a later session — replays the cached descriptors
+straight into lazy registration, skipping the ISO 8211 catalogue parse
+entirely; regenerating the catalogue (which changes its mtime/size)
+transparently invalidates the entry. The cache is a pure descriptor
+store: cell bytes are always read fresh on demand, so it never serves
+stale chart content (`Services/Caching/DiskS57CatalogCache`).
 
 ## The Datasets panel
 
@@ -762,7 +797,9 @@ parallel agent runs do not collide.
 **Full data-directory redirect.** `--data-dir <PATH>` (also honoured
 via the `S100_DATA_DIR` environment variable) re-roots **everything**
 the viewer writes — the settings file, crash markers, and all three
-disk caches (pattern-clip, portrayal-instruction, warm tile cache) —
+disk caches (pattern-clip, portrayal-instruction, warm tile cache, the
+cross-session dataset-metadata sidecar cache, and the S-57 exchange-set
+catalogue descriptor cache) —
 underneath one folder. Point it at an empty temp directory for a
 guaranteed-fresh instance whose entire footprint can be deleted in one
 `rm -rf`, or pre-seed the folder to launch with mocked-up settings or

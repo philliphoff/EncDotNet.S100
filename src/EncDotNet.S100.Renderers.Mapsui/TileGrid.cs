@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -230,10 +228,10 @@ internal static class TileGrid
         // never re-anchor the window. A large absolute guard only bounds a
         // pathological zoom-out — it is far beyond any realistic viewport, so it
         // does not truncate the visible copies in practice.
-        const int MaxColumns = 4096;
-        if (xEnd - xStart + 1 > MaxColumns)
+        const int maxColumns = 4096;
+        if (xEnd - xStart + 1 > maxColumns)
         {
-            xEnd = xStart + MaxColumns - 1;
+            xEnd = xStart + maxColumns - 1;
         }
         // Y is inverted (XYZ): the top row (Y=0) is the northernmost.
         var yStart = (int)Math.Floor((Extent - (centerY + halfH)) / size);

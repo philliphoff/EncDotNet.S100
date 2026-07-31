@@ -1,4 +1,5 @@
 using EncDotNet.S100.Cli.Commands;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
@@ -9,12 +10,20 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// </summary>
 internal static class CliApp
 {
-    public static CommandApp Build()
+    public static CommandApp Build(
+        string? applicationVersion = null,
+        IAnsiConsole? console = null)
     {
         var app = new CommandApp();
         app.Configure(config =>
         {
             config.SetApplicationName("s100");
+            config.SetApplicationVersion(
+                applicationVersion ?? CliVersionInfo.FromAssembly(typeof(CliApp).Assembly).InformationalVersion);
+            if (console is not null)
+            {
+                config.ConfigureConsole(console);
+            }
 
             config.AddCommand<RenderCommand>("render")
                 .WithDescription("Render one S-100 dataset — or composite several (with --layer, or an entire exchange set) — to an image (PNG, JPEG, or WebP).")
@@ -39,6 +48,12 @@ internal static class CliApp
             config.AddCommand<InfoCommand>("info")
                 .WithDescription("Show the detected spec, edition, and available time steps for a dataset.")
                 .WithExample("info", "dataset.h5");
+
+            config.AddCommand<IdentifyCommand>("identify")
+                .WithDescription("Headless ECDIS-style pick: identify vector features and sample coverage values at a lat/lon across one or more dataset layers.")
+                .WithExample("identify", "warnings.gml", "--lat", "50.1", "--lon", "-1.3")
+                .WithExample("identify", "--layer", "enc.000", "--layer", "bathy.h5", "--lat", "50.1", "--lon", "-1.3")
+                .WithExample("identify", "--from", "exchange-set.zip", "--lat", "50.1", "--lon", "-1.3", "--format", "json");
 
             config.AddCommand<ListSpecsCommand>("list-specs")
                 .WithDescription("List supported product specifications and headless-render capability.")

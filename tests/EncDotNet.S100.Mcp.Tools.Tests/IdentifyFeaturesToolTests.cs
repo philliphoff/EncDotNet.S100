@@ -1,6 +1,7 @@
-using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -116,6 +117,37 @@ public class IdentifyFeaturesToolTests
         var tight = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 10));
         Assert.True(tight.TryGetValue(out var tightValue));
         Assert.Empty(tightValue.Features);
+    }
+
+    [Fact]
+    public async Task Radius_filters_curve_whose_bbox_contains_pick_but_vertices_are_far()
+    {
+        // A curve whose bounding box spans the pick point, but whose nearest
+        // vertex is ~55 km away — far beyond the default radius. The coarse
+        // bbox pre-filter admits it, so the precise radius test must reject it.
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(
+            Curve("far", new GeoPosition(0.0, -0.5), new GeoPosition(0.0, 0.5)))));
+        var tool = new IdentifyFeaturesTool(catalog);
+
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 50));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Empty(value.Features);
+    }
+
+    [Fact]
+    public async Task Non_finite_radius_returns_invalid_argument()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(Point("pt", 0.0, 0.0))));
+        var tool = new IdentifyFeaturesTool(catalog);
+
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: double.NaN));
+
+        Assert.False(result.TryGetValue(out _));
+        Assert.True(result.TryGetError(out var err));
+        Assert.IsType<InvalidArgument>(err);
     }
 
     [Fact]

@@ -1,4 +1,3 @@
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 
 namespace EncDotNet.S100.Pipelines.Tests;

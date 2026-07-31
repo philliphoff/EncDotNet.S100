@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;

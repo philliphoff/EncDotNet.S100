@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using EncDotNet.S100.Validation;
 
 [assembly: InternalsVisibleTo("EncDotNet.S100.Pipelines.Tests")]
+[assembly: InternalsVisibleTo("EncDotNet.S100.Mcp.Tools.Tests")]
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 

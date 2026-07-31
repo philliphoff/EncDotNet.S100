@@ -55,6 +55,7 @@ then guide you into deeper API and architecture detail.
 - [Embedding the renderer](embedding-the-renderer.md) — scene/rendering integration seam.
 - [Typed data models](typed-data-models.md) — strongly-typed projections on feature bags.
 - [Observability](observability.md) — logs, traces, and metrics.
+- [C# coding style guide](coding-style.md) — normative style for contributors.
 - [MCP server](mcp-server.md) — AI-agent tool surface.
 - [What's new](whats-new.md) — docs and experience highlights.
 

@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Hdf5.PureHdf;
 

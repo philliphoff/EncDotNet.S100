@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// Disk-backed <see cref="IPatternClipCache"/>: persists each computed S-101
 /// pattern-fill priority clip result (see <see cref="MapsuiDisplayListRenderer"/>'s
-/// <c>ClipPatternsByPriority</c>) as a WKB sidecar file so that the
+/// <see cref="EncDotNet.S100.Rendering.Scene.PatternPriorityClipper"/>) as a WKB sidecar file so that the
 /// <em>cold</em> first open of a previously-seen cell — including after a
 /// process restart — skips the multi-second NetTopologySuite overlay.
 /// </summary>

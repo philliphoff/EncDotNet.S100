@@ -1,5 +1,4 @@
 using EncDotNet.S100.DynamicSources;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 
@@ -30,8 +29,10 @@ public class OwnShipSourceVesselGeometryTests
         {
             Current = new DynamicVesselGeometry
             {
-                LengthMetres = 50, BeamMetres = 10,
-                BowOffsetMetres = 25, PortOffsetMetres = 5,
+                LengthMetres = 50,
+                BeamMetres = 10,
+                BowOffsetMetres = 25,
+                PortOffsetMetres = 5,
             },
         };
         using var src = new OwnShipSource(stub, geom);
@@ -58,8 +59,10 @@ public class OwnShipSourceVesselGeometryTests
         {
             Current = new DynamicVesselGeometry
             {
-                LengthMetres = 50, BeamMetres = 10,
-                BowOffsetMetres = 25, PortOffsetMetres = 5,
+                LengthMetres = 50,
+                BeamMetres = 10,
+                BowOffsetMetres = 25,
+                PortOffsetMetres = 5,
             },
         };
         using var src = new OwnShipSource(stub, geom);
@@ -70,8 +73,10 @@ public class OwnShipSourceVesselGeometryTests
 
         geom.Current = new DynamicVesselGeometry
         {
-            LengthMetres = 100, BeamMetres = 20,
-            BowOffsetMetres = 50, PortOffsetMetres = 10,
+            LengthMetres = 100,
+            BeamMetres = 20,
+            BowOffsetMetres = 50,
+            PortOffsetMetres = 10,
         };
         geom.Raise();
 

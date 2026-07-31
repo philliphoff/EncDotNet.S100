@@ -1,9 +1,6 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Tests;

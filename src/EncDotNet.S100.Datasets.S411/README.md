@@ -15,7 +15,7 @@ S-411 provides a standard data model for distributing sea-ice and lake-ice infor
 
 Key types:
 
-- **`S411Dataset`** — root model containing parsed features and dataset identification.
+- **`S411Dataset`** — root model containing parsed features and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S411Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S411ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
 - **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.

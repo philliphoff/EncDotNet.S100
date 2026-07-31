@@ -1,4 +1,3 @@
-using System;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer;

@@ -1,6 +1,6 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S104;
 

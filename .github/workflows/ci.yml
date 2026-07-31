@@ -77,6 +77,37 @@ jobs:
           name: nupkgs
           path: nupkgs/*.nupkg
 
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Verify formatting and naming
+        # The root command verifies whitespace while the diagnostic filter
+        # limits code-style analysis to using directives (IDE0005) and naming
+        # (IDE1006). Keeping one invocation avoids loading the multi-targeted
+        # solution separately for each rule.
+        run: >
+          dotnet format EncDotNet.S100.slnx
+          --diagnostics IDE0005 IDE1006
+          --severity warn
+          --no-restore
+          --verify-no-changes
+
   test-arm64:
     strategy:
       matrix:

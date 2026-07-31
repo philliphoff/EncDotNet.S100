@@ -5,6 +5,7 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>s100</AssemblyName>
     <RootNamespace>EncDotNet.S100.Cli</RootNamespace>
+    <Version>0.0.0-dev</Version>
     <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
     <!--

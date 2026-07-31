@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -379,6 +376,17 @@ internal sealed class ViewerSettings
     /// then never drop out on zoom-out.
     /// </summary>
     public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
+
+    /// <summary>
+    /// Whether the on-chart overscale "curtain" (a subtle vertical-line pattern,
+    /// S-52 / S-101 <c>AP(OVERSC01)</c>) is drawn over the region of a cell that
+    /// is being displayed beyond its compilation scale (issue #441, Form A).
+    /// Enabled by default, matching type-approved ECDIS where overscale
+    /// indication is mandatory and on by default; the mariner may switch it off
+    /// here (it belongs to the S-52 "chart display" information set, viewing
+    /// group 21030).
+    /// </summary>
+    public bool ShowOverscaleIndication { get; set; } = true;
 
     /// <summary>
     /// Whether the online OpenStreetMap basemap tile layer is shown

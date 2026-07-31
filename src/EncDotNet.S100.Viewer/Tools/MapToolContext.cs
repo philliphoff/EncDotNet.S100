@@ -1,6 +1,5 @@
-using EncDotNet.S100.DataModel;
-using System;
 using Avalonia;
+using EncDotNet.S100.DataModel;
 using Mapsui.Layers;
 using Mapsui.UI.Avalonia;
 

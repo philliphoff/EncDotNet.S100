@@ -1,5 +1,4 @@
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Pipelines.Tests;

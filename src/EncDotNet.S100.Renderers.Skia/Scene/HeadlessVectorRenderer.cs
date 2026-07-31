@@ -1,8 +1,7 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
-using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Skia.Scene;
@@ -12,7 +11,8 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// S-100 Part 9 display list (point/line/solid-area/pattern-area/text) through
 /// the shared <see cref="VectorSceneBuilder"/> and rasterises it with
 /// <see cref="SkiaDisplayListRenderer"/>, auto-fitting the viewport to the
-/// resolved scene's EPSG:3857 extent. Works for any vector product (S-101
+/// resolved scene's EPSG:3857 extent unless an explicit viewport is supplied.
+/// Works for any vector product (S-101
 /// ISO 8211, S-12x / S-201 / S-421 GML, …) because it depends only on the
 /// encoding-agnostic <see cref="DrawingInstruction"/> /
 /// <see cref="IFeatureGeometryProvider"/> contract — not on Mapsui.
@@ -26,15 +26,19 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// text within a plane) — the same ordering each Mapsui layer applies —
 /// but a single headless bitmap does not reproduce the S-101 processor's
 /// two-layer area/non-area split (that split exists only to interleave
-/// S-102), nor the Mapsui pattern phase's NetTopologySuite priority-clipping
-/// against higher-priority patterns and opaque solid fills.
+/// S-102). Pattern area-fills <b>are</b> priority-clipped against
+/// higher-priority patterns and opaque solid fills: the shared
+/// <c>VectorSceneBuilder</c> applies <c>PatternPriorityClipper</c> when
+/// lowering the scene, so headless output matches the Mapsui pattern phase.
 /// </remarks>
 public static class HeadlessVectorRenderer
 {
     /// <summary>
-    /// Renders a display list to a standalone bitmap, auto-fitting the viewport
-    /// to the scene extent. Scale-visibility culling is disabled (the fitted
-    /// scale is not a meaningful compilation scale); all resolved ops are drawn.
+    /// Renders a display list to a standalone bitmap. By default the viewport is
+    /// auto-fitted to the scene extent and scale-visibility culling is disabled
+    /// (the fitted scale is not a meaningful compilation scale), so all resolved
+    /// ops are drawn; pass an explicit <paramref name="viewport"/> to frame an
+    /// exact window and enable scale-visibility culling.
     /// </summary>
     /// <param name="instructions">The Part 9 display list to render.</param>
     /// <param name="geometryProvider">Resolves feature geometry referenced by the instructions.</param>
@@ -69,6 +73,15 @@ public static class HeadlessVectorRenderer
     /// the same auto-fitted viewport, so it registers exactly with the chart.
     /// Defaults to <see cref="BasemapKind.None"/> (no basemap; output unchanged).
     /// </param>
+    /// <param name="viewport">
+    /// Optional explicit display window. When <c>null</c> (the default) the
+    /// viewport is auto-fitted to the scene extent (padded 10%, aspect-matched)
+    /// and scale-visibility culling is disabled. When supplied, that exact
+    /// window is rendered <em>and</em> S-100 Part 9 scale-visibility culling is
+    /// enabled — because an explicit viewport carries a meaningful
+    /// <see cref="Viewport.ScaleDenominator"/> — bringing this path into
+    /// alignment with the composite/GUI render paths.
+    /// </param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     public static SKBitmap Render(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -83,7 +96,8 @@ public static class HeadlessVectorRenderer
         RgbaColor background,
         Func<string, AreaFill?>? areaFillProvider = null,
         DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
-        BasemapKind basemap = BasemapKind.None)
+        BasemapKind basemap = BasemapKind.None,
+        Viewport? viewport = null)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
@@ -102,28 +116,33 @@ public static class HeadlessVectorRenderer
             symbolScale,
             textScale,
             areaFillProvider);
-        var viewport = FitViewport(scene, widthPixels, heightPixels);
+
+        // An explicit viewport frames an exact window and carries a real scale
+        // denominator, so honour scale-visibility; the auto-fit fallback uses a
+        // synthetic scale, so culling stays disabled (draw every resolved op).
+        bool honorScaleVisibility = viewport is not null;
+        var resolvedViewport = viewport ?? FitViewport(scene, widthPixels, heightPixels);
 
         if (basemap == BasemapKind.Offline)
         {
-            // Paint the land basemap under the dataset against the SAME fitted
+            // Paint the land basemap under the dataset against the SAME
             // viewport so the two register exactly. The compositor clears the
             // background once, then draws each transparent layer bottom-first.
             var compositeRenderer = new HeadlessCompositeRenderer { Background = background };
             var layers = new CompositeLayer[]
             {
                 new VectorCompositeLayer(NaturalEarthBasemap.LandScene, honorScaleVisibility: false),
-                new VectorCompositeLayer(scene, honorScaleVisibility: false),
+                new VectorCompositeLayer(scene, honorScaleVisibility),
             };
-            return compositeRenderer.Render(viewport, layers);
+            return compositeRenderer.Render(resolvedViewport, layers);
         }
 
         var renderer = new SkiaDisplayListRenderer
         {
             Background = background,
-            HonorScaleVisibility = false,
+            HonorScaleVisibility = honorScaleVisibility,
         };
-        return renderer.Render(scene, viewport);
+        return renderer.Render(scene, resolvedViewport);
     }
 
     /// <summary>

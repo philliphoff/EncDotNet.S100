@@ -6,11 +6,12 @@ Reader and coverage pipeline for S-104 Water Level Information for Surface Navig
 
 This library reads S-104 datasets from HDF5 files and provides time-series water level height and trend grids for the portrayal pipeline. Key types include:
 
-- **`S104Dataset`** — root model containing horizontal CRS, data coding format, and time-step coverages.
-- **`S104DatasetReader`** — reads an S-104 dataset from an `IHdf5File` (regular grid format). The reader targets the Edition 2.0.0 HDF5 layout; when a required attribute is missing it raises `S100DatasetSchemaException`, and if the dataset declares a different `productSpecification` edition (e.g. the draft `INT.IHO.S-104.0.8`) the exception message notes that the declared edition may explain the unexpected layout. The `waterLevelTrend` compound member is an enumerated indicator (0 nodata / 1 decreasing / 2 increasing / 3 steady) that producers may store in any small numeric width: all signed/unsigned 8/16/32-bit integers (including the `Int16` used by IC-ENC NL feeds) and both float widths are decoded. An unrecognised trend width is dropped to `0` (nodata) rather than failing the read, so a renderable water-level height grid is never lost to an unrepresentable trend.
+- **`S104Dataset`** — root model containing horizontal CRS, vertical datum, data coding format, and time-step coverages.
+- **`S104DatasetReader`** — reads an S-104 dataset from an `IHdf5File` (regular grid format). The reader targets the Edition 2.0.0 HDF5 layout; when a required attribute is missing it raises `S100DatasetSchemaException`, and if the dataset declares a different `productSpecification` edition (e.g. the draft `INT.IHO.S-104.0.8`) the exception message notes that the declared edition may explain the unexpected layout. The `verticalDatum` root attribute (S-104 Ed 2.0.0 §10.2.4) is surfaced as `S104Dataset.VerticalDatum` (an S-100 register code) and resolved to a label by `S104CoverageSource` via `EncDotNet.S100.DataModel.VerticalDatums`. The `waterLevelTrend` compound member is an enumerated indicator (0 nodata / 1 decreasing / 2 increasing / 3 steady) that producers may store in any small numeric width: all signed/unsigned 8/16/32-bit integers (including the `Int16` used by IC-ENC NL feeds) and both float widths are decoded. An unrecognised trend width is dropped to `0` (nodata) rather than failing the read, so a renderable water-level height grid is never lost to an unrepresentable trend. `ReadMetadata(file)` is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` (declared spec, union grid extent, and temporal coverage from the per-group `timePoint` attributes) without reading any `values` arrays.
 - **`S104CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S104PortrayalCatalogue`** — viewer-parity heatmap catalogue with hand-coded Day / Dusk / Night band tables (see *Portrayal* below).
 - **`WaterLevelCoverage`**, **`WaterLevelValue`** — water level data models. `WaterLevelCoverage.GroupPath` carries the HDF5 instance path (e.g. `/WaterLevel/WaterLevel.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
+- **`S104TimeSeriesSampler`** — samples a regular-grid (dcf=2) dataset at an arbitrary geographic point across its time steps, returning an `S104TimeSeries` (nearest cell + a per-step `S104TimeSeriesPoint` list of height/trend, ordered by time and optionally windowed to a `from`/`to` range). This is the shared kernel for depth-over-time visualisations and tide reconciliation; the MCP `sample_coverage` windowed path delegates its nearest-cell and containment math to it. Nearest-cell selection operates in the coverage's geographic space (EPSG:4326 per S-104 Ed 2.0.0) without reprojection; NoData cells (`FillValue`, `-9999f`) report a `null` height.
 
 ## Portrayal
 
@@ -35,6 +36,30 @@ colour rather than leaving them transparent.
 If IHO publishes an official S-104 portrayal catalogue, the bundled
 `content/S104/pc/` directory (today `.gitkeep`-only by design) will be the
 landing point and this catalogue will be re-wired against it.
+
+### Visibility and water-area clipping (issue #483)
+
+Because the heatmap is non-normative, the **gridded surface** (data coding
+format 2) loads **hidden by default** in the viewer — the user can reveal it
+from the layer controls. Discrete **fixed-station glyphs** (data coding format 8)
+remain visible by default; they are point features and are unaffected.
+`S104DatasetProcessor.IsGriddedSurface` distinguishes the two so the loader only
+defaults the surface hidden.
+
+When the surface is shown alongside an S-101 ENC, the S-98 interoperability rule
+`R-101-104-B` (`S98DefaultRules.R_101_104_B_ClipSurfaceToWater`) attaches the
+ENC's `LandArea` geometry to the surface sub-layer (`GridCoverageSubLayer.LandAreaMask`).
+The coverage renderers (`MapsuiCoverageRenderer` and the headless
+`CoverageHeadlessRenderer`) then clip the rasterised surface to water at
+**output-pixel resolution**: `CoverageLandClip.BuildLandPath` projects the land
+polygons (honouring interior water rings via even–odd fill) into the destination
+pixel space and the surface is drawn under an antialiased
+`SKClipOperation.Difference` clip. Pixel-accurate clipping is essential because
+real S-104 grids are often very coarse (e.g. the Rotterdam sample is only 5×6
+cells ≈ 1 km each); an earlier per-cell mask could only toggle whole grid cells
+and so straddled piers and basins. The surface is thus layered like S-102
+bathymetry — beneath ENC line work and clipped to water — so it never bleeds
+over land.
 
 ## Validation
 

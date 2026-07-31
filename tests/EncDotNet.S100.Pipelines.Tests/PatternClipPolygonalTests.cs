@@ -1,4 +1,4 @@
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Operation.Overlay;
 using NetTopologySuite.Operation.OverlayNG;
@@ -34,7 +34,7 @@ public class PatternClipPolygonalTests
     public void ExtractPolygonal_PolygonInput_ReturnedUnchanged()
     {
         var polygon = Square(0, 0, 10);
-        Assert.Same(polygon, MapsuiDisplayListRenderer.ExtractPolygonal(polygon));
+        Assert.Same(polygon, PatternPriorityClipper.ExtractPolygonal(polygon));
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class PatternClipPolygonalTests
 
         var mixed = Factory.CreateGeometryCollection([polygon, line, point]);
 
-        var result = MapsuiDisplayListRenderer.ExtractPolygonal(mixed);
+        var result = PatternPriorityClipper.ExtractPolygonal(mixed);
 
         Assert.NotNull(result);
         Assert.Equal(Dimension.Surface, result!.Dimension);
@@ -71,7 +71,7 @@ public class PatternClipPolygonalTests
 
         var mixed = Factory.CreateGeometryCollection([a, line, b]);
 
-        var result = MapsuiDisplayListRenderer.ExtractPolygonal(mixed);
+        var result = PatternPriorityClipper.ExtractPolygonal(mixed);
 
         var multi = Assert.IsType<MultiPolygon>(result);
         Assert.Equal(2, multi.NumGeometries);
@@ -87,7 +87,7 @@ public class PatternClipPolygonalTests
         ]);
         var collection = Factory.CreateGeometryCollection([line]);
 
-        Assert.Null(MapsuiDisplayListRenderer.ExtractPolygonal(collection));
+        Assert.Null(PatternPriorityClipper.ExtractPolygonal(collection));
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class PatternClipPolygonalTests
         ]);
         var mixed = Factory.CreateGeometryCollection([polygon, line]);
 
-        var subject = MapsuiDisplayListRenderer.ExtractPolygonal(mixed)!;
+        var subject = PatternPriorityClipper.ExtractPolygonal(mixed)!;
         var clip = Square(5, 0, 10);
 
         var difference = OverlayNGRobust.Overlay(

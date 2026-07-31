@@ -5,7 +5,6 @@ using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 

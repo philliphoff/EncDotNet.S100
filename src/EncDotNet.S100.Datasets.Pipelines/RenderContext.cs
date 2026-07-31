@@ -1,4 +1,3 @@
-using System;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -89,6 +88,37 @@ public abstract record RenderContext
     /// does not declare the id.
     /// </summary>
     public string? DisplayModeId { get; init; }
+
+    /// <summary>
+    /// An explicit display window (geographic bounds + pixel size + scale
+    /// denominator) to render, or <c>null</c> to auto-fit the viewport to the
+    /// dataset extent (the historical single-dataset headless behaviour).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Supplying a viewport brings the single-dataset headless render path into
+    /// alignment with the composite/GUI paths, which have always accepted an
+    /// explicit viewport (CLI <c>--bbox</c> / <c>--center</c>+<c>--scale</c>).
+    /// It lets a caller frame an exact window — e.g. to reproduce a viewer
+    /// screenshot or capture a fixed scene — instead of the padded auto-fit.
+    /// </para>
+    /// <para>
+    /// Honoured by the vector headless path
+    /// (<c>HeadlessVectorRenderer.Render</c>) for S-101, S-57 and the GML
+    /// products. Because an explicit viewport carries a meaningful
+    /// <see cref="Viewport.ScaleDenominator"/>, the vector path additionally
+    /// enables S-100 Part 9 scale-visibility culling when it is set (the
+    /// auto-fit path leaves culling disabled, as the fitted scale is not a real
+    /// compilation scale). The coverage processors (S-102/S-104/S-111) forward
+    /// the viewport (and, for non-EPSG:4326 grids, a WGS-84 → native transform)
+    /// to <see cref="EncDotNet.S100.Pipelines.Coverage.CoveragePipeline"/> so
+    /// only the cells that fall inside the viewport at the viewport's ground
+    /// resolution are sampled (issue #487). Coverage sampling applies on the
+    /// initial dataset load; live pan/zoom re-sampling of the Mapsui coverage
+    /// layer is a follow-up (see issue #486).
+    /// </para>
+    /// </remarks>
+    public Viewport? Viewport { get; init; }
 }
 
 public sealed record S101RenderContext : RenderContext;

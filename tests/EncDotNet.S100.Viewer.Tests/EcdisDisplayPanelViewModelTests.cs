@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
@@ -7,7 +5,6 @@ using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
-using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

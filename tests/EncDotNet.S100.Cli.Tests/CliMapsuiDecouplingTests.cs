@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Cli.Tests;

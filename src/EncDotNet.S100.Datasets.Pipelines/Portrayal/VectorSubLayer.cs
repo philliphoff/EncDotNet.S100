@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Vector;
 

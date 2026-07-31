@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
@@ -33,6 +29,31 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private bool _validationCached;
 
     public SpecRef Spec { get; }
+
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the coverage source's already-read georeferencing
+    /// metadata (root attributes + coverage extent) and the dataset's
+    /// horizontal CRS — no HDF5 payload is re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    private DatasetMetadata BuildMetadata()
+    {
+        var extent = _source.Metadata.Extent;
+        return new DatasetMetadata
+        {
+            Spec = Spec,
+            Extent = new BoundingBox(
+                extent.SouthLatitude,
+                extent.WestLongitude,
+                extent.NorthLatitude,
+                extent.EastLongitude),
+            HorizontalCrsEpsg = _dataset.HorizontalCRS,
+        };
+    }
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
@@ -134,9 +155,27 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         try
         {
             await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+            var previousLevel = _source.SelectedOverviewLevel;
+
+            int crs = _dataset.HorizontalCRS ?? 4326;
+            ICrsTransform? wgs84ToNative = null;
+            if (context?.Viewport is not null && crs != 4326)
+            {
+                wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+            }
+
+            // Select the coarsest shoal-biased overview that does not exceed
+            // the viewport's cells-per-pixel ratio. Deriving the ratio through
+            // GridRegion accounts for how much of the viewport the tile
+            // occupies; comparing only full-grid dimensions to viewport pixels
+            // would incorrectly choose level 0 when zoomed beyond the tile.
+            // Ordering matters: selection precedes this Metadata read so the
+            // pipeline computes its residual region against level-L geometry.
+            SelectOverviewLevelForViewport(context?.Viewport, wgs84ToNative);
             var metadata = _source.Metadata;
 
-            var viewport = new EncDotNet.S100.Pipelines.Viewport
+            var viewport = context?.Viewport ?? new EncDotNet.S100.Pipelines.Viewport
             {
                 MinLatitude = metadata.Extent.SouthLatitude,
                 MaxLatitude = metadata.Extent.NorthLatitude,
@@ -147,42 +186,113 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 ScaleDenominator = 50_000,
             };
 
-            var pipeline = _pipeline;
-            var layer = await pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
-                .ConfigureAwait(false);
-            var styledLayer = (StyledCoverageLayer)layer;
-
-            int crs = _dataset.HorizontalCRS ?? 4326;
-            var geoId = _dataset.GeographicIdentifier ?? _fileName;
-            var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
-
-            return new CoveragePortrayalResult
+            try
             {
-                // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
-                // ("gridded bathymetry replaces depth area and depth
-                // contours"). S-102 always emits a single coverage layer;
-                // PR-L1 leaves WithinPlanePriority at 0.
-                SubLayers = new CoverageSubLayerBase[]
+                var pipeline = _pipeline;
+
+                // Viewport-scoped sampling (issue #487): when the render context
+                // supplies a live map viewport, pass it (and the WGS84→native
+                // transform for non-4326 grids) through so the pipeline samples
+                // only cells that fall inside the viewport at the viewport's
+                // ground resolution. Falls back to full-grid sampling when the
+                // caller doesn't specify a viewport (e.g. RenderHeadlessAsync,
+                // CLI tools). Composes with the overview pyramid selection
+                // above: the region math runs against the level-L metadata
+                // exposed by _source.Metadata (issue #486).
+                var layer = await pipeline.ProcessAsync(
+                    _source,
+                    _catalogue,
+                    viewport: context?.Viewport,
+                    wgs84ToNative: wgs84ToNative,
+                    mariner: context?.Mariner ?? MarinerSettings.Default,
+                    cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                var styledLayer = (StyledCoverageLayer)layer;
+
+                var geoId = _dataset.GeographicIdentifier ?? _fileName;
+                var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
+
+                return new CoveragePortrayalResult
                 {
-                    new GridCoverageSubLayer
+                    // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
+                    // ("gridded bathymetry replaces depth area and depth
+                    // contours"). S-102 always emits a single coverage layer;
+                    // PR-L1 leaves WithinPlanePriority at 0.
+                    SubLayers = new CoverageSubLayerBase[]
                     {
-                        LayerKey = "s102.surface",
-                        LayerName = $"S-102: {_fileName}",
-                        Plane = S98DisplayPlane.Bathymetry,
-                        WithinPlanePriority = 0,
-                        Coverage = styledLayer,
-                        Viewport = viewport,
+                        new GridCoverageSubLayer
+                        {
+                            LayerKey = "s102.surface",
+                            LayerName = $"S-102: {_fileName}",
+                            Plane = S98DisplayPlane.Bathymetry,
+                            WithinPlanePriority = 0,
+                            Coverage = styledLayer,
+                            Viewport = viewport,
+                        },
                     },
-                },
-                Spec = new SpecRef("S-102", default),
-                SourceDatasetId = _fileName,
-                Info = info,
-            };
+                    Spec = new SpecRef("S-102", default),
+                    SourceDatasetId = _fileName,
+                    Info = info,
+                };
+            }
+            catch
+            {
+                _source.SelectOverviewLevel(previousLevel);
+                throw;
+            }
         }
         finally
         {
             _renderGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Selects the pyramid level whose native cell spacing best matches the
+    /// viewport's ground resolution (issues #486 and #496). Falls back to
+    /// level 0 when no viewport is supplied. Formula:
+    /// <code>
+    ///   nativeRegion  = GridRegion.FromViewport(viewport, nativeMetadata)
+    ///   cellsPerPixel = min(nativeRegion.RowStride, nativeRegion.ColStride)
+    ///   level         = clamp(floor(log2(cellsPerPixel)), 0, maxLevel)
+    /// </code>
+    /// The selected overview has already min-pooled depth and max-pooled
+    /// uncertainty. Any non-power-of-two remainder is handled by the source's
+    /// residual block reducer, so no stride lattice can skip a shoal.
+    /// </summary>
+    private void SelectOverviewLevelForViewport(
+        EncDotNet.S100.Pipelines.Viewport? viewport,
+        ICrsTransform? wgs84ToNative)
+    {
+        if (viewport is null)
+        {
+            _source.SelectOverviewLevel(0);
+            return;
+        }
+
+        if (viewport.WidthPixels <= 0 || viewport.HeightPixels <= 0)
+        {
+            _source.SelectOverviewLevel(0);
+            return;
+        }
+
+        _source.SelectOverviewLevel(0);
+        var nativeMetadata = _source.Metadata;
+        var nativeRegion = GridRegion.FromViewport(
+            viewport,
+            nativeMetadata.GridMetadata,
+            nativeMetadata.HorizontalCRS,
+            wgs84ToNative);
+        int cellsPerPixel = Math.Min(nativeRegion.RowStride, nativeRegion.ColStride);
+
+        int desiredLevel = cellsPerPixel <= 1
+            ? 0
+            : (int)Math.Floor(Math.Log2(cellsPerPixel));
+
+        var available = _source.AvailableOverviewLevels;
+        int maxLevel = available.Count - 1;
+        int level = Math.Clamp(desiredLevel, 0, maxLevel);
+        _source.SelectOverviewLevel(level);
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
@@ -214,7 +324,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         var styledLayer = (StyledCoverageLayer)await _pipeline
-            .ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ProcessAsync(_source, _catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         var extent = _source.Metadata.Extent;
@@ -309,6 +419,33 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         => value == noData
             ? "NoData"
             : value.ToString("0.##########", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Samples this S-102 bathymetric surface at a WGS-84 point and returns the
+    /// depth (and co-located uncertainty) in metres, or <c>null</c> when the
+    /// point falls outside the grid or the depth cell is NoData. Unlike
+    /// <see cref="GetCoverageInfo"/> this returns raw quantities (not a display
+    /// <see cref="FeatureInfo"/>) for the viewer's depth-assimilation pipeline
+    /// (S-102 §10.2 BathymetryCoverage; S-100 Part 4a vertical datum).
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns>The bathymetric sample, or <c>null</c>.</returns>
+    public S102DepthProbe? SampleBaseDepth(double latitude, double longitude)
+    {
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        if (!sample.Values.TryGetValue("depth", out var depth) || depth == sample.NoDataValue)
+            return null;
+
+        double? uncertainty = sample.Values.TryGetValue("uncertainty", out var u) && u != sample.NoDataValue
+            ? u
+            : null;
+
+        return new S102DepthProbe(depth, uncertainty, _dataset.VerticalDatum);
+    }
 
     /// <summary>
     /// Runs the S-102 normative rule pack

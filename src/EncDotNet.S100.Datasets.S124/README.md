@@ -15,7 +15,7 @@ S-124 provides a standard data model for distributing navigational warnings (NAV
 
 Key types include:
 
-- **`S124Dataset`** — root model containing parsed features, information types, and dataset identification.
+- **`S124Dataset`** — root model containing parsed features, information types, and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S124Feature`** — a geographic feature with type code, geometry, simple attributes, complex attributes, and `xlink:href` references (`GmlReference`).
 - **`S124InformationType`** — a non-geographic information type instance (e.g. `NavwarnPreamble`).
 - **`S124ComplexAttribute`** — a complex attribute instance containing sub-attribute values.

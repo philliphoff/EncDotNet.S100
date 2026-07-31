@@ -1,9 +1,7 @@
-using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Viewer;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -67,6 +65,31 @@ public partial class PickReportView : UserControl
         catch
         {
             // Best-effort; clipboard access can fail on some Linux WMs.
+        }
+    }
+
+    // Depth-card header tap: toggle the collapsible detail region. Using a
+    // plain Border (rather than a ToggleButton) keeps the header flat with a
+    // hover-only background; the expand state lives on the card view-model.
+    private void OnDepthHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: DepthOverTimeViewModel depth })
+            depth.IsExpanded = !depth.IsExpanded;
+    }
+
+    // Keyboard activation for the focusable depth-card header: Enter/Space
+    // toggle the detail region, matching the pointer tap so the card is
+    // operable without a mouse and exposes a button-like interaction to
+    // assistive tech.
+    private void OnDepthHeaderKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space))
+            return;
+
+        if (sender is Control { DataContext: DepthOverTimeViewModel depth })
+        {
+            depth.IsExpanded = !depth.IsExpanded;
+            e.Handled = true;
         }
     }
 

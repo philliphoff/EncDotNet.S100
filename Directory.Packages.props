@@ -40,6 +40,7 @@
     <PackageVersion Include="Mapsui.Rendering.Skia" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Tiling" Version="5.1.0" />
     <PackageVersion Include="MoonSharp" Version="2.0.0" />
+    <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
     <PackageVersion Include="ProjNet" Version="2.1.0" />
     <PackageVersion Include="PureHDF" Version="2.1.2" />
     <PackageVersion Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-798" />

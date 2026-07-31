@@ -1,11 +1,8 @@
-using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
-using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Protocol;
-using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

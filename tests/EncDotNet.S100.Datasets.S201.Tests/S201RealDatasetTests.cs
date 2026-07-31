@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace EncDotNet.S100.Datasets.S201.Tests;
 
 /// <summary>

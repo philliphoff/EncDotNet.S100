@@ -1,6 +1,7 @@
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -188,5 +189,44 @@ public sealed class OptionParsingTests
         Assert.True(ValidateCommand.IsSuppressed("S101-R-1.2", patterns));
         Assert.True(ValidateCommand.IsSuppressed("S102-R-9.9", patterns));
         Assert.False(ValidateCommand.IsSuppressed("S104-R-1.1", patterns));
+    }
+
+    [Theory]
+    [InlineData(null, "chart.png", SKEncodedImageFormat.Png)]
+    [InlineData(null, "chart.jpg", SKEncodedImageFormat.Jpeg)]
+    [InlineData(null, "chart.webp", SKEncodedImageFormat.Webp)]
+    [InlineData("webp", "chart", SKEncodedImageFormat.Webp)]
+    public void TryResolveOutput_resolves_image_kinds(
+        string? format, string output, SKEncodedImageFormat expected)
+    {
+        Assert.True(RenderCommand.TryResolveOutput(format, output, out var kind, out var image, out _));
+        Assert.Equal(RenderCommand.RenderOutputKind.Image, kind);
+        Assert.Equal(expected, image);
+    }
+
+    [Theory]
+    [InlineData(null, "chart.json")]   // inferred from extension
+    [InlineData("json", "chart.txt")]  // explicit, non-image extension
+    [InlineData("json", "chart")]      // explicit, no extension
+    public void TryResolveOutput_resolves_display_list_kind(string? format, string output)
+    {
+        Assert.True(RenderCommand.TryResolveOutput(format, output, out var kind, out _, out _));
+        Assert.Equal(RenderCommand.RenderOutputKind.DisplayList, kind);
+    }
+
+    [Fact]
+    public void TryResolveOutput_rejects_format_json_against_image_extension()
+    {
+        Assert.False(
+            RenderCommand.TryResolveOutput("json", "chart.png", out _, out _, out var error));
+        Assert.Contains("json", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TryResolveOutput_rejects_unknown_format()
+    {
+        Assert.False(
+            RenderCommand.TryResolveOutput("tiff", "chart.tiff", out _, out _, out var error));
+        Assert.Contains("json", error, StringComparison.OrdinalIgnoreCase);
     }
 }

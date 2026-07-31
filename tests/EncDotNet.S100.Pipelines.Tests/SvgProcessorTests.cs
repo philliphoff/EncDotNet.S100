@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.Pipelines.Tests;

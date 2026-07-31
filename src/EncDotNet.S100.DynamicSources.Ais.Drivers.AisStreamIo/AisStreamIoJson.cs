@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
@@ -13,7 +12,7 @@ namespace EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 /// </summary>
 internal static class AisStreamIoJson
 {
-    private static readonly JsonSerializerOptions s_options = new()
+    private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,
     };

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Reflection;
@@ -45,7 +43,7 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 internal static class MapPaintInstrumentation
 {
     private static readonly object Sync = new();
-    private static bool s_installed;
+    private static bool _installed;
 
     /// <summary>
     /// When set (env <c>S100_MEASURE_VECTOR_SPLIT</c> = <c>1</c>/<c>true</c>),
@@ -61,13 +59,13 @@ internal static class MapPaintInstrumentation
     /// remaining draw-issue cost). Off by default; gated to a
     /// diagnostics run because it double-draws vectors.
     /// </summary>
-    private static readonly bool s_measureSplit =
+    private static readonly bool MeasureSplit =
         (Environment.GetEnvironmentVariable("S100_MEASURE_VECTOR_SPLIT") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";
 
-    private static double s_vectorBuildMs;
-    private static double s_vectorFillMs;
-    private static long s_vectorSplitCalls;
+    private static double _vectorBuildMs;
+    private static double _vectorFillMs;
+    private static long _vectorSplitCalls;
 
     private static readonly Meter Meter =
         S100Telemetry.CreateMeter(typeof(MapPaintInstrumentation));
@@ -90,7 +88,7 @@ internal static class MapPaintInstrumentation
     /// <see cref="BeginPaint"/> and <see cref="EndPaintAndEmit"/>),
     /// so no locking is required.
     /// </summary>
-    private static readonly Dictionary<(string Style, string Layer, string PointBucket), StyleStats> s_perPaint = new();
+    private static readonly Dictionary<(string Style, string Layer, string PointBucket), StyleStats> PerPaint = new();
 
     private sealed class StyleStats
     {
@@ -102,14 +100,15 @@ internal static class MapPaintInstrumentation
     {
         lock (Sync)
         {
-            if (s_installed) return;
-            s_installed = true;
+            if (_installed) return;
+            _installed = true;
 
             // Make sure our pattern-fill renderer is in the dict
             // before we wrap. Subsequent registrations of the same
             // style type overwrite, so this is safe even if Render()
             // hasn't run yet.
             EncDotNet.S100.Renderers.Mapsui.AnchoredPatternFillRenderer.Register();
+            EncDotNet.S100.Renderers.Mapsui.OverscaleCurtainRenderer.Register();
 
             var dictField = typeof(MapRenderer).GetField(
                 "_styleRenderers",
@@ -139,7 +138,7 @@ internal static class MapPaintInstrumentation
                 // measuring renderer between the counter and Mapsui's
                 // real VectorStyle renderer so the build/fill split is
                 // captured for the same draws the counter sees.
-                if (s_measureSplit
+                if (MeasureSplit
                     && pair.Key == typeof(VectorStyle)
                     && inner is ISkiaStyleRenderer skiaInner)
                 {
@@ -155,24 +154,24 @@ internal static class MapPaintInstrumentation
     public static void BeginPaint()
     {
         // Reset accumulators in place to avoid GC churn.
-        foreach (var stats in s_perPaint.Values)
+        foreach (var stats in PerPaint.Values)
         {
             stats.Calls = 0;
             stats.DurationMs = 0;
         }
 
-        if (s_measureSplit)
+        if (MeasureSplit)
         {
-            s_vectorBuildMs = 0;
-            s_vectorFillMs = 0;
-            s_vectorSplitCalls = 0;
+            _vectorBuildMs = 0;
+            _vectorFillMs = 0;
+            _vectorSplitCalls = 0;
         }
     }
 
     /// <summary>Called from <see cref="InstrumentedMapControl"/>'s end marker.</summary>
     public static void EndPaintAndEmit()
     {
-        foreach (var (key, stats) in s_perPaint)
+        foreach (var (key, stats) in PerPaint)
         {
             if (stats.Calls == 0) continue;
             var styleTag = new KeyValuePair<string, object?>("style", key.Style);
@@ -199,7 +198,7 @@ internal static class MapPaintInstrumentation
     public static IReadOnlyList<EncDotNet.S100.Viewer.Services.RenderStyleStat> CollectStyleSnapshot()
     {
         var byStyle = new Dictionary<string, (long Calls, double DurationMs)>();
-        foreach (var (key, stats) in s_perPaint)
+        foreach (var (key, stats) in PerPaint)
         {
             if (stats.Calls == 0) continue;
             byStyle.TryGetValue(key.Style, out var acc);
@@ -218,10 +217,10 @@ internal static class MapPaintInstrumentation
         // get_render_stats payload unchanged. Calls are reported as 0 so
         // the differential's extra draws don't inflate TotalDrawCalls;
         // the real VectorStyle call count is available from its own entry.
-        if (s_measureSplit && s_vectorSplitCalls > 0)
+        if (MeasureSplit && _vectorSplitCalls > 0)
         {
-            result.Add(new EncDotNet.S100.Viewer.Services.RenderStyleStat("VectorBuild", 0, s_vectorBuildMs));
-            result.Add(new EncDotNet.S100.Viewer.Services.RenderStyleStat("VectorFill", 0, s_vectorFillMs));
+            result.Add(new EncDotNet.S100.Viewer.Services.RenderStyleStat("VectorBuild", 0, _vectorBuildMs));
+            result.Add(new EncDotNet.S100.Viewer.Services.RenderStyleStat("VectorFill", 0, _vectorFillMs));
         }
 
         return result;
@@ -246,10 +245,10 @@ internal static class MapPaintInstrumentation
     private static StyleStats GetStats(string styleName, string layerName, string pointBucket)
     {
         var key = (styleName, layerName, pointBucket);
-        if (!s_perPaint.TryGetValue(key, out var stats))
+        if (!PerPaint.TryGetValue(key, out var stats))
         {
             stats = new StyleStats();
-            s_perPaint[key] = stats;
+            PerPaint[key] = stats;
         }
         return stats;
     }
@@ -314,7 +313,7 @@ internal static class MapPaintInstrumentation
     /// <remarks>
     /// Only the first draw's return value is propagated. The extra draw
     /// produces identical overdraw, so this must stay gated behind
-    /// <see cref="s_measureSplit"/>. The differential is only meaningful
+    /// <see cref="MeasureSplit"/>. The differential is only meaningful
     /// while Mapsui's <c>VectorCache</c> is enabled; if it is disabled
     /// the second draw also rebuilds and the build half collapses toward
     /// zero, which the harness can detect.
@@ -336,9 +335,9 @@ internal static class MapPaintInstrumentation
             _inner.Draw(canvas, viewport, layer, feature, style, renderService, iteration);
             var secondMs = Stopwatch.GetElapsedTime(secondStart).TotalMilliseconds;
 
-            s_vectorBuildMs += Math.Max(0, firstMs - secondMs);
-            s_vectorFillMs += secondMs;
-            s_vectorSplitCalls++;
+            _vectorBuildMs += Math.Max(0, firstMs - secondMs);
+            _vectorFillMs += secondMs;
+            _vectorSplitCalls++;
             return result;
         }
     }

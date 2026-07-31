@@ -2,6 +2,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using NetTopologySuite.Geometries;
 
 namespace EncDotNet.S100.Rendering.Scene;
 
@@ -32,9 +33,14 @@ public readonly record struct SymbolAsset(
 /// <b>Scope.</b> Both solid-colour and tiled-symbol pattern area fills are
 /// lowered into the IR. Pattern fills are emitted as
 /// <see cref="PatternAreaPaintOp"/> only when a <see cref="PatternResolver"/>
-/// is supplied (the headless Skia path); the Mapsui renderer leaves the
-/// resolver unset and continues to drive its own pattern collection /
-/// priority-clip / insert phase, so its output is unchanged.
+/// is supplied (the headless Skia path and the Mapsui TiledScene subsystem);
+/// the Mapsui feature path leaves the resolver unset and continues to drive its
+/// own pattern collection / insert phase, so its output is unchanged. When
+/// pattern ops are emitted they are priority-clipped via the shared
+/// <see cref="PatternPriorityClipper"/> — the same algorithm the Mapsui feature
+/// path uses — so all three paths clip identically. The (palette-independent)
+/// clip result can be memoized via <see cref="PatternClipCache"/> so re-builds
+/// that only change the palette skip the expensive overlay.
 /// </remarks>
 public sealed class VectorSceneBuilder
 {
@@ -67,6 +73,21 @@ public sealed class VectorSceneBuilder
     /// for a given name silently drops just that instruction.
     /// </summary>
     public Func<string, byte[]?>? PatternResolver { get; init; }
+
+    /// <summary>
+    /// Optional memoizer for the pattern priority-clip result. When set, the
+    /// builder routes the shared <see cref="PatternPriorityClipper.Clip"/> call
+    /// through this delegate, so a re-build whose clip inputs are unchanged — most
+    /// importantly a Day/Dusk/Night palette switch — reuses the previously
+    /// computed (palette-independent) clip geometry instead of repeating the
+    /// expensive NetTopologySuite overlay. The Mapsui renderer wires this to its
+    /// pattern-clip cache for the default TiledScene render subsystem, matching
+    /// the caching the Mapsui feature path already enjoys; the headless Skia path
+    /// leaves it unset (a headless render clips once). Only consulted when a
+    /// <see cref="PatternResolver"/> is also set (otherwise no pattern ops are
+    /// emitted and there is nothing to clip).
+    /// </summary>
+    public PatternClipMemoizer? PatternClipCache { get; init; }
 
     /// <summary>Global scale factor applied to all point symbols (default 1.0).</summary>
     public double SymbolScale { get; init; } = 1.0;
@@ -153,9 +174,18 @@ public sealed class VectorSceneBuilder
             .ToList();
 
         var ops = new List<PaintOp>(sorted.Count);
+        var patternPriorities = new List<(PatternAreaPaintOp Op, int Priority)>();
+        HashSet<string>? featuresWithPatterns = null;
 
         foreach (var instruction in sorted)
         {
+            // Track every feature carrying a pattern fill (even when its geometry
+            // is missing or its tile does not resolve), mirroring the Mapsui
+            // feature path: such a feature's own solid colour fill is not used as
+            // a pattern exclusion area.
+            if (instruction is AreaInstruction { AreaFillReference: not null })
+                (featuresWithPatterns ??= new(StringComparer.Ordinal)).Add(instruction.FeatureReference);
+
             var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
 
             bool hasAugmentedLine = instruction is LineInstruction { CoordinatesOverride: not null };
@@ -177,10 +207,288 @@ public sealed class VectorSceneBuilder
             };
 
             if (op is not null)
+            {
                 ops.Add(op);
+                if (op is PatternAreaPaintOp patternOp)
+                    patternPriorities.Add((patternOp, instruction.DrawingPriority));
+            }
         }
 
+        // Priority-clip pattern ops in the IR (shared with the Mapsui feature
+        // path via PatternPriorityClipper) so the headless Skia backend and the
+        // Mapsui TiledScene subsystem clip identically to the Mapsui feature arm.
+        if (patternPriorities.Count > 0)
+            ClipPatternAreas(ops, patternPriorities, featuresWithPatterns);
+
         return new VectorScene(ops);
+    }
+
+    private static readonly GeometryFactory ClipGeometryFactory = new();
+
+    /// <summary>
+    /// Applies S-100 Part 9 §11.3 pattern priority-clipping to the pattern ops in
+    /// <paramref name="ops"/> using the shared <see cref="PatternPriorityClipper"/>,
+    /// then rewrites the pattern-op block in place with the clipped result. Pattern
+    /// ops are grouped by (pattern reference, drawing priority) — matching the
+    /// Mapsui feature path — so both render arms produce identical clip topology.
+    /// </summary>
+    /// <remarks>
+    /// A clipped group can become a <see cref="MultiPolygon"/>, so one input op may
+    /// expand into several output ops (one per polygon). Because clipping merges the
+    /// ops of a group into a single geometry, the resulting op(s) carry the group's
+    /// <em>union</em> scale-visibility band (the widest visible range across the
+    /// merged ops); this is a superset, so a merged region is never over-culled. In
+    /// practice ops sharing a pattern reference and priority also share their scale
+    /// rules, so the band is unchanged in the common case.
+    /// </remarks>
+    private void ClipPatternAreas(
+        List<PaintOp> ops,
+        List<(PatternAreaPaintOp Op, int Priority)> patternPriorities,
+        HashSet<string>? featuresWithPatterns)
+    {
+        // Fully-opaque non-patterned solid colour fills (e.g. land) occlude
+        // patterns. Translucent fills (alpha < 255 — an AreaInstruction's
+        // Transparency is folded into the fill alpha) do not fully hide what lies
+        // under them, and PatternPriorityClipper treats every supplied polygon as
+        // a full occluder, so they must not clip patterns. A feature that itself
+        // carries a pattern does not contribute its solid fill as an exclusion
+        // area (mirrors the Mapsui feature path).
+        var excludes = new List<Polygon>();
+        foreach (var op in ops)
+        {
+            if (op is AreaPaintOp area
+                && area.Fill.A == 255
+                && (featuresWithPatterns is null || !featuresWithPatterns.Contains(area.FeatureReference)))
+            {
+                var polygon = CreatePolygon(area.WorldShell, area.WorldHoles);
+                if (polygon is not null)
+                    excludes.Add(polygon);
+            }
+        }
+
+        // Group pattern ops by (pattern reference, priority), building NTS polygons
+        // and a merged template (tile + union scale band) per group. Pattern
+        // references are compared case-insensitively (OrdinalIgnoreCase) to match
+        // the Mapsui feature path's tile-resolution comparer, so mixed-case
+        // references group identically across both render arms.
+        var groupOrder = new List<(string PatternRef, int Priority)>();
+        var groupPolygons = new Dictionary<(string, int), List<Polygon>>(PatternGroupKeyComparer);
+        var groupTemplates = new Dictionary<(string, int), PatternGroupTemplate>(PatternGroupKeyComparer);
+        var unclippable = new List<PatternAreaPaintOp>();
+
+        foreach (var (op, priority) in patternPriorities)
+        {
+            var polygon = CreatePolygon(op.WorldShell, op.WorldHoles);
+            if (polygon is null)
+            {
+                // Degenerate ring: keep the op visible rather than dropping it.
+                unclippable.Add(op);
+                continue;
+            }
+
+            var key = (op.PatternReference, priority);
+            if (groupPolygons.TryGetValue(key, out var list))
+            {
+                groupTemplates[key] = groupTemplates[key].MergeBand(op.ScaleMinimum, op.ScaleMaximum);
+            }
+            else
+            {
+                list = [];
+                groupPolygons[key] = list;
+                groupOrder.Add(key);
+                groupTemplates[key] = new PatternGroupTemplate(
+                    op.FeatureReference, op.TilePng, op.ScaleMinimum, op.ScaleMaximum);
+            }
+
+            list.Add(polygon);
+        }
+
+        // The shared clipper requires entries pre-sorted ascending by priority.
+        groupOrder.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+
+        var entries = new List<PatternPriorityClipper.PatternGroup>(groupOrder.Count);
+        foreach (var key in groupOrder)
+            entries.Add(new PatternPriorityClipper.PatternGroup(key.PatternRef, key.Priority, groupPolygons[key]));
+
+        var clipped = PatternClipCache is null
+            ? PatternPriorityClipper.Clip(entries, excludes)
+            : PatternClipCache(() => PatternPriorityClipper.Clip(entries, excludes));
+
+        // Rebuild pattern ops from the clipped geometry, expanding a MultiPolygon
+        // result into one op per polygon.
+        var rebuilt = new List<PaintOp>();
+        foreach (var (patternRef, priority, geometry) in clipped)
+        {
+            if (geometry.IsEmpty)
+                continue;
+
+            var template = groupTemplates.TryGetValue((patternRef, priority), out var found)
+                ? found
+                // A memoized clip result (shared with the Mapsui feature arm via
+                // PatternClipCache) can, in a pathological case, carry a group key
+                // absent from this build's templates; skip it rather than throw.
+                : (PatternGroupTemplate?)null;
+            if (template is null)
+                continue;
+
+            foreach (var (shell, holes) in EnumeratePolygonRings(geometry))
+            {
+                rebuilt.Add(new PatternAreaPaintOp
+                {
+                    FeatureReference = template.Value.FeatureReference,
+                    ScaleMinimum = template.Value.ScaleMinimum,
+                    ScaleMaximum = template.Value.ScaleMaximum,
+                    PatternReference = patternRef,
+                    WorldShell = shell,
+                    WorldHoles = holes,
+                    TilePng = template.Value.TilePng,
+                });
+            }
+        }
+
+        rebuilt.AddRange(unclippable);
+
+        // Replace the (contiguous, draw-order rank-1) pattern-op block in place:
+        // patterns sit after solid area fills and before lines/points/text.
+        int insertAt = ops.FindIndex(o => o is PatternAreaPaintOp);
+        if (insertAt < 0)
+            insertAt = ops.Count;
+        ops.RemoveAll(o => o is PatternAreaPaintOp);
+        ops.InsertRange(insertAt, rebuilt);
+    }
+
+    /// <summary>
+    /// Groups pattern-clip keys by drawing priority and case-insensitive pattern
+    /// reference (<see cref="StringComparison.OrdinalIgnoreCase"/>), mirroring the
+    /// Mapsui feature path's tile-resolution comparer so both render arms produce
+    /// identical clip topology for mixed-case pattern references.
+    /// </summary>
+    private static readonly IEqualityComparer<(string, int)> PatternGroupKeyComparer =
+        new PatternGroupKeyEqualityComparer();
+
+    private sealed class PatternGroupKeyEqualityComparer : IEqualityComparer<(string, int)>
+    {
+        public bool Equals((string, int) x, (string, int) y)
+            => x.Item2 == y.Item2
+                && string.Equals(x.Item1, y.Item1, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string, int) obj)
+            => HashCode.Combine(
+                obj.Item1 is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Item1),
+                obj.Item2);
+    }
+
+    /// <summary>Per-group attributes carried through the pattern clip.</summary>
+    private readonly record struct PatternGroupTemplate(
+        string FeatureReference, byte[] TilePng, double? ScaleMinimum, double? ScaleMaximum)
+    {
+        /// <summary>
+        /// Widens this template's scale-visibility band to the union of it and the
+        /// supplied band (a null bound means "unbounded", which dominates the union).
+        /// </summary>
+        public PatternGroupTemplate MergeBand(double? scaleMinimum, double? scaleMaximum)
+        {
+            double? mergedMinimum = ScaleMinimum is null || scaleMinimum is null
+                ? null
+                : Math.Max(ScaleMinimum.Value, scaleMinimum.Value);
+            double? mergedMaximum = ScaleMaximum is null || scaleMaximum is null
+                ? null
+                : Math.Min(ScaleMaximum.Value, scaleMaximum.Value);
+            return this with { ScaleMinimum = mergedMinimum, ScaleMaximum = mergedMaximum };
+        }
+    }
+
+    /// <summary>
+    /// Builds an NTS polygon from already-projected EPSG:3857 ring coordinates,
+    /// closing rings and dropping degenerate ones (fewer than three distinct
+    /// vertices) exactly as the Mapsui feature path does, so both paths clip the
+    /// same set of areas.
+    /// </summary>
+    private static Polygon? CreatePolygon(
+        IReadOnlyList<(double X, double Y)> shell,
+        IReadOnlyList<IReadOnlyList<(double X, double Y)>> holes)
+    {
+        var shellRing = BuildLinearRing(shell);
+        if (shellRing is null)
+            return null;
+
+        if (holes.Count == 0)
+            return ClipGeometryFactory.CreatePolygon(shellRing);
+
+        var holeRings = new List<LinearRing>(holes.Count);
+        foreach (var hole in holes)
+        {
+            var ring = BuildLinearRing(hole);
+            if (ring is not null)
+                holeRings.Add(ring);
+        }
+
+        return holeRings.Count == 0
+            ? ClipGeometryFactory.CreatePolygon(shellRing)
+            : ClipGeometryFactory.CreatePolygon(shellRing, [.. holeRings]);
+    }
+
+    private static LinearRing? BuildLinearRing(IReadOnlyList<(double X, double Y)> coords)
+    {
+        if (coords.Count < 3)
+            return null;
+
+        var ring = new List<Coordinate>(coords.Count + 1);
+        foreach (var (x, y) in coords)
+            ring.Add(new Coordinate(x, y));
+
+        // Close the ring if not already closed.
+        if (ring.Count > 0 && !ring[0].Equals2D(ring[^1]))
+            ring.Add(new Coordinate(ring[0].X, ring[0].Y));
+
+        if (ring.Count < 4)
+            return null;
+
+        return ClipGeometryFactory.CreateLinearRing([.. ring]);
+    }
+
+    /// <summary>
+    /// Enumerates the exterior + interior rings of every polygon in a clipped
+    /// geometry (a <see cref="Polygon"/> or <see cref="MultiPolygon"/>) as
+    /// EPSG:3857 coordinate tuples, dropping each ring's closing duplicate vertex
+    /// to match the open-ring convention of <see cref="PatternAreaPaintOp"/>.
+    /// </summary>
+    private static IEnumerable<(IReadOnlyList<(double X, double Y)> Shell,
+        IReadOnlyList<IReadOnlyList<(double X, double Y)>> Holes)> EnumeratePolygonRings(Geometry geometry)
+    {
+        for (int i = 0; i < geometry.NumGeometries; i++)
+        {
+            if (geometry.GetGeometryN(i) is not Polygon polygon || polygon.IsEmpty)
+                continue;
+
+            var shell = RingToTuples(polygon.ExteriorRing);
+            if (shell.Count < 3)
+                continue;
+
+            var holes = new List<IReadOnlyList<(double X, double Y)>>(polygon.NumInteriorRings);
+            for (int h = 0; h < polygon.NumInteriorRings; h++)
+            {
+                var hole = RingToTuples(polygon.GetInteriorRingN(h));
+                if (hole.Count >= 3)
+                    holes.Add(hole);
+            }
+
+            yield return (shell, holes);
+        }
+    }
+
+    private static List<(double X, double Y)> RingToTuples(LineString ring)
+    {
+        var coords = ring.Coordinates;
+        int count = coords.Length;
+        // Drop the closing duplicate vertex (NTS rings are explicitly closed).
+        if (count >= 2 && coords[0].Equals2D(coords[count - 1]))
+            count--;
+
+        var result = new List<(double X, double Y)>(count);
+        for (int i = 0; i < count; i++)
+            result.Add((coords[i].X, coords[i].Y));
+        return result;
     }
 
     private PatternAreaPaintOp? BuildPatternArea(

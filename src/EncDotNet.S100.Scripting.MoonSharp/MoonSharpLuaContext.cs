@@ -4,7 +4,6 @@ using System.Reflection;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Scripting.MoonSharp.Diagnostics;
 using MoonSharp.Interpreter;
-using MoonSharp.Interpreter.Loaders;
 
 namespace EncDotNet.S100.Scripting.MoonSharp;
 
@@ -319,13 +318,13 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         var self = typeof(MoonSharpLuaContext);
         return new Dictionary<Type, MethodInfo>
         {
-            [typeof(Action<>)]       = self.GetMethod(nameof(WrapAction1Typed), flags)!,
-            [typeof(Action<,>)]      = self.GetMethod(nameof(WrapAction2Typed), flags)!,
-            [typeof(Func<>)]         = self.GetMethod(nameof(WrapFunc0Typed), flags)!,
-            [typeof(Func<,>)]        = self.GetMethod(nameof(WrapFunc1Typed), flags)!,
-            [typeof(Func<,,>)]       = self.GetMethod(nameof(WrapFunc2Typed), flags)!,
-            [typeof(Func<,,,>)]      = self.GetMethod(nameof(WrapFunc3Typed), flags)!,
-            [typeof(Func<,,,,>)]     = self.GetMethod(nameof(WrapFunc4Typed), flags)!,
+            [typeof(Action<>)] = self.GetMethod(nameof(WrapAction1Typed), flags)!,
+            [typeof(Action<,>)] = self.GetMethod(nameof(WrapAction2Typed), flags)!,
+            [typeof(Func<>)] = self.GetMethod(nameof(WrapFunc0Typed), flags)!,
+            [typeof(Func<,>)] = self.GetMethod(nameof(WrapFunc1Typed), flags)!,
+            [typeof(Func<,,>)] = self.GetMethod(nameof(WrapFunc2Typed), flags)!,
+            [typeof(Func<,,,>)] = self.GetMethod(nameof(WrapFunc3Typed), flags)!,
+            [typeof(Func<,,,,>)] = self.GetMethod(nameof(WrapFunc4Typed), flags)!,
         };
     }
 

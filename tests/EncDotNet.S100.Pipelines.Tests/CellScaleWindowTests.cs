@@ -1,7 +1,6 @@
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
-using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

@@ -1,13 +1,11 @@
 using System.Net;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp.Tools;
-using EncDotNet.S100.Mcp.Tools.Catalog;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Mcp;

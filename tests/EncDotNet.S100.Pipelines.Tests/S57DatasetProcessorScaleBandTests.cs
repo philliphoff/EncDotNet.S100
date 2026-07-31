@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
@@ -85,6 +84,33 @@ public class S57DatasetProcessorScaleBandTests
         Assert.Null(result.OutOfBandMinDisplayScale);
         Assert.NotNull(result.CellMinimumDisplayScale);
         Assert.True(result.CellMinimumDisplayScale > 0);
+    }
+
+    [SkippableFact]
+    public void Metadata_MatchesReaderPeek_AndIsMemoized()
+    {
+        var fixturePath = ResolveFixturePath(FixtureFile);
+        Skip.IfNot(File.Exists(fixturePath),
+            $"S-57 fixture not found at expected path: {fixturePath}");
+
+        var processor = CreateProcessor(fixturePath);
+
+        var metadata = processor.Metadata;
+
+        // The processor surfaces the same cheap metadata the reader's peek path
+        // produces (issue #460): canonical S-57 spec, WGS-84 extent folded from
+        // the raw coordinates, and the CSCL display window.
+        Assert.Equal("S-57", metadata.Spec.Name);
+        Assert.NotNull(metadata.Extent);
+        Assert.NotNull(metadata.DisplayScale);
+        Assert.NotNull(metadata.DisplayScale!.Value.Minimum);
+
+        var peek = EncDotNet.S100.Datasets.S57.S57Dataset.ReadMetadata(fixturePath);
+        Assert.Equal(peek.Extent, metadata.Extent);
+        Assert.Equal(peek.DisplayScale, metadata.DisplayScale);
+
+        // Metadata is memoized: repeat access returns the same instance.
+        Assert.Same(metadata, processor.Metadata);
     }
 
     private static string ResolveFixturePath(string fileName)

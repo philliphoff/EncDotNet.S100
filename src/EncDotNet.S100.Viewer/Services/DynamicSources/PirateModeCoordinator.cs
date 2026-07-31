@@ -1,6 +1,3 @@
-using System;
-using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
-
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
 /// <summary>

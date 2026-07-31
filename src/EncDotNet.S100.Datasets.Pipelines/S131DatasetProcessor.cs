@@ -1,11 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Xml;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S131.DataModel;
 using EncDotNet.S100.Datasets.S131.Validation;
@@ -14,7 +8,6 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
 

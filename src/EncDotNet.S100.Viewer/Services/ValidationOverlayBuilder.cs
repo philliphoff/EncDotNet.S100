@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;

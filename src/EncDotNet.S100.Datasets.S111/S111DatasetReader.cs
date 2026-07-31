@@ -1,6 +1,8 @@
 using System.Globalization;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Pipelines;
 using S100Diag = EncDotNet.S100.Datasets.S111.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S111;
@@ -107,7 +109,7 @@ public static class S111DatasetReader
             : null;
 
         var scGroup = root.OpenGroup("SurfaceCurrent");
-        const string SurfaceCurrentPath = "/SurfaceCurrent";
+        const string surfaceCurrentPath = "/SurfaceCurrent";
 
         // S-111 Edition 2.0.0 §12.2 — every SurfaceCurrent container
         // carries a dataCodingFormat enum that selects the per-instance
@@ -117,7 +119,7 @@ public static class S111DatasetReader
                 "dataCodingFormat",
                 product: "S-111",
                 file: null,
-                groupPath: SurfaceCurrentPath,
+                groupPath: surfaceCurrentPath,
                 specReference: "S-100 Part 10c §10.2.1")
             : 2;
 
@@ -175,6 +177,177 @@ public static class S111DatasetReader
         };
     }
 
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for the S-111
+    /// dataset — its declared specification, horizontal CRS, geographic
+    /// extent, and temporal coverage — for phased / deferred loading (issue
+    /// #460).
+    /// </summary>
+    /// <remarks>
+    /// For data coding format 2 (regularly-gridded) the extent is the union
+    /// of the <c>SurfaceCurrent.NN</c> grid footprints and the time coverage
+    /// spans the <c>timePoint</c> attributes of every <c>Group_NNN</c> step,
+    /// read <em>without</em> touching the per-step <c>values</c> arrays. For
+    /// data coding formats 3 (ungeorectified grid) and 8 (time series at
+    /// fixed stations) the comparatively small station series is read in full
+    /// and the extent / time span are derived from the station positions and
+    /// record windows.
+    /// </remarks>
+    public static DatasetMetadata ReadMetadata(IHdf5File file)
+    {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.readmetadata");
+        __activity?.SetTag("s100.product", "S-111");
+        ArgumentNullException.ThrowIfNull(file);
+
+        var root = file.Root;
+
+        int? horizontalCRS = root.AttributeExists("horizontalDatumValue")
+            ? (int)root.ReadInt64Attribute("horizontalDatumValue")
+            : null;
+
+        string? productSpecification = root.AttributeExists("productSpecification")
+            ? root.ReadStringAttribute("productSpecification")
+            : null;
+
+        var scGroup = root.OpenGroup("SurfaceCurrent");
+        const string surfaceCurrentPath = "/SurfaceCurrent";
+
+        int dataCodingFormat = scGroup.AttributeExists("dataCodingFormat")
+            ? (int)scGroup.ReadRequiredInt64Attribute(
+                "dataCodingFormat", "S-111", null, surfaceCurrentPath, "S-100 Part 10c §10.2.1")
+            : 2;
+
+        BoundingBox? extent;
+        TimeCoverage? time;
+
+        if (dataCodingFormat is 3 or 8)
+        {
+            var stations = dataCodingFormat == 3
+                ? ReadUngeorectifiedGrid(root, scGroup)
+                : ReadStationSeries(root, scGroup);
+            extent = StationExtent(stations);
+            time = StationTimeCoverage(stations);
+        }
+        else
+        {
+            (extent, time) = ReadGriddedExtentAndTime(scGroup);
+        }
+
+        return new DatasetMetadata
+        {
+            Spec = HdfDeclaredSpec.Resolve(productSpecification, "S-111"),
+            Extent = extent,
+            HorizontalCrsEpsg = horizontalCRS,
+            TimeCoverage = time,
+        };
+    }
+
+    /// <summary>
+    /// Computes the union grid extent and time-step span of a dcf2 dataset
+    /// from georef and time attributes alone (no <c>values</c> read), so the
+    /// result matches a full read's extent and available times. The time span
+    /// prefers each instance's arithmetic cadence
+    /// (<c>dateTimeOfFirstRecord</c> + <c>i × timeRecordInterval</c>) when
+    /// present, falling back to the per-step <c>timePoint</c> attributes.
+    /// </summary>
+    private static (BoundingBox? Extent, TimeCoverage? Time) ReadGriddedExtentAndTime(IHdf5Group scGroup)
+    {
+        double south = double.MaxValue, west = double.MaxValue;
+        double north = double.MinValue, east = double.MinValue;
+        DateTime min = DateTime.MaxValue, max = DateTime.MinValue;
+        bool anyBounds = false, anyTime = false;
+
+        foreach (var instanceName in scGroup.GroupNames)
+        {
+            if (!instanceName.StartsWith("SurfaceCurrent.", StringComparison.Ordinal))
+                continue;
+
+            var instance = scGroup.OpenGroup(instanceName);
+            var instancePath = $"/SurfaceCurrent/{instanceName}";
+            const string spec = "S-100 Part 10c §10.2.1.2";
+
+            double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, spec);
+            double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, spec);
+            double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, spec);
+            double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, spec);
+            int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, spec);
+            int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, spec);
+
+            double latA = originLat, latB = originLat + spacingLat * numLat;
+            double lonA = originLon, lonB = originLon + spacingLon * numLon;
+            south = Math.Min(south, Math.Min(latA, latB));
+            north = Math.Max(north, Math.Max(latA, latB));
+            west = Math.Min(west, Math.Min(lonA, lonB));
+            east = Math.Max(east, Math.Max(lonA, lonB));
+            anyBounds = true;
+
+            // Prefer the arithmetic cadence (dateTimeOfFirstRecord + i ×
+            // timeRecordInterval) when present so we avoid opening every
+            // Group_NNN; otherwise fall back to per-step timePoint attributes.
+            var groupNames = instance.GroupNames
+                .Where(n => n.StartsWith("Group_", StringComparison.Ordinal))
+                .ToList();
+
+            if (groupNames.Count > 0
+                && instance.AttributeExists("dateTimeOfFirstRecord")
+                && instance.AttributeExists("timeRecordInterval"))
+            {
+                DateTime first = ParseTimestamp(instance.ReadStringAttribute("dateTimeOfFirstRecord"));
+                double intervalSeconds = ReadIntervalSeconds(instance);
+                DateTime last = first.AddSeconds(intervalSeconds * (groupNames.Count - 1));
+                if (first < min) min = first;
+                if (last > max) max = last;
+                anyTime = true;
+            }
+            else
+            {
+                foreach (var groupName in groupNames)
+                {
+                    var group = instance.OpenGroup(groupName);
+                    var t = ParseTimestamp(group.ReadStringAttribute("timePoint"));
+                    if (t < min) min = t;
+                    if (t > max) max = t;
+                    anyTime = true;
+                }
+            }
+        }
+
+        BoundingBox? extent = anyBounds ? new BoundingBox(south, west, north, east) : null;
+        TimeCoverage? time = anyTime ? new TimeCoverage(min, max) : null;
+        return (extent, time);
+    }
+
+    private static BoundingBox? StationExtent(IReadOnlyList<SurfaceCurrentStation> stations)
+    {
+        if (stations.Count == 0) return null;
+
+        double south = double.MaxValue, west = double.MaxValue;
+        double north = double.MinValue, east = double.MinValue;
+        foreach (var s in stations)
+        {
+            south = Math.Min(south, s.Latitude);
+            north = Math.Max(north, s.Latitude);
+            west = Math.Min(west, s.Longitude);
+            east = Math.Max(east, s.Longitude);
+        }
+
+        return new BoundingBox(south, west, north, east);
+    }
+
+    private static TimeCoverage? StationTimeCoverage(IReadOnlyList<SurfaceCurrentStation> stations)
+    {
+        if (stations.Count == 0) return null;
+
+        DateTime min = DateTime.MaxValue, max = DateTime.MinValue;
+        foreach (var s in stations)
+        {
+            if (s.StartTime < min) min = s.StartTime;
+            if (s.EndTime > max) max = s.EndTime;
+        }
+
+        return new TimeCoverage(min, max);
+    }
+
     private static List<SurfaceCurrentCoverage> ReadCoverages(IHdf5Group scGroup, int dataCodingFormat, S111ReadOptions? options)
     {
         if (dataCodingFormat != 2)
@@ -227,13 +400,13 @@ public static class S111DatasetReader
     {
         // S-100 Part 10c §10.2.1.2 — the grid-georef attributes are
         // required on every dcf2 SurfaceCurrent.NN instance group.
-        const string Spec = "S-100 Part 10c §10.2.1.2";
-        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, Spec);
-        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, Spec);
-        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, Spec);
-        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, Spec);
-        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, Spec);
-        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, Spec);
+        const string spec = "S-100 Part 10c §10.2.1.2";
+        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-111", null, instancePath, spec);
+        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-111", null, instancePath, spec);
+        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-111", null, instancePath, spec);
+        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-111", null, instancePath, spec);
+        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-111", null, instancePath, spec);
+        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-111", null, instancePath, spec);
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
@@ -299,12 +472,7 @@ public static class S111DatasetReader
 
             var group = instance.OpenGroup(groupName);
 
-            string timePointStr = group.ReadStringAttribute("timePoint");
-            DateTime timePoint = DateTime.ParseExact(
-                timePointStr,
-                ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+            DateTime timePoint = ParseTimestamp(group.ReadStringAttribute("timePoint"));
 
             var values = ReadValues(group);
 
@@ -430,7 +598,7 @@ public static class S111DatasetReader
         string instancePath,
         List<SurfaceCurrentStation> stations)
     {
-        const string Spec = "S-100 Part 10c §10.2.1";
+        const string spec = "S-100 Part 10c §10.2.1";
 
         // Read per-node positions from Positioning/geometryValues under this instance.
         var positions = ReadInstancePositions(instance, instancePath);
@@ -447,14 +615,14 @@ public static class S111DatasetReader
 
         // Parse time info from the instance.
         string firstTimeStr = instance.ReadRequiredStringAttribute(
-            "dateTimeOfFirstRecord", "S-111", null, instancePath, Spec);
+            "dateTimeOfFirstRecord", "S-111", null, instancePath, spec);
         string lastTimeStr = instance.ReadRequiredStringAttribute(
-            "dateTimeOfLastRecord", "S-111", null, instancePath, Spec);
+            "dateTimeOfLastRecord", "S-111", null, instancePath, spec);
         DateTime firstTime = ParseTimestamp(firstTimeStr);
         DateTime lastTime = ParseTimestamp(lastTimeStr);
 
         long intervalSeconds = instance.ReadRequiredInt64Attribute(
-            "timeRecordInterval", "S-111", null, instancePath, Spec);
+            "timeRecordInterval", "S-111", null, instancePath, spec);
         var interval = TimeSpan.FromSeconds(intervalSeconds);
 
         int numberOfTimes = timeGroupNames.Count;
@@ -730,7 +898,7 @@ public static class S111DatasetReader
         IReadOnlyList<GeoPosition> positions,
         List<SurfaceCurrentStation> stations)
     {
-        const string Spec = "S-111 Edition 2.0.0 §10.2.7";
+        const string spec = "S-111 Edition 2.0.0 §10.2.7";
 
         int numberOfStations = instance.AttributeExists("numberOfStations")
             ? (int)instance.ReadInt64Attribute("numberOfStations")
@@ -750,17 +918,17 @@ public static class S111DatasetReader
                 : groupName;
 
             string startStr = group.ReadRequiredStringAttribute(
-                "startDateTime", "S-111", null, groupPath, Spec);
+                "startDateTime", "S-111", null, groupPath, spec);
             string endStr = group.ReadRequiredStringAttribute(
-                "endDateTime", "S-111", null, groupPath, Spec);
+                "endDateTime", "S-111", null, groupPath, spec);
 
             DateTime startTime = ParseTimestamp(startStr);
             DateTime endTime = ParseTimestamp(endStr);
 
             int numberOfTimes = (int)group.ReadRequiredInt64Attribute(
-                "numberOfTimes", "S-111", null, groupPath, Spec);
+                "numberOfTimes", "S-111", null, groupPath, spec);
             long intervalSeconds = group.ReadRequiredInt64Attribute(
-                "timeRecordInterval", "S-111", null, groupPath, Spec);
+                "timeRecordInterval", "S-111", null, groupPath, spec);
             var interval = TimeSpan.FromSeconds(intervalSeconds);
 
             var (speeds, directions) = ReadStationValues(group, numberOfTimes);

@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Hdf5.PureHdf;
 
 namespace EncDotNet.S100.Datasets.S104.Tests;

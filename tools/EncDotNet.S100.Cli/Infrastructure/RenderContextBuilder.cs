@@ -1,6 +1,6 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
-using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
@@ -21,7 +21,8 @@ internal static class RenderContextBuilder
         int timeStepIndex,
         DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
         BasemapKind basemap = BasemapKind.None,
-        string? displayModeId = null)
+        string? displayModeId = null,
+        Viewport? viewport = null)
     {
         DateTime? timeStep = ResolveTimeStep(processor, timeStepIndex);
 
@@ -41,7 +42,7 @@ internal static class RenderContextBuilder
             _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
         };
 
-        return context with { Basemap = basemap, DisplayModeId = displayModeId };
+        return context with { Basemap = basemap, DisplayModeId = displayModeId, Viewport = viewport };
     }
 
     private static DateTime? ResolveTimeStep(IDatasetProcessor processor, int timeStepIndex)

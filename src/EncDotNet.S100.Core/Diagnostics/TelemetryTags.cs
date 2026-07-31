@@ -72,6 +72,23 @@ public static class TelemetryTags
     /// <summary>XSLT rule name (used for compile and transform spans).</summary>
     public const string XsltRule = "s100.xslt.rule";
 
+    /// <summary>
+    /// Overview pyramid level selected for a coverage read (issue #486).
+    /// <c>0</c> = native base grid; higher values = coarser downsampled
+    /// levels (each level is 2× coarser per axis, 4× fewer cells).
+    /// Applied to the <c>s100.pipeline.coverage.stage.read</c> span
+    /// and the <c>s100.coverage.overview.level_selected</c> histogram.
+    /// </summary>
+    public const string CoverageOverviewLevel = "s100.coverage.overview.level";
+
+    /// <summary>
+    /// Reduction policy applied while downsampling a coverage grid, such as
+    /// <c>nearest</c> or <c>min</c>. Applied to the coverage read span so
+    /// safety-critical products can prove that viewport stride does not use
+    /// point sampling.
+    /// </summary>
+    public const string CoverageReducer = "s100.coverage.reducer";
+
     /// <summary>Symbol identifier used in a resolve operation.</summary>
     public const string SymbolId = "s100.symbol.id";
 
@@ -88,4 +105,12 @@ public static class TelemetryTags
 
     /// <inheritdoc cref="GcGen0Delta"/>
     public const string GcGen2Delta = "gc.gen2.delta";
+
+    /// <summary>
+    /// Selected line-LOD pyramid level index for the current paint (0 =
+    /// coarsest). Attached to
+    /// <c>s100.geometry.vertices.out</c> and to renderer LOD-cache
+    /// counters so hit/miss ratios can be attributed per zoom band.
+    /// </summary>
+    public const string LodBucket = "s100.geometry.lod.bucket";
 }

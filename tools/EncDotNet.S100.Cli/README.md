@@ -6,12 +6,37 @@ via repeated `--layer` or by pointing at an entire exchange set / directory —
 to a PNG, JPEG, or WebP image by
 running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
 it can also report a dataset's product specification (`info`), validate a
-dataset against its specification's normative rule pack (`validate`), and
+dataset against its specification's normative rule pack (`validate`), perform a
+headless ECDIS-style "pick" of the features and coverage values at a point
+across one or more layers (`identify`), and
 convert an S-57 base cell to an S-101 dataset (`s57 convert`). It is
 intended as the basis for batch scripts (for example, generating previews of
 sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
 The command name is **`s100`**.
+
+## Version and update notifications
+
+Run `s100 --version` to print the CLI's assembly informational version:
+
+```text
+$ s100 --version
+0.24.0+a1f9c20
+```
+
+Official builds also check the repository's latest GitHub Release. When a newer
+version is known, every invocation writes a single notice to **standard error**:
+
+```text
+Update available: s100 0.25.0 (current 0.24.0): https://github.com/philliphoff/EncDotNet.S100/releases/tag/v0.25.0
+```
+
+Standard output and the command's exit code are unchanged, so JSON and other
+machine-readable output can still be redirected or parsed normally. The latest
+release and check timestamp are cached in the user's local application-data
+directory; GitHub is contacted at most once every 24 hours. Development builds
+(`0.0.0-dev`) do not check. Network, API, and cache failures are silent and
+never prevent a command from running.
 
 ## Distribution
 
@@ -117,9 +142,9 @@ unless `--format` is given.
 | `--exchange-set`, `--from <path>` | _none_ | Composite an entire exchange set (directory / `CATALOG.XML` / `.zip`). A directory / `CATALOG.XML` / `.zip` passed positionally is also auto-detected. Mutually exclusive with `--layer`. |
 | `--only <specs>` | _all_ | **Exchange-set only.** Restrict compositing to a comma-separated list of product specifications (e.g. `--only S101,S128`; hyphenation and case are ignored). |
 | `-o`, `--output <path>` | _positional_ | Output image path. Required (or given positionally) for the composite forms; an alternative to the positional `<output>` for the single form. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | union auto-fit | **Composite forms only.** Explicit shared viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. |
-| `--center <lon,lat>` | union auto-fit | **Composite forms only.** Explicit shared viewport centre. Must be used with `--scale`. |
-| `--scale <denominator>` | union auto-fit | **Composite forms only.** Explicit shared viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | auto-fit | Explicit viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. Applies to the single-dataset **vector** form and both composite forms; on a single vector dataset it also enables S-100 Part 9 scale-visibility culling. **Not supported for coverage products (S-102/S-104/S-111)**, nor with `--format json`. |
+| `--center <lon,lat>` | auto-fit | Explicit viewport centre. Must be used with `--scale`. Same applicability as `--bbox`. |
+| `--scale <denominator>` | auto-fit | Explicit viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. Same applicability as `--bbox`. |
 | `-w`, `--width` | `1024` | Output image width in pixels. |
 | `-h`, `--height` | `768` | Output image height in pixels. |
 | `--palette` | `day` | Colour palette: `day`, `dusk`, or `night`. |
@@ -127,7 +152,7 @@ unless `--format` is given.
 | `--text-scale` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time-step index for time-series datasets (S-104 / S-111). |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
-| `--format <fmt>` | inferred from extension, else `png` | Output image format: `png`, `jpeg` (`jpg`), or `webp`. When omitted, the format is inferred from the output file extension; an unrecognised extension falls back to `png`. An explicit `--format` that conflicts with a recognised output extension is rejected. |
+| `--format <fmt>` | inferred from extension, else `png` | Output format: `png`, `jpeg` (`jpg`), `webp`, or `json`. When omitted, the format is inferred from the output file extension; an unrecognised extension falls back to `png`. `json` emits the S-100 Part 9 **display list** (see [Display-list output](#display-list-output-format-json)) instead of an image — **single-dataset form only**. An explicit `--format` that conflicts with a recognised output extension is rejected. |
 | `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
 | `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. In the composite form the suppression is global (applies to every layer). |
 | `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. In the composite form the suppression is global. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
@@ -146,6 +171,10 @@ s100 render NL4NZ110.000 cell.png                          # applies .001/.002/�
 s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
 s100 render warnings.gml warnings.jpg --quality 85         # JPEG (format inferred from .jpg)
 s100 render warnings.gml preview.webp                      # WebP preview
+s100 render warnings.gml warnings.json                     # display list (not an image)
+s100 render warnings.gml list.txt --format json           # display list, explicit format
+s100 render enc.000 window.png --bbox -1.5,50.0,-1.0,50.5  # exact viewport (vector only)
+s100 render enc.000 window.png --center -1.25,50.25 --scale 50000  # centre + scale
 
 # Composite several products into one chart:
 s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
@@ -158,6 +187,58 @@ s100 render exchange-set/ chart.png                         # auto-detected dire
 s100 render exchange-set/CATALOG.XML chart.png              # auto-detected catalogue
 s100 render --exchange-set exchange-set.zip -o chart.png    # explicit, ZIP archive
 s100 render --from exchange-set/ chart.png --only S101,S102 # restrict to some specs
+```
+
+#### Display-list output (`--format json`)
+
+Instead of rasterising, the single-dataset form can emit the dataset's
+**S-100 Part 9 display list** — the ordered set of drawing instructions the
+portrayal pipeline produced — as JSON. This captures *what* was drawn (symbol,
+line-style and area-fill references, colours, display planes, drawing
+priorities, viewing groups, text) rather than pixels, so a portrayal change can
+be reviewed, diffed, and snapshot-tested in text without a viewer or an image
+comparison. It is available for vector products (S-101, S-57, and the GML
+families S-12x / S-129 / S-131 / S-201 / S-411 / S-421); coverage products
+(S-102 / S-104 / S-111) do not emit a Part 9 display list and report a clear
+error.
+
+The document is **pure portrayal output**: it contains no timing and no encoder
+settings, and geometry is summarised (type, vertex count, and a representative
+latitude/longitude anchor) rather than dumped in full, so two runs over the same
+dataset and render context produce byte-identical JSON. The palette and the
+portrayal options (symbol/text scale, display mode, and time step) still
+influence which instructions the pipeline emits. The raster-only options
+`--width` / `--height` / `--quality` / `--background` are ignored (the JSON path
+builds the display list without rasterizing), and the viewport options `--bbox`
+/ `--center` / `--scale` are rejected for `--format json` (a display list has no
+viewport).
+
+```bash
+s100 render warnings.gml warnings.json           # infer json from the .json extension
+s100 render warnings.gml out.txt --format json   # explicit; any non-image extension
+```
+
+```jsonc
+{
+  "dataset": "navwarn_surface.gml",
+  "product": "S-124",
+  "spec": "S-124/1.0.0",
+  "palette": "day",
+  "instructionCount": 3,
+  "categoryCounts": { "areas": 0, "lines": 0, "points": 3, "text": 0 },
+  "instructions": [
+    {
+      "kind": "point",
+      "feature": "f1",
+      "subLayer": 0,
+      "plane": "UnderRadar",
+      "viewingGroup": 31020,
+      "drawingPriority": 15,
+      "symbol": "NavigationalWarningFeaturePart",
+      "geometry": { "type": "Surface", "vertexCount": 5, "anchor": [51.05, 1.2] }
+    }
+  ]
+}
 ```
 
 > **Composite ordering.** The S-98 authority orders layers by display plane,
@@ -202,6 +283,49 @@ whose portrayal catalogue declares display modes (e.g. S-411 sea-ice) it also
 lists the available `render --display-mode` tokens. For an S-101
 base cell, sibling sequential updates are applied first (see `--no-updates`)
 so the reported model reflects the up-to-date cell.
+
+### `s100 identify --lat <lat> --lon <lon>`
+
+Performs a headless ECDIS-style **pick**: at a geographic point it identifies
+the vector features and samples the coverage products across one or more
+dataset layers — the same interaction the viewer offers on a cursor click, but
+without an open viewer or MCP server. It drives the same shared pick services
+(`IdentifyFeaturesService` / `SampleCoverageService`) the MCP
+`identify_features` / `sample_coverage` tools use, so the results match
+exactly. Features are ranked in ECDIS draw order (point before curve before
+area; nearer before farther).
+
+Three input grammars mirror `s100 render`: a single positional dataset,
+repeated `--layer` options, or an exchange set (positional directory /
+`CATALOG.XML` / `.zip`, or `--from`). Datasets whose product specification is
+unsupported, whose file is missing, or that fail to parse are skipped with a
+warning on stderr rather than failing the whole pick.
+
+| Option | Default | Description |
+|---|---|---|
+| `--lat <lat>` | _required_ | Pick latitude in decimal degrees, WGS-84 (EPSG:4326), range −90..90. |
+| `--lon <lon>` | _required_ | Pick longitude in decimal degrees, WGS-84 (EPSG:4326), range −180..180. |
+| `--layer <path>` | _none_ | Add a dataset as a pick layer (repeatable). Mutually exclusive with the exchange-set form. |
+| `--from`, `--exchange-set <path>` | _none_ | Pick across every dataset in an exchange set (directory, `CATALOG.XML`, or `.zip`). |
+| `--only <specs>` | _all_ | Comma-separated spec filter for the exchange-set form (e.g. `--only S101,S102`). |
+| `--radius <metres>` | `50` | Search radius for point/near-miss feature matching (clamped 0..100000). |
+| `--spec <spec>` | _all_ | Restrict features and samples to one specification (e.g. `S-124`). |
+| `--time <iso8601>` | _first step_ | Time step for coverage sampling of time-series products (S-104 / S-111). When omitted the first available step is used; when supplied the nearest step is selected (clamped to the dataset range). |
+| `--max-results <n>` | `20` | Maximum number of features to report (clamped 1..200). |
+| `--attributes` | off | Include each feature's full attribute set (via `DescribeFeatureService`). |
+| `--format <fmt>` | `table` | Output format: `table` (human-readable) or `json` (machine-readable). |
+| `--debug` | off | Print full stack traces on error. |
+
+```bash
+s100 identify warnings.gml --lat 51.085 --lon 1.30            # single dataset
+s100 identify --layer enc.000 --layer bathy.h5 --lat 50.1 --lon -1.4   # several layers
+s100 identify --from exchange-set.zip --lat 50.1 --lon -1.4 --format json
+s100 identify chart.000 --lat 50.1 --lon -1.4 --attributes    # include feature attributes
+```
+
+The JSON output is an object with `point`, `totalMatched`, `truncated`,
+`features` (ranked), `samples` (one per coverage layer that covers the point),
+and, when any input was skipped, a `warnings` array.
 
 ### `s100 validate <dataset>`
 
@@ -253,6 +377,13 @@ encoded `.000` file (S-100 Part 10a). The source is translated to an
 `S101Document` in memory with the same `S57ToS101Translator` the render/validate
 paths use, then encoded with `S101DocumentWriter`.
 
+Sibling sequential update files (`.001`, `.002`, …) sitting next to the base
+cell are auto-discovered and folded in (S-57 Part 3 dataset updating) before
+translation, so a converted cell reflects its up-to-date state. Pass
+`--no-updates` to convert only the bare base cell. After a successful convert a
+concise translation-coverage summary is printed; add `--report <path>` to also
+write the full diagnostics as JSON.
+
 ```
 s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
 ```
@@ -260,6 +391,8 @@ s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
 | Option | Default | Description |
 |---|---|---|
 | `-o`, `--output <path>` | _required_ | Path of the S-101 dataset file to write. |
+| `--report <path>` | off | Write a machine-readable (JSON) translation diagnostics report. |
+| `--no-updates` | off | Do not auto-discover and fold sibling update files before converting. |
 | `--debug` | off | Show a full stack trace on error. |
 
 The written dataset can be inspected with `s100 info`, validated with
@@ -277,8 +410,12 @@ and attribute mapping, allowed-value enforcement) are owned by
 
 ## Limitations
 
-- **Vector pattern area-fills are omitted** on the headless path; points,
-  lines, solid-area fills, and text render.
+- **Explicit viewport is vector-only.** `--bbox` / `--center`+`--scale` frame an
+  exact window (and enable scale-visibility culling) for a single **vector**
+  dataset and for composites, but are **not** yet honoured for a single coverage
+  dataset (S-102/S-104/S-111); the CLI reports a clear "not supported" error
+  rather than silently ignoring them. Without them, a single dataset auto-fits
+  its extent (padded 10%) with scale-visibility culling disabled.
 - **Coverage fixed-station datasets are not supported.** S-104 / S-111 datasets
   using data coding format 3 or 8 (time series at fixed stations) emit point
   glyphs through the Mapsui path only; the CLI reports a clear "not supported"

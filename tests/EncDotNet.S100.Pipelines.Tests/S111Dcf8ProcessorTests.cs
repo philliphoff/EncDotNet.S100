@@ -1,7 +1,5 @@
-using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
@@ -143,6 +141,36 @@ public class S111Dcf8ProcessorTests
 
             Assert.Null(p.GetFeatureInfo("station:Nope"));
             Assert.Null(p.GetFeatureInfo("plain-ref"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Metadata_Dcf8_DerivesExtentFromStationCoordinates()
+    {
+        var path = WriteFixture();
+        try
+        {
+            using var catalogues = new PortrayalCatalogueManager();
+            var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
+
+            var metadata = p.Metadata;
+
+            Assert.Equal("S-111", metadata.Spec.Name);
+            Assert.NotNull(metadata.Extent);
+
+            // Fixture stations: S1 (47.6, -122.3), S2 (47.7, -122.4).
+            var extent = metadata.Extent!;
+            Assert.Equal(47.6, extent.SouthLatitude, 4);
+            Assert.Equal(47.7, extent.NorthLatitude, 4);
+            Assert.Equal(-122.4, extent.WestLongitude, 4);
+            Assert.Equal(-122.3, extent.EastLongitude, 4);
+
+            // Memoized: repeat access returns the same instance (issue #467 WS1).
+            Assert.Same(metadata, p.Metadata);
         }
         finally
         {

@@ -179,12 +179,15 @@ internal static class S101Synth
                 new S101InformationAssociation(infoAssociationCode, infoRcid, roleCode)],
         };
 
-        var points = new Dictionary<uint, S101PointRecord> { [featureRcid] = new S101PointRecord
+        var points = new Dictionary<uint, S101PointRecord>
+        {
+            [featureRcid] = new S101PointRecord
             {
                 RecordId = featureRcid,
                 Y = (int)Math.Round(47.6 * CoordinateMultiplicationFactor),
                 X = (int)Math.Round(-122.3 * CoordinateMultiplicationFactor),
-            } };
+            }
+        };
 
         var featureTypes = new Dictionary<ushort, string> { [featureTypeCode] = "CautionArea" };
         var attributeTypes = new Dictionary<ushort, string> { [textAttributeCode] = "information" };
@@ -236,12 +239,15 @@ internal static class S101Synth
             InformationAssociations = [],
         };
 
-        var points = new Dictionary<uint, S101PointRecord> { [featureRcid] = new S101PointRecord
+        var points = new Dictionary<uint, S101PointRecord>
+        {
+            [featureRcid] = new S101PointRecord
             {
                 RecordId = featureRcid,
                 Y = (int)Math.Round(lat * CoordinateMultiplicationFactor),
                 X = (int)Math.Round(lon * CoordinateMultiplicationFactor),
-            } };
+            }
+        };
 
         var featureTypes = new Dictionary<ushort, string> { [featureTypeCode] = featureTypeName };
         var attributeTypes = new Dictionary<ushort, string>();

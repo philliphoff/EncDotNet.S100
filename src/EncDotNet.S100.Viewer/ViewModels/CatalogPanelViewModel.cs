@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using Avalonia.Media;
 using Avalonia.Threading;
 using EncDotNet.S100.Viewer.Catalogs;
-using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 

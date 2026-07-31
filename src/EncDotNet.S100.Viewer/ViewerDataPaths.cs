@@ -1,13 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-
 namespace EncDotNet.S100.Viewer;
 
 /// <summary>
 /// Single source of truth for every on-disk location the viewer writes to:
-/// the persisted settings file, the crash-marker directory, and the three
-/// disk caches (pattern-clip, portrayal-instruction, warm tile cache).
+/// the persisted settings file, the crash-marker directory, and the disk
+/// caches (pattern-clip, portrayal-instruction, dataset-metadata sidecar,
+/// S-57 catalogue descriptor cache, and warm tile cache).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -101,6 +98,31 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "caches", "PortrayalInstructionCache")
             : Path.Combine(DefaultLocalDataDirectory, "PortrayalInstructionCache");
 
+    /// <summary>Directory for the shared cross-session dataset-metadata sidecar cache.</summary>
+    public string DatasetMetadataCacheDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "caches", "DatasetMetadataCache")
+            : Path.Combine(DefaultLocalDataDirectory, "DatasetMetadataCache");
+
+    /// <summary>Directory for the cross-session S-57 exchange-set catalogue descriptor cache.</summary>
+    public string S57CatalogCacheDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "caches", "S57CatalogCache")
+            : Path.Combine(DefaultLocalDataDirectory, "S57CatalogCache");
+
+    /// <summary>
+    /// Directory for the shared cross-session line-LOD pyramid disk cache
+    /// (issue #489, PR-3). Persists Douglas–Peucker-simplified copies of
+    /// S-101 line features so first-paint after a fresh open skips the
+    /// per-frame simplification pass, and the cost of pre-building the
+    /// pyramid at open is only paid on the very first open of a given
+    /// dataset (subsequent opens hit the disk cache).
+    /// </summary>
+    public string LineLodCacheDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "caches", "LineLodCache")
+            : Path.Combine(DefaultLocalDataDirectory, "LineLodCache");
+
     /// <summary>
     /// Directory for the warm tile disk cache when a base directory is in
     /// use, or <see langword="null"/> to let the renderer pick its own
@@ -123,10 +145,13 @@ internal sealed class ViewerDataPaths
     {
         get
         {
-            var dirs = new List<string>(3)
+            var dirs = new List<string>(5)
             {
                 PatternClipCacheDirectory,
                 PortrayalInstructionCacheDirectory,
+                DatasetMetadataCacheDirectory,
+                S57CatalogCacheDirectory,
+                LineLodCacheDirectory,
             };
             if (TileDiskCacheDirectory is { } tiles)
             {

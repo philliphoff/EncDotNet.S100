@@ -1,6 +1,3 @@
-using EncDotNet.S100.Core;
-using Xunit;
-
 namespace EncDotNet.S100.Core.Tests;
 
 public class SpecCompatibilityTests
