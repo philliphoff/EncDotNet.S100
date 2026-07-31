@@ -15,8 +15,8 @@ public static class S100MapsuiRendering
     /// </summary>
     /// <remarks>
     /// Call this during application startup, before installing diagnostics that
-    /// wrap Mapsui's renderer registry. Individual render paths retain their
-    /// defensive registrations so one-shot consumers remain safe.
+    /// wrap Mapsui's renderer registry. Render operations do not register
+    /// renderers implicitly.
     /// </remarks>
     public static void Register()
     {
