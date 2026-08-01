@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.ExchangeSets.Protection;
@@ -29,8 +28,6 @@ namespace EncDotNet.S100.ExchangeSets.Protection;
 /// </remarks>
 public sealed class DecryptingAssetSource : IAssetSource
 {
-    private static readonly byte[] ZipLocalFileHeader = [0x50, 0x4B, 0x03, 0x04];
-
     private readonly IAssetSource _inner;
     private readonly IDatasetKeyProvider _keyProvider;
     private readonly bool _decompress;
@@ -69,52 +66,33 @@ public sealed class DecryptingAssetSource : IAssetSource
     {
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
-        string fileName = GetFileName(relativePath);
-        if (!_keyProvider.TryGetCellKey(fileName, out byte[]? cellKey) || cellKey is null)
+        var fileName = GetFileName(relativePath);
+        if (!_keyProvider.TryGetCellKey(fileName, out var cellKey) || cellKey is null)
         {
             // No key for this file: it is not protected (e.g. the catalogue).
             return await _inner.OpenAsync(relativePath, cancellationToken).ConfigureAwait(false);
         }
 
-        byte[] ciphertext = await ReadAllBytesAsync(relativePath, cancellationToken).ConfigureAwait(false);
-        byte[] plaintext = S100Cipher.DecryptDataset(ciphertext, cellKey);
-        Array.Clear(cellKey);
-
-        if (_decompress && IsZipArchive(plaintext))
+        var ciphertext = await ProtectedContentReader.ReadAllBytesAsync(
+            _inner,
+            relativePath,
+            cancellationToken).ConfigureAwait(false);
+        byte[] plaintext;
+        try
         {
-            plaintext = ExtractSingleEntry(plaintext);
+            plaintext = S100Cipher.DecryptDataset(ciphertext, cellKey);
+        }
+        finally
+        {
+            Array.Clear(cellKey);
+        }
+
+        if (_decompress && ProtectedContentReader.IsZipArchive(plaintext))
+        {
+            plaintext = ProtectedContentReader.ExtractSingleEntry(plaintext);
         }
 
         return new MemoryStream(plaintext, writable: false);
-    }
-
-    private async Task<byte[]> ReadAllBytesAsync(string relativePath, CancellationToken cancellationToken)
-    {
-        await using Stream stream = await _inner.OpenAsync(relativePath, cancellationToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream(
-            capacity: stream.CanSeek ? (int)Math.Min(stream.Length, int.MaxValue) : 4096);
-        await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
-        return buffer.ToArray();
-    }
-
-    private static bool IsZipArchive(byte[] content) =>
-        content.Length >= ZipLocalFileHeader.Length &&
-        content.AsSpan(0, ZipLocalFileHeader.Length).SequenceEqual(ZipLocalFileHeader);
-
-    private static byte[] ExtractSingleEntry(byte[] zipBytes)
-    {
-        using var zipStream = new MemoryStream(zipBytes, writable: false);
-        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
-        ZipArchiveEntry entry = archive.Entries.Count == 1
-            ? archive.Entries[0]
-            : throw new InvalidDataException(
-                $"A compressed Part 15 resource must contain exactly one entry but contained {archive.Entries.Count}.");
-
-        using Stream entryStream = entry.Open();
-        using var output = new MemoryStream(
-            capacity: entry.Length > 0 && entry.Length <= int.MaxValue ? (int)entry.Length : 4096);
-        entryStream.CopyTo(output);
-        return output.ToArray();
     }
 
     private static string GetFileName(string relativePath)

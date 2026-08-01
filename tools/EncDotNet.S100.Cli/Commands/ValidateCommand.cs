@@ -314,6 +314,16 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
                     computedSha256 = f.ComputedSha256,
                     detail = f.Detail,
                     failed = FileFailed(f, strict),
+                    signatures = f.SignatureResults
+                        .Select(signature => new
+                        {
+                            id = signature.Id,
+                            kind = signature.Kind.ToString(),
+                            outcome = signature.Outcome.ToString(),
+                            failureReason = signature.FailureReason.ToString(),
+                            detail = signature.Detail,
+                        })
+                        .ToArray(),
                 })
                 .ToArray(),
         };

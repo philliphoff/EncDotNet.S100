@@ -324,6 +324,9 @@ public class DigitalSignatureTests
         var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
 
         Assert.Equal(VerificationOutcome.FileMissing, result.FileResults[0].Outcome);
+        Assert.Equal(
+            VerificationOutcome.FileMissing,
+            Assert.Single(result.FileResults[0].SignatureResults).Outcome);
     }
 
     [Fact]
