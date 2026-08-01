@@ -16,9 +16,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Pipeline processor for S-104 water-level datasets. Branches between
-/// dcf2 (regular grid → coverage layer) and dcf8 (time series at fixed
-/// stations → station-glyph point layer; see S-104 Edition 2.0.0
-/// §10.2.3 / §10.2.7).
+/// dcf2 (regular grid → coverage layer) and dcf1/dcf8 positioned station
+/// series (station-glyph point layer; S-100 Part 10c §10.2.1).
 /// </summary>
 public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
 {
@@ -26,13 +25,13 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly S104CoverageSource? _source;
     private readonly S104PortrayalCatalogue? _catalogue;
 
-    // dcf8 only
+    // Station-series formats only
     private readonly S104StationSeriesDataset? _stationSeries;
     private readonly IReadOnlyList<DateTime> _stationTimes = Array.Empty<DateTime>();
     private readonly Dictionary<string, WaterLevelStation> _stationsById = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Last time-step selected via <see cref="Render"/> for dcf8 station
+    /// Last time-step selected via <see cref="Render"/> for a station
     /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
     /// at the same time the rendered glyph is showing. <c>null</c> until
     /// the first render.
@@ -40,7 +39,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private DateTime? _stationSelectedTime;
 
     /// <summary>
-    /// Prefix used on the renderer's feature-ref tag for dcf8 station-series
+    /// Prefix used on the renderer's feature-ref tag for station-series
     /// point features. The remainder is the station identifier.
     /// <see cref="GetFeatureInfo"/> recognises this prefix to route station
     /// picks back through this processor.
@@ -294,12 +293,10 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Renders the gridded water-level surface to a standalone
-    /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia coverage
-    /// core. The selected time step is taken from the
-    /// <see cref="S104RenderContext.TimeStep"/> (defaulting to the first
-    /// available step). Fixed-station (dcf8) datasets have no coverage colour
-    /// fill and therefore throw <see cref="NotSupportedException"/>.
+    /// Renders the water-level portrayal to a standalone <see cref="SKBitmap"/>
+    /// through the headless, Mapsui-free Skia path. The selected time step is
+    /// taken from <see cref="S104RenderContext.TimeStep"/>, defaulting to the
+    /// first available step.
     /// </summary>
     /// <param name="widthPixels">Output bitmap width in pixels.</param>
     /// <param name="heightPixels">Output bitmap height in pixels.</param>
@@ -307,10 +304,6 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <param name="background">Optional background fill; defaults to opaque white.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
-    /// <exception cref="NotSupportedException">
-    /// Thrown for fixed-station (dcf8) datasets, which are not renderable
-    /// through the headless coverage path.
-    /// </exception>
     public async Task<SKBitmap> RenderHeadlessAsync(
         int widthPixels,
         int heightPixels,
@@ -322,11 +315,23 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_stationSeries is not null || _source is null)
-            throw new NotSupportedException(
-                "Headless rendering is not supported for S-104 fixed-station " +
-                "(data coding format 8) datasets; only gridded surfaces can be " +
-                "rendered to an image.");
+        if (_stationSeries is { } stationSeries)
+        {
+            var portrayal = BuildStationSeries(stationSeries, context);
+            var glyphLayer = portrayal.SubLayers.OfType<GlyphCoverageSubLayer>().Single();
+            if (glyphLayer.Extent is not { } glyphExtent)
+                throw new InvalidOperationException("The S-104 station portrayal has no geographic extent.");
+
+            return PointGlyphHeadlessAdapter.Render(
+                glyphLayer,
+                glyphExtent,
+                widthPixels,
+                heightPixels,
+                background ?? new RgbaColor(255, 255, 255, 255));
+        }
+
+        if (_source is null)
+            throw new InvalidOperationException("The S-104 dataset has no renderable data source.");
 
         var source = _source;
         var catalogue = _catalogue!;
@@ -358,7 +363,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             context?.Basemap ?? BasemapKind.None);
     }
 
-    // ---- dcf8 station series rendering ---------------------------------
+    // ---- station-series rendering --------------------------------------
 
     private CoveragePortrayalResult BuildStationSeries(S104StationSeriesDataset ds, RenderContext? context)
     {
@@ -823,14 +828,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// mode is the constructor itself throwing, so this only fires if
     /// a future reader change moves schema validation later in the
     /// pipeline.</description></item>
-    /// <item><description><c>S104-PROJ-UNSUPPORTED</c> — surfaced
-    /// proactively when the loaded dataset is a
-    /// <see cref="S104DatasetData.StationSeries"/> (S-104 dcf 8,
-    /// "time series at fixed stations") because the V-2 rule pack
-    /// operates on <see cref="S104Dataset"/> (the gridded view) and
-    /// not on the station-series shape. Also surfaced defensively if
-    /// rule evaluation ever throws an
-    /// <see cref="S100DatasetNotSupportedException"/>.</description></item>
+    /// <item><description>Station-series datasets are checked directly for
+    /// sample shape, explicit timestamp ordering, and valid trend codes because
+    /// the gridded V-2 rule pack operates on <see cref="S104Dataset"/>.</description></item>
     /// </list>
     /// <para>
     /// Validation is a pure function of the parsed dataset; the
@@ -866,8 +866,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     return BuildUnsupportedSurrogateReport(ex);
                 }
 
-            case S104DatasetData.StationSeries:
-                return BuildStationSeriesUnsupportedReport();
+            case S104DatasetData.StationSeries s:
+                return ValidateStationSeries(s.Dataset);
 
             default:
                 return null;
@@ -917,28 +917,53 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             RulesWithFindings: 1);
     }
 
-    private ValidationReport BuildStationSeriesUnsupportedReport()
+    private static ValidationReport ValidateStationSeries(S104StationSeriesDataset dataset)
     {
-        // The reader produced a StationSeries (dcf 8) variant. The V-2
-        // rule pack targets the gridded S104Dataset view (dcf 2/3) only,
-        // so surface this proactively under S104-PROJ-UNSUPPORTED per
-        // docs/design/non-gml-validation.md §5.3.
-        var finding = new ValidationFinding
+        var findings = new List<ValidationFinding>();
+        int rulesEvaluated = dataset.Stations.Any(station => station.SampleTimes.Count > 0) ? 3 : 2;
+
+        foreach (var station in dataset.Stations)
         {
-            RuleId = "S104-PROJ-UNSUPPORTED",
-            Severity = ValidationSeverity.Error,
-            Message =
-                $"S104 dataset '{_fileName}' uses data coding format 8 " +
-                "(time series at fixed stations). The V-2 S-104 rule pack " +
-                "targets the gridded (dcf 2 / dcf 3) S104Dataset shape and " +
-                "does not currently evaluate station-series datasets " +
-                "(S-100 Part 10c §10.2.1; S-104 Edition 2.0.0 §10.2.3 / §10.2.7).",
-            RelatedFeatureId = "/WaterLevel",
-        };
+            if (station.NumberOfTimes != station.Heights.Length ||
+                station.NumberOfTimes != station.Trends.Length ||
+                (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S104-STATION-SHAPE",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' has inconsistent timestamp, height, or trend counts.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.SampleTimes.Count > 0 &&
+                station.SampleTimes.Zip(station.SampleTimes.Skip(1)).Any(pair => pair.First >= pair.Second))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S104-STATION-TIME",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' explicit timestamps are not strictly increasing.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.Trends.Any(trend => trend > 3))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S104-STATION-TREND",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' contains an invalid waterLevelTrend code.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+        }
 
         return new ValidationReport(
-            [finding],
-            RulesEvaluated: 1,
-            RulesWithFindings: 1);
+            findings,
+            RulesEvaluated: rulesEvaluated,
+            RulesWithFindings: findings.Select(finding => finding.RuleId).Distinct(StringComparer.Ordinal).Count());
     }
 }

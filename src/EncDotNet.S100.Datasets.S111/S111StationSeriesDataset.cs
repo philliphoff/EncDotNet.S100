@@ -1,10 +1,10 @@
 namespace EncDotNet.S100.Datasets.S111;
 
 /// <summary>
-/// Root data model for an S-111 Surface Currents dataset encoded in
-/// <em>data coding format 8 — time series at fixed stations</em>
-/// (S-111 Edition 2.0.0 §10.2.3 / §10.2.7) or <em>data coding
-/// format 3 — ungeorectified grid</em> (S-100 Part 10c §10.2.1).
+/// Root data model for an S-111 Surface Currents dataset encoded as
+/// time-major fixed stations (DCF1), an ungeorectified grid (DCF3), or
+/// station-major fixed stations (DCF8), as defined by S-111 Edition 2.0.0
+/// §10.2.2.6–10.2.2.9.
 /// </summary>
 /// <remarks>
 /// Both DCF 3 and DCF 8 are represented as a collection of
@@ -35,10 +35,11 @@ public sealed class S111StationSeriesDataset
     public float? SurfaceCurrentDepth { get; init; }
 
     /// <summary>
-    /// Data coding format — <c>3</c> for ungeorectified grid or
-    /// <c>8</c> for station series (S-100 Part 10c §10.2.1 Table).
+    /// Data coding format — <c>1</c> for time-major fixed stations,
+    /// <c>3</c> for ungeorectified grid, or <c>8</c> for station-major fixed
+    /// stations (S-111 Edition 2.0.0 Table 10-5).
     /// </summary>
-    public int DataCodingFormat { get; init; }
+    public int DataCodingFormat { get; init; } = 8;
 
     /// <summary>
     /// Type of current data (e.g. <c>6</c> = forecast model output). See
@@ -65,7 +66,8 @@ public sealed class S111StationSeriesDataset
 /// <summary>
 /// Discriminated union over the two structurally different S-111
 /// dataset shapes the reader emits — gridded coverage (dcf2) and
-/// per-station time series (dcf8). See <see cref="S111DatasetReader.ReadAny"/>.
+/// positioned station/node series (dcf1/dcf3/dcf8). See
+/// <see cref="S111DatasetReader.ReadAny"/>.
 /// </summary>
 public abstract record S111DatasetData
 {
@@ -81,6 +83,6 @@ public abstract record S111DatasetData
     /// <summary>S-111 dcf2 — regularly-gridded surface-current coverage.</summary>
     public sealed record GriddedCoverage(S111Dataset Dataset) : S111DatasetData;
 
-    /// <summary>S-111 dcf8 — time series at fixed stations, or dcf3 — ungeorectified grid.</summary>
+    /// <summary>S-111 dcf1/dcf8 fixed stations or dcf3 ungeorectified grid.</summary>
     public sealed record StationSeries(S111StationSeriesDataset Dataset) : S111DatasetData;
 }

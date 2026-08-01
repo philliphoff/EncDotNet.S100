@@ -495,7 +495,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 .GetAwaiter().GetResult();
 
             bool hasRenderableCoverage = portrayal.SubLayers.Any(
-                subLayer => subLayer is GridCoverageSubLayer or ArrowCoverageSubLayer);
+                subLayer => subLayer is GridCoverageSubLayer or ArrowCoverageSubLayer or GlyphCoverageSubLayer);
             if (hasRenderableCoverage)
             {
                 var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
@@ -693,10 +693,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 if (debug) AnsiConsole.WriteException(ex);
                 return 4;
 
-            // Distinct from NotSupportedException (e.g. the dcf8 headless path):
-            // readers raise this for recognised-but-not-yet-implemented spec
-            // features such as data coding format 1 (irregular fixed-station
-            // time series). It does not derive from NotSupportedException, so it
+            // Distinct from NotSupportedException: readers raise this for
+            // recognised-but-not-yet-implemented product features. It does not
+            // derive from NotSupportedException, so it
             // needs its own case to avoid the generic exit-1 path. See issue #253.
             case S100DatasetNotSupportedException:
                 AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");

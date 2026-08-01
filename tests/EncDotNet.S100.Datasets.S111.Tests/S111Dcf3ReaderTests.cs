@@ -82,7 +82,7 @@ public class S111Dcf3ReaderTests
 
             // Node 0 transposed to a station with 4 time steps.
             var node0 = model.Stations[0];
-            Assert.Equal("Node_001", node0.Identifier);
+            Assert.Equal("SurfaceCurrent.01:Node_001", node0.Identifier);
             Assert.Equal(46.83, node0.Latitude, precision: 2);
             Assert.Equal(-71.16, node0.Longitude, precision: 2);
             Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), node0.StartTime);
@@ -96,13 +96,13 @@ public class S111Dcf3ReaderTests
 
             // Node 1.
             var node1 = model.Stations[1];
-            Assert.Equal("Node_002", node1.Identifier);
+            Assert.Equal("SurfaceCurrent.01:Node_002", node1.Identifier);
             Assert.Equal(1.0f, node1.SpeedsMetresPerSecond[0]);
             Assert.Equal(90f, node1.DirectionsDegreesTrue[0]);
 
             // Node 2 — last time step.
             var node2 = model.Stations[2];
-            Assert.Equal("Node_003", node2.Identifier);
+            Assert.Equal("SurfaceCurrent.01:Node_003", node2.Identifier);
             Assert.Equal(0.4f, node2.SpeedsMetresPerSecond[3]);
             Assert.Equal(195f, node2.DirectionsDegreesTrue[3]);
 

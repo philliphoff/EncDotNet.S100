@@ -16,7 +16,7 @@ public sealed class S111ReadOptions
     /// </summary>
     /// <remarks>
     /// The caller must keep the underlying HDF5 file open for the lifetime
-    /// of the returned dataset. dcf3/dcf8 (station-series) datasets always
+    /// of the returned dataset. dcf1/dcf3/dcf8 station-series datasets always
     /// materialize fully and ignore this flag.
     /// </remarks>
     public bool DeferValueReads { get; init; }

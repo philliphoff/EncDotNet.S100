@@ -416,18 +416,14 @@ and attribute mapping, allowed-value enforcement) are owned by
 |---|---|---|
 | Vector (ISO 8211) | S-101, S-57 (translated to S-101) | `HeadlessVectorRenderer` |
 | Vector (GML) | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | `HeadlessVectorRenderer` |
-| Coverage (HDF5) | S-102, S-104 (gridded), S-111 (gridded) | `CoverageHeadlessRenderer` |
+| Coverage (HDF5) | S-102; S-104 DCF1/2/8; S-111 DCF1/2/3/8 | Coverage and point-glyph headless renderers |
 
 ## Limitations
 
-- **Explicit coverage viewports require gridded data.** `--bbox` /
-  `--center`+`--scale` crop S-102/S-104/S-111 sampling to the requested WGS-84
-  window and reproject projected grids from their native CRS. Fixed-station
-  S-104/S-111 datasets remain unsupported by the headless renderer.
-- **Coverage fixed-station datasets are not supported.** S-104 / S-111 datasets
-  using data coding format 3 or 8 (time series at fixed stations) emit point
-  glyphs through the Mapsui path only; the CLI reports a clear "not supported"
-  error.
+- **Explicit coverage viewports.** `--bbox` / `--center`+`--scale` crop
+  S-102/S-104/S-111 gridded sampling to the requested WGS-84 window and
+  reproject projected grids from their native CRS. Positioned station/node
+  datasets render their point glyphs against the requested viewport.
 - **S-57 renders through the S-101 pipeline.** Datasets are translated to
   `S101Document` in-memory and rasterised with S-101 symbology (not S-52).
 
@@ -439,7 +435,7 @@ and attribute mapping, allowed-value enforcement) are owned by
 | `1` | Unhandled error (use `--debug` for a stack trace). |
 | `2` | Product specification could not be detected (single dataset), or no renderable datasets were discovered in an exchange set. |
 | `3` | The detected spec does not support headless rendering. |
-| `4` | The dataset is recognised but its shape or encoding is unsupported — e.g. a fixed-station coverage, or a data coding format the reader does not yet implement (such as dcf1, irregular time series at fixed stations). |
+| `4` | The dataset is recognised but its shape or encoding is unsupported by the selected operation. |
 | `5` | The dataset is recognised but non-conforming (a required attribute, dataset, or group is missing or malformed). |
 | `6` | `validate` only: the dataset was evaluated and produced failing findings (any error-severity finding, or — with `--strict` — any warning). |
 | non-zero | Argument validation failure (missing file, bad palette, etc.). |

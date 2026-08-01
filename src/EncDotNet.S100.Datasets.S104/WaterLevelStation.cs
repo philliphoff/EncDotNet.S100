@@ -2,14 +2,13 @@ namespace EncDotNet.S100.Datasets.S104;
 
 /// <summary>
 /// A single water-level time series at a fixed station, as encoded by an
-/// S-104 data-coding-format-8 ("time series at fixed stations") instance
-/// (S-104 Edition 2.0.0 §10.2.3 and §10.2.7).
+/// S-104 data-coding-format-1 or data-coding-format-8 instance (S-100 Part
+/// 10c §10.2.1).
 /// </summary>
 /// <remarks>
-/// Each <c>Group_NNN</c> under the dcf8 <c>WaterLevel.NN</c> instance
-/// corresponds to one station; the i-th station's position is read from
-/// the i-th row of the <c>Positioning/geometryValues</c> compound
-/// dataset (S-104 Edition 2.0.0 §10.2.3).
+/// DCF1 encodes time records as groups and is transposed by the reader; DCF8
+/// encodes each station's complete time series as one group. Both use
+/// <c>Positioning/geometryValues</c> for station coordinates.
 /// </remarks>
 public sealed class WaterLevelStation
 {
@@ -29,10 +28,20 @@ public sealed class WaterLevelStation
     public required DateTime EndTime { get; init; }
 
     /// <summary>
-    /// Interval between consecutive samples. Parsed from the S-104
-    /// <c>timeRecordInterval</c> integer (seconds).
+    /// Interval between consecutive samples when uniform. DCF1 readers derive
+    /// it from <see cref="SampleTimes"/> and use <see cref="TimeSpan.Zero"/> for
+    /// non-uniform samples; DCF8 readers parse <c>timeRecordInterval</c>.
     /// </summary>
     public required TimeSpan TimeRecordInterval { get; init; }
+
+    /// <summary>
+    /// Explicit UTC timestamps for each sample, in the same order as
+    /// <see cref="Heights"/> and <see cref="Trends"/>. DCF1 readers populate
+    /// this sequence from each <c>Group_NNN/timePoint</c> attribute (S-100
+    /// Part 10c §10.2.1); regular station encodings may leave it empty and use
+    /// <see cref="StartTime"/> plus <see cref="TimeRecordInterval"/>.
+    /// </summary>
+    public IReadOnlyList<DateTime> SampleTimes { get; init; } = [];
 
     /// <summary>
     /// Number of samples in this station's time series — equal to
@@ -61,6 +70,28 @@ public sealed class WaterLevelStation
     public int NearestTimeIndex(DateTime time)
     {
         if (NumberOfTimes <= 1) return 0;
+        if (SampleTimes.Count > 0)
+        {
+            EnsureSampleTimeCount();
+
+            int low = 0;
+            int high = SampleTimes.Count;
+            while (low < high)
+            {
+                int middle = low + ((high - low) / 2);
+                if (SampleTimes[middle] < time)
+                    low = middle + 1;
+                else
+                    high = middle;
+            }
+
+            if (low == 0) return 0;
+            if (low == SampleTimes.Count) return SampleTimes.Count - 1;
+
+            var previousDistance = time - SampleTimes[low - 1];
+            var nextDistance = SampleTimes[low] - time;
+            return previousDistance < nextDistance ? low - 1 : low;
+        }
         if (TimeRecordInterval <= TimeSpan.Zero) return 0;
         var delta = (time - StartTime).TotalSeconds / TimeRecordInterval.TotalSeconds;
         var idx = (int)Math.Round(delta, MidpointRounding.AwayFromZero);
@@ -77,6 +108,21 @@ public sealed class WaterLevelStation
     {
         ArgumentOutOfRangeException.ThrowIfNegative(index);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, NumberOfTimes);
+        if (SampleTimes.Count > 0)
+        {
+            EnsureSampleTimeCount();
+            return SampleTimes[index];
+        }
         return StartTime + TimeSpan.FromTicks(TimeRecordInterval.Ticks * index);
+    }
+
+    private void EnsureSampleTimeCount()
+    {
+        if (SampleTimes.Count != NumberOfTimes)
+        {
+            throw new InvalidOperationException(
+                $"Station '{Identifier}' declares {NumberOfTimes} samples but has " +
+                $"{SampleTimes.Count} explicit timestamps.");
+        }
     }
 }
