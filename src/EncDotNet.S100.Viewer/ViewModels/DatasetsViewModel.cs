@@ -24,7 +24,8 @@ internal sealed class DatasetEntry : ViewModelBase
 
     /// <summary>
     /// Renderer-neutral loaded state projected by this view-model, or
-    /// <c>null</c> while the entry is registered but not loaded.
+    /// <c>null</c> until the entry first loads. Lazy eviction retains the last
+    /// snapshot so user-controlled display state survives a later reload.
     /// </summary>
     public MapDataset? MapDataset => _mapDataset;
 
