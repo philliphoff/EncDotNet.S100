@@ -772,6 +772,7 @@ public partial class App : Application
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
+        services.AddSingleton<MapPresentationStateProjection>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
         services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
             sp.GetService<ITimeFormatProvider>(),

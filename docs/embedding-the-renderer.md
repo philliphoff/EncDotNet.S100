@@ -55,6 +55,15 @@ assessment. It intentionally excludes rendered layers, UI commands, framework
 events, and localized strings so a future map session can own the state without
 depending on Viewer, Mapsui, or Avalonia.
 
+The Viewer now follows that boundary throughout its loaded-dataset lifecycle:
+its dataset and sub-layer view-models project `MapDataset` /
+`MapDatasetSubLayer` snapshots while retaining only UI commands, localized
+labels, selection, and registration metadata. Map-wide Viewer inputs are
+similarly projected into one current `MapPresentationState` before render
+contexts are created. The Viewer therefore no longer acts as the rendering
+identity or active-state store, although session extraction and an explicit
+`SetPresentationAsync` API remain later roadmap work.
+
 ## Why it matters
 
 This is the smallest seam for teams that already own portrayal outputs or want
