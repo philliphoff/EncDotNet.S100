@@ -28,8 +28,9 @@ public sealed class WaterLevelStation
     public required DateTime EndTime { get; init; }
 
     /// <summary>
-    /// Interval between consecutive samples. Parsed from the S-104
-    /// <c>timeRecordInterval</c> integer (seconds).
+    /// Interval between consecutive samples when uniform. DCF1 readers derive
+    /// it from <see cref="SampleTimes"/> and use <see cref="TimeSpan.Zero"/> for
+    /// non-uniform samples; DCF8 readers parse <c>timeRecordInterval</c>.
     /// </summary>
     public required TimeSpan TimeRecordInterval { get; init; }
 

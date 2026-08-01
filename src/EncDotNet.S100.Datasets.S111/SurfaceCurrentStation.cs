@@ -28,16 +28,18 @@ public sealed class SurfaceCurrentStation
     public required DateTime EndTime { get; init; }
 
     /// <summary>
-    /// Interval between consecutive samples. Parsed from the S-111
-    /// <c>timeRecordInterval</c> integer (seconds).
+    /// Interval between consecutive samples when uniform. DCF1 and DCF3
+    /// readers derive it from <see cref="SampleTimes"/> and use
+    /// <see cref="TimeSpan.Zero"/> for non-uniform samples; DCF8 readers parse
+    /// <c>timeRecordInterval</c>.
     /// </summary>
     public required TimeSpan TimeRecordInterval { get; init; }
 
     /// <summary>
     /// Explicit UTC timestamps for each sample, in the same order as
     /// <see cref="SpeedsMetresPerSecond"/> and
-    /// <see cref="DirectionsDegreesTrue"/>. DCF1 readers populate this from
-    /// each <c>Group_NNN/timePoint</c> attribute (S-111 Edition 2.0.0
+    /// <see cref="DirectionsDegreesTrue"/>. DCF1 and DCF3 readers populate this
+    /// from each <c>Group_NNN/timePoint</c> attribute (S-111 Edition 2.0.0
     /// §12.3.4); regular station encodings may leave it empty.
     /// </summary>
     public IReadOnlyList<DateTime> SampleTimes { get; init; } = [];
