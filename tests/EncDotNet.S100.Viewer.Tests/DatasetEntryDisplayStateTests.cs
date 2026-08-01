@@ -5,6 +5,14 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class DatasetEntryDisplayStateTests
 {
     [Fact]
+    public void Constructor_AssignsStableMapDatasetIdentity()
+    {
+        var entry = new DatasetEntry("/tmp/catalog/US5WA50M.000", "S-101");
+
+        Assert.Equal("US5WA50M.000", entry.Id.Value);
+    }
+
+    [Fact]
     public void Defaults_AreVisibleAndFullyOpaque()
     {
         var entry = new DatasetEntry("/tmp/x.000", "S-101");

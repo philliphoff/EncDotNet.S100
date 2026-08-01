@@ -82,12 +82,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private IReadOnlyList<LayerStackEntry> _currentStackEntries = Array.Empty<LayerStackEntry>();
     /// <summary>
     /// In-memory per-dataset Active flags. Keyed by dataset id (the
-    /// same identifier produced by <see cref="EntryId"/>). Missing
+    /// same <see cref="DatasetEntry.Id"/> used by the layer stack). Missing
     /// entries default to <c>true</c>. Process-local for PR-L3; PR-L4
     /// will persist in <see cref="ViewerSettings"/>.
     /// </summary>
     // TODO PR-L4: persist Active in ViewerSettings
-    private readonly Dictionary<string, bool> _activeFlags = new(StringComparer.Ordinal);
+    private readonly Dictionary<MapDatasetId, bool> _activeFlags = new();
     /// <summary>
     /// Per-entry sub-layer keys, parallel by index to
     /// <see cref="_entryLayers"/>. Null when the processor did not
@@ -214,7 +214,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     public bool GetActive(string datasetId)
     {
         ArgumentException.ThrowIfNullOrEmpty(datasetId);
-        return !_activeFlags.TryGetValue(datasetId, out var v) || v;
+        return !_activeFlags.TryGetValue(new MapDatasetId(datasetId), out var v) || v;
     }
 
     public void SetActive(string datasetId, bool active)
@@ -222,7 +222,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentException.ThrowIfNullOrEmpty(datasetId);
         var previous = GetActive(datasetId);
         if (previous == active) return;
-        _activeFlags[datasetId] = active;
+        _activeFlags[new MapDatasetId(datasetId)] = active;
         // Recompute the cross-product stack so R-101-102-B (and any
         // future Active-aware rules) re-evaluates with the new
         // flag, and rebroadcast it through the map host so PickService
@@ -852,7 +852,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             disposableProcessor.Dispose();
         }
         _entryOrder.Remove(entry);
-        _activeFlags.Remove(EntryId(entry));
+        _activeFlags.Remove(entry.Id);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         // Publish the new (empty / smaller) stack so PickService and
@@ -964,7 +964,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var entry = _entryOrder[i];
             if (!_entryLayers.TryGetValue(entry, out var layers)) continue;
 
-            var datasetId = EntryId(entry);
+            var datasetId = entry.Id.Value;
 
             if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
             {
@@ -1047,17 +1047,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     }
 
     /// <summary>
-    /// Stable per-entry identifier matching
-    /// <see cref="LayerStackEntry.SourceDatasetId"/>. Used both as
-    /// the key for <see cref="_activeFlags"/> and as the dataset id
-    /// passed to <see cref="IInteroperabilityAuthority"/> rules.
-    /// </summary>
-    private static string EntryId(DatasetEntry entry) =>
-        entry.FilePath is { } p && p.Length > 0
-            ? System.IO.Path.GetFileName(p)
-            : entry.DisplayName;
-
-    /// <summary>
     /// Builds the snapshot of <see cref="LoadedDatasetInfo"/> values
     /// the S-98 rule engine consumes. <c>Active</c> combines the
     /// PR-L3 in-memory flag, the existing <c>DatasetEntry.IsVisible</c>
@@ -1071,12 +1060,29 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         foreach (var entry in _entryOrder)
         {
             if (!_processors.TryGetValue(entry, out var proc)) continue;
-            var datasetId = EntryId(entry);
-            var active = GetActive(datasetId)
-                && entry.IsVisible
+            var dataset = new MapDataset(
+                entry.Id,
+                entry.DisplayName,
+                proc.Metadata,
+                entry.IsVisible,
+                GetActive(entry.Id.Value),
+                entry.Opacity,
+                entry.AvailableTimes,
+                entry.CurrentTime,
+                entry.SubLayers
+                    .Select(layer => new MapDatasetSubLayer(
+                        layer.Key,
+                        layer.DisplayName,
+                        layer.IsVisible,
+                        layer.Opacity))
+                    .ToArray(),
+                entry.Validation,
+                proc.VersionAssessment);
+            var active = dataset.IsActive
+                && dataset.IsVisible
                 && _entryLayers.TryGetValue(entry, out var layers)
                 && layers.Count > 0;
-            result.Add(new LoadedDatasetInfo(datasetId, proc.Spec.Name, active));
+            result.Add(new LoadedDatasetInfo(dataset.Id.Value, dataset.Metadata.Spec.Name, active));
         }
         return result;
     }

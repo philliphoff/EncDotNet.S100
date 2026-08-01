@@ -37,6 +37,24 @@ This presentation layer is renderer-neutral: it does not reference Mapsui,
 Avalonia, or SkiaSharp. Per-dataset time and viewport choices remain on the
 specific render context.
 
+Loaded dataset state has the same renderer-neutral seam:
+
+```csharp
+var dataset = new MapDataset(
+    new MapDatasetId("US5WA50M.000"),
+    "US5WA50M.000",
+    processor.Metadata,
+    availableTimes: timeSteps,
+    validation: processor.Validate(),
+    versionAssessment: processor.VersionAssessment);
+```
+
+`MapDataset` snapshots metadata and extent, independent visibility and active
+state, opacity, available/current time, sub-layer state, validation, and version
+assessment. It intentionally excludes rendered layers, UI commands, framework
+events, and localized strings so a future map session can own the state without
+depending on Viewer, Mapsui, or Avalonia.
+
 ## Why it matters
 
 This is the smallest seam for teams that already own portrayal outputs or want
