@@ -82,8 +82,8 @@ internal static class PointGlyphHeadlessAdapter
             maxX += grow;
         }
 
-        var (minLongitude, minLatitude) = WebMercator.ToLonLat(minX, minY);
-        var (maxLongitude, maxLatitude) = WebMercator.ToLonLat(maxX, maxY);
+        var (minLongitude, minLatitude) = WebMercator.ToLonLat(minX, minY, clampLatitude: false);
+        var (maxLongitude, maxLatitude) = WebMercator.ToLonLat(maxX, maxY, clampLatitude: false);
         double middleLatitudeRadians = (minLatitude + maxLatitude) * Math.PI / 360.0;
         double groundMetresPerPixel = (maxX - minX) / widthPixels * Math.Cos(middleLatitudeRadians);
 

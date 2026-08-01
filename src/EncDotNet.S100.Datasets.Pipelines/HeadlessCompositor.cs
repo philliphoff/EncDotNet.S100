@@ -329,8 +329,8 @@ public sealed class HeadlessCompositor
                         return false;
 
                     layer = PointGlyphHeadlessAdapter.CreateLayer(glyph);
-                    var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY);
-                    var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY);
+                    var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
+                    var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);
                     west = w; east = e; south = s; north = n;
                     return true;
                 }
