@@ -22,5 +22,8 @@ public interface IDatasetKeyProvider
     /// </param>
     /// <param name="cellKey">The resolved 16-byte cell key, if available.</param>
     /// <returns><c>true</c> if a key was resolved.</returns>
+    /// <exception cref="DatasetPermitException">
+    /// A matching protected dataset is rejected by its permit policy.
+    /// </exception>
     bool TryGetCellKey(string datasetFileName, out byte[]? cellKey);
 }

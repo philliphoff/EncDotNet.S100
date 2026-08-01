@@ -26,21 +26,38 @@ namespace EncDotNet.S100.ExchangeSets.Protection;
 /// </remarks>
 public sealed class PermitFile
 {
-    private PermitFile(IReadOnlyList<PermitGroup> groups) => Groups = groups;
+    private PermitFile(IReadOnlyList<PermitGroup> groups, bool isAuthenticated)
+    {
+        Groups = groups;
+        IsAuthenticated = isAuthenticated;
+    }
 
     /// <summary>The header/products groups contained in the permit file.</summary>
     public IReadOnlyList<PermitGroup> Groups { get; }
+
+    /// <summary>
+    /// Whether the permit was authenticated using its mandatory
+    /// <c>PERMIT.SIGN</c> file.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-7.4.5.</remarks>
+    public bool IsAuthenticated { get; }
 
     /// <summary>
     /// Reads and parses a permit file from a stream.
     /// </summary>
     /// <param name="stream">A stream positioned at the start of the PERMIT.XML content.</param>
     /// <returns>The parsed permit file.</returns>
+    /// <remarks>
+    /// This parses permit metadata for inspection only. The returned permit is
+    /// not authenticated and cannot be used with <see cref="PermitKeyProvider"/>.
+    /// Use <see cref="PermitSignatureVerifier.AuthenticateAsync"/> before
+    /// decrypting permit keys.
+    /// </remarks>
     public static PermitFile Read(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
         var doc = XDocument.Load(stream);
-        return Parse(doc);
+        return Parse(doc, isAuthenticated: false);
     }
 
     /// <summary>
@@ -48,14 +65,26 @@ public sealed class PermitFile
     /// </summary>
     /// <param name="path">The path to the PERMIT.XML file.</param>
     /// <returns>The parsed permit file.</returns>
+    /// <remarks>
+    /// This parses permit metadata for inspection only. The returned permit is
+    /// not authenticated and cannot be used with <see cref="PermitKeyProvider"/>.
+    /// Use <see cref="PermitSignatureVerifier.AuthenticateAsync"/> before
+    /// decrypting permit keys.
+    /// </remarks>
     public static PermitFile Read(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
         var doc = XDocument.Load(path);
-        return Parse(doc);
+        return Parse(doc, isAuthenticated: false);
     }
 
-    private static PermitFile Parse(XDocument doc)
+    internal static PermitFile ReadAuthenticated(Stream stream)
+    {
+        var doc = XDocument.Load(stream);
+        return Parse(doc, isAuthenticated: true);
+    }
+
+    private static PermitFile Parse(XDocument doc, bool isAuthenticated)
     {
         XElement root = doc.Root ?? throw new XmlException("Missing root element.");
         if (!string.Equals(root.Name.LocalName, "Permit", StringComparison.Ordinal))
@@ -82,7 +111,7 @@ public sealed class PermitFile
             }
         }
 
-        return new PermitFile(groups);
+        return new PermitFile(groups, isAuthenticated);
     }
 
     private static PermitHeader ParseHeader(XElement header)
@@ -150,36 +179,110 @@ public sealed class PermitFile
                 $"datasetPermit for '{fileName}' has a non-hexadecimal encryptedKey.", ex);
         }
 
+        var editionText = ChildValue(permit, "editionNumber");
         int? editionNumber = null;
-        if (int.TryParse(ChildValue(permit, "editionNumber"), NumberStyles.Integer,
-                CultureInfo.InvariantCulture, out int edition))
+        if (editionText is not null)
         {
+            if (!int.TryParse(
+                    editionText,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var edition) ||
+                edition <= 0)
+            {
+                throw new XmlException(
+                    $"datasetPermit for '{fileName}' has an invalid editionNumber.");
+            }
+
             editionNumber = edition;
         }
+
+        var issueDate = ParseOptionalDate(
+            ChildValue(permit, "issueDate"),
+            fileName,
+            "issueDate");
+        var expiryText = ChildValue(permit, "expiry");
+        if (expiryText is null)
+        {
+            throw new XmlException($"datasetPermit for '{fileName}' is missing its expiry element.");
+        }
+
+        var expiry = ParseOptionalDate(expiryText, fileName, "expiry")
+            ?? throw new XmlException($"datasetPermit for '{fileName}' has an invalid expiry.");
 
         return new DataPermit(
             fileName.Trim(),
             encryptedKey,
-            ParseDate(ChildValue(permit, "expiry")),
+            expiry,
             editionNumber,
-            ParseDate(ChildValue(permit, "issueDate")));
+            issueDate);
     }
 
     private static string? ChildValue(XElement parent, string localName) =>
         parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Value?.Trim();
 
-    private static DateOnly? ParseDate(string? value)
+    internal static DateOnly? ParseDate(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             return null;
         }
 
-        // Permit dates are xs:date and may carry a trailing 'Z' (e.g. 2018-03-20Z).
-        string trimmed = value.Trim().TrimEnd('Z', 'z');
-        return DateOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly date)
+        var trimmed = value.Trim();
+        var dateText = ExtractXmlSchemaDate(trimmed);
+        return dateText is not null &&
+               DateOnly.TryParseExact(
+                   dateText,
+                   "yyyy-MM-dd",
+                   CultureInfo.InvariantCulture,
+                   DateTimeStyles.None,
+                   out var date)
             ? date
             : null;
+    }
+
+    private static string? ExtractXmlSchemaDate(string value)
+    {
+        if (value.Length == 10)
+        {
+            return value;
+        }
+
+        if (value.Length == 11 && value[10] == 'Z')
+        {
+            return value[..10];
+        }
+
+        if (value.Length != 16 || value[10] is not ('+' or '-'))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(value.AsSpan(11, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var hours) ||
+            !int.TryParse(value.AsSpan(14, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) ||
+            hours > 14 ||
+            minutes > 59 ||
+            hours == 14 && minutes != 0)
+        {
+            return null;
+        }
+
+        return value[..10];
+    }
+
+    private static DateOnly? ParseOptionalDate(
+        string? value,
+        string fileName,
+        string elementName)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return ParseDate(value) ??
+            throw new XmlException(
+                $"datasetPermit for '{fileName}' has an invalid {elementName}.");
     }
 
     /// <summary>

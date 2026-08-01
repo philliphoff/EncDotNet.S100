@@ -23,6 +23,10 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
     /// <summary>Buffer size used when streaming file content for hashing.</summary>
     private const int StreamBufferSize = 81920;
 
+    /// <summary>The secp384r1 / NIST P-384 named-curve object identifier.</summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.4.</remarks>
+    private const string NistP384Oid = "1.3.132.0.34";
+
     /// <inheritdoc />
     public async Task<ExchangeSetVerificationResult> VerifyAsync(
         IAssetSource source,
@@ -174,12 +178,14 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
     /// already been hashed. Returns <see cref="VerificationOutcome.NotSigned"/>
     /// when the file carries no signature.
     /// </summary>
-    private static (VerificationOutcome Outcome, string? Detail) EvaluateSignature(
+    internal static (VerificationOutcome Outcome, string? Detail) EvaluateSignature(
         DigitalSignatureValue? signatureValue,
         DigitalSignatureAlgorithm algorithm,
         byte[] fileHash,
         Dictionary<string, CertificateEntry> certLookup,
-        TrustAnchorOptions trustAnchors)
+        TrustAnchorOptions trustAnchors,
+        IReadOnlyCollection<CertificateEntry>? certificateChain = null,
+        bool requireP384DerSignature = false)
     {
         if (signatureValue is null)
         {
@@ -211,7 +217,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         using (cert)
         {
             // Check certificate trust
-            var trustOutcome = ValidateCertificateTrust(cert, trustAnchors);
+            var trustOutcome = ValidateCertificateTrust(cert, trustAnchors, certificateChain);
             if (trustOutcome is not null)
             {
                 var detail = trustOutcome.Value == VerificationOutcome.CertificateExpired
@@ -223,7 +229,12 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             // Verify the signature
             try
             {
-                var valid = VerifySignature(cert, algorithm, fileHash, signatureValue.Value);
+                var valid = VerifySignature(
+                    cert,
+                    algorithm,
+                    fileHash,
+                    signatureValue.Value,
+                    requireP384DerSignature);
                 return (valid ? VerificationOutcome.Ok : VerificationOutcome.SignatureInvalid, null);
             }
             catch (CryptographicException ex)
@@ -240,7 +251,8 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
     /// </summary>
     private static VerificationOutcome? ValidateCertificateTrust(
         X509Certificate2 cert,
-        TrustAnchorOptions trustAnchors)
+        TrustAnchorOptions trustAnchors,
+        IReadOnlyCollection<CertificateEntry>? certificateChain)
     {
         // Check expiry
         var now = DateTimeOffset.UtcNow;
@@ -261,20 +273,50 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             return VerificationOutcome.CertificateUntrusted;
         }
 
-        // Check if the certificate was issued by one of the trusted roots.
-        // S-100 Part 15 uses a simple two-level hierarchy:
-        //   SA root → Data Server certificate.
-        // We check if the cert's issuer matches any trusted root's subject.
-        foreach (var root in trustAnchors.TrustedRoots)
+        using var chain = new X509Chain();
+        var intermediates = new List<X509Certificate2>();
+        try
         {
-            if (cert.Issuer == root.Subject ||
-                cert.Thumbprint == root.Thumbprint)
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            foreach (var root in trustAnchors.TrustedRoots)
             {
-                return null;
+                chain.ChainPolicy.CustomTrustStore.Add(root);
+            }
+
+            if (certificateChain is not null)
+            {
+                foreach (var entry in certificateChain)
+                {
+#if NET10_0_OR_GREATER
+                    var intermediate = X509CertificateLoader.LoadCertificate(entry.Value);
+#else
+                    var intermediate = new X509Certificate2(entry.Value);
+#endif
+                    if (string.Equals(intermediate.Thumbprint, cert.Thumbprint, StringComparison.Ordinal))
+                    {
+                        intermediate.Dispose();
+                        continue;
+                    }
+
+                    intermediates.Add(intermediate);
+                    chain.ChainPolicy.ExtraStore.Add(intermediate);
+                }
+            }
+
+            return chain.Build(cert) ? null : VerificationOutcome.CertificateUntrusted;
+        }
+        catch (CryptographicException)
+        {
+            return VerificationOutcome.Error;
+        }
+        finally
+        {
+            foreach (var intermediate in intermediates)
+            {
+                intermediate.Dispose();
             }
         }
-
-        return VerificationOutcome.CertificateUntrusted;
     }
 
     /// <summary>
@@ -285,7 +327,8 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         X509Certificate2 cert,
         DigitalSignatureAlgorithm algorithm,
         byte[] hash,
-        byte[] signature)
+        byte[] signature,
+        bool requireP384DerSignature)
     {
         switch (algorithm)
         {
@@ -294,6 +337,22 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                     using var ecdsa = cert.GetECDsaPublicKey();
                     if (ecdsa is null)
                         throw new CryptographicException("Certificate does not contain an ECDSA public key.");
+                    if (requireP384DerSignature)
+                    {
+                        var curveOid = ecdsa.ExportParameters(includePrivateParameters: false).Curve.Oid.Value;
+                        if (ecdsa.KeySize != 384 ||
+                            !string.Equals(curveOid, NistP384Oid, StringComparison.Ordinal))
+                        {
+                            throw new CryptographicException(
+                                "Part 15 standalone signatures require an ECDSA P-384 key.");
+                        }
+
+                        return ecdsa.VerifyHash(
+                            hash,
+                            signature,
+                            DSASignatureFormat.Rfc3279DerSequence);
+                    }
+
                     return ecdsa.VerifyHash(hash, signature);
                 }
 
