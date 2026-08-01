@@ -145,12 +145,19 @@ public sealed class MapsuiDisplayListRenderer
     public string? PatternClipCacheKey { get; init; }
 
     /// <summary>
+    /// Optional captured Mapsui rendering configuration. When
+    /// <see langword="null"/>, settings that have not been overridden directly
+    /// are read from the legacy process-global
+    /// <see cref="RenderingOptimizations"/> store.
+    /// </summary>
+    public S100MapsuiOptions? Options { get; init; }
+
+    /// <summary>
     /// Optional per-render override of the active base-plane render subsystem
-    /// (see <see cref="RenderingOptimizations.RenderSubsystem"/>). When set, this
-    /// render uses the specified arm regardless of the process-wide default,
-    /// without mutating global state — making arm-specific behaviour
-    /// deterministic and parallel-safe for tests and harnesses. When
-    /// <see langword="null"/> (the default) the process-wide subsystem applies.
+    /// (see <see cref="S100MapsuiOptions.RenderSubsystem"/>). When set, this
+    /// render uses the specified arm regardless of captured or process-wide
+    /// configuration, without mutating global state — making arm-specific
+    /// behaviour deterministic and parallel-safe for tests and harnesses.
     /// </summary>
     public RenderSubsystemKind? RenderSubsystemOverride { get; init; }
 
@@ -244,7 +251,9 @@ public sealed class MapsuiDisplayListRenderer
         // pure dead weight there. Compute the arm now so the whole pattern phase
         // can be skipped when the B arm is active.
         var useTiledScene =
-            (RenderSubsystemOverride ?? RenderingOptimizations.RenderSubsystem)
+            (RenderSubsystemOverride
+                ?? Options?.RenderSubsystem
+                ?? RenderingOptimizations.RenderSubsystem)
                 == RenderSubsystemKind.TiledScene;
 
         // 3a. Pattern bookkeeping (A arm only): collect pattern polygons grouped
@@ -524,13 +533,13 @@ public sealed class MapsuiDisplayListRenderer
 
     /// <summary>
     /// Whether the TiledScene subsystem uses the Phase-2 tiled renderer (default)
-    /// or the Phase-1 single-surface renderer. Sourced live from
-    /// <see cref="RenderingOptimizations.SceneMode"/> (seeded from
-    /// <c>S100_VECTOR_SCENE_MODE</c>; <c>single</c> selects the Phase-1 arm), so a
-    /// runtime change applies on the next re-render.
+    /// or the Phase-1 single-surface renderer. Explicit
+    /// <see cref="S100MapsuiOptions"/> take precedence; otherwise the mode is
+    /// sourced live from <see cref="RenderingOptimizations.SceneMode"/>.
     /// </summary>
-    private static bool TiledSceneModeIsTiled =>
-        RenderingOptimizations.SceneMode == VectorSceneMode.Tiled;
+    private bool TiledSceneModeIsTiled =>
+        (Options?.SceneMode ?? RenderingOptimizations.SceneMode)
+            == VectorSceneMode.Tiled;
 
     private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
 

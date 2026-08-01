@@ -18,6 +18,38 @@ public class S100MapsuiRenderingTests
     }
 
     [Fact]
+    public void MapsuiDatasetRenderer_PreservesLegacyConstructor()
+    {
+        var constructor = typeof(MapsuiDatasetRenderer).GetConstructor(
+            [typeof(ICrsTransformFactory), typeof(IPatternClipCache)]);
+
+        Assert.NotNull(constructor);
+    }
+
+    [Theory]
+    [InlineData(VectorSceneMode.Single, S100VectorSceneRenderer.RendererName)]
+    [InlineData(VectorSceneMode.Tiled, S100VectorTileRenderer.RendererName)]
+    public async Task MapsuiDatasetRenderer_UsesCapturedRenderingOptions(
+        VectorSceneMode sceneMode,
+        string expectedRendererName)
+    {
+        var options = new S100MapsuiOptions
+        {
+            RenderSubsystem = RenderSubsystemKind.TiledScene,
+            SceneMode = sceneMode,
+        };
+        var renderer = new MapsuiDatasetRenderer(
+            new IdentityCrsTransformFactory(),
+            patternClipCache: null,
+            options: options);
+
+        var result = await renderer.RenderAsync(new StubVectorProcessor());
+
+        var layer = Assert.Single(result.Layers);
+        Assert.Equal(expectedRendererName, layer.CustomLayerRendererName);
+    }
+
+    [Fact]
     public void MapsuiDatasetResult_IsOwnedByMapsuiRenderer()
     {
         var assembly = typeof(MapsuiDatasetResult).Assembly;

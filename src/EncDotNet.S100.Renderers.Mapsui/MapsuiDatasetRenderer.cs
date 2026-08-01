@@ -41,6 +41,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 public sealed class MapsuiDatasetRenderer
 {
     private readonly ICrsTransformFactory _crsTransformFactory;
+    private readonly S100MapsuiOptions? _options;
     private readonly IPatternClipCache? _patternClipCache;
 
     // The processor's portrayal build holds the processor's own render gate,
@@ -64,6 +65,10 @@ public sealed class MapsuiDatasetRenderer
     /// NetTopologySuite clip. When <see langword="null"/> an in-memory
     /// single-slot cache is used per render.
     /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="crsTransformFactory"/> is
+    /// <see langword="null"/>.
+    /// </exception>
     public MapsuiDatasetRenderer(
         ICrsTransformFactory crsTransformFactory,
         IPatternClipCache? patternClipCache = null)
@@ -71,6 +76,35 @@ public sealed class MapsuiDatasetRenderer
         ArgumentNullException.ThrowIfNull(crsTransformFactory);
         _crsTransformFactory = crsTransformFactory;
         _patternClipCache = patternClipCache;
+    }
+
+    /// <summary>
+    /// Creates a new renderer with captured Mapsui rendering configuration.
+    /// </summary>
+    /// <param name="crsTransformFactory">
+    /// CRS transform factory used by the coverage / arrow renderers to project
+    /// the native grid CRS to EPSG:3857.
+    /// </param>
+    /// <param name="patternClipCache">
+    /// Optional process-wide pattern-fill priority-clip cache.
+    /// </param>
+    /// <param name="options">
+    /// Captured rendering configuration.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="crsTransformFactory"/> or
+    /// <paramref name="options"/> is <see langword="null"/>.
+    /// </exception>
+    public MapsuiDatasetRenderer(
+        ICrsTransformFactory crsTransformFactory,
+        IPatternClipCache? patternClipCache,
+        S100MapsuiOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(crsTransformFactory);
+        ArgumentNullException.ThrowIfNull(options);
+        _crsTransformFactory = crsTransformFactory;
+        _patternClipCache = patternClipCache;
+        _options = options;
     }
 
     /// <summary>
@@ -147,6 +181,7 @@ public sealed class MapsuiDatasetRenderer
                 SymbolProvider = result.SymbolProvider,
                 AreaFillProvider = result.AreaFillProvider,
                 LineStyleProvider = result.LineStyleProvider,
+                Options = _options,
                 // TiledScene ("B") subsystem only: the Mapsui ("A") path enforces
                 // this cell-wide cap via per-feature MaxVisible below
                 // (ApplyOutOfScaleBandCap). Propagating it here lets the

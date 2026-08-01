@@ -37,6 +37,30 @@ order and is safe to call repeatedly. Applications must call this entry point
 before rendering S-100 layers; render operations do not mutate Mapsui's global
 renderer registry implicitly.
 
+## Rendering options
+
+`S100MapsuiOptions` captures Mapsui-specific configuration for a renderer or
+future map session. Its defaults are copied from the existing
+environment-backed `RenderingOptimizations` store, while explicit values let a
+reusable host configure rendering without mutating process-global state:
+
+```csharp
+var options = new S100MapsuiOptions
+{
+    RenderSubsystem = RenderSubsystemKind.TiledScene,
+    SceneMode = VectorSceneMode.Tiled,
+};
+var renderer = new MapsuiDatasetRenderer(
+    crsTransformFactory,
+    patternClipCache,
+    options);
+```
+
+The render subsystem and vector-scene mode are the first settings captured by
+this object. Other optimization settings will move from
+`RenderingOptimizations` incrementally. Omitting `options` preserves the
+existing live global behavior used by the Viewer and performance harnesses.
+
 ## Layer-band composition
 
 `MapsuiLayerBands` owns the ordered S-100 layer bands of an existing
