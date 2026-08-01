@@ -9,7 +9,7 @@ public class S104Dcf1ReaderTests
     [Fact]
     public void ReadAny_Dcf1_UsesExplicitTimesAndTransposesValues()
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = CreateTempPath();
         try
         {
             S104Dcf1FixtureBuilder.WriteFile(
@@ -51,7 +51,7 @@ public class S104Dcf1ReaderTests
     [Fact]
     public void ReadAny_Dcf1_NonUniformTimesUseExplicitNearestSample()
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = CreateTempPath();
         try
         {
             S104Dcf1FixtureBuilder.WriteFile(
@@ -84,7 +84,7 @@ public class S104Dcf1ReaderTests
     [InlineData(false)]
     public void ReadAny_Dcf1_RejectsNonIncreasingTimesAndMismatchedStationCounts(bool nonIncreasingTimes)
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = CreateTempPath();
         try
         {
             S104Dcf1FixtureBuilder.WriteFile(
@@ -112,6 +112,9 @@ public class S104Dcf1ReaderTests
             File.Delete(path);
         }
     }
+
+    private static string CreateTempPath() =>
+        Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".h5");
 
     private static S104Dcf1FixtureBuilder.TimeStep TimeStep(
         string timePoint,

@@ -12,7 +12,7 @@ public class S111Dcf1ProcessorTests
     [Fact]
     public async Task Processor_PreservesExplicitTimesAndRendersStationGlyphs()
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = CreateTempPath();
         try
         {
             S111Dcf1FixtureBuilder.WriteFile(
@@ -45,7 +45,9 @@ public class S111Dcf1ProcessorTests
                 Enumerable.Range(0, bitmap.Width).SelectMany(x =>
                     Enumerable.Range(0, bitmap.Height).Select(y => bitmap.GetPixel(x, y))),
                 color => color != SKColors.White);
-            Assert.Empty(Assert.IsType<ValidationReport>(processor.Validate()).Findings);
+            var report = Assert.IsType<ValidationReport>(processor.Validate());
+            Assert.Empty(report.Findings);
+            Assert.Equal(8, report.RulesEvaluated);
         }
         finally
         {
@@ -56,7 +58,7 @@ public class S111Dcf1ProcessorTests
     [Fact]
     public void Validate_Dcf1_RejectsDirectionOf360Degrees()
     {
-        var path = Path.GetTempFileName() + ".h5";
+        var path = CreateTempPath();
         try
         {
             S111Dcf1FixtureBuilder.WriteFile(
@@ -75,6 +77,9 @@ public class S111Dcf1ProcessorTests
             File.Delete(path);
         }
     }
+
+    private static string CreateTempPath() =>
+        Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".h5");
 
     private static S111Dcf1FixtureBuilder.TimeStep TimeStep(
         string timePoint,

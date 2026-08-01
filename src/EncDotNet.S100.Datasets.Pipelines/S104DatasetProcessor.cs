@@ -924,7 +924,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         foreach (var station in dataset.Stations)
         {
-            rulesEvaluated += 3;
+            rulesEvaluated += station.SampleTimes.Count > 0 ? 3 : 2;
             if (station.NumberOfTimes != station.Heights.Length ||
                 station.NumberOfTimes != station.Trends.Length ||
                 (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))

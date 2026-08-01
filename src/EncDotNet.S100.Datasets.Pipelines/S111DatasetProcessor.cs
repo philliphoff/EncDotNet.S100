@@ -1168,7 +1168,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         foreach (var station in dataset.Stations)
         {
-            rulesEvaluated += 4;
+            rulesEvaluated += station.SampleTimes.Count > 0 ? 4 : 3;
             if (station.NumberOfTimes != station.SpeedsMetresPerSecond.Length ||
                 station.NumberOfTimes != station.DirectionsDegreesTrue.Length ||
                 (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))

@@ -96,23 +96,28 @@ public sealed class PointGlyphCompositeLayer : CompositeLayer
                 float y = (float)((maxY - glyph.MercatorY) * scaleY);
 
                 canvas.Save();
-                canvas.Translate(x, y);
-                canvas.RotateDegrees((float)glyph.RotationDegrees);
-
-                switch (glyph.Symbol)
+                try
                 {
-                    case SkiaPointGlyphSymbol.Ellipse:
-                        DrawEllipse(canvas, glyph);
-                        break;
-                    case SkiaPointGlyphSymbol.Triangle:
-                        DrawTriangle(canvas, glyph);
-                        break;
-                    case SkiaPointGlyphSymbol.Svg:
-                        DrawSvg(canvas, glyph, parsedSvgs);
-                        break;
-                }
+                    canvas.Translate(x, y);
+                    canvas.RotateDegrees((float)glyph.RotationDegrees);
 
-                canvas.Restore();
+                    switch (glyph.Symbol)
+                    {
+                        case SkiaPointGlyphSymbol.Ellipse:
+                            DrawEllipse(canvas, glyph);
+                            break;
+                        case SkiaPointGlyphSymbol.Triangle:
+                            DrawTriangle(canvas, glyph);
+                            break;
+                        case SkiaPointGlyphSymbol.Svg:
+                            DrawSvg(canvas, glyph, parsedSvgs);
+                            break;
+                    }
+                }
+                finally
+                {
+                    canvas.Restore();
+                }
             }
         }
         finally
