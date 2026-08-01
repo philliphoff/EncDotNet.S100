@@ -23,6 +23,13 @@ public sealed class FileVerificationResult
     public required VerificationOutcome Outcome { get; init; }
 
     /// <summary>
+    /// Results for every digital signature declared for this resource, in
+    /// catalogue order. Empty for unsigned resources and compatibility adapters
+    /// that expose only an aggregate outcome.
+    /// </summary>
+    public IReadOnlyList<SignatureVerificationResult> SignatureResults { get; init; } = [];
+
+    /// <summary>
     /// The checksum/integrity outcome for this file, independent of
     /// <see cref="Outcome"/>. Defaults to <see cref="VerificationOutcome.NoChecksum"/>
     /// when the file carries no declared cryptographic hash to compare against.

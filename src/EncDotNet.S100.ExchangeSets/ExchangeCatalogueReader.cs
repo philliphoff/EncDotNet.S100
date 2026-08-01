@@ -11,7 +11,17 @@ public static class ExchangeCatalogueReader
     private static readonly XNamespace Gex = "http://standards.iso.org/iso/19115/-3/gex/1.0";
     private static readonly XNamespace Cit = "http://standards.iso.org/iso/19115/-3/cit/2.0";
     private static readonly XNamespace Mri = "http://standards.iso.org/iso/19115/-3/mri/1.0";
-    private static readonly XNamespace S100SE = "http://www.iho.int/s100/se/5.0";
+    /// <summary>
+    /// S-100 security-schema namespaces accepted for backwards-compatible
+    /// exchange catalogue parsing.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.11.</remarks>
+    private static readonly HashSet<string> S100SecurityNamespaces =
+    [
+        "http://www.iho.int/s100/se/5.0",
+        "http://www.iho.int/s100/se/5.1",
+        "http://www.iho.int/s100/se/5.2",
+    ];
 
     public static ExchangeCatalogue Read(Stream stream)
     {
@@ -136,6 +146,7 @@ public static class ExchangeCatalogueReader
     private static DatasetDiscoveryMetadata ReadDatasetDiscovery(XElement element, XNamespace xc, XNamespace lan)
     {
         var defaultLocaleEl = element.Element(xc + "defaultLocale");
+        var digitalSignatures = ReadDigitalSignatures(element, xc);
 
         return new DatasetDiscoveryMetadata
         {
@@ -146,7 +157,8 @@ public static class ExchangeCatalogueReader
             DataProtection = ParseBool(element, "dataProtection", xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
-            DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
+            DigitalSignatureValue = digitalSignatures.FirstOrDefault(),
+            DigitalSignatures = digitalSignatures,
             ExpectedHash = ReadExpectedHash(element),
             Copyright = ParseBool(element, "copyright", xc),
             Classification = ReadCodeListValue(element.Element(xc + "classification")),
@@ -207,6 +219,8 @@ public static class ExchangeCatalogueReader
 
     private static SupportFileDiscoveryMetadata ReadSupportFileDiscovery(XElement element, XNamespace xc)
     {
+        var digitalSignatures = ReadDigitalSignatures(element, xc);
+
         return new SupportFileDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
@@ -226,7 +240,8 @@ public static class ExchangeCatalogueReader
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
-            DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
+            DigitalSignatureValue = digitalSignatures.FirstOrDefault(),
+            DigitalSignatures = digitalSignatures,
             ExpectedHash = ReadExpectedHash(element),
             SupportedResources = element
                 .Elements(xc + "supportedResource")
@@ -239,6 +254,7 @@ public static class ExchangeCatalogueReader
     private static CatalogueDiscoveryMetadata ReadCatalogueDiscovery(XElement element, XNamespace xc, XNamespace lan)
     {
         var defaultLocaleEl = element.Element(xc + "defaultLocale");
+        var digitalSignatures = ReadDigitalSignatures(element, xc);
 
         return new CatalogueDiscoveryMetadata
         {
@@ -252,7 +268,8 @@ public static class ExchangeCatalogueReader
             ProductSpecification = ReadProductSpecification(element.Element(xc + "productSpecification"), xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
-            DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
+            DigitalSignatureValue = digitalSignatures.FirstOrDefault(),
+            DigitalSignatures = digitalSignatures,
             ExpectedHash = ReadExpectedHash(element),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DefaultLocaleLanguage = ReadLocaleLanguage(defaultLocaleEl, lan),
@@ -384,35 +401,130 @@ public static class ExchangeCatalogueReader
         {
             "DSA" => DigitalSignatureAlgorithm.DSA,
             "ECDSA" => DigitalSignatureAlgorithm.ECDSA,
+            "ECDSA-384-SHA2" => DigitalSignatureAlgorithm.ECDSA384SHA2,
             _ => DigitalSignatureAlgorithm.Unknown,
         };
     }
 
     /// <summary>
-    /// Parses an <c>S100_SE_DigitalSignature</c> element nested inside a
-    /// <c>digitalSignatureValue</c> wrapper.
+    /// Parses every digital signature wrapper on a discovery metadata record.
     /// </summary>
-    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-4.2.</remarks>
-    private static DigitalSignatureValue? ReadDigitalSignatureValue(XElement? wrapper)
+    /// <remarks>
+    /// S-100 Edition 5.2.1 Part 15 §15-8.8 and §15-8.11.3 through
+    /// §15-8.11.6.
+    /// </remarks>
+    private static IReadOnlyList<DigitalSignatureValue> ReadDigitalSignatures(
+        XElement parent,
+        XNamespace xc)
     {
-        if (wrapper is null) return null;
+        var signatures = new List<DigitalSignatureValue>();
+        foreach (var wrapper in parent.Elements(xc + "digitalSignatureValue"))
+        {
+            var signatureElements = wrapper.Elements().ToList();
+            if (signatureElements.Count != 1)
+            {
+                throw new XmlException(
+                    "A digitalSignatureValue element must contain exactly one signature element.");
+            }
 
-        var sigEl = wrapper.Element(S100SE + "S100_SE_DigitalSignature");
-        if (sigEl is null) return null;
+            var signatureElement = signatureElements[0];
+            if (!IsSecurityNamespace(signatureElement.Name.Namespace))
+            {
+                throw new XmlException(
+                    $"Unexpected digital signature namespace '{signatureElement.Name.NamespaceName}'.");
+            }
 
-        var id = (string?)sigEl.Attribute("id");
-        var certRef = (string?)sigEl.Attribute("certificateRef");
-        var base64 = sigEl.Value.Trim();
+            signatures.Add(ReadDigitalSignature(signatureElement));
+        }
 
-        if (id is null || certRef is null || base64.Length == 0)
-            return null;
+        return signatures;
+    }
+
+    private static DigitalSignatureValue ReadDigitalSignature(XElement element)
+    {
+        var kind = element.Name.LocalName switch
+        {
+            "S100_SE_DigitalSignature" => DigitalSignatureKind.Legacy,
+            "S100_SE_SignatureOnData" => DigitalSignatureKind.SignatureOnData,
+            "S100_SE_SignatureOnSignature" => DigitalSignatureKind.SignatureOnSignature,
+            _ => throw new XmlException(
+                $"Unsupported digital signature element '{element.Name.LocalName}'."),
+        };
+        ValidateSignatureAttributes(element, kind);
+
+        SignatureDataStatus? dataStatus = kind == DigitalSignatureKind.SignatureOnData
+            ? ParseDataStatus(RequiredAttribute(element, "dataStatus"))
+            : null;
+        var signatureRef = kind == DigitalSignatureKind.SignatureOnSignature
+            ? RequiredAttribute(element, "signatureRef")
+            : null;
 
         return new DigitalSignatureValue
         {
-            Id = id,
-            CertificateRef = certRef,
-            Value = Convert.FromBase64String(base64),
+            Kind = kind,
+            Id = RequiredAttribute(element, "id"),
+            CertificateRef = RequiredAttribute(element, "certificateRef"),
+            Value = ParseSignatureValue(element),
+            DataStatus = dataStatus,
+            SignatureRef = signatureRef,
         };
+    }
+
+    private static void ValidateSignatureAttributes(
+        XElement element,
+        DigitalSignatureKind kind)
+    {
+        if (kind != DigitalSignatureKind.SignatureOnData &&
+            element.Attribute("dataStatus") is not null)
+        {
+            throw new XmlException(
+                $"Digital signature '{element.Name.LocalName}' cannot declare dataStatus.");
+        }
+
+        if (kind != DigitalSignatureKind.SignatureOnSignature &&
+            element.Attribute("signatureRef") is not null)
+        {
+            throw new XmlException(
+                $"Digital signature '{element.Name.LocalName}' cannot declare signatureRef.");
+        }
+    }
+
+    private static SignatureDataStatus ParseDataStatus(string value) =>
+        value switch
+        {
+            "unencrypted" => SignatureDataStatus.Unencrypted,
+            "compressed" => SignatureDataStatus.Compressed,
+            "encrypted" => SignatureDataStatus.Encrypted,
+            _ => throw new XmlException($"Unsupported signature dataStatus '{value}'."),
+        };
+
+    private static string RequiredAttribute(XElement element, string localName)
+    {
+        var value = ((string?)element.Attribute(localName))?.Trim();
+        return !string.IsNullOrEmpty(value)
+            ? value
+            : throw new XmlException(
+                $"Digital signature '{element.Name.LocalName}' is missing required attribute '{localName}'.");
+    }
+
+    private static byte[] ParseSignatureValue(XElement element)
+    {
+        var value = element.Value.Trim();
+        if (value.Length == 0)
+        {
+            throw new XmlException(
+                $"Digital signature '{element.Name.LocalName}' has an empty value.");
+        }
+
+        try
+        {
+            return Convert.FromBase64String(value);
+        }
+        catch (FormatException ex)
+        {
+            throw new XmlException(
+                $"Digital signature '{element.Name.LocalName}' is not valid base64.", ex);
+        }
     }
 
     /// <summary>
@@ -449,10 +561,18 @@ public static class ExchangeCatalogueReader
     {
         if (element is null) return null;
 
-        var saId = (string?)element.Element(S100SE + "schemeAdministrator")?.Attribute("id");
+        var saId = (string?)element
+            .Elements()
+            .FirstOrDefault(child =>
+                child.Name.LocalName == "schemeAdministrator" &&
+                IsSecurityNamespace(child.Name.Namespace))?
+            .Attribute("id");
 
         var certs = element
-            .Elements(S100SE + "certificate")
+            .Elements()
+            .Where(child =>
+                child.Name.LocalName == "certificate" &&
+                IsSecurityNamespace(child.Name.Namespace))
             .Select(c =>
             {
                 var id = (string?)c.Attribute("id");
@@ -470,12 +590,16 @@ public static class ExchangeCatalogueReader
                 };
             })
             .Where(c => c is not null)
-            .ToList()!;
+            .Cast<CertificateEntry>()
+            .ToList();
 
         return new CertificateBlock
         {
             SchemeAdministratorId = saId,
-            Certificates = certs!,
+            Certificates = certs,
         };
     }
+
+    private static bool IsSecurityNamespace(XNamespace xmlNamespace) =>
+        S100SecurityNamespaces.Contains(xmlNamespace.NamespaceName);
 }

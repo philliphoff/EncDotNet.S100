@@ -107,7 +107,8 @@ public static class PermitSignatureVerifier
             certificates,
             trustAnchors,
             standalone.Certificates.Certificates,
-            requireP384DerSignature: true);
+            DSASignatureFormat.Rfc3279DerSequence,
+            requireP384: true);
         var verification = new PermitSignatureVerificationResult(outcome, detail, standalone);
         if (!verification.IsValid)
         {
