@@ -131,7 +131,6 @@ public class S111Dcf8ProcessorTests
             var report = Assert.IsType<ValidationReport>(processor.Validate());
 
             Assert.Empty(report.Findings);
-            Assert.DoesNotContain(report.Findings, finding => finding.RuleId == "S111-PROJ-UNSUPPORTED");
         }
         finally
         {

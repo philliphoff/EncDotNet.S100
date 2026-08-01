@@ -53,6 +53,29 @@ public class S111Dcf1ProcessorTests
         }
     }
 
+    [Fact]
+    public void Validate_Dcf1_RejectsDirectionOf360Degrees()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            S111Dcf1FixtureBuilder.WriteFile(
+                path,
+                [new() { Latitude = 52.88, Longitude = 4.61 }],
+                [TimeStep("20240101T000000Z", (0.3f, 360f))]);
+            using var catalogues = new PortrayalCatalogueManager();
+            var processor = new S111DatasetProcessor(path, catalogues, new ProjNetCrsTransformFactory());
+
+            var report = Assert.IsType<ValidationReport>(processor.Validate());
+
+            Assert.Contains(report.Findings, finding => finding.RuleId == "S111-STATION-DIRECTION");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static S111Dcf1FixtureBuilder.TimeStep TimeStep(
         string timePoint,
         params (float Speed, float Direction)[] values) =>

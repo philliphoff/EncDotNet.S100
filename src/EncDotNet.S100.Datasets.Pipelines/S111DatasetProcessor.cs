@@ -1206,13 +1206,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             }
 
             if (station.DirectionsDegreesTrue.Any(direction =>
-                !float.IsFinite(direction) || direction < 0 || direction > 360))
+                !float.IsFinite(direction) || direction < 0 || direction >= 360))
             {
                 findings.Add(new ValidationFinding
                 {
                     RuleId = "S111-STATION-DIRECTION",
                     Severity = ValidationSeverity.Error,
-                    Message = $"Station '{station.Identifier}' contains a surface-current direction outside 0-360 degrees.",
+                    Message = $"Station '{station.Identifier}' contains a surface-current direction outside 0 to less than 360 degrees.",
                     RelatedFeatureId = station.Identifier,
                 });
             }
