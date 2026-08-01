@@ -15,8 +15,14 @@ internal sealed class Program
 
     // Avalonia design-time preview support
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
-            .UsePlatformDetect()
+    {
+        var builder = AppBuilder.Configure<App>()
+            .UsePlatformDetect();
+#if DEBUG
+        builder = builder.WithDeveloperTools();
+#endif
+        return builder
             .WithInterFont()
             .LogToTrace();
+    }
 }

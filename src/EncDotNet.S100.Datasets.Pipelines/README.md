@@ -193,6 +193,15 @@ context and is preserved. The Avalonia Viewer now uses this projection at its
 processor-to-renderer boundary; future Mapsui sessions can construct the same
 state without depending on Viewer, Mapsui, or Avalonia types.
 
+`MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
+`MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,
+and temporal coverage) with independent visibility and active flags, opacity,
+available/current time, `MapDatasetSubLayer` state, `ValidationReport`, and
+`SpecVersionAssessment`. The contract contains no rendered layers, localized
+strings, UI commands, or framework events. The Viewer projects its existing
+loaded entry state into this model at the S-98 interoperability boundary; full
+view-model/session extraction remains a later roadmap step.
+
 ## Validation
 
 Every processor implements `IDatasetProcessor.Validate()`:
@@ -338,7 +347,8 @@ for the full design rationale.
 
 ## Other utilities
 
-- `MapPresentationState`, `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
+- `MapPresentationState`, `MapDataset`, `MapDatasetId`, `MapDatasetSubLayer`,
+  `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
   `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
   blocks for the per-processor `Render` / `GetFeatureInfo` /
   `GetCoverageInfo` paths.

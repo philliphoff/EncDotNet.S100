@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -11,6 +12,12 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class DatasetEntry : ViewModelBase
 {
+    /// <summary>
+    /// Stable renderer-neutral identity shared with the loaded map-state
+    /// contract and S-98 layer stack.
+    /// </summary>
+    public MapDatasetId Id { get; }
+
     public string FilePath { get; }
     public string DisplayName { get; }
     public string ProductSpec { get; }
@@ -506,6 +513,10 @@ internal sealed class DatasetEntry : ViewModelBase
         GeographicBounds = geographicBounds;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
+        Id = new MapDatasetId(
+            filePath is { Length: > 0 }
+                ? System.IO.Path.GetFileName(filePath)
+                : DisplayName);
         UsageBand = Services.LazyLoading.CellUsageBand.TryParse(DisplayName)
             ?? Services.LazyLoading.CellUsageBand.TryParse(relativePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
