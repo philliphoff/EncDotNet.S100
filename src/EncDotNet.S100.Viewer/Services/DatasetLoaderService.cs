@@ -1484,9 +1484,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
     }
 
-    private DatasetEntry? FindEntry(string datasetId) =>
-        _entryOrder.FirstOrDefault(entry =>
+    private DatasetEntry? FindEntry(string datasetId)
+    {
+        var loadedEntry = _processors.Keys.FirstOrDefault(entry =>
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
+        return loadedEntry ?? _entryOrder.FirstOrDefault(entry =>
+            string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
+    }
 
     private void RemoveEntryLayers(DatasetEntry entry)
     {
