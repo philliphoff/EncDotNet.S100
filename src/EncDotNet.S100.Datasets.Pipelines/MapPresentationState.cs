@@ -100,9 +100,14 @@ public sealed class MapPresentationState
     /// <exception cref="ArgumentNullException">
     /// <paramref name="context"/> is <c>null</c>.
     /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="portrayalSpec"/> is unset.
+    /// </exception>
     public RenderContext ApplyTo(RenderContext context, SpecRef portrayalSpec)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            portrayalSpec.Name, nameof(portrayalSpec));
 
         var applied = context with
         {

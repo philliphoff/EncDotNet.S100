@@ -103,4 +103,11 @@ public class MapPresentationStateTests
             MapPresentationState.Default.EcdisDisplay.Category);
         Assert.Same(MarinerSettings.Default, MapPresentationState.Default.Mariner);
     }
+
+    [Fact]
+    public void ApplyTo_RejectsUnsetPortrayalSpec()
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            MapPresentationState.Default.ApplyTo(new S101RenderContext(), default));
+    }
 }
