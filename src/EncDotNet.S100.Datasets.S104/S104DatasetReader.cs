@@ -465,14 +465,14 @@ public static class S104DatasetReader
     /// </summary>
     private static string DataCodingFormatName(int dcf) => dcf switch
     {
-        1 => "time series at fixed stations",
+        1 => "time series at fixed stations (irregular)",
         2 => "regularly-gridded arrays",
         3 => "ungeorectified grid",
         4 => "moving platform",
         5 => "irregular grid",
         6 => "variable cell size",
         7 => "TIN",
-        8 => "stationwise time series at fixed stations",
+        8 => "time series at fixed stations",
         9 => "stationwise arrays",
         _ => "unknown",
     };
