@@ -699,7 +699,7 @@ public static class S111DatasetReader
             {
                 Identifier = dataCodingFormat == 1
                     ? $"{instanceName}:Station_{n + 1:D3}"
-                    : $"Node_{n + 1:D3}",
+                    : $"{instanceName}:Node_{n + 1:D3}",
                 Latitude = lat,
                 Longitude = lon,
                 StartTime = sampleTimes[0],
