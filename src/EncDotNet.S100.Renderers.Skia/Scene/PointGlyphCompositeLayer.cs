@@ -175,7 +175,14 @@ public sealed class PointGlyphCompositeLayer : CompositeLayer
             string svgContent = glyph.SvgSource.StartsWith(mapsuiSvgPrefix, StringComparison.Ordinal)
                 ? glyph.SvgSource[mapsuiSvgPrefix.Length..]
                 : glyph.SvgSource;
-            svg = SKSvg.CreateFromSvg(svgContent);
+            try
+            {
+                svg = SKSvg.CreateFromSvg(svgContent);
+            }
+            catch
+            {
+                svg = null;
+            }
             parsedSvgs.Add(glyph.SvgSource, svg);
         }
 
