@@ -323,8 +323,18 @@ public sealed class HeadlessCompositor
                     return true;
                 }
 
-            // Pre-projected point-glyph sub-layers (fixed-station variants) are
-            // not yet supported in the headless composite path.
+            case GlyphCoverageSubLayer glyph:
+                {
+                    if (glyph.Extent is not { } extent)
+                        return false;
+
+                    layer = PointGlyphHeadlessAdapter.CreateLayer(glyph);
+                    var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY);
+                    var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY);
+                    west = w; east = e; south = s; north = n;
+                    return true;
+                }
+
             default:
                 return false;
         }

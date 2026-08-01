@@ -66,10 +66,14 @@
   <ItemGroup>
     <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104Dcf8FixtureBuilder.cs"
              Link="Fixtures\S104Dcf8FixtureBuilder.cs" />
+    <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104Dcf1FixtureBuilder.cs"
+             Link="Fixtures\S104Dcf1FixtureBuilder.cs" />
     <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104FixtureBuilder.cs"
              Link="Fixtures\S104FixtureBuilder.cs" />
     <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf8FixtureBuilder.cs"
              Link="Fixtures\S111Dcf8FixtureBuilder.cs" />
+    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf1FixtureBuilder.cs"
+             Link="Fixtures\S111Dcf1FixtureBuilder.cs" />
   </ItemGroup>
 
 </Project>

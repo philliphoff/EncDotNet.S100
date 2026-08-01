@@ -9,9 +9,10 @@ namespace EncDotNet.S100.Datasets.S104;
 
 /// <summary>
 /// Reads an S-104 Water Level dataset from an HDF5 file via the
-/// <see cref="IHdf5File"/> abstraction. Supports data coding format 2
-/// (regularly-gridded coverage) and data coding format 8 (time series at
-/// fixed stations).
+/// <see cref="IHdf5File"/> abstraction. Supports data coding format 1
+/// (time-major positioned stations), data coding format 2
+/// (regularly-gridded coverage), and data coding format 8
+/// (station-major fixed stations).
 /// </summary>
 public static class S104DatasetReader
 {
@@ -19,7 +20,7 @@ public static class S104DatasetReader
     /// Reads an <see cref="S104Dataset"/> from the given HDF5 file. Throws
     /// <see cref="S100DatasetNotSupportedException"/> if the dataset is
     /// not dcf2 (regularly-gridded). Use <see cref="ReadAny"/> to handle
-    /// both dcf2 and dcf8.
+    /// dcf1, dcf2, and dcf8.
     /// </summary>
     public static S104Dataset Read(IHdf5File file)
     {
@@ -27,22 +28,24 @@ public static class S104DatasetReader
         return any switch
         {
             S104DatasetData.GriddedCoverage g => g.Dataset,
-            S104DatasetData.StationSeries => throw new S100DatasetNotSupportedException(
+            S104DatasetData.StationSeries stationSeries => throw new S100DatasetNotSupportedException(
                 product: "S-104",
                 file: null,
-                feature: "data coding format 8 (time series at fixed stations)",
+                feature: $"data coding format {stationSeries.Dataset.DataCodingFormat} " +
+                    $"({DataCodingFormatName(stationSeries.Dataset.DataCodingFormat)})",
                 specReference: "S-100 Part 10c §10.2.1",
                 message: ExceptionMessageFormatter.FormatNotSupported(
                     "S-104", null,
-                    "data coding format 8 (time series at fixed stations)",
+                    $"data coding format {stationSeries.Dataset.DataCodingFormat} " +
+                        $"({DataCodingFormatName(stationSeries.Dataset.DataCodingFormat)})",
                     "S-100 Part 10c §10.2.1",
-                    "Use S104DatasetReader.ReadAny to handle dcf8 station series.")),
+                    "Use S104DatasetReader.ReadAny to handle station series.")),
             _ => throw new InvalidOperationException("Unhandled S104DatasetData variant."),
         };
     }
 
     /// <summary>
-    /// Reads either a dcf2 <see cref="S104Dataset"/> or a dcf8
+    /// Reads either a dcf2 <see cref="S104Dataset"/> or a dcf1/dcf8
     /// <see cref="S104StationSeriesDataset"/> from the given HDF5 file,
     /// dispatching on the <c>/WaterLevel/dataCodingFormat</c> attribute
     /// (S-100 Part 10c §10.2.1). Other data coding formats raise
@@ -111,9 +114,13 @@ public static class S104DatasetReader
             ? wlGroup.ReadStringAttribute("methodWaterLevelProduct")
             : null;
 
-        if (dataCodingFormat == 8)
+        if (dataCodingFormat is 1 or 8)
         {
-            var stations = ReadStationSeriesGuarded(root, wlGroup, productSpecification);
+            var stations = ReadStationSeriesGuarded(
+                root,
+                wlGroup,
+                dataCodingFormat,
+                productSpecification);
             DateTime? minTime = null, maxTime = null;
             foreach (var s in stations)
             {
@@ -129,7 +136,7 @@ public static class S104DatasetReader
                 GeographicIdentifier = geographicIdentifier,
                 IssueDate = issueDate,
                 Metadata = metadata,
-                DataCodingFormat = 8,
+                DataCodingFormat = dataCodingFormat,
                 MethodWaterLevelProduct = methodWaterLevelProduct,
                 WaterLevelTrendThreshold = waterLevelTrendThreshold,
                 Stations = stations,
@@ -171,7 +178,7 @@ public static class S104DatasetReader
     /// of the <c>WaterLevel.NN</c> grid footprints and the time coverage
     /// spans the <c>timePoint</c> attributes of every <c>Group_NNN</c> step,
     /// read <em>without</em> touching the per-step <c>values</c> arrays. For
-    /// data coding format 8 (time series at fixed stations) the comparatively
+    /// station-series data coding formats 1 and 8, the comparatively
     /// small station series is read in full and the extent / time span are
     /// derived from the station positions and record windows.
     /// </remarks>
@@ -202,9 +209,13 @@ public static class S104DatasetReader
         BoundingBox? extent;
         TimeCoverage? time;
 
-        if (dataCodingFormat == 8)
+        if (dataCodingFormat is 1 or 8)
         {
-            var stations = ReadStationSeriesGuarded(root, wlGroup, productSpecification);
+            var stations = ReadStationSeriesGuarded(
+                root,
+                wlGroup,
+                dataCodingFormat,
+                productSpecification);
             extent = StationExtent(stations);
             time = StationTimeCoverage(stations);
         }
@@ -344,11 +355,16 @@ public static class S104DatasetReader
     /// note when the dataset targets an edition other than 2.0.0.
     /// </summary>
     private static IReadOnlyList<WaterLevelStation> ReadStationSeriesGuarded(
-        IHdf5Group root, IHdf5Group wlGroup, string? productSpecification)
+        IHdf5Group root,
+        IHdf5Group wlGroup,
+        int dataCodingFormat,
+        string? productSpecification)
     {
         try
         {
-            return ReadStationSeries(root, wlGroup);
+            return dataCodingFormat == 1
+                ? ReadTimeMajorStationSeries(wlGroup)
+                : ReadStationSeries(root, wlGroup);
         }
         catch (S100DatasetSchemaException ex) when (DeclaredEditionMismatchNote(productSpecification) is { } note)
         {
@@ -449,14 +465,14 @@ public static class S104DatasetReader
     /// </summary>
     private static string DataCodingFormatName(int dcf) => dcf switch
     {
-        1 => "time series at fixed stations (irregular)",
+        1 => "time series at fixed stations",
         2 => "regularly-gridded arrays",
         3 => "ungeorectified grid",
         4 => "moving platform",
         5 => "irregular grid",
         6 => "variable cell size",
         7 => "TIN",
-        8 => "time series at fixed stations",
+        8 => "stationwise time series at fixed stations",
         9 => "stationwise arrays",
         _ => "unknown",
     };
@@ -602,7 +618,230 @@ public static class S104DatasetReader
     }
 
     // -------------------------------------------------------------------
-    // dcf8 — time series at fixed stations (S-104 Edition 2.0.0 §10.2.3 / §10.2.7)
+    // dcf1 — time-major fixed stations (S-100 Part 10c §10.2.1)
+    // -------------------------------------------------------------------
+
+    private static IReadOnlyList<WaterLevelStation> ReadTimeMajorStationSeries(IHdf5Group wlGroup)
+    {
+        var stations = new List<WaterLevelStation>();
+
+        foreach (var instanceName in wlGroup.GroupNames)
+        {
+            if (!instanceName.StartsWith("WaterLevel.", StringComparison.Ordinal))
+                continue;
+
+            var instance = wlGroup.OpenGroup(instanceName);
+            var instancePath = $"/WaterLevel/{instanceName}";
+            ReadTimeMajorInstance(instance, instanceName, instancePath, stations);
+        }
+
+        return stations;
+    }
+
+    private static void ReadTimeMajorInstance(
+        IHdf5Group instance,
+        string instanceName,
+        string instancePath,
+        List<WaterLevelStation> stations)
+    {
+        const string spec = "S-100 Part 10c §10.2.1";
+
+        var positions = ReadInstancePositions(instance, instancePath);
+        int stationCount = positions.Count;
+        var timeGroupNames = instance.GroupNames
+            .Where(name => name.StartsWith("Group_", StringComparison.Ordinal))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        if (timeGroupNames.Count == 0)
+            return;
+
+        int numberOfTimes = timeGroupNames.Count;
+        var sampleTimes = new DateTime[numberOfTimes];
+        var allHeights = new float[numberOfTimes][];
+        var allTrends = new byte[numberOfTimes][];
+
+        for (int timeIndex = 0; timeIndex < numberOfTimes; timeIndex++)
+        {
+            string groupName = timeGroupNames[timeIndex];
+            string groupPath = $"{instancePath}/{groupName}";
+            var group = instance.OpenGroup(groupName);
+            sampleTimes[timeIndex] = ParseTimestamp(group.ReadRequiredStringAttribute(
+                "timePoint", "S-104", null, groupPath, spec));
+            if (timeIndex > 0 && sampleTimes[timeIndex] <= sampleTimes[timeIndex - 1])
+            {
+                throw new S100DatasetSchemaException(
+                    product: "S-104",
+                    file: null,
+                    groupPath: groupPath,
+                    attributeOrDataset: "timePoint",
+                    specReference: spec,
+                    message: ExceptionMessageFormatter.FormatSchema(
+                        "S-104", null, groupPath, "timePoint", spec)
+                    + " Values-group timestamps must be strictly increasing.");
+            }
+
+            var values = ReadValues(group);
+            if (values.Length != stationCount)
+            {
+                throw new S100DatasetSchemaException(
+                    product: "S-104",
+                    file: null,
+                    groupPath: groupPath,
+                    attributeOrDataset: "values",
+                    specReference: spec,
+                    message: ExceptionMessageFormatter.FormatSchema(
+                        "S-104", null, groupPath, "values", spec)
+                    + $" Expected {stationCount} records but found {values.Length}.");
+            }
+
+            var heights = new float[stationCount];
+            var trends = new byte[stationCount];
+            for (int stationIndex = 0; stationIndex < stationCount; stationIndex++)
+            {
+                heights[stationIndex] = values[stationIndex].Height;
+                trends[stationIndex] = values[stationIndex].Trend;
+            }
+
+            allHeights[timeIndex] = heights;
+            allTrends[timeIndex] = trends;
+        }
+
+        var interval = DeriveUniformInterval(sampleTimes);
+        for (int stationIndex = 0; stationIndex < stationCount; stationIndex++)
+        {
+            var heights = new float[numberOfTimes];
+            var trends = new byte[numberOfTimes];
+            for (int timeIndex = 0; timeIndex < numberOfTimes; timeIndex++)
+            {
+                heights[timeIndex] = allHeights[timeIndex][stationIndex];
+                trends[timeIndex] = allTrends[timeIndex][stationIndex];
+            }
+
+            var (latitude, longitude) = positions[stationIndex];
+            stations.Add(new WaterLevelStation
+            {
+                Identifier = $"{instanceName}:Station_{stationIndex + 1:D3}",
+                Latitude = latitude,
+                Longitude = longitude,
+                StartTime = sampleTimes[0],
+                EndTime = sampleTimes[^1],
+                TimeRecordInterval = interval,
+                SampleTimes = sampleTimes,
+                NumberOfTimes = numberOfTimes,
+                Heights = heights,
+                Trends = trends,
+            });
+        }
+    }
+
+    private static List<GeoPosition> ReadInstancePositions(
+        IHdf5Group instance,
+        string instancePath)
+    {
+        const string spec = "S-100 Part 10c §10.2.1";
+        if (!instance.GroupNames.Contains("Positioning"))
+        {
+            throw new S100DatasetSchemaException(
+                product: "S-104",
+                file: null,
+                groupPath: $"{instancePath}/Positioning",
+                attributeOrDataset: "Positioning/geometryValues",
+                specReference: spec,
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-104",
+                    null,
+                    $"{instancePath}/Positioning",
+                    "Positioning/geometryValues",
+                    spec));
+        }
+
+        var positioning = instance.OpenGroup("Positioning");
+        RawCompoundDataset raw;
+        try
+        {
+            raw = positioning.ReadRawCompoundDataset("geometryValues");
+        }
+        catch (Exception ex)
+        {
+            throw new S100DatasetSchemaException(
+                product: "S-104",
+                file: null,
+                groupPath: $"{instancePath}/Positioning",
+                attributeOrDataset: "geometryValues",
+                specReference: spec,
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-104",
+                    null,
+                    $"{instancePath}/Positioning",
+                    "geometryValues",
+                    spec),
+                innerException: ex);
+        }
+
+        var latitudeMember = raw.FindMember("latitude", "Latitude", "lat", "Lat")
+            ?? throw new S100DatasetSchemaException(
+                product: "S-104",
+                file: null,
+                groupPath: $"{instancePath}/Positioning/geometryValues",
+                attributeOrDataset: "latitude",
+                specReference: spec,
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-104",
+                    null,
+                    $"{instancePath}/Positioning/geometryValues",
+                    "latitude",
+                    spec));
+        var longitudeMember = raw.FindMember(
+            "longitude",
+            "Longitude",
+            "long",
+            "Long",
+            "lon",
+            "Lon")
+            ?? throw new S100DatasetSchemaException(
+                product: "S-104",
+                file: null,
+                groupPath: $"{instancePath}/Positioning/geometryValues",
+                attributeOrDataset: "longitude",
+                specReference: spec,
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-104",
+                    null,
+                    $"{instancePath}/Positioning/geometryValues",
+                    "longitude",
+                    spec));
+
+        var positions = new List<GeoPosition>(raw.RecordCount);
+        var span = raw.Data.AsSpan();
+        for (int index = 0; index < raw.RecordCount; index++)
+        {
+            var record = span.Slice(index * raw.RecordSize, raw.RecordSize);
+            positions.Add(new GeoPosition(
+                ReadFloatingPointMember(record, latitudeMember),
+                ReadFloatingPointMember(record, longitudeMember)));
+        }
+
+        return positions;
+    }
+
+    private static TimeSpan DeriveUniformInterval(IReadOnlyList<DateTime> sampleTimes)
+    {
+        if (sampleTimes.Count < 2)
+            return TimeSpan.Zero;
+
+        var interval = sampleTimes[1] - sampleTimes[0];
+        for (int index = 2; index < sampleTimes.Count; index++)
+        {
+            if (sampleTimes[index] - sampleTimes[index - 1] != interval)
+                return TimeSpan.Zero;
+        }
+
+        return interval;
+    }
+
+    // -------------------------------------------------------------------
+    // dcf8 — station-major fixed stations (S-100 Part 10c §10.2.1)
     // -------------------------------------------------------------------
 
     /// <summary>

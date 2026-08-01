@@ -1,16 +1,14 @@
 namespace EncDotNet.S100.Datasets.S111;
 
 /// <summary>
-/// A single surface-current time series at a fixed station, as encoded by
-/// an S-111 data-coding-format-8 ("time series at fixed stations") instance
-/// (S-111 Edition 2.0.0 §10.2.3 — Positioning — and §10.2.7).
+/// A single surface-current time series at a fixed station or positioned
+/// node, as encoded by S-111 data coding formats 1, 3, or 8 (S-111 Edition
+/// 2.0.0 §10.2.2.6–10.2.2.9).
 /// </summary>
 /// <remarks>
-/// Each <c>Group_NNN</c> under the dcf8 <c>SurfaceCurrent.NN</c> instance
-/// corresponds to one station; the i-th station's position is read from
-/// the i-th row of the <c>Positioning/geometryValues</c> compound
-/// dataset (S-111 Edition 2.0.0 §10.2.3, mirroring S-104 §10.2.3 / S-100
-/// Part 10c §10.2.6).
+/// DCF1 and DCF3 encode time records as groups and are transposed by the
+/// reader; DCF8 encodes each station's complete time series as one group.
+/// Positioned formats use <c>Positioning/geometryValues</c> for coordinates.
 /// </remarks>
 public sealed class SurfaceCurrentStation
 {
@@ -34,6 +32,15 @@ public sealed class SurfaceCurrentStation
     /// <c>timeRecordInterval</c> integer (seconds).
     /// </summary>
     public required TimeSpan TimeRecordInterval { get; init; }
+
+    /// <summary>
+    /// Explicit UTC timestamps for each sample, in the same order as
+    /// <see cref="SpeedsMetresPerSecond"/> and
+    /// <see cref="DirectionsDegreesTrue"/>. DCF1 readers populate this from
+    /// each <c>Group_NNN/timePoint</c> attribute (S-111 Edition 2.0.0
+    /// §12.3.4); regular station encodings may leave it empty.
+    /// </summary>
+    public IReadOnlyList<DateTime> SampleTimes { get; init; } = [];
 
     /// <summary>
     /// Number of samples in this station's time series — equal to the
@@ -64,6 +71,28 @@ public sealed class SurfaceCurrentStation
     public int NearestTimeIndex(DateTime time)
     {
         if (NumberOfTimes <= 1) return 0;
+        if (SampleTimes.Count > 0)
+        {
+            EnsureSampleTimeCount();
+
+            int low = 0;
+            int high = SampleTimes.Count;
+            while (low < high)
+            {
+                int middle = low + ((high - low) / 2);
+                if (SampleTimes[middle] < time)
+                    low = middle + 1;
+                else
+                    high = middle;
+            }
+
+            if (low == 0) return 0;
+            if (low == SampleTimes.Count) return SampleTimes.Count - 1;
+
+            var previousDistance = time - SampleTimes[low - 1];
+            var nextDistance = SampleTimes[low] - time;
+            return previousDistance < nextDistance ? low - 1 : low;
+        }
         if (TimeRecordInterval <= TimeSpan.Zero) return 0;
         var delta = (time - StartTime).TotalSeconds / TimeRecordInterval.TotalSeconds;
         var idx = (int)Math.Round(delta, MidpointRounding.AwayFromZero);
@@ -80,6 +109,21 @@ public sealed class SurfaceCurrentStation
     {
         ArgumentOutOfRangeException.ThrowIfNegative(index);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, NumberOfTimes);
+        if (SampleTimes.Count > 0)
+        {
+            EnsureSampleTimeCount();
+            return SampleTimes[index];
+        }
         return StartTime + TimeSpan.FromTicks(TimeRecordInterval.Ticks * index);
+    }
+
+    private void EnsureSampleTimeCount()
+    {
+        if (SampleTimes.Count != NumberOfTimes)
+        {
+            throw new InvalidOperationException(
+                $"Station '{Identifier}' declares {NumberOfTimes} samples but has " +
+                $"{SampleTimes.Count} explicit timestamps.");
+        }
     }
 }

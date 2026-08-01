@@ -17,11 +17,9 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Pipeline processor for S-111 surface-currents datasets. Branches
-/// between dcf2 (regular grid → coverage + arrow layers, see existing
-/// portrayal catalogue), dcf3 (ungeorectified grid → station-arrow
-/// point layer; S-100 Part 10c §10.2.1), and dcf8 (time series at
-/// fixed stations → station-arrow point layer; see S-111 Edition 2.0.0
-/// §10.2.3 / §10.2.7).
+/// between dcf2 (regular grid → coverage + arrow layers) and dcf1/dcf3/dcf8
+/// positioned station/node series (station-arrow point layers; S-111 Edition
+/// 2.0.0 §10.2.2.6–10.2.2.9).
 /// </summary>
 public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable
 {
@@ -31,13 +29,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly PortrayalCatalogueProvider? _provider;
     private readonly S111Dataset? _dataset;
 
-    // dcf8 only
+    // Station-series formats only
     private readonly S111StationSeriesDataset? _stationSeries;
     private readonly IReadOnlyList<DateTime> _stationTimes = Array.Empty<DateTime>();
     private readonly Dictionary<string, SurfaceCurrentStation> _stationsById = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Last time-step selected via <see cref="Render"/> for dcf8 station
+    /// Last time-step selected via <see cref="Render"/> for a station
     /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
     /// at the same time the rendered arrow is showing. <c>null</c> until
     /// the first render.
@@ -46,7 +44,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <summary>
     /// Prefix used on <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>
-    /// tags for dcf8 station-series point features. The remainder is the
+    /// tags for station-series point features. The remainder is the
     /// station identifier. <see cref="GetFeatureInfo"/> recognises this
     /// prefix to route station picks back through this processor.
     /// </summary>
@@ -64,7 +62,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// For dcf2 (regular grid) with deferred value reads, the underlying
     /// HDF5 file and stream are retained for the lifetime of the processor
     /// so per-time-step <c>values</c> datasets can be read lazily on first
-    /// access. <see langword="null"/> for dcf3/dcf8, whose values are read
+    /// access. <see langword="null"/> for dcf1/dcf3/dcf8, whose values are read
     /// eagerly and whose file is closed in the constructor.
     /// </summary>
     private readonly IHdf5File? _retainedHdf5;
@@ -405,14 +403,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Renders the gridded surface-current arrows to a standalone
-    /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia coverage
-    /// core (<see cref="CoverageHeadlessRenderer"/> +
-    /// <see cref="SkiaCoverageArrowRenderer"/>). The selected time step is taken
-    /// from <see cref="S111RenderContext.TimeStep"/> (defaulting to the first
-    /// available step). Fixed-station / ungeorectified (dcf3 / dcf8) datasets
-    /// emit point glyphs rather than a gridded coverage and therefore throw
-    /// <see cref="NotSupportedException"/>.
+    /// Renders the surface-current portrayal to a standalone
+    /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia path. The
+    /// selected time step is taken from <see cref="S111RenderContext.TimeStep"/>,
+    /// defaulting to the first available step.
     /// </summary>
     /// <param name="widthPixels">Output bitmap width in pixels.</param>
     /// <param name="heightPixels">Output bitmap height in pixels.</param>
@@ -420,9 +414,6 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <param name="background">Optional background fill; defaults to opaque white.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
-    /// <exception cref="NotSupportedException">
-    /// Thrown for dcf3 / dcf8 station-series datasets.
-    /// </exception>
     public async Task<SKBitmap> RenderHeadlessAsync(
         int widthPixels,
         int heightPixels,
@@ -434,11 +425,23 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_stationSeries is not null || _source is null || _catalogue is null || _provider is null)
-            throw new NotSupportedException(
-                "Headless rendering is not supported for S-111 fixed-station / " +
-                "ungeorectified (data coding format 3 or 8) datasets; only " +
-                "gridded surface-current coverages can be rendered to an image.");
+        if (_stationSeries is { } stationSeries)
+        {
+            var portrayal = await BuildStationSeriesAsync(stationSeries, context, cancellationToken).ConfigureAwait(false);
+            var glyphLayer = portrayal.SubLayers.OfType<GlyphCoverageSubLayer>().Single();
+            if (glyphLayer.Extent is not { } glyphExtent)
+                throw new InvalidOperationException("The S-111 station portrayal has no geographic extent.");
+
+            return PointGlyphHeadlessAdapter.Render(
+                glyphLayer,
+                glyphExtent,
+                widthPixels,
+                heightPixels,
+                background ?? new RgbaColor(255, 255, 255, 255));
+        }
+
+        if (_source is null || _catalogue is null || _provider is null)
+            throw new InvalidOperationException("The S-111 dataset has no renderable data source.");
 
         var source = _source;
         var catalogue = _catalogue;
@@ -486,7 +489,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             context?.Basemap ?? BasemapKind.None);
     }
 
-    // ---- dcf8 station series rendering ---------------------------------
+    // ---- station-series rendering --------------------------------------
 
     /// <summary>
     /// Projects each station/node to a single point feature with an arrow
@@ -1068,14 +1071,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// mode is the constructor itself throwing, so this only fires if
     /// a future reader change moves schema validation later in the
     /// pipeline.</description></item>
-    /// <item><description><c>S111-PROJ-UNSUPPORTED</c> — surfaced
-    /// proactively when the loaded dataset is a
-    /// <see cref="S111DatasetData.StationSeries"/> (S-111 dcf 3 or
-    /// dcf 8) because the V-3 rule pack operates on
-    /// <see cref="S111Dataset"/> (the gridded view) and not on the
-    /// station-series shape. Also surfaced defensively if rule
-    /// evaluation ever throws an
-    /// <see cref="S100DatasetNotSupportedException"/>.</description></item>
+    /// <item><description>Station-series datasets are checked directly for
+    /// sample shape, explicit timestamp ordering, and speed/direction ranges
+    /// because the gridded V-3 rule pack operates on
+    /// <see cref="S111Dataset"/>.</description></item>
     /// </list>
     /// <para>
     /// Validation is a pure function of the parsed dataset; the
@@ -1112,7 +1111,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 }
 
             case S111DatasetData.StationSeries s:
-                return BuildStationSeriesUnsupportedReport(s.Dataset.DataCodingFormat);
+                return ValidateStationSeries(s.Dataset);
 
             default:
                 return null;
@@ -1162,36 +1161,67 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             RulesWithFindings: 1);
     }
 
-    private ValidationReport BuildStationSeriesUnsupportedReport(int dataCodingFormat)
+    private static ValidationReport ValidateStationSeries(S111StationSeriesDataset dataset)
     {
-        // The reader produced a StationSeries variant (dcf 3 ungeorectified
-        // grid or dcf 8 time series at fixed stations). The V-3 rule pack
-        // targets the gridded S111Dataset view (dcf 2) only, so surface
-        // this proactively under S111-PROJ-UNSUPPORTED per
-        // docs/design/non-gml-validation.md §5.3.
-        string formatLabel = dataCodingFormat switch
-        {
-            3 => "data coding format 3 (ungeorectified grid)",
-            8 => "data coding format 8 (time series at fixed stations)",
-            _ => $"data coding format {dataCodingFormat} (station-series projection)",
-        };
+        var findings = new List<ValidationFinding>();
+        int rulesEvaluated = 0;
 
-        var finding = new ValidationFinding
+        foreach (var station in dataset.Stations)
         {
-            RuleId = "S111-PROJ-UNSUPPORTED",
-            Severity = ValidationSeverity.Error,
-            Message =
-                $"S111 dataset '{_fileName}' uses {formatLabel}. The V-3 S-111 rule pack " +
-                "targets the gridded (dcf 2) S111Dataset shape and does not currently " +
-                "evaluate station-series datasets " +
-                "(S-100 Part 10c §10.2.1; S-111 Edition 2.0.0 §10.2.3 / §10.2.7).",
-            RelatedFeatureId = "/SurfaceCurrent",
-        };
+            rulesEvaluated += 4;
+            if (station.NumberOfTimes != station.SpeedsMetresPerSecond.Length ||
+                station.NumberOfTimes != station.DirectionsDegreesTrue.Length ||
+                (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-SHAPE",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' has inconsistent timestamp, speed, or direction counts.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.SampleTimes.Count > 0 &&
+                station.SampleTimes.Zip(station.SampleTimes.Skip(1)).Any(pair => pair.First >= pair.Second))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-TIME",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' explicit timestamps are not strictly increasing.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.SpeedsMetresPerSecond.Any(speed => !float.IsFinite(speed) || speed < 0))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-SPEED",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' contains a negative or non-finite surface-current speed.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.DirectionsDegreesTrue.Any(direction =>
+                !float.IsFinite(direction) || direction < 0 || direction > 360))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-DIRECTION",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' contains a surface-current direction outside 0-360 degrees.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+        }
 
         return new ValidationReport(
-            [finding],
-            RulesEvaluated: 1,
-            RulesWithFindings: 1);
+            findings,
+            RulesEvaluated: rulesEvaluated,
+            RulesWithFindings: findings.Select(finding => finding.RuleId).Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>

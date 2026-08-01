@@ -4,10 +4,10 @@ Reader and coverage portrayal pipeline for S-111 Surface Current datasets.
 
 ## Overview
 
-This library reads S-111 datasets from HDF5 files and provides time-series current speed and direction grids for the portrayal pipeline. Key types include:
+This library reads S-111 datasets from HDF5 files and provides gridded and positioned-node current time series for the portrayal pipeline. Key types include:
 
 - **`S111Dataset`** — root model containing horizontal CRS, depth, data coding format, and time-step coverages.
-- **`S111DatasetReader`** — reads an S-111 dataset from an `IHdf5File` (regular grid format). `ReadAny(file)` decodes every time step eagerly; `ReadAny(file, new S111ReadOptions { DeferValueReads = true })` reads only metadata up front and decodes each step's `values` compound lazily on first access (see *Lazy reads* below). `ReadMetadata(file)` is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` (declared spec, union grid extent, and temporal coverage — from the arithmetic `dateTimeOfFirstRecord` + `timeRecordInterval` cadence or the per-group `timePoint` attributes) without reading any `values` arrays.
+- **`S111DatasetReader`** — reads DCF1, DCF2, DCF3, and DCF8 datasets. DCF1 uses each `Group_NNN/timePoint` as the authoritative timestamp and transposes the time-major matrix into positioned node series; this deliberately ignores conflicting instance cadence metadata found in production IC-ENC files. `ReadAny(file, new S111ReadOptions { DeferValueReads = true })` lazily decodes DCF2 values; station-series formats are materialized eagerly.
 - **`S111ReadOptions`** — opt-in read options; `DeferValueReads` enables lazy per-time-step value decoding for dcf2 (regular-grid) datasets.
 - **`S111CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S111PortrayalCatalogue`** — coverage portrayal catalogue for current arrow rendering (see *Portrayal* below).
@@ -86,7 +86,7 @@ and therefore implements `IDisposable`: it retains the underlying HDF5
 file/stream for the processor's lifetime so deferred reads can resolve.
 Callers that create an `S111DatasetProcessor` (the viewer's
 `DatasetLoaderService` does this) must dispose it to release the file.
-dcf3/dcf8 station-series datasets are materialized fully and close their
+dcf1/dcf3/dcf8 station-series datasets are materialized fully and close their
 file immediately.
 
 ## Validation
@@ -113,7 +113,10 @@ foreach (var finding in report.Findings)
 | `S111-R-4.1`             | Warning  | Non-NODATA current speeds lie in the plausible range `[0, 15]` m/s; fill / NaN / ±Infinity skipped.                     |
 | `S111-R-4.2`             | Error    | Non-NODATA current directions lie in the half-open range `[0, 360)` degrees true.                                       |
 | `S111-PROJ-SCHEMA`       | Error    | Defensive surrogate: emitted when the underlying HDF5 dataset fails schema-level parsing inside `Validate()`.           |
-| `S111-PROJ-UNSUPPORTED`  | Error    | Emitted when the loaded dataset uses an unsupported data coding format (e.g. dcf 8 station series).                     |
+| `S111-STATION-SHAPE`     | Error    | Station timestamps, speeds, directions, and declared sample count disagree.                                            |
+| `S111-STATION-TIME`      | Error    | Explicit station timestamps are not strictly increasing.                                                              |
+| `S111-STATION-SPEED`     | Error    | A station contains a negative or non-finite speed.                                                                     |
+| `S111-STATION-DIRECTION` | Error    | A station contains a direction outside 0–360 degrees.                                                                  |
 
 R-2.1 reuses the time-axis rule template established by S-104 (V-2),
 keeping monotonicity / cadence checks consistent across the two

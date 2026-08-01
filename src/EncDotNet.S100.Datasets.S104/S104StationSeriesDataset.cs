@@ -1,12 +1,11 @@
 namespace EncDotNet.S100.Datasets.S104;
 
 /// <summary>
-/// Root data model for an S-104 Water Level dataset encoded in
-/// <em>data coding format 8 — time series at fixed stations</em>
-/// (S-104 Edition 2.0.0 §10.2.3 / §10.2.7).
+/// Root data model for an S-104 Water Level dataset encoded as fixed-station
+/// time series in data coding format 1 or 8 (S-100 Part 10c §10.2.1).
 /// </summary>
 /// <remarks>
-/// dcf8 is structurally different from the regularly-gridded dcf2 path
+/// Station-series encodings are structurally different from the gridded dcf2 path
 /// modelled by <see cref="S104Dataset"/>: instead of a 2-D grid of
 /// values per time-step, each station carries an independent 1-D series
 /// of <c>(height, trend)</c> samples plus its own start/end timestamps
@@ -40,10 +39,10 @@ public sealed class S104StationSeriesDataset
     public string? Metadata { get; init; }
 
     /// <summary>
-    /// Data coding format — always <c>8</c> for this dataset type
-    /// (S-100 Part 10c §10.2.1 Table).
+    /// Data coding format — <c>1</c> for time-major fixed stations or
+    /// <c>8</c> for station-major fixed stations (S-100 Part 10c §10.2.1).
     /// </summary>
-    public int DataCodingFormat { get; init; } = 8;
+    public int DataCodingFormat { get; init; }
 
     /// <summary>
     /// Method or source used to compute water level values (e.g. model
@@ -78,7 +77,7 @@ public sealed class S104StationSeriesDataset
 /// <summary>
 /// Discriminated union over the two structurally different S-104
 /// dataset shapes the reader emits — gridded coverage (dcf2) and
-/// per-station time series (dcf8). See <see cref="S104DatasetReader.ReadAny"/>.
+/// per-station time series (dcf1/dcf8). See <see cref="S104DatasetReader.ReadAny"/>.
 /// </summary>
 public abstract record S104DatasetData
 {
@@ -94,6 +93,6 @@ public abstract record S104DatasetData
     /// <summary>S-104 dcf2 — regularly-gridded water-level coverage.</summary>
     public sealed record GriddedCoverage(S104Dataset Dataset) : S104DatasetData;
 
-    /// <summary>S-104 dcf8 — time series at fixed stations.</summary>
+    /// <summary>S-104 dcf1 or dcf8 — time series at fixed stations.</summary>
     public sealed record StationSeries(S104StationSeriesDataset Dataset) : S104DatasetData;
 }
