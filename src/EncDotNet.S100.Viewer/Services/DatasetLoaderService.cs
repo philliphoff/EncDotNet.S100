@@ -1106,72 +1106,47 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
     {
-        var palette = _settingsVm.SelectedPalette;
-        var symbolScale = _settingsVm.SymbolScale;
-        var textScale = _settingsVm.TextScale;
-        var ecdis = _ecdisDisplay.Snapshot();
-        var mariner = _marinerSettings.Current;
+        var presentation = new MapPresentationState(
+            _settingsVm.SelectedPalette,
+            _settingsVm.SymbolScale,
+            _settingsVm.TextScale,
+            _ecdisDisplay.Snapshot(),
+            _marinerSettings.Current);
 
         RenderContext context = processor switch
         {
             S104DatasetProcessor when timeStep is not null
-                => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S104RenderContext(timeStep),
             S104DatasetProcessor
-                => new S104RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S104RenderContext(),
             S111DatasetProcessor when timeStep is not null
-                => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S111RenderContext(timeStep),
             S111DatasetProcessor
-                => new S111RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S111RenderContext(),
             S101DatasetProcessor
-                => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S101RenderContext(),
             S102DatasetProcessor
-                => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S102RenderContext(),
             S122DatasetProcessor
-                => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S122RenderContext(),
             S124DatasetProcessor
-                => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S124RenderContext(),
             S125DatasetProcessor
-                => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S125RenderContext(),
             S201DatasetProcessor
-                => new S201RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S201RenderContext(),
             S127DatasetProcessor
-                => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S127RenderContext(),
             S129DatasetProcessor
-                => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S129RenderContext(),
             S411DatasetProcessor when timeStep is not null
-                => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S411RenderContext(timeStep),
             S411DatasetProcessor
-                => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
-            _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+                => new S411RenderContext(),
+            _ => new S101RenderContext(),
         };
 
-        // Thread the explicit per-spec S-100 Part 9 §11.7 display-mode
-        // selection (only S-411 declares >1 mode today). Applied generically
-        // via a record `with`; a null id leaves the catalogue's default mode
-        // in place (GmlDatasetProcessorBase.ApplyDisplayMode). Keyed on the
-        // portrayal spec so an S-57 dataset resolves the S-101 selection.
-        return ApplyDisplayMode(context, ecdis, processor.PortrayalSpec.Name);
-    }
-
-    /// <summary>
-    /// Copies <paramref name="context"/> with the explicit S-100 Part 9
-    /// §11.7 display-mode id selected for <paramref name="specName"/> in
-    /// <paramref name="ecdis"/>, or returns it unchanged when the spec has no
-    /// explicit selection (so the catalogue's default mode stands). Extracted
-    /// as a pure helper so the threading contract is unit-testable without
-    /// constructing the full loader.
-    /// </summary>
-    internal static RenderContext ApplyDisplayMode(
-        RenderContext context, EcdisDisplaySettings ecdis, string specName)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(ecdis);
-        ArgumentNullException.ThrowIfNull(specName);
-
-        var displayModeId = ecdis.ActiveDisplayModes.GetValueOrDefault(specName);
-        return string.IsNullOrEmpty(displayModeId)
-            ? context
-            : context with { DisplayModeId = displayModeId };
+        return presentation.ApplyTo(context, processor.PortrayalSpec);
     }
 
     private void ReplaceLayers(

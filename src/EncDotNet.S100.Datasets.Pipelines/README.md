@@ -177,6 +177,22 @@ The `ProjNet`-based `ICrsTransformFactory` implementation lives in the
 separate **`EncDotNet.S100.Crs.ProjNet`** package, keeping CRS handling
 Mapsui-free too.
 
+### Renderer-neutral map presentation
+
+`MapPresentationState` is the immutable, UI- and renderer-neutral snapshot of
+presentation choices shared across every dataset on a map: palette, symbol and
+text scale, ECDIS settings, mariner settings, and the product-specific display
+modes carried by `EcdisDisplaySettings.ActiveDisplayModes`. Its constructor
+defensively freezes the ECDIS collections, so a host can safely reuse the
+snapshot across concurrent renders.
+
+Call `presentation.ApplyTo(context, processor.PortrayalSpec)` to project those
+map-wide choices onto a product-specific `RenderContext`. Dataset/request state
+such as time step, viewport, basemap, and instruction filtering remains on the
+context and is preserved. The Avalonia Viewer now uses this projection at its
+processor-to-renderer boundary; future Mapsui sessions can construct the same
+state without depending on Viewer, Mapsui, or Avalonia types.
+
 ## Validation
 
 Every processor implements `IDatasetProcessor.Validate()`:
@@ -322,7 +338,7 @@ for the full design rationale.
 
 ## Other utilities
 
-- `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
+- `MapPresentationState`, `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
   `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
   blocks for the per-processor `Render` / `GetFeatureInfo` /
   `GetCoverageInfo` paths.
