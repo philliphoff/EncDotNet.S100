@@ -1164,11 +1164,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private static ValidationReport ValidateStationSeries(S111StationSeriesDataset dataset)
     {
         var findings = new List<ValidationFinding>();
-        int rulesEvaluated = 0;
+        int rulesEvaluated = dataset.Stations.Any(station => station.SampleTimes.Count > 0) ? 4 : 3;
 
         foreach (var station in dataset.Stations)
         {
-            rulesEvaluated += station.SampleTimes.Count > 0 ? 4 : 3;
             if (station.NumberOfTimes != station.SpeedsMetresPerSecond.Length ||
                 station.NumberOfTimes != station.DirectionsDegreesTrue.Length ||
                 (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))

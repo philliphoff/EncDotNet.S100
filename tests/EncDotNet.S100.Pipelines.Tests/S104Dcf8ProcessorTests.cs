@@ -126,7 +126,7 @@ public class S104Dcf8ProcessorTests
             var report = Assert.IsType<ValidationReport>(processor.Validate());
 
             Assert.Empty(report.Findings);
-            Assert.Equal(4, report.RulesEvaluated);
+            Assert.Equal(2, report.RulesEvaluated);
         }
         finally
         {

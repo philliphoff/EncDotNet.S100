@@ -920,11 +920,10 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private static ValidationReport ValidateStationSeries(S104StationSeriesDataset dataset)
     {
         var findings = new List<ValidationFinding>();
-        int rulesEvaluated = 0;
+        int rulesEvaluated = dataset.Stations.Any(station => station.SampleTimes.Count > 0) ? 3 : 2;
 
         foreach (var station in dataset.Stations)
         {
-            rulesEvaluated += station.SampleTimes.Count > 0 ? 3 : 2;
             if (station.NumberOfTimes != station.Heights.Length ||
                 station.NumberOfTimes != station.Trends.Length ||
                 (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))

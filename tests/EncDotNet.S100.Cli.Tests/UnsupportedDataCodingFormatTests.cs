@@ -11,6 +11,8 @@ namespace EncDotNet.S100.Cli.Tests;
 /// </summary>
 public sealed class UnsupportedDataCodingFormatTests
 {
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
     private struct GeometryRow
     {
         [H5Name("longitude")]
@@ -51,7 +53,9 @@ public sealed class UnsupportedDataCodingFormatTests
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
-            Assert.True(new FileInfo(output).Length > 8);
+            var bytes = File.ReadAllBytes(output);
+            Assert.True(bytes.Length > PngSignature.Length);
+            Assert.Equal(PngSignature, bytes[..PngSignature.Length]);
         }
         finally
         {
@@ -73,7 +77,9 @@ public sealed class UnsupportedDataCodingFormatTests
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
-            Assert.True(new FileInfo(output).Length > 8);
+            var bytes = File.ReadAllBytes(output);
+            Assert.True(bytes.Length > PngSignature.Length);
+            Assert.Equal(PngSignature, bytes[..PngSignature.Length]);
         }
         finally
         {

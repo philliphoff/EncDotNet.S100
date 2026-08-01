@@ -48,7 +48,7 @@ public class S111Dcf1ProcessorTests
                 color => color != SKColors.White);
             var report = Assert.IsType<ValidationReport>(processor.Validate());
             Assert.Empty(report.Findings);
-            Assert.Equal(8, report.RulesEvaluated);
+            Assert.Equal(4, report.RulesEvaluated);
         }
         finally
         {
