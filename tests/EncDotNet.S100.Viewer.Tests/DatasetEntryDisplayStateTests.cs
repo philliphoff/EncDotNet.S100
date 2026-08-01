@@ -118,4 +118,29 @@ public class DatasetEntryDisplayStateTests
 
         Assert.Null(entry.MapDataset);
     }
+
+    [Fact]
+    public void AvailableTimes_SameSourceAfterLoad_DoesNotReplaceProjection()
+    {
+        IReadOnlyList<DateTime> times =
+        [
+            new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc),
+        ];
+        var entry = new DatasetEntry("/tmp/x.h5", "S-111")
+        {
+            AvailableTimes = times,
+        };
+        entry.SetLoadedState(new DatasetMetadata
+        {
+            Spec = new SpecRef("S-111", new SpecVersion(2, 0, 0)),
+        });
+        var state = entry.MapDataset;
+        var observed = new List<string?>();
+        entry.PropertyChanged += (_, e) => observed.Add(e.PropertyName);
+
+        entry.AvailableTimes = times;
+
+        Assert.Same(state, entry.MapDataset);
+        Assert.DoesNotContain(nameof(DatasetEntry.AvailableTimes), observed);
+    }
 }

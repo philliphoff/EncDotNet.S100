@@ -330,7 +330,7 @@ internal sealed class DatasetEntry : ViewModelBase
         get => _mapDataset?.AvailableTimes ?? _availableTimes;
         set
         {
-            if (!ReferenceEquals(AvailableTimes, value))
+            if (!ReferenceEquals(_availableTimes, value))
             {
                 _availableTimes = value;
                 UpdateMapDataset();
