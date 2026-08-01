@@ -1,5 +1,6 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;
@@ -71,6 +72,31 @@ public class S111Dcf1ProcessorTests
             var report = Assert.IsType<ValidationReport>(processor.Validate());
 
             Assert.Contains(report.Findings, finding => finding.RuleId == "S111-STATION-DIRECTION");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Validate_Dcf1_AllowsNoDataSpeedAndDirection()
+    {
+        var path = CreateTempPath();
+        try
+        {
+            S111Dcf1FixtureBuilder.WriteFile(
+                path,
+                [new() { Latitude = 52.88, Longitude = 4.61 }],
+                [TimeStep(
+                    "20240101T000000Z",
+                    (S111CoverageSource.FillValue, S111CoverageSource.FillValue))]);
+            using var catalogues = new PortrayalCatalogueManager();
+            var processor = new S111DatasetProcessor(path, catalogues, new ProjNetCrsTransformFactory());
+
+            var report = Assert.IsType<ValidationReport>(processor.Validate());
+
+            Assert.Empty(report.Findings);
         }
         finally
         {

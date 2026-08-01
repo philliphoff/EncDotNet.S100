@@ -1194,7 +1194,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 });
             }
 
-            if (station.SpeedsMetresPerSecond.Any(speed => !float.IsFinite(speed) || speed < 0))
+            if (station.SpeedsMetresPerSecond.Any(speed =>
+                speed != S111CoverageSource.FillValue && (!float.IsFinite(speed) || speed < 0)))
             {
                 findings.Add(new ValidationFinding
                 {
@@ -1206,7 +1207,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             }
 
             if (station.DirectionsDegreesTrue.Any(direction =>
-                !float.IsFinite(direction) || direction < 0 || direction >= 360))
+                direction != S111CoverageSource.FillValue &&
+                (!float.IsFinite(direction) || direction < 0 || direction >= 360)))
             {
                 findings.Add(new ValidationFinding
                 {

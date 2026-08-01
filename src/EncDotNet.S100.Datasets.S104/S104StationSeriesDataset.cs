@@ -42,7 +42,7 @@ public sealed class S104StationSeriesDataset
     /// Data coding format — <c>1</c> for time-major fixed stations or
     /// <c>8</c> for station-major fixed stations (S-100 Part 10c §10.2.1).
     /// </summary>
-    public required int DataCodingFormat { get; init; }
+    public int DataCodingFormat { get; init; } = 8;
 
     /// <summary>
     /// Method or source used to compute water level values (e.g. model

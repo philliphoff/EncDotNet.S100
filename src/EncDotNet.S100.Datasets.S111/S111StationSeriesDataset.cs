@@ -39,7 +39,7 @@ public sealed class S111StationSeriesDataset
     /// <c>3</c> for ungeorectified grid, or <c>8</c> for station-major fixed
     /// stations (S-111 Edition 2.0.0 Table 10-5).
     /// </summary>
-    public required int DataCodingFormat { get; init; }
+    public int DataCodingFormat { get; init; } = 8;
 
     /// <summary>
     /// Type of current data (e.g. <c>6</c> = forecast model output). See
