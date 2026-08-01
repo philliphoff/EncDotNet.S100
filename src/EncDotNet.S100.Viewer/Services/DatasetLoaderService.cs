@@ -1065,19 +1065,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 entry.DisplayName,
                 proc.Metadata,
                 entry.IsVisible,
-                GetActive(entry.Id.Value),
-                entry.Opacity,
-                entry.AvailableTimes,
-                entry.CurrentTime,
-                entry.SubLayers
-                    .Select(layer => new MapDatasetSubLayer(
-                        layer.Key,
-                        layer.DisplayName,
-                        layer.IsVisible,
-                        layer.Opacity))
-                    .ToArray(),
-                entry.Validation,
-                proc.VersionAssessment);
+                GetActive(entry.Id.Value));
             var active = dataset.IsActive
                 && dataset.IsVisible
                 && _entryLayers.TryGetValue(entry, out var layers)
