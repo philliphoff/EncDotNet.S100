@@ -4,8 +4,8 @@ using EncDotNet.S100.Viewer.ViewModels;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Projects Viewer settings services into the renderer-neutral presentation
-/// snapshot consumed by dataset rendering.
+/// Projects the current Viewer settings into a renderer-neutral presentation
+/// snapshot.
 /// </summary>
 internal sealed class MapPresentationStateProjection
 {
@@ -25,27 +25,12 @@ internal sealed class MapPresentationStateProjection
         _settings = settings;
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
-        Current = CreateSnapshot();
-
-        _settings.PaletteChanged += _ => Refresh();
-        _settings.DisplayScaleChanged += Refresh;
-        _ecdisDisplay.Changed += Refresh;
-        _marinerSettings.Changed += _ => Refresh();
     }
 
-    /// <summary>The current renderer-neutral presentation snapshot.</summary>
-    public MapPresentationState Current { get; private set; }
-
-    /// <summary>Raised after Viewer inputs produce a new snapshot.</summary>
-    public event Action? Changed;
-
-    private void Refresh()
-    {
-        Current = CreateSnapshot();
-        Changed?.Invoke();
-    }
-
-    private MapPresentationState CreateSnapshot() => new(
+    /// <summary>
+    /// Captures the current Viewer inputs as one immutable presentation state.
+    /// </summary>
+    public MapPresentationState CreateSnapshot() => new(
         _settings.SelectedPalette,
         _settings.SymbolScale,
         _settings.TextScale,

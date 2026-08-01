@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class MapPresentationStateProjectionTests
 {
     [Fact]
-    public void ViewerStateChanges_ReplaceRendererNeutralSnapshot()
+    public void CreateSnapshot_CapturesCurrentViewerState()
     {
         var settings = new ViewerSettings
         {
@@ -20,21 +20,17 @@ public class MapPresentationStateProjectionTests
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
             settingsViewModel, ecdis, mariner);
-        var original = projection.Current;
-        var changed = 0;
-        projection.Changed += () => changed++;
 
         settingsViewModel.SelectedPalette = PaletteType.Night;
         settingsViewModel.SymbolScale = 1.25;
         ecdis.SetCategory(EcdisDisplayCategory.All);
         mariner.Set(MarinerSettings.Default with { FourShades = false });
+        var snapshot = projection.CreateSnapshot();
 
-        Assert.NotSame(original, projection.Current);
-        Assert.Equal(PaletteType.Night, projection.Current.Palette);
-        Assert.Equal(1.25, projection.Current.SymbolScale);
-        Assert.Equal(EcdisDisplayCategory.All, projection.Current.EcdisDisplay.Category);
-        Assert.False(projection.Current.Mariner.FourShades);
-        Assert.Equal(4, changed);
+        Assert.Equal(PaletteType.Night, snapshot.Palette);
+        Assert.Equal(1.25, snapshot.SymbolScale);
+        Assert.Equal(EcdisDisplayCategory.All, snapshot.EcdisDisplay.Category);
+        Assert.False(snapshot.Mariner.FourShades);
     }
 
     private sealed class StubMarinerSettingsProvider : IMarinerSettingsProvider

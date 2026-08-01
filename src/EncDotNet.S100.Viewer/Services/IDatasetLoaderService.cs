@@ -67,12 +67,6 @@ internal interface IDatasetLoaderService
     Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Re-renders every loaded dataset, preserving its current time step
-    /// when applicable. Triggered by palette / scale changes.
-    /// </summary>
-    Task ReRenderAllAsync();
-
-    /// <summary>
     /// Removes a previously-loaded entry's layers from the map and drops
     /// its processor. Safe to call for entries that were never loaded.
     /// </summary>
