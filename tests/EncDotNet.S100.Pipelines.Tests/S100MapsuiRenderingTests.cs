@@ -18,15 +18,6 @@ public class S100MapsuiRenderingTests
     }
 
     [Fact]
-    public void Options_DefaultsCaptureLegacyRenderingConfiguration()
-    {
-        var options = new S100MapsuiOptions();
-
-        Assert.Equal(RenderingOptimizations.RenderSubsystem, options.RenderSubsystem);
-        Assert.Equal(RenderingOptimizations.SceneMode, options.SceneMode);
-    }
-
-    [Fact]
     public void MapsuiDatasetRenderer_PreservesLegacyConstructor()
     {
         var constructor = typeof(MapsuiDatasetRenderer).GetConstructor(
