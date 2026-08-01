@@ -30,10 +30,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly IRecentFilesService _recentFiles;
     private readonly S128DatasetCatalogSource _s128CatalogSource;
-    private readonly SettingsViewModel _settingsVm;
+    private readonly MapPresentationStateProjection _presentation;
     private readonly GlobalTimeService _globalTime;
-    private readonly EcdisDisplayState _ecdisDisplay;
-    private readonly IMarinerSettingsProvider _marinerSettings;
     private readonly INotificationService _notifications;
     /// <summary>
     /// Resolves the <em>currently active</em> cross-dataset paint-order
@@ -81,14 +79,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// </summary>
     private IReadOnlyList<LayerStackEntry> _currentStackEntries = Array.Empty<LayerStackEntry>();
     /// <summary>
-    /// In-memory per-dataset Active flags. Keyed by dataset id (the
-    /// same <see cref="DatasetEntry.Id"/> used by the layer stack). Missing
-    /// entries default to <c>true</c>. Process-local for PR-L3; PR-L4
-    /// will persist in <see cref="ViewerSettings"/>.
-    /// </summary>
-    // TODO PR-L4: persist Active in ViewerSettings
-    private readonly Dictionary<MapDatasetId, bool> _activeFlags = new();
-    /// <summary>
     /// Per-entry sub-layer keys, parallel by index to
     /// <see cref="_entryLayers"/>. Null when the processor did not
     /// supply per-layer names (single-layer products).
@@ -134,10 +124,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         DatasetPipelineFactory pipelineFactory,
         IRecentFilesService recentFiles,
         S128DatasetCatalogSource s128CatalogSource,
-        SettingsViewModel settingsVm,
+        MapPresentationStateProjection presentation,
         GlobalTimeService globalTime,
-        EcdisDisplayState ecdisDisplay,
-        IMarinerSettingsProvider marinerSettings,
         INotificationService notifications,
         IInteroperabilityAuthorityProvider authorityProvider,
         EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer mapsuiRenderer,
@@ -150,10 +138,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(pipelineFactory);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(s128CatalogSource);
-        ArgumentNullException.ThrowIfNull(settingsVm);
+        ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(globalTime);
-        ArgumentNullException.ThrowIfNull(ecdisDisplay);
-        ArgumentNullException.ThrowIfNull(marinerSettings);
         ArgumentNullException.ThrowIfNull(notifications);
 
         _settings = settings;
@@ -163,10 +149,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _pipelineFactory = pipelineFactory;
         _recentFiles = recentFiles;
         _s128CatalogSource = s128CatalogSource;
-        _settingsVm = settingsVm;
+        _presentation = presentation;
         _globalTime = globalTime;
-        _ecdisDisplay = ecdisDisplay;
-        _marinerSettings = marinerSettings;
         _notifications = notifications;
         ArgumentNullException.ThrowIfNull(authorityProvider);
         _authorityProvider = authorityProvider;
@@ -214,15 +198,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     public bool GetActive(string datasetId)
     {
         ArgumentException.ThrowIfNullOrEmpty(datasetId);
-        return !_activeFlags.TryGetValue(new MapDatasetId(datasetId), out var v) || v;
+        return FindEntry(datasetId)?.IsActive ?? true;
     }
 
     public void SetActive(string datasetId, bool active)
     {
         ArgumentException.ThrowIfNullOrEmpty(datasetId);
-        var previous = GetActive(datasetId);
-        if (previous == active) return;
-        _activeFlags[new MapDatasetId(datasetId)] = active;
+        var entry = FindEntry(datasetId);
+        if (entry is null || entry.IsActive == active) return;
+        entry.IsActive = active;
         // Recompute the cross-product stack so R-101-102-B (and any
         // future Active-aware rules) re-evaluates with the new
         // flag, and rebroadcast it through the map host so PickService
@@ -280,10 +264,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // that affects portrayal output (palette / display scale). These are
         // wired here, not in the window, so the loader fully owns its
         // re-render lifecycle.
-        _settingsVm.PaletteChanged += palette => _ = ReRenderAllAsync();
-        _settingsVm.DisplayScaleChanged += () => _ = ReRenderAllAsync();
-        _ecdisDisplay.Changed += () => _ = ReRenderAllAsync();
-        _marinerSettings.Changed += m => _ = ReRenderAllAsync();
+        _presentation.Changed += () => _ = ReRenderAllAsync();
     }
 
     public async Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
@@ -460,6 +441,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 gatedHidden = initialTime is null;
             }
 
+            entry.SetVersionAssessment(processor.VersionAssessment);
+            entry.CurrentTime = gatedHidden ? null : (initialTime ?? adapter?.AvailableTimes.FirstOrDefault());
+            entry.SetLoadedState(processor.Metadata);
+
             // Snapshot the paint counter *before* the layers are swapped in,
             // so the post-load wait can confirm the map actually painted the
             // new dataset (PaintCount increased) rather than merely settling
@@ -498,9 +483,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             entry.IsLoaded = true;
             entry.Info = result?.Info;
-            entry.SetVersionAssessment(processor.VersionAssessment);
-            entry.CurrentTime = gatedHidden ? null : (initialTime ?? adapter?.AvailableTimes.FirstOrDefault());
-
             // Run the spec's normative validation rule pack against
             // the parsed dataset. Validation is a pure function of the
             // parsed model so we only do this once per load; ECDIS
@@ -791,7 +773,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     {
         using var __cmd = ViewerObservability.BeginCommand("palette.change");
 
-        var palette = _settingsVm.SelectedPalette;
+        var palette = _presentation.Current.Palette;
 
         foreach (var (entry, proc) in _processors.ToArray())
         {
@@ -852,7 +834,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             disposableProcessor.Dispose();
         }
         _entryOrder.Remove(entry);
-        _activeFlags.Remove(entry.Id);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         // Publish the new (empty / smaller) stack so PickService and
@@ -901,11 +882,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // would make the next reload look like a first load and re-insert it at
         // index 0, reshuffling cross-dataset paint order on every evict/reload
         // cycle. See issue #458.
-        // NB: unlike RemoveEntry, do NOT clear _activeFlags here. Eviction
-        // keeps the DatasetEntry registered, so its user-set active/inactive
-        // state must survive the unload → reload cycle; dropping the flag would
-        // silently reset an inactive cell back to active (the GetActive
-        // default) when it next loads. See issue #458.
+        // Active state lives on the entry's renderer-neutral MapDataset
+        // projection, so it naturally survives this unload → reload cycle.
         _globalTime.Unregister(entry);
         entry.IsDeferred = true;
         if (_mapHost is not null)
@@ -1017,7 +995,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // explicitly no-ops ApplyRules so the strict load-order mode
         // is unaffected.
         var loaded = BuildLoadedDatasetInfos();
-        var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
+        var ruled = authority.ApplyRules(sorted, loaded, _presentation.Current.Mariner);
 
         // Project the ordered / suppressed neutral items back onto the
         // prebuilt Mapsui layers. Cached ILayers are reused where the S-98
@@ -1060,12 +1038,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         foreach (var entry in _entryOrder)
         {
             if (!_processors.TryGetValue(entry, out var proc)) continue;
-            var dataset = new MapDataset(
-                entry.Id,
-                entry.DisplayName,
-                proc.Metadata,
-                entry.IsVisible,
-                GetActive(entry.Id.Value));
+            var dataset = entry.MapDataset;
+            if (dataset is null) continue;
             var active = dataset.IsActive
                 && dataset.IsVisible
                 && _entryLayers.TryGetValue(entry, out var layers)
@@ -1100,13 +1074,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
     {
-        var presentation = new MapPresentationState(
-            _settingsVm.SelectedPalette,
-            _settingsVm.SymbolScale,
-            _settingsVm.TextScale,
-            _ecdisDisplay.Snapshot(),
-            _marinerSettings.Current);
-
         RenderContext context = processor switch
         {
             S104DatasetProcessor when timeStep is not null
@@ -1140,7 +1107,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             _ => new S101RenderContext(),
         };
 
-        return presentation.ApplyTo(context, processor.PortrayalSpec);
+        return _presentation.Current.ApplyTo(context, processor.PortrayalSpec);
     }
 
     private void ReplaceLayers(
@@ -1278,7 +1245,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         if (cells.Count == 0)
             return;
 
-        if (_marinerSettings.Current.IgnoreScaleMinimum)
+        if (_presentation.Current.Mariner.IgnoreScaleMinimum)
             OverlapSuppression.ClearAll(cells);
         else
             OverlapSuppression.Apply(cells);
@@ -1356,7 +1323,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // when zoomed out just as it would when loaded from an exchange set.
         if ((entry.MinimumDisplayScale ?? cellMinimumDisplayScale) is not int minimumDisplayScale)
             return;
-        if (_marinerSettings.Current.IgnoreScaleMinimum)
+        if (_presentation.Current.Mariner.IgnoreScaleMinimum)
             return;
 
         MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale);
@@ -1516,6 +1483,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
         }
     }
+
+    private DatasetEntry? FindEntry(string datasetId) =>
+        _entryOrder.FirstOrDefault(entry =>
+            string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
 
     private void RemoveEntryLayers(DatasetEntry entry)
     {

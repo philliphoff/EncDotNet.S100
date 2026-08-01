@@ -178,6 +178,13 @@ is draggable and persisted. The panel opens on the Exchange sets tab,
 unless only loose datasets are loaded, in which case it opens on the
 Datasets tab.
 
+Internally, loaded rows project the renderer-neutral `MapDataset` and
+`MapDatasetSubLayer` snapshots; commands, localized labels, selection, and
+exchange-set registration details remain Viewer-only. Palette, ECDIS, scale,
+and mariner inputs are likewise consolidated into the current
+`MapPresentationState` before rendering. This keeps active and visible state
+independent while giving every loaded dataset one reusable state identity.
+
 **Double-click a dataset row to reveal it** — the viewer ensures the
 dataset is loaded and then flies the map to that dataset's extent. This
 is the quickest way to locate a member of a wide-spread exchange set,
