@@ -15,6 +15,28 @@ Neither package references Mapsui, Avalonia, or any GUI framework, so this is th
 seam to embed into a tile-serving web API, a batch image job, or the library half
 of a future web/WASM target.
 
+Hosts that own dataset processors can also capture map-wide portrayal choices in
+`MapPresentationState` from `EncDotNet.S100.Datasets.Pipelines`. The immutable
+snapshot carries palette, symbol/text scale, ECDIS and mariner settings, including
+per-product display modes, and projects them onto a product `RenderContext`:
+
+```csharp
+var presentation = new MapPresentationState(
+    PaletteType.Day,
+    symbolScale: 1.0,
+    textScale: 1.0,
+    ecdisSettings,
+    marinerSettings);
+
+RenderContext context = presentation.ApplyTo(
+    new S101RenderContext(),
+    processor.PortrayalSpec);
+```
+
+This presentation layer is renderer-neutral: it does not reference Mapsui,
+Avalonia, or SkiaSharp. Per-dataset time and viewport choices remain on the
+specific render context.
+
 ## Why it matters
 
 This is the smallest seam for teams that already own portrayal outputs or want
