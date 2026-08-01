@@ -327,6 +327,7 @@ public class DigitalSignatureTests
         Assert.Equal(
             VerificationOutcome.FileMissing,
             Assert.Single(result.FileResults[0].SignatureResults).Outcome);
+        Assert.Equal("The signed resource was not found.", result.FileResults[0].Detail);
     }
 
     [Fact]

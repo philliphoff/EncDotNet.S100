@@ -139,6 +139,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
                     VerificationOutcome.FileMissing,
                     "The signed resource was not found."),
                 ChecksumOutcome = VerificationOutcome.FileMissing,
+                Detail = "The signed resource was not found.",
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

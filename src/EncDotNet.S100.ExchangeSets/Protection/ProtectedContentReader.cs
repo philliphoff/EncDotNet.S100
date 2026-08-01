@@ -14,7 +14,9 @@ internal static class ProtectedContentReader
     {
         await using var stream = await source.OpenAsync(relativePath, cancellationToken).ConfigureAwait(false);
         using var buffer = new MemoryStream(
-            capacity: stream.CanSeek ? (int)Math.Min(stream.Length, int.MaxValue) : 4096);
+            capacity: stream.CanSeek && stream.Length <= int.MaxValue
+                ? (int)stream.Length
+                : 4096);
         await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
         return buffer.ToArray();
     }
