@@ -117,6 +117,21 @@ useful for orders-of-magnitude comparisons, not exact attribution.
 | `s100.symbol.cache.miss.count` | counter | `{misses}` | `s100.product` |
 | `s100.pattern.cache.hit.count` | counter | `{hits}` | `s100.product` |
 | `s100.pattern.cache.miss.count` | counter | `{misses}` | `s100.product` |
+| `s100.render.metatile.rasterize.duration` | histogram | `ms` | — |
+| `s100.render.metatile.slice.duration` | histogram | `ms` | — |
+| `s100.render.metatile.tiles` | histogram | `{tile}` | — |
+| `s100.render.metatile.jobs` | counter | `{job}` | — |
+| `s100.render.metatile.fallbacks` | counter | `{fallback}` | `reason` |
+
+Metatile metrics are emitted only when `S100_VECTOR_TILE_METATILE=1` (or the
+matching viewer setting is enabled). `rasterize.duration` is the undivided
+union-job time, `slice.duration` is the copy cost, and `tiles` measures achieved
+batch density. The fallback `reason` is `sparse`, `disk`, `scamin`, `dimension`,
+or `scale` (when integer pixel geometry cannot preserve the independent-tile
+projection at a fractional device scale). Existing
+`s100.render.tile.rasterize.duration` remains comparable between arms: a
+batched job records its total elapsed time divided across the logical tiles it
+produced.
 
 ### Skia renderer metrics (`EncDotNet.S100.Renderers.Skia`)
 

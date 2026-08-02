@@ -43,4 +43,34 @@ public class TileColdLatencyTelemetryTests
         Assert.Equal("{tile}", depth.Unit);
         Assert.Equal(9, depth.Value);
     }
+
+    [Fact]
+    public void MetatileMetrics_PublishExpectedInstruments()
+    {
+        var seen = new Dictionary<string, string>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Name.StartsWith(
+                    "s100.render.metatile.", StringComparison.Ordinal))
+            {
+                seen[instrument.Name] = instrument.Unit ?? string.Empty;
+                meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.Start();
+
+        Telemetry.MetatileRasterizeDuration.Record(10);
+        Telemetry.MetatileSliceDuration.Record(2);
+        Telemetry.MetatileTiles.Record(4);
+        Telemetry.MetatileJobs.Add(1);
+        Telemetry.MetatileFallbacks.Add(
+            1, new KeyValuePair<string, object?>("reason", "scamin"));
+
+        Assert.Equal("ms", seen["s100.render.metatile.rasterize.duration"]);
+        Assert.Equal("ms", seen["s100.render.metatile.slice.duration"]);
+        Assert.Equal("{tile}", seen["s100.render.metatile.tiles"]);
+        Assert.Equal("{job}", seen["s100.render.metatile.jobs"]);
+        Assert.Equal("{fallback}", seen["s100.render.metatile.fallbacks"]);
+    }
 }

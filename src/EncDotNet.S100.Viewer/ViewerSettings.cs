@@ -278,6 +278,15 @@ internal sealed class ViewerSettings
     public bool? TileCrossBandPrewarmEnabled { get; set; }
 
     /// <summary>
+    /// Whether adjacent cold tile misses may be rasterised as a 2&#215;2
+    /// metatile and sliced into tile-granular cache entries (issue&#160;#427).
+    /// <see langword="null"/> → conservative default (off). Mirrors
+    /// <c>RenderingOptimizations.TileMetatileEnabled</c> /
+    /// <c>S100_VECTOR_TILE_METATILE</c>.
+    /// </summary>
+    public bool? TileMetatileEnabled { get; set; }
+
+    /// <summary>
     /// Whether the warm disk tile cache is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
     /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /
