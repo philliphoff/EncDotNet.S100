@@ -181,7 +181,7 @@ public class CaptureSynchronizedMapControl : MapControl
                 using var lease = leaseFeature.Lease();
                 lease.GrContext?.Flush(submit: true, synchronous: true);
             }
-            catch (InvalidOperationException exception)
+            catch (Exception exception)
             {
                 Debug.WriteLine(
                     $"CaptureCoordinator: unable to drain the live Skia context: {exception.Message}");

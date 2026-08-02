@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using Mapsui;
@@ -299,25 +300,27 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
         Map liveMap,
         int widthPx,
         int heightPx,
-        out Map snapshot)
+        [NotNullWhen(true)] out Map? snapshot)
     {
         var liveViewport = liveMap.Navigator.Viewport;
-        snapshot = new Map
-        {
-            BackColor = liveMap.BackColor,
-            CRS = liveMap.CRS,
-        };
         if (liveViewport.Width <= 0 || liveViewport.Height <= 0)
         {
+            snapshot = null;
             return false;
         }
 
         var extent = liveViewport.ToExtent();
         if (extent is null || extent.Width <= 0 || extent.Height <= 0)
         {
+            snapshot = null;
             return false;
         }
 
+        snapshot = new Map
+        {
+            BackColor = liveMap.BackColor,
+            CRS = liveMap.CRS,
+        };
         snapshot.Navigator.SetSize(widthPx, heightPx);
         snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
         if (liveViewport.Rotation != 0)

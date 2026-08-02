@@ -179,6 +179,20 @@ public class AvaloniaMapsuiMapAdapterTests
         }
     }
 
+    [Fact]
+    public void Snapshot_does_not_allocate_map_for_unlaid_out_viewport()
+    {
+        using var liveMap = new Map();
+
+        Assert.False(
+            AvaloniaMapsuiMapAdapter.TryConfigureSnapshotMap(
+                liveMap,
+                320,
+                200,
+                out var snapshot));
+        Assert.Null(snapshot);
+    }
+
     private static Map CreateLaidOutMap()
     {
         var map = new Map();
