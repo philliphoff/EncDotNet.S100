@@ -46,6 +46,12 @@ public class MapPaintInstrumentationTests
 
         Assert.Equal(3, callMeasurements.Length);
         Assert.All(callMeasurements, measurement => Assert.Equal(1, measurement.Value));
+        Assert.Equal(
+            new[] { "(unclassified)", "Coastline", "DepthContour" },
+            callMeasurements
+                .Select(measurement => Assert.IsType<string>(measurement.Tags["featureClass"]))
+                .OrderBy(featureClass => featureClass)
+                .ToArray());
         Assert.Equal(3, durationMeasurements.Length);
         Assert.Equal(
             new[] { "(unclassified)", "Coastline", "DepthContour" },

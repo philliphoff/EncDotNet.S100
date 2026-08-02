@@ -223,11 +223,11 @@ in production builds.
 | `s100.layer.get_features.fps` | gauge | `layer` | Effective `GetFeatures` rate per layer |
 | `s100.pattern_fill.draw.duration` | ms | — | `AnchoredPatternFillRenderer` per-call cost |
 
-The `points` tag is bucketed (`1-9`, `10-99`, `100-999`, `1k-10k`,
-`10k-100k`, `100k+`) to keep histogram cardinality bounded while
-still revealing whether a layer's cost is driven by many cheap draws
-or a few expensive ones. `featureClass` is the source Feature Catalogue
-type carried by S-101/S-57 features (for example, `DepthContour`); generated
+The `points` tag is bucketed (`n/a`, `0`, `1-9`, `10-99`, `100-999`,
+`1k-10k`, `10k-100k`, `100k+`) to keep histogram cardinality bounded
+while still revealing whether a layer's cost is driven by many cheap draws
+or a few expensive ones. `featureClass` is the source Feature Catalogue type
+carried by S-101/S-57 features (for example, `DepthContour`); generated
 features and products that do not attach a source type use `(unclassified)`.
 
 To capture a measurement session, run the viewer with the OTel console
