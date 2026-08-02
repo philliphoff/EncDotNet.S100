@@ -141,7 +141,10 @@ public partial class MainWindow : ShadUI.Window
                 "The map control must have a map before creating the Viewer host.");
         _mapHost = new MapsuiMapHost(
             map,
-            AvaloniaMapsuiMapAdapter.Attach(MapControl));
+            AvaloniaMapsuiMapAdapter.Attach(MapControl),
+            App.Services.GetRequiredService<DatasetProcessorOwner>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>());
         _rendererRedrawHandler = _mapHost.RequestRedraw;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;

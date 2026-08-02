@@ -42,8 +42,8 @@ public sealed class MapsuiDatasetResult
     /// S-98 cross-dataset stack metadata, parallel by index to
     /// <see cref="Layers"/> when supplied (every entry's
     /// <see cref="LayerStackEntry.Layer"/> appears in <see cref="Layers"/>
-    /// exactly once and at the same index). The viewer's dataset loader pumps
-    /// every loaded dataset's entries through
+    /// exactly once and at the same index). A host compositor can pump every
+    /// loaded dataset's entries through
     /// <see cref="LayerStackBuilder"/> to compute the global paint order
     /// across products (S-98 Annex A §4.4.1; S-98 Main §9.2.1).
     /// </summary>
@@ -54,7 +54,7 @@ public sealed class MapsuiDatasetResult
     /// derived from the dataset's own content rather than an exchange-set
     /// <c>CATALOG.XML</c> (S-101 in-file <c>DataCoverage.minimumDisplayScale</c>,
     /// FC §3.1.1; S-57 DSPM compilation scale, Appendix B.1 §7.3.1.1). The
-    /// viewer's dataset loader uses this as the whole-cell zoom-out window
+    /// map session uses this as the whole-cell zoom-out window
     /// (<c>ApplyCellScaleWindow</c>) when no catalogue value is available, so a
     /// standalone-loaded cell hides — with its extent border — when zoomed out
     /// past its scale band, matching the exchange-set behaviour. Null when the
@@ -66,7 +66,7 @@ public sealed class MapsuiDatasetResult
     /// The rendered cell's declared data-coverage footprint in EPSG:3857
     /// (Web Mercator), projected from the processor's EPSG:4326
     /// <c>DataCoverage</c> polygons (S-101 FC §3.1.1; S-57 <c>M_COVR</c>). The
-    /// viewer's dataset loader unions the footprints of finer, overlapping
+    /// map session unions the footprints of finer, overlapping
     /// in-band cells and clips this cell to its coverage minus that union,
     /// suppressing coarse-under-fine overdraw for overlapping multi-scale ENC
     /// cells (issue #438 Phase 2). Null when the cell declares no usable

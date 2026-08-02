@@ -211,9 +211,9 @@ context and is preserved.
 application boundary for a host or session that owns loaded datasets. The
 controller accepts the immutable state explicitly and applies it asynchronously
 without exposing UI refresh events or renderer types. Implementations retain
-processor, layer, refresh, and disposal ownership; the Avalonia Viewer currently
-implements this boundary in its dataset loader until that ownership moves into a
-reusable map session.
+processor, refresh, and disposal ownership. The Mapsui backend now implements
+ordinary layer ownership in `MapsuiMapSession`; presentation/time coalescing and
+S-98 composition remain host-owned incremental roadmap slices.
 
 `MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
 `MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,
@@ -221,8 +221,8 @@ and temporal coverage) with independent visibility and active flags, opacity,
 available/current time, `MapDatasetSubLayer` state, `ValidationReport`, and
 `SpecVersionAssessment`. The contract contains no rendered layers, localized
 strings, UI commands, or framework events. The Viewer projects its existing
-loaded entry state into this model at the S-98 interoperability boundary; full
-view-model/session extraction remains a later roadmap step.
+loaded entry state into this model, while `MapsuiMapSession` treats it as the
+authoritative identity and display-state snapshot across layer replacements.
 
 ## Validation
 

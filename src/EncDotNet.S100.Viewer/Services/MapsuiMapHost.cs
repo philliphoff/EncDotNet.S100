@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using Mapsui;
@@ -31,12 +32,20 @@ internal sealed class MapsuiMapHost :
 
     public MapsuiMapHost(
         Map map,
-        AvaloniaMapsuiMapAdapter avaloniaAdapter)
+        AvaloniaMapsuiMapAdapter avaloniaAdapter,
+        DatasetProcessorOwner processorOwner,
+        MapsuiDatasetRenderer datasetRenderer)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(avaloniaAdapter);
+        ArgumentNullException.ThrowIfNull(processorOwner);
+        ArgumentNullException.ThrowIfNull(datasetRenderer);
         _avaloniaAdapter = avaloniaAdapter;
         _layerBands = new MapsuiLayerBands(map);
+        DatasetSession = new MapsuiMapSession(
+            _layerBands,
+            processorOwner,
+            datasetRenderer);
         _mapNavigator = new MapsuiMapNavigator(map);
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();
@@ -44,6 +53,8 @@ internal sealed class MapsuiMapHost :
 
     /// <inheritdoc />
     public IChartRenderSubsystem RenderSubsystem { get; }
+
+    public MapsuiMapSession DatasetSession { get; }
 
     public void AddDatasetLayer(ILayer layer) => _layerBands.AddDatasetLayer(layer);
 
@@ -126,6 +137,7 @@ internal sealed class MapsuiMapHost :
         }
 
         _disposed = true;
+        DatasetSession.Dispose();
         RenderSubsystem.Deactivate();
         _avaloniaAdapter.Dispose();
     }
