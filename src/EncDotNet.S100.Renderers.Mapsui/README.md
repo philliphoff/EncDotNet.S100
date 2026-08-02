@@ -207,17 +207,17 @@ megapixel grid).
 ## Performance instrumentation
 
 The renderer ships with optional OpenTelemetry instrumentation that
-attributes paint cost down to the style-renderer, layer, and geometry
-vertex count. All instruments are sub-millisecond per paint when no
-OTel listener is attached, so they are safe to leave in production
-builds.
+attributes paint cost down to the style-renderer, layer, source feature
+class, and geometry vertex count. All instruments are sub-millisecond
+per paint when no OTel listener is attached, so they are safe to leave
+in production builds.
 
 | Instrument | Unit | Tags | Purpose |
 |---|---|---|---|
 | `s100.map.paint.duration` | ms | — | Compositor-thread paint wall-time per frame |
 | `s100.map.paint.interval` | ms | — | Time between paints (idle gaps > 500 ms dropped) |
-| `s100.map.paint.style.calls` | count | `style`, `layer`, `points` | Style-renderer `Draw` calls per paint |
-| `s100.map.paint.style.duration` | ms | `style`, `layer`, `points` | Cumulative `Draw` duration per paint |
+| `s100.map.paint.style.calls` | count | `style`, `layer`, `points`, `featureClass` | Style-renderer `Draw` calls per paint |
+| `s100.map.paint.style.duration` | ms | `style`, `layer`, `points`, `featureClass` | Cumulative `Draw` duration per paint |
 | `s100.layer.get_features.duration` | ms | `layer` | Layer-level filter cost per `GetFeatures` call |
 | `s100.layer.get_features.visible` / `total` | count | `layer` | Visible / total feature counts per call |
 | `s100.layer.get_features.fps` | gauge | `layer` | Effective `GetFeatures` rate per layer |
@@ -226,7 +226,9 @@ builds.
 The `points` tag is bucketed (`1-9`, `10-99`, `100-999`, `1k-10k`,
 `10k-100k`, `100k+`) to keep histogram cardinality bounded while
 still revealing whether a layer's cost is driven by many cheap draws
-or a few expensive ones.
+or a few expensive ones. `featureClass` is the source Feature Catalogue
+type carried by S-101/S-57 features (for example, `DepthContour`); generated
+features and products that do not attach a source type use `(unclassified)`.
 
 To capture a measurement session, run the viewer with the OTel console
 exporter enabled:
@@ -237,7 +239,7 @@ ENC_DOTNET_OTEL_CONSOLE=1 OTEL_METRIC_EXPORT_INTERVAL=2000 \
 ```
 
 Histograms are emitted every 2 s with cumulative counts and per-bucket
-distributions. Aggregate by `(layer, points)` to identify which
+distributions. Aggregate by `(layer, featureClass, points)` to identify which
 geometries are dominating paint time — empirically, ~93% of paint cost
 on real-world S-101 datasets is spent on geometries with ≥100 vertices,
 with per-vertex cost ~1 µs. See
