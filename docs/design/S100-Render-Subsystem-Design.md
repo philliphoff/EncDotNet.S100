@@ -104,7 +104,11 @@ EMA of recent viewport-center deltas → velocity estimate. Each tick the **warm
 
 Because both the current Mapsui path and the new subsystem consume the **same `VectorScene`**, A/B is apples-to-apples on identical portrayal.
 
-- **Switch at the `IMapHost` seam.** The viewer already late-binds `IMapHost` via `IMapHostAccessor`, constructed in `MainWindow` after the Avalonia `MapControl` exists. Introduce `IChartRenderSubsystem` with two implementations — `MapsuiSubsystem` (wraps today's path) and `TiledSceneSubsystem` (new) — and let `IMapHost` hold the active one.
+- **Switch at the map adapter seam.** `MainWindow` constructs `MapsuiMapHost`
+  after the Avalonia `MapControl` exists. The adapter implements focused layer,
+  viewport, coordinate, snapshot, and invalidation capabilities; it retains the
+  active `IChartRenderSubsystem` lifecycle without exposing that choice through
+  a monolithic consumer contract.
 - **Runtime toggle.** Extend the existing `RenderingOptimizations` flag pattern (env-pinnable bools) with `RenderSubsystem { Mapsui | TiledScene }`, surfaced in `SettingsViewModel` for hot-swap, and overridable by env var for benchmark runs.
 - **Side-by-side mode (optional, high value).** Split-view or toggle-overlay so the same gesture drives both subsystems for visual diffing of portrayal fidelity.
 - **Metrics.** Both renderers already carry `Diagnostics/Telemetry`. Standardize a comparison surface: frame time (p50/p95/p99), per-stage timing (scene query / rasterize / composite), tiles produced vs. evicted, cache hit rate, prediction hit rate, native bytes resident. Capture against fixed gesture scripts on reference cells (`101AU005PDB01` as the established baseline) so wins are defensible and regressions caught.

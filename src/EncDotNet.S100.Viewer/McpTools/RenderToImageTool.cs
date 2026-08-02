@@ -34,7 +34,7 @@ internal sealed record RenderToImageResult(
 /// <remarks>
 /// <para>
 /// The tool snapshots the live Mapsui map managed by the viewer's
-/// <see cref="IMapHost"/>: current viewport, palette, time step, and
+/// <see cref="IMapSnapshotRenderer"/>: current viewport, palette, time step, and
 /// loaded datasets are reflected exactly. Nothing in the live map is
 /// mutated; the snapshot uses a clone Map that shares the layer
 /// collection but owns its own navigator.
@@ -71,13 +71,18 @@ internal sealed class RenderToImageTool
     internal const double MinPixelDensity = 0.5;
     internal const double MaxPixelDensity = 3.0;
 
-    private readonly IMapHostAccessor _accessor;
+    private readonly IMapCapabilityAccessor<IMapSnapshotRenderer> _snapshotAccessor;
+    private readonly IMapCapabilityAccessor<IMapCoordinateConverter> _coordinateAccessor;
 
     /// <summary>Creates a new <see cref="RenderToImageTool"/>.</summary>
-    public RenderToImageTool(IMapHostAccessor accessor)
+    public RenderToImageTool(
+        IMapCapabilityAccessor<IMapSnapshotRenderer> snapshotAccessor,
+        IMapCapabilityAccessor<IMapCoordinateConverter> coordinateAccessor)
     {
-        ArgumentNullException.ThrowIfNull(accessor);
-        _accessor = accessor;
+        ArgumentNullException.ThrowIfNull(snapshotAccessor);
+        ArgumentNullException.ThrowIfNull(coordinateAccessor);
+        _snapshotAccessor = snapshotAccessor;
+        _coordinateAccessor = coordinateAccessor;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -95,14 +100,14 @@ internal sealed class RenderToImageTool
                     $"value {d} is not a finite number"));
         }
 
-        var host = _accessor.Current;
-        if (host is null)
+        var renderer = _snapshotAccessor.Current;
+        if (renderer is null)
         {
             return ToolResult<RenderToImageResult>.Err(
                 new MapNotReady("the viewer's map control has not been initialised yet"));
         }
 
-        var (viewportWidth, viewportHeight) = ResolveViewportSize(host);
+        var (viewportWidth, viewportHeight) = ResolveViewportSize(_coordinateAccessor.Current);
 
         // When the caller specifies neither dimension we capture at the
         // live viewport size (if known) so the snapshot matches what the
@@ -122,7 +127,7 @@ internal sealed class RenderToImageTool
         byte[]? bytes;
         try
         {
-            bytes = await host.RenderCurrentViewToPngAsync(width, height, density, cancellationToken)
+            bytes = await renderer.RenderCurrentViewToPngAsync(width, height, density, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -151,9 +156,9 @@ internal sealed class RenderToImageTool
             width, height, density, "png", bytes, notes, viewportWidth, viewportHeight));
     }
 
-    private static (int? Width, int? Height) ResolveViewportSize(IMapHost host)
+    private static (int? Width, int? Height) ResolveViewportSize(IMapCoordinateConverter? converter)
     {
-        if (host.TryGetViewportSizePx() is not { } size) return (null, null);
+        if (converter?.TryGetViewportSizePx() is not { } size) return (null, null);
         if (size.Width < 1 || size.Height < 1
             || double.IsNaN(size.Width) || double.IsNaN(size.Height)
             || double.IsInfinity(size.Width) || double.IsInfinity(size.Height))

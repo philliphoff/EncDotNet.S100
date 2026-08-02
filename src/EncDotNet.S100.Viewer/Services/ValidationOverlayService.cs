@@ -12,17 +12,17 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 internal sealed class ValidationOverlayService : IDisposable
 {
-    private readonly IMapHost _mapHost;
+    private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private DatasetEntry? _trackedEntry;
     private MemoryLayer? _layer;
     private bool _disposed;
 
-    public ValidationOverlayService(IMapHost mapHost, DatasetsViewModel datasets)
+    public ValidationOverlayService(IMapLayerCollection layers, DatasetsViewModel datasets)
     {
-        ArgumentNullException.ThrowIfNull(mapHost);
+        ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(datasets);
-        _mapHost = mapHost;
+        _layers = layers;
         _datasets = datasets;
         _datasets.PropertyChanged += OnDatasetsPropertyChanged;
         SyncSelection();
@@ -86,7 +86,7 @@ internal sealed class ValidationOverlayService : IDisposable
         if (_layer is null)
         {
             _layer = ValidationOverlayBuilder.Create();
-            _mapHost.AddOverlayLayer(_layer);
+            _layers.AddOverlayLayer(_layer);
         }
         ValidationOverlayBuilder.Update(_layer, spatial!);
     }
@@ -94,7 +94,7 @@ internal sealed class ValidationOverlayService : IDisposable
     private void TeardownLayer()
     {
         if (_layer is null) return;
-        _mapHost.RemoveOverlayLayer(_layer);
+        _layers.RemoveOverlayLayer(_layer);
         _layer = null;
     }
 

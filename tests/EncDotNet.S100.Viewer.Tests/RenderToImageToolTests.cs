@@ -2,8 +2,6 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
-using Mapsui;
-using Mapsui.Layers;
 using ModelContextProtocol.Protocol;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -22,29 +20,14 @@ public class RenderToImageToolTests
         return b;
     }
 
-    private sealed class FakeMapHost : IMapHost
+    private sealed class FakeMapHost : IMapSnapshotRenderer, IMapCoordinateConverter
     {
-        public IChartRenderSubsystem RenderSubsystem { get; } = new MapsuiChartRenderSubsystem();
-
         public int ObservedWidth, ObservedHeight;
         public double ObservedDensity;
         public byte[]? Result = StubPng;
         public Exception? Throw;
         public (double Width, double Height)? ViewportSize;
 
-        public void AddLayer(ILayer layer) { }
-        public void RemoveLayer(ILayer layer) { }
-        public void AddOverlayLayer(ILayer layer) { }
-        public void RemoveOverlayLayer(ILayer layer) { }
-        public void ReorderDatasetLayers(System.Collections.Generic.IReadOnlyList<ILayer> orderedDatasetLayers) { }
-        public void ZoomToExtent(MRect extent) { }
-        public void SetViewportToExtent(MRect mercatorExtent) { }
-        public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
-
-        public void SetRotation(double degrees) { }
-
-        public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
-        public GeoPosition? TryGetViewportCenterWgs84() => null;
         public (double Width, double Height)? TryGetViewportSizePx() => ViewportSize;
         public GeoPosition? TryScreenToWgs84(double xPx, double yPx) => null;
         public GeoPosition? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
@@ -59,17 +42,27 @@ public class RenderToImageToolTests
         }
     }
 
-    private sealed class FakeAccessor : IMapHostAccessor
+    private sealed class FakeAccessor :
+        IMapCapabilityAccessor<IMapSnapshotRenderer>,
+        IMapCapabilityAccessor<IMapCoordinateConverter>
     {
-        public IMapHost? Current { get; set; }
+        public FakeMapHost? Current { get; set; }
+
+        IMapSnapshotRenderer? IMapCapabilityAccessor<IMapSnapshotRenderer>.Current => Current;
+        IMapCoordinateConverter? IMapCapabilityAccessor<IMapCoordinateConverter>.Current => Current;
+    }
+
+    private static RenderToImageTool CreateTool(FakeMapHost? host)
+    {
+        var accessor = new FakeAccessor { Current = host };
+        return new RenderToImageTool(accessor, accessor);
     }
 
     [Fact]
     public async Task Applies_defaults_when_request_is_blank()
     {
         var host = new FakeMapHost();
-        var accessor = new FakeAccessor { Current = host };
-        var tool = new RenderToImageTool(accessor);
+        var tool = CreateTool(host);
 
         var result = await tool.InvokeAsync(new RenderToImageRequest());
 
@@ -91,7 +84,7 @@ public class RenderToImageToolTests
     public async Task Defaults_to_live_viewport_size_when_blank()
     {
         var host = new FakeMapHost { ViewportSize = (1226.4, 939.6) };
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
 
         var result = await tool.InvokeAsync(new RenderToImageRequest());
 
@@ -109,7 +102,7 @@ public class RenderToImageToolTests
     public async Task Echoes_viewport_size_even_with_explicit_dimensions()
     {
         var host = new FakeMapHost { ViewportSize = (1226, 939) };
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
 
         var result = await tool.InvokeAsync(new RenderToImageRequest(Width: 512, Height: 512));
 
@@ -126,7 +119,7 @@ public class RenderToImageToolTests
     public async Task Partial_request_keeps_static_fallback_for_omitted_dimension()
     {
         var host = new FakeMapHost { ViewportSize = (1226, 939) };
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
 
         var result = await tool.InvokeAsync(new RenderToImageRequest(Width: 800));
 
@@ -141,7 +134,7 @@ public class RenderToImageToolTests
     public async Task Degenerate_viewport_size_falls_back_to_static_default()
     {
         var host = new FakeMapHost { ViewportSize = (0, 0) };
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
 
         var result = await tool.InvokeAsync(new RenderToImageRequest());
 
@@ -161,7 +154,7 @@ public class RenderToImageToolTests
     public async Task Clamps_dimensions(int requested, int expected)
     {
         var host = new FakeMapHost();
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
         var r = await tool.InvokeAsync(new RenderToImageRequest(Width: requested, Height: requested, PixelDensity: 1.0));
         Assert.True(r.TryGetValue(out var ok));
         Assert.Equal(expected, ok!.Width);
@@ -175,7 +168,7 @@ public class RenderToImageToolTests
     public async Task Clamps_pixel_density(double requested, double expected)
     {
         var host = new FakeMapHost();
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
         var r = await tool.InvokeAsync(new RenderToImageRequest(PixelDensity: requested));
         Assert.True(r.TryGetValue(out var ok));
         Assert.Equal(expected, ok!.PixelDensity);
@@ -184,7 +177,7 @@ public class RenderToImageToolTests
     [Fact]
     public async Task NaN_density_returns_invalid_argument()
     {
-        var tool = new RenderToImageTool(new FakeAccessor { Current = new FakeMapHost() });
+        var tool = CreateTool(new FakeMapHost());
         var r = await tool.InvokeAsync(new RenderToImageRequest(PixelDensity: double.NaN));
         Assert.True(r.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -193,7 +186,7 @@ public class RenderToImageToolTests
     [Fact]
     public async Task Missing_host_returns_map_not_ready()
     {
-        var tool = new RenderToImageTool(new FakeAccessor { Current = null });
+        var tool = CreateTool(null);
         var r = await tool.InvokeAsync(new RenderToImageRequest());
         Assert.True(r.TryGetError(out var err));
         Assert.IsType<MapNotReady>(err);
@@ -203,7 +196,7 @@ public class RenderToImageToolTests
     public async Task Null_bytes_returns_map_not_ready()
     {
         var host = new FakeMapHost { Result = null };
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
         var r = await tool.InvokeAsync(new RenderToImageRequest());
         Assert.True(r.TryGetError(out var err));
         Assert.IsType<MapNotReady>(err);
@@ -213,7 +206,7 @@ public class RenderToImageToolTests
     public async Task Host_exception_returns_map_not_ready()
     {
         var host = new FakeMapHost { Throw = new InvalidOperationException("no map") };
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
         var r = await tool.InvokeAsync(new RenderToImageRequest());
         Assert.True(r.TryGetError(out var err));
         Assert.IsType<MapNotReady>(err);
@@ -223,7 +216,7 @@ public class RenderToImageToolTests
     public void Adapter_produces_image_content_block_first()
     {
         var host = new FakeMapHost();
-        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+        var tool = CreateTool(host);
         var mcpTool = RenderToImageMcpAdapter.Create(tool);
         Assert.Equal("render_to_image", mcpTool.ProtocolTool.Name);
     }

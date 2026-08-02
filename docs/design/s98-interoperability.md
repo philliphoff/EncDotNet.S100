@@ -508,7 +508,7 @@ is the *only* place layers from different datasets are combined.
 It walks `_entryOrder` (user-controlled dataset stacking from the
 Datasets panel) bottom-up, concatenates each entry's
 `_entryLayers[entry]` in dataset-iteration order, and hands the
-result to `MapsuiMapHost.ReorderDatasetLayers`.
+result to `IMapLayerCollection.ReplaceDatasetLayers`.
 
 That means today every layer of dataset N sits below every layer
 of dataset N+1, regardless of plane. This is **Level 0** in S-98
@@ -536,7 +536,7 @@ result and the map host:
                          │
                          ▼
             ┌───────────────────────────────────┐
-            │ MapsuiMapHost.ReorderDatasetLayers│
+            │ IMapLayerCollection.ReplaceDatasetLayers │
             └───────────────────────────────────┘
 ```
 
@@ -573,7 +573,7 @@ hit test; we only reorder the dedup-survivors.
 
 - `ViewerDatasetCatalog.cs` — none expected.
 - `MainViewModel.cs` — none expected (it never assembles layers).
-- `MapsuiMapHost.cs` (i.e. `IMapHost.ReorderDatasetLayers`) — none;
+- `MapsuiMapHost.cs` (i.e. `IMapLayerCollection.ReplaceDatasetLayers`) — none;
   it already takes a flat ordered list.
 - `DatasetsViewModel.cs` — no changes; user-perceived ordering
   still flows through this VM.

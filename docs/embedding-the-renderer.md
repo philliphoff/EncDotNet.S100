@@ -68,6 +68,21 @@ than a presentation-specific refresh event. The Viewer therefore no longer acts
 as the rendering identity or active-state store. Processor and layer ownership
 remain in the Viewer loader until the later reusable session extraction.
 
+The Viewer's live map adapter is also segregated by responsibility. Its
+`MapsuiMapHost` implements separate internal capabilities for layer-band
+collection, viewport/navigation, coordinate conversion, snapshot rendering, and
+redraw invalidation. Dataset loading receives only the layer and viewport
+capabilities; overlays receive only layer collection; MCP and feedback services
+use typed late-bound accessors for only the viewport, conversion, or snapshot
+capability they need. There is no aggregate `IMapHost` facade.
+
+This is an application-boundary cleanup rather than the final reusable session
+API. Layer ownership continues to use the reusable `MapsuiLayerBands` component
+against `Mapsui.Map`, while Avalonia dispatch, live-control invalidation, and
+capture remain in the Viewer adapter. A future reusable navigator adapter and
+separate Avalonia capture package can therefore be extracted without consumers
+depending on the current control-bound implementation.
+
 ## Why it matters
 
 This is the smallest seam for teams that already own portrayal outputs or want

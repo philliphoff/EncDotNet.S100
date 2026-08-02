@@ -20,16 +20,17 @@ public class ValidationOverlayTests
 {
     // ── Test fakes ───────────────────────────────────────────────────
 
-    private sealed class FakeMapHost : IMapHost
+    private sealed class FakeMapHost : IMapLayerCollection, IMapViewportController
     {
-        public IChartRenderSubsystem RenderSubsystem { get; } = new MapsuiChartRenderSubsystem();
-
         public List<MRect> ZoomCalls { get; } = new();
         public List<ILayer> Overlays { get; } = new();
 
-        public void AddLayer(ILayer layer) { }
-        public void RemoveLayer(ILayer layer) { }
-        public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) { }
+        public void AddDatasetLayer(ILayer layer) { }
+        public void RemoveDatasetLayer(ILayer layer) { }
+        public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) { }
+        public void SetBasemapLayer(ILayer? layer) { }
+        public void AddToolLayer(ILayer layer) { }
+        public void RemoveToolLayer(ILayer layer) { }
         public void ZoomToExtent(MRect extent) => ZoomCalls.Add(extent);
         public void SetViewportToExtent(MRect mercatorExtent) { }
         public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
@@ -38,13 +39,8 @@ public class ValidationOverlayTests
 
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
         public GeoPosition? TryGetViewportCenterWgs84() => null;
-        public (double Width, double Height)? TryGetViewportSizePx() => null;
-        public GeoPosition? TryScreenToWgs84(double xPx, double yPx) => null;
-        public GeoPosition? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
         public void AddOverlayLayer(ILayer layer) => Overlays.Add(layer);
         public void RemoveOverlayLayer(ILayer layer) => Overlays.Remove(layer);
-        public System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, System.Threading.CancellationToken cancellationToken = default)
-            => System.Threading.Tasks.Task.FromResult<byte[]?>(null);
     }
 
     private static ValidationFinding Finding(

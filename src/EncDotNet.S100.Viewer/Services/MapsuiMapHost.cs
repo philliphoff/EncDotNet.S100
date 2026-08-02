@@ -13,12 +13,20 @@ using Mapsui.UI.Avalonia;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// <see cref="IMapHost"/> implementation backed by a live Mapsui
-/// <see cref="MapControl"/>. Created by <see cref="MainWindow"/> after
-/// the control has been initialized and handed to consumers via
-/// <see cref="IDatasetLoaderService.Initialize"/>.
+/// Focused map capability implementation backed by a live Mapsui
+/// <see cref="MapControl"/>.
 /// </summary>
-internal sealed class MapsuiMapHost : IMapHost
+/// <remarks>
+/// Layer ownership remains delegated to <see cref="MapsuiLayerBands"/>. This
+/// adapter supplies only the Avalonia control, dispatcher, and capture behavior
+/// that cannot live in the reusable Mapsui layer-band component.
+/// </remarks>
+internal sealed class MapsuiMapHost :
+    IMapLayerCollection,
+    IMapViewportController,
+    IMapCoordinateConverter,
+    IMapSnapshotRenderer,
+    IMapInvalidator
 {
     private readonly MapControl _mapControl;
     private readonly MapsuiLayerBands _layerBands;
@@ -38,17 +46,17 @@ internal sealed class MapsuiMapHost : IMapHost
     /// <inheritdoc />
     public IChartRenderSubsystem RenderSubsystem { get; }
 
-    public void AddLayer(ILayer layer)
+    public void AddDatasetLayer(ILayer layer)
     {
         _layerBands.AddDatasetLayer(layer);
     }
 
-    public void RemoveLayer(ILayer layer)
+    public void RemoveDatasetLayer(ILayer layer)
     {
         _layerBands.RemoveDatasetLayer(layer);
     }
 
-    public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
+    public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
     {
         _layerBands.ReplaceDatasetLayers(orderedDatasetLayers);
     }
@@ -58,6 +66,17 @@ internal sealed class MapsuiMapHost : IMapHost
     public void AddToolLayer(ILayer layer) => _layerBands.AddToolLayer(layer);
 
     public void RemoveToolLayer(ILayer layer) => _layerBands.RemoveToolLayer(layer);
+
+    public void RequestRedraw()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            _mapControl.RefreshGraphics();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(_mapControl.RefreshGraphics);
+    }
 
     public void ZoomToExtent(MRect extent)
     {

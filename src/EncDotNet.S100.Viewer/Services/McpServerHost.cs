@@ -23,7 +23,9 @@ internal sealed class McpServerHost : IAsyncDisposable
 {
     private readonly EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
-    private readonly IMapHostAccessor? _mapHostAccessor;
+    private readonly IMapCapabilityAccessor<IMapSnapshotRenderer>? _snapshotAccessor;
+    private readonly IMapCapabilityAccessor<IMapViewportController>? _viewportAccessor;
+    private readonly IMapCapabilityAccessor<IMapCoordinateConverter>? _coordinateAccessor;
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
     private readonly GlobalTimeService? _globalTime;
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
@@ -42,7 +44,9 @@ internal sealed class McpServerHost : IAsyncDisposable
     public McpServerHost(
         EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
-        IMapHostAccessor? mapHostAccessor = null,
+        IMapCapabilityAccessor<IMapSnapshotRenderer>? snapshotAccessor = null,
+        IMapCapabilityAccessor<IMapViewportController>? viewportAccessor = null,
+        IMapCapabilityAccessor<IMapCoordinateConverter>? coordinateAccessor = null,
         ILoggerFactory? loggers = null,
         IRenderStateControllerAccessor? renderStateAccessor = null,
         GlobalTimeService? globalTime = null,
@@ -58,7 +62,9 @@ internal sealed class McpServerHost : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
         _settings = settings;
-        _mapHostAccessor = mapHostAccessor;
+        _snapshotAccessor = snapshotAccessor;
+        _viewportAccessor = viewportAccessor;
+        _coordinateAccessor = coordinateAccessor;
         _renderStateAccessor = renderStateAccessor;
         _globalTime = globalTime;
         _renderActivityMonitor = renderActivityMonitor;
@@ -277,11 +283,19 @@ internal sealed class McpServerHost : IAsyncDisposable
     private System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
     {
         var tools = new System.Collections.Generic.List<McpServerTool>();
-        if (_mapHostAccessor is not null)
+        if (_snapshotAccessor is not null && _coordinateAccessor is not null)
         {
-            tools.Add(RenderToImageMcpAdapter.Create(new RenderToImageTool(_mapHostAccessor)));
-            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_mapHostAccessor)));
-            tools.Add(PickFeaturesMcpAdapter.Create(new PickFeaturesTool(_mapHostAccessor, _catalog, _pickPresenter)));
+            tools.Add(RenderToImageMcpAdapter.Create(
+                new RenderToImageTool(_snapshotAccessor, _coordinateAccessor)));
+        }
+        if (_viewportAccessor is not null)
+        {
+            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_viewportAccessor)));
+        }
+        if (_coordinateAccessor is not null)
+        {
+            tools.Add(PickFeaturesMcpAdapter.Create(
+                new PickFeaturesTool(_coordinateAccessor, _catalog, _pickPresenter)));
         }
         if (_renderStateAccessor is not null)
         {
