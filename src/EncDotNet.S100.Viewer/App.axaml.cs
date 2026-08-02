@@ -599,6 +599,7 @@ public partial class App : Application
         services.AddSingleton<Func<AboutDialogViewModel>>(sp =>
             sp.GetRequiredService<AboutDialogViewModel>);
 
+        services.AddSingleton<DatasetProcessorOwner>();
         services.AddSingleton<DatasetLoaderService>();
         services.AddSingleton<IDatasetLoaderService>(sp =>
             sp.GetRequiredService<DatasetLoaderService>());

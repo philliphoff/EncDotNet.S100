@@ -33,6 +33,23 @@ features ─▶ portrayal catalogue (MoonSharp / XSLT)
 
 Its one structural limit: it records *what Mapsui would draw* — it rides `GetFeatures` / `SortFeatures` and the per-feature style dispatch. The new subsystem cuts that tie by rasterizing **from `VectorScene` directly**, so the base plane no longer touches Mapsui's feature/style/layer model at all.
 
+### 1.1 Processor lifecycle seam
+
+Processor lifetime is independent of rendering backend and Viewer policy.
+`DatasetProcessorOwner` in `EncDotNet.S100.Datasets.Pipelines` owns processors
+by stable `MapDatasetId`. Registration is an explicit ownership transfer;
+duplicate identities are rejected without taking ownership. Removal makes a
+processor unavailable immediately but defers its `IDisposable` cleanup until
+active `DatasetProcessorLease` instances finish, so cancellation or concurrent
+remove cannot dispose a processor beneath an in-flight render.
+
+The Viewer `DatasetLoaderService` creates processors and coordinates catalogue
+prompts, notifications, recent files, validation, rendering, layer policy, and
+optional framing, but delegates registration, lookup, failed-load rollback,
+lazy-unload removal, shutdown, and disposal to that reusable owner. Layer
+replacement, S-98 composition, time registration, and presentation refresh
+remain Viewer responsibilities until later map-session extraction slices.
+
 ---
 
 ## 2. Prerequisite refactor (small, enabling)

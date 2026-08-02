@@ -46,6 +46,22 @@ product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### Processor lifecycle ownership
+
+`DatasetProcessorOwner` is the renderer- and UI-neutral lifecycle boundary for
+processors loaded into a map. It is keyed by host-stable `MapDatasetId`, rejects
+duplicate identities without taking ownership of the rejected processor, and
+uses `DatasetProcessorLease` to defer removal disposal while a render or other
+operation is still using a processor. Disposing the owner deterministically
+retires every processor and disposes the current `IDisposable` processor
+implementations exactly once.
+
+The component belongs in this aggregate pipeline package because it owns
+`IDatasetProcessor` instances across product specifications while depending on
+neither Mapsui nor a UI framework. Layer rendering, S-98 composition, time
+registration, and presentation refresh remain outside this first lifecycle
+slice.
+
 ### Headless pick services and catalog (issue #480)
 
 The protocol-neutral "pick" logic — identify the vector features and
