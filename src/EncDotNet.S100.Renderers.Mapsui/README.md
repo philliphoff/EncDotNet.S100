@@ -60,6 +60,9 @@ The render subsystem and vector-scene mode are the first settings captured by
 this object. Other optimization settings will move from
 `RenderingOptimizations` incrementally. Omitting `options` preserves the
 existing live global behavior used by the Viewer and performance harnesses.
+When `patternClipCache` is omitted, the renderer retains an in-memory
+single-entry cache for its lifetime. Hosts can inject `DiskPatternClipCache`
+to share entries across renderers and process restarts.
 
 ## Layer-band composition
 
