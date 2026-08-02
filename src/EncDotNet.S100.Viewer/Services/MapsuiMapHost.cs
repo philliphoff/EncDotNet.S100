@@ -18,8 +18,9 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 /// <remarks>
 /// Layer ownership remains delegated to <see cref="MapsuiLayerBands"/>. This
-/// adapter supplies only the Avalonia control, dispatcher, and capture behavior
-/// that cannot live in the reusable Mapsui layer-band component.
+/// adapter delegates navigation to <see cref="MapsuiMapNavigator"/> and supplies
+/// only the Avalonia control, dispatcher, coordinate-conversion, and capture
+/// behavior that remains Viewer-specific.
 /// </remarks>
 internal sealed class MapsuiMapHost :
     IMapLayerCollection,
@@ -30,15 +31,17 @@ internal sealed class MapsuiMapHost :
 {
     private readonly MapControl _mapControl;
     private readonly MapsuiLayerBands _layerBands;
+    private readonly MapsuiMapNavigator _mapNavigator;
 
     public MapsuiMapHost(MapControl mapControl)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         _mapControl = mapControl;
-        _layerBands = new MapsuiLayerBands(
-            mapControl.Map
+        var map = mapControl.Map
             ?? throw new InvalidOperationException(
-                "The Mapsui map control must have a map before creating its host."));
+                "The Mapsui map control must have a map before creating its host.");
+        _layerBands = new MapsuiLayerBands(map);
+        _mapNavigator = new MapsuiMapNavigator(map);
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();
     }
@@ -80,75 +83,39 @@ internal sealed class MapsuiMapHost :
 
     public void ZoomToExtent(MRect extent)
     {
-        ArgumentNullException.ThrowIfNull(extent);
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1));
-        }
+        _mapNavigator.ZoomToExtent(extent);
+    }
+
+    public void ZoomToExtent(MRect extent, long durationMilliseconds)
+    {
+        _mapNavigator.ZoomToExtent(extent, durationMilliseconds);
     }
 
     public void SetViewportToExtent(MRect mercatorExtent)
     {
-        ArgumentNullException.ThrowIfNull(mercatorExtent);
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            // duration: 0 for an instantaneous, scripted viewport set —
-            // animations would prevent reproducible measurement runs.
-            nav.ZoomToBox(mercatorExtent, duration: 0);
-        }
+        _mapNavigator.SetViewportToExtent(mercatorExtent);
     }
 
     public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution)
     {
-        ArgumentNullException.ThrowIfNull(mercatorCenter);
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            nav.CenterOnAndZoomTo(mercatorCenter, resolution, duration: 0);
-        }
+        _mapNavigator.SetViewportToCenterAndResolution(mercatorCenter, resolution);
     }
 
     public void SetRotation(double degrees)
     {
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            // duration: 0 for an instantaneous, scripted rotation — animations
-            // would prevent reproducible measurement / capture runs.
-            nav.RotateTo(degrees, duration: 0);
-        }
+        _mapNavigator.SetRotation(degrees);
     }
 
     public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300)
     {
-        if (double.IsNaN(latitudeWgs84) || double.IsNaN(longitudeWgs84)
-            || double.IsInfinity(latitudeWgs84) || double.IsInfinity(longitudeWgs84)
-            || latitudeWgs84 < -90.0 || latitudeWgs84 > 90.0)
-        {
-            return;
-        }
-
-        if (_mapControl.Map?.Navigator is not { } nav)
-            return;
-
-        var (x, y) = SphericalMercator.FromLonLat(longitudeWgs84, latitudeWgs84);
-        // CenterOn keeps the current resolution, so the zoom level is
-        // preserved — only the viewport centre moves.
-        nav.CenterOn(x, y, durationMs);
+        _mapNavigator.CenterOn(
+            new GeoPosition(latitudeWgs84, longitudeWgs84),
+            durationMs);
     }
 
     public GeoPosition? TryGetViewportCenterWgs84()
     {
-        if (_mapControl.Map?.Navigator is not { } nav)
-            return null;
-
-        var viewport = nav.Viewport;
-        if (viewport.Width <= 0 || viewport.Height <= 0)
-            return null;
-
-        var (lon, lat) = SphericalMercator.ToLonLat(viewport.CenterX, viewport.CenterY);
-        if (double.IsNaN(lat) || double.IsNaN(lon) || lat < -90.0 || lat > 90.0)
-            return null;
-
-        return new GeoPosition(lat, lon);
+        return _mapNavigator.TryGetViewportCenterWgs84();
     }
 
     public (double Width, double Height)? TryGetViewportSizePx()

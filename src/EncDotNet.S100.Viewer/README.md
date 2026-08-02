@@ -965,7 +965,10 @@ Consumers depend on focused interfaces for layer bands, viewport/navigation,
 coordinate conversion, snapshot rendering, or redraw invalidation. Late-bound
 services use typed `IMapCapabilityAccessor<TCapability>` instances, so no
 consumer regains the former monolithic map-host dependency. Layer ordering and
-ownership remain in the reusable `MapsuiLayerBands` component.
+ownership remain in the reusable `MapsuiLayerBands` component, while viewport
+behavior delegates to the reusable `MapsuiMapNavigator`; both operate on
+`Mapsui.Map` without Avalonia. The Viewer retains automatic zoom-after-load,
+dispatcher, control invalidation, coordinate conversion, and capture policy.
 
 - Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
 - Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
