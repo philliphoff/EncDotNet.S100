@@ -266,6 +266,7 @@ public sealed class MapsuiMapSession : IDisposable
         bool preserveState = false,
         bool removeProcessor = true)
     {
+        DatasetProcessorLease? processorLease = null;
         lock (_sync)
         {
             ThrowIfDisposed();
@@ -300,7 +301,13 @@ public sealed class MapsuiMapSession : IDisposable
             }
 
             if (removeProcessor)
-                _processorOwner.Remove(datasetId);
+                _processorOwner.TryAcquire(datasetId, out processorLease);
+        }
+
+        if (processorLease is not null)
+        {
+            using (processorLease)
+                _processorOwner.Remove(datasetId, processorLease.Processor);
         }
 
         LayersChanged?.Invoke();
@@ -668,7 +675,9 @@ public sealed class MapsuiMapSession : IDisposable
     {
         var subLayer = dataset.SubLayers.FirstOrDefault(
             candidate => string.Equals(candidate.Key, layerKey, StringComparison.Ordinal));
-        layer.Enabled = dataset.IsVisible && (subLayer?.IsVisible ?? true);
+        layer.Enabled = dataset.IsActive
+            && dataset.IsVisible
+            && (subLayer?.IsVisible ?? true);
         layer.Opacity = dataset.Opacity * (subLayer?.Opacity ?? 1.0);
     }
 
@@ -775,6 +784,7 @@ public sealed class MapsuiMapSession : IDisposable
     private static bool IsDrawing(Entry entry)
     {
         if (entry.Layers.Count == 0
+            || !entry.Dataset.IsActive
             || !entry.Dataset.IsVisible
             || entry.Dataset.Opacity <= 0)
         {

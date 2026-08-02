@@ -215,8 +215,8 @@ internal sealed class DatasetEntry : ViewModelBase
     //
     // These properties drive the underlying Mapsui ILayer.Enabled and
     // ILayer.Opacity values via MapsuiMapSession. They survive
-    // re-renders (palette switches, time-step scrubs) because the
-    // loader re-applies them inside ReplaceLayers.
+    // re-renders (palette switches, time-step scrubs) because the session
+    // reapplies them when replacing generated layers.
 
     private bool _isVisible = true;
     /// <summary>

@@ -70,6 +70,33 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public async Task HostProjectionCannotDrawAnInactiveDataset()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
+        session.SetDataset(Dataset(id));
+        await session.RenderAsync(id, context: null);
+        session.SetLayerProjector(datasets =>
+        {
+            var snapshot = Assert.Single(datasets);
+            return snapshot.Layers
+                .Select((layer, index) => new MapsuiProjectedDatasetLayer(
+                    snapshot.Dataset.Id,
+                    snapshot.LayerKeys?[index] ?? $"layer-{index}",
+                    layer))
+                .ToArray();
+        });
+
+        session.SetDataset(Dataset(id, isActive: false));
+
+        Assert.False(Assert.Single(map.Layers).Enabled);
+        Assert.False(session.GetDataset(id)!.IsDrawing);
+    }
+
+    [Fact]
     public async Task OpacityScaleAndSubLayerStateSurviveReplacement()
     {
         using var map = new Map();
