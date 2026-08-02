@@ -42,12 +42,11 @@ public sealed class MapsuiDatasetRenderer
 {
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S100MapsuiOptions? _options;
-    private readonly IPatternClipCache? _patternClipCache;
+    private readonly IPatternClipCache _patternClipCache;
 
     // The processor's portrayal build holds the processor's own render gate,
-    // but the Mapsui conversion below uses two per-processor, non-thread-safe
-    // resources — the pattern-clip cache and the render-asset cache — so the
-    // whole render is serialized per processor here.
+    // but the Mapsui conversion below uses a per-processor, non-thread-safe
+    // render-asset cache, so the whole render is serialized per processor here.
     private static readonly ConditionalWeakTable<IDatasetProcessor, SemaphoreSlim> RenderGates = new();
     private static readonly ConditionalWeakTable<IDatasetProcessor, MapsuiRenderAssetCache> AssetCaches = new();
 
@@ -63,7 +62,7 @@ public sealed class MapsuiDatasetRenderer
     /// <see cref="DiskPatternClipCache"/>) shared across every S-101 render, so
     /// the cold first open of a previously-seen cell skips the multi-second
     /// NetTopologySuite clip. When <see langword="null"/> an in-memory
-    /// single-slot cache is used per render.
+    /// single-slot cache is retained for the lifetime of this renderer.
     /// </param>
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="crsTransformFactory"/> is
@@ -75,7 +74,7 @@ public sealed class MapsuiDatasetRenderer
     {
         ArgumentNullException.ThrowIfNull(crsTransformFactory);
         _crsTransformFactory = crsTransformFactory;
-        _patternClipCache = patternClipCache;
+        _patternClipCache = patternClipCache ?? new InMemoryPatternClipCache();
     }
 
     /// <summary>
@@ -86,7 +85,9 @@ public sealed class MapsuiDatasetRenderer
     /// the native grid CRS to EPSG:3857.
     /// </param>
     /// <param name="patternClipCache">
-    /// Optional process-wide pattern-fill priority-clip cache.
+    /// Optional process-wide pattern-fill priority-clip cache. When
+    /// <see langword="null"/> an in-memory single-slot cache is retained for the
+    /// lifetime of this renderer.
     /// </param>
     /// <param name="options">
     /// Captured rendering configuration.
@@ -103,9 +104,13 @@ public sealed class MapsuiDatasetRenderer
         ArgumentNullException.ThrowIfNull(crsTransformFactory);
         ArgumentNullException.ThrowIfNull(options);
         _crsTransformFactory = crsTransformFactory;
-        _patternClipCache = patternClipCache;
+        _patternClipCache = patternClipCache ?? new InMemoryPatternClipCache();
         _options = options;
     }
+
+    internal long PatternClipCacheHits => _patternClipCache.Hits;
+
+    internal long PatternClipCacheMisses => _patternClipCache.Misses;
 
     /// <summary>
     /// Renders the supplied processor's portrayal into Mapsui layers.
@@ -171,7 +176,7 @@ public sealed class MapsuiDatasetRenderer
                 Palette = result.Palette,
                 AssetCache = assetCache,
                 PatternClipCache = sub.PatternClipCacheKey is not null
-                    ? (_patternClipCache ?? new InMemoryPatternClipCache())
+                    ? _patternClipCache
                     : null,
                 PatternClipCacheKey = sub.PatternClipCacheKey is not null
                     ? QualifyPatternClipKey(sub.PatternClipCacheKey)

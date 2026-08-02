@@ -50,6 +50,27 @@ public class S100MapsuiRenderingTests
     }
 
     [Fact]
+    public async Task MapsuiDatasetRenderer_ReusesFallbackPatternClipCache()
+    {
+        var options = new S100MapsuiOptions
+        {
+            RenderSubsystem = RenderSubsystemKind.TiledScene,
+            SceneMode = VectorSceneMode.Tiled,
+        };
+        var renderer = new MapsuiDatasetRenderer(
+            new IdentityCrsTransformFactory(),
+            patternClipCache: null,
+            options);
+        var processor = new StubPatternVectorProcessor();
+
+        await renderer.RenderAsync(processor);
+        await renderer.RenderAsync(processor);
+
+        Assert.Equal(1, renderer.PatternClipCacheMisses);
+        Assert.True(renderer.PatternClipCacheHits >= 1);
+    }
+
+    [Fact]
     public void MapsuiDatasetResult_IsOwnedByMapsuiRenderer()
     {
         var assembly = typeof(MapsuiDatasetResult).Assembly;
@@ -166,5 +187,59 @@ public class S100MapsuiRenderingTests
                     ],
                 }
                 : null;
+    }
+
+    private sealed class StubPatternVectorProcessor : IDatasetProcessor, IVectorPortrayalSource
+    {
+        public SpecRef Spec { get; } = new("S-101", default);
+
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+        public Task<VectorPortrayalResult> BuildVectorPortrayalAsync(
+            RenderContext? context = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var subLayer = new VectorSubLayer
+            {
+                LayerKey = "test.pattern",
+                LayerName = "Test pattern layer",
+                Instructions =
+                [
+                    new AreaInstruction
+                    {
+                        FeatureReference = StubGeometryProvider.FeatureReference,
+                        AreaFillReference = "TEST_PATTERN",
+                    },
+                ],
+                PatternClipCacheKey = "test-pattern-key",
+                Plane = S98DisplayPlane.BaseChartUnder,
+            };
+
+            var result = new VectorPortrayalResult
+            {
+                SubLayers = [subLayer],
+                Palette = ColorPalette.Default,
+                GeometryProvider = new StubGeometryProvider(),
+                Product = "S-101",
+                Spec = Spec,
+                SourceDatasetId = "test-pattern-dataset",
+                Info = "Test pattern dataset",
+                AreaFillProvider = static name => new AreaFill
+                {
+                    Name = name,
+                    PatternSymbol = name,
+                    V1X = 4.0,
+                    V1Y = 0.0,
+                    V2X = 0.0,
+                    V2Y = 4.0,
+                },
+                SymbolProvider = static _ =>
+                    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><rect width="4" height="4" fill="black"/></svg>""",
+            };
+
+            return Task.FromResult(result);
+        }
     }
 }

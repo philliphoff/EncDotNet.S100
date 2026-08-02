@@ -21,20 +21,29 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// a single cell.
 /// </para>
 /// <para>
-/// Instances are not thread-safe; callers that re-render re-entrantly must
-/// serialize access (the S-101 processor already does so via its render gate).
+/// Instances are thread-safe. Concurrent misses may duplicate the same
+/// computation, but the last identical result becomes the retained entry.
 /// </para>
 /// </remarks>
 public sealed class InMemoryPatternClipCache : IPatternClipCache
 {
+    private readonly object _gate = new();
     private string? _key;
     private IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)>? _value;
+    private long _hits;
+    private long _misses;
 
     /// <inheritdoc />
-    public long Hits { get; private set; }
+    public long Hits
+    {
+        get { lock (_gate) { return _hits; } }
+    }
 
     /// <inheritdoc />
-    public long Misses { get; private set; }
+    public long Misses
+    {
+        get { lock (_gate) { return _misses; } }
+    }
 
     /// <inheritdoc />
     public IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)> GetOrCompute(
@@ -44,16 +53,25 @@ public sealed class InMemoryPatternClipCache : IPatternClipCache
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(factory);
 
-        if (_value is not null && string.Equals(_key, key, StringComparison.Ordinal))
+        lock (_gate)
         {
-            Hits++;
-            return _value;
+            if (_value is not null && string.Equals(_key, key, StringComparison.Ordinal))
+            {
+                _hits++;
+                return _value;
+            }
+
+            _misses++;
         }
 
-        Misses++;
         var produced = factory();
-        _key = key;
-        _value = produced;
+
+        lock (_gate)
+        {
+            _key = key;
+            _value = produced;
+        }
+
         return produced;
     }
 }
