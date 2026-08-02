@@ -101,6 +101,20 @@ a UI thread, invalidate a control, or automatically zoom after a load.
 Avalonia, MAUI, and other hosts retain those policies and thread-affinity
 responsibilities.
 
+## Optional Avalonia adapter
+
+Avalonia hosts can add
+[`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/)
+without coupling this base package to a UI framework. Its
+`AvaloniaMapsuiMapAdapter` attaches explicitly to a
+`CaptureSynchronizedMapControl` and owns UI-thread redraw, control-state
+coordinate conversion, current-view snapshots, and framework control capture.
+Disposal detaches the adapter without disposing the borrowed control or map.
+
+The optional package composes with `MapsuiLayerBands` and
+`MapsuiMapNavigator`; it does not own processors, dataset layers, S-98
+composition, presentation state, or automatic navigation policy.
+
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
 `EncDotNet.S100.Rendering.Scene` (`VectorSceneBuilder` → `VectorScene` of

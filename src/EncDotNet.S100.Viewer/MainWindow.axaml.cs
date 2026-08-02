@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -135,7 +136,12 @@ public partial class MainWindow : ShadUI.Window
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally.
-        _mapHost = new MapsuiMapHost(MapControl);
+        var map = MapControl.Map
+            ?? throw new InvalidOperationException(
+                "The map control must have a map before creating the Viewer host.");
+        _mapHost = new MapsuiMapHost(
+            map,
+            AvaloniaMapsuiMapAdapter.Attach(MapControl));
         _rendererRedrawHandler = _mapHost.RequestRedraw;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
@@ -212,6 +218,10 @@ public partial class MainWindow : ShadUI.Window
             // MainViewModel / window are not kept alive after close.
             App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
             App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = null;
+            _mapHost.Dispose();
         };
         DataContext = _viewModel;
 
@@ -804,7 +814,7 @@ public partial class MainWindow : ShadUI.Window
             // snapshot. Short and fixed — the heavy waiting already
             // happened above on the load/render-quiesce signals.
             await Task.Delay(400);
-            CaptureScreenshot(_screenshotPath);
+            await CaptureScreenshotAsync(_screenshotPath);
 
             if (_closeAfterScreenshot)
             {
@@ -982,12 +992,15 @@ public partial class MainWindow : ShadUI.Window
         Resources["AccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(0x33, themed.R, themed.G, themed.B));
     }
 
-    private void CaptureScreenshot(string outputPath)
+    private Task CaptureScreenshotAsync(string outputPath)
     {
         // Full-window capture snapshots the whole window (panels,
         // toolbars, status bar); the default captures just the map.
         Control target = _fullWindowScreenshot ? this : MapControl;
-        _screenshotService.Capture(target, outputPath);
+        return _screenshotService.CaptureAsync(
+            target,
+            outputPath,
+            _windowLifetimeCancellation.Token);
     }
 
     /// <summary>

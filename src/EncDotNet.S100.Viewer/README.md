@@ -960,20 +960,23 @@ The libraries do all the spec-aware work; the viewer is mainly
 glue + Avalonia views. To understand or extend any of it, start
 with the matching library README:
 
-The live `MapsuiMapHost` is an Avalonia adapter, not a service contract.
+The live `MapsuiMapHost` is Viewer composition, not a service contract.
 Consumers depend on focused interfaces for layer bands, viewport/navigation,
 coordinate conversion, snapshot rendering, or redraw invalidation. Late-bound
 services use typed `IMapCapabilityAccessor<TCapability>` instances, so no
 consumer regains the former monolithic map-host dependency. Layer ordering and
 ownership remain in the reusable `MapsuiLayerBands` component, while viewport
-behavior delegates to the reusable `MapsuiMapNavigator`; both operate on
-`Mapsui.Map` without Avalonia. The Viewer retains automatic zoom-after-load,
-dispatcher, control invalidation, coordinate conversion, and capture policy.
+behavior delegates to `MapsuiMapNavigator`; both operate on `Mapsui.Map`
+without Avalonia. The optional `EncDotNet.S100.Renderers.Mapsui.Avalonia`
+adapter owns live-control attachment, dispatcher use, invalidation, coordinate
+conversion, and framework capture. The Viewer retains automatic zoom-after-load,
+capability readiness, diagnostics, MCP/feedback policy, and host lifecycle.
 
 - Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
 - Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
 - Per-product readers and validation rule packs — `EncDotNet.S100.Datasets.S*/README.md`
 - Vector + coverage + dynamic-feature renderers — [`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/README.md)
+- Optional Avalonia live-control adapter — [`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md)
 - MCP server foundation — [`EncDotNet.S100.Mcp.Tools`](../EncDotNet.S100.Mcp.Tools/README.md) and [`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md)
 
 Design notes for cross-cutting features:

@@ -77,12 +77,19 @@ use typed late-bound accessors for only the viewport, conversion, or snapshot
 capability they need. There is no aggregate `IMapHost` facade.
 
 This is an application-boundary cleanup rather than the final reusable session
-API. Layer ownership continues to use the reusable `MapsuiLayerBands` component
-against `Mapsui.Map`, and viewport behavior delegates to the reusable
-`MapsuiMapNavigator` component against `Map.Navigator`. Both mutate the supplied
-map directly without requiring Avalonia. Automatic zoom after dataset load
-remains Viewer policy. Avalonia dispatch, live-control invalidation, coordinate
-conversion, and capture remain in the Viewer adapter for later extraction.
+API. Layer ownership uses the reusable `MapsuiLayerBands` component against
+`Mapsui.Map`, and viewport behavior delegates to `MapsuiMapNavigator` against
+`Map.Navigator`. Both mutate the supplied map directly without requiring
+Avalonia. Automatic zoom after dataset load remains Viewer policy.
+
+Hosts that use Avalonia can opt into
+`EncDotNet.S100.Renderers.Mapsui.Avalonia`. Its disposable
+`AvaloniaMapsuiMapAdapter` attaches to a live `CaptureSynchronizedMapControl`
+and owns UI-thread invalidation, control-state coordinate conversion, current
+view PNG snapshots, and Avalonia control capture. The capture-synchronized
+control brackets the live Skia paint so offscreen capture cannot race shared GPU
+images. The optional adapter does not own datasets, processors, presentation,
+S-98 composition, or host UX.
 
 ## Why it matters
 

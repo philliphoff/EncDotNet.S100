@@ -104,14 +104,18 @@ EMA of recent viewport-center deltas → velocity estimate. Each tick the **warm
 
 Because both the current Mapsui path and the new subsystem consume the **same `VectorScene`**, A/B is apples-to-apples on identical portrayal.
 
-- **Switch at the map adapter seam.** `MainWindow` constructs `MapsuiMapHost`
-  after the Avalonia `MapControl` exists. The adapter implements focused layer,
-  viewport, coordinate, snapshot, and invalidation capabilities; it retains the
-  active `IChartRenderSubsystem` lifecycle without exposing that choice through
-  a monolithic consumer contract. Layer ownership and viewport behavior delegate
-  to reusable `MapsuiLayerBands` and `MapsuiMapNavigator` components that operate
-  on `Mapsui.Map` without Avalonia; control invalidation and capture remain in
-  the Viewer adapter.
+- **Switch at the map adapter seam.** `MainWindow` attaches the optional
+  `AvaloniaMapsuiMapAdapter` after the live `CaptureSynchronizedMapControl`
+  exists, then constructs the Viewer-owned `MapsuiMapHost`. The host implements
+  focused layer, viewport, coordinate, snapshot, and invalidation capabilities
+  and retains the active `IChartRenderSubsystem` lifecycle without exposing a
+  monolithic consumer contract. Layer ownership and viewport behavior delegate
+  to reusable `MapsuiLayerBands` and `MapsuiMapNavigator` components that
+  operate on `Mapsui.Map` without Avalonia. UI dispatch, live-control
+  invalidation, coordinate conversion, and framework capture live in
+  `EncDotNet.S100.Renderers.Mapsui.Avalonia`; Viewer telemetry subclasses its
+  capture-synchronized control without moving dataset or UX policy into the
+  adapter.
 - **Runtime toggle.** Extend the existing `RenderingOptimizations` flag pattern (env-pinnable bools) with `RenderSubsystem { Mapsui | TiledScene }`, surfaced in `SettingsViewModel` for hot-swap, and overridable by env var for benchmark runs.
 - **Side-by-side mode (optional, high value).** Split-view or toggle-overlay so the same gesture drives both subsystems for visual diffing of portrayal fidelity.
 - **Metrics.** Both renderers already carry `Diagnostics/Telemetry`. Standardize a comparison surface: frame time (p50/p95/p99), per-stage timing (scene query / rasterize / composite), tiles produced vs. evicted, cache hit rate, prediction hit rate, native bytes resident. Capture against fixed gesture scripts on reference cells (`101AU005PDB01` as the established baseline) so wins are defensible and regressions caught.

@@ -29,6 +29,7 @@
     <Project Path="src/EncDotNet.S100.Mcp.Tools/EncDotNet.S100.Mcp.Tools.csproj" />
     <Project Path="src/EncDotNet.S100.Mcp/EncDotNet.S100.Mcp.csproj" />
     <Project Path="src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj" />
+    <Project Path="src/EncDotNet.S100.Renderers.Mapsui.Avalonia/EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj" />
     <Project Path="src/EncDotNet.S100.Rendering.Scene/EncDotNet.S100.Rendering.Scene.csproj" />
@@ -42,6 +43,7 @@
     <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Rendering.Scene.Tests/EncDotNet.S100.Rendering.Scene.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Renderers.Mapsui.Avalonia.Tests/EncDotNet.S100.Renderers.Mapsui.Avalonia.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.VisualRegression.Tests/EncDotNet.S100.VisualRegression.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.VisualRegression/EncDotNet.S100.VisualRegression.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S101.Tests/EncDotNet.S100.Datasets.S101.Tests.csproj" />
