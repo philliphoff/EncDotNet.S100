@@ -1,7 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
-using Avalonia.Threading;
+using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -21,23 +19,11 @@ internal sealed class AppScreenshotProvider : IAppScreenshotProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        return await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            var target = Target;
-            if (target is null)
-                return null;
-
-            var width = (int)Math.Round(target.Bounds.Width);
-            var height = (int)Math.Round(target.Bounds.Height);
-            if (width <= 0 || height <= 0)
-                return null;
-
-            using var bitmap = new RenderTargetBitmap(new PixelSize(width, height));
-            bitmap.Render(target);
-
-            using var stream = new MemoryStream();
-            bitmap.Save(stream);
-            return stream.ToArray();
-        });
+        var target = Target;
+        return target is null
+            ? null
+            : await AvaloniaControlCapture.CapturePngAsync(
+                target,
+                cancellationToken).ConfigureAwait(false);
     }
 }

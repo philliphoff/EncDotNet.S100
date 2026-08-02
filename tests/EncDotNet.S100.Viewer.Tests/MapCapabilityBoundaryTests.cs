@@ -1,5 +1,7 @@
+using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
+using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -15,6 +17,17 @@ public class MapCapabilityBoundaryTests
         Assert.Contains(typeof(IMapCoordinateConverter), interfaces);
         Assert.Contains(typeof(IMapSnapshotRenderer), interfaces);
         Assert.Contains(typeof(IMapInvalidator), interfaces);
+        Assert.Contains(typeof(IDisposable), interfaces);
+    }
+
+    [Fact]
+    public void Mapsui_host_composes_map_and_optional_avalonia_adapter()
+    {
+        var constructor = Assert.Single(typeof(MapsuiMapHost).GetConstructors());
+        var parameters = constructor.GetParameters();
+
+        Assert.Equal(typeof(Map), parameters[0].ParameterType);
+        Assert.Equal(typeof(AvaloniaMapsuiMapAdapter), parameters[1].ParameterType);
     }
 
     [Fact]

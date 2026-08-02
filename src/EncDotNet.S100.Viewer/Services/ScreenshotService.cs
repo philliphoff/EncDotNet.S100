@@ -1,6 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
+using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Viewer.Diagnostics;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -16,7 +15,10 @@ internal sealed class ScreenshotService
     /// Renders <paramref name="target"/> to a PNG at <paramref name="outputPath"/>.
     /// Logs a message on success and on failure, but never throws.
     /// </summary>
-    public void Capture(Control target, string outputPath)
+    public async Task CaptureAsync(
+        Control target,
+        string outputPath,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(outputPath);
@@ -25,29 +27,9 @@ internal sealed class ScreenshotService
 
         try
         {
-            var pixelSize = new PixelSize((int)target.Bounds.Width, (int)target.Bounds.Height);
-            if (pixelSize.Width <= 0 || pixelSize.Height <= 0)
-            {
-                Console.Error.WriteLine($"[Screenshot] Target has zero size, skipping.");
-                return;
-            }
-
-            // RenderTargetBitmap.Render re-reads the map's GPU-resident tile
-            // textures on the UI thread; left unsynchronised it races the
-            // render thread's Metal paint and crashes in Skia (issue #337).
-            // Route through the shared capture protocol that forces one
-            // fully-drained live frame and holds the gate during the render —
-            // the same guard the MCP render_to_image path uses.
-            var png = RenderGate.CaptureDrained(
-                target.InvalidateVisual,
-                () =>
-                {
-                    using var bitmap = new RenderTargetBitmap(pixelSize);
-                    bitmap.Render(target);
-                    using var ms = new MemoryStream();
-                    bitmap.Save(ms);
-                    return ms.ToArray();
-                });
+            var png = await AvaloniaControlCapture.CapturePngAsync(
+                target,
+                cancellationToken);
 
             if (png is null)
             {
@@ -56,7 +38,8 @@ internal sealed class ScreenshotService
             }
 
             File.WriteAllBytes(outputPath, png);
-            Console.WriteLine($"[Screenshot] Saved {pixelSize.Width}x{pixelSize.Height} to {outputPath}");
+            Console.WriteLine(
+                $"[Screenshot] Saved {(int)target.Bounds.Width}x{(int)target.Bounds.Height} to {outputPath}");
         }
         catch (Exception ex)
         {
