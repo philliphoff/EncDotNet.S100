@@ -1,3 +1,4 @@
+using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -12,6 +13,11 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal interface IMapLayerCollection
 {
+    /// <summary>
+    /// Gets the reusable dataset-layer session when the host provides one.
+    /// </summary>
+    MapsuiMapSession? DatasetSession => null;
+
     /// <summary>Adds a layer to the dataset band.</summary>
     void AddDatasetLayer(ILayer layer);
 

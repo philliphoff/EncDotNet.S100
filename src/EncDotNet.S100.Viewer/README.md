@@ -183,11 +183,12 @@ Internally, loaded rows project the renderer-neutral `MapDataset` and
 exchange-set registration details remain Viewer-only. Palette, ECDIS, scale,
 and mariner inputs are likewise consolidated into the current
 `MapPresentationState` before rendering and passed explicitly through
-`IMapPresentationController.SetPresentationAsync`. The Viewer-owned coordinator
-only translates settings changes; the loader temporarily retains processor,
-layer, coalescing, and cancellation ownership pending session extraction. This
-keeps active and visible state independent while giving every loaded dataset one
-reusable state identity.
+`IMapPresentationController.SetPresentationAsync`. `MapsuiMapSession` now owns
+processor-to-layer rendering, replacement/removal, ordinary order,
+active/visible/opacity and sub-layer state application, scale windows, and
+non-S-98 overlap suppression. The Viewer loader coordinates files, catalogues,
+validation, notifications, optional zoom, time/presentation gating, and the
+temporary S-98 projection callback pending its dedicated roadmap slice.
 
 **Double-click a dataset row to reveal it** — the viewer ensures the
 dataset is loaded and then flies the map to that dataset's extent. This

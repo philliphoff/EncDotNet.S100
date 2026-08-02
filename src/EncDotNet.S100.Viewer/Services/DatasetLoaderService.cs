@@ -52,17 +52,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
 
     private readonly Dictionary<MapDatasetId, DatasetEntry> _processorEntries = [];
+    private readonly Dictionary<MapDatasetId, DatasetEntry> _sessionEntries = [];
     private readonly ConditionalWeakTable<DatasetEntry, LoadGeneration> _loadGenerations = new();
     private readonly ConditionalWeakTable<DatasetEntry, SemaphoreSlim> _loadGates = new();
-    private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
-    /// <summary>
-    /// Per-entry S-98 layer-stack entries produced by the processor's
-    /// most recent render. Each entry's <see cref="LayerStackEntry.Layer"/>
-    /// also appears in <see cref="_entryLayers"/>. Populated from
-    /// <see cref="MapsuiDatasetResult.StackEntries"/> when available; otherwise
-    /// synthesised through the active <see cref="IInteroperabilityAuthority"/>.
-    /// </summary>
-    private readonly Dictionary<DatasetEntry, IReadOnlyList<LayerStackEntry>> _entryStackEntries = new();
     /// <summary>
     /// Snapshot of the most recently computed S-98 layer stack
     /// (bottom-of-paint-stack first; index 0 = drawn first / under
@@ -81,34 +73,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// by <see cref="S98DisplayPlane"/> for the tree view.
     /// </summary>
     private IReadOnlyList<LayerStackEntry> _currentStackEntries = Array.Empty<LayerStackEntry>();
-    /// <summary>
-    /// Per-entry sub-layer keys, parallel by index to
-    /// <see cref="_entryLayers"/>. Null when the processor did not
-    /// supply per-layer names (single-layer products).
-    /// </summary>
-    private readonly Dictionary<DatasetEntry, IReadOnlyList<string>?> _entryLayerKeys = new();
-    /// <summary>
-    /// Per-entry data-coverage footprint (EPSG:3857) and scale-band denominator
-    /// used for cross-cell scale-band overlap suppression (issue #438 Phase 2).
-    /// Populated from <see cref="MapsuiDatasetResult.CoverageGeometry"/> and the
-    /// entry's coarsest display scale on each render; consumed by
-    /// <see cref="ApplyOverlapSuppression"/>.
-    /// </summary>
-    private readonly Dictionary<DatasetEntry, (NetTopologySuite.Geometries.Geometry Coverage, int ScaleDenominator)> _entryCoverage = new();
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
-    /// <summary>
-    /// Canonical paint-order of dataset entries. Mirrors the order the
-    /// user sees in the Datasets panel; index 0 is the TOP of the
-    /// paint stack (drawn last, on top of every other dataset) — the
-    /// Photoshop/QGIS convention. Mutated only by the loader so
-    /// palette/time re-renders don't disturb user-driven ordering.
-    /// </summary>
-    private readonly List<DatasetEntry> _entryOrder = new();
-    private readonly ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayersView;
     private readonly SemaphoreSlim _layerRenderGate = new(1, 1);
     private readonly object _presentationSync = new();
 
     private IMapLayerCollection? _layerCollection;
+    private MapsuiMapSession? _mapSession;
     private IMapViewportController? _viewport;
     private MapPresentationState _presentation;
     private CancellationTokenSource? _presentationCts;
@@ -174,8 +144,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // active authority. Cheap when no datasets are loaded.
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
 
-        _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
-
         _globalTime.CurrentTimeChanged += t => _ = ReRenderAtTimeAsync(t, CancellationToken.None);
         _globalTime.RangeChanged += OnGlobalRangeChanged;
     }
@@ -212,7 +180,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(snapshot),
             leases);
     }
-    public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers => _entryLayersView;
+    public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers
+    {
+        get
+        {
+            var layers = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
+            if (_mapSession is null)
+                return layers;
+
+            foreach (var snapshot in _mapSession.GetDatasets())
+            {
+                if (_sessionEntries.TryGetValue(snapshot.Dataset.Id, out var entry))
+                    layers[entry] = snapshot.Layers;
+            }
+            return layers;
+        }
+    }
 
     public IReadOnlyList<ILayer> CurrentStackedLayers => _currentStackedLayers;
 
@@ -225,7 +208,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public bool GetActive(string datasetId)
     {
         ArgumentException.ThrowIfNullOrEmpty(datasetId);
-        return FindEntry(datasetId)?.IsActive ?? true;
+        var entry = FindEntry(datasetId);
+        return entry?.IsActive ?? true;
     }
 
     public void SetActive(string datasetId, bool active)
@@ -234,12 +218,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         var entry = FindEntry(datasetId);
         if (entry is null || entry.IsActive == active) return;
         entry.IsActive = active;
-        // Recompute the cross-product stack so R-101-102-B (and any
-        // future Active-aware rules) re-evaluates with the new
-        // flag, and rebroadcast it through the map host so PickService
-        // / Layer Stack panel see the change.
-        if (_layerCollection is not null)
-            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
+        ApplyEntryState(entry);
         ActiveChanged?.Invoke(datasetId);
     }
 
@@ -287,6 +266,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             throw new InvalidOperationException("DatasetLoaderService has already been initialized.");
 
         _layerCollection = layerCollection;
+        _mapSession = layerCollection.DatasetSession
+            ?? throw new InvalidOperationException(
+                "The map layer collection must provide a Mapsui dataset session.");
+        _mapSession.LayersChanged += OnSessionLayersChanged;
+        _mapSession.SetLayerProjector(ProjectLayerStack);
+        _mapSession.SetIgnoreScaleMinimum(CurrentPresentation.Mariner.IgnoreScaleMinimum);
         _viewport = viewport;
 
         var transientFcPaths = _catalogueSeeder.Seed(options);
@@ -423,6 +408,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             callerOwnedProcessor = null;
             registeredProcessor = processor;
             _processorEntries[entry.Id] = entry;
+            _sessionEntries[entry.Id] = entry;
+            var wasKnownBySession = _mapSession!.GetDataset(entry.Id) is not null;
 
             // Collapse duplicate coverage products: S-111/S-104 exchange sets
             // routinely bundle several variants of the same cell (e.g. neap /
@@ -459,13 +446,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // opts in via the eye icon in the Datasets list (issue #483).
             // Fixed-station (dcf8) glyphs are discrete symbols at genuine
             // stations and stay visible.
-            // Default the surface to hidden only on the entry's first load
-            // (not yet tracked in _entryOrder). On an evict → reload cycle the
-            // entry is preserved in _entryOrder (see UnloadEntry), so re-hiding
-            // here would silently reset a surface the user had opted into
-            // (issue #483).
+            // Default the surface to hidden only on the session's first load.
+            // Lazy unload retains session state and its order slot, so a reload
+            // preserves a surface the user had opted into (issue #483).
             if (processor is S104DatasetProcessor { IsGriddedSurface: true }
-                && !_entryOrder.Contains(entry))
+                && !wasKnownBySession)
             {
                 entry.IsVisible = false;
             }
@@ -511,6 +496,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             entry.SetVersionAssessment(processor.VersionAssessment);
             entry.CurrentTime = gatedHidden ? null : (initialTime ?? adapter?.AvailableTimes.FirstOrDefault());
             entry.SetLoadedState(processor.Metadata);
+            var mapDataset = entry.MapDataset
+                ?? throw new InvalidOperationException(
+                    "A loaded entry must expose renderer-neutral dataset state.");
+            _mapSession.SetDataset(
+                mapDataset,
+                entry.MinimumDisplayScale,
+                entry.MaximumDisplayScale);
+            SubscribeEntry(entry);
 
             // Snapshot the paint counter *before* the layers are swapped in,
             // so the post-load wait can confirm the map actually painted the
@@ -586,6 +579,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 return;
             }
             entry.SetValidationReport(validation);
+            ApplyEntryState(entry);
 
             // Hold the progress notification in its indeterminate "loading"
             // state until the map has actually painted the new dataset — not
@@ -869,7 +863,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                     // Out of covered range: hide the dataset (drop its
                     // layers) rather than draw stale endpoint-clamped
                     // arrows. Cheap when already hidden.
-                    if (_entryLayers.TryGetValue(entry, out var current) && current.Count > 0)
+                    if (_mapSession?.GetDataset(entry.Id) is { Layers.Count: > 0 })
                     {
                         await ReplaceLayersAsync(
                             entry,
@@ -927,6 +921,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             enteredGate = true;
             localCts.Token.ThrowIfCancellationRequested();
             Volatile.Write(ref _presentation, presentation);
+            _mapSession?.SetIgnoreScaleMinimum(
+                presentation.Mariner.IgnoreScaleMinimum);
             await ReRenderAllAsync(presentation, localCts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -973,8 +969,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 && _globalTime.CurrentTime is { } gateNow
                 && gateAdapter.SnapTo(gateNow) is null)
             {
-                if (_entryLayers.TryGetValue(entry, out var cur) && cur.Count > 0)
-                    ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+                if (_mapSession?.GetDataset(entry.Id) is { Layers.Count: > 0 })
+                    _mapSession.ClearLayers(entry.Id);
                 continue;
             }
 
@@ -1043,8 +1039,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             if (!OwnsProcessor(entry, processor))
                 return;
 
-            ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+            _mapSession!.ClearLayers(entry.Id);
             onApplied?.Invoke();
+            ApplyEntryState(entry);
         }
         finally
         {
@@ -1061,31 +1058,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         Action<MapsuiDatasetResult>? onApplied = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_processorOwner.TryAcquire(entry.Id, out var lease)
-            || !ReferenceEquals(lease.Processor, processor))
-        {
-            lease?.Dispose();
-            return null;
-        }
-        using var processorLease = lease;
-
-        var context = CreateRenderContext(processor, timeStep, presentation);
-        var result = await Task.Run(
-            () => _mapsuiRenderer.RenderAsync(processor, context, cancellationToken),
-            cancellationToken).ConfigureAwait(true);
-
-        cancellationToken.ThrowIfCancellationRequested();
         if (!OwnsProcessor(entry, processor))
             return null;
 
-        ReplaceLayers(
-            entry,
-            result.Layers.ToList(),
-            result.LayerNames,
-            result.StackEntries,
-            result.CellMinimumDisplayScale,
-            result.CoverageGeometry);
+        var context = CreateRenderContext(processor, timeStep, presentation);
+        var result = await _mapSession!.RenderAsync(
+            entry.Id,
+            context,
+            cancellationToken).ConfigureAwait(true);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result is null || !OwnsProcessor(entry, processor))
+            return null;
+
+        ProjectSessionState(entry);
         onApplied?.Invoke(result);
+        ApplyEntryState(entry);
         return result;
     }
 
@@ -1097,26 +1085,16 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(entry);
         InvalidateLoad(entry);
 
-        RemoveEntryLayers(entry);
         UnsubscribeSubLayers(entry);
         entry.SubLayers.Clear();
-        _entryLayerKeys.Remove(entry);
-        _entryStackEntries.Remove(entry);
-        _entryCoverage.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        RemoveOwnedProcessor(entry);
-        _entryOrder.Remove(entry);
+        _mapSession?.RemoveDataset(entry.Id);
+        _processorEntries.Remove(entry.Id);
+        _sessionEntries.Remove(entry.Id);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         entry.IsLoaded = false;
-        // Publish the new (empty / smaller) stack so PickService and
-        // anyone else who cares drops references to the removed layers.
-        if (_layerCollection is not null)
-            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
-        // Recompute overlap-suppression clips now this cell's coverage is gone,
-        // so a coarser cell it used to suppress paints in full again (#438 Ph2).
-        ApplyOverlapSuppression();
         DatasetRemoved?.Invoke(entry);
     }
 
@@ -1137,123 +1115,68 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(entry);
         InvalidateLoad(entry);
 
-        RemoveEntryLayers(entry);
-        UnsubscribeSubLayers(entry);
-        entry.SubLayers.Clear();
-        _entryLayerKeys.Remove(entry);
-        _entryStackEntries.Remove(entry);
-        _entryCoverage.Remove(entry);
-        if (_subscribedEntries.Remove(entry))
-            entry.PropertyChanged -= OnEntryPropertyChanged;
-        RemoveOwnedProcessor(entry);
-        // NB: unlike RemoveEntry, do NOT drop the entry from _entryOrder here.
-        // Eviction keeps the DatasetEntry registered; FlattenLayerOrder already
-        // skips entries with no layers (RemoveEntryLayers cleared _entryLayers
-        // above), so its slot is inert while unloaded but preserved. Removing it
-        // would make the next reload look like a first load and re-insert it at
-        // index 0, reshuffling cross-dataset paint order on every evict/reload
-        // cycle. See issue #458.
-        // Active state lives on the entry's renderer-neutral MapDataset
-        // projection, so it naturally survives this unload → reload cycle.
+        _mapSession?.RemoveDataset(entry.Id, preserveState: true);
+        _processorEntries.Remove(entry.Id);
         _globalTime.Unregister(entry);
         entry.IsLoaded = false;
         entry.IsDeferred = true;
-        if (_layerCollection is not null)
-            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
-        // Recompute overlap-suppression clips now this cell's coverage is gone
-        // (evicted), so any coarser cell it suppressed paints in full (#438 Ph2).
-        ApplyOverlapSuppression();
     }
 
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
     {
         ArgumentNullException.ThrowIfNull(orderedEntries);
-        if (_layerCollection is null) return;
+        if (_mapSession is null) return;
 
-        // Rebuild the canonical order from the supplied sequence,
-        // dropping any entries that are no longer bound to layers
-        // (e.g. removed concurrently).
-        _entryOrder.Clear();
-        foreach (var e in orderedEntries)
-        {
-            if (_entryLayers.ContainsKey(e))
-                _entryOrder.Add(e);
-        }
-        _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
+        // The Viewer list is top-first; the reusable session and Mapsui dataset
+        // band use bottom-to-top paint order.
+        _mapSession.SetOrder(
+            orderedEntries
+                .Reverse()
+                .Select(entry => entry.Id)
+                .ToArray());
     }
 
-    private List<ILayer> FlattenLayerOrder()
+    private IReadOnlyList<MapsuiProjectedDatasetLayer> ProjectLayerStack(
+        IReadOnlyList<MapsuiMapDatasetSnapshot> datasets)
     {
-        // PR-L1 (S-98): defer the cross-dataset paint order to the
-        // S-98 interoperability authority. _entryOrder is top-of-UI
-        // first (mirrors the Datasets panel); the authority sorts
-        // by S-98 display plane (BaseChartUnder → EcdisAlerts) and
-        // uses input order as the final tiebreaker. We feed it
-        // bottom-of-UI first so the topmost-UI dataset wins ties
-        // (and lands at the highest layer index — drawn last, on
-        // top), preserving the prior behaviour for single-plane
-        // dataset stacks.
-        //
-        // Issue #398: the S-98 engine now operates on renderer-neutral
-        // SubLayerStackItem values (in the Mapsui-free Datasets.Pipelines
-        // assembly). We feed it each dataset's items, then project the
-        // ordered / suppressed result back onto the prebuilt Mapsui
-        // layers via LayerStackProjector (reusing cached ILayers and
-        // filtering only suppressed features — no re-rasterisation).
-        //
-        // PR-L3: we keep building the FULL plane-sorted list of
-        // entries (including inactive datasets) so the Layer Stack
-        // panel can still show their rows and let the user re-enable
-        // them. Only the rendered layer list (returned to the map
-        // host) is filtered to active entries; the snapshot stored
-        // in <see cref="_currentStackEntries"/> retains every entry.
-        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(_entryOrder.Count);
+        // Temporary Viewer-owned S-98 projection. The reusable session supplies
+        // ordinary bottom-to-top snapshots, invokes this callback inside its one
+        // atomic dataset-band update, and retains all layer ownership.
+        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(datasets.Count);
         var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
-        for (int i = 0; i < _entryOrder.Count; i++)
+        foreach (var dataset in datasets)
         {
-            var entry = _entryOrder[i];
-            if (!_entryLayers.TryGetValue(entry, out var layers)) continue;
+            var layers = dataset.Layers;
+            var datasetId = dataset.Dataset.Id.Value;
 
-            var datasetId = entry.Id.Value;
-
-            if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
+            if (dataset.StackEntries is { Count: > 0 } stack)
             {
                 var items = new List<SubLayerStackItem>(stack.Count);
-                foreach (var se in stack)
+                foreach (var stackEntry in stack)
                 {
-                    items.Add(se.Item);
-                    prebuilt[LayerStackProjector.KeyOf(se.Item)] = se;
+                    items.Add(stackEntry.Item);
+                    prebuilt[LayerStackProjector.KeyOf(stackEntry.Item)] = stackEntry;
                 }
                 perDataset.Add(items);
             }
             else
             {
-                // Fallback: processor didn't supply StackEntries. Drop
-                // each layer onto the spec's default plane with
-                // priority 0 so it still participates in S-98 ordering.
-                var specName = "unknown";
-                if (_processorOwner.TryAcquire(entry.Id, out var lease))
-                {
-                    using (lease)
-                        specName = lease.Processor.Spec.Name;
-                }
-                var plane = _authorityProvider.Current.GetDefaultPlane(specName);
+                var plane = _authorityProvider.Current.GetDefaultPlane(
+                    dataset.Dataset.Metadata.Spec.Name);
                 var synth = new List<SubLayerStackItem>(layers.Count);
-                for (int li = 0; li < layers.Count; li++)
+                for (var layerIndex = 0; layerIndex < layers.Count; layerIndex++)
                 {
-                    // Synthesise a stable key so the projector can recover the
-                    // layer; there is no portrayal payload for these legacy
-                    // fallbacks so we key by dataset + ordinal.
                     var layerKey = string.Create(
                         System.Globalization.CultureInfo.InvariantCulture,
-                        $"__synth__{li}");
+                        $"__synth__{layerIndex}");
                     var item = new SubLayerStackItem(
                         new SyntheticStackPayload(layerKey),
                         plane,
                         WithinPlanePriority: 0,
                         SourceDatasetId: datasetId);
                     synth.Add(item);
-                    prebuilt[(datasetId, layerKey)] = new LayerStackEntry(layers[li], item);
+                    prebuilt[(datasetId, layerKey)] =
+                        new LayerStackEntry(layers[layerIndex], item);
                 }
                 perDataset.Add(synth);
             }
@@ -1269,7 +1192,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // exception per MSC.232(82) §5.8). LoadOrderInteroperabilityAuthority
         // explicitly no-ops ApplyRules so the strict load-order mode
         // is unaffected.
-        var loaded = BuildLoadedDatasetInfos();
+        var loaded = BuildLoadedDatasetInfos(datasets);
         var ruled = authority.ApplyRules(sorted, loaded, CurrentPresentation.Mariner);
 
         // Project the ordered / suppressed neutral items back onto the
@@ -1286,17 +1209,32 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // list handed back to the map host. The active flag is the
         // single source of truth: inactive entries don't paint and
         // don't influence pick.
+        var stateById = datasets.ToDictionary(
+            snapshot => snapshot.Dataset.Id.Value,
+            snapshot => snapshot.Dataset,
+            StringComparer.Ordinal);
         var renderEntries = new List<LayerStackEntry>(projected.Count);
-        foreach (var e in projected)
+        foreach (var stackEntry in projected)
         {
-            if (!GetActive(e.SourceDatasetId)) continue;
-            renderEntries.Add(e);
+            if (!stateById.TryGetValue(stackEntry.SourceDatasetId, out var state)
+                || !state.IsActive)
+            {
+                continue;
+            }
+            renderEntries.Add(stackEntry);
         }
 
-        var list = LayerStackProjector.ToLayerList(renderEntries);
-        _currentStackedLayers = list;
-        LayerStackChanged?.Invoke();
-        return list;
+        _currentStackedLayers = LayerStackProjector.ToLayerList(renderEntries);
+        return renderEntries
+            .Select(stackEntry =>
+            {
+                var key = LayerStackProjector.KeyOf(stackEntry.Item);
+                return new MapsuiProjectedDatasetLayer(
+                    new MapDatasetId(stackEntry.SourceDatasetId),
+                    key.LayerKey,
+                    stackEntry.Layer);
+            })
+            .ToArray();
     }
 
     /// <summary>
@@ -1307,19 +1245,16 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// check so a failed render doesn't accidentally suppress
     /// sibling products.
     /// </summary>
-    private IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos()
+    private static IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos(
+        IReadOnlyList<MapsuiMapDatasetSnapshot> datasets)
     {
-        var result = new List<LoadedDatasetInfo>(_entryOrder.Count);
-        foreach (var entry in _entryOrder)
+        var result = new List<LoadedDatasetInfo>(datasets.Count);
+        foreach (var snapshot in datasets)
         {
-            if (!_processorOwner.TryAcquire(entry.Id, out var lease)) continue;
-            using var processorLease = lease;
-            var dataset = entry.MapDataset;
-            if (dataset is null) continue;
+            var dataset = snapshot.Dataset;
             var active = dataset.IsActive
                 && dataset.IsVisible
-                && _entryLayers.TryGetValue(entry, out var layers)
-                && layers.Count > 0;
+                && snapshot.IsDrawing;
             result.Add(new LoadedDatasetInfo(dataset.Id.Value, dataset.Metadata.Spec.Name, active));
         }
         return result;
@@ -1389,180 +1324,27 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         return (presentation ?? CurrentPresentation).ApplyTo(context, processor.PortrayalSpec);
     }
 
-    private void ReplaceLayers(
-        DatasetEntry entry,
-        IReadOnlyList<ILayer> layers,
-        IReadOnlyList<string>? layerKeys,
-        IReadOnlyList<LayerStackEntry>? stackEntries,
-        int? cellMinimumDisplayScale = null,
-        NetTopologySuite.Geometries.Geometry? coverageGeometry = null)
-    {
-        bool isFirstLoad = !_entryOrder.Contains(entry);
-
-        RemoveEntryLayers(entry);
-        _entryLayers[entry] = layers;
-        _entryLayerKeys[entry] = layerKeys;
-
-        // Record this cell's coverage footprint + scale band for cross-cell
-        // overlap suppression (issue #438 Phase 2). The suppression band prefers
-        // the exchange-set catalogue scale, falling back to the processor-derived
-        // cell scale (same precedence as the Phase 1 zoom-out window below).
-        var suppressionScale = entry.MinimumDisplayScale ?? cellMinimumDisplayScale;
-        if (coverageGeometry is { IsEmpty: false } && suppressionScale is int band)
-            _entryCoverage[entry] = (coverageGeometry, band);
-        else
-            _entryCoverage.Remove(entry);
-        // Keep _entryStackEntries in sync with _entryLayers. If the
-        // processor didn't supply StackEntries, FlattenLayerOrder will
-        // synthesise defaults below — but we still clear any stale
-        // entries from a previous render so they don't leak.
-        if (stackEntries is not null && stackEntries.Count > 0)
-            _entryStackEntries[entry] = stackEntries;
-        else
-            _entryStackEntries.Remove(entry);
-
-        // Reconcile sub-layers (don't replace) so existing per-sub-layer
-        // visibility / opacity choices survive palette switches and
-        // time-scrub re-renders. Sub-layers are matched by stable key.
-        ReconcileSubLayers(entry, layerKeys);
-
-        // Re-apply effective display state (parent + sub-layer combined)
-        // to the freshly-produced layers. Each ReplaceLayers call creates
-        // new ILayer instances that default to Enabled=true / Opacity=1
-        // — without this step those defaults silently win.
-        ApplyDisplayState(entry);
-
-        // Hole-safe per-cell zoom-out visibility window (issue #438 Phase 1):
-        // clamp each layer's MaxVisible to the cell's coarsest intended scale
-        // so finer nested cells drop out first as the viewport zooms out,
-        // leaving the coarser cell underneath. Re-applied on every render
-        // because each build produces fresh ILayer instances.
-        ApplyCellScaleWindow(entry, layers, cellMinimumDisplayScale);
-
-        // Subscribe lazily on first ReplaceLayers so that property
-        // changes raised by the UI propagate to the live ILayer
-        // instances. The subscription persists across re-renders.
-        if (_subscribedEntries.Add(entry))
-            entry.PropertyChanged += OnEntryPropertyChanged;
-
-        // PR-L1 (S-98): always recompute the cross-dataset paint
-        // order after a load/re-render. The S-98 plane sort can
-        // place a newly-loaded dataset *under* existing layers
-        // (e.g. an S-102 bathymetry load arrives after S-101 line
-        // work — the bathy must sit between the ENC's area fills
-        // and its line work). Pre-PR-L1 we only re-shuffled on
-        // re-renders; that was correct for the old "load order
-        // wins" model.
-        if (isFirstLoad)
-        {
-            _entryOrder.Insert(0, entry);
-        }
-        _layerCollection!.ReplaceDatasetLayers(FlattenLayerOrder());
-
-        // Cross-cell scale-band overlap suppression (issue #438 Phase 2):
-        // recompute every loaded cell's clip region now that this cell's layers
-        // (and coverage) have changed, so a coarser cell stops drawing where a
-        // finer overlapping cell provides coverage.
-        ApplyOverlapSuppression();
-    }
-
-    /// <summary>
-    /// Recomputes and attaches cross-cell scale-band overlap-suppression clip
-    /// regions (issue #438 Phase 2) across every loaded cell: each coarser cell
-    /// is clipped to its data coverage minus the union of finer, overlapping
-    /// in-band cells' coverage. Skipped (and all clips cleared) when the mariner
-    /// has opted to ignore scale minima — consistent with the Phase 1 zoom-out
-    /// window (<see cref="ApplyCellScaleWindow"/>) — so an override still shows
-    /// every cell in full. Recomputed on every load / unload / re-render because
-    /// each build produces fresh <see cref="ILayer"/> instances and the finer/
-    /// coarser overlap set changes as cells come and go, and on every
-    /// visibility/opacity change (a cell that is not currently drawing is
-    /// excluded as a suppressor so hiding a finer cell does not leave a hole).
-    /// </summary>
-    private void ApplyOverlapSuppression()
-    {
-        var cells = new List<OverlapSuppressionCell>(_entryLayers.Count);
-        foreach (var (entry, layers) in _entryLayers)
-        {
-            if (layers.Count == 0)
-                continue;
-
-            // A cell that is not currently drawing (parent hidden, opacity 0, or
-            // all its sub-layers toggled off) must not suppress coarser cells —
-            // otherwise hiding a finer cell would leave the "blank hole" its own
-            // content used to fill. ApplyDisplayState (run before this on load,
-            // and on every visibility/opacity change) has already folded the
-            // composed state into each layer's Enabled/Opacity, so a cell is
-            // drawing iff any of its layers is enabled with non-zero opacity.
-            // Non-drawing entries stay in the set with null Coverage so their own
-            // clip attachments are cleared (they paint in full when re-shown).
-            var isDrawing = false;
-            foreach (var layer in layers)
-            {
-                if (layer.Enabled && layer.Opacity > 0)
-                {
-                    isDrawing = true;
-                    break;
-                }
-            }
-
-            _entryCoverage.TryGetValue(entry, out var coverage);
-            var effectiveCoverage = isDrawing ? coverage.Coverage : null;
-            cells.Add(new OverlapSuppressionCell
-            {
-                Layers = layers,
-                Coverage = effectiveCoverage,
-                ScaleDenominator = effectiveCoverage is null ? null : coverage.ScaleDenominator,
-            });
-        }
-
-        if (cells.Count == 0)
-            return;
-
-        if (CurrentPresentation.Mariner.IgnoreScaleMinimum)
-            OverlapSuppression.ClearAll(cells);
-        else
-            OverlapSuppression.Apply(cells);
-    }
-
     /// <inheritdoc />
     public IReadOnlyList<OverscaleCellInput> GetOverscaleCells()
     {
         List<OverscaleCellInput>? cells = null;
-        foreach (var (entry, layers) in _entryLayers)
+        if (_mapSession is null)
+            return [];
+
+        foreach (var snapshot in _mapSession.GetDatasets())
         {
-            if (layers.Count == 0)
-                continue;
-
-            // The cell's compilation (finest) scale — the denominator past which
-            // zooming in is overscale (S-101 FC §3.1.1 maximumDisplayScale).
-            if (entry.MaximumDisplayScale is not int compilationScale || compilationScale <= 0)
-                continue;
-
-            // Only cells that are actually drawing contribute an indication (a
-            // hidden cell isn't being overscaled on screen). Same drawing test
-            // as ApplyOverlapSuppression.
-            var isDrawing = false;
-            foreach (var layer in layers)
+            if (snapshot.MaximumDisplayScale is not int compilationScale
+                || compilationScale <= 0
+                || !snapshot.IsDrawing
+                || snapshot.CoverageGeometry is not { IsEmpty: false } coverage)
             {
-                if (layer.Enabled && layer.Opacity > 0)
-                {
-                    isDrawing = true;
-                    break;
-                }
+                continue;
             }
-
-            if (!isDrawing)
-                continue;
-
-            if (!_entryCoverage.TryGetValue(entry, out var coverage)
-                || coverage.Coverage is not { IsEmpty: false })
-                continue;
 
             (cells ??= []).Add(new OverscaleCellInput
             {
-                Name = entry.DisplayName,
-                Coverage = coverage.Coverage,
+                Name = snapshot.Dataset.Name,
+                Coverage = coverage,
                 CompilationScaleDenominator = compilationScale,
             });
         }
@@ -1570,111 +1352,37 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         return (IReadOnlyList<OverscaleCellInput>?)cells ?? [];
     }
 
-    /// <summary>
-    /// Applies the hole-safe per-cell zoom-out visibility window (issue #438
-    /// Phase 1) to <paramref name="entry"/>'s freshly-built layers when the
-    /// exchange-set catalogue supplied a coarsest display scale
-    /// (<see cref="DatasetEntry.MinimumDisplayScale"/>). Skipped when the
-    /// mariner has opted to ignore scale minima (consistent with the S-101
-    /// in-file out-of-scale-band cap), so a mariner override still shows every
-    /// cell at all zooms. Toggling the setting re-renders (which calls back
-    /// into <see cref="ReplaceLayers"/>), so the window is re-evaluated.
-    /// </summary>
-    private void ApplyCellScaleWindow(
-        DatasetEntry entry,
-        IReadOnlyList<ILayer> layers,
-        int? cellMinimumDisplayScale = null)
+    private void ProjectSessionState(DatasetEntry entry)
     {
-        // Default to "never disappears" until we confirm a window was applied.
-        entry.ContentMaxVisibleResolution = null;
-
-        if (layers.Count == 0)
+        var snapshot = _mapSession?.GetDataset(entry.Id);
+        if (snapshot is null)
             return;
-        // Prefer the exchange-set catalogue value (DatasetEntry.MinimumDisplayScale);
-        // otherwise fall back to the scale the processor derived from the
-        // dataset's own content (S-101 in-file DataCoverage.minimumDisplayScale,
-        // S-57 DSPM compilation scale). This makes a standalone-loaded cell hide
-        // when zoomed out just as it would when loaded from an exchange set.
-        if ((entry.MinimumDisplayScale ?? cellMinimumDisplayScale) is not int minimumDisplayScale)
-            return;
-        if (CurrentPresentation.Mariner.IgnoreScaleMinimum)
-            return;
-
-        MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale);
-
-        // Record the whole-cell zoom-out cutoff so the out-of-scale extent
-        // indicator (issue #446) knows the resolution at which this dataset
-        // fully drops out. A dataset is visible while at least one layer draws
-        // (resolution <= its MaxVisible), so the cutoff is the largest finite
-        // MaxVisible across the clamped layers — the last layer to vanish.
-        double cutoff = 0.0;
-        foreach (var layer in layers)
-        {
-            if (layer is BaseLayer baseLayer && baseLayer.MaxVisible < double.MaxValue)
-                cutoff = Math.Max(cutoff, baseLayer.MaxVisible);
-        }
-
-        entry.ContentMaxVisibleResolution = cutoff > 0.0 ? cutoff : null;
-    }
-
-    /// <summary>
-    /// Brings <see cref="DatasetEntry.SubLayers"/> in line with the
-    /// processor's freshly-emitted layer keys. Existing
-    /// <see cref="DatasetSubLayer"/> instances are reused (matched by
-    /// <see cref="DatasetSubLayer.Key"/>) so user toggles survive
-    /// re-renders. Single-layer datasets have an empty SubLayers
-    /// collection, which the UI treats as "no disclosure".
-    /// </summary>
-    private void ReconcileSubLayers(DatasetEntry entry, IReadOnlyList<string>? layerKeys)
-    {
-        // Single-layer datasets: clear any (stale) sub-layers and bail.
-        if (layerKeys is null || layerKeys.Count <= 1)
-        {
-            if (entry.SubLayers.Count > 0)
-            {
-                UnsubscribeSubLayers(entry);
-                entry.SubLayers.Clear();
-            }
-            return;
-        }
 
         var existing = entry.SubLayers.ToDictionary(s => s.Key, s => s);
-        var seen = new HashSet<string>();
-        var orderedNew = new List<DatasetSubLayer>(layerKeys.Count);
-        foreach (var key in layerKeys)
+        var projected = new List<DatasetSubLayer>(snapshot.Dataset.SubLayers.Count);
+        foreach (var state in snapshot.Dataset.SubLayers)
         {
-            // Suffix-resolve duplicate keys defensively (the contract
-            // expects unique keys; this just keeps a runtime collision
-            // from corrupting the SubLayers collection).
-            var k = key;
-            int n = 1;
-            while (!seen.Add(k))
+            if (!existing.TryGetValue(state.Key, out var subLayer))
             {
-                k = $"{key}#{++n}";
+                subLayer = new DatasetSubLayer(
+                    state.Key,
+                    ResolveSubLayerDisplayName(state.Key));
             }
-
-            if (existing.TryGetValue(k, out var sub))
-            {
-                orderedNew.Add(sub);
-            }
-            else
-            {
-                var displayName = ResolveSubLayerDisplayName(k);
-                sub = new DatasetSubLayer(k, displayName);
-                sub.PropertyChanged += OnSubLayerPropertyChanged;
-                orderedNew.Add(sub);
-            }
+            subLayer.PropertyChanged -= OnSubLayerPropertyChanged;
+            subLayer.IsVisible = state.IsVisible;
+            subLayer.Opacity = state.Opacity;
+            subLayer.PropertyChanged += OnSubLayerPropertyChanged;
+            projected.Add(subLayer);
         }
 
-        // Drop sub-layers that no longer correspond to any emitted
-        // layer (e.g. processor changed shape between renders).
-        foreach (var stale in existing.Values.Where(s => !seen.Contains(s.Key)))
-        {
+        foreach (var stale in existing.Values.Except(projected))
             stale.PropertyChanged -= OnSubLayerPropertyChanged;
-        }
 
         entry.SubLayers.Clear();
-        foreach (var sub in orderedNew) entry.SubLayers.Add(sub);
+        foreach (var subLayer in projected)
+            entry.SubLayers.Add(subLayer);
+
+        entry.ContentMaxVisibleResolution = snapshot.ContentMaxVisibleResolution;
     }
 
     private void UnsubscribeSubLayers(DatasetEntry entry)
@@ -1695,45 +1403,34 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _ => key,
     };
 
-    private void ApplyDisplayState(DatasetEntry entry)
+    private void SubscribeEntry(DatasetEntry entry)
     {
-        if (!_entryLayers.TryGetValue(entry, out var layers)) return;
+        if (_subscribedEntries.Add(entry))
+            entry.PropertyChanged += OnEntryPropertyChanged;
+    }
 
-        // When the processor emitted sub-layer keys, fold the per-
-        // sub-layer state into the per-layer Enabled/Opacity values.
-        // Otherwise apply parent state uniformly.
-        _entryLayerKeys.TryGetValue(entry, out var keys);
+    private void ApplyEntryState(DatasetEntry entry)
+    {
+        if (_mapSession is null || entry.MapDataset is not { } dataset)
+            return;
 
-        var subLayerLookup = entry.SubLayers.Count > 0
-            ? entry.SubLayers.ToDictionary(s => s.Key, s => s)
-            : null;
-
-        for (int i = 0; i < layers.Count; i++)
-        {
-            var layer = layers[i];
-            DatasetSubLayer? sub = null;
-            if (subLayerLookup is not null && keys is not null && i < keys.Count)
-            {
-                subLayerLookup.TryGetValue(keys[i], out sub);
-            }
-
-            // AND visibility, multiply opacity. (Mapsui has a single
-            // scalar opacity per layer, so multiplication is the
-            // canonical way to express parent×sub.)
-            layer.Enabled = entry.IsVisible && (sub?.IsVisible ?? true);
-            layer.Opacity = entry.Opacity * (sub?.Opacity ?? 1.0);
-        }
+        _mapSession.SetDataset(
+            dataset,
+            entry.MinimumDisplayScale,
+            entry.MaximumDisplayScale);
+        entry.ContentMaxVisibleResolution =
+            _mapSession.GetDataset(entry.Id)?.ContentMaxVisibleResolution;
     }
 
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DatasetEntry entry) return;
-        if (e.PropertyName is not (nameof(DatasetEntry.IsVisible) or nameof(DatasetEntry.Opacity)))
+        if (e.PropertyName is not (
+            nameof(DatasetEntry.IsVisible)
+            or nameof(DatasetEntry.IsActive)
+            or nameof(DatasetEntry.Opacity)))
             return;
-        ApplyDisplayState(entry);
-        // Visibility/opacity feeds the suppression set (a hidden finer cell must
-        // stop clipping coarser cells), so keep the clip attachments in sync.
-        ApplyOverlapSuppression();
+        ApplyEntryState(entry);
     }
 
     private void OnSubLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1742,17 +1439,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (e.PropertyName is not (nameof(DatasetSubLayer.IsVisible) or nameof(DatasetSubLayer.Opacity)))
             return;
 
-        // The sub-layer doesn't know its parent; find it by membership.
-        // The cost is bounded by the number of loaded datasets which is
-        // always small for an interactive viewer.
-        foreach (var (entry, _) in _entryLayers)
+        foreach (var entry in _processorEntries.Values)
         {
             if (entry.SubLayers.Contains(sub))
             {
-                ApplyDisplayState(entry);
-                // Toggling all of a cell's sub-layers off makes it non-drawing,
-                // so refresh suppression to release any clip it imposed.
-                ApplyOverlapSuppression();
+                ApplyEntryState(entry);
                 break;
             }
         }
@@ -1762,35 +1453,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     {
         var loadedEntry = _processorEntries.Values.FirstOrDefault(entry =>
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
-        return loadedEntry ?? _entryOrder.FirstOrDefault(entry =>
+        return loadedEntry ?? _sessionEntries.Values.FirstOrDefault(entry =>
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
-    }
-
-    private void RemoveEntryLayers(DatasetEntry entry)
-    {
-        if (_layerCollection is null)
-            return;
-
-        if (_entryLayers.TryGetValue(entry, out var oldLayers))
-        {
-            foreach (var layer in oldLayers)
-            {
-                _layerCollection.RemoveDatasetLayer(layer);
-            }
-            _entryLayers.Remove(entry);
-        }
     }
 
     private void OnAuthorityChanged()
     {
-        // The host swapped the active interoperability authority
-        // (e.g. flipped a viewer setting between S-98 and load-order).
-        // Re-flatten the current stack through the new authority's
-        // policy and push the result to the map host. Cheap when no
-        // datasets are loaded.
-        if (_layerCollection is null) return;
-        if (_entryOrder.Count == 0) return;
-        _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
+        _mapSession?.SetLayerProjector(ProjectLayerStack);
+    }
+
+    private void OnSessionLayersChanged()
+    {
+        LayerStackChanged?.Invoke();
     }
 
     private void EnsureInitialized()
@@ -1814,39 +1488,19 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             return;
 
         _processorEntries.Remove(entry.Id);
-        RemoveEntryLayers(entry);
+        _sessionEntries.Remove(entry.Id);
+        _mapSession?.RemoveDataset(
+            entry.Id,
+            removeProcessor: false);
         UnsubscribeSubLayers(entry);
         entry.SubLayers.Clear();
-        _entryLayerKeys.Remove(entry);
-        _entryStackEntries.Remove(entry);
-        _entryCoverage.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        _entryOrder.Remove(entry);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         entry.IsLoaded = false;
         entry.Info = null;
         entry.SetValidationReport(null);
-        if (_layerCollection is not null)
-            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
-        ApplyOverlapSuppression();
-    }
-
-    private bool RemoveOwnedProcessor(DatasetEntry entry)
-    {
-        if (!_processorEntries.TryGetValue(entry.Id, out var currentEntry)
-            || !ReferenceEquals(currentEntry, entry))
-        {
-            return false;
-        }
-
-        _processorEntries.Remove(entry.Id);
-        if (!_processorOwner.TryAcquire(entry.Id, out var lease))
-            return false;
-
-        using (lease)
-            return _processorOwner.Remove(entry.Id, lease.Processor);
     }
 
     private sealed class LoadGeneration
