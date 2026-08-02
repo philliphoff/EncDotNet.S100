@@ -136,11 +136,11 @@ public class AvaloniaMapsuiMapAdapterTests
         byte[]? png = [];
         HeadlessTest.Run(() =>
         {
-            png = AvaloniaControlCapture.CapturePngAsync(new Border())
+            png = AvaloniaControlCapture.CapturePngAsync(
+                new global::Mapsui.UI.Avalonia.MapControl())
                 .GetAwaiter()
                 .GetResult();
         });
-        Assert.Null(png);
         Assert.Null(png);
     }
 

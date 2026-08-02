@@ -39,16 +39,17 @@ public static class AvaloniaControlCapture
     {
         ArgumentNullException.ThrowIfNull(target);
         cancellationToken.ThrowIfCancellationRequested();
-        var (hasLayout, requiresSynchronization) = await InvokeOnUiThreadAsync(
-            () => (
-                target.Bounds.Width > 0 && target.Bounds.Height > 0,
-                RequiresCaptureSynchronization(target)))
+        var hasLayout = await InvokeOnUiThreadAsync(
+            () => target.Bounds.Width > 0 && target.Bounds.Height > 0)
             .ConfigureAwait(false);
         if (!hasLayout)
         {
             return null;
         }
 
+        var requiresSynchronization = await InvokeOnUiThreadAsync(
+            () => RequiresCaptureSynchronization(target))
+            .ConfigureAwait(false);
         if (!requiresSynchronization)
         {
             return await InvokeOnUiThreadAsync(

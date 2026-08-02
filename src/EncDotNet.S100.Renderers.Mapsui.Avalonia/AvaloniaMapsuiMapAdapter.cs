@@ -29,7 +29,7 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
 {
     private readonly CaptureSynchronizedMapControl _mapControl;
     private readonly Map _map;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     private AvaloniaMapsuiMapAdapter(
         CaptureSynchronizedMapControl mapControl,
@@ -82,9 +82,8 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (!_disposed)
+            if (!_disposed && ReferenceEquals(_mapControl.Map, _map))
             {
-                EnsureMapAttached();
                 _mapControl.RefreshGraphics();
             }
         });
