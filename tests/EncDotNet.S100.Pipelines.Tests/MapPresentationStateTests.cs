@@ -110,4 +110,27 @@ public class MapPresentationStateTests
         Assert.ThrowsAny<ArgumentException>(() =>
             MapPresentationState.Default.ApplyTo(new S101RenderContext(), default));
     }
+
+    [Fact]
+    public async Task PresentationControllerContract_AcceptsExplicitState()
+    {
+        var controller = new RecordingPresentationController();
+
+        await controller.SetPresentationAsync(MapPresentationState.Default);
+
+        Assert.Same(MapPresentationState.Default, controller.Presentation);
+    }
+
+    private sealed class RecordingPresentationController : IMapPresentationController
+    {
+        public MapPresentationState? Presentation { get; private set; }
+
+        public Task SetPresentationAsync(
+            MapPresentationState presentation,
+            CancellationToken cancellationToken = default)
+        {
+            Presentation = presentation;
+            return Task.CompletedTask;
+        }
+    }
 }

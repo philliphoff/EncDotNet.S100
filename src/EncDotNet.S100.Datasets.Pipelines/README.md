@@ -189,9 +189,15 @@ snapshot across concurrent renders.
 Call `presentation.ApplyTo(context, processor.PortrayalSpec)` to project those
 map-wide choices onto a product-specific `RenderContext`. Dataset/request state
 such as time step, viewport, basemap, and instruction filtering remains on the
-context and is preserved. The Avalonia Viewer now uses this projection at its
-processor-to-renderer boundary; future Mapsui sessions can construct the same
-state without depending on Viewer, Mapsui, or Avalonia types.
+context and is preserved.
+
+`IMapPresentationController.SetPresentationAsync` is the corresponding
+application boundary for a host or session that owns loaded datasets. The
+controller accepts the immutable state explicitly and applies it asynchronously
+without exposing UI refresh events or renderer types. Implementations retain
+processor, layer, refresh, and disposal ownership; the Avalonia Viewer currently
+implements this boundary in its dataset loader until that ownership moves into a
+reusable map session.
 
 `MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
 `MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,
@@ -347,7 +353,8 @@ for the full design rationale.
 
 ## Other utilities
 
-- `MapPresentationState`, `MapDataset`, `MapDatasetId`, `MapDatasetSubLayer`,
+- `MapPresentationState`, `IMapPresentationController`, `MapDataset`,
+  `MapDatasetId`, `MapDatasetSubLayer`,
   `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
   `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
   blocks for the per-processor `Render` / `GetFeatureInfo` /

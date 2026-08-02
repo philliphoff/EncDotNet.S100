@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -116,6 +117,7 @@ public partial class App : Application
         };
 
         _services = ConfigureServices();
+        _services.GetRequiredService<ViewerPresentationCoordinator>();
 
         // Now that the container exists, route recorded crashes into the
         // feedback reporter's last-error tracker (the global handlers above
@@ -597,7 +599,11 @@ public partial class App : Application
         services.AddSingleton<Func<AboutDialogViewModel>>(sp =>
             sp.GetRequiredService<AboutDialogViewModel>);
 
-        services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
+        services.AddSingleton<DatasetLoaderService>();
+        services.AddSingleton<IDatasetLoaderService>(sp =>
+            sp.GetRequiredService<DatasetLoaderService>());
+        services.AddSingleton<IMapPresentationController>(sp =>
+            sp.GetRequiredService<DatasetLoaderService>());
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IGeographicPickPresenter>(sp =>
             new DispatcherGeographicPickPresenter(sp.GetRequiredService<IPickService>()));
@@ -773,6 +779,9 @@ public partial class App : Application
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<MapPresentationStateProjection>();
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<MapPresentationStateProjection>().CreateSnapshot());
+        services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
         services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
             sp.GetService<ITimeFormatProvider>(),

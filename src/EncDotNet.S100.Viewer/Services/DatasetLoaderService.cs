@@ -21,7 +21,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// dataset pipeline factory, the per-entry processor + layer maps, and
 /// drives all map mutations through an <see cref="IMapHost"/>.
 /// </summary>
-internal sealed class DatasetLoaderService : IDatasetLoaderService
+internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresentationController
 {
     private readonly ViewerSettings _settings;
     private readonly PortrayalCatalogueManager _catalogueManager;
@@ -30,7 +30,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly IRecentFilesService _recentFiles;
     private readonly S128DatasetCatalogSource _s128CatalogSource;
-    private readonly MapPresentationStateProjection _presentation;
     private readonly GlobalTimeService _globalTime;
     private readonly INotificationService _notifications;
     /// <summary>
@@ -103,8 +102,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly List<DatasetEntry> _entryOrder = new();
     private readonly ReadOnlyDictionary<DatasetEntry, IDatasetProcessor> _processorsView;
     private readonly ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayersView;
+    private readonly SemaphoreSlim _layerRenderGate = new(1, 1);
+    private readonly object _presentationSync = new();
 
     private IMapHost? _mapHost;
+    private MapPresentationState _presentation;
+    private CancellationTokenSource? _presentationCts;
+
+    private MapPresentationState CurrentPresentation =>
+        Volatile.Read(ref _presentation);
 
     /// <inheritdoc />
     public bool IsInitialized => _mapHost is not null;
@@ -124,7 +130,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         DatasetPipelineFactory pipelineFactory,
         IRecentFilesService recentFiles,
         S128DatasetCatalogSource s128CatalogSource,
-        MapPresentationStateProjection presentation,
+        MapPresentationState presentation,
         GlobalTimeService globalTime,
         INotificationService notifications,
         IInteroperabilityAuthorityProvider authorityProvider,
@@ -260,11 +266,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var transientFcPaths = _catalogueSeeder.Seed(options);
         _fcOverrides.SetTransientPaths(transientFcPaths);
 
-        // Re-render every loaded dataset whenever the user changes a setting
-        // that affects portrayal output (palette / display scale). These are
-        // wired here, not in the window, so the loader fully owns its
-        // re-render lifecycle.
-        _presentation.Changed += () => _ = ReRenderAllAsync();
     }
 
     public async Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
@@ -456,15 +457,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             {
                 // Present but empty: registers in the panel / timeline and
                 // draws nothing until a scrub brings it into range.
-                ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+                await ReplaceLayersAsync(entry, processor, token).ConfigureAwait(true);
             }
             else
             {
-                var initialContext = CreateRenderContext(processor, initialTime);
-                result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
-
-                token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale, result.CoverageGeometry);
+                result = await RenderAndReplaceAsync(
+                    entry,
+                    processor,
+                    initialTime,
+                    presentation: null,
+                    token).ConfigureAwait(true);
+                if (result is null)
+                    return;
                 // Record the dataset's mercator extent so the panel can zoom to
                 // it (double-click reveal) and the out-of-scale extent indicator
                 // can outline it, even for exchange-set entries that opt out of
@@ -747,19 +751,30 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                     // arrows. Cheap when already hidden.
                     if (_entryLayers.TryGetValue(entry, out var current) && current.Count > 0)
                     {
-                        ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+                        await ReplaceLayersAsync(
+                            entry,
+                            proc,
+                            token,
+                            () => entry.CurrentTime = null).ConfigureAwait(true);
                     }
-                    entry.CurrentTime = null;
+                    else
+                    {
+                        entry.CurrentTime = null;
+                    }
                     continue;
                 }
 
-                var context = CreateRenderContext(proc, snapped);
-                var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, token), token).ConfigureAwait(true);
-
-                token.ThrowIfCancellationRequested();
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale, result.CoverageGeometry);
-                entry.Info = result.Info;
-                entry.CurrentTime = snapped;
+                await RenderAndReplaceAsync(
+                    entry,
+                    proc,
+                    snapped,
+                    presentation: null,
+                    token,
+                    result =>
+                    {
+                        entry.Info = result.Info;
+                        entry.CurrentTime = snapped;
+                    }).ConfigureAwait(true);
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex)
@@ -769,15 +784,62 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
     }
 
-    public async Task ReRenderAllAsync()
+    /// <inheritdoc />
+    public async Task SetPresentationAsync(
+        MapPresentationState presentation,
+        CancellationToken cancellationToken = default)
     {
-        using var __cmd = ViewerObservability.BeginCommand("palette.change");
+        ArgumentNullException.ThrowIfNull(presentation);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        var palette = _presentation.Current.Palette;
+        CancellationTokenSource localCts;
+        lock (_presentationSync)
+        {
+            _presentationCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _presentationCts = localCts;
+        }
+
+        var enteredGate = false;
+        try
+        {
+            await _layerRenderGate.WaitAsync(localCts.Token).ConfigureAwait(true);
+            enteredGate = true;
+            localCts.Token.ThrowIfCancellationRequested();
+            Volatile.Write(ref _presentation, presentation);
+            await ReRenderAllAsync(presentation, localCts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // A newer presentation superseded this application.
+        }
+        finally
+        {
+            if (enteredGate)
+                _layerRenderGate.Release();
+
+            lock (_presentationSync)
+            {
+                if (ReferenceEquals(_presentationCts, localCts))
+                    _presentationCts = null;
+            }
+            localCts.Dispose();
+        }
+    }
+
+    private async Task ReRenderAllAsync(
+        MapPresentationState presentation,
+        CancellationToken cancellationToken)
+    {
+        using var __cmd = ViewerObservability.BeginCommand("presentation.apply");
+
+        var palette = presentation.Palette;
 
         foreach (var (entry, proc) in _processors.ToArray())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!entry.IsLoaded) continue;
+            if (!OwnsProcessor(entry, proc)) continue;
 
             // Keep time-gated datasets hidden across palette / display
             // re-renders: if the entry's adapter snaps the current global
@@ -794,12 +856,17 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             try
             {
-                var context = CreateRenderContext(proc, entry.CurrentTime);
-
-                var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, CancellationToken.None));
-
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries, result.CellMinimumDisplayScale, result.CoverageGeometry);
-                entry.Info = result.Info;
+                await RenderAndReplaceCoreAsync(
+                    entry,
+                    proc,
+                    entry.CurrentTime,
+                    presentation,
+                    cancellationToken,
+                    result => entry.Info = result.Info).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -807,11 +874,95 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         _notifications.Create(Strings.Toast_Success)
             .WithSeverity(NotificationSeverity.Success)
             .WithContent(Strings.Toast_SettingsApplied)
             .Show();
     }
+
+    private async Task<MapsuiDatasetResult?> RenderAndReplaceAsync(
+        DatasetEntry entry,
+        IDatasetProcessor processor,
+        DateTime? timeStep,
+        MapPresentationState? presentation,
+        CancellationToken cancellationToken,
+        Action<MapsuiDatasetResult>? onApplied = null)
+    {
+        await _layerRenderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            return await RenderAndReplaceCoreAsync(
+                entry,
+                processor,
+                timeStep,
+                presentation,
+                cancellationToken,
+                onApplied).ConfigureAwait(true);
+        }
+        finally
+        {
+            _layerRenderGate.Release();
+        }
+    }
+
+    private async Task ReplaceLayersAsync(
+        DatasetEntry entry,
+        IDatasetProcessor processor,
+        CancellationToken cancellationToken,
+        Action? onApplied = null)
+    {
+        await _layerRenderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!OwnsProcessor(entry, processor))
+                return;
+
+            ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+            onApplied?.Invoke();
+        }
+        finally
+        {
+            _layerRenderGate.Release();
+        }
+    }
+
+    private async Task<MapsuiDatasetResult?> RenderAndReplaceCoreAsync(
+        DatasetEntry entry,
+        IDatasetProcessor processor,
+        DateTime? timeStep,
+        MapPresentationState? presentation,
+        CancellationToken cancellationToken,
+        Action<MapsuiDatasetResult>? onApplied = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!OwnsProcessor(entry, processor))
+            return null;
+
+        var context = CreateRenderContext(processor, timeStep, presentation);
+        var result = await Task.Run(
+            () => _mapsuiRenderer.RenderAsync(processor, context, cancellationToken),
+            cancellationToken).ConfigureAwait(true);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!OwnsProcessor(entry, processor))
+            return null;
+
+        ReplaceLayers(
+            entry,
+            result.Layers.ToList(),
+            result.LayerNames,
+            result.StackEntries,
+            result.CellMinimumDisplayScale,
+            result.CoverageGeometry);
+        onApplied?.Invoke(result);
+        return result;
+    }
+
+    private bool OwnsProcessor(DatasetEntry entry, IDatasetProcessor processor) =>
+        _processors.TryGetValue(entry, out var current)
+        && ReferenceEquals(current, processor);
 
     public void RemoveEntry(DatasetEntry entry)
     {
@@ -995,7 +1146,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // explicitly no-ops ApplyRules so the strict load-order mode
         // is unaffected.
         var loaded = BuildLoadedDatasetInfos();
-        var ruled = authority.ApplyRules(sorted, loaded, _presentation.Current.Mariner);
+        var ruled = authority.ApplyRules(sorted, loaded, CurrentPresentation.Mariner);
 
         // Project the ordered / suppressed neutral items back onto the
         // prebuilt Mapsui layers. Cached ILayers are reused where the S-98
@@ -1072,7 +1223,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
     }
 
-    private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
+    private RenderContext CreateRenderContext(
+        IDatasetProcessor processor,
+        DateTime? timeStep = null,
+        MapPresentationState? presentation = null)
     {
         RenderContext context = processor switch
         {
@@ -1107,7 +1261,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             _ => new S101RenderContext(),
         };
 
-        return _presentation.Current.ApplyTo(context, processor.PortrayalSpec);
+        return (presentation ?? CurrentPresentation).ApplyTo(context, processor.PortrayalSpec);
     }
 
     private void ReplaceLayers(
@@ -1245,7 +1399,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         if (cells.Count == 0)
             return;
 
-        if (_presentation.Current.Mariner.IgnoreScaleMinimum)
+        if (CurrentPresentation.Mariner.IgnoreScaleMinimum)
             OverlapSuppression.ClearAll(cells);
         else
             OverlapSuppression.Apply(cells);
@@ -1323,7 +1477,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // when zoomed out just as it would when loaded from an exchange set.
         if ((entry.MinimumDisplayScale ?? cellMinimumDisplayScale) is not int minimumDisplayScale)
             return;
-        if (_presentation.Current.Mariner.IgnoreScaleMinimum)
+        if (CurrentPresentation.Mariner.IgnoreScaleMinimum)
             return;
 
         MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale);

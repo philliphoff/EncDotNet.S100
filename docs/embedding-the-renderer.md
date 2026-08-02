@@ -35,7 +35,10 @@ RenderContext context = presentation.ApplyTo(
 
 This presentation layer is renderer-neutral: it does not reference Mapsui,
 Avalonia, or SkiaSharp. Per-dataset time and viewport choices remain on the
-specific render context.
+specific render context. Hosts that manage loaded datasets can expose
+`IMapPresentationController.SetPresentationAsync(presentation, cancellationToken)`
+to apply the snapshot explicitly. The boundary does not own the supplied state
+or prescribe processor, layer, renderer, or UI lifecycles.
 
 Loaded dataset state has the same renderer-neutral seam:
 
@@ -60,9 +63,10 @@ its dataset and sub-layer view-models project `MapDataset` /
 `MapDatasetSubLayer` snapshots while retaining only UI commands, localized
 labels, selection, and registration metadata. Map-wide Viewer inputs are
 similarly projected into one current `MapPresentationState` before render
-contexts are created. The Viewer therefore no longer acts as the rendering
-identity or active-state store, although session extraction and an explicit
-`SetPresentationAsync` API remain later roadmap work.
+contexts are created, then applied through `IMapPresentationController` rather
+than a presentation-specific refresh event. The Viewer therefore no longer acts
+as the rendering identity or active-state store. Processor and layer ownership
+remain in the Viewer loader until the later reusable session extraction.
 
 ## Why it matters
 
