@@ -108,10 +108,18 @@ internal interface IDatasetLoaderService
     void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries);
 
     /// <summary>
-    /// Point-in-time compatibility snapshot of active processors keyed by
-    /// entry. Processor lifetime is owned by <see cref="DatasetProcessorOwner"/>.
+    /// Test-double compatibility view of active processors keyed by entry.
+    /// Production callers use <see cref="AcquireProcessors"/> so processor
+    /// lifetime remains protected while processors are accessed.
     /// </summary>
-    IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
+    IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors =>
+        new Dictionary<DatasetEntry, IDatasetProcessor>();
+
+    /// <summary>
+    /// Acquires a point-in-time processor snapshot whose disposal releases
+    /// every processor lease.
+    /// </summary>
+    DatasetProcessorSnapshot AcquireProcessors() => new(Processors);
 
     /// <summary>Read-only view of the layers each entry currently owns.</summary>
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }

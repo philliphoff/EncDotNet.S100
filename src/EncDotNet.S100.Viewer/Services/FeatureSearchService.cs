@@ -1,9 +1,12 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.ViewModels;
+
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Default <see cref="IFeatureSearchService"/> implementation. Builds
 /// a snapshot of <c>(processor, FeatureSummary)</c> pairs lazily from
-/// <see cref="IDatasetLoaderService.Processors"/> /
+/// <see cref="IDatasetLoaderService.AcquireProcessors"/> /
 /// <see cref="IDatasetLoaderService.EntryLayers"/>, and rebuilds it
 /// whenever the loader signals a dataset load or unload.
 /// </summary>
@@ -67,12 +70,13 @@ internal sealed class FeatureSearchService : IFeatureSearchService
         // Cheap signature: count + each processor's identity hash. The
         // loader doesn't expose an unload event, so we re-check on each
         // search; index-build is in-memory and inexpensive.
-        var hash = ComputeProcessorHash();
+        using var processors = _loader.AcquireProcessors();
+        var hash = ComputeProcessorHash(processors);
         if (_snapshot is not null && _snapshotProcessorHash == hash)
             return;
 
         var snapshot = new List<FeatureSearchHit>();
-        foreach (var (entry, processor) in _loader.Processors)
+        foreach (var (entry, processor) in processors)
         {
             foreach (var summary in processor.EnumerateFeatures())
             {
@@ -92,11 +96,12 @@ internal sealed class FeatureSearchService : IFeatureSearchService
         _snapshotProcessorHash = hash;
     }
 
-    private int ComputeProcessorHash()
+    private static int ComputeProcessorHash(
+        IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> processors)
     {
         var hash = new HashCode();
-        hash.Add(_loader.Processors.Count);
-        foreach (var (entry, processor) in _loader.Processors)
+        hash.Add(processors.Count);
+        foreach (var (entry, processor) in processors)
         {
             hash.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(entry));
             hash.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(processor));

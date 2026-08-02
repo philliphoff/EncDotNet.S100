@@ -196,21 +196,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             _ = ReRenderAtTimeAsync(now, CancellationToken.None);
     }
 
-    public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors
+    public DatasetProcessorSnapshot AcquireProcessors()
     {
-        get
+        var snapshot = new Dictionary<DatasetEntry, IDatasetProcessor>();
+        var leases = new List<IDisposable>();
+        foreach (var entry in _processorEntries.Values.ToArray())
         {
-            var snapshot = new Dictionary<DatasetEntry, IDatasetProcessor>();
-            foreach (var entry in _processorEntries.Values.ToArray())
-            {
-                if (!_processorOwner.TryAcquire(entry.Id, out var lease))
-                    continue;
+            if (!_processorOwner.TryAcquire(entry.Id, out var lease))
+                continue;
 
-                using (lease)
-                    snapshot[entry] = lease.Processor;
-            }
-            return new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(snapshot);
+            leases.Add(lease);
+            snapshot[entry] = lease.Processor;
         }
+        return new DatasetProcessorSnapshot(
+            new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(snapshot),
+            leases);
     }
     public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers => _entryLayersView;
 
@@ -411,9 +411,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             }, token);
             callerOwnedProcessor = processor;
             if (!IsCurrentLoad(entry, loadGeneration))
+            {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                 return;
+            }
             if (!_processorOwner.TryRegister(entry.Id, processor))
+            {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                 return;
+            }
             callerOwnedProcessor = null;
             registeredProcessor = processor;
             _processorEntries[entry.Id] = entry;
@@ -528,7 +534,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                     presentation: null,
                     token).ConfigureAwait(true);
                 if (result is null)
+                {
+                    DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                     return;
+                }
                 // Record the dataset's mercator extent so the panel can zoom to
                 // it (double-click reveal) and the out-of-scale extent indicator
                 // can outline it, even for exchange-set entries that opt out of
@@ -559,6 +568,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 || !ReferenceEquals(validationLease.Processor, processor))
             {
                 validationLease?.Dispose();
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                 return;
             }
 
@@ -572,6 +582,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             if (!IsCurrentLoad(entry, loadGeneration)
                 || !OwnsProcessor(entry, processor))
             {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                 return;
             }
             entry.SetValidationReport(validation);
@@ -597,6 +608,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             if (!IsCurrentLoad(entry, loadGeneration)
                 || !OwnsProcessor(entry, processor))
             {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                 return;
             }
 
@@ -716,6 +728,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         handle.SetActions();
         handle.Update(title: title, message: message, severity: severity);
         handle.ScheduleAutoDismiss(NotificationService.DefaultDelayFor(severity));
+    }
+
+    private static void DriveLoadAbandoned(
+        INotificationHandle? handle,
+        bool fromExchangeSet,
+        DatasetEntry entry)
+    {
+        if (!fromExchangeSet)
+        {
+            DriveTerminal(
+                handle,
+                NotificationSeverity.Info,
+                Strings.Toast_DatasetCancelled,
+                entry.DisplayName);
+        }
     }
 
     /// <summary>

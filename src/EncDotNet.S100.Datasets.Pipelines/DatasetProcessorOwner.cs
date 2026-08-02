@@ -239,7 +239,7 @@ public sealed class DatasetProcessorOwner : IDisposable
         if (string.IsNullOrWhiteSpace(datasetId.Value))
         {
             throw new ArgumentException(
-                "The dataset identifier must not be the default value.",
+                "The dataset identifier must not be null, empty, or white-space.",
                 nameof(datasetId));
         }
     }
