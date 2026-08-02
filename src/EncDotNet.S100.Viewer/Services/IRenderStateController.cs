@@ -6,7 +6,8 @@ namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Late-bound controller for the viewer's render-state knobs (palette,
-/// ECDIS display category) — the analogue of <see cref="IMapHostAccessor"/>
+/// ECDIS display category) — the analogue of
+/// <see cref="IMapCapabilityAccessor{TCapability}"/>
 /// for state that lives in view-models and singletons rather than in the
 /// Mapsui control. Lets MCP tools mutate the live render state from
 /// off-UI threads without coupling them directly to <c>SettingsViewModel</c>
@@ -83,7 +84,8 @@ internal interface IRenderStateController
 
 /// <summary>
 /// Late-bound accessor for <see cref="IRenderStateController"/>, mirroring
-/// <see cref="IMapHostAccessor"/>. Allows <see cref="McpServerHost"/> to
+/// <see cref="IMapCapabilityAccessor{TCapability}"/>. Allows
+/// <see cref="McpServerHost"/> to
 /// resolve the controller before the viewer's main window finishes
 /// constructing it.
 /// </summary>

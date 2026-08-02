@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Owns the dataset processor cache and orchestrates load / re-render /
-/// remove against an <see cref="IMapHost"/>. Decouples the dataset
+/// remove against focused map layer and viewport capabilities. Decouples the dataset
 /// pipeline from <see cref="MainWindow"/>; the window only supplies the
 /// map host and listens for completion events.
 /// </summary>
@@ -18,7 +18,10 @@ internal interface IDatasetLoaderService
     /// from the supplied CLI options. Must be called exactly once before
     /// any <see cref="LoadAsync"/> call.
     /// </summary>
-    void Initialize(IMapHost host, ViewerCommandSettings? options);
+    void Initialize(
+        IMapLayerCollection layerCollection,
+        IMapViewportController viewport,
+        ViewerCommandSettings? options);
 
     /// <summary>
     /// <see langword="true"/> once <see cref="Initialize"/> has wired the

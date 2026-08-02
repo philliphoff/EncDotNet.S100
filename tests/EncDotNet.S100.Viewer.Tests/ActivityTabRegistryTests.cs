@@ -74,7 +74,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
             = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
-        public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
+        public void Initialize(IMapLayerCollection layers, IMapViewportController viewport, ViewerCommandSettings? options) { }
         public System.Threading.Tasks.Task LoadAsync(DatasetEntry entry, System.Threading.CancellationToken cancellationToken = default) => System.Threading.Tasks.Task.CompletedTask;
         public System.Threading.Tasks.Task ReRenderAtTimeAsync(DateTime t, System.Threading.CancellationToken ct) => System.Threading.Tasks.Task.CompletedTask;
         public System.Threading.Tasks.Task ReRenderAllAsync() => System.Threading.Tasks.Task.CompletedTask;

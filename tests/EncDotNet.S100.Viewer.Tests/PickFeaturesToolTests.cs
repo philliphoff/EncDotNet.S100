@@ -11,11 +11,6 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 public class PickFeaturesToolTests
 {
-    private sealed class FakeAccessor : IMapHostAccessor
-    {
-        public IMapHost? Current { get; set; }
-    }
-
     private sealed class FakeCatalog : IDatasetCatalog
     {
         public IReadOnlyList<LoadedDataset> Datasets { get; set; } = [];
@@ -23,11 +18,17 @@ public class PickFeaturesToolTests
         public void Raise() => Changed?.Invoke(this, null!);
     }
 
-    private static (PickFeaturesTool tool, FakeMapHost host, FakeAccessor accessor) Make(
-        IMapHost? hostOverride = null)
+    private static (
+        PickFeaturesTool Tool,
+        FakeMapHost Host,
+        MapCapabilityAccessor<IMapCoordinateConverter> Accessor) Make(
+        IMapCoordinateConverter? hostOverride = null)
     {
         var host = hostOverride as FakeMapHost ?? new FakeMapHost();
-        var accessor = new FakeAccessor { Current = hostOverride is null ? host : hostOverride };
+        var accessor = new MapCapabilityAccessor<IMapCoordinateConverter>
+        {
+            Current = hostOverride ?? host,
+        };
         var tool = new PickFeaturesTool(accessor, new FakeCatalog());
         return (tool, host, accessor);
     }

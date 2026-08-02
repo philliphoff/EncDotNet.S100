@@ -79,12 +79,14 @@ internal sealed class PickFeaturesTool
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "pick_features";
 
-    private readonly IMapHostAccessor _accessor;
+    private readonly IMapCapabilityAccessor<IMapCoordinateConverter> _accessor;
     private readonly IdentifyFeaturesTool _identify;
     private readonly IGeographicPickPresenter? _presenter;
 
     /// <summary>Creates a new <see cref="PickFeaturesTool"/>.</summary>
-    public PickFeaturesTool(IMapHostAccessor accessor, IDatasetCatalog catalog)
+    public PickFeaturesTool(
+        IMapCapabilityAccessor<IMapCoordinateConverter> accessor,
+        IDatasetCatalog catalog)
         : this(accessor, catalog, presenter: null)
     {
     }
@@ -94,7 +96,10 @@ internal sealed class PickFeaturesTool
     /// presenter used to honour <see cref="PickFeaturesRequest.Select"/> by
     /// publishing the pick to the live viewer panel + highlight.
     /// </summary>
-    public PickFeaturesTool(IMapHostAccessor accessor, IDatasetCatalog catalog, IGeographicPickPresenter? presenter)
+    public PickFeaturesTool(
+        IMapCapabilityAccessor<IMapCoordinateConverter> accessor,
+        IDatasetCatalog catalog,
+        IGeographicPickPresenter? presenter)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         ArgumentNullException.ThrowIfNull(catalog);

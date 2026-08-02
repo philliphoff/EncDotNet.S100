@@ -77,7 +77,7 @@ internal sealed class VesselListViewModel : ViewModelBase
     private readonly IDynamicFeatureSource? _ownShip;
     private readonly IHelmStatusProvider? _helmStatus;
     private readonly IDynamicFeatureSource? _helmTargetSource;
-    private readonly IMapHostAccessor _mapHostAccessor;
+    private readonly IMapCapabilityAccessor<IMapViewportController> _viewportAccessor;
     private readonly DispatcherTimer? _timer;
     private readonly Dictionary<string, VesselListItem> _itemsById = new(StringComparer.Ordinal);
 
@@ -88,13 +88,13 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     public VesselListViewModel(
         IEnumerable<IDynamicFeatureSource> sources,
-        IMapHostAccessor mapHostAccessor)
-        : this(sources, mapHostAccessor, helmStatus: null, helmTargetSource: null)
+        IMapCapabilityAccessor<IMapViewportController> viewportAccessor)
+        : this(sources, viewportAccessor, helmStatus: null, helmTargetSource: null)
     {
     }
 
     /// <param name="sources">All registered dynamic feature sources.</param>
-    /// <param name="mapHostAccessor">Accessor for the live map host.</param>
+    /// <param name="viewportAccessor">Accessor for the live map viewport.</param>
     /// <param name="helmStatus">
     /// Read-only pirate-mode status used to label the own-ship row and gate
     /// the release-helm command. <see langword="null"/> in tests / when no
@@ -108,14 +108,14 @@ internal sealed class VesselListViewModel : ViewModelBase
     /// </param>
     public VesselListViewModel(
         IEnumerable<IDynamicFeatureSource> sources,
-        IMapHostAccessor mapHostAccessor,
+        IMapCapabilityAccessor<IMapViewportController> viewportAccessor,
         IHelmStatusProvider? helmStatus,
         IDynamicFeatureSource? helmTargetSource)
     {
         ArgumentNullException.ThrowIfNull(sources);
-        ArgumentNullException.ThrowIfNull(mapHostAccessor);
+        ArgumentNullException.ThrowIfNull(viewportAccessor);
 
-        _mapHostAccessor = mapHostAccessor;
+        _viewportAccessor = viewportAccessor;
         _helmStatus = helmStatus;
         _helmTargetSource = helmTargetSource;
         Vessels = new ObservableCollection<VesselListItem>();
@@ -189,7 +189,7 @@ internal sealed class VesselListViewModel : ViewModelBase
                 ReleaseHelmCommand.NotifyCanExecuteChanged();
                 if (value is not null)
                 {
-                    _mapHostAccessor.Current?.CenterOn(value.Latitude, value.Longitude);
+                    _viewportAccessor.Current?.CenterOn(value.Latitude, value.Longitude);
                 }
             }
         }
@@ -350,7 +350,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         // user is actually looking at (rather than by MMSI, whose order is
         // meaningless to the navigator). Either may be null — e.g. no
         // laid-out map yet — in which case ordering falls back to name.
-        var sortOrigin = own ?? _mapHostAccessor.Current?.TryGetViewportCenterWgs84();
+        var sortOrigin = own ?? _viewportAccessor.Current?.TryGetViewportCenterWgs84();
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var feature in features)

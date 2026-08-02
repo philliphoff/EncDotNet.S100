@@ -17,7 +17,7 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     public void RaiseLoaded(DatasetEntry entry) => DatasetLoaded?.Invoke(entry);
     public void RaiseRemoved(DatasetEntry entry) => DatasetRemoved?.Invoke(entry);
 
-    public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
+    public void Initialize(IMapLayerCollection layers, IMapViewportController viewport, ViewerCommandSettings? options) { }
 
     /// <summary>Backs <see cref="IsInitialized"/>; settable by tests.</summary>
     public bool IsInitializedValue { get; set; } = true;

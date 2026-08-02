@@ -135,7 +135,11 @@ public partial class MainWindow : ShadUI.Window
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally.
         _mapHost = new MapsuiMapHost(MapControl);
-        App.Services.GetRequiredService<IMapHostAccessor>().Current = _mapHost;
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
+        // Snapshot is the MCP readiness gate, so publish it only after the
+        // coordinate and viewport capabilities used alongside it are attached.
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>().Current = _mapHost;
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
@@ -150,7 +154,7 @@ public partial class MainWindow : ShadUI.Window
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
             new ViewerUiController(_viewModel);
-        _loader.Initialize(_mapHost, options);
+        _loader.Initialize(_mapHost, _mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
         _viewModel.Datasets.ZoomDispatcher = _mapHost.ZoomToExtent;
@@ -316,19 +320,19 @@ public partial class MainWindow : ShadUI.Window
         // prebuild is enabled) so toggling the prebuild on at runtime works
         // without a relaunch.
         EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = () =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+            _mapHost.RequestRedraw();
 
         // Same marshalling for the TiledScene ("B") subsystem: when a worker
         // publishes a freshly rasterised VectorScene image, request a single
         // UI-thread repaint that swaps the transient stale blit for the new image.
         EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw = () =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+            _mapHost.RequestRedraw();
 
         // Same marshalling for the Phase-2 tiled arm of the TiledScene subsystem:
         // when a worker publishes a freshly rasterised base-plane tile, request a
         // single UI-thread repaint that composites it into the visible mosaic.
         EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw = () =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+            _mapHost.RequestRedraw();
 
         // Bind the map-viewport notifier as early as possible so the
         // AIS overlay's zoom-gated decorator (resolved below via
@@ -702,7 +706,7 @@ public partial class MainWindow : ShadUI.Window
     private void OnBasemapModeChanged(BasemapMode mode)
     {
         _mapHost.SetBasemapLayer(BasemapLayerFactory.TryCreate(mode));
-        MapControl.RefreshGraphics();
+        _mapHost.RequestRedraw();
     }
 
     /// <summary>
@@ -987,7 +991,7 @@ public partial class MainWindow : ShadUI.Window
             addLayer: _mapHost.AddToolLayer,
             removeLayer: _mapHost.RemoveToolLayer,
             setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
-            refreshGraphics: () => MapControl.RefreshGraphics(),
+            refreshGraphics: _mapHost.RequestRedraw,
             screenToLatLon: ScreenToLatLon,
             latLonToScreen: LatLonToScreen);
 
@@ -1047,7 +1051,7 @@ public partial class MainWindow : ShadUI.Window
             _routeStore.Routes,
             _routeStore.SelectedWaypointIndex,
             _routeAppearance.Current);
-        MapControl.RefreshGraphics();
+        _mapHost.RequestRedraw();
     }
 
     /// <summary>

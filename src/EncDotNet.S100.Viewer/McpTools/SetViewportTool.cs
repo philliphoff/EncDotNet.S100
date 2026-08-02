@@ -45,7 +45,7 @@ internal sealed record SetViewportResult(
 /// zoom, and viewport-change scenarios from outside the GUI.
 /// Distinguished from <see cref="RenderToImageTool"/>, which is
 /// deliberately read-only and clones the Map: this tool intentionally
-/// mutates the live <see cref="IMapHost"/>.
+/// mutates the live <see cref="IMapViewportController"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -82,10 +82,10 @@ internal sealed class SetViewportTool
     // Mapsui Navigator wants. 156543.0339... = 2 * pi * 6378137 / 256.
     internal const double ResolutionAtZoomZero = 156543.03392804097;
 
-    private readonly IMapHostAccessor _accessor;
+    private readonly IMapCapabilityAccessor<IMapViewportController> _accessor;
 
     /// <summary>Creates a new <see cref="SetViewportTool"/>.</summary>
-    public SetViewportTool(IMapHostAccessor accessor)
+    public SetViewportTool(IMapCapabilityAccessor<IMapViewportController> accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         _accessor = accessor;
@@ -143,7 +143,7 @@ internal sealed class SetViewportTool
 
     private static Task<ToolResult<SetViewportResult>> ApplyBbox(
         SetViewportRequest request,
-        IMapHost host,
+        IMapViewportController host,
         double rotation)
     {
         if (request.South is not { } south
@@ -184,7 +184,7 @@ internal sealed class SetViewportTool
 
     private static Task<ToolResult<SetViewportResult>> ApplyCenterZoom(
         SetViewportRequest request,
-        IMapHost host,
+        IMapViewportController host,
         double rotation)
     {
         if (request.CenterLat is not { } lat

@@ -6,21 +6,21 @@ using Mapsui.Layers;
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 
 /// <summary>
-/// Test-only <see cref="IMapHost"/> that records overlay-layer
-/// additions/removals without spinning up Mapsui or Avalonia.
+/// Test-only focused map capabilities that record layer and viewport activity
+/// without spinning up Mapsui or Avalonia.
 /// </summary>
-internal sealed class FakeMapHost : IMapHost
+internal sealed class FakeMapHost :
+    IMapLayerCollection,
+    IMapViewportController,
+    IMapCoordinateConverter
 {
     public List<ILayer> DatasetLayers { get; } = new();
     public List<ILayer> OverlayLayers { get; } = new();
 
-    /// <summary>Active render subsystem; defaults to the Mapsui ("A") arm.</summary>
-    public IChartRenderSubsystem RenderSubsystem { get; set; } = new MapsuiChartRenderSubsystem();
+    public void AddDatasetLayer(ILayer layer) => DatasetLayers.Add(layer);
+    public void RemoveDatasetLayer(ILayer layer) => DatasetLayers.Remove(layer);
 
-    public void AddLayer(ILayer layer) => DatasetLayers.Add(layer);
-    public void RemoveLayer(ILayer layer) => DatasetLayers.Remove(layer);
-
-    public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
+    public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
     {
         DatasetLayers.Clear();
         DatasetLayers.AddRange(orderedDatasetLayers);
@@ -28,6 +28,9 @@ internal sealed class FakeMapHost : IMapHost
 
     public void AddOverlayLayer(ILayer layer) => OverlayLayers.Add(layer);
     public void RemoveOverlayLayer(ILayer layer) => OverlayLayers.Remove(layer);
+    public void SetBasemapLayer(ILayer? layer) { }
+    public void AddToolLayer(ILayer layer) { }
+    public void RemoveToolLayer(ILayer layer) { }
 
     public void ZoomToExtent(MRect extent) { }
     public void SetViewportToExtent(MRect mercatorExtent) { }
@@ -80,7 +83,4 @@ internal sealed class FakeMapHost : IMapHost
         double xPx, double yPx, int imageWidthPx, int imageHeightPx)
         => ImagePixelToWgs84(xPx, yPx, imageWidthPx, imageHeightPx);
 
-    public Task<byte[]?> RenderCurrentViewToPngAsync(
-        int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken = default)
-        => Task.FromResult<byte[]?>(null);
 }

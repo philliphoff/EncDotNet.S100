@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// <see cref="DynamicSourceMetadata.RendererKey"/>, falling back to
 /// <see cref="DefaultDynamicFeatureRenderer"/> when the key is
 /// <see langword="null"/> or unresolved; (2) attaches a backing
-/// <see cref="MemoryLayer"/> to <see cref="IMapHost.AddOverlayLayer"/>;
+/// <see cref="MemoryLayer"/> to <see cref="IMapLayerCollection.AddOverlayLayer"/>;
 /// (3) subscribes to <see cref="IDynamicFeatureSource.Changed"/> and
 /// marshals updates onto the UI thread; and (4) rebuilds the layer's
 /// features on each (debounced) change.
@@ -37,7 +37,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// </remarks>
 internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSourceRegistry
 {
-    private readonly IMapHost _mapHost;
+    private readonly IMapLayerCollection _layers;
     private readonly IServiceProvider _services;
     private readonly Action<Action> _marshal;
     private readonly ILogger<DynamicSourceOverlayHost> _logger;
@@ -71,8 +71,8 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     /// <summary>
     /// Creates a new overlay host.
     /// </summary>
-    /// <param name="mapHost">
-    /// Target map host. The host must already be initialised
+    /// <param name="layers">
+    /// Target map layer collection. The map must already be initialised
     /// (basemap added) before any source is registered; layers
     /// added before initialisation are silently dropped by
     /// <see cref="MapsuiMapHost"/>.
@@ -96,15 +96,15 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     /// disable the throttle and keep rebuilds synchronous.
     /// </param>
     public DynamicSourceOverlayHost(
-        IMapHost mapHost,
+        IMapLayerCollection layers,
         IServiceProvider services,
         Action<Action>? marshal = null,
         ILogger<DynamicSourceOverlayHost>? logger = null,
         TimeSpan? coalesceWindow = null)
     {
-        ArgumentNullException.ThrowIfNull(mapHost);
+        ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(services);
-        _mapHost = mapHost;
+        _layers = layers;
         _services = services;
         _marshal = marshal ?? DispatcherMarshal;
         _logger = logger ?? NullLogger<DynamicSourceOverlayHost>.Instance;
@@ -155,7 +155,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
 
         _marshal(() =>
         {
-            _mapHost.AddOverlayLayer(layer);
+            _layers.AddOverlayLayer(layer);
             Rebuild(registration);
             SourcesChanged?.Invoke();
         });
@@ -448,7 +448,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
             }
             _host._marshal(() =>
             {
-                _host._mapHost.RemoveOverlayLayer(Layer);
+                _host._layers.RemoveOverlayLayer(Layer);
                 _host.SourcesChanged?.Invoke();
             });
         }
@@ -457,7 +457,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             Source.Changed -= OnChanged;
-            _host._marshal(() => _host._mapHost.RemoveOverlayLayer(Layer));
+            _host._marshal(() => _host._layers.RemoveOverlayLayer(Layer));
         }
     }
 }

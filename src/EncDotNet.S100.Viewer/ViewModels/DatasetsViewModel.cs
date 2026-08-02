@@ -489,7 +489,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// extent. Set by <see cref="DatasetsViewModel"/> once the entry
     /// is added to its <c>Entries</c> collection so finding
     /// view-models built by <see cref="SetValidationReport"/> can
-    /// drive <see cref="Services.IMapHost.ZoomToExtent"/> through it.
+    /// drive <see cref="Services.IMapViewportController.ZoomToExtent"/> through it.
     /// Stays <c>null</c> in tests that don't construct the
     /// view-model, in which case <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
     /// is disabled.
@@ -897,7 +897,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// <summary>
     /// Routes <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
     /// activations from individual finding view-models to the live
-    /// map's <see cref="Services.IMapHost.ZoomToExtent"/>. Set once by
+    /// map's <see cref="Services.IMapViewportController.ZoomToExtent"/>. Set once by
     /// the window after the map host is available; assigned to every
     /// entry currently in <see cref="Entries"/> and to entries added
     /// later.

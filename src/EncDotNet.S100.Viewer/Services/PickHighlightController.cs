@@ -45,7 +45,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class PickHighlightController : IDisposable
 {
-    private readonly IMapHost _mapHost;
+    private readonly IMapLayerCollection _layers;
     private readonly PickReportViewModel _pickReport;
     private readonly IDatasetCatalog _catalog;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
@@ -60,7 +60,7 @@ internal sealed class PickHighlightController : IDisposable
     /// layers added before initialisation are silently dropped by
     /// <see cref="MapsuiMapHost"/>.
     /// </summary>
-    /// <param name="mapHost">Target map host.</param>
+    /// <param name="layers">Target map layer collection.</param>
     /// <param name="pickReport">The pick-report view model to observe.</param>
     /// <param name="catalog">Loaded-dataset catalog used to resolve feature geometry.</param>
     /// <param name="appearance">Accent/theme provider for the highlight colours.</param>
@@ -74,20 +74,20 @@ internal sealed class PickHighlightController : IDisposable
     /// implementation.
     /// </param>
     public PickHighlightController(
-        IMapHost mapHost,
+        IMapLayerCollection layers,
         PickReportViewModel pickReport,
         IDatasetCatalog catalog,
         IMeasureOverlayAppearanceProvider appearance,
         SettingsViewModel settings,
         Action<Action>? marshal = null)
     {
-        ArgumentNullException.ThrowIfNull(mapHost);
+        ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(settings);
 
-        _mapHost = mapHost;
+        _layers = layers;
         _pickReport = pickReport;
         _catalog = catalog;
         _appearance = appearance;
@@ -102,7 +102,7 @@ internal sealed class PickHighlightController : IDisposable
 
         _marshal(() =>
         {
-            _mapHost.AddOverlayLayer(_layer);
+            _layers.AddOverlayLayer(_layer);
             Rebuild();
         });
     }
@@ -234,6 +234,6 @@ internal sealed class PickHighlightController : IDisposable
         _appearance.Changed -= OnAppearanceChanged;
         _settings.PaletteChanged -= OnPaletteChanged;
 
-        _marshal(() => _mapHost.RemoveOverlayLayer(_layer));
+        _marshal(() => _layers.RemoveOverlayLayer(_layer));
     }
 }

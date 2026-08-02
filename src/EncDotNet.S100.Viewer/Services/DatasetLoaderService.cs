@@ -19,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <summary>
 /// Default <see cref="IDatasetLoaderService"/> implementation. Owns the
 /// dataset pipeline factory, the per-entry processor + layer maps, and
-/// drives all map mutations through an <see cref="IMapHost"/>.
+/// drives map mutations through focused layer and viewport capabilities.
 /// </summary>
 internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresentationController
 {
@@ -63,7 +63,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// Snapshot of the most recently computed S-98 layer stack
     /// (bottom-of-paint-stack first; index 0 = drawn first / under
     /// everything else). Mirrors what was just handed to
-    /// <see cref="IMapHost.ReorderDatasetLayers"/>. Refreshed whenever
+    /// <see cref="IMapLayerCollection.ReplaceDatasetLayers"/>. Refreshed whenever
     /// the layer order changes so <see cref="PickService"/> can rank
     /// multi-hit picks top-of-stack first.
     /// </summary>
@@ -105,7 +105,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly SemaphoreSlim _layerRenderGate = new(1, 1);
     private readonly object _presentationSync = new();
 
-    private IMapHost? _mapHost;
+    private IMapLayerCollection? _layerCollection;
+    private IMapViewportController? _viewport;
     private MapPresentationState _presentation;
     private CancellationTokenSource? _presentationCts;
 
@@ -113,7 +114,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         Volatile.Read(ref _presentation);
 
     /// <inheritdoc />
-    public bool IsInitialized => _mapHost is not null;
+    public bool IsInitialized => _layerCollection is not null && _viewport is not null;
 
     // Coalesce slider scrubs into a single render pass after the user has
     // paused for ~100 ms. Each new SetCurrentTime cancels the in-flight
@@ -217,8 +218,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // future Active-aware rules) re-evaluates with the new
         // flag, and rebroadcast it through the map host so PickService
         // / Layer Stack panel see the change.
-        if (_mapHost is not null)
-            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        if (_layerCollection is not null)
+            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
         ActiveChanged?.Invoke(datasetId);
     }
 
@@ -255,13 +256,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
     }
 
-    public void Initialize(IMapHost host, ViewerCommandSettings? options)
+    public void Initialize(
+        IMapLayerCollection layerCollection,
+        IMapViewportController viewport,
+        ViewerCommandSettings? options)
     {
-        ArgumentNullException.ThrowIfNull(host);
-        if (_mapHost is not null)
+        ArgumentNullException.ThrowIfNull(layerCollection);
+        ArgumentNullException.ThrowIfNull(viewport);
+        if (_layerCollection is not null)
             throw new InvalidOperationException("DatasetLoaderService has already been initialized.");
 
-        _mapHost = host;
+        _layerCollection = layerCollection;
+        _viewport = viewport;
 
         var transientFcPaths = _catalogueSeeder.Seed(options);
         _fcOverrides.SetTransientPaths(transientFcPaths);
@@ -481,7 +487,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 // load and "win" the viewport.
                 if (!fromExchangeSet && !SuppressAutoZoom)
                 {
-                    _mapHost!.ZoomToExtent(result.Extent);
+                    _viewport!.ZoomToExtent(result.Extent);
                 }
             }
 
@@ -989,8 +995,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         // Publish the new (empty / smaller) stack so PickService and
         // anyone else who cares drops references to the removed layers.
-        if (_mapHost is not null)
-            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        if (_layerCollection is not null)
+            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
         // Recompute overlap-suppression clips now this cell's coverage is gone,
         // so a coarser cell it used to suppress paints in full again (#438 Ph2).
         ApplyOverlapSuppression();
@@ -1037,8 +1043,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // projection, so it naturally survives this unload → reload cycle.
         _globalTime.Unregister(entry);
         entry.IsDeferred = true;
-        if (_mapHost is not null)
-            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        if (_layerCollection is not null)
+            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
         // Recompute overlap-suppression clips now this cell's coverage is gone
         // (evicted), so any coarser cell it suppressed paints in full (#438 Ph2).
         ApplyOverlapSuppression();
@@ -1047,7 +1053,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
     {
         ArgumentNullException.ThrowIfNull(orderedEntries);
-        if (_mapHost is null) return;
+        if (_layerCollection is null) return;
 
         // Rebuild the canonical order from the supplied sequence,
         // dropping any entries that are no longer bound to layers
@@ -1058,7 +1064,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             if (_entryLayers.ContainsKey(e))
                 _entryOrder.Add(e);
         }
-        _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
     }
 
     private List<ILayer> FlattenLayerOrder()
@@ -1322,7 +1328,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         foreach (var layer in layers)
         {
-            _mapHost!.AddLayer(layer);
+            _layerCollection!.AddDatasetLayer(layer);
         }
 
         // PR-L1 (S-98): always recompute the cross-dataset paint
@@ -1337,7 +1343,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         {
             _entryOrder.Insert(0, entry);
         }
-        _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
+        _layerCollection!.ReplaceDatasetLayers(FlattenLayerOrder());
 
         // Cross-cell scale-band overlap suppression (issue #438 Phase 2):
         // recompute every loaded cell's clip region now that this cell's layers
@@ -1648,14 +1654,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private void RemoveEntryLayers(DatasetEntry entry)
     {
-        if (_mapHost is null)
+        if (_layerCollection is null)
             return;
 
         if (_entryLayers.TryGetValue(entry, out var oldLayers))
         {
             foreach (var layer in oldLayers)
             {
-                _mapHost.RemoveLayer(layer);
+                _layerCollection.RemoveDatasetLayer(layer);
             }
             _entryLayers.Remove(entry);
         }
@@ -1668,14 +1674,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // Re-flatten the current stack through the new authority's
         // policy and push the result to the map host. Cheap when no
         // datasets are loaded.
-        if (_mapHost is null) return;
+        if (_layerCollection is null) return;
         if (_entryOrder.Count == 0) return;
-        _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
     }
 
     private void EnsureInitialized()
     {
-        if (_mapHost is null)
+        if (_layerCollection is null || _viewport is null)
             throw new InvalidOperationException("DatasetLoaderService.Initialize must be called before LoadAsync.");
     }
 }

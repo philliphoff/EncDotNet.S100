@@ -35,7 +35,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class DatasetExtentIndicatorController : IDisposable
 {
-    private readonly IMapHost _mapHost;
+    private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly SettingsViewModel _settings;
@@ -48,7 +48,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     /// Creates and attaches the controller. The map host must already be
     /// initialised (basemap added) so the overlay lands above the basemap.
     /// </summary>
-    /// <param name="mapHost">Target map host.</param>
+    /// <param name="layers">Target map layer collection.</param>
     /// <param name="datasets">The datasets view-model to observe.</param>
     /// <param name="appearance">Accent/theme provider for the border colour.</param>
     /// <param name="settings">Settings view-model supplying the on/off toggle.</param>
@@ -58,18 +58,18 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     /// implementation.
     /// </param>
     public DatasetExtentIndicatorController(
-        IMapHost mapHost,
+        IMapLayerCollection layers,
         DatasetsViewModel datasets,
         IMeasureOverlayAppearanceProvider appearance,
         SettingsViewModel settings,
         Action<Action>? marshal = null)
     {
-        ArgumentNullException.ThrowIfNull(mapHost);
+        ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(settings);
 
-        _mapHost = mapHost;
+        _layers = layers;
         _datasets = datasets;
         _appearance = appearance;
         _settings = settings;
@@ -86,7 +86,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
 
         _marshal(() =>
         {
-            _mapHost.AddOverlayLayer(_layer);
+            _layers.AddOverlayLayer(_layer);
             Rebuild();
         });
     }
@@ -256,6 +256,6 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         _appearance.Changed -= OnAppearanceChanged;
         _settings.ExtentIndicatorsChanged -= OnToggleChanged;
 
-        _marshal(() => _mapHost.RemoveOverlayLayer(_layer));
+        _marshal(() => _layers.RemoveOverlayLayer(_layer));
     }
 }

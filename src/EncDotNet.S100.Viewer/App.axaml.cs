@@ -719,11 +719,11 @@ public partial class App : Application
 
         // PR-D2.1: dynamic-source registry accessor. The real registry
         // is the DynamicSourceOverlayHost constructed in MainWindow
-        // (it needs IMapHost, which only exists after the MapControl
+        // (it needs map layer capabilities, which only exist after the MapControl
         // initialises). The accessor is the indirection: view-models
         // depend on it through IDynamicFeatureSourceRegistry; MainWindow
         // assigns Current once the host is built. Mirrors
-        // IMapHostAccessor / MapHostAccessor below.
+        // typed map capability accessors below.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>());
@@ -732,7 +732,15 @@ public partial class App : Application
         // observes the existing dataset loader and re-opens dataset files
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
-        services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
+        services.AddSingleton<MapCapabilityAccessor<IMapSnapshotRenderer>>();
+        services.AddSingleton<IMapCapabilityAccessor<IMapSnapshotRenderer>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>());
+        services.AddSingleton<MapCapabilityAccessor<IMapViewportController>>();
+        services.AddSingleton<IMapCapabilityAccessor<IMapViewportController>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>());
+        services.AddSingleton<MapCapabilityAccessor<IMapCoordinateConverter>>();
+        services.AddSingleton<IMapCapabilityAccessor<IMapCoordinateConverter>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>());
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
         services.AddSingleton<IViewerUiControllerAccessor, ViewerUiControllerAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
@@ -749,7 +757,9 @@ public partial class App : Application
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
-            sp.GetRequiredService<IMapHostAccessor>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapSnapshotRenderer>>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapCoordinateConverter>>(),
             sp.GetService<ILoggerFactory>(),
             sp.GetRequiredService<IRenderStateControllerAccessor>(),
             sp.GetRequiredService<GlobalTimeService>(),
@@ -773,7 +783,7 @@ public partial class App : Application
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
             sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
-            sp.GetRequiredService<IMapHostAccessor>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapViewportController>>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         services.AddSingleton<SettingsViewModel>();
