@@ -184,11 +184,12 @@ exchange-set registration details remain Viewer-only. Palette, ECDIS, scale,
 and mariner inputs are likewise consolidated into the current
 `MapPresentationState` before rendering and passed explicitly through
 `IMapPresentationController.SetPresentationAsync`. `MapsuiMapSession` now owns
-processor-to-layer rendering, replacement/removal, ordinary order,
-active/visible/opacity and sub-layer state application, scale windows, and
-non-S-98 overlap suppression. The Viewer loader coordinates files, catalogues,
-validation, notifications, optional zoom, time/presentation gating, and the
-temporary S-98 projection callback pending its dedicated roadmap slice.
+processor-to-layer rendering, replacement/removal, S-98 cross-product order and
+suppression, active/visible/opacity and sub-layer state application, scale
+windows, and overlap suppression. The Viewer loader coordinates files,
+catalogues, validation, notifications, optional zoom, time/presentation gating,
+and forwards mariner state to the reusable session; it no longer projects or
+orders the cross-product layer stack.
 
 **Double-click a dataset row to reveal it** — the viewer ensures the
 dataset is loaded and then flies the map to that dataset's extent. This

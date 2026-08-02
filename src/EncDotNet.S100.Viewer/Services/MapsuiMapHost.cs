@@ -1,5 +1,6 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using Mapsui;
@@ -34,18 +35,21 @@ internal sealed class MapsuiMapHost :
         Map map,
         AvaloniaMapsuiMapAdapter avaloniaAdapter,
         DatasetProcessorOwner processorOwner,
-        MapsuiDatasetRenderer datasetRenderer)
+        MapsuiDatasetRenderer datasetRenderer,
+        IInteroperabilityAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(avaloniaAdapter);
         ArgumentNullException.ThrowIfNull(processorOwner);
         ArgumentNullException.ThrowIfNull(datasetRenderer);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
         _avaloniaAdapter = avaloniaAdapter;
         _layerBands = new MapsuiLayerBands(map);
         DatasetSession = new MapsuiMapSession(
             _layerBands,
             processorOwner,
-            datasetRenderer);
+            datasetRenderer,
+            authorityProvider);
         _mapNavigator = new MapsuiMapNavigator(map);
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();

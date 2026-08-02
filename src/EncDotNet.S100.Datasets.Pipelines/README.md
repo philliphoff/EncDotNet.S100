@@ -212,8 +212,9 @@ application boundary for a host or session that owns loaded datasets. The
 controller accepts the immutable state explicitly and applies it asynchronously
 without exposing UI refresh events or renderer types. Implementations retain
 processor, refresh, and disposal ownership. The Mapsui backend now implements
-ordinary layer ownership in `MapsuiMapSession`; presentation/time coalescing and
-S-98 composition remain host-owned incremental roadmap slices.
+layer ownership and S-98 cross-product composition in `MapsuiMapSession`;
+presentation/time refresh and coalescing remain host-owned incremental roadmap
+slices.
 
 `MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
 `MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,
@@ -223,6 +224,9 @@ available/current time, `MapDatasetSubLayer` state, `ValidationReport`, and
 strings, UI commands, or framework events. The Viewer projects its existing
 loaded entry state into this model, while `MapsuiMapSession` treats it as the
 authoritative identity and display-state snapshot across layer replacements.
+The session also consumes `IInteroperabilityAuthorityProvider` and
+`MarinerSettings` to own S-98 ordering, suppression, authority changes, and the
+final active dataset layer band without coupling those concerns to the Viewer.
 
 ## Validation
 

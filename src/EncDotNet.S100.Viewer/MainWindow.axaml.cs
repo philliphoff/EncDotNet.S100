@@ -144,7 +144,9 @@ public partial class MainWindow : ShadUI.Window
             AvaloniaMapsuiMapAdapter.Attach(MapControl),
             App.Services.GetRequiredService<DatasetProcessorOwner>(),
             App.Services.GetRequiredService<
-                EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>());
+                EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>());
         _rendererRedrawHandler = _mapHost.RequestRedraw;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;

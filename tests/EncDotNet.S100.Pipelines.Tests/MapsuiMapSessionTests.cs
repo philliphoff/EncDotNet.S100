@@ -1,6 +1,7 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Vector;
@@ -35,6 +36,8 @@ public sealed class MapsuiMapSessionTests
 
         Assert.True(session.RemoveDataset(id));
         Assert.Empty(map.Layers);
+        Assert.Empty(session.GetLayerStackEntries());
+        Assert.Empty(session.GetStackedLayers());
         Assert.Equal(1, processor.DisposeCount);
     }
 
@@ -70,7 +73,7 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
-    public async Task HostProjectionCannotDrawAnInactiveDataset()
+    public async Task InactiveDatasetRemainsInStackButCannotDraw()
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
@@ -79,21 +82,88 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, context: null);
-        session.SetLayerProjector(datasets =>
-        {
-            var snapshot = Assert.Single(datasets);
-            return snapshot.Layers
-                .Select((layer, index) => new MapsuiProjectedDatasetLayer(
-                    snapshot.Dataset.Id,
-                    snapshot.LayerKeys?[index] ?? $"layer-{index}",
-                    layer))
-                .ToArray();
-        });
-
         session.SetDataset(Dataset(id, isActive: false));
 
-        Assert.False(Assert.Single(map.Layers).Enabled);
+        Assert.Empty(map.Layers);
+        Assert.Single(session.GetLayerStackEntries());
+        Assert.Empty(session.GetStackedLayers());
         Assert.False(session.GetDataset(id)!.IsDrawing);
+    }
+
+    [Fact]
+    public async Task S98OrdersProductsAndVisibleS102SuppressesS101Depth()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var s101Id = new MapDatasetId("s101");
+        var s102Id = new MapDatasetId("s102");
+        var s101 = new StubProcessor(s101Id.Value)
+        {
+            ProductSpec = "S-101",
+            Plane = S98DisplayPlane.BaseChartUnder,
+            FeatureType = "DepthArea",
+        };
+        var s102 = new StubProcessor(s102Id.Value)
+        {
+            ProductSpec = "S-102",
+            Plane = S98DisplayPlane.Bathymetry,
+        };
+        Assert.True(owner.TryRegister(s102Id, s102));
+        Assert.True(owner.TryRegister(s101Id, s101));
+        session.SetDataset(Dataset(s102Id, productSpec: "S-102"));
+        session.SetDataset(Dataset(s101Id));
+        await session.RenderAsync(s102Id, context: null);
+        await session.RenderAsync(s101Id, context: null);
+
+        Assert.Equal(
+            ["s101-v1", "s102-v1"],
+            map.Layers.Select(layer => layer.Name));
+        Assert.Empty(((MemoryLayer)map.Layers.First()).Features);
+        Assert.Equal(2, session.GetLayerStackEntries().Count);
+
+        session.SetDataset(Dataset(s102Id, isVisible: false, productSpec: "S-102"));
+
+        Assert.Single(((MemoryLayer)map.Layers.First()).Features);
+        Assert.False(map.Layers.ElementAt(1).Enabled);
+    }
+
+    [Fact]
+    public async Task AuthoritySwapReprojectsTheOwnedStack()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var provider = new InteroperabilityAuthorityProvider(
+            new InteroperabilityAuthority());
+        using var session = CreateSession(map, owner, provider);
+        var underId = new MapDatasetId("under");
+        var overId = new MapDatasetId("over");
+        Assert.True(owner.TryRegister(
+            underId,
+            new StubProcessor(underId.Value)
+            {
+                Plane = S98DisplayPlane.BaseChartUnder,
+            }));
+        Assert.True(owner.TryRegister(
+            overId,
+            new StubProcessor(overId.Value)
+            {
+                Plane = S98DisplayPlane.BaseChartOver,
+            }));
+        session.SetDataset(Dataset(overId));
+        session.SetDataset(Dataset(underId));
+        await session.RenderAsync(overId, context: null);
+        await session.RenderAsync(underId, context: null);
+        Assert.Equal(
+            ["under-v1", "over-v1"],
+            map.Layers.Select(layer => layer.Name));
+
+        provider.Set(new LoadOrderInteroperabilityAuthority(
+            new InteroperabilityAuthority()));
+
+        Assert.Equal(
+            ["over-v1", "under-v1"],
+            map.Layers.Select(layer => layer.Name));
     }
 
     [Fact]
@@ -140,6 +210,13 @@ public sealed class MapsuiMapSessionTests
         Assert.Equal(double.MaxValue, ((BaseLayer)layers[0]).MaxVisible);
         session.SetIgnoreScaleMinimum(false);
         Assert.Equal(capped, ((BaseLayer)layers[0]).MaxVisible);
+        session.SetMarinerSettings(new MarinerSettings
+        {
+            IgnoreScaleMinimum = true,
+        });
+        Assert.Equal(double.MaxValue, ((BaseLayer)layers[0]).MaxVisible);
+        session.SetMarinerSettings(new MarinerSettings());
+        Assert.Equal(capped, ((BaseLayer)layers[0]).MaxVisible);
 
         var retainedState = session.GetDataset(id)!.Dataset;
         session.ClearLayers(id);
@@ -181,31 +258,18 @@ public sealed class MapsuiMapSessionTests
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
-        using var session = CreateSession(map, owner);
+        var authority = new ThrowingAuthority();
+        using var session = CreateSession(
+            map,
+            owner,
+            new InteroperabilityAuthorityProvider(authority));
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, context: null);
         var original = Assert.Single(map.Layers);
-        session.SetLayerProjector(datasets =>
-        {
-            var snapshot = Assert.Single(datasets);
-            if (snapshot.Layers.Any(layer => layer.Name.EndsWith(
-                    "-v2",
-                    StringComparison.Ordinal)))
-            {
-                throw new InvalidOperationException("Projection failed.");
-            }
-
-            return snapshot.Layers
-                .Select((layer, index) => new MapsuiProjectedDatasetLayer(
-                    snapshot.Dataset.Id,
-                    snapshot.LayerKeys?[index] ?? $"layer-{index}",
-                    layer))
-                .ToArray();
-        });
-
+        authority.Throw = true;
         processor.Version = 2;
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => session.RenderAsync(id, context: null));
@@ -221,7 +285,11 @@ public sealed class MapsuiMapSessionTests
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
-        using var session = CreateSession(map, owner);
+        var authority = new ThrowingAuthority();
+        using var session = CreateSession(
+            map,
+            owner,
+            new InteroperabilityAuthorityProvider(authority));
         var existingId = new MapDatasetId("existing");
         Assert.True(owner.TryRegister(
             existingId,
@@ -229,23 +297,7 @@ public sealed class MapsuiMapSessionTests
         session.SetDataset(Dataset(existingId));
         await session.RenderAsync(existingId, context: null);
         var existingLayer = Assert.Single(map.Layers);
-        session.SetLayerProjector(datasets =>
-        {
-            if (datasets.Any(snapshot => !snapshot.Dataset.IsVisible)
-                || datasets.Any(snapshot => snapshot.Dataset.Id.Value == "new"))
-            {
-                throw new InvalidOperationException("Projection failed.");
-            }
-
-            return datasets
-                .SelectMany(snapshot => snapshot.Layers.Select(
-                    (layer, index) => new MapsuiProjectedDatasetLayer(
-                        snapshot.Dataset.Id,
-                        snapshot.LayerKeys?[index] ?? $"layer-{index}",
-                        layer)))
-                .ToArray();
-        });
-
+        authority.Throw = true;
         Assert.Throws<InvalidOperationException>(() =>
             session.SetDataset(Dataset(
                 existingId,
@@ -265,7 +317,11 @@ public sealed class MapsuiMapSessionTests
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
-        using var session = CreateSession(map, owner);
+        var authority = new ThrowingAuthority();
+        using var session = CreateSession(
+            map,
+            owner,
+            new InteroperabilityAuthorityProvider(authority));
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
@@ -273,22 +329,7 @@ public sealed class MapsuiMapSessionTests
         await session.RenderAsync(id, context: null);
         var original = Assert.Single(map.Layers);
         var capped = ((BaseLayer)original).MaxVisible;
-        var fail = false;
-        session.SetLayerProjector(datasets =>
-        {
-            if (fail)
-                throw new InvalidOperationException("Projection failed.");
-
-            var snapshot = Assert.Single(datasets);
-            return snapshot.Layers
-                .Select((layer, index) => new MapsuiProjectedDatasetLayer(
-                    snapshot.Dataset.Id,
-                    snapshot.LayerKeys?[index] ?? $"layer-{index}",
-                    layer))
-                .ToArray();
-        });
-
-        fail = true;
+        authority.Throw = true;
         Assert.Throws<InvalidOperationException>(() => session.ClearLayers(id));
         Assert.Same(original, Assert.Single(map.Layers));
         Assert.Same(original, Assert.Single(session.GetDataset(id)!.Layers));
@@ -299,7 +340,7 @@ public sealed class MapsuiMapSessionTests
 
         Assert.Throws<InvalidOperationException>(
             () => session.SetIgnoreScaleMinimum(true));
-        fail = false;
+        authority.Throw = false;
         session.SetIgnoreScaleMinimum(true);
         Assert.Equal(double.MaxValue, ((BaseLayer)original).MaxVisible);
         session.SetIgnoreScaleMinimum(false);
@@ -329,6 +370,103 @@ public sealed class MapsuiMapSessionTests
         Assert.Equal(2, changeCount);
         Assert.False(Assert.Single(map.Layers).Enabled);
         Assert.False(session.GetDataset(id)!.Dataset.IsVisible);
+    }
+
+    [Fact]
+    public async Task LaterConcurrentRenderPreventsStaleReplacement()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value);
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id));
+        await session.RenderAsync(id, context: null);
+
+        processor.Version = 2;
+        processor.Delay = TimeSpan.FromSeconds(5);
+        processor.RenderStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var staleRender = session.RenderAsync(id, context: null);
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        processor.Version = 3;
+        processor.Delay = TimeSpan.Zero;
+        processor.RenderStarted = null;
+        var current = await session.RenderAsync(id, context: null);
+        processor.ReleaseDelayedRender.TrySetResult();
+        var stale = await staleRender;
+
+        Assert.NotNull(current);
+        Assert.Null(stale);
+        Assert.Equal("dataset-v3", Assert.Single(map.Layers).Name);
+        Assert.Equal(
+            "dataset-v3",
+            Assert.Single(session.GetStackedLayers()).Name);
+    }
+
+    [Fact]
+    public async Task RemovalDuringRenderCannotReinstallStaleLayers()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value)
+        {
+            Version = 2,
+            Delay = TimeSpan.FromSeconds(5),
+            RenderStarted = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id));
+
+        var render = session.RenderAsync(id, context: null);
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(session.RemoveDataset(id));
+        processor.ReleaseDelayedRender.TrySetResult();
+
+        Assert.Null(await render);
+        Assert.Empty(map.Layers);
+        Assert.Empty(session.GetLayerStackEntries());
+        Assert.Empty(session.GetStackedLayers());
+    }
+
+    [Fact]
+    public async Task RemoveAndReaddDuringRenderCannotInstallIntoReplacementEntry()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value)
+        {
+            Version = 2,
+            Delay = TimeSpan.FromSeconds(5),
+            RenderStarted = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id));
+
+        var staleRender = session.RenderAsync(id, context: null);
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(session.RemoveDataset(id, removeProcessor: false));
+        session.SetDataset(Dataset(id));
+        processor.Version = 3;
+        processor.Delay = TimeSpan.Zero;
+        processor.RenderStarted = null;
+        var current = await session.RenderAsync(id, context: null);
+        processor.ReleaseDelayedRender.TrySetResult();
+
+        Assert.NotNull(current);
+        Assert.Null(await staleRender);
+        Assert.Equal("dataset-v3", Assert.Single(map.Layers).Name);
+        Assert.Equal(
+            "dataset-v3",
+            Assert.Single(session.GetStackedLayers()).Name);
     }
 
     [Fact]
@@ -379,22 +517,26 @@ public sealed class MapsuiMapSessionTests
 
     private static MapsuiMapSession CreateSession(
         Map map,
-        DatasetProcessorOwner owner) =>
+        DatasetProcessorOwner owner,
+        IInteroperabilityAuthorityProvider? authorityProvider = null) =>
         new(
             new MapsuiLayerBands(map),
             owner,
-            new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()));
+            new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),
+            authorityProvider ?? new InteroperabilityAuthorityProvider(
+                new InteroperabilityAuthority()));
 
     private static MapDataset Dataset(
         MapDatasetId id,
         bool isVisible = true,
-        bool isActive = true) =>
+        bool isActive = true,
+        string productSpec = "S-101") =>
         new(
             id,
             id.Value,
             new DatasetMetadata
             {
-                Spec = new SpecRef("S-101", new SpecVersion(1, 0, 0)),
+                Spec = new SpecRef(productSpec, new SpecVersion(1, 0, 0)),
             },
             isVisible,
             isActive);
@@ -429,10 +571,21 @@ public sealed class MapsuiMapSessionTests
 
         public TimeSpan Delay { get; set; }
 
+        public TaskCompletionSource? RenderStarted { get; set; }
+
+        public TaskCompletionSource ReleaseDelayedRender { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string ProductSpec { get; set; } = "S-101";
+
+        public string? FeatureType { get; set; }
+
+        public S98DisplayPlane Plane { get; set; } = S98DisplayPlane.BaseChartUnder;
+
         public int DisposeCount => Volatile.Read(ref _disposeCount);
 
-        public SpecRef Spec { get; } =
-            new("S-101", new SpecVersion(1, 0, 0));
+        public SpecRef Spec =>
+            new(ProductSpec, new SpecVersion(1, 0, 0));
 
         public FeatureInfo? GetFeatureInfo(string featureRef) => null;
 
@@ -440,25 +593,33 @@ public sealed class MapsuiMapSessionTests
             RenderContext? context = null,
             CancellationToken cancellationToken = default)
         {
-            if (Delay > TimeSpan.Zero)
-                await Task.Delay(Delay, cancellationToken);
+            var version = Version;
+            var delay = Delay;
+            RenderStarted?.TrySetResult();
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.WhenAny(
+                    Task.Delay(delay, cancellationToken),
+                    ReleaseDelayedRender.Task);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
 
             var subLayers = Enumerable.Range(0, SubLayerCount)
                 .Select(index => new VectorSubLayer
                 {
                     LayerKey = $"layer-{index}",
                     LayerName = SubLayerCount == 1
-                        ? $"{DatasetId}-v{Version}"
-                        : $"{DatasetId}-{index}-v{Version}",
+                        ? $"{DatasetId}-v{version}"
+                        : $"{DatasetId}-{index}-v{version}",
                     Instructions =
                     [
                         new AreaInstruction
                         {
-                            FeatureReference = $"feature-{index}",
+                            FeatureReference = $"{index + 1}",
                             FillColor = "TEST_FILL",
                         },
                     ],
-                    Plane = S98DisplayPlane.BaseChartUnder,
+                    Plane = Plane,
                 })
                 .ToArray();
             return new VectorPortrayalResult
@@ -471,17 +632,50 @@ public sealed class MapsuiMapSessionTests
                         ["TEST_FILL"] = "#336699",
                     }),
                 GeometryProvider = new StubGeometryProvider(),
-                Product = "S-101",
+                Product = ProductSpec,
                 Spec = Spec,
                 SourceDatasetId = DatasetId,
                 Info = DatasetId,
                 LayerNames = subLayers.Select(layer => layer.LayerKey).ToArray(),
+                FeatureTags = FeatureType is null
+                    ? null
+                    : new Dictionary<long, VectorFeatureTag>
+                    {
+                        [1] = new(FeatureType, null),
+                    },
                 CellMinimumDisplayScale = CellMinimumDisplayScale,
                 CoverageAreas = CoverageAreas,
             };
         }
 
         public void Dispose() => Interlocked.Increment(ref _disposeCount);
+    }
+
+    private sealed class ThrowingAuthority : IInteroperabilityAuthority
+    {
+        private readonly InteroperabilityAuthority _inner = new();
+
+        public bool Throw { get; set; }
+
+        public S98DisplayPlane GetDefaultPlane(
+            string productSpec,
+            string? featureTypeOrLayerKind = null) =>
+            _inner.GetDefaultPlane(productSpec, featureTypeOrLayerKind);
+
+        public IReadOnlyList<SubLayerStackItem> Sort(
+            IEnumerable<SubLayerStackItem> entries)
+        {
+            if (Throw)
+                throw new InvalidOperationException("Projection failed.");
+            return _inner.Sort(entries);
+        }
+
+        public IReadOnlyList<SubLayerStackItem> ApplyRules(
+            IReadOnlyList<SubLayerStackItem> sortedStack,
+            IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
+            MarinerSettings? mariner = null,
+            IReadOnlyCollection<S98InteroperabilityRule>? rules = null) =>
+            _inner.ApplyRules(sortedStack, loadedDatasets, mariner, rules);
     }
 
     private sealed class StubGeometryProvider : IFeatureGeometryProvider
