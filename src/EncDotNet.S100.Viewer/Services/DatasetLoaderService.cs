@@ -1326,11 +1326,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (_subscribedEntries.Add(entry))
             entry.PropertyChanged += OnEntryPropertyChanged;
 
-        foreach (var layer in layers)
-        {
-            _layerCollection!.AddDatasetLayer(layer);
-        }
-
         // PR-L1 (S-98): always recompute the cross-dataset paint
         // order after a load/re-render. The S-98 plane sort can
         // place a newly-loaded dataset *under* existing layers
