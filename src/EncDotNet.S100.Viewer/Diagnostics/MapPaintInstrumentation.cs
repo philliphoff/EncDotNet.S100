@@ -74,13 +74,13 @@ internal static class MapPaintInstrumentation
         Meter.CreateHistogram<long>(
             name: "s100.map.paint.style.calls",
             unit: "{calls}",
-            description: "Number of style-renderer Draw calls per paint, tagged by style and feature class.");
+            description: "Number of style-renderer Draw calls per paint, tagged by style, layer, point bucket, and feature class.");
 
     private static readonly Histogram<double> StyleDurationPerPaint =
         Meter.CreateHistogram<double>(
             name: "s100.map.paint.style.duration",
             unit: "ms",
-            description: "Cumulative duration of style-renderer Draw calls per paint, tagged by style and feature class.");
+            description: "Cumulative duration of style-renderer Draw calls per paint, tagged by style, layer, point bucket, and feature class.");
 
     /// <summary>
     /// Per (style-type, layer, point-bucket, feature-class) accumulator
