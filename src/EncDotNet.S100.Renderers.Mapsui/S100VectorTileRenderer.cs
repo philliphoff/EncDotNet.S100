@@ -1958,7 +1958,7 @@ public static class S100VectorTileRenderer
             {
                 var rasterStart = Stopwatch.GetTimestamp();
                 IReadOnlyDictionary<TileKey, SKImage> fresh;
-                if (MetatileEnabled && misses.Count > 1)
+                if (misses.Count > 1)
                 {
                     fresh = RasterizeMetatile(job.Scene, job.BaseIndex, misses, job.DeviceScale);
                 }
