@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 
@@ -27,6 +28,10 @@ public static class AvaloniaControlCapture
     /// </exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> is canceled.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The target contains a Mapsui control that does not derive from
+    /// <see cref="CaptureSynchronizedMapControl"/>.
     /// </exception>
     public static async Task<byte[]?> CapturePngAsync(
         Control target,
@@ -58,9 +63,23 @@ public static class AvaloniaControlCapture
             cancellationToken).ConfigureAwait(false);
     }
 
-    internal static bool RequiresCaptureSynchronization(Control target) =>
-        target is CaptureSynchronizedMapControl
-        || target.GetVisualDescendants().OfType<CaptureSynchronizedMapControl>().Any();
+    internal static bool RequiresCaptureSynchronization(Control target)
+    {
+        var mapControls = target.GetVisualDescendants().OfType<MapControl>().ToList();
+        if (target is MapControl mapControl)
+        {
+            mapControls.Add(mapControl);
+        }
+
+        if (mapControls.Any(control => control is not CaptureSynchronizedMapControl))
+        {
+            throw new InvalidOperationException(
+                "Mapsui controls must derive from CaptureSynchronizedMapControl " +
+                "before their control tree can be captured.");
+        }
+
+        return mapControls.Count > 0;
+    }
 
     private static byte[]? CaptureOnUiThread(
         Control target,

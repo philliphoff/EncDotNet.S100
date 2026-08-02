@@ -164,6 +164,24 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public async Task Plain_mapsui_control_tree_capture_is_rejected()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => HeadlessTest.RunAsync(async () =>
+            {
+                var target = new Border
+                {
+                    Child = new global::Mapsui.UI.Avalonia.MapControl(),
+                };
+                target.Measure(new Size(20, 10));
+                target.Arrange(new Rect(0, 0, 20, 10));
+
+                await AvaloniaControlCapture.CapturePngAsync(target);
+                return true;
+            }));
+    }
+
+    [Fact]
     public void Base_mapsui_renderer_remains_avalonia_free()
     {
         var references = typeof(EncDotNet.S100.Renderers.Mapsui.MapsuiLayerBands)
