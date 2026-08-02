@@ -1089,6 +1089,12 @@
   <data name="Tooltip_TileCrossBandPrewarmEnabled" xml:space="preserve">
     <value>When idle, speculatively rasterize the adjacent zoom levels (±1 band) covering the current view, so a subsequent zoom starts warm. Runs at the lowest priority behind on-screen work. Takes effect immediately. Recommended on.</value>
   </data>
+  <data name="Settings_TileMetatileEnabled" xml:space="preserve">
+    <value>Batch adjacent tiles</value>
+  </data>
+  <data name="Tooltip_TileMetatileEnabled" xml:space="preserve">
+    <value>Rasterize adjacent cold tiles together, then slice them into normal cache entries. This experimental optimization is off by default until real-data measurements show a consistent gain.</value>
+  </data>
   <data name="Settings_TileBudgetMb" xml:space="preserve">
     <value>In-memory cache (MB)</value>
   </data>

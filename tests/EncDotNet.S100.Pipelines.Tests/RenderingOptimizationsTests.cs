@@ -205,6 +205,28 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
+    public void TileMetatile_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileMetatileEnvExplicit)
+        {
+            return;
+        }
+
+        var original = RenderingOptimizations.TileMetatileEnabled;
+        try
+        {
+            RenderingOptimizations.TileMetatileEnabled = false;
+            Assert.False(RenderingOptimizations.TileMetatileEnabled);
+            RenderingOptimizations.TileMetatileEnabled = true;
+            Assert.True(RenderingOptimizations.TileMetatileEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.TileMetatileEnabled = original;
+        }
+    }
+
+    [Fact]
     public void Profile_LowEnd_DisablesCrossBandPrewarm_WhenNotEnvPinned()
     {
         if (RenderingOptimizations.ProfileEnvExplicit ||
@@ -288,6 +310,7 @@ public class RenderingOptimizationsTests
     {
         Assert.Equal(RenderingOptimizations.TilePredictionEnabled, S100VectorTileRenderer.PredictionEnabled);
         Assert.Equal(RenderingOptimizations.TileCrossBandPrewarmEnabled, S100VectorTileRenderer.CrossBandPrewarmEnabled);
+        Assert.Equal(RenderingOptimizations.TileMetatileEnabled, S100VectorTileRenderer.MetatileEnabled);
         Assert.Equal(RenderingOptimizations.TileGpuResidencyEnabled, S100VectorTileRenderer.GpuResidencyEnabled);
         Assert.Equal(RenderingOptimizations.TileDiskCacheEnabled, S100VectorTileRenderer.DiskCacheEnabled);
         Assert.Equal(RenderingOptimizations.TileGutterDip, S100VectorTileRenderer.GutterDip);

@@ -871,6 +871,26 @@ Its tiles flow through the existing prediction telemetry, so a zoom-transition
 A/B reads time-to-fill at the new band from `s100.render.tile.cold.latency` and
 the `s100.render.tile.prediction.hits` counter.
 
+### Metatile raster jobs (issue #427)
+
+The tiled renderer can claim pending tiles from one aligned 2×2 block and one
+priority tier, rasterise their union once, then slice the result back into
+ordinary tile-granular cache and disk entries. SCAMIN visibility is evaluated
+at every claimed row denominator; jobs split by row when visibility differs.
+Per-tile cold latency, prediction accounting, eviction, and redraw behaviour
+therefore remain unchanged.
+
+Metatiling is experimental and off by default. Enable it with
+`S100_VECTOR_TILE_METATILE=1`, the viewer's **Batch adjacent tiles** setting, or
+`RenderingOptimizations.TileMetatileEnabled`. Measure it with
+`s100.render.metatile.rasterize.duration`, `.slice.duration`, `.tiles`, `.jobs`,
+and `.fallbacks`; the fallback counter is tagged
+`reason=sparse|disk|scamin|dimension|scale`. The `scale` fallback preserves the
+single-tile projection when fractional device scaling cannot represent both the
+core and gutter as integer pixel spans. The feature should remain off unless
+real-cell A/B runs reduce aggregate tile raster duration without regressing
+cold latency, paint time, memory, or pixels.
+
 ### Persistent warm disk cache + `styleStateHash` (Phase 4)
 
 Below the in-memory hot cache sits a **persistent, on-disk warm tier**

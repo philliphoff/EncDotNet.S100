@@ -85,6 +85,7 @@ public static class RenderingOptimizations
     private static double _tileBudgetMb;
     private static bool _tilePredictionEnabled;
     private static bool _tileCrossBandPrewarmEnabled;
+    private static bool _tileMetatileEnabled;
     private static bool _tileDiskCacheEnabled;
     private static double _tileDiskMb;
     private static bool _tileGpuResidencyEnabled;
@@ -139,6 +140,8 @@ public static class RenderingOptimizations
         // env var or the setter is still honoured on any tier.
         (_tileCrossBandPrewarmEnabled, TileCrossBandPrewarmEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_XBAND", defaultValue: tier != PerformanceProfile.LowEnd);
+        (_tileMetatileEnabled, TileMetatileEnvExplicit) =
+            SeedBool("S100_VECTOR_TILE_METATILE", defaultValue: false);
         (_tileDiskCacheEnabled, TileDiskCacheEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_DISK", defaultValue: true);
         (_tileDiskMb, TileDiskMbEnvExplicit) =
@@ -344,6 +347,22 @@ public static class RenderingOptimizations
 
     /// <summary>True when <see cref="TileCrossBandPrewarmEnabled"/> is pinned by an explicit environment variable.</summary>
     public static bool TileCrossBandPrewarmEnvExplicit { get; }
+
+    /// <summary>
+    /// Whether adjacent tile misses may be rasterised as one 2&#215;2 metatile
+    /// job and sliced back into tile-granular cache entries (issue&#160;#427).
+    /// Seeded from <c>S100_VECTOR_TILE_METATILE</c>; default off until the
+    /// real-corpus performance gate demonstrates a measurable gain. Read for
+    /// each worker job, so a change takes effect without rebuilding a dataset.
+    /// </summary>
+    public static bool TileMetatileEnabled
+    {
+        get => _tileMetatileEnabled;
+        set { if (!TileMetatileEnvExplicit) _tileMetatileEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="TileMetatileEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileMetatileEnvExplicit { get; }
 
     /// <summary>
     /// Whether the persistent warm disk tile cache (Phase&#160;4) is enabled.

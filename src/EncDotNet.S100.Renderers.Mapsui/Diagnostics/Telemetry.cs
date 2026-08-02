@@ -284,6 +284,44 @@ internal static class Telemetry
             description: "Wall-clock duration of one off-thread base-plane tile rasterisation (core + gutter) by the tiled TiledScene render subsystem.");
 
     /// <summary>
+    /// Wall-clock duration of one batched metatile raster job before its output
+    /// is sliced into tile-granular cache entries (issue&#160;#427).
+    /// </summary>
+    public static readonly Histogram<double> MetatileRasterizeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.metatile.rasterize.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one off-thread metatile union rasterisation before slicing.");
+
+    /// <summary>Wall-clock duration spent slicing one metatile into individual tile images.</summary>
+    public static readonly Histogram<double> MetatileSliceDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.metatile.slice.duration",
+            unit: "ms",
+            description: "Wall-clock duration spent slicing one metatile raster into tile-granular images.");
+
+    /// <summary>Number of logical tile images produced by one metatile job.</summary>
+    public static readonly Histogram<int> MetatileTiles =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.metatile.tiles",
+            unit: "{tile}",
+            description: "Logical tile images produced by one metatile raster job.");
+
+    /// <summary>Count of metatile raster jobs completed.</summary>
+    public static readonly Counter<long> MetatileJobs =
+        Meter.CreateCounter<long>(
+            name: "s100.render.metatile.jobs",
+            unit: "{job}",
+            description: "Metatile raster jobs completed by the tiled TiledScene render subsystem.");
+
+    /// <summary>Count of planned metatiles that fell back to smaller jobs.</summary>
+    public static readonly Counter<long> MetatileFallbacks =
+        Meter.CreateCounter<long>(
+            name: "s100.render.metatile.fallbacks",
+            unit: "{fallback}",
+            description: "Metatile plans split or declined; tagged with the fallback reason.");
+
+    /// <summary>
     /// Wall-clock duration of one UI-thread tile composite pass (best-available
     /// blits of all visible tiles) by the tiled <c>TiledScene</c> arm
     /// (<see cref="S100VectorTileRenderer"/>). This is the per-frame work that
