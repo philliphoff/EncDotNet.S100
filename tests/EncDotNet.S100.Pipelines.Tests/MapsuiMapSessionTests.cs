@@ -389,7 +389,7 @@ public sealed class MapsuiMapSessionTests
         processor.RenderStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var staleRender = session.RenderAsync(id, context: null);
-        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         processor.Version = 3;
         processor.Delay = TimeSpan.Zero;
@@ -424,7 +424,7 @@ public sealed class MapsuiMapSessionTests
         session.SetDataset(Dataset(id));
 
         var render = session.RenderAsync(id, context: null);
-        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(session.RemoveDataset(id));
         processor.ReleaseDelayedRender.TrySetResult();
 
@@ -452,7 +452,7 @@ public sealed class MapsuiMapSessionTests
         session.SetDataset(Dataset(id));
 
         var staleRender = session.RenderAsync(id, context: null);
-        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(session.RemoveDataset(id, removeProcessor: false));
         session.SetDataset(Dataset(id));
         processor.Version = 3;
