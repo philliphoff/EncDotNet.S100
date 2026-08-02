@@ -221,10 +221,9 @@ and coordinate budget.
 first paint after a zoom change (the `vectorMax` spikes), so an
 **off-thread cold path-build** is the most direct next lever; **draw-call
 batching** (shared `SKPath` per style) and **overlapping-cell coverage
-suppression** are the larger structural wins. Per-`(layer, style,
-vertex-bucket)` draw attribution is already collected in
-`MapPaintInstrumentation` and just needs surfacing to confirm the dominant
-feature class first.
+suppression** are the larger structural wins. Per-`(layer, style, feature-class, vertex-bucket)` draw attribution is
+collected in `MapPaintInstrumentation` so residual cost can be ranked before
+investing in batching or off-thread cold path construction.
 
 The 1 µs/vertex projection below predates the GPU-path measurement and
 **held for lines but not polygons** (the path cache neutralizes vertex
@@ -248,9 +247,32 @@ cross-check against the offending layer/feature combinations.
 `101GB00GB302045` was responsible for ~67% of paint cost on its own.
 Worth identifying which S-101 feature class
 (`DepthContour`? `CoastlineLine`?) contributes most, so the
-simplification work in (1) can target the highest-impact features
-first. Requires extending `MapPaintInstrumentation` to tag by feature
-class via the `FeatureRefKey` round-trip.
+remaining optimization work can target the highest-impact features first.
+`MapPaintInstrumentation` now emits a `featureClass` dimension using the
+existing `S100.FeatureType` tag attached during layer construction; no
+per-paint feature-reference lookup is required.
+
+An August 2026 MCP-driven diagnostic run loaded the four cells that dominated
+the original review (`101GB00GB302045`, `101GB0040242B`,
+`101GB0040242C`, and `101GB00502038`), pinned the Mapsui subsystem, disabled
+the vector snapshot, and exercised their union plus four tighter viewports.
+The selected viewports attributed `VectorStyle` paint to the dense
+`101GB00GB302045` cell as follows:
+
+| feature class | total ms | draws | µs/draw | % of classified vector time |
+|---|---:|---:|---:|---:|
+| **Coastline** | **460.1** | **4,318** | 106.6 | **62.9%** |
+| **DepthArea** | **170.2** | **1,677** | 101.5 | **23.3%** |
+| CautionArea | 40.4 | 164 | 246.5 | 5.5% |
+| LandArea | 21.2 | 325 | 65.1 | 2.9% |
+| LocalDirectionOfBuoyage | 18.4 | 45 | 408.5 | 2.5% |
+
+`Coastline` in the 100–999-point bucket alone contributed 457.3 ms
+(3,218 draws); `DepthArea` split between 1k–10k (92.7 ms) and 100–999
+(74.7 ms). The top two classes therefore account for **86.2%** of classified
+vector time in the offending cell. Prioritise coastline draw-call batching
+and cold path construction first; `DepthArea` remains the next target, but
+the rejected polygon-simplification experiment above still applies.
 
 ### 4. Batch polylines into shared SKPath objects
 
