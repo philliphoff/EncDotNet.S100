@@ -48,17 +48,23 @@ public sealed class MapsuiMapNavigator
     /// <paramref name="extent"/> is <see langword="null"/>.
     /// </exception>
     /// <param name="durationMilliseconds">
-    /// Animation duration in milliseconds. A non-positive value applies the
-    /// viewport immediately.
+    /// Animation duration in milliseconds. A negative value uses Mapsui's
+    /// default timing, zero applies the viewport immediately, and a positive
+    /// value animates for the requested duration.
     /// </param>
     public void ZoomToExtent(MRect extent, long durationMilliseconds = -1)
     {
         ArgumentNullException.ThrowIfNull(extent);
         var paddingX = extent.Width * 0.1;
         var paddingY = extent.Height * 0.1;
-        _navigator.ZoomToBox(
-            extent.Grow(paddingX, paddingY),
-            duration: durationMilliseconds);
+        var paddedExtent = extent.Grow(paddingX, paddingY);
+        if (durationMilliseconds < 0)
+        {
+            _navigator.ZoomToBox(paddedExtent);
+            return;
+        }
+
+        _navigator.ZoomToBox(paddedExtent, duration: durationMilliseconds);
     }
 
     /// <summary>

@@ -131,6 +131,18 @@ public sealed class MapsuiMapNavigatorTests
         AssertExtent(new MRect(-60, -60, 60, 60), map.Navigator.Viewport.ToExtent());
     }
 
+    [Fact]
+    public void ZoomToExtent_ZeroDurationAddsTenPercentPaddingImmediately()
+    {
+        using var map = SizedMap();
+        var navigation = new MapsuiMapNavigator(map);
+        var extent = new MRect(-50, -50, 50, 50);
+
+        navigation.ZoomToExtent(extent, durationMilliseconds: 0);
+
+        AssertExtent(new MRect(-60, -60, 60, 60), map.Navigator.Viewport.ToExtent());
+    }
+
     private static Map SizedMap()
     {
         var map = new Map();
