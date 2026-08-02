@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Projections;
@@ -143,6 +145,25 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public async Task Plain_control_capture_bypasses_mapsui_synchronization()
+    {
+        var result = await HeadlessTest.RunAsync(async () =>
+        {
+            var target = new CaptureProbeControl();
+            target.Measure(new Size(20, 10));
+            target.Arrange(new Rect(0, 0, 20, 10));
+
+            Assert.False(
+                AvaloniaControlCapture.RequiresCaptureSynchronization(target));
+            var png = await AvaloniaControlCapture.CapturePngAsync(target);
+            return (Png: png, target.CaptureWasActive);
+        });
+
+        Assert.NotNull(result.Png);
+        Assert.False(result.CaptureWasActive);
+    }
+
+    [Fact]
     public void Base_mapsui_renderer_remains_avalonia_free()
     {
         var references = typeof(EncDotNet.S100.Renderers.Mapsui.MapsuiLayerBands)
@@ -200,5 +221,16 @@ public class AvaloniaMapsuiMapAdapterTests
         map.Navigator.SetSize(800, 600);
         map.Navigator.CenterOnAndZoomTo(new MPoint(x, y), resolution: 100, duration: 0);
         return map;
+    }
+
+    private sealed class CaptureProbeControl : Control
+    {
+        public bool CaptureWasActive { get; private set; }
+
+        public override void Render(DrawingContext context)
+        {
+            CaptureWasActive = CaptureCoordinator.CaptureActive;
+            base.Render(context);
+        }
     }
 }

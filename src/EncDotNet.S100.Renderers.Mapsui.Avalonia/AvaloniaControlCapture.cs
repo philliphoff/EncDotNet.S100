@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 
@@ -33,12 +34,21 @@ public static class AvaloniaControlCapture
     {
         ArgumentNullException.ThrowIfNull(target);
         cancellationToken.ThrowIfCancellationRequested();
-        var hasLayout = await InvokeOnUiThreadAsync(
-            () => target.Bounds.Width > 0 && target.Bounds.Height > 0)
+        var (hasLayout, requiresSynchronization) = await InvokeOnUiThreadAsync(
+            () => (
+                target.Bounds.Width > 0 && target.Bounds.Height > 0,
+                RequiresCaptureSynchronization(target)))
             .ConfigureAwait(false);
         if (!hasLayout)
         {
             return null;
+        }
+
+        if (!requiresSynchronization)
+        {
+            return await InvokeOnUiThreadAsync(
+                () => CaptureOnUiThread(target, cancellationToken))
+                .ConfigureAwait(false);
         }
 
         return await CaptureCoordinator.CaptureDrainedAsync(
@@ -47,6 +57,10 @@ public static class AvaloniaControlCapture
                 () => CaptureOnUiThread(target, cancellationToken)),
             cancellationToken).ConfigureAwait(false);
     }
+
+    internal static bool RequiresCaptureSynchronization(Control target) =>
+        target is CaptureSynchronizedMapControl
+        || target.GetVisualDescendants().OfType<CaptureSynchronizedMapControl>().Any();
 
     private static byte[]? CaptureOnUiThread(
         Control target,

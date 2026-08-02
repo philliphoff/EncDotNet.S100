@@ -37,9 +37,13 @@ internal sealed class ScreenshotService
                 return;
             }
 
-            File.WriteAllBytes(outputPath, png);
+            await File.WriteAllBytesAsync(outputPath, png, cancellationToken);
             Console.WriteLine(
                 $"[Screenshot] Saved {(int)target.Bounds.Width}x{(int)target.Bounds.Height} to {outputPath}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            Console.Error.WriteLine("[Screenshot] Capture canceled.");
         }
         catch (Exception ex)
         {
