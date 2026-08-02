@@ -74,7 +74,8 @@ internal sealed class DisplayModeToolbarViewModel : ViewModelBase, IDisposable
         _activeSpec = null;
         Options.Clear();
 
-        foreach (var kv in _datasetLoader.Processors)
+        using var processors = _datasetLoader.AcquireProcessors();
+        foreach (var kv in processors)
         {
             if (kv.Value is IDisplayModeAwareDatasetProcessor aware
                 && aware.DeclaredDisplayModeIds.Count > 1)

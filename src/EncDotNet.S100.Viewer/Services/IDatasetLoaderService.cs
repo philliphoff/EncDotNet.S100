@@ -6,8 +6,9 @@ using Mapsui.Layers;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Owns the dataset processor cache and orchestrates load / re-render /
-/// remove against focused map layer and viewport capabilities. Decouples the dataset
+/// Orchestrates load / re-render / remove against focused map layer and
+/// viewport capabilities while a reusable <see cref="DatasetProcessorOwner"/>
+/// owns processor lifetime. Decouples the dataset
 /// pipeline from <see cref="MainWindow"/>; the window only supplies the
 /// map host and listens for completion events.
 /// </summary>
@@ -70,8 +71,9 @@ internal interface IDatasetLoaderService
     Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Removes a previously-loaded entry's layers from the map and drops
-    /// its processor. Safe to call for entries that were never loaded.
+    /// Removes a previously-loaded entry's layers from the map and asks the
+    /// processor owner to retire its processor. Safe to call for entries that
+    /// were never loaded.
     /// </summary>
     void RemoveEntry(DatasetEntry entry);
 
@@ -105,8 +107,19 @@ internal interface IDatasetLoaderService
     /// </summary>
     void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries);
 
-    /// <summary>Read-only view of the active processors keyed by entry.</summary>
-    IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
+    /// <summary>
+    /// Test-double compatibility view of active processors keyed by entry.
+    /// Production callers use <see cref="AcquireProcessors"/> so processor
+    /// lifetime remains protected while processors are accessed.
+    /// </summary>
+    IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors =>
+        new Dictionary<DatasetEntry, IDatasetProcessor>();
+
+    /// <summary>
+    /// Acquires a point-in-time processor snapshot whose disposal releases
+    /// every processor lease.
+    /// </summary>
+    DatasetProcessorSnapshot AcquireProcessors() => new(Processors);
 
     /// <summary>Read-only view of the layers each entry currently owns.</summary>
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }

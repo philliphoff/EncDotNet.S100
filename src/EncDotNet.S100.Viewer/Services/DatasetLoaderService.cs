@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -17,9 +18,9 @@ using Mapsui.Layers;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Default <see cref="IDatasetLoaderService"/> implementation. Owns the
-/// dataset pipeline factory, the per-entry processor + layer maps, and
-/// drives map mutations through focused layer and viewport capabilities.
+/// Default <see cref="IDatasetLoaderService"/> implementation. Coordinates
+/// Viewer load policy and layer rendering while processor lifetime is delegated
+/// to <see cref="DatasetProcessorOwner"/>.
 /// </summary>
 internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresentationController
 {
@@ -32,6 +33,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly S128DatasetCatalogSource _s128CatalogSource;
     private readonly GlobalTimeService _globalTime;
     private readonly INotificationService _notifications;
+    private readonly DatasetProcessorOwner _processorOwner;
     /// <summary>
     /// Resolves the <em>currently active</em> cross-dataset paint-order
     /// policy on each consult. Hosts can swap the authority at runtime
@@ -49,7 +51,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// </summary>
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
 
-    private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
+    private readonly Dictionary<MapDatasetId, DatasetEntry> _processorEntries = [];
+    private readonly ConditionalWeakTable<DatasetEntry, LoadGeneration> _loadGenerations = new();
+    private readonly ConditionalWeakTable<DatasetEntry, SemaphoreSlim> _loadGates = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
     /// <summary>
     /// Per-entry S-98 layer-stack entries produced by the processor's
@@ -100,7 +104,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// palette/time re-renders don't disturb user-driven ordering.
     /// </summary>
     private readonly List<DatasetEntry> _entryOrder = new();
-    private readonly ReadOnlyDictionary<DatasetEntry, IDatasetProcessor> _processorsView;
     private readonly ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayersView;
     private readonly SemaphoreSlim _layerRenderGate = new(1, 1);
     private readonly object _presentationSync = new();
@@ -134,6 +137,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         MapPresentationState presentation,
         GlobalTimeService globalTime,
         INotificationService notifications,
+        DatasetProcessorOwner processorOwner,
         IInteroperabilityAuthorityProvider authorityProvider,
         EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer mapsuiRenderer,
         IRenderActivityMonitor? renderActivityMonitor = null)
@@ -148,6 +152,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(notifications);
+        ArgumentNullException.ThrowIfNull(processorOwner);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -159,6 +164,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _presentation = presentation;
         _globalTime = globalTime;
         _notifications = notifications;
+        _processorOwner = processorOwner;
         ArgumentNullException.ThrowIfNull(authorityProvider);
         _authorityProvider = authorityProvider;
         ArgumentNullException.ThrowIfNull(mapsuiRenderer);
@@ -168,7 +174,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // active authority. Cheap when no datasets are loaded.
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
 
-        _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
 
         _globalTime.CurrentTimeChanged += t => _ = ReRenderAtTimeAsync(t, CancellationToken.None);
@@ -191,7 +196,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             _ = ReRenderAtTimeAsync(now, CancellationToken.None);
     }
 
-    public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors => _processorsView;
+    public DatasetProcessorSnapshot AcquireProcessors()
+    {
+        var snapshot = new Dictionary<DatasetEntry, IDatasetProcessor>();
+        var leases = new List<IDisposable>();
+        foreach (var entry in _processorEntries.Values.ToArray())
+        {
+            if (!_processorOwner.TryAcquire(entry.Id, out var lease))
+                continue;
+
+            leases.Add(lease);
+            snapshot[entry] = lease.Processor;
+        }
+        return new DatasetProcessorSnapshot(
+            new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(snapshot),
+            leases);
+    }
     public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers => _entryLayersView;
 
     public IReadOnlyList<ILayer> CurrentStackedLayers => _currentStackedLayers;
@@ -279,6 +299,30 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(entry);
         EnsureInitialized();
 
+        var loadGeneration = BeginLoad(entry);
+        var gate = _loadGates.GetValue(entry, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            if (IsCurrentLoad(entry, loadGeneration))
+            {
+                await LoadCoreAsync(
+                    entry,
+                    loadGeneration,
+                    cancellationToken).ConfigureAwait(true);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task LoadCoreAsync(
+        DatasetEntry entry,
+        long loadGeneration,
+        CancellationToken cancellationToken)
+    {
         using var __cmd = ViewerObservability.BeginCommand("dataset.open");
 
         // Create a linked CTS so the caller's token and the toast's
@@ -340,6 +384,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 .Show();
         }
 
+        IDatasetProcessor? callerOwnedProcessor = null;
+        IDatasetProcessor? registeredProcessor = null;
+        var loadCompleted = false;
         try
         {
             var processor = await Task.Run(() =>
@@ -362,7 +409,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                         entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
                 };
             }, token);
-            _processors[entry] = processor;
+            callerOwnedProcessor = processor;
+            if (!IsCurrentLoad(entry, loadGeneration))
+            {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
+                return;
+            }
+            if (!_processorOwner.TryRegister(entry.Id, processor))
+            {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
+                return;
+            }
+            callerOwnedProcessor = null;
+            registeredProcessor = processor;
+            _processorEntries[entry.Id] = entry;
 
             // Collapse duplicate coverage products: S-111/S-104 exchange sets
             // routinely bundle several variants of the same cell (e.g. neap /
@@ -376,7 +436,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // dims and the eye icon reflects the hidden state).
             if (fromExchangeSet && DuplicateCoverageDetector.IsCollapsibleSpec(spec))
             {
-                foreach (var other in _processors.Keys)
+                foreach (var other in _processorEntries.Values)
                 {
                     if (ReferenceEquals(other, entry) || !other.IsFromExchangeSet)
                         continue;
@@ -474,7 +534,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                     presentation: null,
                     token).ConfigureAwait(true);
                 if (result is null)
+                {
+                    DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
                     return;
+                }
                 // Record the dataset's mercator extent so the panel can zoom to
                 // it (double-click reveal) and the out-of-scale extent indicator
                 // can outline it, even for exchange-set entries that opt out of
@@ -501,7 +564,27 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // distinct from an empty report — and the Validation tab
             // surfaces those two states with different empty-state
             // messages.
-            var validation = await Task.Run(() => SafeValidate(processor), token);
+            if (!_processorOwner.TryAcquire(entry.Id, out var validationLease)
+                || !ReferenceEquals(validationLease.Processor, processor))
+            {
+                validationLease?.Dispose();
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
+                return;
+            }
+
+            EncDotNet.S100.Validation.ValidationReport? validation;
+            using (validationLease)
+            {
+                validation = await Task.Run(
+                    () => SafeValidate(processor),
+                    token).ConfigureAwait(true);
+            }
+            if (!IsCurrentLoad(entry, loadGeneration)
+                || !OwnsProcessor(entry, processor))
+            {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
+                return;
+            }
             entry.SetValidationReport(validation);
 
             // Hold the progress notification in its indeterminate "loading"
@@ -521,6 +604,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 && _renderActivityMonitor is not null)
             {
                 await WaitForDatasetPaintedAsync(paintsBeforeRender, token).ConfigureAwait(true);
+            }
+            if (!IsCurrentLoad(entry, loadGeneration)
+                || !OwnsProcessor(entry, processor))
+            {
+                DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
+                return;
             }
 
             // Drive the held progress notification to its terminal Success
@@ -557,6 +646,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             }
 
             DatasetLoaded?.Invoke(entry);
+            loadCompleted = true;
         }
         catch (OperationCanceledException)
         {
@@ -610,6 +700,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 }
             }
         }
+        finally
+        {
+            if (!loadCompleted && registeredProcessor is not null)
+                RollBackLoad(entry, registeredProcessor);
+            if (callerOwnedProcessor is IDisposable disposableProcessor)
+                disposableProcessor.Dispose();
+        }
     }
 
     /// <summary>
@@ -631,6 +728,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         handle.SetActions();
         handle.Update(title: title, message: message, severity: severity);
         handle.ScheduleAutoDismiss(NotificationService.DefaultDelayFor(severity));
+    }
+
+    private static void DriveLoadAbandoned(
+        INotificationHandle? handle,
+        bool fromExchangeSet,
+        DatasetEntry entry)
+    {
+        if (!fromExchangeSet)
+        {
+            DriveTerminal(
+                handle,
+                NotificationSeverity.Info,
+                Strings.Toast_DatasetCancelled,
+                entry.DisplayName);
+        }
     }
 
     /// <summary>
@@ -743,7 +855,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         foreach (var (entry, adapter) in _globalTime.Adapters.ToArray())
         {
             if (token.IsCancellationRequested) return;
-            if (!_processors.TryGetValue(entry, out var proc)) continue;
+            if (!_processorOwner.TryAcquire(entry.Id, out var lease)) continue;
+            using var processorLease = lease;
+            var proc = lease.Processor;
 
             var snapped = adapter.SnapTo(t);
             if (snapped == entry.CurrentTime && entry.IsLoaded) continue;
@@ -841,9 +955,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         var palette = presentation.Palette;
 
-        foreach (var (entry, proc) in _processors.ToArray())
+        foreach (var datasetId in _processorOwner.GetDatasetIds())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!_processorEntries.TryGetValue(datasetId, out var entry)) continue;
+            if (!_processorOwner.TryAcquire(datasetId, out var lease)) continue;
+            using var processorLease = lease;
+            var proc = lease.Processor;
             if (!entry.IsLoaded) continue;
             if (!OwnsProcessor(entry, proc)) continue;
 
@@ -943,8 +1061,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         Action<MapsuiDatasetResult>? onApplied = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!OwnsProcessor(entry, processor))
+        if (!_processorOwner.TryAcquire(entry.Id, out var lease)
+            || !ReferenceEquals(lease.Processor, processor))
+        {
+            lease?.Dispose();
             return null;
+        }
+        using var processorLease = lease;
 
         var context = CreateRenderContext(processor, timeStep, presentation);
         var result = await Task.Run(
@@ -967,12 +1090,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     }
 
     private bool OwnsProcessor(DatasetEntry entry, IDatasetProcessor processor) =>
-        _processors.TryGetValue(entry, out var current)
-        && ReferenceEquals(current, processor);
+        _processorOwner.Owns(entry.Id, processor);
 
     public void RemoveEntry(DatasetEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        InvalidateLoad(entry);
 
         RemoveEntryLayers(entry);
         UnsubscribeSubLayers(entry);
@@ -982,17 +1105,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _entryCoverage.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        if (_processors.Remove(entry, out var removedProcessor)
-            && removedProcessor is IDisposable disposableProcessor)
-        {
-            // Releases any file/stream a processor keeps open for lazy reads
-            // (e.g. S-111 dcf2 retains its HDF5 file for deferred time-step
-            // value decoding).
-            disposableProcessor.Dispose();
-        }
+        RemoveOwnedProcessor(entry);
         _entryOrder.Remove(entry);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
+        entry.IsLoaded = false;
         // Publish the new (empty / smaller) stack so PickService and
         // anyone else who cares drops references to the removed layers.
         if (_layerCollection is not null)
@@ -1018,6 +1135,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public void UnloadEntry(DatasetEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        InvalidateLoad(entry);
 
         RemoveEntryLayers(entry);
         UnsubscribeSubLayers(entry);
@@ -1027,11 +1145,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _entryCoverage.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        if (_processors.Remove(entry, out var removedProcessor)
-            && removedProcessor is IDisposable disposableProcessor)
-        {
-            disposableProcessor.Dispose();
-        }
+        RemoveOwnedProcessor(entry);
         // NB: unlike RemoveEntry, do NOT drop the entry from _entryOrder here.
         // Eviction keeps the DatasetEntry registered; FlattenLayerOrder already
         // skips entries with no layers (RemoveEntryLayers cleared _entryLayers
@@ -1042,6 +1156,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // Active state lives on the entry's renderer-neutral MapDataset
         // projection, so it naturally survives this unload → reload cycle.
         _globalTime.Unregister(entry);
+        entry.IsLoaded = false;
         entry.IsDeferred = true;
         if (_layerCollection is not null)
             _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
@@ -1116,9 +1231,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 // Fallback: processor didn't supply StackEntries. Drop
                 // each layer onto the spec's default plane with
                 // priority 0 so it still participates in S-98 ordering.
-                var specName = _processors.TryGetValue(entry, out var proc)
-                    ? proc.Spec.Name
-                    : "unknown";
+                var specName = "unknown";
+                if (_processorOwner.TryAcquire(entry.Id, out var lease))
+                {
+                    using (lease)
+                        specName = lease.Processor.Spec.Name;
+                }
                 var plane = _authorityProvider.Current.GetDefaultPlane(specName);
                 var synth = new List<SubLayerStackItem>(layers.Count);
                 for (int li = 0; li < layers.Count; li++)
@@ -1194,7 +1312,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         var result = new List<LoadedDatasetInfo>(_entryOrder.Count);
         foreach (var entry in _entryOrder)
         {
-            if (!_processors.TryGetValue(entry, out var proc)) continue;
+            if (!_processorOwner.TryAcquire(entry.Id, out var lease)) continue;
+            using var processorLease = lease;
             var dataset = entry.MapDataset;
             if (dataset is null) continue;
             var active = dataset.IsActive
@@ -1641,7 +1760,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private DatasetEntry? FindEntry(string datasetId)
     {
-        var loadedEntry = _processors.Keys.FirstOrDefault(entry =>
+        var loadedEntry = _processorEntries.Values.FirstOrDefault(entry =>
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
         return loadedEntry ?? _entryOrder.FirstOrDefault(entry =>
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
@@ -1678,5 +1797,60 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     {
         if (_layerCollection is null || _viewport is null)
             throw new InvalidOperationException("DatasetLoaderService.Initialize must be called before LoadAsync.");
+    }
+
+    private long BeginLoad(DatasetEntry entry)
+        => Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+
+    private void InvalidateLoad(DatasetEntry entry)
+        => Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+
+    private bool IsCurrentLoad(DatasetEntry entry, long generation)
+        => Volatile.Read(ref _loadGenerations.GetOrCreateValue(entry).Value) == generation;
+
+    private void RollBackLoad(DatasetEntry entry, IDatasetProcessor processor)
+    {
+        if (!_processorOwner.Remove(entry.Id, processor))
+            return;
+
+        _processorEntries.Remove(entry.Id);
+        RemoveEntryLayers(entry);
+        UnsubscribeSubLayers(entry);
+        entry.SubLayers.Clear();
+        _entryLayerKeys.Remove(entry);
+        _entryStackEntries.Remove(entry);
+        _entryCoverage.Remove(entry);
+        if (_subscribedEntries.Remove(entry))
+            entry.PropertyChanged -= OnEntryPropertyChanged;
+        _entryOrder.Remove(entry);
+        _globalTime.Unregister(entry);
+        _s128CatalogSource.RemoveDataset(entry.DisplayName);
+        entry.IsLoaded = false;
+        entry.Info = null;
+        entry.SetValidationReport(null);
+        if (_layerCollection is not null)
+            _layerCollection.ReplaceDatasetLayers(FlattenLayerOrder());
+        ApplyOverlapSuppression();
+    }
+
+    private bool RemoveOwnedProcessor(DatasetEntry entry)
+    {
+        if (!_processorEntries.TryGetValue(entry.Id, out var currentEntry)
+            || !ReferenceEquals(currentEntry, entry))
+        {
+            return false;
+        }
+
+        _processorEntries.Remove(entry.Id);
+        if (!_processorOwner.TryAcquire(entry.Id, out var lease))
+            return false;
+
+        using (lease)
+            return _processorOwner.Remove(entry.Id, lease.Processor);
+    }
+
+    private sealed class LoadGeneration
+    {
+        public long Value;
     }
 }

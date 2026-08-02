@@ -176,6 +176,7 @@ public partial class MainWindow : ShadUI.Window
         {
             _windowLifetimeCancellation.Cancel();
             _windowLifetimeCancellation.Dispose();
+            App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();
             _validationOverlay?.Dispose();
             _validationOverlay = null;
             ClearRendererRedrawHandlers();
