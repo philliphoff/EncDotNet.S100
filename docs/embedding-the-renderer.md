@@ -78,10 +78,11 @@ capability they need. There is no aggregate `IMapHost` facade.
 
 This is an application-boundary cleanup rather than the final reusable session
 API. Layer ownership continues to use the reusable `MapsuiLayerBands` component
-against `Mapsui.Map`, while Avalonia dispatch, live-control invalidation, and
-capture remain in the Viewer adapter. A future reusable navigator adapter and
-separate Avalonia capture package can therefore be extracted without consumers
-depending on the current control-bound implementation.
+against `Mapsui.Map`, and viewport behavior delegates to the reusable
+`MapsuiMapNavigator` component against `Map.Navigator`. Both mutate the supplied
+map directly without requiring Avalonia. Automatic zoom after dataset load
+remains Viewer policy. Avalonia dispatch, live-control invalidation, coordinate
+conversion, and capture remain in the Viewer adapter for later extraction.
 
 ## Why it matters
 

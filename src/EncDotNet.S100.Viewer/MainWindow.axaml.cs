@@ -743,8 +743,6 @@ public partial class MainWindow : ShadUI.Window
     private bool TryFrameOnOwnShip(
         EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource source)
     {
-        if (MapControl.Map?.Navigator is not { } nav) return false;
-
         var feature = source.CurrentFeatures.FirstOrDefault();
         if (feature?.Coordinates is not { Count: > 0 } coords) return false;
 
@@ -753,7 +751,7 @@ public partial class MainWindow : ShadUI.Window
         // Harbour-scale resolution (~web-mercator zoom 13): close enough to
         // see the own-ship and its surroundings without losing context.
         const double resolution = 156543.03392804097 / (1 << 13);
-        nav.CenterOnAndZoomTo(new MPoint(x, y), resolution, duration: 0);
+        _mapHost.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
         return true;
     }
 
@@ -907,7 +905,6 @@ public partial class MainWindow : ShadUI.Window
     private void ApplyStartupViewport()
     {
         if (_startupOptions is not { } options) return;
-        if (MapControl.Map?.Navigator is not { } nav) return;
 
         if (options.ParsedBoundingBox is { } bbox)
         {
@@ -916,7 +913,7 @@ public partial class MainWindow : ShadUI.Window
             var extent = new MRect(minX, minY, maxX, maxY);
             if (extent.Width > 0 && extent.Height > 0)
             {
-                nav.ZoomToBox(extent, duration: 0);
+                _mapHost.SetViewportToExtent(extent);
             }
             return;
         }
@@ -927,7 +924,7 @@ public partial class MainWindow : ShadUI.Window
             // Standard web-mercator resolution (metres/pixel) at a given
             // 256-pixel-tile zoom level: 156543.03392804097 / 2^zoom.
             var resolution = 156543.03392804097 / Math.Pow(2, zoom);
-            nav.CenterOnAndZoomTo(new MPoint(x, y), resolution, duration: 0);
+            _mapHost.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
         }
     }
 
@@ -1246,11 +1243,8 @@ public partial class MainWindow : ShadUI.Window
             var framedEarly = false;
             void FrameEarly(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
             {
-                if (MapControl.Map?.Navigator is { } nav)
-                {
-                    ZoomToCatalogueBoundingBox(nav, bbox);
-                    framedEarly = true;
-                }
+                ZoomToCatalogueBoundingBox(bbox);
+                framedEarly = true;
             }
 
             Action<EncDotNet.S100.ExchangeSets.BoundingBox> onFramingReady = bbox =>
@@ -1281,10 +1275,9 @@ public partial class MainWindow : ShadUI.Window
             {
                 // Already framed up front — nothing to do.
             }
-            else if (result.UnionBoundingBox is { } bbox &&
-                MapControl.Map?.Navigator is { } nav)
+            else if (result.UnionBoundingBox is { } bbox)
             {
-                ZoomToCatalogueBoundingBox(nav, bbox);
+                ZoomToCatalogueBoundingBox(bbox);
             }
             else
             {
@@ -1374,7 +1367,7 @@ public partial class MainWindow : ShadUI.Window
             NotificationService.DefaultDelayFor(pending.Severity));
     }
 
-    private void ZoomToCatalogueBoundingBox(Mapsui.Navigator nav, EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+    private void ZoomToCatalogueBoundingBox(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
     {
         // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps
         // the input range, so polar catalogues degrade gracefully.
@@ -1385,7 +1378,7 @@ public partial class MainWindow : ShadUI.Window
         var extent = new MRect(minX, minY, maxX, maxY);
         if (extent.Width > 0 && extent.Height > 0)
         {
-            nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+            _mapHost.ZoomToExtent(extent, durationMilliseconds: 250);
         }
     }
 
@@ -1429,12 +1422,10 @@ public partial class MainWindow : ShadUI.Window
                 break;
         }
 
-        if (MapControl.Map?.Navigator is not { } nav) return;
-
         var extent = unionSlot[0] ?? MapControl.Map.Extent;
         if (extent is null || extent.Width <= 0 || extent.Height <= 0) return;
 
-        nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+        _mapHost.ZoomToExtent(extent, durationMilliseconds: 250);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

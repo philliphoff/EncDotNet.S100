@@ -81,6 +81,26 @@ removes only layers owned by that band. Calls mutate `Map.Layers` immediately;
 Avalonia, MAUI, and other UI hosts remain responsible for thread dispatch and
 redraw invalidation.
 
+## Viewport navigation
+
+`MapsuiMapNavigator` provides the small navigation surface already used by
+S-100 interactive hosts against an existing `Mapsui.Map`:
+
+```csharp
+var navigation = new MapsuiMapNavigator(map);
+navigation.ZoomToExtent(datasetExtent);
+navigation.CenterOn(new GeoPosition(latitude, longitude));
+```
+
+It supports padded dataset framing, exact scripted extent or
+center/resolution changes, rotation, WGS-84 recentering, and WGS-84 viewport
+center reporting. Exact scripted changes are instantaneous; framing and
+recentering accept animation durations while preserving their prior defaults.
+The adapter does not own the map, duplicate normal Mapsui gestures, marshal to
+a UI thread, invalidate a control, or automatically zoom after a load.
+Avalonia, MAUI, and other hosts retain those policies and thread-affinity
+responsibilities.
+
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
 `EncDotNet.S100.Rendering.Scene` (`VectorSceneBuilder` → `VectorScene` of

@@ -108,7 +108,10 @@ Because both the current Mapsui path and the new subsystem consume the **same `V
   after the Avalonia `MapControl` exists. The adapter implements focused layer,
   viewport, coordinate, snapshot, and invalidation capabilities; it retains the
   active `IChartRenderSubsystem` lifecycle without exposing that choice through
-  a monolithic consumer contract.
+  a monolithic consumer contract. Layer ownership and viewport behavior delegate
+  to reusable `MapsuiLayerBands` and `MapsuiMapNavigator` components that operate
+  on `Mapsui.Map` without Avalonia; control invalidation and capture remain in
+  the Viewer adapter.
 - **Runtime toggle.** Extend the existing `RenderingOptimizations` flag pattern (env-pinnable bools) with `RenderSubsystem { Mapsui | TiledScene }`, surfaced in `SettingsViewModel` for hot-swap, and overridable by env var for benchmark runs.
 - **Side-by-side mode (optional, high value).** Split-view or toggle-overlay so the same gesture drives both subsystems for visual diffing of portrayal fidelity.
 - **Metrics.** Both renderers already carry `Diagnostics/Telemetry`. Standardize a comparison surface: frame time (p50/p95/p99), per-stage timing (scene query / rasterize / composite), tiles produced vs. evicted, cache hit rate, prediction hit rate, native bytes resident. Capture against fixed gesture scripts on reference cells (`101AU005PDB01` as the established baseline) so wins are defensible and regressions caught.

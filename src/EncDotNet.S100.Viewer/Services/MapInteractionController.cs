@@ -45,6 +45,7 @@ internal sealed class MapInteractionController
     private readonly IDynamicSourcePickService? _dynamicPickService;
 
     private MapControl? _mapControl;
+    private MapsuiMapNavigator? _mapNavigator;
 
     private DispatcherTimer? _longPressTimer;
     private Point? _longPressOrigin;
@@ -122,6 +123,9 @@ internal sealed class MapInteractionController
         ArgumentNullException.ThrowIfNull(compassRose);
 
         _mapControl = mapControl;
+        _mapNavigator = mapControl.Map is { } map
+            ? new MapsuiMapNavigator(map)
+            : null;
 
         // Trackpad magnify / rotate gestures, double-tap zoom, single-tap pick.
         mapControl.AddHandler(InputElement.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
@@ -182,16 +186,14 @@ internal sealed class MapInteractionController
     /// </summary>
     private void OnZoomToExtentClick(object? sender, RoutedEventArgs e)
     {
-        if (_mapControl?.Map is not { } map || map.Navigator is not { } navigator)
+        if (_mapControl?.Map is not { } map || _mapNavigator is not { } navigation)
             return;
 
         var extent = map.Extent;
         if (extent is null || extent.Width <= 0 || extent.Height <= 0)
             return;
 
-        // Match DatasetLoaderService.ZoomToExtent: pad by 10% so features
-        // at the edges aren't flush against the viewport border.
-        navigator.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+        navigation.ZoomToExtent(extent, durationMilliseconds: 250);
     }
 
     private void HandleViewportChangedForScaleBar(ScaleBarView scaleBar, CompassRoseView compassRose)
