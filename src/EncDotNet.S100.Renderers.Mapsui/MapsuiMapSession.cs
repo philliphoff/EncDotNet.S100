@@ -578,17 +578,18 @@ public sealed class MapsuiMapSession : IDisposable
         if (!_processorOwner.TryAcquire(datasetId, out var lease))
             return null;
 
-        // Raise Started only once a lease is held, so it reliably means a
-        // render is about to run. A dataset removed/unregistered before this
-        // point yields no lifecycle events at all (rather than a Started that
-        // is never followed by Completed/Failed).
-        DatasetRenderStarted?.Invoke(
-            this,
-            new MapSessionDatasetRenderEventArgs(datasetId, kind));
-
         MapsuiDatasetResult result;
         using (lease)
         {
+            // Raise Started only once a lease is held, so it reliably means a
+            // render is about to run. A dataset removed/unregistered before this
+            // point yields no lifecycle events at all (rather than a Started that
+            // is never followed by Completed/Failed). Raised inside the using so
+            // a throwing subscriber still releases the lease.
+            DatasetRenderStarted?.Invoke(
+                this,
+                new MapSessionDatasetRenderEventArgs(datasetId, kind));
+
             var context = presentation.CreateRenderContext(
                 lease.Processor,
                 selectedTime);
