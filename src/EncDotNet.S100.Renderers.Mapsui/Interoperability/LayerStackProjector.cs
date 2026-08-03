@@ -182,7 +182,7 @@ public static class LayerStackProjector
             .ToList();
 
         // Build a fresh MemoryLayer mirroring the source rather than mutating it
-        // — the loader caches the prebuilt layer for the un-suppressed case (e.g.
+        // — the session retains the prebuilt layer for the un-suppressed case (e.g.
         // an S-102 deactivation restores the full S-101 depth shading).
         return new MemoryLayer
         {

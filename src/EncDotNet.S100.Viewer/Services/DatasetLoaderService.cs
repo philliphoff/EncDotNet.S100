@@ -5,7 +5,6 @@ using Avalonia.Input.Platform;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Catalogs;
@@ -35,14 +34,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly INotificationService _notifications;
     private readonly DatasetProcessorOwner _processorOwner;
     /// <summary>
-    /// Resolves the <em>currently active</em> cross-dataset paint-order
-    /// policy on each consult. Hosts can swap the authority at runtime
-    /// (e.g. flip from S-98 to strict load-order) and we re-sort the
-    /// stack in response to <see cref="IInteroperabilityAuthorityProvider.CurrentChanged"/>.
-    /// </summary>
-    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
-    private readonly EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer _mapsuiRenderer;
-    /// <summary>
     /// Lets a standalone dataset load hold its progress notification in the
     /// "loading" state until the map has actually painted the new dataset,
     /// so the terminal success only appears once the data is visible rather
@@ -55,24 +46,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly Dictionary<MapDatasetId, DatasetEntry> _sessionEntries = [];
     private readonly ConditionalWeakTable<DatasetEntry, LoadGeneration> _loadGenerations = new();
     private readonly ConditionalWeakTable<DatasetEntry, SemaphoreSlim> _loadGates = new();
-    /// <summary>
-    /// Snapshot of the most recently computed S-98 layer stack
-    /// (bottom-of-paint-stack first; index 0 = drawn first / under
-    /// everything else). Mirrors what was just handed to
-    /// <see cref="IMapLayerCollection.ReplaceDatasetLayers"/>. Refreshed whenever
-    /// the layer order changes so <see cref="PickService"/> can rank
-    /// multi-hit picks top-of-stack first.
-    /// </summary>
-    private IReadOnlyList<ILayer> _currentStackedLayers = Array.Empty<ILayer>();
-    /// <summary>
-    /// Snapshot of the most recently computed S-98 layer stack as
-    /// <see cref="LayerStackEntry"/> records (bottom-of-paint-stack
-    /// first). Same order as <see cref="_currentStackedLayers"/>;
-    /// the Layer Stack panel
-    /// (<see cref="ViewModels.LayerStackViewModel"/>) groups these
-    /// by <see cref="S98DisplayPlane"/> for the tree view.
-    /// </summary>
-    private IReadOnlyList<LayerStackEntry> _currentStackEntries = Array.Empty<LayerStackEntry>();
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
     private readonly SemaphoreSlim _layerRenderGate = new(1, 1);
     private readonly object _presentationSync = new();
@@ -108,8 +81,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         GlobalTimeService globalTime,
         INotificationService notifications,
         DatasetProcessorOwner processorOwner,
-        IInteroperabilityAuthorityProvider authorityProvider,
-        EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer mapsuiRenderer,
         IRenderActivityMonitor? renderActivityMonitor = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -135,14 +106,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _globalTime = globalTime;
         _notifications = notifications;
         _processorOwner = processorOwner;
-        ArgumentNullException.ThrowIfNull(authorityProvider);
-        _authorityProvider = authorityProvider;
-        ArgumentNullException.ThrowIfNull(mapsuiRenderer);
-        _mapsuiRenderer = mapsuiRenderer;
         _renderActivityMonitor = renderActivityMonitor;
-        // Re-sort the live layer stack whenever the host swaps the
-        // active authority. Cheap when no datasets are loaded.
-        _authorityProvider.CurrentChanged += OnAuthorityChanged;
 
         _globalTime.CurrentTimeChanged += t => _ = ReRenderAtTimeAsync(t, CancellationToken.None);
         _globalTime.RangeChanged += OnGlobalRangeChanged;
@@ -197,9 +161,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
     }
 
-    public IReadOnlyList<ILayer> CurrentStackedLayers => _currentStackedLayers;
+    public IReadOnlyList<ILayer> CurrentStackedLayers =>
+        _mapSession?.GetStackedLayers() ?? [];
 
-    public IReadOnlyList<LayerStackEntry> CurrentStackEntries => _currentStackEntries;
+    public IReadOnlyList<LayerStackEntry> CurrentStackEntries =>
+        _mapSession?.GetLayerStackEntries() ?? [];
 
     public event Action? LayerStackChanged;
 
@@ -270,8 +236,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             ?? throw new InvalidOperationException(
                 "The map layer collection must provide a Mapsui dataset session.");
         _mapSession.LayersChanged += OnSessionLayersChanged;
-        _mapSession.SetLayerProjector(ProjectLayerStack);
-        _mapSession.SetIgnoreScaleMinimum(CurrentPresentation.Mariner.IgnoreScaleMinimum);
+        _mapSession.SetMarinerSettings(CurrentPresentation.Mariner);
         _viewport = viewport;
 
         var transientFcPaths = _catalogueSeeder.Seed(options);
@@ -920,9 +885,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             await _layerRenderGate.WaitAsync(localCts.Token).ConfigureAwait(true);
             enteredGate = true;
             localCts.Token.ThrowIfCancellationRequested();
+            _mapSession?.SetMarinerSettings(presentation.Mariner);
             Volatile.Write(ref _presentation, presentation);
-            _mapSession?.SetIgnoreScaleMinimum(
-                presentation.Mariner.IgnoreScaleMinimum);
             await ReRenderAllAsync(presentation, localCts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -1136,130 +1100,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 .ToArray());
     }
 
-    private IReadOnlyList<MapsuiProjectedDatasetLayer> ProjectLayerStack(
-        IReadOnlyList<MapsuiMapDatasetSnapshot> datasets)
-    {
-        // Temporary Viewer-owned S-98 projection. The reusable session supplies
-        // ordinary bottom-to-top snapshots, invokes this callback inside its one
-        // atomic dataset-band update, and retains all layer ownership.
-        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(datasets.Count);
-        var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
-        foreach (var dataset in datasets)
-        {
-            var layers = dataset.Layers;
-            var datasetId = dataset.Dataset.Id.Value;
-
-            if (dataset.StackEntries is { Count: > 0 } stack)
-            {
-                var items = new List<SubLayerStackItem>(stack.Count);
-                foreach (var stackEntry in stack)
-                {
-                    items.Add(stackEntry.Item);
-                    prebuilt[LayerStackProjector.KeyOf(stackEntry.Item)] = stackEntry;
-                }
-                perDataset.Add(items);
-            }
-            else
-            {
-                var plane = _authorityProvider.Current.GetDefaultPlane(
-                    dataset.Dataset.Metadata.Spec.Name);
-                var synth = new List<SubLayerStackItem>(layers.Count);
-                for (var layerIndex = 0; layerIndex < layers.Count; layerIndex++)
-                {
-                    var layerKey = string.Create(
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        $"__synth__{layerIndex}");
-                    var item = new SubLayerStackItem(
-                        new SyntheticStackPayload(layerKey),
-                        plane,
-                        WithinPlanePriority: 0,
-                        SourceDatasetId: datasetId);
-                    synth.Add(item);
-                    prebuilt[(datasetId, layerKey)] =
-                        new LayerStackEntry(layers[layerIndex], item);
-                }
-                perDataset.Add(synth);
-            }
-        }
-
-        var authority = _authorityProvider.Current;
-        var sorted = LayerStackBuilder.Build(authority, perDataset);
-
-        // PR-L2: apply S-98 inter-product rules (suppression, etc.)
-        // after the per-plane sort. The rule set is the default
-        // S98DefaultRules collection; rules read the mariner settings
-        // (e.g. SafetyContour for R-101-102-B's safety-contour
-        // exception per MSC.232(82) §5.8). LoadOrderInteroperabilityAuthority
-        // explicitly no-ops ApplyRules so the strict load-order mode
-        // is unaffected.
-        var loaded = BuildLoadedDatasetInfos(datasets);
-        var ruled = authority.ApplyRules(sorted, loaded, CurrentPresentation.Mariner);
-
-        // Project the ordered / suppressed neutral items back onto the
-        // prebuilt Mapsui layers. Cached ILayers are reused where the S-98
-        // outcome is unchanged; the BuildGridCoverageLayer callback lets the
-        // projector rebuild a grid-coverage raster when a rule changed its
-        // payload (e.g. S-104 land clipping), so this path is no longer always
-        // rasterisation-free. Cache the FULL projected list (including inactive
-        // datasets) for the Layer Stack panel.
-        var projected = LayerStackProjector.Project(ruled, prebuilt, _mapsuiRenderer.BuildGridCoverageLayer);
-        _currentStackEntries = projected;
-
-        // PR-L3: filter inactive datasets out of the rendered layer
-        // list handed back to the map host. The active flag is the
-        // single source of truth: inactive entries don't paint and
-        // don't influence pick.
-        var stateById = datasets.ToDictionary(
-            snapshot => snapshot.Dataset.Id.Value,
-            snapshot => snapshot.Dataset,
-            StringComparer.Ordinal);
-        var renderEntries = new List<LayerStackEntry>(projected.Count);
-        foreach (var stackEntry in projected)
-        {
-            if (!stateById.TryGetValue(stackEntry.SourceDatasetId, out var state)
-                || !state.IsActive)
-            {
-                continue;
-            }
-            renderEntries.Add(stackEntry);
-        }
-
-        _currentStackedLayers = LayerStackProjector.ToLayerList(renderEntries);
-        return renderEntries
-            .Select(stackEntry =>
-            {
-                var key = LayerStackProjector.KeyOf(stackEntry.Item);
-                return new MapsuiProjectedDatasetLayer(
-                    new MapDatasetId(stackEntry.SourceDatasetId),
-                    key.LayerKey,
-                    stackEntry.Layer);
-            })
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Builds the snapshot of <see cref="LoadedDatasetInfo"/> values
-    /// the S-98 rule engine consumes. <c>Active</c> combines the
-    /// PR-L3 in-memory flag, the existing <c>DatasetEntry.IsVisible</c>
-    /// proxy, and a "did the processor actually produce layers?"
-    /// check so a failed render doesn't accidentally suppress
-    /// sibling products.
-    /// </summary>
-    private static IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos(
-        IReadOnlyList<MapsuiMapDatasetSnapshot> datasets)
-    {
-        var result = new List<LoadedDatasetInfo>(datasets.Count);
-        foreach (var snapshot in datasets)
-        {
-            var dataset = snapshot.Dataset;
-            var active = dataset.IsActive
-                && dataset.IsVisible
-                && snapshot.IsDrawing;
-            result.Add(new LoadedDatasetInfo(dataset.Id.Value, dataset.Metadata.Spec.Name, active));
-        }
-        return result;
-    }
-
     /// <summary>
     /// Runs the processor's spec-specific validation rule pack and
     /// swallows any exception so a buggy rule cannot abort a dataset
@@ -1455,11 +1295,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
         return loadedEntry ?? _sessionEntries.Values.FirstOrDefault(entry =>
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
-    }
-
-    private void OnAuthorityChanged()
-    {
-        _mapSession?.SetLayerProjector(ProjectLayerStack);
     }
 
     private void OnSessionLayersChanged()

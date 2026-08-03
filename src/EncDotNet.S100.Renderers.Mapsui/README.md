@@ -12,9 +12,10 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 - **`MapsuiDatasetRenderer`** — the entry point that converts a dataset processor's renderer-neutral portrayal output into a Mapsui-owned `MapsuiDatasetResult` (layers + extent). It consumes the `IVectorPortrayalSource` / `ICoveragePortrayalSource` seam exposed by `EncDotNet.S100.Datasets.Pipelines` and owns everything Mapsui-specific: the NTS pattern-clip cache, feature-type tagging, out-of-scale-band cap application, S-101 area/line `ILayer` build, the S-111 arrow renderer, and the Mapsui-typed S-98 layer-stack. This is the seed of the future multi-layer renderer in issue #213 (which will adopt `IS100DatasetRenderer<IReadOnlyList<ILayer>>`); adopting that interface later is purely additive.
 - **`MapsuiMapSession`** — the first reusable map-session component. It
   acquires processors through `DatasetProcessorOwner` leases, renders and
-  atomically replaces their layers, owns ordinary bottom-to-top dataset order,
-  and applies independent active/visible state, opacity, persistent sub-layer
-  state, cell scale windows, and non-S-98 overlapping-cell suppression.
+  atomically replaces their layers, owns S-98 cross-product ordering and
+  suppression, and applies independent active/visible state, opacity,
+  persistent sub-layer state, cell scale windows, and overlapping-cell
+  suppression.
 
 > **Dependency direction (issue #189).** This package now references
 > `EncDotNet.S100.Datasets.Pipelines` (not the other way round), so that the
@@ -92,22 +93,35 @@ redraw invalidation.
 `MapsuiMapSession` owns the dataset band on top of this primitive:
 
 ```csharp
-using var session = new MapsuiMapSession(bands, processorOwner, renderer);
+using var session = new MapsuiMapSession(
+    bands,
+    processorOwner,
+    renderer,
+    interoperabilityAuthorityProvider);
 session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
 await session.RenderAsync(dataset.Id, renderContext);
 session.SetOrder(bottomToTopDatasetIds);
+session.SetMarinerSettings(presentation.Mariner);
 ```
 
 The processor must already be registered with `DatasetProcessorOwner`.
 Rendering holds a safe lease and replacement is transactional: cancellation,
-removal, a changed processor, or host-projection failure leaves the previous
-layers installed. Hosts may provide a `MapsuiDatasetLayerProjector`; the
-session invokes it inside the same single band update and then applies
-visibility, scale windows, and overlap clips to the actual projected layer
-instances. The Viewer uses this temporary hook for S-98 composition; moving
-that projector into the session is the next roadmap slice. Render-context
-construction, presentation/time coalescing, notifications, and zoom policy
-remain host responsibilities. No `Map.AddS100` API is published yet.
+removal, a changed processor, or S-98 projection failure leaves the previous
+layers installed. Concurrent renders are latest-started-wins, so an older
+render cannot replace newer output or reinstall a removed dataset.
+
+The session subscribes to `IInteroperabilityAuthorityProvider`, rebuilds the
+neutral cross-product stack with `LayerStackBuilder`, applies the authority's
+S-98 rules using the current mariner settings, and projects through
+`LayerStackProjector` inside the same dataset-band update. It retains both the
+complete ruled stack (`GetLayerStackEntries`, including inactive datasets for
+inspection) and the active Mapsui band (`GetStackedLayers`). Visibility, scale
+windows, and overlap clips are applied to the actual projected instances.
+This follows S-98 Ed.2.0.0 Main §9.2.1 and Annex A §8.4.1.
+
+Render-context construction, presentation/time refresh and coalescing,
+notifications, and zoom policy remain host responsibilities. No
+`Map.AddS100` API is published yet.
 
 ## Viewport navigation
 

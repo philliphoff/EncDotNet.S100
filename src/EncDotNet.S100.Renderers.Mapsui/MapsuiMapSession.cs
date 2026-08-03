@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -13,9 +14,12 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <remarks>
 /// <para>
 /// The session owns generated layer replacement, removal, bottom-to-top order,
-/// dataset and sub-layer display state, whole-cell scale windows, and
-/// non-S-98 overlap suppression. Processor lifetime remains protected by the
-/// supplied <see cref="DatasetProcessorOwner"/>; every render uses a lease.
+/// dataset and sub-layer display state, S-98 cross-product ordering and
+/// suppression, whole-cell scale windows, and overlapping-cell suppression.
+/// Processor lifetime remains protected by the supplied
+/// <see cref="DatasetProcessorOwner"/>; every render uses a lease.
+/// Cross-product composition follows S-98 Edition 2.0.0 Main §9.2.1 and
+/// Annex A §8.4.1.
 /// </para>
 /// <para>
 /// Rendering work runs on a worker thread. The continuation that installs
@@ -29,10 +33,13 @@ public sealed class MapsuiMapSession : IDisposable
     private readonly MapsuiLayerBands _layerBands;
     private readonly DatasetProcessorOwner _processorOwner;
     private readonly MapsuiDatasetRenderer _renderer;
+    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
     private readonly Dictionary<MapDatasetId, Entry> _entries = [];
     private readonly List<MapDatasetId> _order = [];
     private readonly ConditionalWeakTable<ILayer, LayerVisibilityRange> _visibilityRanges = new();
-    private MapsuiDatasetLayerProjector? _projector;
+    private IReadOnlyList<LayerStackEntry> _stackEntries = [];
+    private IReadOnlyList<ILayer> _stackedLayers = [];
+    private MarinerSettings _mariner = MarinerSettings.Default;
     private bool _ignoreScaleMinimum;
     private bool _disposed;
 
@@ -44,13 +51,36 @@ public sealed class MapsuiMapSession : IDisposable
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer)
+        : this(
+            layerBands,
+            processorOwner,
+            renderer,
+            new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()))
+    {
+    }
+
+    /// <summary>Creates a Mapsui dataset-layer session.</summary>
+    /// <param name="layerBands">The map layer bands the session will mutate.</param>
+    /// <param name="processorOwner">The owner from which render leases are acquired.</param>
+    /// <param name="renderer">The processor-to-Mapsui renderer.</param>
+    /// <param name="authorityProvider">
+    /// The runtime S-98 cross-product ordering and suppression authority.
+    /// </param>
+    public MapsuiMapSession(
+        MapsuiLayerBands layerBands,
+        DatasetProcessorOwner processorOwner,
+        MapsuiDatasetRenderer renderer,
+        IInteroperabilityAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(layerBands);
         ArgumentNullException.ThrowIfNull(processorOwner);
         ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
         _layerBands = layerBands;
         _processorOwner = processorOwner;
         _renderer = renderer;
+        _authorityProvider = authorityProvider;
+        _authorityProvider.CurrentChanged += OnAuthorityChanged;
     }
 
     /// <summary>
@@ -59,26 +89,29 @@ public sealed class MapsuiMapSession : IDisposable
     public event Action? LayersChanged;
 
     /// <summary>
-    /// Sets the optional host projector used inside the session's single
-    /// dataset-band update.
+    /// Sets the mariner choices consumed by S-98 cross-product rules and
+    /// dataset scale-window projection.
     /// </summary>
-    /// <param name="projector">
-    /// The projector, or <see langword="null"/> to restore ordinary ordering.
-    /// </param>
-    public void SetLayerProjector(MapsuiDatasetLayerProjector? projector)
+    /// <param name="mariner">The current immutable mariner settings.</param>
+    public void SetMarinerSettings(MarinerSettings mariner)
     {
+        ArgumentNullException.ThrowIfNull(mariner);
+
         lock (_sync)
         {
             ThrowIfDisposed();
-            var previous = _projector;
-            _projector = projector;
+            var previousMariner = _mariner;
+            var previousIgnoreScaleMinimum = _ignoreScaleMinimum;
+            _mariner = mariner;
+            _ignoreScaleMinimum = mariner.IgnoreScaleMinimum;
             try
             {
                 ComposeLayers();
             }
             catch
             {
-                _projector = previous;
+                _mariner = previousMariner;
+                _ignoreScaleMinimum = previousIgnoreScaleMinimum;
                 throw;
             }
         }
@@ -164,13 +197,15 @@ public sealed class MapsuiMapSession : IDisposable
         RenderContext? context,
         CancellationToken cancellationToken = default)
     {
+        Entry renderEntry;
         long generation;
         lock (_sync)
         {
             ThrowIfDisposed();
             if (!_entries.TryGetValue(datasetId, out var entry))
                 return null;
-            generation = entry.Generation;
+            renderEntry = entry;
+            generation = ++entry.Generation;
         }
 
         if (!_processorOwner.TryAcquire(datasetId, out var lease))
@@ -189,6 +224,7 @@ public sealed class MapsuiMapSession : IDisposable
         {
             ThrowIfDisposed();
             if (!_entries.TryGetValue(datasetId, out var entry)
+                || !ReferenceEquals(entry, renderEntry)
                 || entry.Generation != generation
                 || !_processorOwner.Owns(datasetId, lease.Processor))
             {
@@ -414,6 +450,31 @@ public sealed class MapsuiMapSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets the complete S-98-ordered and suppression-applied layer stack,
+    /// including entries from inactive datasets for inspection UI.
+    /// </summary>
+    /// <returns>A materialized bottom-to-top snapshot.</returns>
+    public IReadOnlyList<LayerStackEntry> GetLayerStackEntries()
+    {
+        lock (_sync)
+        {
+            return _stackEntries.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Gets the active S-98-projected Mapsui dataset band.
+    /// </summary>
+    /// <returns>A materialized bottom-to-top layer snapshot.</returns>
+    public IReadOnlyList<ILayer> GetStackedLayers()
+    {
+        lock (_sync)
+        {
+            return _stackedLayers.ToArray();
+        }
+    }
+
     /// <summary>Removes every managed dataset layer and subscription.</summary>
     public void Dispose()
     {
@@ -423,8 +484,11 @@ public sealed class MapsuiMapSession : IDisposable
                 return;
 
             _disposed = true;
+            _authorityProvider.CurrentChanged -= OnAuthorityChanged;
             _entries.Clear();
             _order.Clear();
+            _stackEntries = [];
+            _stackedLayers = [];
             _layerBands.ReplaceDatasetLayers([]);
         }
     }
@@ -432,13 +496,15 @@ public sealed class MapsuiMapSession : IDisposable
     private void ComposeLayers()
     {
         var snapshots = CreateOrderedSnapshots();
-        var projected = _projector?.Invoke(snapshots) ?? ProjectOrdinary(snapshots);
+        var (projected, stackEntries, stackedLayers) = ProjectLayerStack(snapshots);
         ValidateProjection(projected, snapshots);
         ApplyDisplayAndScaleToSourceLayers(snapshots);
         ApplyDisplayAndScaleToProjectedLayers(projected);
         ApplyOverlapSuppression(projected);
         UpdateContentCutoffs(projected);
         _layerBands.ReplaceDatasetLayers(projected.Select(item => item.Layer).ToArray());
+        _stackEntries = stackEntries;
+        _stackedLayers = stackedLayers;
     }
 
     private void ApplyDisplayAndScaleToSourceLayers(
@@ -549,22 +615,96 @@ public sealed class MapsuiMapSession : IDisposable
         }
     }
 
-    private IReadOnlyList<MapsuiProjectedDatasetLayer> ProjectOrdinary(
+    private (
+        IReadOnlyList<MapsuiProjectedDatasetLayer> Projected,
+        IReadOnlyList<LayerStackEntry> StackEntries,
+        IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(
         IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
     {
-        var result = new List<MapsuiProjectedDatasetLayer>();
+        var authority = _authorityProvider.Current;
+        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(snapshots.Count);
+        var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
         foreach (var snapshot in snapshots)
         {
-            if (!snapshot.Dataset.IsActive)
-                continue;
+            var layers = snapshot.Layers;
+            var datasetId = snapshot.Dataset.Id.Value;
 
-            for (var index = 0; index < snapshot.Layers.Count; index++)
+            if (snapshot.StackEntries is { Count: > 0 } stack)
             {
-                result.Add(new MapsuiProjectedDatasetLayer(
-                    snapshot.Dataset.Id,
-                    LayerKeyAt(snapshot, index),
-                    snapshot.Layers[index]));
+                var items = new List<SubLayerStackItem>(stack.Count);
+                foreach (var stackEntry in stack)
+                {
+                    items.Add(stackEntry.Item);
+                    prebuilt[LayerStackProjector.KeyOf(stackEntry.Item)] = stackEntry;
+                }
+                perDataset.Add(items);
+                continue;
             }
+
+            var plane = authority.GetDefaultPlane(
+                snapshot.Dataset.Metadata.Spec.Name);
+            var syntheticItems = new List<SubLayerStackItem>(layers.Count);
+            for (var layerIndex = 0; layerIndex < layers.Count; layerIndex++)
+            {
+                var layerKey = FormattableString.Invariant($"__synth__{layerIndex}");
+                var item = new SubLayerStackItem(
+                    new SyntheticStackPayload(layerKey),
+                    plane,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: datasetId);
+                syntheticItems.Add(item);
+                prebuilt[(datasetId, layerKey)] =
+                    new LayerStackEntry(layers[layerIndex], item);
+            }
+            perDataset.Add(syntheticItems);
+        }
+
+        var topFirst = perDataset.AsEnumerable().Reverse().ToArray();
+        var sorted = LayerStackBuilder.Build(authority, topFirst);
+        var loaded = BuildLoadedDatasetInfos(snapshots);
+        var ruled = authority.ApplyRules(sorted, loaded, _mariner);
+        var stackEntries = LayerStackProjector.Project(
+            ruled,
+            prebuilt,
+            _renderer.BuildGridCoverageLayer);
+
+        var activeById = snapshots.ToDictionary(
+            snapshot => snapshot.Dataset.Id.Value,
+            snapshot => snapshot.Dataset.IsActive,
+            StringComparer.Ordinal);
+        var activeEntries = stackEntries
+            .Where(entry => activeById.GetValueOrDefault(entry.SourceDatasetId))
+            .ToArray();
+        var projected = activeEntries
+            .Select(entry =>
+            {
+                var key = LayerStackProjector.KeyOf(entry.Item);
+                return new MapsuiProjectedDatasetLayer(
+                    new MapDatasetId(entry.SourceDatasetId),
+                    key.LayerKey,
+                    entry.Layer);
+            })
+            .ToArray();
+        return (
+            projected,
+            stackEntries.ToArray(),
+            LayerStackProjector.ToLayerList(activeEntries));
+    }
+
+    private static IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos(
+        IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
+    {
+        var result = new List<LoadedDatasetInfo>(snapshots.Count);
+        foreach (var snapshot in snapshots)
+        {
+            var dataset = snapshot.Dataset;
+            var active = dataset.IsActive
+                && dataset.IsVisible
+                && snapshot.IsDrawing;
+            result.Add(new LoadedDatasetInfo(
+                dataset.Id.Value,
+                dataset.Metadata.Spec.Name,
+                active));
         }
         return result;
     }
@@ -818,6 +958,18 @@ public sealed class MapsuiMapSession : IDisposable
 
     private static int? EffectiveMinimumDisplayScale(Entry entry) =>
         entry.CatalogueMinimumDisplayScale ?? entry.CellMinimumDisplayScale;
+
+    private void OnAuthorityChanged()
+    {
+        lock (_sync)
+        {
+            if (_disposed)
+                return;
+            ComposeLayers();
+        }
+
+        LayersChanged?.Invoke();
+    }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
