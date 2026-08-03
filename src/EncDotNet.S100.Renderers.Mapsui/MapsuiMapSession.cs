@@ -37,11 +37,18 @@ public sealed class MapsuiMapSession : IDisposable
     private readonly Dictionary<MapDatasetId, Entry> _entries = [];
     private readonly List<MapDatasetId> _order = [];
     private readonly ConditionalWeakTable<ILayer, LayerVisibilityRange> _visibilityRanges = new();
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
     private IReadOnlyList<LayerStackEntry> _stackEntries = [];
     private IReadOnlyList<ILayer> _stackedLayers = [];
+    private MapsuiMapTimeSnapshot _time = MapsuiMapTimeSnapshot.Empty;
     private MarinerSettings _mariner = MarinerSettings.Default;
+    private CancellationTokenSource? _timeRefreshCts;
+    private CancellationTokenSource? _presentationRefreshCts;
     private bool _ignoreScaleMinimum;
     private bool _disposed;
+
+    private static readonly TimeSpan TimeRefreshDebounceWindow =
+        TimeSpan.FromMilliseconds(100);
 
     /// <summary>Creates a Mapsui dataset-layer session.</summary>
     /// <param name="layerBands">The map layer bands the session will mutate.</param>
@@ -87,6 +94,18 @@ public sealed class MapsuiMapSession : IDisposable
     /// Raised after the final dataset-band projection changes.
     /// </summary>
     public event Action? LayersChanged;
+
+    /// <summary>Raised after the aggregate registered time range changes.</summary>
+    public event Action? TimeRangeChanged;
+
+    /// <summary>Raised after the global map clock changes.</summary>
+    public event Action<DateTime>? CurrentTimeChanged;
+
+    /// <summary>
+    /// Raised when one dataset fails during a coalesced time or presentation
+    /// refresh. Other registered datasets continue refreshing.
+    /// </summary>
+    public event Action<MapDatasetId, Exception>? DatasetRefreshFailed;
 
     /// <summary>
     /// Sets the mariner choices consumed by S-98 cross-product rules and
@@ -136,6 +155,22 @@ public sealed class MapsuiMapSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
+        TimePolicy? timePolicy = null;
+        if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
+        {
+            using (processorLease)
+            {
+                if (processorLease.Processor is ITimeAwareDatasetProcessor timeAware)
+                {
+                    timePolicy = TimePolicy.TryCreate(
+                        dataset.Metadata.Spec.Name,
+                        timeAware.AvailableTimes);
+                }
+            }
+        }
+
+        var rangeChanged = false;
+        DateTime? changedCurrent = null;
         lock (_sync)
         {
             ThrowIfDisposed();
@@ -149,16 +184,48 @@ public sealed class MapsuiMapSession : IDisposable
             }
 
             var previousDataset = entry.Dataset;
+            var previousTimePolicy = entry.TimePolicy;
+            var previousRenderedTime = entry.RenderedTime;
             var previousMinimum = entry.CatalogueMinimumDisplayScale;
             var previousMaximum = entry.MaximumDisplayScale;
             entry.Dataset = ReconcileDatasetState(
                 dataset,
                 entry.LayerKeys,
                 entry.Dataset.SubLayers);
+            entry.TimePolicy = timePolicy;
+            if (timePolicy is not null)
+            {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    timePolicy.AvailableTimes,
+                    created ? null : previousDataset.CurrentTime);
+            }
+            else
+            {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    [],
+                    currentTime: null);
+                entry.RenderedTime = null;
+            }
             entry.CatalogueMinimumDisplayScale = minimumDisplayScale;
             entry.MaximumDisplayScale = maximumDisplayScale;
             try
             {
+                (rangeChanged, changedCurrent) = RecomputeTimeState();
+                if (entry.TimePolicy is not null
+                    && (created || previousTimePolicy is null))
+                {
+                    entry.Dataset = CopyDataset(
+                        entry.Dataset,
+                        entry.Dataset.SubLayers,
+                        entry.TimePolicy.AvailableTimes,
+                        _time.Current is { } clock
+                            ? entry.TimePolicy.SnapTo(clock)
+                            : entry.TimePolicy.AvailableTimes.FirstOrDefault());
+                }
                 ComposeLayers();
             }
             catch
@@ -171,14 +238,18 @@ public sealed class MapsuiMapSession : IDisposable
                 else
                 {
                     entry.Dataset = previousDataset;
+                    entry.TimePolicy = previousTimePolicy;
+                    entry.RenderedTime = previousRenderedTime;
                     entry.CatalogueMinimumDisplayScale = previousMinimum;
                     entry.MaximumDisplayScale = previousMaximum;
                 }
+                RecomputeTimeState();
                 throw;
             }
         }
 
         LayersChanged?.Invoke();
+        RaiseTimeEvents(rangeChanged, changedCurrent);
     }
 
     /// <summary>
@@ -197,6 +268,269 @@ public sealed class MapsuiMapSession : IDisposable
         RenderContext? context,
         CancellationToken cancellationToken = default)
     {
+        CancellationTokenSource localCts;
+        DateTime? selectedTime;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return null;
+            entry.RenderCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            entry.RenderCts = localCts;
+            selectedTime = SelectedTime(context)
+                ?? (entry.TimePolicy is not null
+                    ? entry.Dataset.CurrentTime
+                    : null);
+        }
+
+        var enteredGate = false;
+        try
+        {
+            await _renderGate.WaitAsync(localCts.Token).ConfigureAwait(true);
+            enteredGate = true;
+            return await RenderCoreAsync(
+                datasetId,
+                _ => context,
+                selectedTime,
+                localCts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        finally
+        {
+            if (enteredGate)
+                _renderGate.Release();
+
+            lock (_sync)
+            {
+                if (_entries.TryGetValue(datasetId, out var entry)
+                    && ReferenceEquals(entry.RenderCts, localCts))
+                {
+                    entry.RenderCts = null;
+                }
+            }
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>Gets the aggregate time state for all registered datasets.</summary>
+    /// <returns>An immutable materialized snapshot.</returns>
+    public MapsuiMapTimeSnapshot GetTimeSnapshot()
+    {
+        lock (_sync)
+        {
+            return _time;
+        }
+    }
+
+    /// <summary>
+    /// Updates the global map clock without rendering. Hosts should then call
+    /// <see cref="RefreshTimeAsync"/> to apply the new time to dataset layers.
+    /// </summary>
+    /// <param name="time">Requested global clock value.</param>
+    public void SetCurrentTime(DateTime time)
+    {
+        DateTime? changedCurrent = null;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (_time.Minimum is not { } minimum
+                || _time.Maximum is not { } maximum)
+            {
+                return;
+            }
+
+            var clamped = time < minimum
+                ? minimum
+                : time > maximum
+                    ? maximum
+                    : time;
+            if (_time.Current == clamped)
+                return;
+
+            _time = CopyTimeSnapshot(_time, clamped);
+            changedCurrent = clamped;
+        }
+
+        if (changedCurrent is { } current)
+            CurrentTimeChanged?.Invoke(current);
+    }
+
+    /// <summary>
+    /// Coalesces rapid clock changes, cancels the preceding time refresh, and
+    /// applies product-specific time gating through the shared render gate.
+    /// </summary>
+    /// <param name="contextFactory">Builds the current host render context.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>A task that completes when the applied refresh finishes.</returns>
+    public async Task RefreshTimeAsync(
+        MapsuiRenderContextFactory contextFactory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(contextFactory);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _timeRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            _timeRefreshCts = localCts;
+        }
+
+        try
+        {
+            await Task.Delay(TimeRefreshDebounceWindow, localCts.Token)
+                .ConfigureAwait(true);
+            await RefreshCoreAsync(
+                contextFactory,
+                timeAwareOnly: true,
+                localCts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_timeRefreshCts, localCts))
+                    _timeRefreshCts = null;
+            }
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Cancels the preceding full refresh and re-renders every registered
+    /// dataset through the shared render gate while preserving time gating.
+    /// </summary>
+    /// <param name="contextFactory">Builds the current host render context.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// A task that returns <see langword="true"/> when this refresh was applied,
+    /// or <see langword="false"/> when a newer refresh superseded it.
+    /// </returns>
+    public async Task<bool> RefreshAsync(
+        MapsuiRenderContextFactory contextFactory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(contextFactory);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _presentationRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            _presentationRefreshCts = localCts;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(
+                contextFactory,
+                timeAwareOnly: false,
+                localCts.Token).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_presentationRefreshCts, localCts))
+                    _presentationRefreshCts = null;
+            }
+            localCts.Dispose();
+        }
+    }
+
+    private async Task RefreshCoreAsync(
+        MapsuiRenderContextFactory contextFactory,
+        bool timeAwareOnly,
+        CancellationToken cancellationToken)
+    {
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            MapDatasetId[] datasetIds;
+            lock (_sync)
+            {
+                datasetIds = _order.ToArray();
+            }
+
+            foreach (var datasetId in datasetIds)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                TimePolicy? policy;
+                DateTime? selectedTime;
+                bool alreadyCurrent;
+                lock (_sync)
+                {
+                    if (!_entries.TryGetValue(datasetId, out var entry))
+                        continue;
+                    policy = entry.TimePolicy;
+                    if (timeAwareOnly && policy is null)
+                        continue;
+
+                    selectedTime = policy is not null && _time.Current is { } clock
+                        ? policy.SnapTo(clock)
+                        : null;
+                    alreadyCurrent = policy is not null
+                        && entry.RenderedTime == selectedTime
+                        && (selectedTime is null || entry.Layers.Count > 0);
+                }
+
+                if (timeAwareOnly && alreadyCurrent)
+                    continue;
+
+                try
+                {
+                    if (policy is not null && selectedTime is null)
+                    {
+                        ClearLayersCore(datasetId, updateTime: true);
+                        continue;
+                    }
+
+                    await RenderCoreAsync(
+                        datasetId,
+                        processor => contextFactory(processor, selectedTime),
+                        selectedTime,
+                        cancellationToken).ConfigureAwait(true);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    DatasetRefreshFailed?.Invoke(datasetId, exception);
+                }
+            }
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    private async Task<MapsuiDatasetResult?> RenderCoreAsync(
+        MapDatasetId datasetId,
+        Func<IDatasetProcessor, RenderContext?> contextFactory,
+        DateTime? selectedTime,
+        CancellationToken cancellationToken)
+    {
         Entry renderEntry;
         long generation;
         lock (_sync)
@@ -214,9 +548,13 @@ public sealed class MapsuiMapSession : IDisposable
         MapsuiDatasetResult result;
         using (lease)
         {
+            var context = contextFactory(lease.Processor);
             result = await Task.Run(
-                () => _renderer.RenderAsync(lease.Processor, context, cancellationToken),
-                cancellationToken);
+                () => _renderer.RenderAsync(
+                    lease.Processor,
+                    context,
+                    cancellationToken),
+                cancellationToken).ConfigureAwait(true);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -233,11 +571,20 @@ public sealed class MapsuiMapSession : IDisposable
 
             var previous = entry.CaptureRendering();
             entry.Apply(result);
+            entry.RenderedTime = entry.TimePolicy is null ? null : selectedTime;
             CaptureVisibilityRanges(entry.Layers);
             entry.Dataset = ReconcileDatasetState(
                 entry.Dataset,
                 entry.LayerKeys,
                 entry.Dataset.SubLayers);
+            if (entry.TimePolicy is not null)
+            {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    entry.TimePolicy.AvailableTimes,
+                    selectedTime);
+            }
             try
             {
                 ComposeLayers();
@@ -253,12 +600,9 @@ public sealed class MapsuiMapSession : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// Removes generated layers while retaining dataset state and ordinary
-    /// ordering, for lazy unload or time gating.
-    /// </summary>
-    /// <param name="datasetId">The dataset identity.</param>
-    public void ClearLayers(MapDatasetId datasetId)
+    private void ClearLayersCore(
+        MapDatasetId datasetId,
+        bool updateTime)
     {
         lock (_sync)
         {
@@ -270,6 +614,15 @@ public sealed class MapsuiMapSession : IDisposable
             var previousGeneration = entry.Generation;
             entry.Generation++;
             entry.ClearRendering();
+            if (updateTime && entry.TimePolicy is not null)
+            {
+                entry.RenderedTime = null;
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    entry.TimePolicy.AvailableTimes,
+                    currentTime: null);
+            }
             try
             {
                 ComposeLayers();
@@ -283,6 +636,16 @@ public sealed class MapsuiMapSession : IDisposable
         }
 
         LayersChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Removes generated layers while retaining dataset state and ordinary
+    /// ordering for lazy reload.
+    /// </summary>
+    /// <param name="datasetId">The dataset identity.</param>
+    public void ClearLayers(MapDatasetId datasetId)
+    {
+        ClearLayersCore(datasetId, updateTime: false);
     }
 
     /// <summary>
@@ -303,14 +666,19 @@ public sealed class MapsuiMapSession : IDisposable
         bool removeProcessor = true)
     {
         DatasetProcessorLease? processorLease = null;
+        var rangeChanged = false;
+        DateTime? changedCurrent = null;
         lock (_sync)
         {
             ThrowIfDisposed();
             if (!_entries.TryGetValue(datasetId, out var entry))
                 return false;
 
+            entry.RenderCts?.Cancel();
             var previous = entry.CaptureRendering();
             var previousGeneration = entry.Generation;
+            var previousTimePolicy = entry.TimePolicy;
+            var previousRenderedTime = entry.RenderedTime;
             var orderIndex = _order.IndexOf(datasetId);
             entry.Generation++;
             entry.ClearRendering();
@@ -319,20 +687,34 @@ public sealed class MapsuiMapSession : IDisposable
                 _entries.Remove(datasetId);
                 _order.Remove(datasetId);
             }
+            else
+            {
+                entry.TimePolicy = null;
+                entry.RenderedTime = null;
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    availableTimes: [],
+                    currentTime: null);
+            }
 
             try
             {
+                (rangeChanged, changedCurrent) = RecomputeTimeState();
                 ComposeLayers();
             }
             catch
             {
                 entry.RestoreRendering(previous);
                 entry.Generation = previousGeneration;
+                entry.TimePolicy = previousTimePolicy;
+                entry.RenderedTime = previousRenderedTime;
                 if (!preserveState)
                 {
                     _entries.Add(datasetId, entry);
                     _order.Insert(orderIndex, datasetId);
                 }
+                RecomputeTimeState();
                 throw;
             }
 
@@ -347,6 +729,7 @@ public sealed class MapsuiMapSession : IDisposable
         }
 
         LayersChanged?.Invoke();
+        RaiseTimeEvents(rangeChanged, changedCurrent);
         return true;
     }
 
@@ -484,11 +867,15 @@ public sealed class MapsuiMapSession : IDisposable
                 return;
 
             _disposed = true;
+            _timeRefreshCts?.Cancel();
+            _presentationRefreshCts?.Cancel();
+            CancelEntryRenders();
             _authorityProvider.CurrentChanged -= OnAuthorityChanged;
             _entries.Clear();
             _order.Clear();
             _stackEntries = [];
             _stackedLayers = [];
+            _time = MapsuiMapTimeSnapshot.Empty;
             _layerBands.ReplaceDatasetLayers([]);
         }
     }
@@ -795,6 +1182,17 @@ public sealed class MapsuiMapSession : IDisposable
     private static MapDataset CopyDataset(
         MapDataset dataset,
         IReadOnlyList<MapDatasetSubLayer> subLayers) =>
+        CopyDataset(
+            dataset,
+            subLayers,
+            dataset.AvailableTimes,
+            dataset.CurrentTime);
+
+    private static MapDataset CopyDataset(
+        MapDataset dataset,
+        IReadOnlyList<MapDatasetSubLayer> subLayers,
+        IReadOnlyList<DateTime> availableTimes,
+        DateTime? currentTime) =>
         new(
             dataset.Id,
             dataset.Name,
@@ -802,11 +1200,133 @@ public sealed class MapsuiMapSession : IDisposable
             dataset.IsVisible,
             dataset.IsActive,
             dataset.Opacity,
-            dataset.AvailableTimes,
-            dataset.CurrentTime,
+            availableTimes,
+            currentTime,
             subLayers,
             dataset.Validation,
             dataset.VersionAssessment);
+
+    private (bool RangeChanged, DateTime? CurrentChanged) RecomputeTimeState()
+    {
+        var previous = _time;
+        var samples = _entries.Values
+            .Select(entry => entry.TimePolicy)
+            .Where(policy => policy is not null)
+            .SelectMany(policy => policy!.AvailableTimes)
+            .Distinct()
+            .OrderBy(time => time)
+            .ToArray();
+        var minimum = samples.Length > 0 ? samples[0] : (DateTime?)null;
+        var maximum = samples.Length > 0 ? samples[^1] : (DateTime?)null;
+        var current = previous.Current;
+        if (minimum is null || maximum is null)
+        {
+            current = null;
+        }
+        else if (current is null || current < minimum)
+        {
+            current = minimum;
+        }
+        else if (current > maximum)
+        {
+            current = maximum;
+        }
+
+        var segments = ComputeCoverageSegments(minimum, maximum);
+        _time = new MapsuiMapTimeSnapshot
+        {
+            Minimum = minimum,
+            Maximum = maximum,
+            Current = current,
+            Samples = samples,
+            CoverageSegments = segments,
+        };
+        var rangeChanged = previous.Minimum != minimum
+            || previous.Maximum != maximum
+            || !previous.Samples.SequenceEqual(samples)
+            || !previous.CoverageSegments.SequenceEqual(segments);
+        return (rangeChanged, previous.Current != current ? current : null);
+    }
+
+    private IReadOnlyList<MapsuiMapTimeSegment> ComputeCoverageSegments(
+        DateTime? minimum,
+        DateTime? maximum)
+    {
+        if (minimum is not { } lower || maximum is not { } upper)
+            return [];
+
+        var intervals = new List<MapsuiMapTimeSegment>();
+        foreach (var policy in _entries.Values
+            .Select(entry => entry.TimePolicy)
+            .Where(policy => policy is not null))
+        {
+            foreach (var segment in policy!.CoverageSegments)
+            {
+                var start = segment.Start < lower ? lower : segment.Start;
+                var end = segment.End > upper ? upper : segment.End;
+                if (end >= start)
+                    intervals.Add(new MapsuiMapTimeSegment(start, end));
+            }
+        }
+        if (intervals.Count == 0)
+            return [];
+
+        intervals.Sort((left, right) => left.Start.CompareTo(right.Start));
+        var merged = new List<MapsuiMapTimeSegment>();
+        var currentStart = intervals[0].Start;
+        var currentEnd = intervals[0].End;
+        for (var index = 1; index < intervals.Count; index++)
+        {
+            var next = intervals[index];
+            if (next.Start <= currentEnd)
+            {
+                if (next.End > currentEnd)
+                    currentEnd = next.End;
+            }
+            else
+            {
+                merged.Add(new MapsuiMapTimeSegment(currentStart, currentEnd));
+                currentStart = next.Start;
+                currentEnd = next.End;
+            }
+        }
+        merged.Add(new MapsuiMapTimeSegment(currentStart, currentEnd));
+        return merged;
+    }
+
+    private static MapsuiMapTimeSnapshot CopyTimeSnapshot(
+        MapsuiMapTimeSnapshot source,
+        DateTime current) =>
+        new()
+        {
+            Minimum = source.Minimum,
+            Maximum = source.Maximum,
+            Current = current,
+            Samples = source.Samples,
+            CoverageSegments = source.CoverageSegments,
+        };
+
+    private void RaiseTimeEvents(bool rangeChanged, DateTime? changedCurrent)
+    {
+        if (rangeChanged)
+            TimeRangeChanged?.Invoke();
+        if (changedCurrent is { } current)
+            CurrentTimeChanged?.Invoke(current);
+    }
+
+    private void CancelEntryRenders()
+    {
+        foreach (var entry in _entries.Values)
+            entry.RenderCts?.Cancel();
+    }
+
+    private static DateTime? SelectedTime(RenderContext? context) => context switch
+    {
+        S104RenderContext s104 => s104.TimeStep,
+        S111RenderContext s111 => s111.TimeStep,
+        S411RenderContext s411 => s411.TimeStep,
+        _ => null,
+    };
 
     private static void ApplyDisplayState(
         MapDataset dataset,
@@ -973,9 +1493,149 @@ public sealed class MapsuiMapSession : IDisposable
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
+    private sealed class TimePolicy
+    {
+        private readonly TimePolicyKind _kind;
+        private readonly DateTime _minimum;
+        private readonly DateTime _maximum;
+        private readonly TimeSpan _tolerance;
+
+        private TimePolicy(
+            TimePolicyKind kind,
+            IReadOnlyList<DateTime> availableTimes)
+        {
+            _kind = kind;
+            AvailableTimes = availableTimes
+                .Distinct()
+                .OrderBy(time => time)
+                .ToArray();
+            if (AvailableTimes.Count == 0)
+                return;
+
+            _minimum = AvailableTimes[0];
+            _maximum = AvailableTimes[^1];
+            _tolerance = kind == TimePolicyKind.RangeGatedNearest
+                && AvailableTimes.Count >= 2
+                    ? TimeSpan.FromTicks(
+                        (_maximum - _minimum).Ticks
+                        / (AvailableTimes.Count - 1))
+                    : TimeSpan.Zero;
+
+            CoverageSegments = kind switch
+            {
+                TimePolicyKind.RangeGatedNearest =>
+                [
+                    new MapsuiMapTimeSegment(
+                        AddClamped(_minimum, -_tolerance),
+                        AddClamped(_maximum, _tolerance)),
+                ],
+                TimePolicyKind.SnapshotAtOrBefore =>
+                [
+                    new MapsuiMapTimeSegment(
+                        _minimum,
+                        DateTime.MaxValue),
+                ],
+                _ =>
+                [
+                    new MapsuiMapTimeSegment(_minimum, _maximum),
+                ],
+            };
+        }
+
+        public IReadOnlyList<DateTime> AvailableTimes { get; }
+
+        public IReadOnlyList<MapsuiMapTimeSegment> CoverageSegments { get; } = [];
+
+        public static TimePolicy? TryCreate(
+            string productSpec,
+            IReadOnlyList<DateTime> availableTimes)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(productSpec);
+            ArgumentNullException.ThrowIfNull(availableTimes);
+            if (availableTimes.Count == 0)
+                return null;
+
+            var kind = productSpec.ToUpperInvariant() switch
+            {
+                "S-111" => TimePolicyKind.RangeGatedNearest,
+                "S-411" => TimePolicyKind.SnapshotAtOrBefore,
+                _ => TimePolicyKind.Nearest,
+            };
+            return new TimePolicy(kind, availableTimes);
+        }
+
+        public DateTime? SnapTo(DateTime time)
+        {
+            if (AvailableTimes.Count == 0)
+                return null;
+
+            if (_kind == TimePolicyKind.SnapshotAtOrBefore)
+            {
+                DateTime? selected = null;
+                foreach (var sample in AvailableTimes)
+                {
+                    if (sample <= time)
+                        selected = sample;
+                    else
+                        break;
+                }
+                return selected;
+            }
+
+            if (_kind == TimePolicyKind.RangeGatedNearest
+                && AvailableTimes.Count >= 2
+                && (time < AddClamped(_minimum, -_tolerance)
+                    || time > AddClamped(_maximum, _tolerance)))
+            {
+                return null;
+            }
+
+            var nearest = AvailableTimes[0];
+            var nearestDistance = (nearest - time).Duration();
+            for (var index = 1; index < AvailableTimes.Count; index++)
+            {
+                var distance = (AvailableTimes[index] - time).Duration();
+                if (distance < nearestDistance)
+                {
+                    nearest = AvailableTimes[index];
+                    nearestDistance = distance;
+                }
+            }
+            return nearest;
+        }
+
+        private static DateTime AddClamped(DateTime value, TimeSpan delta)
+        {
+            if (delta > TimeSpan.Zero
+                && DateTime.MaxValue - value < delta)
+            {
+                return DateTime.MaxValue;
+            }
+            if (delta < TimeSpan.Zero
+                && value - DateTime.MinValue < -delta)
+            {
+                return DateTime.MinValue;
+            }
+            return value + delta;
+        }
+    }
+
+    private enum TimePolicyKind
+    {
+        Nearest,
+        RangeGatedNearest,
+        SnapshotAtOrBefore,
+    }
+
     private sealed class Entry(MapDataset dataset)
     {
         public MapDataset Dataset { get; set; } = dataset;
+
+        public TimePolicy? TimePolicy { get; set; }
+
+        public DateTime? RenderedTime { get; set; }
+
+        public CancellationTokenSource? RenderCts { get; set; }
 
         public IReadOnlyList<ILayer> Layers { get; set; } = [];
 
@@ -1031,7 +1691,8 @@ public sealed class MapsuiMapSession : IDisposable
             Info,
             CoverageGeometry,
             CellMinimumDisplayScale,
-            ContentMaxVisibleResolution);
+            ContentMaxVisibleResolution,
+            RenderedTime);
 
         public void RestoreRendering(RenderingState state)
         {
@@ -1044,6 +1705,7 @@ public sealed class MapsuiMapSession : IDisposable
             CoverageGeometry = state.CoverageGeometry;
             CellMinimumDisplayScale = state.CellMinimumDisplayScale;
             ContentMaxVisibleResolution = state.ContentMaxVisibleResolution;
+            RenderedTime = state.RenderedTime;
         }
     }
 
@@ -1056,7 +1718,8 @@ public sealed class MapsuiMapSession : IDisposable
         string? Info,
         NetTopologySuite.Geometries.Geometry? CoverageGeometry,
         int? CellMinimumDisplayScale,
-        double? ContentMaxVisibleResolution);
+        double? ContentMaxVisibleResolution,
+        DateTime? RenderedTime);
 
     private sealed record LayerVisibilityRange(
         double MinVisible,

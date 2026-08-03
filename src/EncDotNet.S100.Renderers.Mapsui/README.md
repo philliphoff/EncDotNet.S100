@@ -15,7 +15,10 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
   atomically replaces their layers, owns S-98 cross-product ordering and
   suppression, and applies independent active/visible state, opacity,
   persistent sub-layer state, cell scale windows, and overlapping-cell
-  suppression.
+  suppression. It also registers time-aware processors, aggregates their
+  samples and coverage windows, applies S-104/S-111/S-411 snap and gating
+  rules, serializes render work, and cancels/coalesces superseded time and
+  presentation refreshes.
 
 > **Dependency direction (issue #189).** This package now references
 > `EncDotNet.S100.Datasets.Pipelines` (not the other way round), so that the
@@ -100,6 +103,9 @@ using var session = new MapsuiMapSession(
     interoperabilityAuthorityProvider);
 session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
 await session.RenderAsync(dataset.Id, renderContext);
+session.SetCurrentTime(clock);
+await session.RefreshTimeAsync(
+    (processor, selectedTime) => BuildRenderContext(processor, selectedTime));
 session.SetOrder(bottomToTopDatasetIds);
 session.SetMarinerSettings(presentation.Mariner);
 ```
@@ -110,6 +116,18 @@ removal, a changed processor, or S-98 projection failure leaves the previous
 layers installed. Concurrent renders are latest-started-wins, so an older
 render cannot replace newer output or reinstall a removed dataset.
 
+Time-aware registration is derived from `ITimeAwareDatasetProcessor` when
+`SetDataset` is called. `GetTimeSnapshot` exposes the aggregate clock, sample
+list, range, and merged coverage segments. `SetCurrentTime` updates the clock
+immediately so host UI can track a drag; `RefreshTimeAsync` applies a 100 ms
+trailing debounce and cancels the preceding time refresh. S-104 selects the
+nearest sample, S-111 additionally hides files outside their forecast window
+(with one sample interval of seam tolerance), and S-411 selects the latest
+snapshot at or before the clock. `RefreshAsync` performs a latest-request-wins
+full presentation refresh while preserving those gates. All render entry
+points share one session gate; hosts must call and await them from the
+map-owning synchronization context.
+
 The session subscribes to `IInteroperabilityAuthorityProvider`, rebuilds the
 neutral cross-product stack with `LayerStackBuilder`, applies the authority's
 S-98 rules using the current mariner settings, and projects through
@@ -119,9 +137,11 @@ inspection) and the active Mapsui band (`GetStackedLayers`). Visibility, scale
 windows, and overlap clips are applied to the actual projected instances.
 This follows S-98 Ed.2.0.0 Main §9.2.1 and Annex A §8.4.1.
 
-Render-context construction, presentation/time refresh and coalescing,
-notifications, and zoom policy remain host responsibilities. No
-`Map.AddS100` API is published yet.
+Render-context construction, notifications, and zoom policy remain host
+responsibilities. The temporary `MapsuiRenderContextFactory` callback lets the
+session request the host's current context until `MapPresentationState` owns
+that construction in the next extraction step. No `Map.AddS100` API is
+published yet.
 
 ## Viewport navigation
 

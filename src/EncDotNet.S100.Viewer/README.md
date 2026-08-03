@@ -186,10 +186,11 @@ and mariner inputs are likewise consolidated into the current
 `IMapPresentationController.SetPresentationAsync`. `MapsuiMapSession` now owns
 processor-to-layer rendering, replacement/removal, S-98 cross-product order and
 suppression, active/visible/opacity and sub-layer state application, scale
-windows, and overlap suppression. The Viewer loader coordinates files,
-catalogues, validation, notifications, optional zoom, time/presentation gating,
-and forwards mariner state to the reusable session; it no longer projects or
-orders the cross-product layer stack.
+windows, overlap suppression, time-aware registration and gating, render
+cancellation, and coalesced time/presentation refreshes. The Viewer loader
+coordinates files, catalogues, validation, notifications, optional zoom, and
+render-context construction, while `GlobalTimeService` only projects the
+session clock into timeline bindings.
 
 **Double-click a dataset row to reveal it** — the viewer ensures the
 dataset is loaded and then flies the map to that dataset's extent. This
@@ -972,7 +973,10 @@ behavior delegates to `MapsuiMapNavigator`; both operate on `Mapsui.Map`
 without Avalonia. The optional `EncDotNet.S100.Renderers.Mapsui.Avalonia`
 adapter owns live-control attachment, dispatcher use, invalidation, coordinate
 conversion, and framework capture. The Viewer retains automatic zoom-after-load,
-capability readiness, diagnostics, MCP/feedback policy, and host lifecycle.
+capability readiness, diagnostics, MCP/feedback policy, render-context
+construction, and host lifecycle. Time registration, product-specific
+snap/gating behavior, refresh cancellation, and render serialization live in
+`MapsuiMapSession`; the Viewer timeline is a projection of its time snapshot.
 
 - Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
 - Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
