@@ -143,6 +143,9 @@ public sealed class MapPresentationState
     /// <exception cref="ArgumentNullException">
     /// <paramref name="processor"/> is <c>null</c>.
     /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The processor's portrayal specification is unset.
+    /// </exception>
     public RenderContext CreateRenderContext(
         IDatasetProcessor processor,
         DateTime? timeStep = null)
