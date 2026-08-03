@@ -52,6 +52,9 @@ internal sealed class GlobalTimeService
         _session.TimeRangeChanged += OnTimeRangeChanged;
         _session.CurrentTimeChanged += OnCurrentTimeChanged;
         UpdateSnapshot();
+        RangeChanged?.Invoke();
+        if (_snapshot.Current is { } current)
+            CurrentTimeChanged?.Invoke(current);
     }
 
     /// <summary>Sets the session clock, clamped to the aggregate range.</summary>
