@@ -67,6 +67,47 @@ public class ExchangeSetServiceLoaderTests
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
+    private sealed class GatedLoader : IDatasetLoaderService
+    {
+        private readonly SemaphoreSlim _release = new(0);
+        private int _active;
+        private int _started;
+
+        public int Active => Volatile.Read(ref _active);
+        public int Started => Volatile.Read(ref _started);
+        public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
+            = new Dictionary<DatasetEntry, IDatasetProcessor>();
+        public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
+            = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
+        public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
+        public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
+        public void Initialize(IMapLayerCollection layers, IMapViewportController viewport, ViewerCommandSettings? options) { }
+        public async Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _started);
+            Interlocked.Increment(ref _active);
+            try
+            {
+                await _release.WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
+        }
+        public void Release() => _release.Release();
+        public Task ReRenderAtTimeAsync(DateTime t, CancellationToken ct) => Task.CompletedTask;
+        public Task ReRenderAllAsync() => Task.CompletedTask;
+        public void RemoveEntry(DatasetEntry entry) { }
+        public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+        public IReadOnlyList<ILayer> CurrentStackedLayers => [];
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => [];
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
+    }
+
     private static (DatasetsViewModel datasets, ExchangeSetService service) CreateSystem()
     {
         var datasets = new DatasetsViewModel(new NoopLoader());
@@ -136,6 +177,42 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(2, datasets.Entries.Count);
         Assert.Contains(datasets.Entries, e => e.ProductSpec == "S-101");
         Assert.Contains(datasets.Entries, e => e.ProductSpec == "S-102");
+    }
+
+    [Fact]
+    public async Task OpenAsync_BoundsConcurrentDatasetLoads()
+    {
+        var loader = new GatedLoader();
+        var datasets = new DatasetsViewModel(loader);
+        using var service = new ExchangeSetService(
+            datasets,
+            Notifications.TestNotifications.Create(),
+            maxConcurrentLoads: 1);
+
+        var openTask = service.OpenAsync(MixedFixture());
+        await Task.Run(async () =>
+        {
+            while (loader.Started == 0)
+            {
+                await Task.Delay(10);
+            }
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, loader.Started);
+        Assert.Equal(1, loader.Active);
+
+        loader.Release();
+        await Task.Run(async () =>
+        {
+            while (loader.Started < 2)
+            {
+                await Task.Delay(10);
+            }
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, loader.Active);
+        loader.Release();
+        await openTask;
     }
 
     [Fact]
