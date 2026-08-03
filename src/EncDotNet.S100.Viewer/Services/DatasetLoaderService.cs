@@ -811,7 +811,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             onApplied).ConfigureAwait(true);
     }
 
-    private async Task ReplaceLayersAsync(
+    private Task ReplaceLayersAsync(
         DatasetEntry entry,
         IDatasetProcessor processor,
         CancellationToken cancellationToken,
@@ -819,11 +819,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!OwnsProcessor(entry, processor))
-            return;
+            return Task.CompletedTask;
 
         _mapSession!.ClearLayers(entry.Id);
         onApplied?.Invoke();
         ApplyEntryState(entry);
+        return Task.CompletedTask;
     }
 
     private async Task<MapsuiDatasetResult?> RenderAndReplaceCoreAsync(
