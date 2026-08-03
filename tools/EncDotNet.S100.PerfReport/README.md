@@ -23,7 +23,26 @@ dotnet run --project tools/EncDotNet.S100.PerfReport -- diff baseline.jsonl cand
 # https://ui.perfetto.dev, or https://www.speedscope.app)
 dotnet run --project tools/EncDotNet.S100.PerfReport -- chrome-trace run.jsonl
 dotnet run --project tools/EncDotNet.S100.PerfReport -- chrome-trace run.jsonl --out timeline.json
+
+# Attribute tiled-viewer latency by queue/raster/disk/publish cost
+dotnet run --project tools/EncDotNet.S100.PerfReport -- tile-report viewer.jsonl
+dotnet run --project tools/EncDotNet.S100.PerfReport -- tile-report viewer.jsonl --top 50 --out tiles.md
 ```
+
+## `tile-report`
+
+Reads `s100.render.tile.job` traces emitted by the tiled viewer renderer. It
+reports P50/P95/P99 end-to-end tile latency, dominant-cause counts, and the
+slowest jobs with:
+
+- visible/predicted/cross-band priority and cache outcome
+- first-visible queue wait
+- raster, disk-read, disk-write, and publish child-span time
+- uninstrumented remainder and candidate paint-operation count
+
+Capture these spans by launching the viewer with
+`ENC_DOTNET_OTEL_FILE=/path/to/viewer.jsonl`; use PerfRunner's
+`viewer-stress` command to generate repeatable pan/zoom pressure.
 
 ## `chrome-trace`
 

@@ -159,6 +159,22 @@ public class TileCacheTests
     }
 
     [Fact]
+    public void TryCreateSnapshot_AfterClearRejectsPriorGeneration()
+    {
+        using var cache = new TileCache(TileCache.MinBudgetBytes);
+        cache.Put(Key(0), MakeImage(32));
+        using var firstGeneration = cache.TryCreateSnapshot(Key(0), expectedGeneration: 0);
+        Assert.NotNull(firstGeneration);
+
+        cache.Clear();
+        cache.Put(Key(0), MakeImage(32));
+
+        Assert.Null(cache.TryCreateSnapshot(Key(0), expectedGeneration: 0));
+        using var secondGeneration = cache.TryCreateSnapshot(Key(0), expectedGeneration: 1);
+        Assert.NotNull(secondGeneration);
+    }
+
+    [Fact]
     public void Put_AfterDispose_DisposesImageAndStaysEmpty()
     {
         var cache = new TileCache(TileCache.MinBudgetBytes);

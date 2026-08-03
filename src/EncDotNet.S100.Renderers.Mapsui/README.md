@@ -994,7 +994,11 @@ Below the in-memory hot cache sits a **persistent, on-disk warm tier**
 (`TileDiskCache`, design doc Appendix E): PNG-encoded tiles that survive a layer
 rebuild (a palette flip-back re-uses them) and a process restart. A tile missing
 from the hot cache is decoded from disk on the worker before any re-rasterise,
-and each freshly rasterised tile is persisted for future reuse.
+and visible raster results are published immediately before being offered to a
+bounded, process-wide write-behind queue. Prediction results are persisted only
+after becoming visible. The dedicated low-priority writer snapshots, encodes,
+and atomically stores accepted tiles; duplicate or overflow work is discarded
+rather than blocking a render worker.
 
 Correctness comes from the cache **namespace**,
 `SHA-256(productLayerSet | styleStateHash)` — a per-style-state subdirectory.
@@ -1017,13 +1021,26 @@ so this extends the no-stale-portrayal guarantee to the persistent tier.
 > content change) in distinct namespaces.
 
 The cache mirrors `DiskPortrayalInstructionCache`: atomic temp+move writes,
-mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss; PNG codec
-work runs outside the lock. Knobs: `S100_VECTOR_TILE_DISK` (default on),
+mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss. Concurrent
+reads do not serialize behind persistence; one background writer owns PNG
+encoding, final-path mutation, and budget sweeps. Knobs:
+`S100_VECTOR_TILE_DISK` (default on),
 `S100_VECTOR_TILE_DISK_DIR` (default an OS-temp subdirectory),
 `S100_VECTOR_TILE_DISK_MB` (default 512). Telemetry counters
-`s100.render.tile.disk.hits` / `.writes`. **Verified (PDB01):** a Day→Night→Day
-palette flip produced two separate namespaces (no cross-style sharing); 163 tiles
-persisted, 198 served warm from disk on the flip-back instead of re-rasterising.
+`s100.render.tile.disk.hits` / `.writes`, plus
+`s100.render.tile.disk.write_queue.depth` / `.discarded`. **Verified (PDB01):**
+a Day→Night→Day palette flip produced two separate namespaces (no cross-style
+sharing); 163 tiles persisted, 198 served warm from disk on the flip-back
+instead of re-rasterising. The bounded queue drains during normal process exit;
+an abrupt process termination may discard outstanding best-effort writes.
+
+The write-behind path was also measured with a 360-step, 100 ms paced navigation
+route over 16 overlapping UK S-101 cells. Moving persistence off render workers
+reduced tile P95 from 781 ms to 49 ms, frame P95 from 23 ms to 12 ms, and
+viewport-command P95 from 92 ms to 2.3 ms while still completing 735 background
+writes. The same route with persistence disabled measured 30 ms, 8.8 ms, and
+3.1 ms respectively; the remaining gap is therefore no longer dominated by
+cache writes.
 
 ### GPU texture residency (Phase 5)
 
@@ -1057,11 +1074,17 @@ held by a **process-wide registry** with a *strong* reference to the cache and a
 *weak* reference to its owning layer. The strong reference keeps the textures off
 the finalizer thread; when the layer is collected, the next render reconciles the
 registry and disposes the orphaned cache on the render thread under the live
-context. Knobs: `S100_VECTOR_TILE_GPU` (default on),
+context. Knobs: `S100_VECTOR_TILE_GPU` (default off),
 `S100_VECTOR_TILE_GPU_MB` (default 256). **Verified (PDB01):** four
 close-all + reopen cycles (each warming and abandoning a GPU cache) with no native
 crash, frames steady at 6–9 ms and a 96 % GPU hit ratio sustained across the
 cycles.
+
+GPU residency remains available as an opt-in for stable, repeatedly drawn views,
+but is disabled by default. A paced pan/zoom route over 13 UK S-101 cells showed
+that eager `ToTextureImage` promotion and texture churn can monopolize the
+compositor thread: GPU residency produced a 3,155 ms maximum frame and 591 ms
+P95, versus 123–160 ms maximum and 75–79 ms P95 without explicit residency.
 
 **Deferred GPU disposal + bounded backdrop (zoom-out safety):** `SKCanvas.DrawImage`
 is deferred — the texture is only dereferenced when Skia flushes *after* the render

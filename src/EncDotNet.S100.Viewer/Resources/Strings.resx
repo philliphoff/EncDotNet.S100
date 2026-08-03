@@ -1117,7 +1117,7 @@
     <value>GPU texture residency</value>
   </data>
   <data name="Tooltip_TileGpuResidencyEnabled" xml:space="preserve">
-    <value>Upload each warm tile to a GPU-resident texture once and reuse it every frame, instead of re-uploading the same pixels. Takes effect immediately; inert on a software-rendered surface. Recommended on.</value>
+    <value>Upload warm tiles to GPU-resident textures for reuse. Disabled by default because promotion and texture churn can stall large multi-layer views. Takes effect immediately; inert on a software-rendered surface.</value>
   </data>
   <data name="Settings_TileGpuBudgetMb" xml:space="preserve">
     <value>GPU residency (MB)</value>

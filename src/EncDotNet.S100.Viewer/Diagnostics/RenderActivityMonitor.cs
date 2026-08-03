@@ -29,6 +29,7 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// </remarks>
 internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderActivitySink
 {
+    private const double SlowPaintThresholdMs = 50;
     private readonly object _gate = new();
 
     private long _paintCount;
@@ -40,9 +41,11 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
     /// <summary>Capacity of the rolling paint window.</summary>
     private const int WindowCapacity = 4096;
     private readonly double[] _winFrameMs = new double[WindowCapacity];
+    private readonly double[] _winStyleMs = new double[WindowCapacity];
     private readonly double[] _winVectorMs = new double[WindowCapacity];
     private readonly long[] _winDrawCalls = new long[WindowCapacity];
     private readonly long[] _winSequence = new long[WindowCapacity];
+    private readonly DateTimeOffset[] _winCapturedAtUtc = new DateTimeOffset[WindowCapacity];
     private int _winHead;
     private int _winCount;
 
@@ -67,10 +70,12 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
         ArgumentNullException.ThrowIfNull(styles);
 
         long total = 0;
+        double styleMs = 0;
         double vectorMs = 0;
         foreach (var s in styles)
         {
             total += s.Calls;
+            styleMs += s.DurationMs;
             if (string.Equals(s.Style, "VectorStyle", StringComparison.Ordinal))
             {
                 vectorMs += s.DurationMs;
@@ -78,6 +83,8 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
         }
 
         TaskCompletionSource toSignal;
+        long paintSequence;
+        var capturedAtUtc = DateTimeOffset.UtcNow;
         lock (_gate)
         {
             var now = Stopwatch.GetTimestamp();
@@ -86,14 +93,15 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
                 : Stopwatch.GetElapsedTime(_lastActivityTimestamp, now).TotalMilliseconds;
 
             _paintCount++;
+            paintSequence = _paintCount;
             _lastActivityTimestamp = now;
             _latestStats = new RenderStatsSnapshot(
                 FrameDurationMs: frameDurationMs,
                 IntervalMs: intervalMs,
                 TotalDrawCalls: total,
                 Styles: styles,
-                PaintSequence: _paintCount,
-                CapturedAtUtc: DateTimeOffset.UtcNow);
+                PaintSequence: paintSequence,
+                CapturedAtUtc: capturedAtUtc);
 
             var slot = (_winHead + _winCount) % WindowCapacity;
             if (_winCount == WindowCapacity)
@@ -106,14 +114,32 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
                 _winCount++;
             }
             _winFrameMs[slot] = frameDurationMs;
+            _winStyleMs[slot] = styleMs;
             _winVectorMs[slot] = vectorMs;
             _winDrawCalls[slot] = total;
-            _winSequence[slot] = _paintCount;
+            _winSequence[slot] = paintSequence;
+            _winCapturedAtUtc[slot] = capturedAtUtc;
 
             toSignal = _pulse;
             _pulse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         toSignal.TrySetResult();
+
+        if (frameDurationMs >= SlowPaintThresholdMs)
+        {
+            using var activity = Telemetry.ActivitySource.StartActivity(
+                "s100.map.paint.slow",
+                ActivityKind.Internal,
+                default(ActivityContext),
+                startTime: capturedAtUtc - TimeSpan.FromMilliseconds(frameDurationMs));
+            activity?.SetTag("s100.map.paint.sequence", paintSequence);
+            activity?.SetTag("s100.map.paint.duration_ms", frameDurationMs);
+            activity?.SetTag("s100.map.paint.style_duration_ms", styleMs);
+            activity?.SetTag(
+                "s100.map.paint.uninstrumented_duration_ms",
+                Math.Max(0, frameDurationMs - styleMs));
+            activity?.SetTag("s100.map.paint.style_calls", total);
+        }
     }
 
     /// <inheritdoc />
@@ -122,6 +148,7 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
         double[] frames;
         double[] vectors;
         long maxCalls = 0;
+        SlowestRenderFrame? slowestFrame = null;
         long firstSeq, lastSeq;
         int n;
         lock (_gate)
@@ -138,6 +165,16 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
                 frames[i] = _winFrameMs[idx];
                 vectors[i] = _winVectorMs[idx];
                 if (_winDrawCalls[idx] > maxCalls) maxCalls = _winDrawCalls[idx];
+                if (slowestFrame is null || _winFrameMs[idx] > slowestFrame.FrameDurationMs)
+                {
+                    slowestFrame = new SlowestRenderFrame(
+                        _winSequence[idx],
+                        _winCapturedAtUtc[idx],
+                        _winFrameMs[idx],
+                        _winStyleMs[idx],
+                        Math.Max(0, _winFrameMs[idx] - _winStyleMs[idx]),
+                        _winDrawCalls[idx]);
+                }
             }
         }
 
@@ -151,7 +188,8 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
             VectorMaxMs: Max(vectors),
             VectorMeanMs: Mean(vectors),
             VectorP95Ms: Percentile(vectors, 0.95),
-            MaxTotalDrawCalls: maxCalls);
+            MaxTotalDrawCalls: maxCalls,
+            SlowestFrame: slowestFrame);
     }
 
     /// <inheritdoc />

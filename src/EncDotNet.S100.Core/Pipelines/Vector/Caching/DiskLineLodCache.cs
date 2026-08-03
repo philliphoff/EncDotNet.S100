@@ -84,10 +84,11 @@ public sealed class DiskLineLodCache : ILineLodCache
 
     private readonly string _cacheDirectory;
     private readonly long _maxBytes;
-    private readonly object _gate = new();
+    private readonly object _evictionGate = new();
 
     private long _hits;
     private long _misses;
+    private long _knownBytes;
 
     /// <summary>
     /// Creates a disk-backed line-LOD cache rooted at
@@ -116,13 +117,14 @@ public sealed class DiskLineLodCache : ILineLodCache
 
         _cacheDirectory = cacheDirectory;
         _maxBytes = maxBytes;
+        _knownBytes = CalculateCacheSize();
     }
 
     /// <inheritdoc />
-    public long Hits { get { lock (_gate) { return _hits; } } }
+    public long Hits => Interlocked.Read(ref _hits);
 
     /// <inheritdoc />
-    public long Misses { get { lock (_gate) { return _misses; } } }
+    public long Misses => Interlocked.Read(ref _misses);
 
     /// <inheritdoc />
     public LineLodPyramid GetOrCompute(string key, Func<LineLodPyramid> factory)
@@ -131,27 +133,17 @@ public sealed class DiskLineLodCache : ILineLodCache
         ArgumentNullException.ThrowIfNull(factory);
 
         var path = GetEntryPath(key);
-
-        lock (_gate)
+        var cached = TryRead(path);
+        if (cached is not null)
         {
-            var cached = TryRead(path);
-            if (cached is not null)
-            {
-                _hits++;
-                TouchAccessTime(path);
-                return cached;
-            }
-
-            _misses++;
+            Interlocked.Increment(ref _hits);
+            TouchAccessTime(path);
+            return cached;
         }
 
+        Interlocked.Increment(ref _misses);
         var produced = factory();
-
-        lock (_gate)
-        {
-            TryWrite(path, produced);
-        }
-
+        TryWrite(path, produced);
         return produced;
     }
 
@@ -202,12 +194,20 @@ public sealed class DiskLineLodCache : ILineLodCache
         {
             Directory.CreateDirectory(_cacheDirectory);
             var bytes = LineLodPyramidSerializer.Serialize(pyramid);
+            var previousLength = TryGetFileLength(path);
 
             File.WriteAllBytes(temp, bytes);
             File.Move(temp, path, overwrite: true);
             TouchAccessTime(path);
 
-            EnforceSizeCap(path);
+            lock (_evictionGate)
+            {
+                _knownBytes += bytes.LongLength - previousLength;
+                if (_knownBytes > _maxBytes)
+                {
+                    _knownBytes = EnforceSizeCap(path);
+                }
+            }
         }
         catch
         {
@@ -217,6 +217,34 @@ public sealed class DiskLineLodCache : ILineLodCache
         finally
         {
             TryDelete(temp);
+        }
+    }
+
+    private static long TryGetFileLength(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private long CalculateCacheSize()
+    {
+        try
+        {
+            return Directory.Exists(_cacheDirectory)
+                ? new DirectoryInfo(_cacheDirectory)
+                    .GetFiles("*" + FileExtension, SearchOption.TopDirectoryOnly)
+                    .Sum(file => file.Length)
+                : 0;
+        }
+        catch
+        {
+            return 0;
         }
     }
 
@@ -261,7 +289,7 @@ public sealed class DiskLineLodCache : ILineLodCache
     /// <paramref name="freshPath"/> is evicted only as a last resort. Also
     /// sweeps orphaned <c>*.tmp</c> files left by interrupted writes.
     /// </summary>
-    private void EnforceSizeCap(string freshPath)
+    private long EnforceSizeCap(string freshPath)
     {
         FileInfo[] files;
         try
@@ -277,7 +305,7 @@ public sealed class DiskLineLodCache : ILineLodCache
         }
         catch
         {
-            return;
+            return CalculateCacheSize();
         }
 
         long total = 0;
@@ -288,7 +316,7 @@ public sealed class DiskLineLodCache : ILineLodCache
 
         if (total <= _maxBytes)
         {
-            return;
+            return total;
         }
 
         Array.Sort(files, (a, b) =>
@@ -321,5 +349,7 @@ public sealed class DiskLineLodCache : ILineLodCache
                 // Skip files we cannot delete (e.g. transient lock).
             }
         }
+
+        return total;
     }
 }

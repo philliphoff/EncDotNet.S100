@@ -72,6 +72,20 @@ internal static class GetRenderStatsMcpAdapter
                 });
             }
 
+            JsonNode? slowestFrame = null;
+            if (value.Window.SlowestFrame is { } slowest)
+            {
+                slowestFrame = new JsonObject
+                {
+                    ["paintSequence"] = slowest.PaintSequence,
+                    ["capturedAtUtc"] = slowest.CapturedAtUtc,
+                    ["frameDurationMs"] = slowest.FrameDurationMs,
+                    ["styleDurationMs"] = slowest.StyleDurationMs,
+                    ["uninstrumentedDurationMs"] = slowest.UninstrumentedDurationMs,
+                    ["totalDrawCalls"] = slowest.TotalDrawCalls,
+                };
+            }
+
             var payload = new JsonObject
             {
                 ["hasData"] = value.HasData,
@@ -93,6 +107,7 @@ internal static class GetRenderStatsMcpAdapter
                     ["vectorMeanMs"] = value.Window.VectorMeanMs,
                     ["vectorP95Ms"] = value.Window.VectorP95Ms,
                     ["maxTotalDrawCalls"] = value.Window.MaxTotalDrawCalls,
+                    ["slowestFrame"] = slowestFrame,
                 },
             };
             return new CallToolResult
