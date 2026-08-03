@@ -955,7 +955,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// </summary>
     public event Action<string>? UnrecognizedFileEncountered;
 
-    public DatasetsViewModel(IDatasetLoaderService loader, GlobalTimeService? globalTime = null)
+    public DatasetsViewModel(IDatasetLoaderService loader)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
@@ -1023,10 +1023,6 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 }
             }
         };
-
-        // Auto-unregister entries from the global time service when they
-        // are removed from the collection.
-        globalTime?.AttachTo(this);
     }
 
     public DatasetEntry Add(string filePath, string productSpec)

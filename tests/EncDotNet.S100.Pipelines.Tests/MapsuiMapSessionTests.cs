@@ -14,6 +14,13 @@ namespace EncDotNet.S100.Pipelines.Tests;
 public sealed class MapsuiMapSessionTests
 {
     [Fact]
+    public void S411ProcessorExposesSharedTimeCapability()
+    {
+        Assert.True(typeof(ITimeAwareDatasetProcessor)
+            .IsAssignableFrom(typeof(S411DatasetProcessor)));
+    }
+
+    [Fact]
     public async Task RenderReplaceAndRemoveOwnTheDatasetBand()
     {
         using var map = new Map();
@@ -533,6 +540,264 @@ public sealed class MapsuiMapSessionTests
         Assert.Null(CoverageClip.Get(coarseLayer));
     }
 
+    [Fact]
+    public void TimeRegistrationAggregatesSamplesAndS111CoverageTolerance()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("current");
+        var processor = new StubProcessor(id.Value)
+        {
+            ProductSpec = "S-111",
+            AvailableTimes =
+            [
+                first,
+                first.AddMinutes(20),
+                first.AddMinutes(40),
+            ],
+        };
+        Assert.True(owner.TryRegister(id, processor));
+
+        session.SetDataset(Dataset(id, productSpec: "S-111"));
+
+        var time = session.GetTimeSnapshot();
+        Assert.Equal(first, time.Minimum);
+        Assert.Equal(first.AddMinutes(40), time.Maximum);
+        Assert.Equal(first, time.Current);
+        Assert.Equal(processor.AvailableTimes, time.Samples);
+        var segment = Assert.Single(time.CoverageSegments);
+        Assert.Equal(first, segment.Start);
+        Assert.Equal(first.AddMinutes(40), segment.End);
+        Assert.Equal(
+            first,
+            session.GetDataset(id)!.Dataset.CurrentTime);
+    }
+
+    [Fact]
+    public async Task TimeRefreshGatesS111WindowsAndRendersNearestSample()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var earlyId = new MapDatasetId("early");
+        var lateId = new MapDatasetId("late");
+        var early = new StubProcessor(earlyId.Value)
+        {
+            ProductSpec = "S-111",
+            AvailableTimes = [first, first.AddMinutes(20), first.AddMinutes(40)],
+        };
+        var late = new StubProcessor(lateId.Value)
+        {
+            ProductSpec = "S-111",
+            AvailableTimes =
+            [
+                first.AddHours(3),
+                first.AddHours(3).AddMinutes(20),
+                first.AddHours(3).AddMinutes(40),
+            ],
+        };
+        Assert.True(owner.TryRegister(earlyId, early));
+        Assert.True(owner.TryRegister(lateId, late));
+        session.SetDataset(Dataset(earlyId, productSpec: "S-111"));
+        session.SetDataset(Dataset(lateId, productSpec: "S-111"));
+        await session.RenderAsync(earlyId, new S111RenderContext(first));
+
+        session.SetCurrentTime(first.AddHours(3).AddMinutes(18));
+        await session.RefreshTimeAsync(
+            static (_, selected) => new S111RenderContext(selected));
+
+        Assert.Empty(session.GetDataset(earlyId)!.Layers);
+        Assert.Null(session.GetDataset(earlyId)!.Dataset.CurrentTime);
+        Assert.Single(session.GetDataset(lateId)!.Layers);
+        Assert.Equal(
+            first.AddHours(3).AddMinutes(20),
+            session.GetDataset(lateId)!.Dataset.CurrentTime);
+        var context = Assert.IsType<S111RenderContext>(late.LastContext);
+        Assert.Equal(
+            first.AddHours(3).AddMinutes(20),
+            context.TimeStep);
+    }
+
+    [Fact]
+    public async Task RapidTimeRefreshesCoalesceToLatestClock()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("current");
+        var processor = new StubProcessor(id.Value)
+        {
+            ProductSpec = "S-111",
+            AvailableTimes =
+            [
+                first,
+                first.AddMinutes(20),
+                first.AddMinutes(40),
+            ],
+        };
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id, productSpec: "S-111"));
+        await session.RenderAsync(id, new S111RenderContext(first));
+
+        session.SetCurrentTime(first.AddMinutes(20));
+        var stale = session.RefreshTimeAsync(
+            static (_, selected) => new S111RenderContext(selected));
+        session.SetCurrentTime(first.AddMinutes(40));
+        var current = session.RefreshTimeAsync(
+            static (_, selected) => new S111RenderContext(selected));
+        await Task.WhenAll(stale, current);
+
+        Assert.Equal(2, processor.RenderCount);
+        Assert.Equal(
+            first.AddMinutes(40),
+            session.GetDataset(id)!.Dataset.CurrentTime);
+    }
+
+    [Fact]
+    public async Task S411SnapshotIsHiddenUntilClockReachesIssueTime()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var waterId = new MapDatasetId("water");
+        var iceId = new MapDatasetId("ice");
+        Assert.True(owner.TryRegister(
+            waterId,
+            new StubProcessor(waterId.Value)
+            {
+                ProductSpec = "S-104",
+                AvailableTimes = [first, first.AddHours(12)],
+            }));
+        var ice = new StubProcessor(iceId.Value)
+        {
+            ProductSpec = "S-411",
+            AvailableTimes = [first.AddHours(6)],
+        };
+        Assert.True(owner.TryRegister(iceId, ice));
+        session.SetDataset(Dataset(waterId, productSpec: "S-104"));
+        session.SetDataset(Dataset(iceId, productSpec: "S-411"));
+        Assert.Null(session.GetDataset(iceId)!.Dataset.CurrentTime);
+
+        session.SetCurrentTime(first.AddHours(7));
+        await session.RefreshTimeAsync(
+            static (_, selected) => new S411RenderContext(selected));
+
+        Assert.Equal(
+            first.AddHours(6),
+            session.GetDataset(iceId)!.Dataset.CurrentTime);
+        Assert.Single(session.GetDataset(iceId)!.Layers);
+    }
+
+    [Fact]
+    public async Task RefreshWaitsForInitialRenderWithoutCancellingLoad()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value)
+        {
+            Delay = TimeSpan.FromSeconds(5),
+            RenderStarted = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id));
+        var initial = session.RenderAsync(id, context: null);
+        await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var refresh = session.RefreshAsync(static (_, _) => new S101RenderContext());
+        Assert.False(initial.IsCompleted);
+        processor.ReleaseDelayedRender.TrySetResult();
+
+        Assert.NotNull(await initial);
+        Assert.True(await refresh);
+        Assert.Equal(2, processor.RenderCount);
+    }
+
+    [Fact]
+    public async Task RefreshFailureDoesNotPreventLaterDatasets()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var failingId = new MapDatasetId("failing");
+        var healthyId = new MapDatasetId("healthy");
+        Assert.True(owner.TryRegister(
+            failingId,
+            new StubProcessor(failingId.Value)
+            {
+                ThrowOnRender = true,
+            }));
+        var healthy = new StubProcessor(healthyId.Value);
+        Assert.True(owner.TryRegister(healthyId, healthy));
+        session.SetDataset(Dataset(failingId));
+        session.SetDataset(Dataset(healthyId));
+        MapDatasetId? failed = null;
+        session.DatasetRefreshFailed += (datasetId, _) => failed = datasetId;
+
+        Assert.True(await session.RefreshAsync(
+            static (_, _) => new S101RenderContext()));
+
+        Assert.Equal(failingId, failed);
+        Assert.Equal(1, healthy.RenderCount);
+        Assert.Single(session.GetDataset(healthyId)!.Layers);
+    }
+
+    [Fact]
+    public async Task LazyReloadRestoresSelectedTimeWithoutRangeChange()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var retainedId = new MapDatasetId("retained");
+        var peerId = new MapDatasetId("peer");
+        var times = new[] { first, first.AddHours(1) };
+        Assert.True(owner.TryRegister(
+            retainedId,
+            new StubProcessor(retainedId.Value)
+            {
+                ProductSpec = "S-104",
+                AvailableTimes = times,
+            }));
+        Assert.True(owner.TryRegister(
+            peerId,
+            new StubProcessor(peerId.Value)
+            {
+                ProductSpec = "S-104",
+                AvailableTimes = times,
+            }));
+        session.SetDataset(Dataset(retainedId, productSpec: "S-104"));
+        session.SetDataset(Dataset(peerId, productSpec: "S-104"));
+        session.SetCurrentTime(first.AddHours(1));
+        await session.RefreshTimeAsync(
+            static (_, selected) => new S104RenderContext(selected));
+        var retainedState = session.GetDataset(retainedId)!.Dataset;
+
+        Assert.True(session.RemoveDataset(retainedId, preserveState: true));
+        Assert.True(owner.TryRegister(
+            retainedId,
+            new StubProcessor(retainedId.Value)
+            {
+                ProductSpec = "S-104",
+                AvailableTimes = times,
+            }));
+        session.SetDataset(retainedState);
+
+        Assert.Equal(
+            first.AddHours(1),
+            session.GetDataset(retainedId)!.Dataset.CurrentTime);
+        Assert.Equal(
+            first.AddHours(1),
+            session.GetTimeSnapshot().Current);
+    }
+
     private static MapsuiMapSession CreateSession(
         Map map,
         DatasetProcessorOwner owner,
@@ -567,6 +832,7 @@ public sealed class MapsuiMapSessionTests
 
     private sealed class StubProcessor :
         IDatasetProcessor,
+        ITimeAwareDatasetProcessor,
         IVectorPortrayalSource,
         IDisposable
     {
@@ -580,6 +846,14 @@ public sealed class MapsuiMapSessionTests
         public string DatasetId { get; }
 
         public int Version { get; set; } = 1;
+
+        public IReadOnlyList<DateTime> AvailableTimes { get; set; } = [];
+
+        public RenderContext? LastContext { get; private set; }
+
+        public int RenderCount { get; private set; }
+
+        public bool ThrowOnRender { get; set; }
 
         public int SubLayerCount { get; set; } = 1;
 
@@ -611,6 +885,10 @@ public sealed class MapsuiMapSessionTests
             RenderContext? context = null,
             CancellationToken cancellationToken = default)
         {
+            LastContext = context;
+            RenderCount++;
+            if (ThrowOnRender)
+                throw new InvalidOperationException("Render failed.");
             var version = Version;
             var delay = Delay;
             RenderStarted?.TrySetResult();

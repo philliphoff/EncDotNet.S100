@@ -47,27 +47,17 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly ConditionalWeakTable<DatasetEntry, LoadGeneration> _loadGenerations = new();
     private readonly ConditionalWeakTable<DatasetEntry, SemaphoreSlim> _loadGates = new();
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
-    private readonly SemaphoreSlim _layerRenderGate = new(1, 1);
-    private readonly object _presentationSync = new();
 
     private IMapLayerCollection? _layerCollection;
     private MapsuiMapSession? _mapSession;
     private IMapViewportController? _viewport;
     private MapPresentationState _presentation;
-    private CancellationTokenSource? _presentationCts;
 
     private MapPresentationState CurrentPresentation =>
         Volatile.Read(ref _presentation);
 
     /// <inheritdoc />
     public bool IsInitialized => _layerCollection is not null && _viewport is not null;
-
-    // Coalesce slider scrubs into a single render pass after the user has
-    // paused for ~100 ms. Each new SetCurrentTime cancels the in-flight
-    // debounce + render so we never queue dozens of stale renders behind
-    // the latest mouse position.
-    private static readonly TimeSpan ScrubDebounceWindow = TimeSpan.FromMilliseconds(100);
-    private CancellationTokenSource? _scrubCts;
 
     public DatasetLoaderService(
         ViewerSettings settings,
@@ -108,8 +98,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _processorOwner = processorOwner;
         _renderActivityMonitor = renderActivityMonitor;
 
-        _globalTime.CurrentTimeChanged += t => _ = ReRenderAtTimeAsync(t, CancellationToken.None);
-        _globalTime.RangeChanged += OnGlobalRangeChanged;
     }
 
     /// <summary>
@@ -124,7 +112,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// </summary>
     private void OnGlobalRangeChanged()
     {
-        if (_globalTime.CurrentTime is { } now && _globalTime.Adapters.Count > 0)
+        if (_globalTime.CurrentTime is { } now && _globalTime.IsActive)
             _ = ReRenderAtTimeAsync(now, CancellationToken.None);
     }
 
@@ -236,7 +224,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             ?? throw new InvalidOperationException(
                 "The map layer collection must provide a Mapsui dataset session.");
         _mapSession.LayersChanged += OnSessionLayersChanged;
+        _mapSession.DatasetRefreshFailed += OnDatasetRefreshFailed;
         _mapSession.SetMarinerSettings(CurrentPresentation.Mariner);
+        _globalTime.AttachTo(_mapSession);
+        _globalTime.CurrentTimeChanged +=
+            time => _ = ReRenderAtTimeAsync(time, CancellationToken.None);
+        _globalTime.RangeChanged += OnGlobalRangeChanged;
         _viewport = viewport;
 
         var transientFcPaths = _catalogueSeeder.Seed(options);
@@ -435,31 +428,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
             }
 
-            // Discover time samples from the processor (S-104, S-111, S-411).
-            // The adapter wraps the processor in a spec-agnostic view used
-            // by the global time slider.
-            var adapter = TimeAwareDatasetAdapter.TryCreate(processor, () => entry.CurrentTime);
-            if (adapter is not null)
-            {
-                entry.AvailableTimes = adapter.AvailableTimes;
-            }
-
-            // Pick the initial render time. If the global slider already
-            // has a clock, snap this dataset to it; otherwise let the
-            // processor pick its default (typically the first sample).
-            // A time-aware adapter that returns null for an existing clock
-            // means the dataset is outside its covered window and should
-            // load hidden (no arrows drawn) until the slider enters range.
-            DateTime? initialTime = null;
-            bool gatedHidden = false;
-            if (adapter is not null && _globalTime.CurrentTime is { } globalNow)
-            {
-                initialTime = adapter.SnapTo(globalNow);
-                gatedHidden = initialTime is null;
-            }
-
             entry.SetVersionAssessment(processor.VersionAssessment);
-            entry.CurrentTime = gatedHidden ? null : (initialTime ?? adapter?.AvailableTimes.FirstOrDefault());
+            entry.AvailableTimes = [];
+            entry.CurrentTime = null;
             entry.SetLoadedState(processor.Metadata);
             var mapDataset = entry.MapDataset
                 ?? throw new InvalidOperationException(
@@ -468,7 +439,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 mapDataset,
                 entry.MinimumDisplayScale,
                 entry.MaximumDisplayScale);
+            ProjectSessionState(entry);
             SubscribeEntry(entry);
+            var initialTime = entry.CurrentTime;
+            var gatedHidden = entry.AvailableTimes.Count > 0
+                && initialTime is null;
 
             // Snapshot the paint counter *before* the layers are swapped in,
             // so the post-load wait can confirm the map actually painted the
@@ -594,14 +569,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             if (!fromExchangeSet)
             {
                 _recentFiles.Add(entry.FilePath);
-            }
-
-            // Register with the global time service after the entry's
-            // CurrentTime has been set so the first slider snap reflects
-            // the actual rendered state.
-            if (adapter is not null && adapter.AvailableTimes.Count > 0)
-            {
-                _globalTime.Register(entry, adapter);
             }
 
             DatasetLoaded?.Invoke(entry);
@@ -790,76 +757,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public async Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken)
     {
         using var __cmd = ViewerObservability.BeginCommand("timeline.scrub");
-
-        // Cancel any in-flight scrub render and start a fresh debounce
-        // window. The token passed in is honoured in addition to the
-        // internal debounce token so callers can cancel from outside
-        // (e.g. on shutdown).
-        _scrubCts?.Cancel();
-        var localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _scrubCts = localCts;
-        var token = localCts.Token;
-
-        try
+        _mapSession?.SetCurrentTime(t);
+        if (_mapSession is not null)
         {
-            await Task.Delay(ScrubDebounceWindow, token).ConfigureAwait(true);
-        }
-        catch (TaskCanceledException)
-        {
-            return;
-        }
-
-        if (token.IsCancellationRequested) return;
-
-        foreach (var (entry, adapter) in _globalTime.Adapters.ToArray())
-        {
-            if (token.IsCancellationRequested) return;
-            if (!_processorOwner.TryAcquire(entry.Id, out var lease)) continue;
-            using var processorLease = lease;
-            var proc = lease.Processor;
-
-            var snapped = adapter.SnapTo(t);
-            if (snapped == entry.CurrentTime && entry.IsLoaded) continue;
-
-            try
-            {
-                if (snapped is null)
-                {
-                    // Out of covered range: hide the dataset (drop its
-                    // layers) rather than draw stale endpoint-clamped
-                    // arrows. Cheap when already hidden.
-                    if (_mapSession?.GetDataset(entry.Id) is { Layers.Count: > 0 })
-                    {
-                        await ReplaceLayersAsync(
-                            entry,
-                            proc,
-                            token,
-                            () => entry.CurrentTime = null).ConfigureAwait(true);
-                    }
-                    else
-                    {
-                        entry.CurrentTime = null;
-                    }
-                    continue;
-                }
-
-                await RenderAndReplaceAsync(
-                    entry,
-                    proc,
-                    snapped,
-                    presentation: null,
-                    token,
-                    result =>
-                    {
-                        entry.Info = result.Info;
-                        entry.CurrentTime = snapped;
-                    }).ConfigureAwait(true);
-            }
-            catch (OperationCanceledException) { return; }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to re-render {entry.FilePath} at {t:u}:\n{ex}");
-            }
+            await _mapSession.RefreshTimeAsync(
+                (processor, selectedTime) => CreateRenderContext(
+                    processor,
+                    selectedTime),
+                cancellationToken).ConfigureAwait(true);
         }
     }
 
@@ -871,98 +776,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(presentation);
         cancellationToken.ThrowIfCancellationRequested();
 
-        CancellationTokenSource localCts;
-        lock (_presentationSync)
-        {
-            _presentationCts?.Cancel();
-            localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _presentationCts = localCts;
-        }
-
-        var enteredGate = false;
-        try
-        {
-            await _layerRenderGate.WaitAsync(localCts.Token).ConfigureAwait(true);
-            enteredGate = true;
-            localCts.Token.ThrowIfCancellationRequested();
-            _mapSession?.SetMarinerSettings(presentation.Mariner);
-            Volatile.Write(ref _presentation, presentation);
-            await ReRenderAllAsync(presentation, localCts.Token).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // A newer presentation superseded this application.
-        }
-        finally
-        {
-            if (enteredGate)
-                _layerRenderGate.Release();
-
-            lock (_presentationSync)
-            {
-                if (ReferenceEquals(_presentationCts, localCts))
-                    _presentationCts = null;
-            }
-            localCts.Dispose();
-        }
-    }
-
-    private async Task ReRenderAllAsync(
-        MapPresentationState presentation,
-        CancellationToken cancellationToken)
-    {
         using var __cmd = ViewerObservability.BeginCommand("presentation.apply");
-
-        var palette = presentation.Palette;
-
-        foreach (var datasetId in _processorOwner.GetDatasetIds())
+        _mapSession?.SetMarinerSettings(presentation.Mariner);
+        Volatile.Write(ref _presentation, presentation);
+        if (_mapSession is not null
+            && await _mapSession.RefreshAsync(
+                (processor, selectedTime) => CreateRenderContext(
+                    processor,
+                    selectedTime,
+                    presentation),
+                cancellationToken).ConfigureAwait(true))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!_processorEntries.TryGetValue(datasetId, out var entry)) continue;
-            if (!_processorOwner.TryAcquire(datasetId, out var lease)) continue;
-            using var processorLease = lease;
-            var proc = lease.Processor;
-            if (!entry.IsLoaded) continue;
-            if (!OwnsProcessor(entry, proc)) continue;
-
-            // Keep time-gated datasets hidden across palette / display
-            // re-renders: if the entry's adapter snaps the current global
-            // time to null it is outside its covered window and must not
-            // be re-materialized here.
-            if (_globalTime.Adapters.TryGetValue(entry, out var gateAdapter)
-                && _globalTime.CurrentTime is { } gateNow
-                && gateAdapter.SnapTo(gateNow) is null)
-            {
-                if (_mapSession?.GetDataset(entry.Id) is { Layers.Count: > 0 })
-                    _mapSession.ClearLayers(entry.Id);
-                continue;
-            }
-
-            try
-            {
-                await RenderAndReplaceCoreAsync(
-                    entry,
-                    proc,
-                    entry.CurrentTime,
-                    presentation,
-                    cancellationToken,
-                    result => entry.Info = result.Info).ConfigureAwait(true);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to re-render {entry.FilePath} with {palette} palette:\n{ex}");
-            }
+            _notifications.Create(Strings.Toast_Success)
+                .WithSeverity(NotificationSeverity.Success)
+                .WithContent(Strings.Toast_SettingsApplied)
+                .Show();
         }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        _notifications.Create(Strings.Toast_Success)
-            .WithSeverity(NotificationSeverity.Success)
-            .WithContent(Strings.Toast_SettingsApplied)
-            .Show();
     }
 
     private async Task<MapsuiDatasetResult?> RenderAndReplaceAsync(
@@ -973,21 +802,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         CancellationToken cancellationToken,
         Action<MapsuiDatasetResult>? onApplied = null)
     {
-        await _layerRenderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
-        try
-        {
-            return await RenderAndReplaceCoreAsync(
-                entry,
-                processor,
-                timeStep,
-                presentation,
-                cancellationToken,
-                onApplied).ConfigureAwait(true);
-        }
-        finally
-        {
-            _layerRenderGate.Release();
-        }
+        return await RenderAndReplaceCoreAsync(
+            entry,
+            processor,
+            timeStep,
+            presentation,
+            cancellationToken,
+            onApplied).ConfigureAwait(true);
     }
 
     private async Task ReplaceLayersAsync(
@@ -996,21 +817,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         CancellationToken cancellationToken,
         Action? onApplied = null)
     {
-        await _layerRenderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
-        try
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!OwnsProcessor(entry, processor))
-                return;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!OwnsProcessor(entry, processor))
+            return;
 
-            _mapSession!.ClearLayers(entry.Id);
-            onApplied?.Invoke();
-            ApplyEntryState(entry);
-        }
-        finally
-        {
-            _layerRenderGate.Release();
-        }
+        _mapSession!.ClearLayers(entry.Id);
+        onApplied?.Invoke();
+        ApplyEntryState(entry);
     }
 
     private async Task<MapsuiDatasetResult?> RenderAndReplaceCoreAsync(
@@ -1056,7 +869,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _mapSession?.RemoveDataset(entry.Id);
         _processorEntries.Remove(entry.Id);
         _sessionEntries.Remove(entry.Id);
-        _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         entry.IsLoaded = false;
         DatasetRemoved?.Invoke(entry);
@@ -1081,7 +893,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         _mapSession?.RemoveDataset(entry.Id, preserveState: true);
         _processorEntries.Remove(entry.Id);
-        _globalTime.Unregister(entry);
         entry.IsLoaded = false;
         entry.IsDeferred = true;
     }
@@ -1222,6 +1033,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         foreach (var subLayer in projected)
             entry.SubLayers.Add(subLayer);
 
+        entry.AvailableTimes = snapshot.Dataset.AvailableTimes;
+        entry.CurrentTime = snapshot.Dataset.CurrentTime;
+        entry.Info = snapshot.Info;
         entry.ContentMaxVisibleResolution = snapshot.ContentMaxVisibleResolution;
     }
 
@@ -1299,7 +1113,23 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     private void OnSessionLayersChanged()
     {
+        foreach (var snapshot in _mapSession?.GetDatasets() ?? [])
+        {
+            if (_sessionEntries.TryGetValue(snapshot.Dataset.Id, out var entry))
+                ProjectSessionState(entry);
+        }
         LayerStackChanged?.Invoke();
+    }
+
+    private void OnDatasetRefreshFailed(
+        MapDatasetId datasetId,
+        Exception exception)
+    {
+        var source = _sessionEntries.TryGetValue(datasetId, out var entry)
+            ? entry.FilePath
+            : datasetId.Value;
+        Console.Error.WriteLine(
+            $"Failed to refresh {source}:{Environment.NewLine}{exception}");
     }
 
     private void EnsureInitialized()
@@ -1331,7 +1161,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         entry.SubLayers.Clear();
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         entry.IsLoaded = false;
         entry.Info = null;
