@@ -279,79 +279,26 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         // meaningful as a recent-file entry).
         var fromExchangeSet = entry.IsFromExchangeSet;
 
-        string? spec;
-        if (fromExchangeSet)
-        {
-            spec = entry.ProductSpec;
-        }
-        else
-        {
-            spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
-            if (spec is null)
-            {
-                _notifications.Create(Strings.Toast_Warning)
-                    .WithSeverity(NotificationSeverity.Warning)
-                    .WithContent(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)))
-                    .Show();
-                return;
-            }
-        }
-
-        // S-104 ships a built-in portrayal catalogue.
-        // S-57 datasets are portrayed with the S-101 catalogue (see SpecConventions).
-        var requiredCatalogue = SpecConventions.PortrayalSpecName(spec);
-        if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
-        {
-            _notifications.Create(Strings.Toast_Warning)
-                .WithSeverity(NotificationSeverity.Warning)
-                .WithContent(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue))
-                .Show();
+        // Coordinator policy: resolve the product spec and require its portrayal
+        // catalogue, warning the user and abandoning the load if either is missing.
+        var spec = ResolveSpecOrWarn(entry, fromExchangeSet);
+        if (spec is null || !HasRequiredCatalogueOrWarn(spec))
             return;
-        }
 
-        // Hold a single progress notification across the whole load for
-        // standalone dataset loads: indeterminate while loading with a
-        // Cancel action, mutated in place to its terminal state (success /
-        // cancelled / error) instead of dismissing and re-creating toasts.
-        // Exchange-set entries are covered by the aggregate exchange-set
-        // progress notification, so they skip the per-dataset one.
-        INotificationHandle? loadNotification = null;
-        if (!fromExchangeSet)
-        {
-            loadNotification = _notifications.Create(Strings.Toast_Loading)
-                .WithSeverity(NotificationSeverity.Info)
-                .WithContent(string.Format(Strings.Status_LoadingFile, entry.DisplayName))
-                .AsProgress(indeterminate: true)
-                .Persistent()
-                .WithAction(Strings.Toast_Cancel, () => cts.Cancel(), dismissOnInvoke: false)
-                .Show();
-        }
+        // Standalone loads hold a single progress notification across the whole
+        // load; exchange-set entries are covered by the aggregate exchange-set
+        // progress notification, so they get no per-dataset one.
+        var loadNotification = fromExchangeSet
+            ? null
+            : CreateLoadProgressNotification(entry, cts);
 
         IDatasetProcessor? callerOwnedProcessor = null;
         IDatasetProcessor? registeredProcessor = null;
         var loadCompleted = false;
         try
         {
-            var processor = await Task.Run(() =>
-            {
-                if (!fromExchangeSet)
-                    return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
-
-                // Collapse a base cell and its in-set sequential updates into a
-                // single up-to-date dataset. S-101 / S-57 / S-100 Part 10a;
-                // S-57 Part 3. The update-application path differs per product,
-                // so dispatch on the declared spec.
-                if (!entry.HasUpdates)
-                    return _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
-
-                return spec switch
-                {
-                    "S-57" => _pipelineFactory.CreateS57ProcessorWithUpdates(
-                        entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
-                    _ => _pipelineFactory.CreateS101ProcessorWithUpdates(
-                        entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
-                };
-            }, token);
+            var processor = await CreateProcessorAsync(
+                entry, spec, fromExchangeSet, token).ConfigureAwait(true);
             callerOwnedProcessor = processor;
             if (!IsCurrentLoad(entry, loadGeneration))
             {
@@ -369,64 +316,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             _sessionEntries[entry.Id] = entry;
             var wasKnownBySession = _mapSession!.GetDataset(entry.Id) is not null;
 
-            // Collapse duplicate coverage products: S-111/S-104 exchange sets
-            // routinely bundle several variants of the same cell (e.g. neap /
-            // spring tidal regime, depth bands) — often shipped as separate
-            // exchange sets, each with its own CATALOG.XML. They share the same
-            // dataset name, cover the same area and time, so the purely-temporal
-            // gate lets them all draw and their arrows stack on the same
-            // locations — looking like several time-steps at once. Keep the
-            // first-loaded variant visible and default the rest to hidden; the
-            // user can re-enable any of them from the Datasets list (the row
-            // dims and the eye icon reflects the hidden state).
-            if (fromExchangeSet && DuplicateCoverageDetector.IsCollapsibleSpec(spec))
-            {
-                foreach (var other in _processorEntries.Values)
-                {
-                    if (ReferenceEquals(other, entry) || !other.IsFromExchangeSet)
-                        continue;
-                    if (!string.Equals(other.ProductSpec, spec, StringComparison.Ordinal))
-                        continue;
-                    if (DuplicateCoverageDetector.IsSameCoverage(
-                            entry.RelativePath, other.RelativePath))
-                    {
-                        entry.IsVisible = false;
-                        break;
-                    }
-                }
-            }
-
-            // S-104 gridded (dcf2) water-level surfaces are a synthesised,
-            // non-normative colour-band heatmap (S-104 Edition 2.0.0 defines no
-            // official portrayal catalogue and treats water level as ECDIS
-            // vertical-adjustment input, not a chart layer). Default the surface
-            // to hidden so it never dominates the display uninvited; the user
-            // opts in via the eye icon in the Datasets list (issue #483).
-            // Fixed-station (dcf8) glyphs are discrete symbols at genuine
-            // stations and stay visible.
-            // Default the surface to hidden only on the session's first load.
-            // Lazy unload retains session state and its order slot, so a reload
-            // preserves a surface the user had opted into (issue #483).
-            if (processor is S104DatasetProcessor { IsGriddedSurface: true }
-                && !wasKnownBySession)
-            {
-                entry.IsVisible = false;
-            }
-
-            // Surface any S-101 update-application diagnostics. Updates are
-            // applied best-effort: a partial/failed apply never blocks the
-            // load, but the user is warned so stale or skipped updates are
-            // visible. S-101 / S-100 Part 10a.
-            if (processor is S101DatasetProcessor { UpdateReport: { } updateReport })
-            {
-                SurfaceUpdateReport(entry, updateReport);
-            }
-
-            // Surface S-128 catalogues into the Dataset Catalog panel.
-            if (processor is S128DatasetProcessor s128)
-            {
-                _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
-            }
+            ApplyPostRegistrationPolicies(entry, processor, spec, wasKnownBySession);
 
             entry.SetVersionAssessment(processor.VersionAssessment);
             entry.AvailableTimes = [];
@@ -631,6 +521,167 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 RollBackLoad(entry, registeredProcessor);
             if (callerOwnedProcessor is IDisposable disposableProcessor)
                 disposableProcessor.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Coordinator policy: resolves the product spec for a load. Exchange-set
+    /// entries carry an explicit spec; standalone files are detected from the
+    /// path. Returns <see langword="null"/> (after warning the user) when a
+    /// standalone file's type is unrecognized.
+    /// </summary>
+    private string? ResolveSpecOrWarn(DatasetEntry entry, bool fromExchangeSet)
+    {
+        if (fromExchangeSet)
+            return entry.ProductSpec;
+
+        var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
+        if (spec is null)
+        {
+            _notifications.Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)))
+                .Show();
+        }
+
+        return spec;
+    }
+
+    /// <summary>
+    /// Coordinator policy: ensures the portrayal catalogue a spec needs is
+    /// present, warning the user and returning <see langword="false"/> if not.
+    /// S-104 ships a built-in catalogue; S-57 is portrayed with the S-101
+    /// catalogue (see <see cref="SpecConventions"/>).
+    /// </summary>
+    private bool HasRequiredCatalogueOrWarn(string spec)
+    {
+        var requiredCatalogue = SpecConventions.PortrayalSpecName(spec);
+        if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
+        {
+            _notifications.Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue))
+                .Show();
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Creates the standalone-load progress notification: indeterminate while
+    /// loading with a Cancel action, later mutated in place to its terminal
+    /// state (success / cancelled / error) instead of dismissing and
+    /// re-creating toasts.
+    /// </summary>
+    private INotificationHandle CreateLoadProgressNotification(
+        DatasetEntry entry,
+        CancellationTokenSource cts) =>
+        _notifications.Create(Strings.Toast_Loading)
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(string.Format(Strings.Status_LoadingFile, entry.DisplayName))
+            .AsProgress(indeterminate: true)
+            .Persistent()
+            .WithAction(Strings.Toast_Cancel, () => cts.Cancel(), dismissOnInvoke: false)
+            .Show();
+
+    /// <summary>
+    /// Builds the dataset processor off the UI thread. A standalone file uses
+    /// the filesystem-update path; an exchange-set entry collapses a base cell
+    /// and its in-set sequential updates into a single up-to-date dataset
+    /// (S-101 / S-57 / S-100 Part 10a; S-57 Part 3), dispatching on the
+    /// declared spec because the update-application path differs per product.
+    /// </summary>
+    private Task<IDatasetProcessor> CreateProcessorAsync(
+        DatasetEntry entry,
+        string spec,
+        bool fromExchangeSet,
+        CancellationToken token) =>
+        Task.Run(() =>
+        {
+            if (!fromExchangeSet)
+                return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
+
+            if (!entry.HasUpdates)
+                return _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
+
+            return spec switch
+            {
+                "S-57" => _pipelineFactory.CreateS57ProcessorWithUpdates(
+                    entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
+                _ => _pipelineFactory.CreateS101ProcessorWithUpdates(
+                    entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
+            };
+        }, token);
+
+    /// <summary>
+    /// Applies Viewer load defaults once a processor is registered: collapse
+    /// duplicate coverage variants, default an S-104 gridded surface to hidden,
+    /// surface S-101 update diagnostics, and register S-128 catalogues.
+    /// </summary>
+    private void ApplyPostRegistrationPolicies(
+        DatasetEntry entry,
+        IDatasetProcessor processor,
+        string spec,
+        bool wasKnownBySession)
+    {
+        // Collapse duplicate coverage products: S-111/S-104 exchange sets
+        // routinely bundle several variants of the same cell (e.g. neap /
+        // spring tidal regime, depth bands) — often shipped as separate
+        // exchange sets, each with its own CATALOG.XML. They share the same
+        // dataset name, cover the same area and time, so the purely-temporal
+        // gate lets them all draw and their arrows stack on the same
+        // locations — looking like several time-steps at once. Keep the
+        // first-loaded variant visible and default the rest to hidden; the
+        // user can re-enable any of them from the Datasets list (the row
+        // dims and the eye icon reflects the hidden state).
+        if (entry.IsFromExchangeSet && DuplicateCoverageDetector.IsCollapsibleSpec(spec))
+        {
+            foreach (var other in _processorEntries.Values)
+            {
+                if (ReferenceEquals(other, entry) || !other.IsFromExchangeSet)
+                    continue;
+                if (!string.Equals(other.ProductSpec, spec, StringComparison.Ordinal))
+                    continue;
+                if (DuplicateCoverageDetector.IsSameCoverage(
+                        entry.RelativePath, other.RelativePath))
+                {
+                    entry.IsVisible = false;
+                    break;
+                }
+            }
+        }
+
+        // S-104 gridded (dcf2) water-level surfaces are a synthesised,
+        // non-normative colour-band heatmap (S-104 Edition 2.0.0 defines no
+        // official portrayal catalogue and treats water level as ECDIS
+        // vertical-adjustment input, not a chart layer). Default the surface
+        // to hidden so it never dominates the display uninvited; the user
+        // opts in via the eye icon in the Datasets list (issue #483).
+        // Fixed-station (dcf8) glyphs are discrete symbols at genuine
+        // stations and stay visible.
+        // Default the surface to hidden only on the session's first load.
+        // Lazy unload retains session state and its order slot, so a reload
+        // preserves a surface the user had opted into (issue #483).
+        if (processor is S104DatasetProcessor { IsGriddedSurface: true }
+            && !wasKnownBySession)
+        {
+            entry.IsVisible = false;
+        }
+
+        // Surface any S-101 update-application diagnostics. Updates are
+        // applied best-effort: a partial/failed apply never blocks the
+        // load, but the user is warned so stale or skipped updates are
+        // visible. S-101 / S-100 Part 10a.
+        if (processor is S101DatasetProcessor { UpdateReport: { } updateReport })
+        {
+            SurfaceUpdateReport(entry, updateReport);
+        }
+
+        // Surface S-128 catalogues into the Dataset Catalog panel.
+        if (processor is S128DatasetProcessor s128)
+        {
+            _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
         }
     }
 
