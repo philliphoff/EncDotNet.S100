@@ -102,10 +102,9 @@ using var session = new MapsuiMapSession(
     renderer,
     interoperabilityAuthorityProvider);
 session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
-await session.RenderAsync(dataset.Id, renderContext);
+await session.RenderAsync(dataset.Id, presentation);
 session.SetCurrentTime(clock);
-await session.RefreshTimeAsync(
-    (processor, selectedTime) => BuildRenderContext(processor, selectedTime));
+await session.RefreshTimeAsync(presentation);
 session.SetOrder(bottomToTopDatasetIds);
 session.SetMarinerSettings(presentation.Mariner);
 ```
@@ -137,11 +136,11 @@ inspection) and the active Mapsui band (`GetStackedLayers`). Visibility, scale
 windows, and overlap clips are applied to the actual projected instances.
 This follows S-98 Ed.2.0.0 Main §9.2.1 and Annex A §8.4.1.
 
-Render-context construction, notifications, and zoom policy remain host
-responsibilities. The temporary `MapsuiRenderContextFactory` callback lets the
-session request the host's current context until `MapPresentationState` owns
-that construction in the next extraction step. No `Map.AddS100` API is
-published yet.
+The host supplies an immutable `MapPresentationState`; the session combines it
+with each leased processor and its selected time so
+`MapPresentationState.CreateRenderContext` owns product-context construction.
+Notifications and zoom policy remain host responsibilities. No `Map.AddS100`
+API is published yet.
 
 ## Viewport navigation
 

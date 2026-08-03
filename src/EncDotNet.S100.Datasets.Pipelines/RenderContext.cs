@@ -7,9 +7,10 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// Base class for spec-specific render contexts passed to dataset processors.
 /// </summary>
 /// <remarks>
-/// Use <see cref="MapPresentationState.ApplyTo"/> to project map-wide palette,
-/// scale, ECDIS, mariner, and product-display choices onto a context while
-/// preserving its dataset-specific time, viewport, and output settings.
+/// Use <see cref="MapPresentationState.CreateRenderContext"/> to create the
+/// product context carrying map-wide palette, scale, ECDIS, mariner, and
+/// product-display choices. Use <see cref="MapPresentationState.ApplyTo"/> when
+/// projecting those choices onto a caller-constructed request context.
 /// </remarks>
 public abstract record RenderContext
 {

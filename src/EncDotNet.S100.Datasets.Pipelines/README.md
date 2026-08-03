@@ -202,19 +202,20 @@ modes carried by `EcdisDisplaySettings.ActiveDisplayModes`. Its constructor
 defensively freezes the ECDIS collections, so a host can safely reuse the
 snapshot across concurrent renders.
 
-Call `presentation.ApplyTo(context, processor.PortrayalSpec)` to project those
-map-wide choices onto a product-specific `RenderContext`. Dataset/request state
-such as time step, viewport, basemap, and instruction filtering remains on the
-context and is preserved.
+Call `presentation.CreateRenderContext(processor, selectedTime)` to select the
+product-specific `RenderContext` from `processor.PortrayalSpec` and apply all
+map-wide choices in one step. S-104, S-111, and S-411 contexts carry the selected
+time; static products ignore it. `presentation.ApplyTo(context,
+processor.PortrayalSpec)` remains available when a caller needs to supply a
+request-specific context carrying a viewport, basemap, or instruction filter.
 
 `IMapPresentationController.SetPresentationAsync` is the corresponding
 application boundary for a host or session that owns loaded datasets. The
 controller accepts the immutable state explicitly and applies it asynchronously
 without exposing UI refresh events or renderer types. Implementations retain
-processor, refresh, and disposal ownership. The Mapsui backend now implements
-layer ownership and S-98 cross-product composition in `MapsuiMapSession`;
-presentation/time refresh and coalescing remain host-owned incremental roadmap
-slices.
+processor, refresh, and disposal ownership. The Mapsui backend consumes the
+snapshot directly in `MapsuiMapSession`, which owns product-context creation,
+layer rendering, S-98 composition, time gating, and refresh coalescing.
 
 `MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
 `MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,

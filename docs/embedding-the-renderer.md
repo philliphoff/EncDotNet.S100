@@ -28,14 +28,17 @@ var presentation = new MapPresentationState(
     ecdisSettings,
     marinerSettings);
 
-RenderContext context = presentation.ApplyTo(
-    new S101RenderContext(),
-    processor.PortrayalSpec);
+RenderContext context = presentation.CreateRenderContext(
+    processor,
+    selectedTime);
 ```
 
 This presentation layer is renderer-neutral: it does not reference Mapsui,
-Avalonia, or SkiaSharp. Per-dataset time and viewport choices remain on the
-specific render context. Hosts that manage loaded datasets can expose
+Avalonia, or SkiaSharp. The factory selects the product context and carries the
+selected time for S-104, S-111, and S-411. Hosts that need a request-specific
+viewport, basemap, or instruction filter can construct that context and call
+`presentation.ApplyTo(context, processor.PortrayalSpec)` instead. Hosts that
+manage loaded datasets can expose
 `IMapPresentationController.SetPresentationAsync(presentation, cancellationToken)`
 to apply the snapshot explicitly. The boundary does not own the supplied state
 or prescribe processor, layer, renderer, or UI lifecycles.
@@ -61,12 +64,12 @@ depending on Viewer, Mapsui, or Avalonia.
 The Viewer now follows that boundary throughout its loaded-dataset lifecycle:
 its dataset and sub-layer view-models project `MapDataset` /
 `MapDatasetSubLayer` snapshots while retaining only UI commands, localized
-labels, selection, and registration metadata. Map-wide Viewer inputs are
-similarly projected into one current `MapPresentationState` before render
-contexts are created, then applied through `IMapPresentationController` rather
-than a presentation-specific refresh event. The Viewer therefore no longer acts
-as the rendering identity or active-state store. Processor and layer ownership
-remain in the Viewer loader until the later reusable session extraction.
+labels, selection, and registration metadata. Map-wide Viewer inputs are similarly projected into one current
+`MapPresentationState`, then applied through `IMapPresentationController`
+rather than a presentation-specific refresh event. `MapsuiMapSession` combines
+that state with its leased processors and selected dataset times, so neither
+render-context construction nor processor/layer ownership remains in Viewer
+state.
 
 The Viewer's live map adapter is also segregated by responsibility. Its
 `MapsuiMapHost` implements separate internal capabilities for layer-band

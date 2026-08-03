@@ -463,7 +463,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 result = await RenderAndReplaceAsync(
                     entry,
                     processor,
-                    initialTime,
                     presentation: null,
                     token).ConfigureAwait(true);
                 if (result is null)
@@ -761,9 +760,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (_mapSession is not null)
         {
             await _mapSession.RefreshTimeAsync(
-                (processor, selectedTime) => CreateRenderContext(
-                    processor,
-                    selectedTime),
+                CurrentPresentation,
                 cancellationToken).ConfigureAwait(true);
         }
     }
@@ -781,10 +778,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         Volatile.Write(ref _presentation, presentation);
         if (_mapSession is not null
             && await _mapSession.RefreshAsync(
-                (processor, selectedTime) => CreateRenderContext(
-                    processor,
-                    selectedTime,
-                    presentation),
+                presentation,
                 cancellationToken).ConfigureAwait(true))
         {
             _notifications.Create(Strings.Toast_Success)
@@ -797,7 +791,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private async Task<MapsuiDatasetResult?> RenderAndReplaceAsync(
         DatasetEntry entry,
         IDatasetProcessor processor,
-        DateTime? timeStep,
         MapPresentationState? presentation,
         CancellationToken cancellationToken,
         Action<MapsuiDatasetResult>? onApplied = null)
@@ -805,7 +798,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         return await RenderAndReplaceCoreAsync(
             entry,
             processor,
-            timeStep,
             presentation,
             cancellationToken,
             onApplied).ConfigureAwait(true);
@@ -830,7 +822,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private async Task<MapsuiDatasetResult?> RenderAndReplaceCoreAsync(
         DatasetEntry entry,
         IDatasetProcessor processor,
-        DateTime? timeStep,
         MapPresentationState? presentation,
         CancellationToken cancellationToken,
         Action<MapsuiDatasetResult>? onApplied = null)
@@ -839,10 +830,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (!OwnsProcessor(entry, processor))
             return null;
 
-        var context = CreateRenderContext(processor, timeStep, presentation);
         var result = await _mapSession!.RenderAsync(
             entry.Id,
-            context,
+            presentation ?? CurrentPresentation,
             cancellationToken).ConfigureAwait(true);
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -933,47 +923,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             System.Diagnostics.Debug.WriteLine($"[validation] {processor.Spec.Name}: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
-    }
-
-    private RenderContext CreateRenderContext(
-        IDatasetProcessor processor,
-        DateTime? timeStep = null,
-        MapPresentationState? presentation = null)
-    {
-        RenderContext context = processor switch
-        {
-            S104DatasetProcessor when timeStep is not null
-                => new S104RenderContext(timeStep),
-            S104DatasetProcessor
-                => new S104RenderContext(),
-            S111DatasetProcessor when timeStep is not null
-                => new S111RenderContext(timeStep),
-            S111DatasetProcessor
-                => new S111RenderContext(),
-            S101DatasetProcessor
-                => new S101RenderContext(),
-            S102DatasetProcessor
-                => new S102RenderContext(),
-            S122DatasetProcessor
-                => new S122RenderContext(),
-            S124DatasetProcessor
-                => new S124RenderContext(),
-            S125DatasetProcessor
-                => new S125RenderContext(),
-            S201DatasetProcessor
-                => new S201RenderContext(),
-            S127DatasetProcessor
-                => new S127RenderContext(),
-            S129DatasetProcessor
-                => new S129RenderContext(),
-            S411DatasetProcessor when timeStep is not null
-                => new S411RenderContext(timeStep),
-            S411DatasetProcessor
-                => new S411RenderContext(),
-            _ => new S101RenderContext(),
-        };
-
-        return (presentation ?? CurrentPresentation).ApplyTo(context, processor.PortrayalSpec);
     }
 
     /// <inheritdoc />
