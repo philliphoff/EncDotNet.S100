@@ -985,6 +985,34 @@ failures (`DatasetRenderFailed` is best-effort and written to `Console.Error`,
 not toasted). The user-facing toast notifications and localized strings for the
 load lifecycle stay in the Viewer's own load path, not the session.
 
+### Viewer coordinator boundary
+
+`DatasetLoaderService` is now a thin Viewer coordinator: the reusable dataset
+render lifecycle — processor-to-layer rendering, replacement, ordering,
+visible/active state, S-98 composition, time gating, render-context
+construction, render serialization/cancellation, and processor ownership —
+lives in `MapsuiMapSession` and `DatasetProcessorOwner`
+(`EncDotNet.S100.Renderers.Mapsui` / `.Datasets.Pipelines`). The coordinator's
+render-orchestration methods (`RenderAndReplaceAsync`, `ReplaceLayersAsync`,
+`SetPresentationAsync`, `ReRenderAtTimeAsync`) are thin wrappers over that
+session. What the coordinator still owns is Viewer host policy:
+
+- **Load orchestration** — spec detection (`ResolveSpecOrWarn`), portrayal
+  catalogue prompts (`HasRequiredCatalogueOrWarn`), processor construction
+  (`CreateProcessorAsync`), and load-generation guarding for concurrent
+  loads/reloads.
+- **UI defaults** — post-registration policies (`ApplyPostRegistrationPolicies`):
+  duplicate-coverage collapse, S-104 gridded-surface default-hidden, S-101
+  update-report surfacing, and S-128 catalogue registration.
+- **Notifications** — the progress/success/cancel/error toasts and localized
+  strings (`CreateLoadProgressNotification`, `DriveTerminal`), plus recent-files
+  and the optional zoom-after-load framing.
+- **View-model projection** — mapping the session's renderer-neutral
+  `MapDataset`/sub-layer snapshots onto Viewer `DatasetEntry` view-models with
+  localized names and `INotifyPropertyChanged` wiring (`ProjectSessionState`).
+  This is inherently Viewer-side and does not belong in the UI-framework-free
+  session.
+
 - Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
 - Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
 - Per-product readers and validation rule packs — `EncDotNet.S100.Datasets.S*/README.md`
