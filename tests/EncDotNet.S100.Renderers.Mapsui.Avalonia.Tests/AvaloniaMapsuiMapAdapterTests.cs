@@ -12,10 +12,18 @@ public class AvaloniaMapsuiMapAdapterTests
     [Fact]
     public async Task Attach_requires_ui_thread()
     {
-        var control = new CaptureSynchronizedMapControl { Map = new Map() };
+        // Run inside the headless session so a real Avalonia UI thread exists,
+        // then dispatch Attach from a genuine non-UI (thread pool) thread. This
+        // keeps the thread-affinity check deterministic regardless of whether a
+        // prior test already bound the dispatcher.
+        await HeadlessTest.RunAsync(async () =>
+        {
+            var control = new CaptureSynchronizedMapControl { Map = new Map() };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Task.Run(() => AvaloniaMapsuiMapAdapter.Attach(control)));
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => Task.Run(() => AvaloniaMapsuiMapAdapter.Attach(control)));
+            return true;
+        });
     }
 
     [Fact]
