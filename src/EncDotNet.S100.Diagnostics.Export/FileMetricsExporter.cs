@@ -133,8 +133,8 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
     protected override bool OnShutdown(int timeoutMilliseconds)
     {
         _queue.CompleteAdding();
-        _writerThread.Join(timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
-        return true;
+        return _writerThread.Join(
+            timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
     }
 
     /// <inheritdoc />
@@ -146,9 +146,11 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
         if (disposing)
         {
             _queue.CompleteAdding();
-            _writerThread.Join(5000);
-            _queue.Dispose();
-            _file.Dispose();
+            if (_writerThread.Join(5000))
+            {
+                _queue.Dispose();
+                _file.Dispose();
+            }
         }
 
         base.Dispose(disposing);
