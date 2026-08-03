@@ -640,7 +640,7 @@ public sealed class MapsuiMapSession : IDisposable
 
     /// <summary>
     /// Removes generated layers while retaining dataset state and ordinary
-    /// ordering, for lazy unload or time gating.
+    /// ordering for lazy reload.
     /// </summary>
     /// <param name="datasetId">The dataset identity.</param>
     public void ClearLayers(MapDatasetId datasetId)

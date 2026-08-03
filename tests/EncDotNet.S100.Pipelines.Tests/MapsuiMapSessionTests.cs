@@ -576,6 +576,32 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public void TimeSnapshotDefensivelyMaterializesCollections()
+    {
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var samples = new List<DateTime> { first };
+        var segments = new List<MapsuiMapTimeSegment>
+        {
+            new(first, first.AddHours(1)),
+        };
+        var snapshot = new MapsuiMapTimeSnapshot
+        {
+            Samples = samples,
+            CoverageSegments = segments,
+        };
+
+        samples.Add(first.AddHours(2));
+        segments.Clear();
+
+        Assert.Equal([first], snapshot.Samples);
+        Assert.Single(snapshot.CoverageSegments);
+        Assert.Throws<NotSupportedException>(
+            () => ((IList<DateTime>)snapshot.Samples).Add(first.AddHours(3)));
+        Assert.Throws<NotSupportedException>(
+            () => ((IList<MapsuiMapTimeSegment>)snapshot.CoverageSegments).Clear());
+    }
+
+    [Fact]
     public void StaticDatasetRegistrationClearsStaleTimeState()
     {
         using var map = new Map();
