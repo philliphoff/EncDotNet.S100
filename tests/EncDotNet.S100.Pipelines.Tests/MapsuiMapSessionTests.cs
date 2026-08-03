@@ -167,6 +167,24 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public void CompositionUsesOneAuthoritySnapshot()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var failingAuthority = new ThrowingAuthority { Throw = true };
+        var provider = new AlternatingAuthorityProvider(
+            new InteroperabilityAuthority(),
+            failingAuthority);
+        using var session = CreateSession(map, owner, provider);
+        var id = new MapDatasetId("dataset");
+
+        session.SetDataset(Dataset(id));
+
+        Assert.NotNull(session.GetDataset(id));
+        Assert.Equal(1, provider.ReadCount);
+    }
+
+    [Fact]
     public async Task OpacityScaleAndSubLayerStateSurviveReplacement()
     {
         using var map = new Map();
@@ -676,6 +694,24 @@ public sealed class MapsuiMapSessionTests
             MarinerSettings? mariner = null,
             IReadOnlyCollection<S98InteroperabilityRule>? rules = null) =>
             _inner.ApplyRules(sortedStack, loadedDatasets, mariner, rules);
+    }
+
+    private sealed class AlternatingAuthorityProvider(
+        IInteroperabilityAuthority first,
+        IInteroperabilityAuthority subsequent) : IInteroperabilityAuthorityProvider
+    {
+        private int _readCount;
+
+        public int ReadCount => Volatile.Read(ref _readCount);
+
+        public IInteroperabilityAuthority Current =>
+            Interlocked.Increment(ref _readCount) == 1 ? first : subsequent;
+
+        public event Action? CurrentChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     private sealed class StubGeometryProvider : IFeatureGeometryProvider

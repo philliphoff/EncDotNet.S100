@@ -621,6 +621,7 @@ public sealed class MapsuiMapSession : IDisposable
         IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(
         IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
     {
+        var authority = _authorityProvider.Current;
         var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(snapshots.Count);
         var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
         foreach (var snapshot in snapshots)
@@ -640,7 +641,7 @@ public sealed class MapsuiMapSession : IDisposable
                 continue;
             }
 
-            var plane = _authorityProvider.Current.GetDefaultPlane(
+            var plane = authority.GetDefaultPlane(
                 snapshot.Dataset.Metadata.Spec.Name);
             var syntheticItems = new List<SubLayerStackItem>(layers.Count);
             for (var layerIndex = 0; layerIndex < layers.Count; layerIndex++)
@@ -658,7 +659,6 @@ public sealed class MapsuiMapSession : IDisposable
             perDataset.Add(syntheticItems);
         }
 
-        var authority = _authorityProvider.Current;
         var topFirst = perDataset.AsEnumerable().Reverse().ToArray();
         var sorted = LayerStackBuilder.Build(authority, topFirst);
         var loaded = BuildLoadedDatasetInfos(snapshots);
