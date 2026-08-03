@@ -395,6 +395,17 @@ internal static class Telemetry
             description: "Tiles rasterised speculatively by the tiled TiledScene prediction warm set.");
 
     /// <summary>
+    /// Count of worker admission attempts deferred because at least one layer
+    /// still has visible cold work. Predicted and cross-band queues remain intact
+    /// and are reconsidered after visible publication requests the next frame.
+    /// </summary>
+    public static readonly Counter<long> TileSpeculationDeferred =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.speculation.deferred",
+            unit: "{worker}",
+            description: "Speculative tile-worker admission attempts deferred while any layer has visible cold work.");
+
+    /// <summary>
     /// Count of speculatively-rasterised tiles that <b>subsequently became
     /// visible while still cached</b> — a successful prediction. Divided by
     /// <see cref="TilePredictionRasterized"/> this is the prediction hit-rate. See §3.6.

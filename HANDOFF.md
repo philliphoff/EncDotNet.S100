@@ -121,6 +121,40 @@ dropped the result before rasterization. Treat relevance-aware/cancellable disk
 reads or reduced read/write I/O contention as a follow-up boundary, not as
 raster-worker queueing.
 
+### Process-wide speculative admission
+
+- Added a process-wide visible-first admission gate without replacing the
+  layer-local queues or raster workers.
+- Predicted and cross-band workers do not start or dequeue while any layer has
+  visible cold work registered.
+- Admission and speculative dequeue are atomic under the existing global
+  visible-layer lock, preserving the `TileState.Sync` → global-lock order.
+- Deferred queues retain their work. Removing the final visible-demand entry
+  requests one follow-up frame so speculation resumes without a redraw loop or
+  stranded queue.
+- Viewport invalidation removes the layer from global visible demand, including
+  off-view culling and invalid viewport exits.
+- Added `s100.render.tile.speculation.deferred` telemetry by speculative
+  priority.
+
+On the same isolated 13-cell, two-cycle route used for the viewport-epoch
+measurement:
+
+| Metric | Epochs only | Global admission |
+|---|---:|---:|
+| Tile jobs | 8,186 | 6,718 |
+| Tile P95 | 58.4 ms | 41.3 ms |
+| Tile maximum | 1,436 ms | 148 ms |
+| Queue-dominant jobs | 8.9% | 3.5% |
+| Persistence maximum | 1,485 ms | 86 ms |
+| Warm-cycle frame P95 | 47.1 ms | 39.0 ms |
+| Warm-cycle frame maximum | 189 ms | 74.7 ms |
+| Warm-cycle `set_viewport` P95 | 10.4 ms | 1.4 ms |
+| Warm-cycle `set_viewport` maximum | 540 ms | 11.3 ms |
+
+The gate deferred 495 predicted-worker admission attempts. Both cycles reached
+render idle, confirming deferred work resumed after visible demand drained.
+
 ## Practical benchmark fixture
 
 The real chart data is intentionally not part of the repository. The source
@@ -147,15 +181,13 @@ without moving raster execution into a global worker pool.
 
 ## Next increments
 
-1. Add process-wide admission control for speculative work while preserving
-   per-layer queues and workers.
-2. Make warm-cache reads relevance-aware or otherwise prevent stale reads from
+1. Make warm-cache reads relevance-aware or otherwise prevent stale reads from
    consuming I/O after a viewport epoch changes.
-3. Add adaptive prediction budgets.
-4. Protect visible and speculative cache segments independently.
-5. Revisit GPU residency only with adaptive or strictly per-frame-budgeted
+2. Add adaptive prediction budgets.
+3. Protect visible and speculative cache segments independently.
+4. Revisit GPU residency only with adaptive or strictly per-frame-budgeted
    promotion that cannot monopolize a paint.
-6. Benchmark each increment with the same paced route and compare frame/tile
+5. Benchmark each increment with the same paced route and compare frame/tile
    distributions, queue depth, discarded work, and navigation wall time.
 
 ## Important files
@@ -186,7 +218,8 @@ without moving raster execution into a global worker pool.
 
 - Solution formatting verification passed.
 - Viewport epoch / persistence tests: 40 passed.
-- Full Pipelines tests after viewport epochs: 1,233 passed, 4 skipped.
+- Speculative admission tests: 27 passed.
+- Full Pipelines tests after global admission: 1,240 passed, 4 skipped.
 - `RenderingOptimizationsTests`: 35 passed.
 - `SettingsViewModelRenderSubsystemTests`: 6 passed.
 - Full Viewer tests: 1,626 passed, 3 skipped.

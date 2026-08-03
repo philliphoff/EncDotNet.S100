@@ -125,6 +125,7 @@ useful for orders-of-magnitude comparisons, not exact attribution.
 | `s100.render.tile.rasterize.duration` | histogram | `ms` | — |
 | `s100.render.tile.cold.latency` | histogram | `ms` | — |
 | `s100.render.tile.visible.queue.depth` | histogram | `{tile}` | — |
+| `s100.render.tile.speculation.deferred` | counter | `{worker}` | `priority` |
 | `s100.render.tile.disk.write_queue.depth` | histogram | `{tile}` | — |
 | `s100.render.tile.disk.write_queue.discarded` | counter | `{tile}` | `reason` |
 
@@ -137,6 +138,12 @@ projection at a fractional device scale). Existing
 `s100.render.tile.rasterize.duration` remains comparable between arms: a
 batched job records its total elapsed time divided across the logical tiles it
 produced.
+
+`s100.render.tile.speculation.deferred` counts predicted or cross-band worker
+admission attempts rejected while any layer still has visible cold work. A
+non-zero count confirms that process-wide visible-first scheduling is actively
+protecting the current viewport; sustained growth after the visible queue
+drains indicates stale active-layer registration.
 
 When tracing is enabled, the tiled renderer also emits an opt-in
 `s100.render.tile.job` span for each worker job. Child spans separate
