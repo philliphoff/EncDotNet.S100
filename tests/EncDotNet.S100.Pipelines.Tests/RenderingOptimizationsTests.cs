@@ -5,8 +5,9 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Validates <see cref="RenderingOptimizations"/>: the central, mutable config
 /// for the viewer's Settings → Map rendering-optimization knobs. The "best"
-/// default is on for every knob, and a programmatic write is honoured unless an
-/// explicit environment variable pins the value (the perf A/B harness).
+/// measured default is selected independently for each knob, and a programmatic
+/// write is honoured unless an explicit environment variable pins the value
+/// (the perf A/B harness).
 /// </summary>
 public class RenderingOptimizationsTests
 {
@@ -202,6 +203,17 @@ public class RenderingOptimizationsTests
         {
             RenderingOptimizations.TileCrossBandPrewarmEnabled = original;
         }
+    }
+
+    [Fact]
+    public void TileGpuResidency_DefaultsOff_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileGpuResidencyEnvExplicit)
+        {
+            return;
+        }
+
+        Assert.False(RenderingOptimizations.TileGpuResidencyEnabled);
     }
 
     [Fact]

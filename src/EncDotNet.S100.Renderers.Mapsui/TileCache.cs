@@ -27,6 +27,7 @@ internal sealed class TileCache : IDisposable
     private readonly HashSet<TileKey> _protected = new();
     private readonly bool _deferDisposal;
     private List<SKImage>? _pendingDisposal;
+    private long _generation;
     private long _residentBytes;
     private bool _disposed;
 
@@ -97,6 +98,34 @@ internal sealed class TileCache : IDisposable
             _lru.Remove(node);
             _lru.AddFirst(node);
             return node.Value.Image;
+        }
+    }
+
+    internal SKImage? TryCreateSnapshot(TileKey key, long expectedGeneration)
+    {
+        SKBitmap? pixels;
+        lock (_sync)
+        {
+            if (_disposed
+                || _generation != expectedGeneration
+                || !_map.TryGetValue(key, out var node))
+            {
+                return null;
+            }
+
+            _lru.Remove(node);
+            _lru.AddFirst(node);
+            pixels = TileDiskCache.CopyPixels(node.Value.Image);
+        }
+
+        if (pixels is null)
+        {
+            return null;
+        }
+
+        using (pixels)
+        {
+            return TileDiskCache.CreateSnapshot(pixels);
         }
     }
 
@@ -257,6 +286,7 @@ internal sealed class TileCache : IDisposable
         List<SKImage>? inline = null;
         lock (_sync)
         {
+            _generation++;
             foreach (var node in _map.Values)
             {
                 RetireImage(node.Value.Image, ref inline);

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
@@ -130,6 +131,42 @@ public class FileTelemetryExporterTests : IDisposable
         {
             using var doc = JsonDocument.Parse(line);
             Assert.True(doc.RootElement.TryGetProperty("kind", out _));
+        }
+    }
+
+    [Fact]
+    public void ExporterFormatsNumericTagsInvariantly()
+    {
+        var path = Path.Combine(_tempDir, "invariant-tags.jsonl");
+        var source = new ActivitySource("test.exporter.invariant");
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("da-DK");
+            using (var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .AddSource("test.exporter.invariant")
+                .AddFileExporter(path)
+                .Build())
+            {
+                using var activity = source.StartActivity("numeric-tag");
+                activity?.SetTag("queue.wait.ms", 73.599);
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+
+        var span = File.ReadLines(path)
+            .Select(static line => JsonDocument.Parse(line))
+            .Single(document =>
+                document.RootElement.TryGetProperty("name", out var name)
+                && name.GetString() == "numeric-tag");
+        using (span)
+        {
+            Assert.Equal(
+                "73.599",
+                span.RootElement.GetProperty("tags").GetProperty("queue.wait.ms").GetString());
         }
     }
 }

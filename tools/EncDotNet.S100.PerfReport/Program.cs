@@ -17,6 +17,9 @@ app.Configure(config =>
 
     config.AddCommand<ChromeTraceCommand>("chrome-trace")
         .WithDescription("Convert a .jsonl telemetry file to Chrome Trace JSON (chrome://tracing / Perfetto / Speedscope). Span timeline, not a CPU flamegraph.");
+
+    config.AddCommand<TileReportCommand>("tile-report")
+        .WithDescription("Rank and attribute tiled-viewer render jobs from a telemetry file.");
 });
 
 return app.Run(args);
