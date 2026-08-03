@@ -257,7 +257,9 @@ public sealed class MapsuiMapSession : IDisposable
     /// replaces its generated layers.
     /// </summary>
     /// <param name="datasetId">The dataset identity.</param>
-    /// <param name="context">The host-constructed render context.</param>
+    /// <param name="presentation">
+    /// The immutable map presentation used to construct the product context.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// The installed result, or <see langword="null"/> when the dataset was
@@ -265,9 +267,11 @@ public sealed class MapsuiMapSession : IDisposable
     /// </returns>
     public async Task<MapsuiDatasetResult?> RenderAsync(
         MapDatasetId datasetId,
-        RenderContext? context,
+        MapPresentationState presentation,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(presentation);
+
         CancellationTokenSource localCts;
         DateTime? selectedTime;
         lock (_sync)
@@ -279,10 +283,9 @@ public sealed class MapsuiMapSession : IDisposable
             localCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
             entry.RenderCts = localCts;
-            selectedTime = SelectedTime(context)
-                ?? (entry.TimePolicy is not null
-                    ? entry.Dataset.CurrentTime
-                    : null);
+            selectedTime = entry.TimePolicy is not null
+                ? entry.Dataset.CurrentTime
+                : null;
         }
 
         var enteredGate = false;
@@ -292,7 +295,7 @@ public sealed class MapsuiMapSession : IDisposable
             enteredGate = true;
             return await RenderCoreAsync(
                 datasetId,
-                _ => context,
+                presentation,
                 selectedTime,
                 localCts.Token).ConfigureAwait(true);
         }
@@ -364,14 +367,16 @@ public sealed class MapsuiMapSession : IDisposable
     /// Coalesces rapid clock changes, cancels the preceding time refresh, and
     /// applies product-specific time gating through the shared render gate.
     /// </summary>
-    /// <param name="contextFactory">Builds the current host render context.</param>
+    /// <param name="presentation">
+    /// The immutable map presentation used to construct product contexts.
+    /// </param>
     /// <param name="cancellationToken">Cancels the requested refresh.</param>
     /// <returns>A task that completes when the applied refresh finishes.</returns>
     public async Task RefreshTimeAsync(
-        MapsuiRenderContextFactory contextFactory,
+        MapPresentationState presentation,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(contextFactory);
+        ArgumentNullException.ThrowIfNull(presentation);
 
         CancellationTokenSource localCts;
         lock (_sync)
@@ -388,7 +393,7 @@ public sealed class MapsuiMapSession : IDisposable
             await Task.Delay(TimeRefreshDebounceWindow, localCts.Token)
                 .ConfigureAwait(true);
             await RefreshCoreAsync(
-                contextFactory,
+                presentation,
                 timeAwareOnly: true,
                 localCts.Token).ConfigureAwait(true);
         }
@@ -410,17 +415,19 @@ public sealed class MapsuiMapSession : IDisposable
     /// Cancels the preceding full refresh and re-renders every registered
     /// dataset through the shared render gate while preserving time gating.
     /// </summary>
-    /// <param name="contextFactory">Builds the current host render context.</param>
+    /// <param name="presentation">
+    /// The immutable map presentation used to construct product contexts.
+    /// </param>
     /// <param name="cancellationToken">Cancels the requested refresh.</param>
     /// <returns>
     /// A task that returns <see langword="true"/> when this refresh was applied,
     /// or <see langword="false"/> when a newer refresh superseded it.
     /// </returns>
     public async Task<bool> RefreshAsync(
-        MapsuiRenderContextFactory contextFactory,
+        MapPresentationState presentation,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(contextFactory);
+        ArgumentNullException.ThrowIfNull(presentation);
 
         CancellationTokenSource localCts;
         lock (_sync)
@@ -435,7 +442,7 @@ public sealed class MapsuiMapSession : IDisposable
         try
         {
             await RefreshCoreAsync(
-                contextFactory,
+                presentation,
                 timeAwareOnly: false,
                 localCts.Token).ConfigureAwait(true);
             return true;
@@ -456,7 +463,7 @@ public sealed class MapsuiMapSession : IDisposable
     }
 
     private async Task RefreshCoreAsync(
-        MapsuiRenderContextFactory contextFactory,
+        MapPresentationState presentation,
         bool timeAwareOnly,
         CancellationToken cancellationToken)
     {
@@ -505,7 +512,7 @@ public sealed class MapsuiMapSession : IDisposable
 
                     await RenderCoreAsync(
                         datasetId,
-                        processor => contextFactory(processor, selectedTime),
+                        presentation,
                         selectedTime,
                         cancellationToken).ConfigureAwait(true);
                 }
@@ -527,7 +534,7 @@ public sealed class MapsuiMapSession : IDisposable
 
     private async Task<MapsuiDatasetResult?> RenderCoreAsync(
         MapDatasetId datasetId,
-        Func<IDatasetProcessor, RenderContext?> contextFactory,
+        MapPresentationState presentation,
         DateTime? selectedTime,
         CancellationToken cancellationToken)
     {
@@ -548,7 +555,9 @@ public sealed class MapsuiMapSession : IDisposable
         MapsuiDatasetResult result;
         using (lease)
         {
-            var context = contextFactory(lease.Processor);
+            var context = presentation.CreateRenderContext(
+                lease.Processor,
+                selectedTime);
             result = await Task.Run(
                 () => _renderer.RenderAsync(
                     lease.Processor,
@@ -1319,14 +1328,6 @@ public sealed class MapsuiMapSession : IDisposable
         foreach (var entry in _entries.Values)
             entry.RenderCts?.Cancel();
     }
-
-    private static DateTime? SelectedTime(RenderContext? context) => context switch
-    {
-        S104RenderContext s104 => s104.TimeStep,
-        S111RenderContext s111 => s111.TimeStep,
-        S411RenderContext s411 => s411.TimeStep,
-        _ => null,
-    };
 
     private static void ApplyDisplayState(
         MapDataset dataset,

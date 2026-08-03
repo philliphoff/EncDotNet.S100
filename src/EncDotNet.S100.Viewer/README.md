@@ -188,9 +188,9 @@ processor-to-layer rendering, replacement/removal, S-98 cross-product order and
 suppression, active/visible/opacity and sub-layer state application, scale
 windows, overlap suppression, time-aware registration and gating, render
 cancellation, and coalesced time/presentation refreshes. The Viewer loader
-coordinates files, catalogues, validation, notifications, optional zoom, and
-render-context construction, while `GlobalTimeService` only projects the
-session clock into timeline bindings.
+coordinates files, catalogues, validation, notifications, and optional zoom.
+`MapPresentationState` creates product render contexts for the session, while
+`GlobalTimeService` only projects the session clock into timeline bindings.
 
 **Double-click a dataset row to reveal it** — the viewer ensures the
 dataset is loaded and then flies the map to that dataset's extent. This

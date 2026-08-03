@@ -31,12 +31,12 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
 
-        var first = await session.RenderAsync(id, context: null);
+        var first = await session.RenderAsync(id, MapPresentationState.Default);
         var firstLayer = Assert.Single(first!.Layers);
         Assert.Same(firstLayer, Assert.Single(map.Layers));
 
         processor.Version = 2;
-        var second = await session.RenderAsync(id, context: null);
+        var second = await session.RenderAsync(id, MapPresentationState.Default);
         var secondLayer = Assert.Single(second!.Layers);
         Assert.NotSame(firstLayer, secondLayer);
         Assert.Same(secondLayer, Assert.Single(map.Layers));
@@ -46,6 +46,37 @@ public sealed class MapsuiMapSessionTests
         Assert.Empty(session.GetLayerStackEntries());
         Assert.Empty(session.GetStackedLayers());
         Assert.Equal(1, processor.DisposeCount);
+    }
+
+    [Fact]
+    public async Task RenderCreatesProductContextFromPresentationState()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("bathymetry");
+        var processor = new StubProcessor(id.Value)
+        {
+            ProductSpec = "S-102",
+        };
+        var mariner = MarinerSettings.Default with { FourShades = true };
+        var presentation = new MapPresentationState(
+            PaletteType.Dusk,
+            1.25,
+            0.75,
+            new EcdisDisplaySettings(),
+            mariner);
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id, productSpec: "S-102"));
+
+        await session.RenderAsync(id, presentation);
+
+        var context = Assert.IsType<S102RenderContext>(processor.LastContext);
+        Assert.Equal(PaletteType.Dusk, context.Palette);
+        Assert.Equal(1.25, context.SymbolScale);
+        Assert.Equal(0.75, context.TextScale);
+        Assert.Same(presentation.EcdisDisplay, context.EcdisDisplay);
+        Assert.Same(mariner, context.Mariner);
     }
 
     [Fact]
@@ -60,8 +91,8 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(secondId, new StubProcessor(secondId.Value)));
         session.SetDataset(Dataset(firstId));
         session.SetDataset(Dataset(secondId));
-        await session.RenderAsync(firstId, context: null);
-        await session.RenderAsync(secondId, context: null);
+        await session.RenderAsync(firstId, MapPresentationState.Default);
+        await session.RenderAsync(secondId, MapPresentationState.Default);
 
         session.SetOrder([secondId, firstId]);
         Assert.Equal(
@@ -88,7 +119,7 @@ public sealed class MapsuiMapSessionTests
         var id = new MapDatasetId("dataset");
         Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
         session.SetDataset(Dataset(id));
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
         session.SetDataset(Dataset(id, isActive: false));
 
         Assert.Empty(map.Layers);
@@ -120,8 +151,8 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(s101Id, s101));
         session.SetDataset(Dataset(s102Id, productSpec: "S-102"));
         session.SetDataset(Dataset(s101Id));
-        await session.RenderAsync(s102Id, context: null);
-        await session.RenderAsync(s101Id, context: null);
+        await session.RenderAsync(s102Id, MapPresentationState.Default);
+        await session.RenderAsync(s101Id, MapPresentationState.Default);
 
         Assert.Equal(
             ["s101-v1", "s102-v1"],
@@ -159,8 +190,8 @@ public sealed class MapsuiMapSessionTests
             }));
         session.SetDataset(Dataset(overId));
         session.SetDataset(Dataset(underId));
-        await session.RenderAsync(overId, context: null);
-        await session.RenderAsync(underId, context: null);
+        await session.RenderAsync(overId, MapPresentationState.Default);
+        await session.RenderAsync(underId, MapPresentationState.Default);
         Assert.Equal(
             ["under-v1", "over-v1"],
             map.Layers.Select(layer => layer.Name));
@@ -201,7 +232,7 @@ public sealed class MapsuiMapSessionTests
         var processor = new StubProcessor(id.Value) { SubLayerCount = 2 };
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id), minimumDisplayScale: 50_000);
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
 
         var renderedState = session.GetDataset(id)!.Dataset;
         Assert.Equal(2, renderedState.SubLayers.Count);
@@ -218,7 +249,7 @@ public sealed class MapsuiMapSessionTests
             minimumDisplayScale: 50_000);
 
         processor.Version = 2;
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
 
         var layers = session.GetDataset(id)!.Layers;
         Assert.Equal(0.2, layers[0].Opacity, precision: 10);
@@ -247,7 +278,7 @@ public sealed class MapsuiMapSessionTests
         session.ClearLayers(id);
         session.SetDataset(retainedState, minimumDisplayScale: 50_000);
         processor.Version = 3;
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
         var reloaded = session.GetDataset(id)!;
         Assert.Equal(0.2, reloaded.Layers[0].Opacity, precision: 10);
         Assert.False(reloaded.Layers[1].Enabled);
@@ -263,14 +294,17 @@ public sealed class MapsuiMapSessionTests
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
         var original = Assert.Single(map.Layers);
 
         processor.Delay = TimeSpan.FromSeconds(10);
         using var cancellation = new CancellationTokenSource(
             TimeSpan.FromMilliseconds(25));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => session.RenderAsync(id, context: null, cancellation.Token));
+            () => session.RenderAsync(
+                id,
+                MapPresentationState.Default,
+                cancellation.Token));
 
         Assert.Same(original, Assert.Single(map.Layers));
         Assert.Same(
@@ -292,12 +326,12 @@ public sealed class MapsuiMapSessionTests
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
         var original = Assert.Single(map.Layers);
         authority.Throw = true;
         processor.Version = 2;
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => session.RenderAsync(id, context: null));
+            () => session.RenderAsync(id, MapPresentationState.Default));
 
         Assert.Same(original, Assert.Single(map.Layers));
         Assert.Same(
@@ -320,7 +354,7 @@ public sealed class MapsuiMapSessionTests
             existingId,
             new StubProcessor(existingId.Value)));
         session.SetDataset(Dataset(existingId));
-        await session.RenderAsync(existingId, context: null);
+        await session.RenderAsync(existingId, MapPresentationState.Default);
         var existingLayer = Assert.Single(map.Layers);
         authority.Throw = true;
         Assert.Throws<InvalidOperationException>(() =>
@@ -351,7 +385,7 @@ public sealed class MapsuiMapSessionTests
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id), minimumDisplayScale: 50_000);
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
         var original = Assert.Single(map.Layers);
         var capped = ((BaseLayer)original).MaxVisible;
         authority.Throw = true;
@@ -381,7 +415,7 @@ public sealed class MapsuiMapSessionTests
         var id = new MapDatasetId("dataset");
         Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
         session.SetDataset(Dataset(id));
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
         var changeCount = 0;
         session.LayersChanged += () =>
         {
@@ -407,19 +441,19 @@ public sealed class MapsuiMapSessionTests
         var processor = new StubProcessor(id.Value);
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
-        await session.RenderAsync(id, context: null);
+        await session.RenderAsync(id, MapPresentationState.Default);
 
         processor.Version = 2;
         processor.Delay = TimeSpan.FromSeconds(5);
         processor.RenderStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        var staleRender = session.RenderAsync(id, context: null);
+        var staleRender = session.RenderAsync(id, MapPresentationState.Default);
         await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         processor.Version = 3;
         processor.Delay = TimeSpan.Zero;
         processor.RenderStarted = null;
-        var current = await session.RenderAsync(id, context: null);
+        var current = await session.RenderAsync(id, MapPresentationState.Default);
         processor.ReleaseDelayedRender.TrySetResult();
         var stale = await staleRender;
 
@@ -448,7 +482,7 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
 
-        var render = session.RenderAsync(id, context: null);
+        var render = session.RenderAsync(id, MapPresentationState.Default);
         await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(session.RemoveDataset(id));
         processor.ReleaseDelayedRender.TrySetResult();
@@ -476,14 +510,14 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
 
-        var staleRender = session.RenderAsync(id, context: null);
+        var staleRender = session.RenderAsync(id, MapPresentationState.Default);
         await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(session.RemoveDataset(id, removeProcessor: false));
         session.SetDataset(Dataset(id));
         processor.Version = 3;
         processor.Delay = TimeSpan.Zero;
         processor.RenderStarted = null;
-        var current = await session.RenderAsync(id, context: null);
+        var current = await session.RenderAsync(id, MapPresentationState.Default);
         processor.ReleaseDelayedRender.TrySetResult();
 
         Assert.NotNull(current);
@@ -529,8 +563,8 @@ public sealed class MapsuiMapSessionTests
             }));
         session.SetDataset(Dataset(coarseId));
         session.SetDataset(Dataset(fineId));
-        await session.RenderAsync(coarseId, context: null);
-        await session.RenderAsync(fineId, context: null);
+        await session.RenderAsync(coarseId, MapPresentationState.Default);
+        await session.RenderAsync(fineId, MapPresentationState.Default);
 
         var coarseLayer = Assert.Single(session.GetDataset(coarseId)!.Layers);
         Assert.NotNull(CoverageClip.Get(coarseLayer));
@@ -686,11 +720,10 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(lateId, late));
         session.SetDataset(Dataset(earlyId, productSpec: "S-111"));
         session.SetDataset(Dataset(lateId, productSpec: "S-111"));
-        await session.RenderAsync(earlyId, new S111RenderContext(first));
+        await session.RenderAsync(earlyId, MapPresentationState.Default);
 
         session.SetCurrentTime(first.AddHours(3).AddMinutes(18));
-        await session.RefreshTimeAsync(
-            static (_, selected) => new S111RenderContext(selected));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
 
         Assert.Empty(session.GetDataset(earlyId)!.Layers);
         Assert.Null(session.GetDataset(earlyId)!.Dataset.CurrentTime);
@@ -724,14 +757,12 @@ public sealed class MapsuiMapSessionTests
         };
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id, productSpec: "S-111"));
-        await session.RenderAsync(id, new S111RenderContext(first));
+        await session.RenderAsync(id, MapPresentationState.Default);
 
         session.SetCurrentTime(first.AddMinutes(20));
-        var stale = session.RefreshTimeAsync(
-            static (_, selected) => new S111RenderContext(selected));
+        var stale = session.RefreshTimeAsync(MapPresentationState.Default);
         session.SetCurrentTime(first.AddMinutes(40));
-        var current = session.RefreshTimeAsync(
-            static (_, selected) => new S111RenderContext(selected));
+        var current = session.RefreshTimeAsync(MapPresentationState.Default);
         await Task.WhenAll(stale, current);
 
         Assert.Equal(2, processor.RenderCount);
@@ -767,8 +798,7 @@ public sealed class MapsuiMapSessionTests
         Assert.Null(session.GetDataset(iceId)!.Dataset.CurrentTime);
 
         session.SetCurrentTime(first.AddHours(7));
-        await session.RefreshTimeAsync(
-            static (_, selected) => new S411RenderContext(selected));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
 
         Assert.Equal(
             first.AddHours(6),
@@ -791,10 +821,10 @@ public sealed class MapsuiMapSessionTests
         };
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
-        var initial = session.RenderAsync(id, context: null);
+        var initial = session.RenderAsync(id, MapPresentationState.Default);
         await processor.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        var refresh = session.RefreshAsync(static (_, _) => new S101RenderContext());
+        var refresh = session.RefreshAsync(MapPresentationState.Default);
         Assert.False(initial.IsCompleted);
         processor.ReleaseDelayedRender.TrySetResult();
 
@@ -824,8 +854,7 @@ public sealed class MapsuiMapSessionTests
         MapDatasetId? failed = null;
         session.DatasetRefreshFailed += (datasetId, _) => failed = datasetId;
 
-        Assert.True(await session.RefreshAsync(
-            static (_, _) => new S101RenderContext()));
+        Assert.True(await session.RefreshAsync(MapPresentationState.Default));
 
         Assert.Equal(failingId, failed);
         Assert.Equal(1, healthy.RenderCount);
@@ -859,8 +888,7 @@ public sealed class MapsuiMapSessionTests
         session.SetDataset(Dataset(retainedId, productSpec: "S-104"));
         session.SetDataset(Dataset(peerId, productSpec: "S-104"));
         session.SetCurrentTime(first.AddHours(1));
-        await session.RefreshTimeAsync(
-            static (_, selected) => new S104RenderContext(selected));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
         var retainedState = session.GetDataset(retainedId)!.Dataset;
 
         Assert.True(session.RemoveDataset(retainedId, preserveState: true));
