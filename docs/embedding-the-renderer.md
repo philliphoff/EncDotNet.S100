@@ -28,6 +28,7 @@ var presentation = new MapPresentationState(
     ecdisSettings,
     marinerSettings);
 
+DateTime? selectedTime = null;
 RenderContext context = presentation.CreateRenderContext(
     processor,
     selectedTime);
