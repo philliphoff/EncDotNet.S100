@@ -224,7 +224,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             ?? throw new InvalidOperationException(
                 "The map layer collection must provide a Mapsui dataset session.");
         _mapSession.LayersChanged += OnSessionLayersChanged;
-        _mapSession.DatasetRefreshFailed += OnDatasetRefreshFailed;
+        _mapSession.DatasetRenderFailed += OnDatasetRenderFailed;
         _mapSession.SetMarinerSettings(CurrentPresentation.Mariner);
         _globalTime.AttachTo(_mapSession);
         _globalTime.CurrentTimeChanged +=
@@ -1061,7 +1061,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             string.Equals(entry.Id.Value, datasetId, StringComparison.Ordinal));
     }
 
-    private void OnSessionLayersChanged()
+    private void OnSessionLayersChanged(object? sender, EventArgs e)
     {
         foreach (var snapshot in _mapSession?.GetDatasets() ?? [])
         {
@@ -1071,15 +1071,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         LayerStackChanged?.Invoke();
     }
 
-    private void OnDatasetRefreshFailed(
-        MapDatasetId datasetId,
-        Exception exception)
+    private void OnDatasetRenderFailed(
+        object? sender,
+        MapSessionDatasetRenderFailedEventArgs e)
     {
-        var source = _sessionEntries.TryGetValue(datasetId, out var entry)
+        var source = _sessionEntries.TryGetValue(e.DatasetId, out var entry)
             ? entry.FilePath
-            : datasetId.Value;
+            : e.DatasetId.Value;
         Console.Error.WriteLine(
-            $"Failed to refresh {source}:{Environment.NewLine}{exception}");
+            $"Failed to refresh {source} ({e.Kind}):{Environment.NewLine}{e.Exception}");
     }
 
     private void EnsureInitialized()

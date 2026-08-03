@@ -977,6 +977,11 @@ capability readiness, diagnostics, MCP/feedback policy, render-context
 construction, and host lifecycle. Time registration, product-specific
 snap/gating behavior, refresh cancellation, and render serialization live in
 `MapsuiMapSession`; the Viewer timeline is a projection of its time snapshot.
+The session reports its render lifecycle and refresh failures through structured
+events (`DatasetRenderStarted`/`DatasetRenderCompleted`/`DatasetRenderFailed`,
+`LayersChanged`, `TimeRangeChanged`, `CurrentTimeChanged`); the Viewer translates
+those into its own toast notifications and localized strings, which remain host
+policy.
 
 - Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
 - Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)

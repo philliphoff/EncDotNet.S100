@@ -142,6 +142,21 @@ with each leased processor and its selected time so
 Notifications and zoom policy remain host responsibilities. No `Map.AddS100`
 API is published yet.
 
+The session reports its lifecycle through structured events rather than
+notifications or localized strings, so a non-Viewer host can drive its own UI:
+
+- `DatasetRenderStarted` / `DatasetRenderCompleted` (`MapSessionDatasetRenderEventArgs`)
+  bracket each dataset render for both `RenderAsync` and every dataset of a
+  coalesced refresh. The `Kind` (`MapSessionRenderKind`: `Render`, `TimeRefresh`,
+  `PresentationRefresh`) says what triggered it. A render superseded or removed
+  mid-flight raises `Started` without `Completed`.
+- `DatasetRenderFailed` (`MapSessionDatasetRenderFailedEventArgs`) reports a
+  per-dataset failure the session **swallowed** during a coalesced refresh so the
+  other datasets keep rendering. A single `RenderAsync` surfaces its error by
+  **throwing** to the awaiting caller instead, so no failed event is raised there.
+- `LayersChanged` / `TimeRangeChanged` (`EventHandler`) and `CurrentTimeChanged`
+  (`MapSessionCurrentTimeEventArgs`) report projected-band and clock changes.
+
 ## Viewport navigation
 
 `MapsuiMapNavigator` provides the small navigation surface already used by
