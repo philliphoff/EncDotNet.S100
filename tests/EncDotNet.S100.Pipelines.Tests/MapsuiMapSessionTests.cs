@@ -576,6 +576,44 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public void RangeRecomputeRaisesCurrentTimeChangedWhenClockIsClamped()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var earlyId = new MapDatasetId("early");
+        var lateId = new MapDatasetId("late");
+        Assert.True(owner.TryRegister(
+            earlyId,
+            new StubProcessor(earlyId.Value)
+            {
+                ProductSpec = "S-104",
+                AvailableTimes = [first],
+            }));
+        Assert.True(owner.TryRegister(
+            lateId,
+            new StubProcessor(lateId.Value)
+            {
+                ProductSpec = "S-104",
+                AvailableTimes = [first.AddHours(6)],
+            }));
+        var observed = new List<DateTime>();
+        session.CurrentTimeChanged += observed.Add;
+
+        session.SetDataset(Dataset(earlyId, productSpec: "S-104"));
+        Assert.Equal([first], observed);
+        session.SetDataset(Dataset(lateId, productSpec: "S-104"));
+        session.SetCurrentTime(first.AddHours(6));
+        observed.Clear();
+
+        Assert.True(session.RemoveDataset(lateId));
+
+        Assert.Equal([first], observed);
+        Assert.Equal(first, session.GetTimeSnapshot().Current);
+    }
+
+    [Fact]
     public async Task TimeRefreshGatesS111WindowsAndRendersNearestSample()
     {
         using var map = new Map();

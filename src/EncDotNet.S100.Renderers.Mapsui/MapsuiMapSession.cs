@@ -1240,7 +1240,7 @@ public sealed class MapsuiMapSession : IDisposable
             || previous.Maximum != maximum
             || !previous.Samples.SequenceEqual(samples)
             || !previous.CoverageSegments.SequenceEqual(segments);
-        return (rangeChanged, null);
+        return (rangeChanged, previous.Current != current ? current : null);
     }
 
     private IReadOnlyList<MapsuiMapTimeSegment> ComputeCoverageSegments(
