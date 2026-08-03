@@ -203,6 +203,11 @@ public sealed class MapsuiMapSession : IDisposable
             }
             else
             {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    [],
+                    currentTime: null);
                 entry.RenderedTime = null;
             }
             entry.CatalogueMinimumDisplayScale = minimumDisplayScale;

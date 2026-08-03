@@ -576,6 +576,25 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public void StaticDatasetRegistrationClearsStaleTimeState()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("static");
+        var staleTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        Assert.True(owner.TryRegister(id, new StaticProcessor()));
+
+        session.SetDataset(Dataset(
+            id,
+            availableTimes: [staleTime],
+            currentTime: staleTime));
+
+        Assert.Empty(session.GetDataset(id)!.Dataset.AvailableTimes);
+        Assert.Null(session.GetDataset(id)!.Dataset.CurrentTime);
+    }
+
+    [Fact]
     public void RangeRecomputeRaisesCurrentTimeChangedWhenClockIsClamped()
     {
         using var map = new Map();
@@ -851,7 +870,9 @@ public sealed class MapsuiMapSessionTests
         MapDatasetId id,
         bool isVisible = true,
         bool isActive = true,
-        string productSpec = "S-101") =>
+        string productSpec = "S-101",
+        IReadOnlyList<DateTime>? availableTimes = null,
+        DateTime? currentTime = null) =>
         new(
             id,
             id.Value,
@@ -860,12 +881,21 @@ public sealed class MapsuiMapSessionTests
                 Spec = new SpecRef(productSpec, new SpecVersion(1, 0, 0)),
             },
             isVisible,
-            isActive);
+            isActive,
+            availableTimes: availableTimes,
+            currentTime: currentTime);
 
     private sealed class IdentityCrsTransformFactory : ICrsTransformFactory
     {
         public ICrsTransform Create(string sourceCrs, string targetCrs) =>
             IdentityCrsTransform.Instance;
+    }
+
+    private sealed class StaticProcessor : IDatasetProcessor
+    {
+        public SpecRef Spec => new("S-101", new SpecVersion(1, 0, 0));
+
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
     }
 
     private sealed class StubProcessor :
