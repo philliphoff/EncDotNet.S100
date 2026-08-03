@@ -417,7 +417,7 @@ public sealed class MapsuiMapSessionTests
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, MapPresentationState.Default);
         var changeCount = 0;
-        session.LayersChanged += () =>
+        session.LayersChanged += (_, _) =>
         {
             changeCount++;
             if (changeCount == 1)
@@ -678,7 +678,7 @@ public sealed class MapsuiMapSessionTests
                 AvailableTimes = [first.AddHours(6)],
             }));
         var observed = new List<DateTime>();
-        session.CurrentTimeChanged += observed.Add;
+        session.CurrentTimeChanged += (_, e) => observed.Add(e.CurrentTime);
 
         session.SetDataset(Dataset(earlyId, productSpec: "S-104"));
         Assert.Equal([first], observed);
@@ -851,14 +851,112 @@ public sealed class MapsuiMapSessionTests
         Assert.True(owner.TryRegister(healthyId, healthy));
         session.SetDataset(Dataset(failingId));
         session.SetDataset(Dataset(healthyId));
-        MapDatasetId? failed = null;
-        session.DatasetRefreshFailed += (datasetId, _) => failed = datasetId;
+        MapSessionDatasetRenderFailedEventArgs? failure = null;
+        session.DatasetRenderFailed += (_, e) => failure = e;
 
         Assert.True(await session.RefreshAsync(MapPresentationState.Default));
 
-        Assert.Equal(failingId, failed);
+        Assert.NotNull(failure);
+        Assert.Equal(failingId, failure!.DatasetId);
+        Assert.Equal(MapSessionRenderKind.PresentationRefresh, failure.Kind);
+        Assert.NotNull(failure.Exception);
         Assert.Equal(1, healthy.RenderCount);
         Assert.Single(session.GetDataset(healthyId)!.Layers);
+    }
+
+    [Fact]
+    public async Task RenderAsyncRaisesStartedThenCompleted()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
+        session.SetDataset(Dataset(id));
+        var events = new List<(string Phase, MapSessionRenderKind Kind, MapDatasetId Id)>();
+        session.DatasetRenderStarted += (_, e) => events.Add(("started", e.Kind, e.DatasetId));
+        session.DatasetRenderCompleted += (_, e) => events.Add(("completed", e.Kind, e.DatasetId));
+
+        Assert.NotNull(await session.RenderAsync(id, MapPresentationState.Default));
+
+        Assert.Equal(
+            [
+                ("started", MapSessionRenderKind.Render, id),
+                ("completed", MapSessionRenderKind.Render, id),
+            ],
+            events);
+    }
+
+    [Fact]
+    public async Task RenderStartedNotRaisedWhenProcessorLeaseUnavailable()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        // Register the dataset with the session but not the processor with the
+        // owner, so the render's lease acquisition fails.
+        session.SetDataset(Dataset(id));
+        var started = 0;
+        var completed = 0;
+        session.DatasetRenderStarted += (_, _) => started++;
+        session.DatasetRenderCompleted += (_, _) => completed++;
+
+        Assert.Null(await session.RenderAsync(id, MapPresentationState.Default));
+
+        Assert.Equal(0, started);
+        Assert.Equal(0, completed);
+    }
+
+    [Fact]
+    public async Task RefreshAsyncRaisesLifecycleWithPresentationRefreshKind()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
+        session.SetDataset(Dataset(id));
+        await session.RenderAsync(id, MapPresentationState.Default);
+        var started = new List<MapSessionRenderKind>();
+        var completed = new List<MapSessionRenderKind>();
+        session.DatasetRenderStarted += (_, e) => started.Add(e.Kind);
+        session.DatasetRenderCompleted += (_, e) => completed.Add(e.Kind);
+
+        Assert.True(await session.RefreshAsync(MapPresentationState.Default));
+
+        Assert.Equal([MapSessionRenderKind.PresentationRefresh], started);
+        Assert.Equal([MapSessionRenderKind.PresentationRefresh], completed);
+    }
+
+    [Fact]
+    public async Task RefreshTimeAsyncRaisesLifecycleWithTimeRefreshKind()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("current");
+        Assert.True(owner.TryRegister(
+            id,
+            new StubProcessor(id.Value)
+            {
+                ProductSpec = "S-111",
+                AvailableTimes = [first, first.AddMinutes(20), first.AddMinutes(40)],
+            }));
+        session.SetDataset(Dataset(id, productSpec: "S-111"));
+        await session.RenderAsync(id, MapPresentationState.Default);
+        var started = new List<MapSessionDatasetRenderEventArgs>();
+        var completed = new List<MapSessionDatasetRenderEventArgs>();
+        session.DatasetRenderStarted += (_, e) => started.Add(e);
+        session.DatasetRenderCompleted += (_, e) => completed.Add(e);
+
+        session.SetCurrentTime(first.AddMinutes(20));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+
+        Assert.Equal(MapSessionRenderKind.TimeRefresh, Assert.Single(started).Kind);
+        Assert.Equal(id, Assert.Single(started).DatasetId);
+        Assert.Equal(MapSessionRenderKind.TimeRefresh, Assert.Single(completed).Kind);
     }
 
     [Fact]

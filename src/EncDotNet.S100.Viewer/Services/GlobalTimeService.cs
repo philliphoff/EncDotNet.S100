@@ -104,16 +104,16 @@ internal sealed class GlobalTimeService
         RangeChanged?.Invoke();
     }
 
-    private void OnTimeRangeChanged()
+    private void OnTimeRangeChanged(object? sender, EventArgs e)
     {
         UpdateSnapshot();
         RangeChanged?.Invoke();
     }
 
-    private void OnCurrentTimeChanged(DateTime time)
+    private void OnCurrentTimeChanged(object? sender, MapSessionCurrentTimeEventArgs e)
     {
         UpdateSnapshot();
-        CurrentTimeChanged?.Invoke(time);
+        CurrentTimeChanged?.Invoke(e.CurrentTime);
     }
 
     private void UpdateSnapshot()

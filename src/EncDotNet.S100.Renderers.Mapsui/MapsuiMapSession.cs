@@ -93,19 +93,37 @@ public sealed class MapsuiMapSession : IDisposable
     /// <summary>
     /// Raised after the final dataset-band projection changes.
     /// </summary>
-    public event Action? LayersChanged;
+    public event EventHandler? LayersChanged;
 
     /// <summary>Raised after the aggregate registered time range changes.</summary>
-    public event Action? TimeRangeChanged;
+    public event EventHandler? TimeRangeChanged;
 
     /// <summary>Raised after the global map clock changes.</summary>
-    public event Action<DateTime>? CurrentTimeChanged;
+    public event EventHandler<MapSessionCurrentTimeEventArgs>? CurrentTimeChanged;
+
+    /// <summary>
+    /// Raised once a processor lease is held and a registered dataset is about
+    /// to render, for single renders and each dataset of a coalesced refresh.
+    /// A dataset removed or unregistered before its lease is acquired raises no
+    /// lifecycle event.
+    /// </summary>
+    public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderStarted;
+
+    /// <summary>
+    /// Raised after a successful render installs a registered dataset's
+    /// generated layers. Not raised when the render throws, is cancelled, or is
+    /// superseded/removed mid-flight — those leave a
+    /// <see cref="DatasetRenderStarted"/> with no matching completion (a
+    /// swallowed refresh failure instead raises <see cref="DatasetRenderFailed"/>).
+    /// </summary>
+    public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderCompleted;
 
     /// <summary>
     /// Raised when one dataset fails during a coalesced time or presentation
-    /// refresh. Other registered datasets continue refreshing.
+    /// refresh. Other registered datasets continue refreshing. A single
+    /// <see cref="RenderAsync"/> surfaces its error by throwing instead.
     /// </summary>
-    public event Action<MapDatasetId, Exception>? DatasetRefreshFailed;
+    public event EventHandler<MapSessionDatasetRenderFailedEventArgs>? DatasetRenderFailed;
 
     /// <summary>
     /// Sets the mariner choices consumed by S-98 cross-product rules and
@@ -135,7 +153,7 @@ public sealed class MapsuiMapSession : IDisposable
             }
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -248,7 +266,7 @@ public sealed class MapsuiMapSession : IDisposable
             }
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
         RaiseTimeEvents(rangeChanged, changedCurrent);
     }
 
@@ -297,6 +315,7 @@ public sealed class MapsuiMapSession : IDisposable
                 datasetId,
                 presentation,
                 selectedTime,
+                MapSessionRenderKind.Render,
                 localCts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -360,7 +379,7 @@ public sealed class MapsuiMapSession : IDisposable
         }
 
         if (changedCurrent is { } current)
-            CurrentTimeChanged?.Invoke(current);
+            CurrentTimeChanged?.Invoke(this, new MapSessionCurrentTimeEventArgs(current));
     }
 
     /// <summary>
@@ -467,6 +486,9 @@ public sealed class MapsuiMapSession : IDisposable
         bool timeAwareOnly,
         CancellationToken cancellationToken)
     {
+        var kind = timeAwareOnly
+            ? MapSessionRenderKind.TimeRefresh
+            : MapSessionRenderKind.PresentationRefresh;
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
@@ -514,6 +536,7 @@ public sealed class MapsuiMapSession : IDisposable
                         datasetId,
                         presentation,
                         selectedTime,
+                        kind,
                         cancellationToken).ConfigureAwait(true);
                 }
                 catch (OperationCanceledException)
@@ -522,7 +545,12 @@ public sealed class MapsuiMapSession : IDisposable
                 }
                 catch (Exception exception)
                 {
-                    DatasetRefreshFailed?.Invoke(datasetId, exception);
+                    DatasetRenderFailed?.Invoke(
+                        this,
+                        new MapSessionDatasetRenderFailedEventArgs(
+                            datasetId,
+                            kind,
+                            exception));
                 }
             }
         }
@@ -536,6 +564,7 @@ public sealed class MapsuiMapSession : IDisposable
         MapDatasetId datasetId,
         MapPresentationState presentation,
         DateTime? selectedTime,
+        MapSessionRenderKind kind,
         CancellationToken cancellationToken)
     {
         Entry renderEntry;
@@ -555,6 +584,15 @@ public sealed class MapsuiMapSession : IDisposable
         MapsuiDatasetResult result;
         using (lease)
         {
+            // Raise Started only once a lease is held, so it reliably means a
+            // render is about to run. A dataset removed/unregistered before this
+            // point yields no lifecycle events at all (rather than a Started that
+            // is never followed by Completed/Failed). Raised inside the using so
+            // a throwing subscriber still releases the lease.
+            DatasetRenderStarted?.Invoke(
+                this,
+                new MapSessionDatasetRenderEventArgs(datasetId, kind));
+
             var context = presentation.CreateRenderContext(
                 lease.Processor,
                 selectedTime);
@@ -605,7 +643,10 @@ public sealed class MapsuiMapSession : IDisposable
             }
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+        DatasetRenderCompleted?.Invoke(
+            this,
+            new MapSessionDatasetRenderEventArgs(datasetId, kind));
         return result;
     }
 
@@ -644,7 +685,7 @@ public sealed class MapsuiMapSession : IDisposable
             }
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -737,7 +778,7 @@ public sealed class MapsuiMapSession : IDisposable
                 _processorOwner.Remove(datasetId, processorLease.Processor);
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
         RaiseTimeEvents(rangeChanged, changedCurrent);
         return true;
     }
@@ -784,7 +825,7 @@ public sealed class MapsuiMapSession : IDisposable
             }
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -814,7 +855,7 @@ public sealed class MapsuiMapSession : IDisposable
             }
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Gets a snapshot for one managed dataset.</summary>
@@ -1318,9 +1359,9 @@ public sealed class MapsuiMapSession : IDisposable
     private void RaiseTimeEvents(bool rangeChanged, DateTime? changedCurrent)
     {
         if (rangeChanged)
-            TimeRangeChanged?.Invoke();
+            TimeRangeChanged?.Invoke(this, EventArgs.Empty);
         if (changedCurrent is { } current)
-            CurrentTimeChanged?.Invoke(current);
+            CurrentTimeChanged?.Invoke(this, new MapSessionCurrentTimeEventArgs(current));
     }
 
     private void CancelEntryRenders()
@@ -1489,7 +1530,7 @@ public sealed class MapsuiMapSession : IDisposable
             ComposeLayers();
         }
 
-        LayersChanged?.Invoke();
+        LayersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
