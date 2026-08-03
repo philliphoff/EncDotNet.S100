@@ -460,7 +460,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
                 sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(),
-                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>()));
+                EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.PrecomputedLineLodEnabled
+                    ? sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>()
+                    : null));
 
         // The Mapsui renderer owns the processor -> ILayer conversion (issue
         // #189): it holds the process-wide pattern-clip cache and the CRS
