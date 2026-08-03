@@ -155,6 +155,30 @@ measurement:
 The gate deferred 495 predicted-worker admission attempts. Both cycles reached
 render idle, confirming deferred work resumed after visible demand drained.
 
+### Rejected follow-up experiments
+
+Three follow-up directions were implemented, tested, benchmarked on the same
+13-cell route, and then removed because they did not clear the real-route gate:
+
+- Relevance checks around synchronous warm-cache reads discarded no stale reads
+  after process-wide admission and introduced measurable lock/contention
+  regressions.
+- Adaptive prediction tiers reduced candidate counts but usually selected the
+  full tier on the paced route. Even with speculative execution capped at one
+  quarter of the process worker pool, warm frame P95 rose from 39.0 to 45.1 ms
+  and warm viewport-command P95/max rose from 1.46/11.3 to 1.91/18.0 ms.
+- Visible/speculative cache segmentation was tried with hard byte partitions,
+  promotion, and eviction-aware suppression. A naive partition caused evicted
+  predictions to reraster repeatedly (31,218 tile jobs). Suppression variants
+  avoided that loop but starved useful prediction hits or increased visible
+  queue latency; the final variant reached 178 ms tile P95 and 161 ms warm-frame
+  P95.
+
+None of those experimental code paths remain. Do not reintroduce them by
+adjusting thresholds alone: each failure came from policy interaction
+(synchronous I/O already in progress, work admitted before pressure became
+visible, or eviction feeding prediction admission), not a single bad constant.
+
 ## Practical benchmark fixture
 
 The real chart data is intentionally not part of the repository. The source
@@ -181,10 +205,12 @@ without moving raster execution into a global worker pool.
 
 ## Next increments
 
-1. Make warm-cache reads relevance-aware or otherwise prevent stale reads from
-   consuming I/O after a viewport epoch changes.
-2. Add adaptive prediction budgets.
-3. Protect visible and speculative cache segments independently.
+1. Revisit warm-cache cancellation only with genuinely cancellable/asynchronous
+   reads; additional relevance checks around synchronous reads were ineffective.
+2. Revisit prediction control only at admission time, before raster work starts,
+   with a policy that cannot suppress useful hits across adjacent viewports.
+3. Revisit cache protection only together with prediction admission metadata;
+   eviction-only segmentation creates reraster loops or hit starvation.
 4. Revisit GPU residency only with adaptive or strictly per-frame-budgeted
    promotion that cannot monopolize a paint.
 5. Benchmark each increment with the same paced route and compare frame/tile
