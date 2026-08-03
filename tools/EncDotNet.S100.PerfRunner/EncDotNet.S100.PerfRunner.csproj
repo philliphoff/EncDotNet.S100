@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" />
+    <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry" />
     <PackageReference Include="Spectre.Console.Cli" />
   </ItemGroup>

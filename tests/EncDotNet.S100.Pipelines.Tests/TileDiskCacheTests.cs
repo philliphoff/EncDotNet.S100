@@ -90,7 +90,7 @@ public class TileDiskCacheTests : IDisposable
     [Fact]
     public void Write_ThenTryRead_RoundTripsPixels()
     {
-        var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
         var ns = TileDiskCache.NamespaceFor("cell", "style");
         using var original = NoiseImage(32, seed: 1);
 
@@ -104,7 +104,7 @@ public class TileDiskCacheTests : IDisposable
     [Fact]
     public void TryRead_AbsentKey_ReturnsNull()
     {
-        var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
         var ns = TileDiskCache.NamespaceFor("cell", "style");
 
         Assert.Null(cache.TryRead(ns, Key(0, 0, 0)));
@@ -115,7 +115,7 @@ public class TileDiskCacheTests : IDisposable
     {
         // The safety property: a tile written under one style state is never
         // served for a different one.
-        var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
         var day = TileDiskCache.NamespaceFor("cell", "day");
         var night = TileDiskCache.NamespaceFor("cell", "night");
         using var image = NoiseImage(32, seed: 7);
@@ -129,7 +129,7 @@ public class TileDiskCacheTests : IDisposable
     [Fact]
     public void TryRead_NullOrEmptyNamespace_ReturnsNull()
     {
-        var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
         Assert.Null(cache.TryRead("", Key(0, 0, 0)));
     }
 
@@ -143,7 +143,9 @@ public class TileDiskCacheTests : IDisposable
         // Measure one encoded tile to derive a budget of ~4 tiles.
         long oneTileBytes;
         {
-            var probe = new TileDiskCache(Path.Combine(_root, "probe"), 64L * 1024 * 1024);
+            using var probe = new TileDiskCache(
+                Path.Combine(_root, "probe"),
+                64L * 1024 * 1024);
             using var img = NoiseImage(48, seed: 99);
             probe.Write(ns, Key(0, 0, 0), img);
             var file = Directory.GetFiles(probe.RootDirectory, "*.png", SearchOption.AllDirectories).Single();
@@ -151,7 +153,7 @@ public class TileDiskCacheTests : IDisposable
         }
 
         var budget = oneTileBytes * 4;
-        var cache = new TileDiskCache(_root, budget);
+        using var cache = new TileDiskCache(_root, budget);
 
         const int count = 64; // 2 × CapSweepInterval, so a sweep runs on write 64.
         for (var i = 0; i < count; i++)
@@ -176,5 +178,226 @@ public class TileDiskCacheTests : IDisposable
     {
         Assert.Throws<ArgumentException>(() => new TileDiskCache("", 1024));
         Assert.Throws<ArgumentOutOfRangeException>(() => new TileDiskCache(_root, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new TileDiskCache(_root, 1024, writeQueueCapacity: 0));
+    }
+
+    [Fact]
+    public void QueueWrite_PersistsSnapshotAfterCallerDisposesImage()
+    {
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(5, 8, 13);
+        var original = NoiseImage(64, seed: 42);
+        var expected = Pixels(original);
+
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueWrite(ns, key, original));
+        original.Dispose();
+
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+        using var read = cache.TryRead(ns, key);
+        Assert.NotNull(read);
+        Assert.Equal(expected, Pixels(read!));
+    }
+
+    [Fact]
+    public void QueueWrite_DeduplicatesPendingTile()
+    {
+        using var cache = new TileDiskCache(
+            _root,
+            64L * 1024 * 1024,
+            writeQueueCapacity: 4);
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(8, 21, 34);
+        using var image = NoiseImage(512, seed: 17);
+
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueWrite(ns, key, image));
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Duplicate,
+            cache.TryQueueWrite(ns, key, image));
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public void QueueDeferredSnapshot_CapturesPixelsOnWriterThread()
+    {
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(7, 11, 12);
+        using var image = NoiseImage(64, seed: 23);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+        var snapshotThreadId = 0;
+
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueDeferredSnapshot(
+                ns,
+                key,
+                () =>
+                {
+                    snapshotThreadId = Environment.CurrentManagedThreadId;
+                    return TileDiskCache.CreateSnapshot(image);
+                }));
+
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+        Assert.NotEqual(callerThreadId, snapshotThreadId);
+        using var read = cache.TryRead(ns, key);
+        Assert.NotNull(read);
+        Assert.Equal(Pixels(image), Pixels(read!));
+    }
+
+    [Fact]
+    public void QueueDeferredSnapshot_DropsStaleWorkBeforeSnapshot()
+    {
+        using var writerEntered = new ManualResetEventSlim();
+        using var releaseWriter = new ManualResetEventSlim();
+        using var cache = new TileDiskCache(
+            _root,
+            64L * 1024 * 1024,
+            beforeWrite: () =>
+            {
+                writerEntered.Set();
+                releaseWriter.Wait();
+            });
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(7, 12, 13);
+        using var image = NoiseImage(64, seed: 29);
+        var relevant = 1;
+        var snapshotsCreated = 0;
+
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueDeferredSnapshot(
+                ns,
+                key,
+                () =>
+                {
+                    Interlocked.Increment(ref snapshotsCreated);
+                    return TileDiskCache.CreateSnapshot(image);
+                },
+                () => Volatile.Read(ref relevant) == 1));
+
+        Assert.True(writerEntered.Wait(TimeSpan.FromSeconds(10)));
+        Volatile.Write(ref relevant, 0);
+        releaseWriter.Set();
+
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+        Assert.Equal(0, Volatile.Read(ref snapshotsCreated));
+        Assert.Null(cache.TryRead(ns, key));
+    }
+
+    [Fact]
+    public void QueueDeferredSnapshot_RechecksRelevanceBeforeEncoding()
+    {
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(7, 14, 15);
+        using var image = NoiseImage(64, seed: 31);
+        var relevanceChecks = 0;
+        var snapshotsCreated = 0;
+
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueDeferredSnapshot(
+                ns,
+                key,
+                () =>
+                {
+                    Interlocked.Increment(ref snapshotsCreated);
+                    return TileDiskCache.CreateSnapshot(image);
+                },
+                () => Interlocked.Increment(ref relevanceChecks) == 1));
+
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+        Assert.Equal(1, Volatile.Read(ref snapshotsCreated));
+        Assert.True(Volatile.Read(ref relevanceChecks) >= 2);
+        Assert.Null(cache.TryRead(ns, key));
+    }
+
+    [Fact]
+    public void QueueDeferredSnapshot_RechecksRelevanceBeforeFileCommit()
+    {
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(7, 16, 17);
+        using var image = NoiseImage(64, seed: 37);
+        var relevanceChecks = 0;
+
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueDeferredSnapshot(
+                ns,
+                key,
+                () => TileDiskCache.CreateSnapshot(image),
+                () => Interlocked.Increment(ref relevanceChecks) < 3));
+
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+        Assert.True(Volatile.Read(ref relevanceChecks) >= 3);
+        Assert.Null(cache.TryRead(ns, key));
+    }
+
+    [Fact]
+    public void QueueWrite_DropsExcessWorkInsteadOfBlockingProducer()
+    {
+        using var writerGate = new ManualResetEventSlim();
+        using var cache = new TileDiskCache(
+            _root,
+            64L * 1024 * 1024,
+            writeQueueCapacity: 1,
+            beforeWrite: () => writerGate.Wait());
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        using var image = NoiseImage(64, seed: 71);
+        var results = new List<TileDiskCache.WriteEnqueueResult>();
+        var snapshotsCreated = 0;
+
+        try
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                results.Add(cache.TryQueueDeferredSnapshot(
+                    ns,
+                    Key(9, i, 0),
+                    () =>
+                    {
+                        Interlocked.Increment(ref snapshotsCreated);
+                        return TileDiskCache.CreateSnapshot(image);
+                    }));
+            }
+
+            Assert.Contains(TileDiskCache.WriteEnqueueResult.Full, results);
+            Assert.Equal(0, Volatile.Read(ref snapshotsCreated));
+        }
+        finally
+        {
+            writerGate.Set();
+        }
+
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+        Assert.Equal(
+            results.Count(result => result == TileDiskCache.WriteEnqueueResult.Queued),
+            Volatile.Read(ref snapshotsCreated));
+    }
+
+    [Fact]
+    public void Dispose_DrainsQueuedWrites()
+    {
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        var key = Key(6, 3, 5);
+        using var image = NoiseImage(128, seed: 9);
+        using (var cache = new TileDiskCache(_root, 64L * 1024 * 1024))
+        {
+            Assert.Equal(
+                TileDiskCache.WriteEnqueueResult.Queued,
+                cache.TryQueueWrite(ns, key, image));
+        }
+
+        using var reader = new TileDiskCache(_root, 64L * 1024 * 1024);
+        using var read = reader.TryRead(ns, key);
+        Assert.NotNull(read);
+        Assert.Equal(Pixels(image), Pixels(read!));
     }
 }

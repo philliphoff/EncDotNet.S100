@@ -15,6 +15,13 @@ app.Configure(config =>
         .WithDescription("Run all scenarios with fixed parameters and produce a baseline.")
         .WithExample("baseline")
         .WithExample("baseline", "--out", "tools/EncDotNet.S100.PerfRunner/baselines");
+
+    config.AddCommand<ViewerStressCommand>("viewer-stress")
+        .WithDescription("Drive pan/zoom pressure against a running viewer MCP endpoint.")
+        .WithExample(
+            "viewer-stress",
+            "--port-file", "/tmp/viewer/mcp.url",
+            "--bbox", "49.8,-6.5,59.0,2.0");
 });
 
 return await app.RunAsync(args);

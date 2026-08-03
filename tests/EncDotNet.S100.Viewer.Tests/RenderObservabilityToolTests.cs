@@ -135,7 +135,24 @@ public class RenderObservabilityToolTests
             PaintSequence: 42,
             CapturedAtUtc: DateTimeOffset.UnixEpoch.ToString("O"),
             Styles: new[] { new RenderStyleStatDto("VectorStyle", 5, 9.0) },
-            Window: new RenderWindowStatsDto(10, 33, 42, 51.0, 20.0, 48.0, 49.0, 18.0, 47.0, 7)));
+            Window: new RenderWindowStatsDto(
+                10,
+                33,
+                42,
+                51.0,
+                20.0,
+                48.0,
+                49.0,
+                18.0,
+                47.0,
+                7,
+                new SlowestRenderFrameDto(
+                    38,
+                    DateTimeOffset.UnixEpoch.ToString("O"),
+                    51.0,
+                    9.0,
+                    42.0,
+                    5))));
         var call = GetRenderStatsMcpAdapter.TranslateResult(ok);
 
         Assert.False(call.IsError);
@@ -148,6 +165,9 @@ public class RenderObservabilityToolTests
         Assert.Equal(10, (long)window["count"]!);
         Assert.Equal(51.0, (double)window["frameMaxMs"]!);
         Assert.Equal(49.0, (double)window["vectorMaxMs"]!);
+        var slowest = (JsonObject)window["slowestFrame"]!;
+        Assert.Equal(38, (long)slowest["paintSequence"]!);
+        Assert.Equal(42.0, (double)slowest["uninstrumentedDurationMs"]!);
     }
 
     [Fact]
@@ -155,7 +175,7 @@ public class RenderObservabilityToolTests
     {
         var ok = ToolResult<GetRenderStatsResult>.Ok(new GetRenderStatsResult(
             HasData: false, null, null, null, null, null, Array.Empty<RenderStyleStatDto>(),
-            Window: new RenderWindowStatsDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));
+            Window: new RenderWindowStatsDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null)));
         var call = GetRenderStatsMcpAdapter.TranslateResult(ok);
 
         Assert.False(call.IsError);

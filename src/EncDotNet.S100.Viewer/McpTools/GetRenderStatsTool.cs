@@ -14,6 +14,15 @@ internal sealed record GetRenderStatsRequest(bool ResetWindow = false);
 /// <summary>Per-style entry in a <see cref="GetRenderStatsResult"/>.</summary>
 internal sealed record RenderStyleStatDto(string Style, long Calls, double DurationMs);
 
+/// <summary>Slowest-frame attribution in a <see cref="RenderWindowStatsDto"/>.</summary>
+internal sealed record SlowestRenderFrameDto(
+    long PaintSequence,
+    string CapturedAtUtc,
+    double FrameDurationMs,
+    double StyleDurationMs,
+    double UninstrumentedDurationMs,
+    long TotalDrawCalls);
+
 /// <summary>Rolling-window aggregate entry in a <see cref="GetRenderStatsResult"/>.</summary>
 internal sealed record RenderWindowStatsDto(
     long Count,
@@ -25,7 +34,8 @@ internal sealed record RenderWindowStatsDto(
     double VectorMaxMs,
     double VectorMeanMs,
     double VectorP95Ms,
-    long MaxTotalDrawCalls);
+    long MaxTotalDrawCalls,
+    SlowestRenderFrameDto? SlowestFrame);
 
 /// <summary>Result payload for <see cref="GetRenderStatsTool"/>.</summary>
 internal sealed record GetRenderStatsResult(
@@ -75,6 +85,15 @@ internal sealed class GetRenderStatsTool
 
         var window = _monitor.GetWindowStats();
         if (request.ResetWindow) _monitor.ResetWindow();
+        var slowestFrame = window.SlowestFrame is null
+            ? null
+            : new SlowestRenderFrameDto(
+                window.SlowestFrame.PaintSequence,
+                window.SlowestFrame.CapturedAtUtc.ToString("O"),
+                window.SlowestFrame.FrameDurationMs,
+                window.SlowestFrame.StyleDurationMs,
+                window.SlowestFrame.UninstrumentedDurationMs,
+                window.SlowestFrame.TotalDrawCalls);
         var windowDto = new RenderWindowStatsDto(
             window.Count,
             window.FirstSequence,
@@ -85,7 +104,8 @@ internal sealed class GetRenderStatsTool
             window.VectorMaxMs,
             window.VectorMeanMs,
             window.VectorP95Ms,
-            window.MaxTotalDrawCalls);
+            window.MaxTotalDrawCalls,
+            slowestFrame);
 
         var snapshot = _monitor.LatestStats;
         if (snapshot is null)

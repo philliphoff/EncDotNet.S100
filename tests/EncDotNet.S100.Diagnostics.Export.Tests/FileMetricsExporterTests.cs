@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 namespace EncDotNet.S100.Diagnostics.Export.Tests;
 
@@ -98,5 +100,47 @@ public class FileMetricsExporterTests : IDisposable
         Assert.True(root.GetProperty("value").GetInt64() >= 8);
 
         metricLine.Dispose();
+    }
+
+    [Fact]
+    public void TraceAndMetricExportersProduceValidSharedJsonLines()
+    {
+        var path = Path.Combine(_tempDir, "combined.jsonl");
+        var source = new ActivitySource("test.exporter.combined");
+        var meter = new Meter("test.exporter.combined", "1.0.0");
+        var counter = meter.CreateCounter<long>("test.combined.count");
+
+        using (var tracerProvider = Sdk.CreateTracerProviderBuilder()
+            .AddSource("test.exporter.combined")
+            .AddFileExporter(path)
+            .Build())
+        using (var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter("test.exporter.combined")
+            .AddReader(new PeriodicExportingMetricReader(
+                new FileMetricsExporter(path),
+                exportIntervalMilliseconds: 10))
+            .Build())
+        {
+            for (var i = 0; i < 1000; i++)
+            {
+                using var activity = source.StartActivity($"op-{i}");
+                counter.Add(1);
+                if (i % 50 == 0)
+                {
+                    Thread.Sleep(10);
+                }
+            }
+
+            Thread.Sleep(100);
+        }
+
+        var lines = File.ReadAllLines(path);
+        Assert.Contains(lines, static line => line.Contains("\"kind\":\"span\"", StringComparison.Ordinal));
+        Assert.Contains(lines, static line => line.Contains("\"kind\":\"metric\"", StringComparison.Ordinal));
+        foreach (var line in lines)
+        {
+            using var document = JsonDocument.Parse(line);
+            Assert.True(document.RootElement.TryGetProperty("kind", out _));
+        }
     }
 }

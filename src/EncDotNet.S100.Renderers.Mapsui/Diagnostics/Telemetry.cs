@@ -395,6 +395,17 @@ internal static class Telemetry
             description: "Tiles rasterised speculatively by the tiled TiledScene prediction warm set.");
 
     /// <summary>
+    /// Count of worker admission attempts deferred because at least one layer
+    /// still has visible cold work. Predicted and cross-band queues remain intact
+    /// and are reconsidered after visible publication requests the next frame.
+    /// </summary>
+    public static readonly Counter<long> TileSpeculationDeferred =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.speculation.deferred",
+            unit: "{worker}",
+            description: "Speculative tile-worker admission attempts deferred while any layer has visible cold work.");
+
+    /// <summary>
     /// Count of speculatively-rasterised tiles that <b>subsequently became
     /// visible while still cached</b> — a successful prediction. Divided by
     /// <see cref="TilePredictionRasterized"/> this is the prediction hit-rate. See §3.6.
@@ -425,6 +436,27 @@ internal static class Telemetry
             name: "s100.render.tile.disk.writes",
             unit: "{tile}",
             description: "Tiles written to the persistent disk cache by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Depth of the bounded asynchronous tile-persistence queue after an enqueue
+    /// or completion.
+    /// </summary>
+    public static readonly Histogram<int> TileDiskWriteQueueDepth =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.tile.disk.write_queue.depth",
+            unit: "{tile}",
+            description: "Raster tiles awaiting asynchronous persistence in the shared warm disk cache.");
+
+    /// <summary>
+    /// Count of tile-persistence requests discarded because they duplicate an
+    /// existing request, exceed the bounded queue, cannot be snapshotted, or
+    /// arrive during shutdown.
+    /// </summary>
+    public static readonly Counter<long> TileDiskWriteQueueDiscarded =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.disk.write_queue.discarded",
+            unit: "{tile}",
+            description: "Tile persistence requests discarded by the bounded asynchronous warm-cache writer.");
 
     /// <summary>
     /// Count of raster tiles <b>uploaded once</b> to a GPU-resident texture

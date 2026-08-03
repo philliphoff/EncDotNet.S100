@@ -122,6 +122,24 @@ public class RenderActivityMonitorTests
         Assert.True(s.IntervalMs >= 0);
     }
 
+    [Fact]
+    public void GetWindowStats_attributes_slowest_frame()
+    {
+        var m = new RenderActivityMonitor();
+        m.NotifyPaint(10.0, Styles(("VectorStyle", 1, 4.0)));
+        m.NotifyPaint(80.0, Styles(("VectorStyle", 2, 7.0), ("LabelStyle", 3, 3.0)));
+        m.NotifyPaint(20.0, Styles(("VectorStyle", 1, 5.0)));
+
+        var slowest = m.GetWindowStats().SlowestFrame;
+
+        Assert.NotNull(slowest);
+        Assert.Equal(2, slowest!.PaintSequence);
+        Assert.Equal(80.0, slowest.FrameDurationMs);
+        Assert.Equal(10.0, slowest.StyleDurationMs);
+        Assert.Equal(70.0, slowest.UninstrumentedDurationMs);
+        Assert.Equal(5, slowest.TotalDrawCalls);
+    }
+
     // ---- WaitForIdleAsync ----------------------------------------------
 
     [Fact]

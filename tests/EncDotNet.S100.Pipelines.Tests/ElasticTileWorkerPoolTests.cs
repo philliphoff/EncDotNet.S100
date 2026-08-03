@@ -191,4 +191,37 @@ public class ElasticTileWorkerPoolTests
         // At or below the floor, a worker drains predicted work rather than shedding.
         Assert.False(S100VectorTileRenderer.ShouldWorkerExit(sceneNull: false, hasVisible: false, hasPredicted: true, layerActiveWorkers: Baseline, baseline: Baseline));
     }
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    public void ShouldAdmitSpeculativeWork_VisibleDemandHasProcessWidePriority(
+        bool hasVisible,
+        bool hasGlobalVisibleWork,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            S100VectorTileRenderer.ShouldAdmitSpeculativeWork(
+                hasVisible,
+                hasGlobalVisibleWork));
+    }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public void ShouldRequestSpeculativeRetry_WakesOnlyWhenVisibleDemandDrains(
+        bool hadActiveVisibleWork,
+        bool hasActiveVisibleWork,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            S100VectorTileRenderer.ShouldRequestSpeculativeRetry(
+                hadActiveVisibleWork,
+                hasActiveVisibleWork));
+    }
 }
