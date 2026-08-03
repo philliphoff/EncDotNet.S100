@@ -139,8 +139,45 @@ This follows S-98 Ed.2.0.0 Main §9.2.1 and Annex A §8.4.1.
 The host supplies an immutable `MapPresentationState`; the session combines it
 with each leased processor and its selected time so
 `MapPresentationState.CreateRenderContext` owns product-context construction.
-Notifications and zoom policy remain host responsibilities. No `Map.AddS100`
-API is published yet.
+Notifications and zoom policy remain host responsibilities.
+
+## `AddS100` extension
+
+`Map.AddS100(options)` composes the pieces above in one call and returns a
+disposable `IS100MapSession` that owns them — a host no longer wires layer bands,
+processor ownership, the renderer, the session, and the navigator by hand or
+knows the renderer registration order:
+
+```csharp
+using var s100 = map.AddS100(new S100MapsuiOptions
+{
+    CrsTransformFactory = new ProjNetCrsTransformFactory(),
+});
+
+await s100.AddDatasetAsync(mapDataset, processor);   // registers + renders
+await s100.SetPresentationAsync(presentation);
+await s100.SetTimeAsync(time);
+s100.ZoomToDataset(mapDataset.Id);
+```
+
+`AddS100` calls `S100MapsuiRendering.Register()` (idempotent) and builds a
+`MapsuiLayerBands`, `DatasetProcessorOwner`, `MapsuiDatasetRenderer`,
+`MapsuiMapSession`, and `MapsuiMapNavigator`. Ownership lives only on the
+returned instance — never in a static table or `Map.Tag` — and `Dispose`
+releases the session and every registered processor. Normal pan / zoom /
+rotation stay with `Map.Navigator`; `ZoomToDataset` is an optional convenience.
+
+The reusable assembly ships no CRS implementation, so
+`S100MapsuiOptions.CrsTransformFactory` is required (the coverage / arrow
+renderers need it); a host supplies `ProjNetCrsTransformFactory` from
+`EncDotNet.S100.Crs.ProjNet` or its own. This first API renders
+**caller-supplied processors** via `AddDatasetAsync`; file / exchange-set
+loading (`Datasets.LoadAsync(path)`) and DI registration helpers are later
+additions.
+
+The session reports its lifecycle through structured events rather than
+notifications or localized strings, so a non-Viewer host can drive its own UI
+(these are re-exposed on `IS100MapSession`):
 
 The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI:

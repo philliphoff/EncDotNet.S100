@@ -1,3 +1,6 @@
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines;
+
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
@@ -25,4 +28,27 @@ public sealed class S100MapsuiOptions
     /// </summary>
     public VectorSceneMode SceneMode { get; init; } =
         RenderingOptimizations.SceneMode;
+
+    /// <summary>
+    /// Gets the CRS transform factory the coverage and arrow renderers use to
+    /// project a native grid CRS to EPSG:3857. Required by
+    /// <see cref="S100MapExtensions.AddS100"/> — the reusable assembly ships no
+    /// CRS implementation, so a host supplies one (e.g.
+    /// <c>ProjNetCrsTransformFactory</c>).
+    /// </summary>
+    public ICrsTransformFactory? CrsTransformFactory { get; init; }
+
+    /// <summary>
+    /// Gets the runtime S-98 cross-product ordering and suppression authority
+    /// provider. When <see langword="null"/>,
+    /// <see cref="S100MapExtensions.AddS100"/> uses a default runtime authority.
+    /// </summary>
+    public IInteroperabilityAuthorityProvider? InteroperabilityAuthorityProvider { get; init; }
+
+    /// <summary>
+    /// Gets the process-wide pattern-fill priority-clip cache shared by the
+    /// dataset renderer. When <see langword="null"/> an in-memory single-slot
+    /// cache is used for the session's lifetime.
+    /// </summary>
+    public IPatternClipCache? PatternClipCache { get; init; }
 }
