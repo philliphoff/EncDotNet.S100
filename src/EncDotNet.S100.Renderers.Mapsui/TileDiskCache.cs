@@ -39,7 +39,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// bounded by <see cref="MaxBytes"/> with least-recently-accessed eviction.
 /// Reads are concurrent; a bounded write-behind queue deduplicates persistence
 /// requests and one low-priority writer owns encoding, final-path mutation, and
-/// budget sweeps.
+/// budget sweeps. Deferred requests may carry a relevance predicate so obsolete
+/// viewport work is discarded before snapshot, PNG encoding, and file commit.
 /// </para>
 /// </remarks>
 internal sealed class TileDiskCache : IDisposable
@@ -240,19 +241,24 @@ internal sealed class TileDiskCache : IDisposable
         return TryQueueRequest(
             ns,
             key,
-            new WriteRequest(default, snapshot, SnapshotFactory: null));
+            new WriteRequest(
+                default,
+                snapshot,
+                SnapshotFactory: null,
+                IsRelevant: null));
     }
 
     internal WriteEnqueueResult TryQueueDeferredSnapshot(
         string ns,
         TileKey key,
-        Func<SKImage?> snapshotFactory)
+        Func<SKImage?> snapshotFactory,
+        Func<bool>? isRelevant = null)
     {
         ArgumentNullException.ThrowIfNull(snapshotFactory);
         return TryQueueRequest(
             ns,
             key,
-            new WriteRequest(default, Image: null, snapshotFactory));
+            new WriteRequest(default, Image: null, snapshotFactory, isRelevant));
     }
 
     private WriteEnqueueResult TryQueueRequest(
@@ -363,8 +369,18 @@ internal sealed class TileDiskCache : IDisposable
         _writeQueueIdle.Dispose();
     }
 
-    private bool WriteCore(string ns, TileKey key, SKImage image)
+    private bool WriteCore(
+        string ns,
+        TileKey key,
+        SKImage image,
+        Func<bool>? isRelevant = null)
     {
+        if (!IsWriteRelevant(isRelevant))
+        {
+            RecordStaleWriteDiscard();
+            return false;
+        }
+
         using var persistActivity = S100Diag.ActivitySource.StartActivity(
             "s100.render.tile.cache.persist", ActivityKind.Internal);
         persistActivity?.SetTag("s100.render.tile.key", $"{key.Band}/{key.X}/{key.Y}");
@@ -391,6 +407,12 @@ internal sealed class TileDiskCache : IDisposable
             }
         }
 
+        if (!IsWriteRelevant(isRelevant))
+        {
+            RecordStaleWriteDiscard();
+            return false;
+        }
+
         var dir = Path.Combine(_rootDirectory, ns);
         var path = Path.Combine(dir, FileName(key));
         var temp = Path.Combine(dir, Path.GetRandomFileName() + ".tmp");
@@ -408,6 +430,13 @@ internal sealed class TileDiskCache : IDisposable
                 {
                     Directory.CreateDirectory(dir);
                     File.WriteAllBytes(temp, encoded);
+                    if (!IsWriteRelevant(isRelevant))
+                    {
+                        TryDelete(temp);
+                        RecordStaleWriteDiscard();
+                        return false;
+                    }
+
                     File.Move(temp, path, overwrite: true);
                     TouchAccessTime(path);
                 }
@@ -449,16 +478,27 @@ internal sealed class TileDiskCache : IDisposable
             try
             {
                 _beforeWrite?.Invoke();
-                image = request.Image ?? request.SnapshotFactory?.Invoke();
-                if (image is null)
+                if (!IsWriteRelevant(request.IsRelevant))
                 {
-                    S100Diag.TileDiskWriteQueueDiscarded.Add(
-                        1,
-                        new KeyValuePair<string, object?>("reason", "snapshot"));
+                    RecordStaleWriteDiscard();
                 }
-                else if (WriteCore(request.Key.Namespace, request.Key.Tile, image))
+                else
                 {
-                    S100Diag.TileDiskWrites.Add(1);
+                    image = request.Image ?? request.SnapshotFactory?.Invoke();
+                    if (image is null)
+                    {
+                        S100Diag.TileDiskWriteQueueDiscarded.Add(
+                            1,
+                            new KeyValuePair<string, object?>("reason", "snapshot"));
+                    }
+                    else if (WriteCore(
+                                 request.Key.Namespace,
+                                 request.Key.Tile,
+                                 image,
+                                 request.IsRelevant))
+                    {
+                        S100Diag.TileDiskWrites.Add(1);
+                    }
                 }
             }
             catch (Exception)
@@ -475,6 +515,14 @@ internal sealed class TileDiskCache : IDisposable
             }
         }
     }
+
+    private static bool IsWriteRelevant(Func<bool>? isRelevant) =>
+        isRelevant?.Invoke() ?? true;
+
+    private static void RecordStaleWriteDiscard() =>
+        S100Diag.TileDiskWriteQueueDiscarded.Add(
+            1,
+            new KeyValuePair<string, object?>("reason", "stale"));
 
     private void RemovePending(WriteKey key)
     {
@@ -589,5 +637,6 @@ internal sealed class TileDiskCache : IDisposable
     private sealed record WriteRequest(
         WriteKey Key,
         SKImage? Image,
-        Func<SKImage?>? SnapshotFactory);
+        Func<SKImage?>? SnapshotFactory,
+        Func<bool>? IsRelevant);
 }

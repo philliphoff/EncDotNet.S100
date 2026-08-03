@@ -86,6 +86,41 @@ This branch changes GPU texture residency to **off by default**. It remains:
 Existing profiles that already persisted `TileGpuResidencyEnabled=true` retain
 that explicit preference.
 
+### Viewport epochs and stale-work checks
+
+- Added per-layer viewport epochs and current visible/speculative relevance
+  sets without replacing the layer-local raster queues.
+- Old-epoch jobs are promoted when their tiles become visible, demoted when
+  they remain speculative, and discarded before rasterization or publication
+  when they are no longer relevant.
+- Off-view culling now invalidates pending and in-flight viewport work.
+- Persistence re-checks current visibility before snapshot, PNG encoding, and
+  atomic file commit so delayed writes cannot preserve obsolete navigation
+  work.
+- Tile-job spans report source/current viewport epochs and
+  stale-before-raster counts; persistence discards use `reason=stale`.
+
+Measured with the stable 13-cell fixture, the issue #537 navigation route
+(`360` steps, `100` ms dwell, zoom `10–15`) completed two cycles:
+
+| Metric | Cycle 1 | Cycle 2 |
+|---|---:|---:|
+| Tile P95 | 41.8 ms | 64.0 ms |
+| Tile maximum | 108 ms | 1,436 ms |
+| Frame P95 | 7.1 ms | 47.1 ms |
+| Frame maximum | 20.1 ms | 189 ms |
+| `set_viewport` P95 | 2.1 ms | 10.4 ms |
+| `set_viewport` maximum | 6.1 ms | 540 ms |
+| Stale tiles dropped before raster | 0 | 62 |
+
+The second, warm cycle demonstrates the intended cancellation: 62 jobs whose
+epochs changed and whose tiles were no longer relevant skipped rasterization.
+Its remaining outliers were almost entirely warm-cache reads (up to 1.44 s)
+that had already started before the viewport changed; the relevance check then
+dropped the result before rasterization. Treat relevance-aware/cancellable disk
+reads or reduced read/write I/O contention as a follow-up boundary, not as
+raster-worker queueing.
+
 ## Practical benchmark fixture
 
 The real chart data is intentionally not part of the repository. The source
@@ -112,9 +147,10 @@ without moving raster execution into a global worker pool.
 
 ## Next increments
 
-1. Add viewport epochs and stale-work cancellation/checks.
-2. Add process-wide admission control for speculative work while preserving
+1. Add process-wide admission control for speculative work while preserving
    per-layer queues and workers.
+2. Make warm-cache reads relevance-aware or otherwise prevent stale reads from
+   consuming I/O after a viewport epoch changes.
 3. Add adaptive prediction budgets.
 4. Protect visible and speculative cache segments independently.
 5. Revisit GPU residency only with adaptive or strictly per-frame-budgeted
@@ -149,6 +185,8 @@ without moving raster execution into a global worker pool.
 ## Validation completed
 
 - Solution formatting verification passed.
+- Viewport epoch / persistence tests: 40 passed.
+- Full Pipelines tests after viewport epochs: 1,233 passed, 4 skipped.
 - `RenderingOptimizationsTests`: 35 passed.
 - `SettingsViewModelRenderSubsystemTests`: 6 passed.
 - Full Viewer tests: 1,626 passed, 3 skipped.

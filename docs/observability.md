@@ -142,15 +142,18 @@ When tracing is enabled, the tiled renderer also emits an opt-in
 `s100.render.tile.job` span for each worker job. Child spans separate
 `disk_read`, `rasterize`, and `publish`. Job tags include tile keys,
 visible/predicted/cross-band priority, queue wait, active worker counts, cache
-outcome, stale/published counts, and persistence enqueue results; raster spans
-include candidate paint operation count and output dimensions.
+outcome, viewport epoch, stale/published counts, stale-before-raster counts,
+and persistence enqueue results; raster spans include candidate paint operation
+count and output dimensions.
 
 Persistent cache writes run independently on a bounded, low-priority writer
 after tile publication. Root `s100.render.tile.cache.persist` spans describe
 that background work, with child `cache.encode`, `cache.file_write`, and
 `cache.sweep` spans. Queue overflow and duplicate requests are best-effort
-discards rather than render-worker backpressure. These spans are inert unless
-an `ActivityListener` subscribes, so ordinary viewer runs do not allocate trace
+discards rather than render-worker backpressure. The discard `reason` may also
+be `stale` when a queued tile leaves the current viewport before snapshot,
+encoding, or atomic file commit. These spans are inert unless an
+`ActivityListener` subscribes, so ordinary viewer runs do not allocate trace
 records.
 
 Use `perfreport tile-report` to rank slow jobs and attribute their end-to-end
