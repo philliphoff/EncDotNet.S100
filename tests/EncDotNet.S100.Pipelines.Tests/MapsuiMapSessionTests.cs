@@ -888,6 +888,27 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public async Task RenderStartedNotRaisedWhenProcessorLeaseUnavailable()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("dataset");
+        // Register the dataset with the session but not the processor with the
+        // owner, so the render's lease acquisition fails.
+        session.SetDataset(Dataset(id));
+        var started = 0;
+        var completed = 0;
+        session.DatasetRenderStarted += (_, _) => started++;
+        session.DatasetRenderCompleted += (_, _) => completed++;
+
+        Assert.Null(await session.RenderAsync(id, MapPresentationState.Default));
+
+        Assert.Equal(0, started);
+        Assert.Equal(0, completed);
+    }
+
+    [Fact]
     public async Task RefreshAsyncRaisesLifecycleWithPresentationRefreshKind()
     {
         using var map = new Map();

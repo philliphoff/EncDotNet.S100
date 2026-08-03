@@ -102,8 +102,10 @@ public sealed class MapsuiMapSession : IDisposable
     public event EventHandler<MapSessionCurrentTimeEventArgs>? CurrentTimeChanged;
 
     /// <summary>
-    /// Raised before a registered dataset begins rendering, for single renders
-    /// and each dataset of a coalesced refresh.
+    /// Raised once a processor lease is held and a registered dataset is about
+    /// to render, for single renders and each dataset of a coalesced refresh.
+    /// A dataset removed or unregistered before its lease is acquired raises no
+    /// lifecycle event.
     /// </summary>
     public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderStarted;
 
@@ -573,12 +575,16 @@ public sealed class MapsuiMapSession : IDisposable
             generation = ++entry.Generation;
         }
 
+        if (!_processorOwner.TryAcquire(datasetId, out var lease))
+            return null;
+
+        // Raise Started only once a lease is held, so it reliably means a
+        // render is about to run. A dataset removed/unregistered before this
+        // point yields no lifecycle events at all (rather than a Started that
+        // is never followed by Completed/Failed).
         DatasetRenderStarted?.Invoke(
             this,
             new MapSessionDatasetRenderEventArgs(datasetId, kind));
-
-        if (!_processorOwner.TryAcquire(datasetId, out var lease))
-            return null;
 
         MapsuiDatasetResult result;
         using (lease)
