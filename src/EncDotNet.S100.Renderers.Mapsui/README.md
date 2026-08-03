@@ -146,12 +146,14 @@ The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI:
 
 - `DatasetRenderStarted` / `DatasetRenderCompleted` (`MapSessionDatasetRenderEventArgs`)
-  bracket each dataset render for both `RenderAsync` and every dataset of a
+  mark each dataset render for both `RenderAsync` and every dataset of a
   coalesced refresh. The `Kind` (`MapSessionRenderKind`: `Render`, `TimeRefresh`,
   `PresentationRefresh`) says what triggered it. `Started` fires only once a
-  processor lease is held (a dataset removed before that raises nothing); a
-  render superseded or removed *after* it begins raises `Started` without
-  `Completed`.
+  processor lease is held (a dataset removed before that raises nothing).
+  `Completed` fires only on a successful render that installs layers; a render
+  that throws, is cancelled, or is superseded/removed *after* it begins raises
+  `Started` without `Completed` (a swallowed refresh failure instead raises
+  `DatasetRenderFailed`).
 - `DatasetRenderFailed` (`MapSessionDatasetRenderFailedEventArgs`) reports a
   per-dataset failure the session **swallowed** during a coalesced refresh so the
   other datasets keep rendering. A single `RenderAsync` surfaces its error by

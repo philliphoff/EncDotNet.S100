@@ -110,8 +110,11 @@ public sealed class MapsuiMapSession : IDisposable
     public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderStarted;
 
     /// <summary>
-    /// Raised after a registered dataset's generated layers are installed by a
-    /// render that was not superseded or removed mid-flight.
+    /// Raised after a successful render installs a registered dataset's
+    /// generated layers. Not raised when the render throws, is cancelled, or is
+    /// superseded/removed mid-flight — those leave a
+    /// <see cref="DatasetRenderStarted"/> with no matching completion (a
+    /// swallowed refresh failure instead raises <see cref="DatasetRenderFailed"/>).
     /// </summary>
     public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderCompleted;
 
