@@ -8,6 +8,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui;
 using Mapsui.Layers;
+using Mapsui.Projections;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -108,6 +109,185 @@ public sealed class MapsuiMapSessionTests
         Assert.Equal("second-v1", map.Layers.First().Name);
         Assert.True(session.GetDataset(firstId)!.Dataset.IsVisible);
         Assert.False(session.GetDataset(firstId)!.Dataset.IsActive);
+    }
+
+    [Fact]
+    public async Task RefreshReportraysEveryDatasetButComposesTheStackOnce()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        var ids = new[]
+        {
+            new MapDatasetId("a"),
+            new MapDatasetId("b"),
+            new MapDatasetId("c"),
+        };
+        var processors = new List<StubProcessor>();
+        foreach (var id in ids)
+        {
+            var processor = new StubProcessor(id.Value);
+            processors.Add(processor);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default);
+        }
+
+        // Each dataset has been portrayed once by the per-cell RenderAsync above.
+        Assert.All(processors, p => Assert.Equal(1, p.RenderCount));
+
+        var layersChanged = 0;
+        session.LayersChanged += (_, _) => layersChanged++;
+
+        var applied = await session.RefreshAsync(MapPresentationState.Default);
+
+        Assert.True(applied);
+        // Every dataset is re-portrayed (a presentation change can alter any
+        // cell's output)...
+        Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
+        // ...but the whole-stack composition — and the LayersChanged notification
+        // that drives the live map redraw — happens exactly once for the batch,
+        // not once per cell. See MapsuiMapSession.RenderCoreAsync(compose).
+        Assert.Equal(1, layersChanged);
+        Assert.Equal(3, map.Layers.Count);
+    }
+
+    [Fact]
+    public async Task RefreshReportraysDatasetsConcurrently()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        // Two cells so the assertion holds regardless of core count: the refresh
+        // concurrency cap is at least two.
+        var processors = new List<StubProcessor>();
+        var ids = new[] { new MapDatasetId("a"), new MapDatasetId("b") };
+        foreach (var id in ids)
+        {
+            var processor = new StubProcessor(id.Value);
+            processors.Add(processor);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default);
+        }
+
+        // Arm each processor to signal when its portrayal starts and then block
+        // until released.
+        var started = new List<TaskCompletionSource>();
+        foreach (var processor in processors)
+        {
+            var startedSignal =
+                new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            started.Add(startedSignal);
+            processor.RenderStarted = startedSignal;
+            processor.Delay = TimeSpan.FromSeconds(30);
+        }
+
+        var refresh = session.RefreshAsync(MapPresentationState.Default);
+
+        // Both portrayals must start before either is released — proof the refresh
+        // re-portrays concurrently. A serial refresh would block on the first
+        // cell's 30s delay and never start the second.
+        var allStarted = Task.WhenAll(started.Select(s => s.Task));
+        var winner = await Task.WhenAny(allStarted, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(allStarted, winner);
+
+        foreach (var processor in processors)
+            processor.ReleaseDelayedRender.TrySetResult();
+
+        Assert.True(await refresh);
+        Assert.Equal(2, map.Layers.Count);
+        Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
+    }
+
+    [Fact]
+    public async Task RefreshComposesOnceEvenWhenAnOutOfRangeTimeAwareCellIsCleared()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        // Two S-111 (range-gated) cells with non-overlapping time windows sharing
+        // one clock: with the clock in the late cell's window, the early cell has
+        // no sample and is cleared during the refresh.
+        var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var earlyTimes = new[] { t0, t0.AddMinutes(20) };
+        var lateTimes = new[] { t0.AddHours(2), t0.AddHours(2).AddMinutes(20) };
+        var earlyId = new MapDatasetId("early");
+        var lateId = new MapDatasetId("late");
+        Assert.True(owner.TryRegister(
+            earlyId,
+            new StubProcessor(earlyId.Value) { ProductSpec = "S-111", AvailableTimes = earlyTimes }));
+        Assert.True(owner.TryRegister(
+            lateId,
+            new StubProcessor(lateId.Value) { ProductSpec = "S-111", AvailableTimes = lateTimes }));
+        session.SetDataset(Dataset(earlyId, productSpec: "S-111", availableTimes: earlyTimes, currentTime: t0));
+        session.SetDataset(Dataset(
+            lateId, productSpec: "S-111", availableTimes: lateTimes, currentTime: t0.AddHours(2)));
+        await session.RenderAsync(earlyId, MapPresentationState.Default);
+        await session.RenderAsync(lateId, MapPresentationState.Default);
+        Assert.Equal(2, map.Layers.Count);
+
+        session.SetCurrentTime(t0.AddHours(2));
+
+        // The early cell is now out of range: its clear defers composition to the
+        // single post-loop pass rather than composing inline on a
+        // Parallel.ForEachAsync worker thread.
+        var layersChanged = 0;
+        session.LayersChanged += (_, _) => layersChanged++;
+        Assert.True(await session.RefreshAsync(MapPresentationState.Default));
+
+        Assert.Equal(1, layersChanged);
+        Assert.Single(map.Layers);
+    }
+
+    [Fact]
+    public async Task ViewportGatedRefreshDefersOffViewCellsAndRevealRefreshesThem()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        var nearId = new MapDatasetId("near");
+        var farId = new MapDatasetId("far");
+        var near = new StubProcessor(nearId.Value)
+        {
+            GeographicExtent = new GeographicBounds(-0.1, -0.1, 0.1, 0.1),
+        };
+        var far = new StubProcessor(farId.Value)
+        {
+            GeographicExtent = new GeographicBounds(99.9, -0.1, 100.1, 0.1),
+        };
+        Assert.True(owner.TryRegister(nearId, near));
+        Assert.True(owner.TryRegister(farId, far));
+        session.SetDataset(Dataset(nearId));
+        session.SetDataset(Dataset(farId));
+        await session.RenderAsync(nearId, MapPresentationState.Default);
+        await session.RenderAsync(farId, MapPresentationState.Default);
+        Assert.Equal(1, near.RenderCount);
+        Assert.Equal(1, far.RenderCount);
+        Assert.Equal(2, map.Layers.Count);
+
+        // Viewport-gated refresh covering only the near cell: the far cell is
+        // deferred, not re-portrayed.
+        Assert.True(await session.RefreshAsync(
+            MapPresentationState.Default, MercatorViewport(-1, -1, 1, 1)));
+        Assert.Equal(2, near.RenderCount);
+        Assert.Equal(1, far.RenderCount);
+        Assert.Equal(2, map.Layers.Count);
+
+        // A reveal pass over the far cell's area re-portrays it (and only it).
+        Assert.True(await session.RefreshRevealedAsync(MercatorViewport(99, -1, 101, 1)));
+        Assert.Equal(2, far.RenderCount);
+        Assert.Equal(2, near.RenderCount);
+        Assert.Equal(2, map.Layers.Count);
+
+        // A second reveal is a no-op — nothing is stale any more.
+        Assert.True(await session.RefreshRevealedAsync(MercatorViewport(99, -1, 101, 1)));
+        Assert.Equal(2, far.RenderCount);
+        Assert.Equal(2, near.RenderCount);
     }
 
     [Fact]
@@ -1018,6 +1198,14 @@ public sealed class MapsuiMapSessionTests
             authorityProvider ?? new InteroperabilityAuthorityProvider(
                 new InteroperabilityAuthority()));
 
+    private static MRect MercatorViewport(
+        double west, double south, double east, double north)
+    {
+        var (minX, minY) = SphericalMercator.FromLonLat(west, south);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(east, north);
+        return new MRect(minX, minY, maxX, maxY);
+    }
+
     private static MapDataset Dataset(
         MapDatasetId id,
         bool isVisible = true,
@@ -1080,6 +1268,13 @@ public sealed class MapsuiMapSessionTests
         public int? CellMinimumDisplayScale { get; set; }
 
         public IReadOnlyList<CoverageArea> CoverageAreas { get; set; } = [];
+
+        /// <summary>
+        /// When set, flows to the portrayal result's
+        /// <c>GeographicExtent</c> so the rendered entry gets a controllable
+        /// Web-Mercator extent (used to exercise viewport-gated refresh).
+        /// </summary>
+        public GeographicBounds? GeographicExtent { get; set; }
 
         public TimeSpan Delay { get; set; }
 
@@ -1161,6 +1356,7 @@ public sealed class MapsuiMapSessionTests
                     },
                 CellMinimumDisplayScale = CellMinimumDisplayScale,
                 CoverageAreas = CoverageAreas,
+                GeographicExtent = GeographicExtent,
             };
         }
 

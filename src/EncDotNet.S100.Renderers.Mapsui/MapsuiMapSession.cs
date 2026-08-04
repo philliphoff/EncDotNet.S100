@@ -50,6 +50,31 @@ public sealed class MapsuiMapSession : IDisposable
     private static readonly TimeSpan TimeRefreshDebounceWindow =
         TimeSpan.FromMilliseconds(100);
 
+    /// <summary>
+    /// The maximum number of datasets re-portrayed concurrently during a bulk
+    /// refresh. Capped at half the core count (minimum 2) to leave head-room for
+    /// the tile render subsystem's own worker threads, mirroring the exchange-set
+    /// lazy loader's concurrency policy.
+    /// </summary>
+    private static readonly int MaxRefreshConcurrency =
+        Math.Max(2, Environment.ProcessorCount / 2);
+
+    /// <summary>
+    /// The fraction of the viewport's width/height added as a margin on each
+    /// side when gating which cells a presentation refresh re-portrays now, so a
+    /// cell whose symbols or over-render reach just outside the visible box is
+    /// still refreshed eagerly rather than deferred to a reveal.
+    /// </summary>
+    private const double ViewportRefreshMarginFraction = 0.5;
+
+    /// <summary>
+    /// The most recent presentation applied by <see cref="RefreshAsync"/>, used
+    /// to re-portray a cell that was deferred as off-view when it later scrolls
+    /// into view (<see cref="RefreshRevealedAsync"/>). Immutable; a plain
+    /// reference read/write under <c>_sync</c> is sufficient.
+    /// </summary>
+    private MapPresentationState? _currentPresentation;
+
     /// <summary>Creates a Mapsui dataset-layer session.</summary>
     /// <param name="layerBands">The map layer bands the session will mutate.</param>
     /// <param name="processorOwner">The owner from which render leases are acquired.</param>
@@ -414,6 +439,8 @@ public sealed class MapsuiMapSession : IDisposable
             await RefreshCoreAsync(
                 presentation,
                 timeAwareOnly: true,
+                viewport: null,
+                staleOnly: false,
                 localCts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -431,11 +458,20 @@ public sealed class MapsuiMapSession : IDisposable
     }
 
     /// <summary>
-    /// Cancels the preceding full refresh and re-renders every registered
-    /// dataset through the shared render gate while preserving time gating.
+    /// Cancels the preceding full refresh and re-renders registered datasets
+    /// through the shared render gate while preserving time gating.
     /// </summary>
     /// <param name="presentation">
     /// The immutable map presentation used to construct product contexts.
+    /// </param>
+    /// <param name="viewport">
+    /// The current EPSG:3857 viewport, or <see langword="null"/> to re-portray
+    /// every registered dataset (the legacy behaviour). When supplied, only
+    /// cells whose extent intersects the viewport (grown by a margin) are
+    /// re-portrayed now; off-view cells are marked stale and re-portrayed lazily
+    /// by <see cref="RefreshRevealedAsync"/> when they scroll into view. This
+    /// keeps a presentation change over a large exchange set proportional to the
+    /// visible cell count rather than the loaded cell count.
     /// </param>
     /// <param name="cancellationToken">Cancels the requested refresh.</param>
     /// <returns>
@@ -444,6 +480,7 @@ public sealed class MapsuiMapSession : IDisposable
     /// </returns>
     public async Task<bool> RefreshAsync(
         MapPresentationState presentation,
+        MRect? viewport = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -452,6 +489,7 @@ public sealed class MapsuiMapSession : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
+            _currentPresentation = presentation;
             _presentationRefreshCts?.Cancel();
             localCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
@@ -463,6 +501,8 @@ public sealed class MapsuiMapSession : IDisposable
             await RefreshCoreAsync(
                 presentation,
                 timeAwareOnly: false,
+                viewport,
+                staleOnly: false,
                 localCts.Token).ConfigureAwait(true);
             return true;
         }
@@ -481,14 +521,69 @@ public sealed class MapsuiMapSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Re-portrays the cells that a prior viewport-gated <see cref="RefreshAsync"/>
+    /// deferred as off-view (<see cref="Entry.NeedsRefresh"/>) and that now
+    /// intersect <paramref name="viewport"/>, using the most recently applied
+    /// presentation. A no-op when no presentation has been applied yet or no
+    /// stale cell is in view. Intended to be driven (debounced) from the host's
+    /// viewport-changed signal so a deferred cell refreshes as it scrolls in.
+    /// </summary>
+    /// <param name="viewport">The current EPSG:3857 viewport.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when the pass ran to completion, or
+    /// <see langword="false"/> when it was cancelled/superseded.
+    /// </returns>
+    public async Task<bool> RefreshRevealedAsync(
+        MRect viewport,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        MapPresentationState? presentation;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            presentation = _currentPresentation;
+        }
+
+        if (presentation is null)
+            return false;
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: true,
+                cancellationToken).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
     private async Task RefreshCoreAsync(
         MapPresentationState presentation,
         bool timeAwareOnly,
+        MRect? viewport,
+        bool staleOnly,
         CancellationToken cancellationToken)
     {
         var kind = timeAwareOnly
             ? MapSessionRenderKind.TimeRefresh
             : MapSessionRenderKind.PresentationRefresh;
+
+        // Grow the viewport by a margin so a cell whose symbols/over-render reach
+        // just outside the visible box is refreshed eagerly rather than deferred.
+        var gate = viewport?.Grow(
+            viewport.Width * ViewportRefreshMarginFraction,
+            viewport.Height * ViewportRefreshMarginFraction);
+
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
@@ -498,60 +593,60 @@ public sealed class MapsuiMapSession : IDisposable
                 datasetIds = _order.ToArray();
             }
 
-            foreach (var datasetId in datasetIds)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+            // Re-portray the datasets concurrently (bounded), then compose once.
+            //
+            // The heavy portrayal runs on worker threads and the pipeline is
+            // thread-safe across cells — per-cell processors and catalogues,
+            // per-context Lua, and lock/ConcurrentDictionary-guarded shared caches
+            // and catalogue managers — so re-portraying different cells in
+            // parallel is safe. Each cell applies its rendering with compose:false
+            // (its own _sync-guarded critical section, touching no Map.Layers);
+            // the whole stack is composed exactly once after the loop (see the
+            // compose parameter on RenderCoreAsync). Composing once turns an
+            // N-cell refresh from N whole-stack projections + overlap-suppression
+            // passes (and N Map.Layers rebuilds) into one, and — via the
+            // ConfigureAwait(true) resume below — keeps that single Map.Layers
+            // mutation on the caller's (UI) thread. Concurrency is capped well
+            // below the core count to leave head-room for the tile render
+            // subsystem's own workers.
+            var needsCompose = 0;
+            await Parallel.ForEachAsync(
+                datasetIds,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = MaxRefreshConcurrency,
+                    CancellationToken = cancellationToken,
+                },
+                async (datasetId, ct) =>
+                {
+                    if (await RefreshDatasetAsync(
+                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct)
+                        .ConfigureAwait(false))
+                    {
+                        Interlocked.Exchange(ref needsCompose, 1);
+                    }
+                }).ConfigureAwait(true);
 
-                TimePolicy? policy;
-                DateTime? selectedTime;
-                bool alreadyCurrent;
+            // Compose the deferred renderings (and any deferred clears) once, on
+            // this — the caller's UI — thread. Nothing to do when no dataset
+            // applied a new rendering or clear (e.g. a time refresh where every
+            // cell was already current, or a viewport-gated pass that deferred
+            // every off-view cell). Skipped silently if the session was disposed
+            // mid-refresh.
+            if (needsCompose != 0)
+            {
+                var composed = false;
                 lock (_sync)
                 {
-                    if (!_entries.TryGetValue(datasetId, out var entry))
-                        continue;
-                    policy = entry.TimePolicy;
-                    if (timeAwareOnly && policy is null)
-                        continue;
-
-                    selectedTime = policy is not null && _time.Current is { } clock
-                        ? policy.SnapTo(clock)
-                        : null;
-                    alreadyCurrent = policy is not null
-                        && entry.RenderedTime == selectedTime
-                        && (selectedTime is null || entry.Layers.Count > 0);
-                }
-
-                if (timeAwareOnly && alreadyCurrent)
-                    continue;
-
-                try
-                {
-                    if (policy is not null && selectedTime is null)
+                    if (!_disposed)
                     {
-                        ClearLayersCore(datasetId, updateTime: true);
-                        continue;
+                        ComposeLayers();
+                        composed = true;
                     }
+                }
 
-                    await RenderCoreAsync(
-                        datasetId,
-                        presentation,
-                        selectedTime,
-                        kind,
-                        cancellationToken).ConfigureAwait(true);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    DatasetRenderFailed?.Invoke(
-                        this,
-                        new MapSessionDatasetRenderFailedEventArgs(
-                            datasetId,
-                            kind,
-                            exception));
-                }
+                if (composed)
+                    LayersChanged?.Invoke(this, EventArgs.Empty);
             }
         }
         finally
@@ -560,12 +655,141 @@ public sealed class MapsuiMapSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Refreshes one dataset as part of a bulk <see cref="RefreshCoreAsync"/>
+    /// pass: applies the viewport and time-policy gates, clears a time-aware cell
+    /// that has no sample for the current clock, or re-portrays the cell with
+    /// deferred composition (<c>compose: false</c>).
+    /// <para>
+    /// Viewport gating (presentation refreshes only): when <paramref name="gate"/>
+    /// is non-null, a cell whose extent falls outside it is <em>not</em>
+    /// re-portrayed — a normal pass marks it stale (<see cref="Entry.NeedsRefresh"/>)
+    /// and a <paramref name="staleOnly"/> reveal pass skips any cell that is not
+    /// both stale and in view. Time refreshes pass a null gate and never touch
+    /// the stale flag, so presentation-staleness survives a time scrub.
+    /// </para>
+    /// <para>
+    /// A per-dataset failure is surfaced as <see cref="DatasetRenderFailed"/> and
+    /// swallowed so siblings keep refreshing; a cancellation still propagates.
+    /// Safe to run concurrently for distinct datasets — it touches only this
+    /// dataset's entry (under <c>_sync</c>) and the thread-safe portrayal
+    /// pipeline. Returns <see langword="true"/> when a new rendering was applied
+    /// and the stack therefore needs composing.
+    /// </para>
+    /// </summary>
+    private async Task<bool> RefreshDatasetAsync(
+        MapDatasetId datasetId,
+        MapPresentationState presentation,
+        bool timeAwareOnly,
+        MRect? gate,
+        bool staleOnly,
+        MapSessionRenderKind kind,
+        CancellationToken cancellationToken)
+    {
+        TimePolicy? policy;
+        DateTime? selectedTime;
+        bool alreadyCurrent;
+        lock (_sync)
+        {
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return false;
+            policy = entry.TimePolicy;
+            if (timeAwareOnly && policy is null)
+                return false;
+
+            // Viewport gating and stale tracking apply to presentation refreshes
+            // and their reveal passes, never to time refreshes (gate is null and
+            // the stale flag is left untouched, so a time scrub does not clear a
+            // cell's presentation-staleness).
+            if (!timeAwareOnly)
+            {
+                var visible = gate is null
+                    || entry.Extent is null
+                    || entry.Extent.Intersects(gate);
+
+                if (staleOnly)
+                {
+                    // Reveal pass: only re-portray a cell previously deferred and
+                    // now back in view.
+                    if (!entry.NeedsRefresh || !visible)
+                        return false;
+                }
+                else if (!visible)
+                {
+                    // Off-view during a presentation change: defer it.
+                    entry.NeedsRefresh = true;
+                    return false;
+                }
+
+                // Committing to re-portray with the current presentation.
+                entry.NeedsRefresh = false;
+            }
+
+            selectedTime = policy is not null && _time.Current is { } clock
+                ? policy.SnapTo(clock)
+                : null;
+            alreadyCurrent = policy is not null
+                && entry.RenderedTime == selectedTime
+                && (selectedTime is null || entry.Layers.Count > 0);
+        }
+
+        if (timeAwareOnly && alreadyCurrent)
+            return false;
+
+        try
+        {
+            if (policy is not null && selectedTime is null)
+            {
+                // Hide the time-aware cell that has no sample for the current
+                // clock, but defer composition to RefreshCoreAsync's single
+                // UI-thread pass: this runs on a Parallel.ForEachAsync worker and
+                // must not mutate Map.Layers here. Returning the clear result sets
+                // needsCompose so the final compose reflects the removal.
+                return ClearLayersCore(datasetId, updateTime: true, compose: false);
+            }
+
+            var rendered = await RenderCoreAsync(
+                datasetId,
+                presentation,
+                selectedTime,
+                kind,
+                cancellationToken,
+                compose: false).ConfigureAwait(false);
+            return rendered is not null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            DatasetRenderFailed?.Invoke(
+                this,
+                new MapSessionDatasetRenderFailedEventArgs(
+                    datasetId,
+                    kind,
+                    exception));
+            return false;
+        }
+    }
+
+    /// <param name="compose">
+    /// When <see langword="true"/> (the default, single-dataset path) the layer
+    /// stack is recomposed and <see cref="LayersChanged"/> raised as soon as this
+    /// dataset's rendering is applied. A bulk refresh passes
+    /// <see langword="false"/> so composition — which rebuilds the <em>whole</em>
+    /// projected stack and recomputes cross-layer overlap suppression — runs once
+    /// after every dataset is applied instead of once per dataset (O(N) instead
+    /// of O(N²) for an N-cell exchange set). The per-dataset
+    /// <see cref="DatasetRenderCompleted"/> lifecycle event is always raised.
+    /// </param>
     private async Task<MapsuiDatasetResult?> RenderCoreAsync(
         MapDatasetId datasetId,
         MapPresentationState presentation,
         DateTime? selectedTime,
         MapSessionRenderKind kind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool compose = true)
     {
         Entry renderEntry;
         long generation;
@@ -632,33 +856,54 @@ public sealed class MapsuiMapSession : IDisposable
                     entry.TimePolicy.AvailableTimes,
                     selectedTime);
             }
-            try
+            if (compose)
             {
-                ComposeLayers();
-            }
-            catch
-            {
-                entry.RestoreRendering(previous);
-                throw;
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    throw;
+                }
             }
         }
 
-        LayersChanged?.Invoke(this, EventArgs.Empty);
+        if (compose)
+        {
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         DatasetRenderCompleted?.Invoke(
             this,
             new MapSessionDatasetRenderEventArgs(datasetId, kind));
         return result;
     }
 
-    private void ClearLayersCore(
+    /// <param name="compose">
+    /// When <see langword="true"/> (the default) the layer stack is recomposed
+    /// and <see cref="LayersChanged"/> raised inline on the calling thread. A
+    /// bulk refresh passes <see langword="false"/> — it may invoke this from a
+    /// <see cref="Parallel.ForEachAsync"/> worker thread, where composing
+    /// <see cref="Map.Layers"/> would run off the UI thread and defeat the
+    /// once-per-refresh composition — and uses the return value to drive the
+    /// single deferred compose instead.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a registered dataset's rendering was cleared
+    /// (so a deferred caller must recompose), otherwise <see langword="false"/>.
+    /// </returns>
+    private bool ClearLayersCore(
         MapDatasetId datasetId,
-        bool updateTime)
+        bool updateTime,
+        bool compose = true)
     {
         lock (_sync)
         {
             ThrowIfDisposed();
             if (!_entries.TryGetValue(datasetId, out var entry))
-                return;
+                return false;
 
             var previous = entry.CaptureRendering();
             var previousGeneration = entry.Generation;
@@ -673,19 +918,26 @@ public sealed class MapsuiMapSession : IDisposable
                     entry.TimePolicy.AvailableTimes,
                     currentTime: null);
             }
-            try
+
+            if (compose)
             {
-                ComposeLayers();
-            }
-            catch
-            {
-                entry.RestoreRendering(previous);
-                entry.Generation = previousGeneration;
-                throw;
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    entry.Generation = previousGeneration;
+                    throw;
+                }
             }
         }
 
-        LayersChanged?.Invoke(this, EventArgs.Empty);
+        if (compose)
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+
+        return true;
     }
 
     /// <summary>
@@ -1686,6 +1938,13 @@ public sealed class MapsuiMapSession : IDisposable
         public IReadOnlyList<LayerStackEntry>? StackEntries { get; set; }
 
         public MRect? Extent { get; set; }
+
+        /// <summary>
+        /// Set when a presentation refresh deferred this cell because it was
+        /// off-view; a subsequent <see cref="RefreshRevealedAsync"/> re-portrays
+        /// it with <see cref="_currentPresentation"/> once it scrolls into view.
+        /// </summary>
+        public bool NeedsRefresh { get; set; }
 
         public string? Info { get; set; }
 
