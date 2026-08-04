@@ -143,9 +143,11 @@ internal sealed class S100MapSession : IS100MapSession
     /// <inheritdoc />
     public void SetOpacity(MapDatasetId datasetId, double opacity)
     {
-        // Validate at the public entry point so callers get an
-        // ArgumentOutOfRangeException naming `opacity` and fail fast without
-        // allocating a new MapDataset.
+        // Fail fast on disposal first (consistent with the other members), then
+        // validate at the public entry point so callers get an
+        // ArgumentOutOfRangeException naming `opacity` without allocating a new
+        // MapDataset.
+        ThrowIfDisposed();
         ArgumentOutOfRangeException.ThrowIfNotEqual(double.IsFinite(opacity), true, nameof(opacity));
         ArgumentOutOfRangeException.ThrowIfLessThan(opacity, 0.0);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(opacity, 1.0);
