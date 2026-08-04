@@ -50,6 +50,15 @@ public sealed class MapsuiMapSession : IDisposable
     private static readonly TimeSpan TimeRefreshDebounceWindow =
         TimeSpan.FromMilliseconds(100);
 
+    /// <summary>
+    /// The maximum number of datasets re-portrayed concurrently during a bulk
+    /// refresh. Capped at half the core count (minimum 2) to leave head-room for
+    /// the tile render subsystem's own worker threads, mirroring the exchange-set
+    /// lazy loader's concurrency policy.
+    /// </summary>
+    private static readonly int MaxRefreshConcurrency =
+        Math.Max(2, Environment.ProcessorCount / 2);
+
     /// <summary>Creates a Mapsui dataset-layer session.</summary>
     /// <param name="layerBands">The map layer bands the session will mutate.</param>
     /// <param name="processorOwner">The owner from which render leases are acquired.</param>
@@ -498,77 +507,45 @@ public sealed class MapsuiMapSession : IDisposable
                 datasetIds = _order.ToArray();
             }
 
-            // Defer layer composition: each dataset applies its rendering below
-            // with compose:false, and the stack is recomposed exactly once after
-            // the loop (see the compose parameter on RenderCoreAsync). This turns
-            // an N-cell refresh from N whole-stack projections + overlap-suppression
-            // passes (and N Map.Layers rebuilds) into one.
-            var needsCompose = false;
-
-            foreach (var datasetId in datasetIds)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                TimePolicy? policy;
-                DateTime? selectedTime;
-                bool alreadyCurrent;
-                lock (_sync)
+            // Re-portray the datasets concurrently (bounded), then compose once.
+            //
+            // The heavy portrayal runs on worker threads and the pipeline is
+            // thread-safe across cells — per-cell processors and catalogues,
+            // per-context Lua, and lock/ConcurrentDictionary-guarded shared caches
+            // and catalogue managers — so re-portraying different cells in
+            // parallel is safe. Each cell applies its rendering with compose:false
+            // (its own _sync-guarded critical section, touching no Map.Layers);
+            // the whole stack is composed exactly once after the loop (see the
+            // compose parameter on RenderCoreAsync). Composing once turns an
+            // N-cell refresh from N whole-stack projections + overlap-suppression
+            // passes (and N Map.Layers rebuilds) into one, and — via the
+            // ConfigureAwait(true) resume below — keeps that single Map.Layers
+            // mutation on the caller's (UI) thread. Concurrency is capped well
+            // below the core count to leave head-room for the tile render
+            // subsystem's own workers.
+            var needsCompose = 0;
+            await Parallel.ForEachAsync(
+                datasetIds,
+                new ParallelOptions
                 {
-                    if (!_entries.TryGetValue(datasetId, out var entry))
-                        continue;
-                    policy = entry.TimePolicy;
-                    if (timeAwareOnly && policy is null)
-                        continue;
-
-                    selectedTime = policy is not null && _time.Current is { } clock
-                        ? policy.SnapTo(clock)
-                        : null;
-                    alreadyCurrent = policy is not null
-                        && entry.RenderedTime == selectedTime
-                        && (selectedTime is null || entry.Layers.Count > 0);
-                }
-
-                if (timeAwareOnly && alreadyCurrent)
-                    continue;
-
-                try
+                    MaxDegreeOfParallelism = MaxRefreshConcurrency,
+                    CancellationToken = cancellationToken,
+                },
+                async (datasetId, ct) =>
                 {
-                    if (policy is not null && selectedTime is null)
+                    if (await RefreshDatasetAsync(
+                        datasetId, presentation, timeAwareOnly, kind, ct)
+                        .ConfigureAwait(false))
                     {
-                        ClearLayersCore(datasetId, updateTime: true);
-                        continue;
+                        Interlocked.Exchange(ref needsCompose, 1);
                     }
-
-                    var rendered = await RenderCoreAsync(
-                        datasetId,
-                        presentation,
-                        selectedTime,
-                        kind,
-                        cancellationToken,
-                        compose: false).ConfigureAwait(true);
-                    if (rendered is not null)
-                        needsCompose = true;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    DatasetRenderFailed?.Invoke(
-                        this,
-                        new MapSessionDatasetRenderFailedEventArgs(
-                            datasetId,
-                            kind,
-                            exception));
-                }
-            }
+                }).ConfigureAwait(true);
 
             // Compose the deferred renderings once. Nothing to do when no dataset
             // applied a new rendering (e.g. a time refresh where every cell was
             // already current, or all were cleared — ClearLayersCore composes
             // itself). Skipped silently if the session was disposed mid-refresh.
-            if (needsCompose)
+            if (needsCompose != 0)
             {
                 var composed = false;
                 lock (_sync)
@@ -587,6 +564,80 @@ public sealed class MapsuiMapSession : IDisposable
         finally
         {
             _renderGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes one dataset as part of a bulk <see cref="RefreshCoreAsync"/>
+    /// pass: applies the time-policy gate, clears a time-aware cell that has no
+    /// sample for the current clock, or re-portrays the cell with deferred
+    /// composition (<c>compose: false</c>). A per-dataset failure is surfaced as
+    /// <see cref="DatasetRenderFailed"/> and swallowed so siblings keep
+    /// refreshing; a cancellation still propagates to cancel the whole pass.
+    /// Safe to run concurrently for distinct datasets — it touches only this
+    /// dataset's entry (under <c>_sync</c>) and the thread-safe portrayal
+    /// pipeline. Returns <see langword="true"/> when a new rendering was applied
+    /// and the stack therefore needs composing.
+    /// </summary>
+    private async Task<bool> RefreshDatasetAsync(
+        MapDatasetId datasetId,
+        MapPresentationState presentation,
+        bool timeAwareOnly,
+        MapSessionRenderKind kind,
+        CancellationToken cancellationToken)
+    {
+        TimePolicy? policy;
+        DateTime? selectedTime;
+        bool alreadyCurrent;
+        lock (_sync)
+        {
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return false;
+            policy = entry.TimePolicy;
+            if (timeAwareOnly && policy is null)
+                return false;
+
+            selectedTime = policy is not null && _time.Current is { } clock
+                ? policy.SnapTo(clock)
+                : null;
+            alreadyCurrent = policy is not null
+                && entry.RenderedTime == selectedTime
+                && (selectedTime is null || entry.Layers.Count > 0);
+        }
+
+        if (timeAwareOnly && alreadyCurrent)
+            return false;
+
+        try
+        {
+            if (policy is not null && selectedTime is null)
+            {
+                ClearLayersCore(datasetId, updateTime: true);
+                return false;
+            }
+
+            var rendered = await RenderCoreAsync(
+                datasetId,
+                presentation,
+                selectedTime,
+                kind,
+                cancellationToken,
+                compose: false).ConfigureAwait(false);
+            return rendered is not null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            DatasetRenderFailed?.Invoke(
+                this,
+                new MapSessionDatasetRenderFailedEventArgs(
+                    datasetId,
+                    kind,
+                    exception));
+            return false;
         }
     }
 

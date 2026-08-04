@@ -153,6 +153,55 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public async Task RefreshReportraysDatasetsConcurrently()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        // Two cells so the assertion holds regardless of core count: the refresh
+        // concurrency cap is at least two.
+        var processors = new List<StubProcessor>();
+        var ids = new[] { new MapDatasetId("a"), new MapDatasetId("b") };
+        foreach (var id in ids)
+        {
+            var processor = new StubProcessor(id.Value);
+            processors.Add(processor);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default);
+        }
+
+        // Arm each processor to signal when its portrayal starts and then block
+        // until released.
+        var started = new List<TaskCompletionSource>();
+        foreach (var processor in processors)
+        {
+            var startedSignal =
+                new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            started.Add(startedSignal);
+            processor.RenderStarted = startedSignal;
+            processor.Delay = TimeSpan.FromSeconds(30);
+        }
+
+        var refresh = session.RefreshAsync(MapPresentationState.Default);
+
+        // Both portrayals must start before either is released — proof the refresh
+        // re-portrays concurrently. A serial refresh would block on the first
+        // cell's 30s delay and never start the second.
+        var allStarted = Task.WhenAll(started.Select(s => s.Task));
+        var winner = await Task.WhenAny(allStarted, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(allStarted, winner);
+
+        foreach (var processor in processors)
+            processor.ReleaseDelayedRender.TrySetResult();
+
+        Assert.True(await refresh);
+        Assert.Equal(2, map.Layers.Count);
+        Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
+    }
+
+    [Fact]
     public async Task InactiveDatasetRemainsInStackButCannotDraw()
     {
         using var map = new Map();
