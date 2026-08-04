@@ -34,10 +34,24 @@ internal sealed class S100MapSession : IS100MapSession
     }
 
     /// <inheritdoc />
-    public MapsuiMapSession Session => _session;
+    public MapsuiMapSession Session
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _session;
+        }
+    }
 
     /// <inheritdoc />
-    public MapsuiMapNavigator Navigator => _navigator;
+    public MapsuiMapNavigator Navigator
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _navigator;
+        }
+    }
 
     /// <inheritdoc />
     public event EventHandler? LayersChanged;
@@ -201,13 +215,26 @@ internal sealed class S100MapSession : IS100MapSession
             return;
 
         var current = snapshot.Dataset;
+        var newVisible = isVisible ?? current.IsVisible;
+        var newActive = isActive ?? current.IsActive;
+        var newOpacity = opacity ?? current.Opacity;
+
+        // Skip the allocation and full SetDataset recomposition when nothing
+        // actually changed (e.g. a UI re-applying the same value).
+        if (newVisible == current.IsVisible
+            && newActive == current.IsActive
+            && newOpacity == current.Opacity)
+        {
+            return;
+        }
+
         var updated = new MapDataset(
             current.Id,
             current.Name,
             current.Metadata,
-            isVisible ?? current.IsVisible,
-            isActive ?? current.IsActive,
-            opacity ?? current.Opacity,
+            newVisible,
+            newActive,
+            newOpacity,
             current.AvailableTimes,
             current.CurrentTime,
             current.SubLayers,

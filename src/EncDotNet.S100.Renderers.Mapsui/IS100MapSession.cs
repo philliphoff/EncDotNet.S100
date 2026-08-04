@@ -52,7 +52,10 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// <param name="dataset">The renderer-neutral dataset state.</param>
     /// <param name="processor">
     /// The processor whose portrayal is rendered. The session takes ownership
-    /// and disposes it when the dataset is removed or the session is disposed.
+    /// only when this call returns <see langword="true"/>, disposing it when the
+    /// dataset is removed or the session is disposed. When it returns
+    /// <see langword="false"/> ownership is <em>not</em> transferred and the
+    /// caller remains responsible for disposing the processor.
     /// </param>
     /// <param name="minimumDisplayScale">Optional coarsest catalogue scale.</param>
     /// <param name="maximumDisplayScale">Optional finest catalogue scale.</param>
@@ -60,7 +63,7 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// <returns>
     /// A task that returns <see langword="true"/> when the dataset was
     /// registered, or <see langword="false"/> when its identity is already in
-    /// use.
+    /// use (in which case the caller still owns <paramref name="processor"/>).
     /// </returns>
     Task<bool> AddDatasetAsync(
         MapDataset dataset,

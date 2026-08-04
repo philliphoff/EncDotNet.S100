@@ -193,6 +193,8 @@ public class S100MapSessionTests
 
         Assert.Equal(1, processor.DisposeCount);
         Assert.Throws<ObjectDisposedException>(() => s100.GetDatasets());
+        Assert.Throws<ObjectDisposedException>(() => s100.Session);
+        Assert.Throws<ObjectDisposedException>(() => s100.Navigator);
     }
 
     private static MapDataset Dataset(
