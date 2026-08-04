@@ -51,11 +51,21 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="dataset">The renderer-neutral dataset state.</param>
     /// <param name="processor">
-    /// The processor whose portrayal is rendered. The session takes ownership
-    /// only when this call returns <see langword="true"/>, disposing it when the
-    /// dataset is removed or the session is disposed. When it returns
-    /// <see langword="false"/> ownership is <em>not</em> transferred and the
-    /// caller remains responsible for disposing the processor.
+    /// The processor whose portrayal is rendered. Ownership by outcome:
+    /// <list type="bullet">
+    /// <item><description>
+    /// Returns <see langword="true"/>: the session owns the processor and
+    /// disposes it when the dataset is removed or the session is disposed.
+    /// </description></item>
+    /// <item><description>
+    /// Returns <see langword="false"/> (identity already in use): the processor
+    /// was never registered; the caller still owns it and must dispose it.
+    /// </description></item>
+    /// <item><description>
+    /// Throws (render failure or cancellation): the session rolls back, which
+    /// disposes the processor; the caller must <em>not</em> dispose it again.
+    /// </description></item>
+    /// </list>
     /// </param>
     /// <param name="minimumDisplayScale">Optional coarsest catalogue scale.</param>
     /// <param name="maximumDisplayScale">Optional finest catalogue scale.</param>
