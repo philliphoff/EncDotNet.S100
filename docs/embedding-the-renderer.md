@@ -81,7 +81,7 @@ use typed late-bound accessors for only the viewport, conversion, or snapshot
 capability they need. There is no aggregate `IMapHost` facade.
 
 The Viewer composition above predates the reusable entry point. New non-Viewer
-hosts should instead call `map.AddS100(options)`
+hosts should instead call `map.AddS100(crsTransformFactory, options)`
 (`EncDotNet.S100.Renderers.Mapsui`), which composes the layer bands, processor
 ownership, dataset renderer, session, and navigator and returns a disposable
 `IS100MapSession` — see that package's README. It renders caller-supplied
