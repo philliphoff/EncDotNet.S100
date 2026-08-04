@@ -1,3 +1,5 @@
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
@@ -25,4 +27,18 @@ public sealed class S100MapsuiOptions
     /// </summary>
     public VectorSceneMode SceneMode { get; init; } =
         RenderingOptimizations.SceneMode;
+
+    /// <summary>
+    /// Gets the runtime S-98 cross-product ordering and suppression authority
+    /// provider. When <see langword="null"/>,
+    /// <see cref="S100MapExtensions.AddS100"/> uses a default runtime authority.
+    /// </summary>
+    public IInteroperabilityAuthorityProvider? InteroperabilityAuthorityProvider { get; init; }
+
+    /// <summary>
+    /// Gets the process-wide pattern-fill priority-clip cache shared by the
+    /// dataset renderer. When <see langword="null"/> an in-memory single-slot
+    /// cache is used for the session's lifetime.
+    /// </summary>
+    public IPatternClipCache? PatternClipCache { get; init; }
 }

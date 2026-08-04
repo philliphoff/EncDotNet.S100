@@ -80,8 +80,14 @@ capabilities; overlays receive only layer collection; MCP and feedback services
 use typed late-bound accessors for only the viewport, conversion, or snapshot
 capability they need. There is no aggregate `IMapHost` facade.
 
-This is an application-boundary cleanup rather than the final reusable session
-API. Layer ownership uses the reusable `MapsuiLayerBands` component against
+The Viewer composition above predates the reusable entry point. New non-Viewer
+hosts should instead call `map.AddS100(crsTransformFactory, options)`
+(`EncDotNet.S100.Renderers.Mapsui`), which composes the layer bands, processor
+ownership, dataset renderer, session, and navigator and returns a disposable
+`IS100MapSession` — see that package's README. It renders caller-supplied
+processors today; file/exchange-set loading and DI helpers are later additions.
+
+Layer ownership uses the reusable `MapsuiLayerBands` component against
 `Mapsui.Map`, and viewport behavior delegates to `MapsuiMapNavigator` against
 `Map.Navigator`. Both mutate the supplied map directly without requiring
 Avalonia. Automatic zoom after dataset load remains Viewer policy.
