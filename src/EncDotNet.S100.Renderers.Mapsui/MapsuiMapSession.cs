@@ -627,10 +627,12 @@ public sealed class MapsuiMapSession : IDisposable
                     }
                 }).ConfigureAwait(true);
 
-            // Compose the deferred renderings once. Nothing to do when no dataset
-            // applied a new rendering (e.g. a time refresh where every cell was
-            // already current, or all were cleared — ClearLayersCore composes
-            // itself). Skipped silently if the session was disposed mid-refresh.
+            // Compose the deferred renderings (and any deferred clears) once, on
+            // this — the caller's UI — thread. Nothing to do when no dataset
+            // applied a new rendering or clear (e.g. a time refresh where every
+            // cell was already current, or a viewport-gated pass that deferred
+            // every off-view cell). Skipped silently if the session was disposed
+            // mid-refresh.
             if (needsCompose != 0)
             {
                 var composed = false;
@@ -738,8 +740,12 @@ public sealed class MapsuiMapSession : IDisposable
         {
             if (policy is not null && selectedTime is null)
             {
-                ClearLayersCore(datasetId, updateTime: true);
-                return false;
+                // Hide the time-aware cell that has no sample for the current
+                // clock, but defer composition to RefreshCoreAsync's single
+                // UI-thread pass: this runs on a Parallel.ForEachAsync worker and
+                // must not mutate Map.Layers here. Returning the clear result sets
+                // needsCompose so the final compose reflects the removal.
+                return ClearLayersCore(datasetId, updateTime: true, compose: false);
             }
 
             var rendered = await RenderCoreAsync(
@@ -875,15 +881,29 @@ public sealed class MapsuiMapSession : IDisposable
         return result;
     }
 
-    private void ClearLayersCore(
+    /// <param name="compose">
+    /// When <see langword="true"/> (the default) the layer stack is recomposed
+    /// and <see cref="LayersChanged"/> raised inline on the calling thread. A
+    /// bulk refresh passes <see langword="false"/> — it may invoke this from a
+    /// <see cref="Parallel.ForEachAsync"/> worker thread, where composing
+    /// <see cref="Map.Layers"/> would run off the UI thread and defeat the
+    /// once-per-refresh composition — and uses the return value to drive the
+    /// single deferred compose instead.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a registered dataset's rendering was cleared
+    /// (so a deferred caller must recompose), otherwise <see langword="false"/>.
+    /// </returns>
+    private bool ClearLayersCore(
         MapDatasetId datasetId,
-        bool updateTime)
+        bool updateTime,
+        bool compose = true)
     {
         lock (_sync)
         {
             ThrowIfDisposed();
             if (!_entries.TryGetValue(datasetId, out var entry))
-                return;
+                return false;
 
             var previous = entry.CaptureRendering();
             var previousGeneration = entry.Generation;
@@ -898,19 +918,26 @@ public sealed class MapsuiMapSession : IDisposable
                     entry.TimePolicy.AvailableTimes,
                     currentTime: null);
             }
-            try
+
+            if (compose)
             {
-                ComposeLayers();
-            }
-            catch
-            {
-                entry.RestoreRendering(previous);
-                entry.Generation = previousGeneration;
-                throw;
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    entry.Generation = previousGeneration;
+                    throw;
+                }
             }
         }
 
-        LayersChanged?.Invoke(this, EventArgs.Empty);
+        if (compose)
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+
+        return true;
     }
 
     /// <summary>

@@ -203,6 +203,47 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public async Task RefreshComposesOnceEvenWhenAnOutOfRangeTimeAwareCellIsCleared()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        // Two S-111 (range-gated) cells with non-overlapping time windows sharing
+        // one clock: with the clock in the late cell's window, the early cell has
+        // no sample and is cleared during the refresh.
+        var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var earlyTimes = new[] { t0, t0.AddMinutes(20) };
+        var lateTimes = new[] { t0.AddHours(2), t0.AddHours(2).AddMinutes(20) };
+        var earlyId = new MapDatasetId("early");
+        var lateId = new MapDatasetId("late");
+        Assert.True(owner.TryRegister(
+            earlyId,
+            new StubProcessor(earlyId.Value) { ProductSpec = "S-111", AvailableTimes = earlyTimes }));
+        Assert.True(owner.TryRegister(
+            lateId,
+            new StubProcessor(lateId.Value) { ProductSpec = "S-111", AvailableTimes = lateTimes }));
+        session.SetDataset(Dataset(earlyId, productSpec: "S-111", availableTimes: earlyTimes, currentTime: t0));
+        session.SetDataset(Dataset(
+            lateId, productSpec: "S-111", availableTimes: lateTimes, currentTime: t0.AddHours(2)));
+        await session.RenderAsync(earlyId, MapPresentationState.Default);
+        await session.RenderAsync(lateId, MapPresentationState.Default);
+        Assert.Equal(2, map.Layers.Count);
+
+        session.SetCurrentTime(t0.AddHours(2));
+
+        // The early cell is now out of range: its clear defers composition to the
+        // single post-loop pass rather than composing inline on a
+        // Parallel.ForEachAsync worker thread.
+        var layersChanged = 0;
+        session.LayersChanged += (_, _) => layersChanged++;
+        Assert.True(await session.RefreshAsync(MapPresentationState.Default));
+
+        Assert.Equal(1, layersChanged);
+        Assert.Single(map.Layers);
+    }
+
+    [Fact]
     public async Task ViewportGatedRefreshDefersOffViewCellsAndRevealRefreshesThem()
     {
         using var map = new Map();
