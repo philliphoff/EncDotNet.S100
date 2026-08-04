@@ -114,6 +114,44 @@ public class CaptureCoordinatorTests
     }
 
     [Fact]
+    public async Task CaptureDrained_without_gate_lets_capture_reenter_live_paint()
+    {
+        // Reproduces the whole-control capture path: the capture callback renders
+        // the control tree, whose start/end markers re-enter the live-paint gate
+        // on the capturing thread. With acquireGate: true, CaptureDrainedAsync
+        // holds the gate on a *worker* thread, so this re-entry from another
+        // thread would block forever (the classic capture_app_screenshot
+        // deadlock). acquireGate: false relies on the markers to serialize and
+        // must not deadlock.
+        var reentered = false;
+        var capture = CaptureCoordinator.CaptureDrainedAsync(
+            () =>
+            {
+                CaptureCoordinator.NotifyDrained();
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                // Stand in for StartMarkerOperation/EndMarkerOperation re-entering
+                // the gate during the on-UI-thread render.
+                var lease = CaptureCoordinator.EnterLivePaint();
+                CaptureCoordinator.ExitGate(lease);
+                reentered = true;
+                return Task.FromResult<byte[]?>([42]);
+            },
+            CancellationToken.None,
+            acquireGate: false);
+
+        var finished = await Task.WhenAny(
+            capture,
+            Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(capture, finished); // did not deadlock
+        Assert.True(reentered);
+        Assert.Equal(new byte[] { 42 }, await capture);
+        Assert.False(CaptureCoordinator.CaptureActive);
+    }
+
+    [Fact]
     public void Live_paint_reentry_recovers_abandoned_gate()
     {
         var abandonedLease = CaptureCoordinator.EnterLivePaint();

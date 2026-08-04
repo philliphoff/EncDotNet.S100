@@ -108,10 +108,31 @@ internal static class CaptureCoordinator
         }
     }
 
+    /// <param name="acquireGate">
+    /// Whether to hold the live-paint gate across <paramref name="captureAsync"/>.
+    /// <para>
+    /// <see langword="true"/> for a capture that renders shared Skia/GPU
+    /// resources <b>without</b> going through the map control's
+    /// <see cref="CaptureSynchronizedMapControl"/> markers (e.g. rendering Mapsui
+    /// layers straight to an offscreen bitmap): the external gate is the only
+    /// thing excluding a concurrent live paint.
+    /// </para>
+    /// <para>
+    /// <see langword="false"/> for a capture that re-renders the control tree on
+    /// the UI thread (e.g. <c>RenderTargetBitmap.Render(control)</c>): that render
+    /// re-enters the map control's start/end markers, which acquire the gate on
+    /// the UI thread themselves and so already serialize against a concurrent
+    /// compositor paint. Holding the gate here too — on a different (worker)
+    /// thread — would deadlock the UI-thread marker's <see cref="EnterLivePaint"/>
+    /// against this holder, which is in turn awaiting that same UI-thread render.
+    /// The drain still runs; only the redundant external gate is skipped.
+    /// </para>
+    /// </param>
     internal static async Task<byte[]?> CaptureDrainedAsync(
         Func<Task> requestRepaintAsync,
         Func<Task<byte[]?>> captureAsync,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool acquireGate = true)
     {
         ArgumentNullException.ThrowIfNull(requestRepaintAsync);
         ArgumentNullException.ThrowIfNull(captureAsync);
@@ -125,6 +146,11 @@ internal static class CaptureCoordinator
             await requestRepaintAsync().ConfigureAwait(false);
             await DrainSignal.WaitAsync(CaptureDrainTimeout, cancellationToken)
                 .ConfigureAwait(false);
+
+            if (!acquireGate)
+            {
+                return await captureAsync().ConfigureAwait(false);
+            }
 
             var lease = await Task.Run(
                 () => AcquireGate(GateTimeout, cancellationToken),

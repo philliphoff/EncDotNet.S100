@@ -57,11 +57,19 @@ public static class AvaloniaControlCapture
                 .ConfigureAwait(false);
         }
 
+        // The capture re-renders the control tree on the UI thread
+        // (RenderTargetBitmap.Render below), which re-enters the map control's
+        // live-paint markers on that same UI thread. Those markers acquire the
+        // capture gate themselves, so they already serialize this capture against
+        // a concurrent compositor paint — do NOT also hold the gate on a worker
+        // thread here, or the UI-thread marker would deadlock waiting on a holder
+        // that is itself awaiting this UI-thread render (acquireGate: false).
         return await CaptureCoordinator.CaptureDrainedAsync(
             () => InvokeOnUiThreadAsync(target.InvalidateVisual),
             () => InvokeOnUiThreadAsync(
                 () => CaptureOnUiThread(target, cancellationToken)),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            acquireGate: false).ConfigureAwait(false);
     }
 
     internal static bool RequiresCaptureSynchronization(Control target)

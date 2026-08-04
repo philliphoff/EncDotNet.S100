@@ -118,6 +118,7 @@ public partial class App : Application
 
         _services = ConfigureServices();
         _services.GetRequiredService<ViewerPresentationCoordinator>();
+        _services.GetRequiredService<PresentationRevealCoordinator>();
 
         // Now that the container exists, route recorded crashes into the
         // feedback reporter's last-error tracker (the global handlers above
@@ -795,6 +796,7 @@ public partial class App : Application
         services.AddSingleton(sp =>
             sp.GetRequiredService<MapPresentationStateProjection>().CreateSnapshot());
         services.AddSingleton<ViewerPresentationCoordinator>();
+        services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
         services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
             sp.GetService<ITimeFormatProvider>(),
