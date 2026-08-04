@@ -68,8 +68,9 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// was never registered; the caller still owns it and must dispose it.
     /// </description></item>
     /// <item><description>
-    /// Throws (render failure or cancellation): the session rolls back, which
-    /// disposes the processor; the caller must <em>not</em> dispose it again.
+    /// Throws (render failure or cancellation, or the dataset was removed before
+    /// its layers were installed): the session rolls back, which disposes the
+    /// processor; the caller must <em>not</em> dispose it again.
     /// </description></item>
     /// </list>
     /// </param>

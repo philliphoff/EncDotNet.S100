@@ -78,6 +78,34 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public async Task AddDatasetAsyncFailsWhenRemovedBeforeLayersInstall()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        var renderStarted =
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processor = new StubProcessor(id.Value)
+        {
+            RenderStarted = renderStarted,
+            Delay = TimeSpan.FromSeconds(30),
+        };
+
+        var add = s100.AddDatasetAsync(Dataset(id), processor);
+        await renderStarted.Task; // the render is in flight
+
+        // Reentrant removal retires the processor before the render installs
+        // layers, so RenderAsync returns null with ownership lost.
+        Assert.True(s100.RemoveDataset(id));
+        processor.ReleaseDelayedRender.TrySetResult();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => add);
+        Assert.Empty(map.Layers);
+        Assert.Empty(s100.GetDatasets());
+        Assert.Equal(1, processor.DisposeCount);
+    }
+
+    [Fact]
     public async Task RemoveDatasetRemovesLayerAndDisposesProcessor()
     {
         using var map = new Map();

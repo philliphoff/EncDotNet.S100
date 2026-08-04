@@ -91,8 +91,22 @@ internal sealed class S100MapSession : IS100MapSession
         try
         {
             _session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
-            await _session.RenderAsync(
+            var result = await _session.RenderAsync(
                 dataset.Id, CurrentPresentation, cancellationToken).ConfigureAwait(true);
+
+            // RenderAsync returns null when the dataset was removed or its
+            // processor changed while rendering. If the session no longer owns
+            // the processor we registered, the add did not take effect (and the
+            // processor was already retired by whoever removed it), so surface
+            // it as a failure through the rollback path rather than reporting a
+            // success that installed no layers. A null result while we still own
+            // the processor means a concurrent render superseded ours but the
+            // dataset is present and rendered, which is a successful add.
+            if (result is null && !_processorOwner.Owns(dataset.Id, processor))
+            {
+                throw new InvalidOperationException(
+                    $"Dataset '{dataset.Id.Value}' was removed before its layers were installed.");
+            }
         }
         catch
         {
