@@ -65,7 +65,10 @@ public class S100MapSessionTests
         var id = new MapDatasetId("dataset");
         Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
 
-        var second = await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        // On a duplicate identity the add returns false and does not take
+        // ownership, so the caller still owns and must dispose this processor.
+        using var duplicate = new StubProcessor(id.Value);
+        var second = await s100.AddDatasetAsync(Dataset(id), duplicate);
 
         Assert.False(second);
         Assert.Single(s100.GetDatasets());

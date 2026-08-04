@@ -15,6 +15,12 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <see cref="ZoomToDataset"/> convenience.
 /// </para>
 /// <para>
+/// The rendering operations mutate <c>Map.Layers</c> and install generated
+/// layers on the calling synchronization context. Call and await them from the
+/// map-owning thread (e.g. a UI host's dispatcher thread), matching
+/// <see cref="MapsuiMapSession"/>'s threading contract.
+/// </para>
+/// <para>
 /// This first API operates on caller-supplied processors via
 /// <see cref="AddDatasetAsync"/>; file/exchange-set loading is a later addition.
 /// </para>
