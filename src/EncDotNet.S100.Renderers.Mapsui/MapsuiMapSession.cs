@@ -498,6 +498,13 @@ public sealed class MapsuiMapSession : IDisposable
                 datasetIds = _order.ToArray();
             }
 
+            // Defer layer composition: each dataset applies its rendering below
+            // with compose:false, and the stack is recomposed exactly once after
+            // the loop (see the compose parameter on RenderCoreAsync). This turns
+            // an N-cell refresh from N whole-stack projections + overlap-suppression
+            // passes (and N Map.Layers rebuilds) into one.
+            var needsCompose = false;
+
             foreach (var datasetId in datasetIds)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -532,12 +539,15 @@ public sealed class MapsuiMapSession : IDisposable
                         continue;
                     }
 
-                    await RenderCoreAsync(
+                    var rendered = await RenderCoreAsync(
                         datasetId,
                         presentation,
                         selectedTime,
                         kind,
-                        cancellationToken).ConfigureAwait(true);
+                        cancellationToken,
+                        compose: false).ConfigureAwait(true);
+                    if (rendered is not null)
+                        needsCompose = true;
                 }
                 catch (OperationCanceledException)
                 {
@@ -553,6 +563,26 @@ public sealed class MapsuiMapSession : IDisposable
                             exception));
                 }
             }
+
+            // Compose the deferred renderings once. Nothing to do when no dataset
+            // applied a new rendering (e.g. a time refresh where every cell was
+            // already current, or all were cleared — ClearLayersCore composes
+            // itself). Skipped silently if the session was disposed mid-refresh.
+            if (needsCompose)
+            {
+                var composed = false;
+                lock (_sync)
+                {
+                    if (!_disposed)
+                    {
+                        ComposeLayers();
+                        composed = true;
+                    }
+                }
+
+                if (composed)
+                    LayersChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
         finally
         {
@@ -560,12 +590,23 @@ public sealed class MapsuiMapSession : IDisposable
         }
     }
 
+    /// <param name="compose">
+    /// When <see langword="true"/> (the default, single-dataset path) the layer
+    /// stack is recomposed and <see cref="LayersChanged"/> raised as soon as this
+    /// dataset's rendering is applied. A bulk refresh passes
+    /// <see langword="false"/> so composition — which rebuilds the <em>whole</em>
+    /// projected stack and recomputes cross-layer overlap suppression — runs once
+    /// after every dataset is applied instead of once per dataset (O(N) instead
+    /// of O(N²) for an N-cell exchange set). The per-dataset
+    /// <see cref="DatasetRenderCompleted"/> lifecycle event is always raised.
+    /// </param>
     private async Task<MapsuiDatasetResult?> RenderCoreAsync(
         MapDatasetId datasetId,
         MapPresentationState presentation,
         DateTime? selectedTime,
         MapSessionRenderKind kind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool compose = true)
     {
         Entry renderEntry;
         long generation;
@@ -632,18 +673,25 @@ public sealed class MapsuiMapSession : IDisposable
                     entry.TimePolicy.AvailableTimes,
                     selectedTime);
             }
-            try
+            if (compose)
             {
-                ComposeLayers();
-            }
-            catch
-            {
-                entry.RestoreRendering(previous);
-                throw;
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    throw;
+                }
             }
         }
 
-        LayersChanged?.Invoke(this, EventArgs.Empty);
+        if (compose)
+        {
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         DatasetRenderCompleted?.Invoke(
             this,
             new MapSessionDatasetRenderEventArgs(datasetId, kind));

@@ -111,6 +111,48 @@ public sealed class MapsuiMapSessionTests
     }
 
     [Fact]
+    public async Task RefreshReportraysEveryDatasetButComposesTheStackOnce()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        var ids = new[]
+        {
+            new MapDatasetId("a"),
+            new MapDatasetId("b"),
+            new MapDatasetId("c"),
+        };
+        var processors = new List<StubProcessor>();
+        foreach (var id in ids)
+        {
+            var processor = new StubProcessor(id.Value);
+            processors.Add(processor);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default);
+        }
+
+        // Each dataset has been portrayed once by the per-cell RenderAsync above.
+        Assert.All(processors, p => Assert.Equal(1, p.RenderCount));
+
+        var layersChanged = 0;
+        session.LayersChanged += (_, _) => layersChanged++;
+
+        var applied = await session.RefreshAsync(MapPresentationState.Default);
+
+        Assert.True(applied);
+        // Every dataset is re-portrayed (a presentation change can alter any
+        // cell's output)...
+        Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
+        // ...but the whole-stack composition — and the LayersChanged notification
+        // that drives the live map redraw — happens exactly once for the batch,
+        // not once per cell. See MapsuiMapSession.RenderCoreAsync(compose).
+        Assert.Equal(1, layersChanged);
+        Assert.Equal(3, map.Layers.Count);
+    }
+
+    [Fact]
     public async Task InactiveDatasetRemainsInStackButCannotDraw()
     {
         using var map = new Map();
