@@ -148,7 +148,11 @@ internal sealed class S100MapSession : IS100MapSession
         // ArgumentOutOfRangeException naming `opacity` without allocating a new
         // MapDataset.
         ThrowIfDisposed();
-        ArgumentOutOfRangeException.ThrowIfNotEqual(double.IsFinite(opacity), true, nameof(opacity));
+        if (!double.IsFinite(opacity))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(opacity), opacity, "Opacity must be a finite value in the range 0..1.");
+        }
         ArgumentOutOfRangeException.ThrowIfLessThan(opacity, 0.0);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(opacity, 1.0);
         ApplyDatasetState(datasetId, opacity: opacity);
