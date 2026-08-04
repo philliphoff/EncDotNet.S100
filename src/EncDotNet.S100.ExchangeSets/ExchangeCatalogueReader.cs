@@ -570,6 +570,7 @@ public static class ExchangeCatalogueReader
 
     private static PtLocale ReadPTLocales(XElement localeElement, XNamespace lan)
     {
+
         XElement? moreLocal = localeElement.Element(lan + "PT_Locale");
 
         var langCode = moreLocal?
