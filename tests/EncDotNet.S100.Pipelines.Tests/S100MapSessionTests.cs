@@ -72,6 +72,9 @@ public class S100MapSessionTests
 
         Assert.False(second);
         Assert.Single(s100.GetDatasets());
+        // The session must not have disposed the rejected processor; ownership
+        // stays with the caller (the `using` above disposes it).
+        Assert.Equal(0, duplicate.DisposeCount);
     }
 
     [Fact]
