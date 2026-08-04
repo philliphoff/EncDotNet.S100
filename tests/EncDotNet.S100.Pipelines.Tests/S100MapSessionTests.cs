@@ -118,6 +118,17 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public void SetOpacityRejectsOutOfRangeValueNamingTheOpacityParameter()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => s100.SetOpacity(new MapDatasetId("dataset"), 1.5));
+        Assert.Equal("opacity", ex.ParamName);
+    }
+
+    [Fact]
     public async Task SetPresentationAsyncReRendersDatasets()
     {
         using var map = new Map();

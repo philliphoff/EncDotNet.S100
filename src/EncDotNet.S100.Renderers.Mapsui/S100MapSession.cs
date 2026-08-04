@@ -141,8 +141,16 @@ internal sealed class S100MapSession : IS100MapSession
         ApplyDatasetState(datasetId, isActive: isActive);
 
     /// <inheritdoc />
-    public void SetOpacity(MapDatasetId datasetId, double opacity) =>
+    public void SetOpacity(MapDatasetId datasetId, double opacity)
+    {
+        // Validate at the public entry point so callers get an
+        // ArgumentOutOfRangeException naming `opacity` and fail fast without
+        // allocating a new MapDataset.
+        ArgumentOutOfRangeException.ThrowIfNotEqual(double.IsFinite(opacity), true, nameof(opacity));
+        ArgumentOutOfRangeException.ThrowIfLessThan(opacity, 0.0);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(opacity, 1.0);
         ApplyDatasetState(datasetId, opacity: opacity);
+    }
 
     /// <inheritdoc />
     public void SetOrder(IReadOnlyList<MapDatasetId> bottomToTopDatasetIds)
