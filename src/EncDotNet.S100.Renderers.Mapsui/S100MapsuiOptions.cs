@@ -1,5 +1,4 @@
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -28,15 +27,6 @@ public sealed class S100MapsuiOptions
     /// </summary>
     public VectorSceneMode SceneMode { get; init; } =
         RenderingOptimizations.SceneMode;
-
-    /// <summary>
-    /// Gets the CRS transform factory the coverage and arrow renderers use to
-    /// project a native grid CRS to EPSG:3857. Required by
-    /// <see cref="S100MapExtensions.AddS100"/> — the reusable assembly ships no
-    /// CRS implementation, so a host supplies one (e.g.
-    /// <c>ProjNetCrsTransformFactory</c>).
-    /// </summary>
-    public ICrsTransformFactory? CrsTransformFactory { get; init; }
 
     /// <summary>
     /// Gets the runtime S-98 cross-product ordering and suppression authority

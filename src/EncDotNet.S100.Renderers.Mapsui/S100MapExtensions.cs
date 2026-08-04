@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines;
 using Mapsui;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -17,17 +18,19 @@ public static class S100MapExtensions
     /// navigation surface; disposing the returned instance releases all of them.
     /// </summary>
     /// <param name="map">The Mapsui map to attach to.</param>
+    /// <param name="crsTransformFactory">
+    /// The CRS transform factory the coverage and arrow renderers use to
+    /// project a native grid CRS to EPSG:3857. Required — the reusable assembly
+    /// ships no CRS implementation, so a host supplies one (e.g.
+    /// <c>ProjNetCrsTransformFactory</c>).
+    /// </param>
     /// <param name="options">
-    /// Rendering configuration. <see cref="S100MapsuiOptions.CrsTransformFactory"/>
-    /// is required.
+    /// Optional rendering configuration. When <see langword="null"/>, defaults
+    /// are used.
     /// </param>
     /// <returns>The owned, disposable S-100 session.</returns>
     /// <exception cref="ArgumentNullException">
-    /// <paramref name="map"/> or <paramref name="options"/> is
-    /// <see langword="null"/>.
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// <see cref="S100MapsuiOptions.CrsTransformFactory"/> is
+    /// <paramref name="map"/> or <paramref name="crsTransformFactory"/> is
     /// <see langword="null"/>.
     /// </exception>
     /// <remarks>
@@ -38,17 +41,14 @@ public static class S100MapExtensions
     /// <see cref="IS100MapSession.AddDatasetAsync"/>; file/exchange-set loading
     /// and DI registration helpers are later additions.
     /// </remarks>
-    public static IS100MapSession AddS100(this Map map, S100MapsuiOptions options)
+    public static IS100MapSession AddS100(
+        this Map map,
+        ICrsTransformFactory crsTransformFactory,
+        S100MapsuiOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(map);
-        ArgumentNullException.ThrowIfNull(options);
-        if (options.CrsTransformFactory is null)
-        {
-            throw new ArgumentException(
-                $"{nameof(S100MapsuiOptions)}.{nameof(S100MapsuiOptions.CrsTransformFactory)} "
-                    + "must be supplied; the reusable assembly ships no CRS implementation.",
-                nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(crsTransformFactory);
+        options ??= new S100MapsuiOptions();
 
         // Register the custom S-100 style and layer renderers with Mapsui. The
         // call is idempotent, so repeated AddS100 calls are safe.
@@ -57,7 +57,7 @@ public static class S100MapExtensions
         var layerBands = new MapsuiLayerBands(map);
         var processorOwner = new DatasetProcessorOwner();
         var renderer = new MapsuiDatasetRenderer(
-            options.CrsTransformFactory,
+            crsTransformFactory,
             options.PatternClipCache,
             options);
         var authorityProvider = options.InteroperabilityAuthorityProvider

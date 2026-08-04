@@ -83,8 +83,14 @@ internal sealed class S100MapSession : IS100MapSession
         catch
         {
             // Roll the registration back so a failed add leaves no orphaned
-            // processor or partial dataset state behind.
-            _session.RemoveDataset(dataset.Id);
+            // processor or partial dataset state behind. Drop any session state
+            // without touching the owner, then retire the processor explicitly:
+            // if SetDataset failed and dropped the entry, the session's own
+            // removal would not retire the processor, leaving it registered and
+            // undisposed in the owner.
+            _session.RemoveDataset(
+                dataset.Id, preserveState: false, removeProcessor: false);
+            _processorOwner.Remove(dataset.Id, processor);
             throw;
         }
 

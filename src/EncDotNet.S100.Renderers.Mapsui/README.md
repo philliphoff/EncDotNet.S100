@@ -143,16 +143,13 @@ Notifications and zoom policy remain host responsibilities.
 
 ## `AddS100` extension
 
-`Map.AddS100(options)` composes the pieces above in one call and returns a
-disposable `IS100MapSession` that owns them — a host no longer wires layer bands,
-processor ownership, the renderer, the session, and the navigator by hand or
-knows the renderer registration order:
+`Map.AddS100(crsTransformFactory, options)` composes the pieces above in one call
+and returns a disposable `IS100MapSession` that owns them — a host no longer wires
+layer bands, processor ownership, the renderer, the session, and the navigator by
+hand or knows the renderer registration order:
 
 ```csharp
-using var s100 = map.AddS100(new S100MapsuiOptions
-{
-    CrsTransformFactory = new ProjNetCrsTransformFactory(),
-});
+using var s100 = map.AddS100(new ProjNetCrsTransformFactory());
 
 await s100.AddDatasetAsync(mapDataset, processor);   // registers + renders
 await s100.SetPresentationAsync(presentation);
@@ -167,10 +164,11 @@ returned instance — never in a static table or `Map.Tag` — and `Dispose`
 releases the session and every registered processor. Normal pan / zoom /
 rotation stay with `Map.Navigator`; `ZoomToDataset` is an optional convenience.
 
-The reusable assembly ships no CRS implementation, so
-`S100MapsuiOptions.CrsTransformFactory` is required (the coverage / arrow
-renderers need it); a host supplies `ProjNetCrsTransformFactory` from
-`EncDotNet.S100.Crs.ProjNet` or its own. This first API renders
+The reusable assembly ships no CRS implementation, so `crsTransformFactory` is a
+required argument (the coverage / arrow renderers need it); a host supplies
+`ProjNetCrsTransformFactory` from `EncDotNet.S100.Crs.ProjNet` or its own. The
+optional `S100MapsuiOptions` carries render-subsystem/scene configuration and an
+optional S-98 authority provider and pattern-clip cache. This first API renders
 **caller-supplied processors** via `AddDatasetAsync`; file / exchange-set
 loading (`Datasets.LoadAsync(path)`) and DI registration helpers are later
 additions.
@@ -178,9 +176,6 @@ additions.
 The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI
 (these are re-exposed on `IS100MapSession`):
-
-The session reports its lifecycle through structured events rather than
-notifications or localized strings, so a non-Viewer host can drive its own UI:
 
 - `DatasetRenderStarted` / `DatasetRenderCompleted` (`MapSessionDatasetRenderEventArgs`)
   mark each dataset render for both `RenderAsync` and every dataset of a
