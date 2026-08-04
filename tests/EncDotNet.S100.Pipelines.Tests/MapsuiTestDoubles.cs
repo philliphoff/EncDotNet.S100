@@ -50,6 +50,13 @@ internal sealed class StubProcessor :
 
     public IReadOnlyList<CoverageArea> CoverageAreas { get; set; } = [];
 
+    /// <summary>
+    /// When set, flows to the portrayal result's
+    /// <c>GeographicExtent</c> so the rendered entry gets a controllable
+    /// Web-Mercator extent (used to exercise viewport-gated refresh).
+    /// </summary>
+    public GeographicBounds? GeographicExtent { get; set; }
+
     public TimeSpan Delay { get; set; }
 
     public TaskCompletionSource? RenderStarted { get; set; }
@@ -130,6 +137,7 @@ internal sealed class StubProcessor :
                 },
             CellMinimumDisplayScale = CellMinimumDisplayScale,
             CoverageAreas = CoverageAreas,
+            GeographicExtent = GeographicExtent,
         };
     }
 

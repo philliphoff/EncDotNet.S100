@@ -171,7 +171,8 @@ internal sealed class S100MapSession : IS100MapSession
 
         _session.SetMarinerSettings(presentation.Mariner);
         Volatile.Write(ref _presentation, presentation);
-        await _session.RefreshAsync(presentation, cancellationToken).ConfigureAwait(true);
+        await _session.RefreshAsync(
+            presentation, cancellationToken: cancellationToken).ConfigureAwait(true);
     }
 
     /// <inheritdoc />
