@@ -1,50 +1,56 @@
-using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Viewer.Diagnostics;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using Mapsui;
-using Mapsui.Extensions;
 using Mapsui.Layers;
-using Mapsui.Projections;
-using Mapsui.Rendering;
-using Mapsui.Rendering.Skia;
-using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// <see cref="IMapHost"/> implementation backed by a live Mapsui
-/// <see cref="MapControl"/>. Created by <see cref="MainWindow"/> after
-/// the control has been initialized and handed to consumers via
-/// <see cref="IDatasetLoaderService.Initialize"/>.
+/// Composes the Viewer's focused map capabilities over reusable Mapsui and
+/// Avalonia adapters.
 /// </summary>
-internal sealed class MapsuiMapHost : IMapHost
+/// <remarks>
+/// Layer ownership remains delegated to <see cref="MapsuiLayerBands"/>,
+/// navigation to <see cref="MapsuiMapNavigator"/>, and live-control behavior
+/// to <see cref="AvaloniaMapsuiMapAdapter"/>. This host retains only Viewer
+/// capability contracts and render-subsystem lifecycle.
+/// </remarks>
+internal sealed class MapsuiMapHost :
+    IMapLayerCollection,
+    IMapViewportController,
+    IMapCoordinateConverter,
+    IMapSnapshotRenderer,
+    IMapInvalidator,
+    IDisposable
 {
-    private readonly MapControl _mapControl;
+    private readonly AvaloniaMapsuiMapAdapter _avaloniaAdapter;
+    private readonly MapsuiLayerBands _layerBands;
+    private readonly MapsuiMapNavigator _mapNavigator;
+    private bool _disposed;
 
-    /// <summary>
-    /// Tracks which layers are dataset layers (as opposed to the basemap
-    /// or tool overlays). Used to compute the correct insertion point
-    /// when a new dataset layer is added and to identify which subset
-    /// of <c>Map.Layers</c> to shuffle on reorder.
-    /// </summary>
-    private readonly HashSet<ILayer> _datasetLayers = new();
-
-    /// <summary>
-    /// Tracks overlay-tier layers added via
-    /// <see cref="AddOverlayLayer"/> — distinct from tool overlays
-    /// (e.g. measure chrome) which the viewer adds straight to
-    /// <c>Map.Layers</c>. Overlay-tier layers sit above the
-    /// dataset slice but below any subsequently-added tool overlays.
-    /// Held separately from <see cref="_datasetLayers"/> so
-    /// <see cref="ReorderDatasetLayers"/> never moves or removes
-    /// overlays.
-    /// </summary>
-    private readonly HashSet<ILayer> _overlayLayers = new();
-
-    public MapsuiMapHost(MapControl mapControl)
+    public MapsuiMapHost(
+        Map map,
+        AvaloniaMapsuiMapAdapter avaloniaAdapter,
+        DatasetProcessorOwner processorOwner,
+        MapsuiDatasetRenderer datasetRenderer,
+        IInteroperabilityAuthorityProvider authorityProvider)
     {
-        ArgumentNullException.ThrowIfNull(mapControl);
-        _mapControl = mapControl;
+        ArgumentNullException.ThrowIfNull(map);
+        ArgumentNullException.ThrowIfNull(avaloniaAdapter);
+        ArgumentNullException.ThrowIfNull(processorOwner);
+        ArgumentNullException.ThrowIfNull(datasetRenderer);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
+        _avaloniaAdapter = avaloniaAdapter;
+        _layerBands = new MapsuiLayerBands(map);
+        DatasetSession = new MapsuiMapSession(
+            _layerBands,
+            processorOwner,
+            datasetRenderer,
+            authorityProvider);
+        _mapNavigator = new MapsuiMapNavigator(map);
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();
     }
@@ -52,402 +58,91 @@ internal sealed class MapsuiMapHost : IMapHost
     /// <inheritdoc />
     public IChartRenderSubsystem RenderSubsystem { get; }
 
-    public void AddLayer(ILayer layer)
-    {
-        ArgumentNullException.ThrowIfNull(layer);
-        var map = _mapControl.Map;
-        if (map is null) return;
-        if (!_datasetLayers.Add(layer)) return;
+    public MapsuiMapSession DatasetSession { get; }
 
-        var insertAt = ComputeDatasetInsertIndex(map.Layers);
-        map.Layers.Insert(insertAt, layer, 0);
-    }
+    public void AddDatasetLayer(ILayer layer) => _layerBands.AddDatasetLayer(layer);
 
-    public void RemoveLayer(ILayer layer)
-    {
-        ArgumentNullException.ThrowIfNull(layer);
-        _datasetLayers.Remove(layer);
-        _mapControl.Map?.Layers.Remove(layer);
-    }
+    public void RemoveDatasetLayer(ILayer layer) => _layerBands.RemoveDatasetLayer(layer);
 
-    public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
-    {
-        ArgumentNullException.ThrowIfNull(orderedDatasetLayers);
-        var map = _mapControl.Map;
-        if (map is null) return;
+    public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) =>
+        _layerBands.ReplaceDatasetLayers(orderedDatasetLayers);
 
-        // Find the lowest index currently occupied by any dataset layer;
-        // that is the slot immediately above the basemap (or below the
-        // first overlay if datasets and overlays already coexist).
-        int insertAt = -1;
-        int i = 0;
-        foreach (var existing in map.Layers)
-        {
-            if (_datasetLayers.Contains(existing))
-            {
-                insertAt = i;
-                break;
-            }
-            i++;
-        }
-        if (insertAt < 0) insertAt = Math.Min(1, map.Layers.Count);
+    public void SetBasemapLayer(ILayer? layer) => _layerBands.SetBasemapLayer(layer);
 
-        // PR-L3 fix: treat the supplied list as the **authoritative**
-        // dataset-layer slice of <c>map.Layers</c>.
-        //
-        // 1. Any previously-known dataset layer that is NOT in the new
-        //    list must be removed from the map (e.g. a dataset whose
-        //    Active flag was just toggled off, or whose original layer
-        //    instance was just replaced by a rule-filtered MemoryLayer
-        //    such as the one produced by R-101-102-B).
-        // 2. Conversely, layers in the new list that the host has not
-        //    seen before — typically the rule-filtered replicas — must
-        //    be inserted *and* tracked so the next reorder cycle treats
-        //    them correctly.
-        foreach (var existing in _datasetLayers)
-        {
-            map.Layers.Remove(existing);
-        }
-        _datasetLayers.Clear();
+    public void AddOverlayLayer(ILayer layer) => _layerBands.AddOverlayLayer(layer);
 
-        int idx = insertAt;
-        foreach (var l in orderedDatasetLayers)
-        {
-            if (l is null) continue;
-            if (idx > map.Layers.Count) idx = map.Layers.Count;
-            map.Layers.Insert(idx++, l, 0);
-            _datasetLayers.Add(l);
-        }
-    }
+    public void RemoveOverlayLayer(ILayer layer) => _layerBands.RemoveOverlayLayer(layer);
 
-    public void ZoomToExtent(MRect extent)
-    {
-        ArgumentNullException.ThrowIfNull(extent);
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1));
-        }
-    }
+    public void AddToolLayer(ILayer layer) => _layerBands.AddToolLayer(layer);
 
-    public void SetViewportToExtent(MRect mercatorExtent)
-    {
-        ArgumentNullException.ThrowIfNull(mercatorExtent);
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            // duration: 0 for an instantaneous, scripted viewport set —
-            // animations would prevent reproducible measurement runs.
-            nav.ZoomToBox(mercatorExtent, duration: 0);
-        }
-    }
+    public void RemoveToolLayer(ILayer layer) => _layerBands.RemoveToolLayer(layer);
 
-    public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution)
-    {
-        ArgumentNullException.ThrowIfNull(mercatorCenter);
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            nav.CenterOnAndZoomTo(mercatorCenter, resolution, duration: 0);
-        }
-    }
+    public void RequestRedraw() => _avaloniaAdapter.RequestRedraw();
 
-    public void SetRotation(double degrees)
-    {
-        if (_mapControl.Map?.Navigator is { } nav)
-        {
-            // duration: 0 for an instantaneous, scripted rotation — animations
-            // would prevent reproducible measurement / capture runs.
-            nav.RotateTo(degrees, duration: 0);
-        }
-    }
+    public void ZoomToExtent(MRect extent) => _mapNavigator.ZoomToExtent(extent);
 
-    public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300)
-    {
-        if (double.IsNaN(latitudeWgs84) || double.IsNaN(longitudeWgs84)
-            || double.IsInfinity(latitudeWgs84) || double.IsInfinity(longitudeWgs84)
-            || latitudeWgs84 < -90.0 || latitudeWgs84 > 90.0)
-        {
-            return;
-        }
+    public void ZoomToExtent(MRect extent, long durationMilliseconds) =>
+        _mapNavigator.ZoomToExtent(extent, durationMilliseconds);
 
-        if (_mapControl.Map?.Navigator is not { } nav)
-            return;
+    public void SetViewportToExtent(MRect mercatorExtent) =>
+        _mapNavigator.SetViewportToExtent(mercatorExtent);
 
-        var (x, y) = SphericalMercator.FromLonLat(longitudeWgs84, latitudeWgs84);
-        // CenterOn keeps the current resolution, so the zoom level is
-        // preserved — only the viewport centre moves.
-        nav.CenterOn(x, y, durationMs);
-    }
+    public void SetViewportToCenterAndResolution(
+        MPoint mercatorCenter,
+        double resolution) =>
+        _mapNavigator.SetViewportToCenterAndResolution(mercatorCenter, resolution);
 
-    public GeoPosition? TryGetViewportCenterWgs84()
-    {
-        if (_mapControl.Map?.Navigator is not { } nav)
-            return null;
+    public void SetRotation(double degrees) => _mapNavigator.SetRotation(degrees);
 
-        var viewport = nav.Viewport;
-        if (viewport.Width <= 0 || viewport.Height <= 0)
-            return null;
+    public void CenterOn(
+        double latitudeWgs84,
+        double longitudeWgs84,
+        long durationMs = 300) =>
+        _mapNavigator.CenterOn(
+            new GeoPosition(latitudeWgs84, longitudeWgs84),
+            durationMs);
 
-        var (lon, lat) = SphericalMercator.ToLonLat(viewport.CenterX, viewport.CenterY);
-        if (double.IsNaN(lat) || double.IsNaN(lon) || lat < -90.0 || lat > 90.0)
-            return null;
+    public GeoPosition? TryGetViewportCenterWgs84() =>
+        _mapNavigator.TryGetViewportCenterWgs84();
 
-        return new GeoPosition(lat, lon);
-    }
+    public (double Width, double Height)? TryGetViewportSizePx() =>
+        _avaloniaAdapter.TryGetViewportSizePx();
 
-    public (double Width, double Height)? TryGetViewportSizePx()
-    {
-        if (_mapControl.Map?.Navigator is not { } nav)
-            return null;
-
-        var viewport = nav.Viewport;
-        if (viewport.Width <= 0 || viewport.Height <= 0)
-            return null;
-
-        return (viewport.Width, viewport.Height);
-    }
-
-    public GeoPosition? TryScreenToWgs84(double xPx, double yPx)
-    {
-        if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
-            return null;
-
-        if (_mapControl.Map?.Navigator is not { } nav)
-            return null;
-
-        var viewport = nav.Viewport;
-        if (viewport.Width <= 0 || viewport.Height <= 0)
-            return null;
-
-        var world = viewport.ScreenToWorld(xPx, yPx);
-        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
-        if (double.IsNaN(lat) || double.IsNaN(lon)
-            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
-        {
-            return null;
-        }
-
-        return new GeoPosition(lat, lon);
-    }
+    public GeoPosition? TryScreenToWgs84(double xPx, double yPx) =>
+        _avaloniaAdapter.TryScreenToWgs84(xPx, yPx);
 
     public GeoPosition? TryImagePixelToWgs84(
-        double xPx, double yPx, int imageWidthPx, int imageHeightPx)
-    {
-        if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
-            return null;
+        double xPx,
+        double yPx,
+        int imageWidthPx,
+        int imageHeightPx) =>
+        _avaloniaAdapter.TryImagePixelToWgs84(
+            xPx,
+            yPx,
+            imageWidthPx,
+            imageHeightPx);
 
-        if (imageWidthPx <= 0 || imageHeightPx <= 0)
-            return null;
-
-        if (_mapControl.Map?.Navigator is not { } liveNav)
-            return null;
-
-        var liveViewport = liveNav.Viewport;
-        if (liveViewport.Width <= 0 || liveViewport.Height <= 0)
-            return null;
-
-        // Reproduce the exact geometry render_to_image uses: a navigator
-        // sized to the requested image, zoomed to the live viewport's
-        // world extent with MBoxFit.Fit (aspect mismatches show slightly
-        // more area, never crop). This makes a pixel measured on the
-        // captured PNG resolve to the same ground point even when the
-        // capture's size / aspect differs from the live on-screen frame.
-        var extent = liveViewport.ToExtent();
-        if (extent is null || extent.Width <= 0 || extent.Height <= 0)
-            return null;
-
-        using var probe = new Map();
-        probe.Navigator.SetSize(imageWidthPx, imageHeightPx);
-        probe.Navigator.ZoomToBox(extent, MBoxFit.Fit);
-
-        var world = probe.Navigator.Viewport.ScreenToWorld(xPx, yPx);
-        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
-        if (double.IsNaN(lat) || double.IsNaN(lon)
-            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
-        {
-            return null;
-        }
-
-        return new GeoPosition(lat, lon);
-    }
-
-    public void AddOverlayLayer(ILayer layer)
-    {
-        ArgumentNullException.ThrowIfNull(layer);
-        var map = _mapControl.Map;
-        if (map is null) return;
-        if (!_overlayLayers.Add(layer)) return;
-
-        // Insert above the dataset slice but below any subsequently-
-        // added tool overlays. We compute the slot as "after the last
-        // tracked dataset layer", which keeps the overlay stable even
-        // if the dataset slice is reordered later.
-        var insertAt = ComputeOverlayInsertIndex(map.Layers);
-        map.Layers.Insert(insertAt, layer, 0);
-    }
-
-    public void RemoveOverlayLayer(ILayer layer)
-    {
-        ArgumentNullException.ThrowIfNull(layer);
-        if (!_overlayLayers.Remove(layer)) return;
-        _mapControl.Map?.Layers.Remove(layer);
-    }
-
-    /// <inheritdoc />
-    public async Task<byte[]?> RenderCurrentViewToPngAsync(
+    public Task<byte[]?> RenderCurrentViewToPngAsync(
         int widthPx,
         int heightPx,
         double pixelDensity,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        _avaloniaAdapter.RenderCurrentViewToPngAsync(
+            widthPx,
+            heightPx,
+            pixelDensity,
+            cancellationToken);
+
+    public void Dispose()
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        // Marshal to the UI thread: Mapsui's Map/Navigator state must
-        // not be read or mutated concurrently with the live control's
-        // own render loop, and Avalonia layers are UI-affine.
-        return await Dispatcher.UIThread.InvokeAsync(() =>
+        if (_disposed)
         {
-            var liveMap = _mapControl.Map;
-            if (liveMap is null) return null;
-
-            var liveNav = liveMap.Navigator;
-            var liveViewport = liveNav.Viewport;
-            if (liveViewport.Width <= 0 || liveViewport.Height <= 0) return null;
-
-            // Build a snapshot Map that shares the live Layers list (so
-            // styles, time-step content, palette switches, and any other
-            // mutable per-layer state mirror the user's current view
-            // exactly) but owns its own Navigator. The live map is
-            // therefore untouched: setting size / zoom on the clone
-            // does not trigger a redraw on screen.
-            //
-            // PERF: the snapshot Map is IDisposable. Prior to this
-            // change it was let go to the GC, which left subscriptions
-            // from its layer-collection / property-changed plumbing
-            // rooting it indefinitely; over the course of many
-            // render_to_image calls the per-call PNG buffer plus
-            // associated native bitmaps could not be reclaimed
-            // (RSS grew ~9× over 150 renders in the perf report's
-            // Track-B measurements). We now detach the live layers
-            // from the snapshot before disposing it so the snapshot's
-            // dispose path only touches its own owned resources, not
-            // the live layers we don't own.
-            var snapshot = new Map { CRS = liveMap.CRS, BackColor = liveMap.BackColor };
-            try
-            {
-                foreach (var layer in liveMap.Layers)
-                {
-                    snapshot.Layers.Add(layer);
-                }
-
-                snapshot.Navigator.SetSize(widthPx, heightPx);
-
-                // Match the world-extent the user currently sees. With
-                // MBoxFit.Fit, aspect-ratio mismatches show slightly more
-                // area rather than cropping — acceptable for diagnostic
-                // snapshots; the requested pixel dimensions are exact.
-                var extent = liveViewport.ToExtent();
-                if (extent is not null && extent.Width > 0 && extent.Height > 0)
-                {
-                    snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
-                }
-
-                // Carry the live viewport rotation onto the snapshot so a
-                // rotated on-screen view is captured rotated (the base chart
-                // turns; the screen-space symbol/label overlay holds upright).
-                // Without this the snapshot would render north-up — flattening
-                // the rotation and making the rotated overlay path unverifiable
-                // via render_to_image. ToExtent() above is the rotated view's
-                // axis-aligned bound, so fitting it then rotating shows the same
-                // content slightly zoomed out (matching the "slightly more area"
-                // contract). duration: 0 keeps the capture deterministic.
-                if (liveViewport.Rotation != 0)
-                {
-                    snapshot.Navigator.RotateTo(liveViewport.Rotation, duration: 0);
-                }
-
-                // Serialise the Skia render against the live on-screen
-                // paint. Both share the live layers' cached SKImage symbol
-                // textures; on a GPU-backed build a concurrent live paint
-                // uploading those images crashes in
-                // sk_image_make_texture_image (issue #337). The shared
-                // CaptureDrained protocol marks a capture pending, forces one
-                // fully-drained live frame, then holds the gate for the
-                // offscreen render.
-                return RenderGate.CaptureDrained(
-                    () => _mapControl.InvalidateVisual(),
-                    () =>
-                    {
-                        using var stream = new MapRenderer().RenderToBitmapStream(
-                            snapshot,
-                            pixelDensity: (float)pixelDensity,
-                            renderFormat: RenderFormat.Png,
-                            quality: 100);
-                        stream.Position = 0;
-                        using var ms = new MemoryStream();
-                        stream.CopyTo(ms);
-                        return ms.ToArray();
-                    });
-            }
-            finally
-            {
-                // Detach the live layers from the snapshot before the
-                // snapshot is disposed, so the snapshot's dispose path
-                // (and any teardown subscriptions Mapsui has registered
-                // on layer collection mutations) cannot release / dispose
-                // layer instances the live Map still owns. Best-effort:
-                // we never want a teardown failure to mask a render
-                // failure or otherwise crash the dispatcher.
-                try
-                {
-                    snapshot.Layers.ClearAllGroups();
-                }
-                catch
-                {
-                    // ignore — see comment above
-                }
-                snapshot.Dispose();
-            }
-        }).GetTask().ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Returns the index at which a new dataset layer should be
-    /// inserted: just after the last existing dataset layer, or — when
-    /// no dataset layer has been added yet — immediately above the
-    /// basemap (index 1). Tool overlays added later via
-    /// <c>Map.Layers.Add</c> sort above this band naturally.
-    /// </summary>
-    private int ComputeDatasetInsertIndex(LayerCollection layers)
-    {
-        int last = -1;
-        int i = 0;
-        foreach (var l in layers)
-        {
-            if (_datasetLayers.Contains(l)) last = i;
-            i++;
+            return;
         }
-        if (last >= 0) return last + 1;
-        return Math.Min(1, layers.Count);
-    }
 
-    /// <summary>
-    /// Returns the index at which a new overlay-tier layer should be
-    /// inserted: just after the last existing dataset or overlay
-    /// layer the host tracks, or — when no such layer is present —
-    /// immediately above the basemap (index 1). Layers added straight
-    /// to <c>Map.Layers</c> by callers other than the host
-    /// (e.g. tool chrome) sort above this band naturally because
-    /// they were added later.
-    /// </summary>
-    private int ComputeOverlayInsertIndex(LayerCollection layers)
-    {
-        int last = -1;
-        int i = 0;
-        foreach (var l in layers)
-        {
-            if (_datasetLayers.Contains(l) || _overlayLayers.Contains(l)) last = i;
-            i++;
-        }
-        if (last >= 0) return last + 1;
-        return Math.Min(1, layers.Count);
+        _disposed = true;
+        DatasetSession.Dispose();
+        RenderSubsystem.Deactivate();
+        _avaloniaAdapter.Dispose();
     }
 }

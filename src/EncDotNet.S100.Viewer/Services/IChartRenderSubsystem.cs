@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <para>
 /// In Phase&#160;0 both arms still draw the base plane through the Mapsui layer
 /// path owned by <see cref="MapsuiMapHost"/>; the active subsystem is held by
-/// the host (<see cref="IMapHost.RenderSubsystem"/>) and exists so the harness,
+/// <see cref="MapsuiMapHost.RenderSubsystem"/> and exists so the harness,
 /// settings, and telemetry can be exercised end-to-end.
 /// </para>
 /// </remarks>

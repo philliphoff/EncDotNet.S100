@@ -13,13 +13,13 @@ namespace EncDotNet.S100.Diagnostics.Export;
 /// Each exported metric point becomes one JSON line with structure:
 /// <code>{"kind":"metric","name":"…","instrument":"histogram",…}</code>
 /// The file is shared with <see cref="FileTelemetryExporter"/> when both
-/// are pointed at the same path; the background writer serialises access.
+/// are pointed at the same path; a shared per-file lock serialises access.
 /// </remarks>
 public sealed class FileMetricsExporter : BaseExporter<Metric>
 {
     private readonly BlockingCollection<string> _queue = new(boundedCapacity: 4096);
     private readonly Thread _writerThread;
-    private readonly string _path;
+    private readonly TelemetryJsonFormat.TelemetryFileLease _file;
     private volatile bool _disposed;
 
     /// <summary>
@@ -34,14 +34,15 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
     public FileMetricsExporter(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        _path = path;
+        var fullPath = Path.GetFullPath(path);
 
-        var dir = Path.GetDirectoryName(path);
+        var dir = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(dir))
         {
             Directory.CreateDirectory(dir);
         }
 
+        _file = TelemetryJsonFormat.AcquireFile(fullPath, truncate: false);
         _writerThread = new Thread(WriterLoop)
         {
             Name = "MetricsFileWriter",
@@ -64,7 +65,9 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
                 foreach (var tag in point.Tags)
                 {
                     if (tag.Value is not null)
-                        tags[tag.Key] = tag.Value.ToString()!;
+                    {
+                        tags[tag.Key] = TelemetryJsonFormat.FormatTagValue(tag.Value);
+                    }
                 }
 
                 string instrumentType;
@@ -130,8 +133,8 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
     protected override bool OnShutdown(int timeoutMilliseconds)
     {
         _queue.CompleteAdding();
-        _writerThread.Join(timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
-        return true;
+        return _writerThread.Join(
+            timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
     }
 
     /// <inheritdoc />
@@ -143,8 +146,11 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
         if (disposing)
         {
             _queue.CompleteAdding();
-            _writerThread.Join(5000);
-            _queue.Dispose();
+            if (_writerThread.Join(5000))
+            {
+                _queue.Dispose();
+                _file.Dispose();
+            }
         }
 
         base.Dispose(disposing);
@@ -152,16 +158,9 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
 
     private void WriterLoop()
     {
-        // Append mode so traces (written first by FileTelemetryExporter)
-        // are preserved when both share the same file.
-        using var writer = new StreamWriter(
-            new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read),
-            leaveOpen: false);
-
         foreach (var line in _queue.GetConsumingEnumerable())
         {
-            writer.WriteLine(line);
-            writer.Flush();
+            _file.WriteLine(line);
         }
     }
 }

@@ -86,6 +86,7 @@ public sealed class RenderHarness : IDisposable
             new ProjNetCrsTransformFactory(),
             featureCatalogueManager,
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
+        S100MapsuiRendering.Register();
         _mapsuiRenderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
     }
 
@@ -116,11 +117,11 @@ public sealed class RenderHarness : IDisposable
     }
 
     /// <summary>
-    /// Same as <see cref="Render"/> but also returns the <see cref="DatasetResult"/>
+    /// Same as <see cref="Render"/> but also returns the <see cref="MapsuiDatasetResult"/>
     /// produced by the pipeline (useful when a test wants to assert against
-    /// <see cref="DatasetResult.Info"/> or similar).
+    /// <see cref="MapsuiDatasetResult.Info"/> or similar).
     /// </summary>
-    public (SKBitmap Bitmap, DatasetResult Result) RenderWithResult(
+    public (SKBitmap Bitmap, MapsuiDatasetResult Result) RenderWithResult(
         string path, HarnessOptions? options = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -218,7 +219,7 @@ public sealed class RenderHarness : IDisposable
     /// Rasterises the layer stack and viewport extent of <paramref name="result"/>
     /// to an <see cref="SKBitmap"/> at the size requested by <paramref name="options"/>.
     /// </summary>
-    private static SKBitmap Rasterize(DatasetResult result, HarnessOptions options)
+    private static SKBitmap Rasterize(MapsuiDatasetResult result, HarnessOptions options)
     {
         var map = new Map { CRS = "EPSG:3857" };
         map.BackColor = MapsuiColorFromUInt(options.BackgroundColor);

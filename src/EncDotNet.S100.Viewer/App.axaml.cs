@@ -3,12 +3,14 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Services.Updates;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using EncDotNet.S100.Viewer.Views;
@@ -56,6 +58,9 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+#if DEBUG
+        this.AttachDeveloperTools();
+#endif
         ConfigureMacApplicationMenu();
     }
 
@@ -112,6 +117,7 @@ public partial class App : Application
         };
 
         _services = ConfigureServices();
+        _services.GetRequiredService<ViewerPresentationCoordinator>();
 
         // Now that the container exists, route recorded crashes into the
         // feedback reporter's last-error tracker (the global handlers above
@@ -147,28 +153,10 @@ public partial class App : Application
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
 
-        // Interpose the translation-invariant vector path cache (solid
-        // polygons + solid-stroked, resolution-simplified lines) before
-        // instrumentation wraps the renderer dictionary, so the cache sits
-        // inside the counting wrapper and pans reuse projected paths instead
-        // of rebuilding and re-stroking them every frame.
-        EncDotNet.S100.Renderers.Mapsui.CachedVectorStyleRenderer.Register();
-
-        // Register the picture-snapshot custom layer renderer (registration is
-        // unconditional; the fast path is gated live by
-        // RenderingOptimizations.VectorSnapshotEnabled, default on, bound by the
-        // Settings → Map section). It resolves Mapsui's style renderers by
-        // reflection, so it must register after the cached vector renderer is in
-        // place; it reads the renderer dictionary lazily on first paint, by which
-        // time instrumentation (below) has also wrapped it.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.Register();
-
-        // Register the TiledScene ("B") custom layer renderer too, so a layer
-        // tagged for it portrays when that subsystem is the active
-        // RenderingOptimizations.RenderSubsystem. Idempotent; the takeover is
-        // gated by the flag at layer-build time, not by registration.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.Register();
-        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.Register();
+        // Register every S-100 style and layer renderer before instrumentation
+        // wraps Mapsui's style registry. The renderer package owns the required
+        // dependency order so hosts do not have to reproduce it.
+        EncDotNet.S100.Renderers.Mapsui.S100MapsuiRendering.Register();
 
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 
@@ -472,7 +460,9 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
                 sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(),
-                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>()));
+                EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.PrecomputedLineLodEnabled
+                    ? sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>()
+                    : null));
 
         // The Mapsui renderer owns the processor -> ILayer conversion (issue
         // #189): it holds the process-wide pattern-clip cache and the CRS
@@ -606,11 +596,17 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(),
                 sp.GetRequiredService<ViewerSettings>(),
                 sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IUpdateNotificationCoordinator, UpdateNotificationCoordinator>();
         services.AddTransient<AboutDialogViewModel>();
         services.AddSingleton<Func<AboutDialogViewModel>>(sp =>
             sp.GetRequiredService<AboutDialogViewModel>);
 
-        services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
+        services.AddSingleton<DatasetProcessorOwner>();
+        services.AddSingleton<DatasetLoaderService>();
+        services.AddSingleton<IDatasetLoaderService>(sp =>
+            sp.GetRequiredService<DatasetLoaderService>());
+        services.AddSingleton<IMapPresentationController>(sp =>
+            sp.GetRequiredService<DatasetLoaderService>());
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IGeographicPickPresenter>(sp =>
             new DispatcherGeographicPickPresenter(sp.GetRequiredService<IPickService>()));
@@ -726,11 +722,11 @@ public partial class App : Application
 
         // PR-D2.1: dynamic-source registry accessor. The real registry
         // is the DynamicSourceOverlayHost constructed in MainWindow
-        // (it needs IMapHost, which only exists after the MapControl
+        // (it needs map layer capabilities, which only exist after the MapControl
         // initialises). The accessor is the indirection: view-models
         // depend on it through IDynamicFeatureSourceRegistry; MainWindow
         // assigns Current once the host is built. Mirrors
-        // IMapHostAccessor / MapHostAccessor below.
+        // typed map capability accessors below.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>());
@@ -739,7 +735,15 @@ public partial class App : Application
         // observes the existing dataset loader and re-opens dataset files
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
-        services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
+        services.AddSingleton<MapCapabilityAccessor<IMapSnapshotRenderer>>();
+        services.AddSingleton<IMapCapabilityAccessor<IMapSnapshotRenderer>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>());
+        services.AddSingleton<MapCapabilityAccessor<IMapViewportController>>();
+        services.AddSingleton<IMapCapabilityAccessor<IMapViewportController>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>());
+        services.AddSingleton<MapCapabilityAccessor<IMapCoordinateConverter>>();
+        services.AddSingleton<IMapCapabilityAccessor<IMapCoordinateConverter>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>());
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
         services.AddSingleton<IViewerUiControllerAccessor, ViewerUiControllerAccessor>();
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
@@ -756,7 +760,9 @@ public partial class App : Application
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
-            sp.GetRequiredService<IMapHostAccessor>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapSnapshotRenderer>>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapCoordinateConverter>>(),
             sp.GetService<ILoggerFactory>(),
             sp.GetRequiredService<IRenderStateControllerAccessor>(),
             sp.GetRequiredService<GlobalTimeService>(),
@@ -780,11 +786,15 @@ public partial class App : Application
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
             sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
-            sp.GetRequiredService<IMapHostAccessor>(),
+            sp.GetRequiredService<IMapCapabilityAccessor<IMapViewportController>>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
+        services.AddSingleton<MapPresentationStateProjection>();
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<MapPresentationStateProjection>().CreateSnapshot());
+        services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
         services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
             sp.GetService<ITimeFormatProvider>(),
@@ -931,7 +941,8 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<IPickService>(),
             sp.GetRequiredService<IFileDialogService>(),
-            sp.GetRequiredService<IExchangeSetService>()));
+            sp.GetRequiredService<IExchangeSetService>(),
+            sp.GetRequiredService<IUpdateNotificationCoordinator>()));
 
         return services.BuildServiceProvider();
     }

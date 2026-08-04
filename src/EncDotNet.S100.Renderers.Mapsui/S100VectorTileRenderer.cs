@@ -134,6 +134,14 @@ public static class S100VectorTileRenderer
     public static bool CrossBandPrewarmEnabled => RenderingOptimizations.TileCrossBandPrewarmEnabled;
 
     /// <summary>
+    /// Whether adjacent misses may be rasterised as a 2&#215;2 metatile and
+    /// sliced into tile-granular cache entries (issue&#160;#427). Sourced from
+    /// <see cref="RenderingOptimizations.TileMetatileEnabled"/> and seeded by
+    /// <c>S100_VECTOR_TILE_METATILE</c>; default off pending the real-data gate.
+    /// </summary>
+    public static bool MetatileEnabled => RenderingOptimizations.TileMetatileEnabled;
+
+    /// <summary>
     /// The maximum number of adjacent-band tiles enqueued per frame for idle
     /// cross-band pre-warm (issue&#160;#428). Bounds the speculative warm budget
     /// so pre-warm cannot churn the hot cache: the band&#160;+&#160;1 footprint
@@ -177,7 +185,7 @@ public static class S100VectorTileRenderer
     /// subsequent frame, instead of re-uploading the same pixels each paint —
     /// the dominant per-frame cost identified in Appendix&#160;F. Sourced from
     /// <see cref="RenderingOptimizations.TileGpuResidencyEnabled"/> (seeded from
-    /// <c>S100_VECTOR_TILE_GPU</c>, default on); read every frame so a change
+    /// <c>S100_VECTOR_TILE_GPU</c>, default off); read every frame so a change
     /// takes effect live. On a software/CPU surface this is inert and the
     /// renderer blits the raster tile directly (universal fallback, no regression).
     /// </summary>
@@ -304,10 +312,10 @@ public static class S100VectorTileRenderer
 
     /// <summary>
     /// Guards <see cref="VisibleLayerStamps"/> and <see cref="VisibleLayerPruneScratch"/>.
-    /// Only ever taken on the render/UI thread (layer paint is serialized there),
-    /// so it is effectively uncontended; tile workers never touch it. Always
-    /// acquired <em>after</em> a layer's <c>state.Sync</c> and never the reverse,
-    /// and workers never take it, so it introduces no lock-order cycle.
+    /// Usually taken on the render/UI thread (layer paint is serialized there);
+    /// tile workers also take it briefly when checking process-wide speculative
+    /// admission. Always acquired <em>after</em> a layer's <c>state.Sync</c> and
+    /// never the reverse, so it introduces no lock-order cycle.
     /// </summary>
     private static readonly object VisibleLayerSync = new();
 
@@ -481,7 +489,9 @@ public static class S100VectorTileRenderer
         {
             var root = ResolveTileDiskDirectory();
             var budgetMb = RenderingOptimizations.TileDiskMb;
-            return new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
+            var cache = new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => cache.Dispose();
+            return cache;
         }
         catch
         {
@@ -506,7 +516,7 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>Registers this renderer under <see cref="RendererName"/>. Idempotent.</summary>
-    public static void Register()
+    internal static void Register()
     {
         MapRenderer.RegisterLayerRenderer(RendererName, Render);
     }
@@ -569,6 +579,10 @@ public static class S100VectorTileRenderer
             state.PendingVisible.Clear();
             state.PendingPredicted.Clear();
             state.PendingCrossBand.Clear();
+            state.CurrentVisible.Clear();
+            state.CurrentSpeculative.Clear();
+            state.CurrentViewport = null;
+            state.ViewportEpoch++;
             state.PredictedInCache.Clear();
             state.VisibleEnqueueTicks.Clear();
             // A new scene is a teleport for prediction: drop the stale velocity
@@ -664,6 +678,7 @@ public static class S100VectorTileRenderer
 
         if (!viewport.HasSize())
         {
+            InvalidateViewport(layer);
             return;
         }
 
@@ -675,6 +690,7 @@ public static class S100VectorTileRenderer
                 DiagBail($"resolution={resolution:F3}");
             }
 
+            InvalidateViewport(layer);
             return;
         }
 
@@ -693,12 +709,16 @@ public static class S100VectorTileRenderer
         // worker publish — once per off-view cell. Culling here makes off-view
         // cells cost nothing. The CullMarginPx halo keeps edge cells (whose
         // symbols/over-render reach into the view) rendering.
+        var state = States.GetValue(layer, static _ => new TileState());
         if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, CullMarginPx))
         {
+            if (InvalidateViewport(state))
+            {
+                RequestRedraw?.Invoke();
+            }
+
             return;
         }
-
-        var state = States.GetValue(layer, static _ => new TileState());
 
         // Resolve the live GPU context from the compositor canvas (null on a
         // software/CPU surface or when residency is disabled). Phase 5: warm
@@ -727,16 +747,38 @@ public static class S100VectorTileRenderer
         var visible = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
 
         var workersToStart = 0;
+        var requestAdmissionRetry = false;
         var coldExposure = 0;
         var visibleQueueDepth = 0;
         var predictionHits = 0L;
+        List<(string Namespace, long Generation, TileKey Key)>? predictionHitsToPersist = null;
         var compositeStart = Stopwatch.GetTimestamp();
+        var compositeLockAcquired = compositeStart;
+        var compositePaintStart = compositeStart;
+        var compositeGpuEnd = compositeStart;
+        var compositeClipEnd = compositeStart;
+        var compositeBaseEnd = compositeStart;
+        var compositeOverlayEnd = compositeStart;
         lock (state.Sync)
         {
+            compositeLockAcquired = Stopwatch.GetTimestamp();
             if (state.Scene is null)
             {
                 return;
             }
+
+            var currentViewport = new TileViewport(
+                centerX,
+                centerY,
+                coverWidth,
+                coverHeight,
+                resolution,
+                deviceScale);
+            state.ViewportEpoch = NextViewportEpoch(
+                state.ViewportEpoch,
+                state.CurrentViewport,
+                currentViewport);
+            state.CurrentViewport = currentViewport;
 
             UpdateVelocity(state, centerX, centerY);
 
@@ -745,9 +787,11 @@ public static class S100VectorTileRenderer
             state.PendingVisible.Clear();
             var frameTicks = Stopwatch.GetTimestamp();
             var visibleSet = new HashSet<TileKey>(visible.Count);
+            state.CurrentVisible.Clear();
             foreach (var key in visible)
             {
                 visibleSet.Add(key);
+                state.CurrentVisible.Add(key);
                 if (state.Cache.Contains(key))
                 {
                     // A tile we rasterised speculatively is now actually visible:
@@ -755,6 +799,11 @@ public static class S100VectorTileRenderer
                     if (state.PredictedInCache.Remove(key))
                     {
                         predictionHits++;
+                        if (state.DiskNamespace is not null)
+                        {
+                            (predictionHitsToPersist ??= []).Add(
+                                (state.DiskNamespace, state.Generation, key));
+                        }
                     }
                 }
                 else
@@ -785,7 +834,12 @@ public static class S100VectorTileRenderer
             // in flight), so a layer mid-raster of its visible burst still keeps its
             // reservation; the reservation is each sibling's shortfall to its floor,
             // so siblings already running their share owe nothing.
-            var reservedForOtherLayers = RefreshActiveVisibleLayers(state, coldExposure > 0, state.ActiveWorkers, frameTicks);
+            var reservedForOtherLayers = RefreshActiveVisibleLayers(
+                state,
+                coldExposure > 0,
+                state.ActiveWorkers,
+                frameTicks,
+                out requestAdmissionRetry);
 
             // Drop enqueue stamps for tiles no longer visible (panned away before
             // they landed) so the dictionary stays bounded by the visible set.
@@ -810,6 +864,7 @@ public static class S100VectorTileRenderer
             // the worker). Excludes visible / cached / in-flight tiles. Skipped
             // entirely when prediction is disabled (Phase-2 A/B baseline).
             state.PendingPredicted.Clear();
+            state.CurrentSpeculative.Clear();
             if (PredictionEnabled)
             {
                 var predicted = TileGrid.PredictedTiles(
@@ -817,6 +872,7 @@ public static class S100VectorTileRenderer
                     state.VelocityX, state.VelocityY);
                 foreach (var key in predicted)
                 {
+                    state.CurrentSpeculative.Add(key);
                     if (!visibleSet.Contains(key)
                         && !state.Cache.Contains(key)
                         && !state.InFlight.Contains(key))
@@ -853,6 +909,7 @@ public static class S100VectorTileRenderer
                     CrossBandPrewarmMaxTiles);
                 foreach (var key in crossBand)
                 {
+                    state.CurrentSpeculative.Add(key);
                     // Also exclude keys already queued in a higher tier this frame:
                     // the band ± 1 centre tiles overlap TileGrid.PredictedTiles, so
                     // without this guard the same key would sit in both PendingPredicted
@@ -893,6 +950,13 @@ public static class S100VectorTileRenderer
                 var elasticCeiling = RenderingOptimizations.ResolvedProfile == PerformanceProfile.LowEnd
                     ? baseline
                     : MaxTotalWorkers;
+                var pendingSpeculative =
+                    state.PendingPredicted.Count + state.PendingCrossBand.Count;
+                if (state.PendingVisible.Count == 0
+                    && HasActiveVisibleWork(frameTicks))
+                {
+                    pendingSpeculative = 0;
+                }
 
                 workersToStart = ComputeWorkersToStart(
                     baseline,
@@ -901,7 +965,7 @@ public static class S100VectorTileRenderer
                     Volatile.Read(ref _activeWorkerTotal),
                     state.ActiveWorkers,
                     state.PendingVisible.Count,
-                    state.PendingPredicted.Count + state.PendingCrossBand.Count,
+                    pendingSpeculative,
                     reservedForOtherLayers);
 
                 if (workersToStart > 0)
@@ -939,6 +1003,11 @@ public static class S100VectorTileRenderer
             // elevated, permanently stalling tile production (a blank chart until
             // the layer is rebuilt). A dropped frame is always recoverable; a
             // stalled worker is not.
+            compositePaintStart = Stopwatch.GetTimestamp();
+            compositeGpuEnd = compositePaintStart;
+            compositeClipEnd = compositePaintStart;
+            compositeBaseEnd = compositePaintStart;
+            compositeOverlayEnd = compositePaintStart;
             try
             {
                 if (grContext is not null)
@@ -947,6 +1016,7 @@ public static class S100VectorTileRenderer
                 }
 
                 ManageGpuResidency(state, grContext, layer);
+                compositeGpuEnd = Stopwatch.GetTimestamp();
 
                 // Cross-cell overlap suppression (issue #438 Phase 2): remove
                 // from this coarser cell's drawable region the coverage of every
@@ -955,6 +1025,7 @@ public static class S100VectorTileRenderer
                 // a finer cell that has dropped out of its band no longer leaves
                 // a blank hole).
                 var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution);
+                compositeClipEnd = Stopwatch.GetTimestamp();
                 var clipApplied = false;
                 try
                 {
@@ -970,11 +1041,13 @@ public static class S100VectorTileRenderer
                     }
 
                     Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+                    compositeBaseEnd = Stopwatch.GetTimestamp();
 
                     // Draw point symbols + soundings live, on top of the composited
                     // base tiles, at constant on-screen size (the base tiles are
                     // band-scaled, so symbols must not be baked into them).
                     DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                    compositeOverlayEnd = Stopwatch.GetTimestamp();
                 }
                 finally
                 {
@@ -992,8 +1065,76 @@ public static class S100VectorTileRenderer
             }
         }
 
-        S100Diag.Telemetry.TileCompositeDuration.Record(
-            Stopwatch.GetElapsedTime(compositeStart).TotalMilliseconds);
+        var compositeEnd = Stopwatch.GetTimestamp();
+        var compositeDuration = Stopwatch.GetElapsedTime(
+            compositeStart,
+            compositeEnd).TotalMilliseconds;
+        S100Diag.Telemetry.TileCompositeDuration.Record(compositeDuration);
+        if (compositeDuration >= 50)
+        {
+            var capturedAtUtc = DateTimeOffset.UtcNow;
+            using var activity = S100Diag.Telemetry.ActivitySource.StartActivity(
+                "s100.render.tile.composite.slow",
+                ActivityKind.Internal,
+                default(ActivityContext),
+                startTime: capturedAtUtc - TimeSpan.FromMilliseconds(compositeDuration));
+            activity?.SetTag("s100.render.layer", layer.Name);
+            activity?.SetTag("s100.render.tile.composite.duration_ms", compositeDuration);
+            activity?.SetTag(
+                "s100.render.tile.composite.lock_wait_ms",
+                Stopwatch.GetElapsedTime(
+                    compositeStart,
+                    compositeLockAcquired).TotalMilliseconds);
+            activity?.SetTag(
+                "s100.render.tile.composite.locked_ms",
+                Stopwatch.GetElapsedTime(
+                    compositeLockAcquired,
+                    compositeEnd).TotalMilliseconds);
+            activity?.SetTag(
+                "s100.render.tile.composite.setup_ms",
+                Stopwatch.GetElapsedTime(
+                    compositeLockAcquired,
+                    compositePaintStart).TotalMilliseconds);
+            activity?.SetTag(
+                "s100.render.tile.composite.gpu_ms",
+                Stopwatch.GetElapsedTime(
+                    compositePaintStart,
+                    compositeGpuEnd).TotalMilliseconds);
+            activity?.SetTag(
+                "s100.render.tile.composite.clip_ms",
+                Stopwatch.GetElapsedTime(
+                    compositeGpuEnd,
+                    compositeClipEnd).TotalMilliseconds);
+            activity?.SetTag(
+                "s100.render.tile.composite.base_ms",
+                Stopwatch.GetElapsedTime(
+                    compositeClipEnd,
+                    compositeBaseEnd).TotalMilliseconds);
+            activity?.SetTag(
+                "s100.render.tile.composite.overlay_ms",
+                Stopwatch.GetElapsedTime(
+                    compositeBaseEnd,
+                    compositeOverlayEnd).TotalMilliseconds);
+            activity?.SetTag("s100.render.tile.cold_exposure", coldExposure);
+            activity?.SetTag("s100.render.tile.visible_queue_depth", visibleQueueDepth);
+        }
+        if (predictionHitsToPersist is not null && SharedDiskCache is { } disk)
+        {
+            foreach (var item in predictionHitsToPersist)
+            {
+                disk.TryQueueDeferredSnapshot(
+                    item.Namespace,
+                    item.Key,
+                    () => TryCreateVisibleTileSnapshot(
+                        state,
+                        item.Key,
+                        item.Generation),
+                    () => IsTileVisible(
+                        state,
+                        item.Key,
+                        item.Generation));
+            }
+        }
         S100Diag.Telemetry.TileColdExposure.Record(coldExposure);
         if (visibleQueueDepth > 0)
         {
@@ -1002,6 +1143,10 @@ public static class S100VectorTileRenderer
         if (predictionHits > 0)
         {
             S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
+        }
+        if (requestAdmissionRetry)
+        {
+            RequestRedraw?.Invoke();
         }
 
         if (workersToStart > 0)
@@ -1034,6 +1179,104 @@ public static class S100VectorTileRenderer
 
                 Interlocked.Add(ref _activeWorkerTotal, -(workersToStart - started));
             }
+        }
+    }
+
+    internal static long NextViewportEpoch(
+        long currentEpoch,
+        TileViewport? previous,
+        TileViewport current) =>
+        previous == current ? currentEpoch : currentEpoch + 1;
+
+    internal static TileRelevance ClassifyTileRelevance(
+        bool generationMatches,
+        bool isVisible,
+        bool isSpeculative) =>
+        generationMatches
+            ? isVisible
+                ? TileRelevance.Visible
+                : isSpeculative
+                    ? TileRelevance.Speculative
+                    : TileRelevance.Irrelevant
+            : TileRelevance.Irrelevant;
+
+    private static void InvalidateViewport(ILayer layer)
+    {
+        if (States.TryGetValue(layer, out var state)
+            && InvalidateViewport(state))
+        {
+            RequestRedraw?.Invoke();
+        }
+    }
+
+    private static bool InvalidateViewport(TileState state)
+    {
+        lock (state.Sync)
+        {
+            var hadViewportWork =
+                state.CurrentViewport is not null
+                || state.CurrentVisible.Count > 0
+                || state.CurrentSpeculative.Count > 0;
+            if (hadViewportWork)
+            {
+                state.ViewportEpoch++;
+            }
+            state.CurrentViewport = null;
+            state.CurrentVisible.Clear();
+            state.CurrentSpeculative.Clear();
+            state.PendingVisible.Clear();
+            state.PendingPredicted.Clear();
+            state.PendingCrossBand.Clear();
+            state.VisibleEnqueueTicks.Clear();
+            return RemoveActiveVisibleLayer(state);
+        }
+    }
+
+    private static bool RemoveActiveVisibleLayer(TileState state)
+    {
+        lock (VisibleLayerSync)
+        {
+            var hadActiveVisibleWork = HasActiveVisibleWorkLocked(
+                Stopwatch.GetTimestamp());
+            VisibleLayerStamps.Remove(state);
+            var hasActiveVisibleWork = HasActiveVisibleWorkLocked(
+                Stopwatch.GetTimestamp());
+            return ShouldRequestSpeculativeRetry(
+                hadActiveVisibleWork,
+                hasActiveVisibleWork);
+        }
+    }
+
+    private static TileRelevance GetTileRelevance(
+        TileState state,
+        TileKey key,
+        long generation) =>
+        ClassifyTileRelevance(
+            generation == state.Generation,
+            state.CurrentVisible.Contains(key),
+            state.CurrentSpeculative.Contains(key));
+
+    private static bool IsTileVisible(
+        TileState state,
+        TileKey key,
+        long generation)
+    {
+        lock (state.Sync)
+        {
+            return GetTileRelevance(state, key, generation) == TileRelevance.Visible;
+        }
+    }
+
+    private static SKImage? TryCreateVisibleTileSnapshot(
+        TileState state,
+        TileKey key,
+        long generation)
+    {
+        lock (state.Sync)
+        {
+            return GetTileRelevance(state, key, generation) == TileRelevance.Visible
+                ? state.Cache.TryCreateSnapshot(key, generation)
+                : null;
         }
     }
 
@@ -1737,6 +1980,16 @@ public static class S100VectorTileRenderer
         || (!hasVisible && !hasPredicted)
         || (!hasVisible && layerActiveWorkers > baseline);
 
+    internal static bool ShouldAdmitSpeculativeWork(
+        bool hasVisible,
+        bool hasGlobalVisibleWork) =>
+        hasVisible || !hasGlobalVisibleWork;
+
+    internal static bool ShouldRequestSpeculativeRetry(
+        bool hadActiveVisibleWork,
+        bool hasActiveVisibleWork) =>
+        hadActiveVisibleWork && !hasActiveVisibleWork;
+
     /// <summary>
     /// Refreshes <paramref name="state"/>'s entry in the active-visible-layer
     /// registry and returns the worker reservation owed to <em>other</em> layers
@@ -1755,13 +2008,23 @@ public static class S100VectorTileRenderer
     /// <param name="hasVisibleWork">True when the layer has visible cold tiles (pending or in flight) this paint.</param>
     /// <param name="layerActiveWorkers">This layer's current live workers (its own entry excludes itself from the reservation).</param>
     /// <param name="nowTicks">The current <see cref="Stopwatch"/> tick.</param>
+    /// <param name="activeVisibleDrained">
+    /// Set when this refresh removes the final active-visible registry entry, so
+    /// the caller can request one follow-up frame for deferred speculative queues.
+    /// </param>
     /// <returns>The total worker reservation owed to other active-visible layers.</returns>
-    private static int RefreshActiveVisibleLayers(TileState state, bool hasVisibleWork, int layerActiveWorkers, long nowTicks)
+    private static int RefreshActiveVisibleLayers(
+        TileState state,
+        bool hasVisibleWork,
+        int layerActiveWorkers,
+        long nowTicks,
+        out bool activeVisibleDrained)
     {
         var windowTicks = (long)(Stopwatch.Frequency * ElasticFairnessWindowSeconds);
         var baseline = RenderingOptimizations.TileWorkerCount;
         lock (VisibleLayerSync)
         {
+            var hadActiveVisibleWork = VisibleLayerStamps.Any();
             if (hasVisibleWork)
             {
                 if (VisibleLayerStamps.TryGetValue(state, out var box))
@@ -1780,6 +2043,7 @@ public static class S100VectorTileRenderer
             }
 
             var reserved = 0;
+            var hasActiveVisibleWork = false;
             VisibleLayerPruneScratch.Clear();
             // A dead layer's weak key drops out of the table on its own; this pass
             // only evicts still-live layers whose last visible paint aged out.
@@ -1789,9 +2053,13 @@ public static class S100VectorTileRenderer
                 {
                     VisibleLayerPruneScratch.Add(entry.Key);
                 }
-                else if (!ReferenceEquals(entry.Key, state))
+                else
                 {
-                    reserved += Math.Max(0, baseline - entry.Value.ActiveWorkers);
+                    hasActiveVisibleWork = true;
+                    if (!ReferenceEquals(entry.Key, state))
+                    {
+                        reserved += Math.Max(0, baseline - entry.Value.ActiveWorkers);
+                    }
                 }
             }
 
@@ -1800,6 +2068,9 @@ public static class S100VectorTileRenderer
                 VisibleLayerStamps.Remove(stale);
             }
 
+            activeVisibleDrained = ShouldRequestSpeculativeRetry(
+                hadActiveVisibleWork,
+                hasActiveVisibleWork);
             return reserved;
         }
     }
@@ -1822,205 +2093,179 @@ public static class S100VectorTileRenderer
         }
     }
 
+    private static bool HasActiveVisibleWork(long nowTicks)
+    {
+        lock (VisibleLayerSync)
+        {
+            return HasActiveVisibleWorkLocked(nowTicks);
+        }
+    }
+
+    private static bool HasActiveVisibleWorkLocked(long nowTicks)
+    {
+        var windowTicks = (long)(Stopwatch.Frequency * ElasticFairnessWindowSeconds);
+        var hasActiveVisibleWork = false;
+        VisibleLayerPruneScratch.Clear();
+        foreach (var entry in VisibleLayerStamps)
+        {
+            if (nowTicks - entry.Value.StampTicks > windowTicks)
+            {
+                VisibleLayerPruneScratch.Add(entry.Key);
+            }
+            else
+            {
+                hasActiveVisibleWork = true;
+            }
+        }
+
+        foreach (var stale in VisibleLayerPruneScratch)
+        {
+            VisibleLayerStamps.Remove(stale);
+        }
+
+        return hasActiveVisibleWork;
+    }
+
     private static void Worker(TileState state)
     {
-        // Set true when this worker releases its pool slot under state.Sync at the
-        // exit decision below, so the finally does not decrement a second time.
-        // Guarding the decrement under the same lock that reads ActiveWorkers is
-        // what lets a cascade of shedding elastic workers converge on the baseline
-        // instead of every one observing the pre-decrement count and over-shedding
-        // (which would stall the predicted drain and thrash the pool).
         var slotReleased = false;
         try
         {
             while (true)
             {
-                // Stop before touching Skia once the process is shutting down,
-                // so ShutdownAndDrain's wait completes and no tile is rasterised
-                // into a half-torn-down Skia. slotReleased is still false on this
-                // path, so the finally below releases the slot and completes the
-                // drain-gate registration.
                 if (DrainGate.IsDraining)
                 {
                     return;
                 }
 
-                TileKey key;
-                float deviceScale;
-                long generation;
-                VectorScene scene;
-                BaseSpatialIndex? baseIndex;
-                bool isPrediction;
-                string? diskNamespace;
-
-                lock (state.Sync)
+                TileJob job;
+                var speculativeAdmissionHeld = false;
+                try
                 {
-                    var currentScene = state.Scene;
-                    var hasVisible = state.PendingVisible.Count > 0;
-                    var hasPredicted = state.PendingPredicted.Count > 0;
-                    var hasCrossBand = state.PendingCrossBand.Count > 0;
-
-                    // Exit when the scene is gone or all work has drained, and — the
-                    // elastic addition (issue #432) — shed an above-baseline
-                    // ("borrowed") worker the moment visible work runs out rather
-                    // than letting it fall through to speculative work, so borrowed
-                    // global capacity returns to the pool within ~one tile raster.
-                    // The idle cross-band ±1 pre-warm (issue #428) is speculative
-                    // like the predicted set: it keeps a baseline worker alive to
-                    // drain it, but never holds a borrowed worker.
-                    // Release the slot under this same lock so concurrent sheds can't
-                    // all read the pre-decrement count and over-shed below baseline.
-                    if (ShouldWorkerExit(
-                            sceneNull: currentScene is null,
-                            hasVisible: hasVisible,
-                            hasPredicted: hasPredicted || hasCrossBand,
-                            layerActiveWorkers: state.ActiveWorkers,
-                            baseline: RenderingOptimizations.TileWorkerCount))
+                    lock (state.Sync)
                     {
-                        state.ActiveWorkers--;
-                        Interlocked.Decrement(ref _activeWorkerTotal);
-                        slotReleased = true;
-                        return;
-                    }
-
-                    // Visible tiles always drain before speculative ones, so
-                    // prediction work yields to anything actually on screen.
-                    if (hasVisible)
-                    {
-                        key = TakeNearest(state.PendingVisible, state.PendingCenterX, state.PendingCenterY);
-                        isPrediction = false;
-                    }
-                    else if (state.PendingPredicted.Count > 0)
-                    {
-                        key = TakeNearest(state.PendingPredicted, state.PendingCenterX, state.PendingCenterY);
-                        isPrediction = true;
-                    }
-                    else
-                    {
-                        // Lowest tier: idle cross-band pre-warm. Treated as a
-                        // prediction (tracked in PredictedInCache, never triggers a
-                        // redraw) so a published adjacent-band tile cannot start a
-                        // repaint loop; it is picked up when a later zoom makes it
-                        // visible.
-                        key = TakeNearest(state.PendingCrossBand, state.PendingCenterX, state.PendingCenterY);
-                        isPrediction = true;
-                    }
-
-                    deviceScale = state.PendingDeviceScale;
-                    generation = state.PendingGeneration;
-                    // ShouldWorkerExit returns true for a null scene, so reaching
-                    // here means the scene is live; the null-coalescing throw is
-                    // unreachable but gives the compiler its non-null narrowing
-                    // (no scene can vanish while we hold state.Sync).
-                    scene = currentScene ?? throw new InvalidOperationException(
-                        "Scene became null after ShouldWorkerExit returned false.");
-                    baseIndex = state.BaseIndex;
-                    diskNamespace = state.DiskNamespace;
-                    state.InFlight.Add(key);
-                }
-
-                // Warm path: a tile rendered under this exact style state in a prior
-                // layer/session is decoded from disk instead of re-rasterised. The
-                // namespace folds the styleStateHash so this can never be a tile from
-                // a different mariner/palette state.
-                var disk = SharedDiskCache;
-                SKImage? image = null;
-                var fromDisk = false;
-                if (disk is not null && diskNamespace is not null)
-                {
-                    image = disk.TryRead(diskNamespace, key);
-                    if (image is not null)
-                    {
-                        fromDisk = true;
-                        S100Diag.Telemetry.TileDiskHits.Add(1);
-                    }
-                }
-
-                if (image is null)
-                {
-                    try
-                    {
-                        var rasterStart = Stopwatch.GetTimestamp();
-                        using var bitmap = RasterizeTile(scene, baseIndex, key, deviceScale);
-                        image = SKImage.FromBitmap(bitmap);
-                        S100Diag.Telemetry.TileRasterizeDuration.Record(
-                            Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
-                    }
-                    catch
-                    {
-                        image?.Dispose();
-                        image = null;
-                    }
-                }
-
-                // Persist a freshly-rasterised tile while we still solely own the
-                // image (before handing it to the hot cache), so a concurrent
-                // eviction can never dispose it mid-encode. Disk-sourced tiles are
-                // already persisted. Best-effort: failures are swallowed inside Write.
-                if (image is not null && !fromDisk && disk is not null && diskNamespace is not null
-                    && generation == state.Generation)
-                {
-                    disk.Write(diskNamespace, key, image);
-                    S100Diag.Telemetry.TileDiskWrites.Add(1);
-                }
-
-                var published = false;
-                lock (state.Sync)
-                {
-                    state.InFlight.Remove(key);
-                    if (image is not null && generation == state.Generation)
-                    {
-                        state.Cache.Put(key, image);
-                        published = true;
-                        if (isPrediction)
+                        var currentScene = state.Scene;
+                        var hasVisible = state.PendingVisible.Count > 0;
+                        var hasPredicted = state.PendingPredicted.Count > 0;
+                        var hasCrossBand = state.PendingCrossBand.Count > 0;
+                        var hasSpeculative = hasPredicted || hasCrossBand;
+                        var speculationDeferred = false;
+                        if (!hasVisible && hasSpeculative)
                         {
-                            // Track so a later visible frame can score it as a hit.
-                            state.PredictedInCache.Add(key);
+                            Monitor.Enter(VisibleLayerSync);
+                            speculativeAdmissionHeld = true;
+                            speculationDeferred = !ShouldAdmitSpeculativeWork(
+                                hasVisible,
+                                HasActiveVisibleWorkLocked(
+                                    Stopwatch.GetTimestamp()));
                         }
-                        else if (state.VisibleEnqueueTicks.Remove(key, out var enqueuedAt))
+
+                        if (ShouldWorkerExit(
+                                sceneNull: currentScene is null,
+                                hasVisible: hasVisible,
+                                hasPredicted: hasSpeculative,
+                                layerActiveWorkers: state.ActiveWorkers,
+                                baseline: RenderingOptimizations.TileWorkerCount)
+                            || speculationDeferred)
                         {
-                            // End-to-end cold latency: queue wait + this tile's
-                            // rasterise/disk read, from the frame it was first
-                            // seen visible-cold to landing in the hot cache.
-                            S100Diag.Telemetry.TileColdLatency.Record(
-                                Stopwatch.GetElapsedTime(enqueuedAt).TotalMilliseconds);
+                            if (speculationDeferred)
+                            {
+                                S100Diag.Telemetry.TileSpeculationDeferred.Add(
+                                    1,
+                                    new KeyValuePair<string, object?>(
+                                        "priority",
+                                        hasPredicted ? "predicted" : "cross_band"));
+                            }
+
+                            state.ActiveWorkers--;
+                            Interlocked.Decrement(ref _activeWorkerTotal);
+                            slotReleased = true;
+                            return;
                         }
+
+                        IReadOnlyList<TileKey> keys;
+                        var priority = TileJobPriority.Visible;
+                        if (hasVisible)
+                        {
+                            keys = TakeMetatile(
+                                state.PendingVisible, state.PendingCenterX, state.PendingCenterY,
+                                MetatileEnabled);
+                        }
+                        else if (hasPredicted)
+                        {
+                            keys = TakeMetatile(
+                                state.PendingPredicted, state.PendingCenterX, state.PendingCenterY,
+                                MetatileEnabled);
+                            priority = TileJobPriority.Predicted;
+                        }
+                        else
+                        {
+                            keys = TakeMetatile(
+                                state.PendingCrossBand, state.PendingCenterX, state.PendingCenterY,
+                                MetatileEnabled);
+                            priority = TileJobPriority.CrossBand;
+                        }
+
+                        if (MetatileEnabled && keys.Count == 1)
+                        {
+                            RecordMetatileFallback("sparse");
+                        }
+
+                        foreach (var key in keys)
+                        {
+                            state.InFlight.Add(key);
+                        }
+
+                        double? queueWaitMs = null;
+                        if (priority == TileJobPriority.Visible)
+                        {
+                            foreach (var key in keys)
+                            {
+                                if (state.VisibleEnqueueTicks.TryGetValue(
+                                        key,
+                                        out var enqueuedAt))
+                                {
+                                    var keyWaitMs = Stopwatch.GetElapsedTime(
+                                        enqueuedAt).TotalMilliseconds;
+                                    queueWaitMs = Math.Max(
+                                        queueWaitMs ?? 0,
+                                        keyWaitMs);
+                                }
+                            }
+                        }
+
+                        job = new TileJob(
+                            keys,
+                            state.PendingDeviceScale,
+                            state.PendingGeneration,
+                            state.ViewportEpoch,
+                            currentScene ?? throw new InvalidOperationException(
+                                "Scene became null after ShouldWorkerExit returned false."),
+                            state.BaseIndex,
+                            priority,
+                            state.DiskNamespace,
+                            queueWaitMs,
+                            state.ActiveWorkers,
+                            Volatile.Read(ref _activeWorkerTotal));
                     }
-                    else
+                }
+                finally
+                {
+                    if (speculativeAdmissionHeld)
                     {
-                        image?.Dispose();
+                        Monitor.Exit(VisibleLayerSync);
                     }
                 }
 
-                if (isPrediction && !fromDisk)
-                {
-                    S100Diag.Telemetry.TilePredictionRasterized.Add(1);
-                }
-
-                // Only a newly-published *visible* tile changes what is on
-                // screen, so only it warrants a repaint (see ShouldRequestRedraw).
-                if (ShouldRequestRedraw(published, isPrediction))
-                {
-                    RequestRedraw?.Invoke();
-                }
+                ProcessTileJob(state, job);
             }
         }
         catch (Exception ex)
         {
-            // The inner rasterise has its own guard; this catches anything else on
-            // the worker (disk I/O, cache, redraw callback). Never let the worker
-            // die without decrementing ActiveWorkers — that would permanently
-            // under-count the pool and starve tile production.
             S100Diag.Telemetry.RecordRenderFault(ex);
         }
         finally
         {
-            // Release this worker's pool slot so the next frame can spin up a fresh
-            // worker for any still-pending tiles, unless the shed/drain path above
-            // already released it under state.Sync. Both the normal drain-exit and
-            // the abnormal-exit (shutdown / exception) paths land here. Mirror the
-            // per-layer slot in the process-wide total so other layers can reclaim
-            // the headroom.
             if (!slotReleased)
             {
                 lock (state.Sync)
@@ -2031,11 +2276,345 @@ public static class S100VectorTileRenderer
                 Interlocked.Decrement(ref _activeWorkerTotal);
             }
 
-            // Pair the TryRegister at the worker-start site. When the last
-            // worker completes, this signals ShutdownAndDrain that Skia is idle.
             DrainGate.Complete();
         }
     }
+
+    private static void ProcessTileJob(TileState state, TileJob job)
+    {
+        var disk = SharedDiskCache;
+        var images = new Dictionary<TileKey, SKImage>();
+        var rasterized = new HashSet<TileKey>();
+        var discardedBeforeRaster = new HashSet<TileKey>();
+        var activeKeys = new List<TileKey>(job.Keys.Count);
+        using var activity = StartTileJobActivity(job);
+
+        try
+        {
+            lock (state.Sync)
+            {
+                activity?.SetTag(
+                    "s100.render.tile.viewport_epoch.current",
+                    state.ViewportEpoch);
+                foreach (var key in job.Keys)
+                {
+                    if (GetTileRelevance(state, key, job.Generation)
+                        == TileRelevance.Irrelevant)
+                    {
+                        state.InFlight.Remove(key);
+                        discardedBeforeRaster.Add(key);
+                    }
+                    else
+                    {
+                        activeKeys.Add(key);
+                    }
+                }
+            }
+
+            if (activeKeys.Count == 0)
+            {
+                activity?.SetTag(
+                    "s100.render.tile.outcome",
+                    "stale_before_disk_read");
+            }
+            else if (disk is not null && job.DiskNamespace is not null)
+            {
+                using var diskReadActivity = S100Diag.Telemetry.ActivitySource.StartActivity(
+                    "s100.render.tile.stage.disk_read", ActivityKind.Internal);
+                foreach (var key in activeKeys)
+                {
+                    var image = disk.TryRead(job.DiskNamespace, key);
+                    if (image is null)
+                    {
+                        continue;
+                    }
+
+                    images.Add(key, image);
+                    S100Diag.Telemetry.TileDiskHits.Add(1);
+                }
+                diskReadActivity?.SetTag("s100.render.tile.disk.hits", images.Count);
+                diskReadActivity?.SetTag(
+                    "s100.render.tile.disk.misses", activeKeys.Count - images.Count);
+            }
+
+            lock (state.Sync)
+            {
+                activeKeys.RemoveAll(key =>
+                {
+                    if (GetTileRelevance(state, key, job.Generation)
+                        != TileRelevance.Irrelevant)
+                    {
+                        return false;
+                    }
+
+                    state.InFlight.Remove(key);
+                    discardedBeforeRaster.Add(key);
+                    if (images.Remove(key, out var staleImage))
+                    {
+                        staleImage.Dispose();
+                    }
+
+                    return true;
+                });
+            }
+
+            var misses = activeKeys.Where(key => !images.ContainsKey(key)).ToList();
+            if (misses.Count > 0)
+            {
+                var rasterStart = Stopwatch.GetTimestamp();
+                IReadOnlyDictionary<TileKey, SKImage> fresh;
+                if (misses.Count > 1)
+                {
+                    fresh = RasterizeMetatile(job.Scene, job.BaseIndex, misses, job.DeviceScale);
+                }
+                else
+                {
+                    if (job.Keys.Count > 1)
+                    {
+                        RecordMetatileFallback("disk");
+                    }
+
+                    using var bitmap = RasterizeTile(
+                        job.Scene, job.BaseIndex, misses[0], job.DeviceScale);
+                    fresh = new Dictionary<TileKey, SKImage>
+                    {
+                        [misses[0]] = SKImage.FromBitmap(bitmap),
+                    };
+                }
+
+                var elapsedMs = Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds;
+                var perTileMs = elapsedMs / fresh.Count;
+                foreach (var (key, image) in fresh)
+                {
+                    images.Add(key, image);
+                    rasterized.Add(key);
+                    S100Diag.Telemetry.TileRasterizeDuration.Record(perTileMs);
+                }
+            }
+
+            activity?.SetTag("s100.render.tile.disk.hits", images.Count - rasterized.Count);
+            activity?.SetTag("s100.render.tile.rasterized", rasterized.Count);
+            if (activeKeys.Count > 0)
+            {
+                activity?.SetTag(
+                    "s100.render.tile.outcome",
+                    (images.Count - rasterized.Count, rasterized.Count) switch
+                    {
+                        ( > 0, > 0) => "mixed",
+                        ( > 0, 0) => "disk",
+                        (0, > 0) => "raster",
+                        _ => "empty",
+                    });
+            }
+            else if (discardedBeforeRaster.Count > 0)
+            {
+                activity?.SetTag(
+                    "s100.render.tile.outcome",
+                    "stale_before_raster");
+            }
+        }
+        catch (Exception ex)
+        {
+            foreach (var image in images.Values)
+            {
+                image.Dispose();
+            }
+
+            images.Clear();
+            rasterized.Clear();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag("error.type", ex.GetType().FullName);
+            activity?.SetTag("s100.render.tile.outcome", "fault");
+            S100Diag.Telemetry.RecordRenderFault(ex);
+        }
+
+        var publishedVisible = false;
+        var published = 0;
+        var stale = 0;
+        var persistenceQueued = 0;
+        var persistenceDiscarded = 0;
+        List<TileKey>? persistenceKeys = null;
+        using (var publishActivity = S100Diag.Telemetry.ActivitySource.StartActivity(
+                   "s100.render.tile.stage.publish", ActivityKind.Internal))
+        {
+            lock (state.Sync)
+            {
+                activity?.SetTag(
+                    "s100.render.tile.viewport_epoch.current",
+                    state.ViewportEpoch);
+                activity?.SetTag(
+                    "s100.render.tile.viewport_epoch.stale",
+                    job.ViewportEpoch != state.ViewportEpoch);
+                foreach (var key in job.Keys)
+                {
+                    state.InFlight.Remove(key);
+                    var relevance = GetTileRelevance(
+                        state,
+                        key,
+                        job.Generation);
+                    if (images.Remove(key, out var image)
+                        && relevance != TileRelevance.Irrelevant)
+                    {
+                        state.Cache.Put(key, image);
+                        published++;
+                        if (relevance == TileRelevance.Visible
+                            && rasterized.Contains(key)
+                            && disk is not null
+                            && job.DiskNamespace is not null)
+                        {
+                            (persistenceKeys ??= []).Add(key);
+                        }
+                        if (relevance == TileRelevance.Speculative)
+                        {
+                            state.PredictedInCache.Add(key);
+                        }
+                        else
+                        {
+                            publishedVisible = true;
+                            if (state.VisibleEnqueueTicks.Remove(key, out var enqueuedAt))
+                            {
+                                S100Diag.Telemetry.TileColdLatency.Record(
+                                    Stopwatch.GetElapsedTime(enqueuedAt).TotalMilliseconds);
+                            }
+                        }
+                    }
+                    else if (image is not null
+                        || discardedBeforeRaster.Contains(key))
+                    {
+                        image?.Dispose();
+                        stale++;
+                    }
+                }
+            }
+
+            publishActivity?.SetTag("s100.render.tile.published", published);
+            publishActivity?.SetTag("s100.render.tile.stale", stale);
+        }
+
+        if (persistenceKeys is not null
+            && disk is not null
+            && job.DiskNamespace is not null)
+        {
+            foreach (var key in persistenceKeys)
+            {
+                var enqueueResult = disk.TryQueueDeferredSnapshot(
+                    job.DiskNamespace,
+                    key,
+                    () => TryCreateVisibleTileSnapshot(
+                        state,
+                        key,
+                        job.Generation),
+                    () => IsTileVisible(
+                        state,
+                        key,
+                        job.Generation));
+                if (enqueueResult == TileDiskCache.WriteEnqueueResult.Queued)
+                {
+                    persistenceQueued++;
+                }
+                else
+                {
+                    persistenceDiscarded++;
+                }
+            }
+        }
+
+        activity?.SetTag("s100.render.tile.published", published);
+        activity?.SetTag("s100.render.tile.stale", stale);
+        activity?.SetTag(
+            "s100.render.tile.stale_before_raster",
+            discardedBeforeRaster.Count);
+        activity?.SetTag("s100.render.tile.persistence.queued", persistenceQueued);
+        activity?.SetTag(
+            "s100.render.tile.persistence.discarded",
+            persistenceDiscarded);
+        foreach (var image in images.Values)
+        {
+            image.Dispose();
+        }
+
+        if (job.Priority != TileJobPriority.Visible && rasterized.Count > 0)
+        {
+            S100Diag.Telemetry.TilePredictionRasterized.Add(rasterized.Count);
+        }
+
+        if (publishedVisible)
+        {
+            RequestRedraw?.Invoke();
+        }
+    }
+
+    private static void RecordMetatileFallback(string reason) =>
+        S100Diag.Telemetry.MetatileFallbacks.Add(
+            1, new KeyValuePair<string, object?>("reason", reason));
+
+    private static Activity? StartTileJobActivity(TileJob job)
+    {
+        var activity = S100Diag.Telemetry.ActivitySource.StartActivity(
+            "s100.render.tile.job", ActivityKind.Internal);
+        if (activity is null)
+        {
+            return null;
+        }
+
+        activity.SetTag("s100.render.tile.keys", FormatTileKeys(job.Keys));
+        activity.SetTag("s100.render.tile.count", job.Keys.Count);
+        activity.SetTag("s100.render.tile.priority", job.Priority switch
+        {
+            TileJobPriority.Visible => "visible",
+            TileJobPriority.Predicted => "predicted",
+            TileJobPriority.CrossBand => "cross_band",
+            _ => "unknown",
+        });
+        activity.SetTag("s100.render.tile.band", job.Keys[0].Band);
+        activity.SetTag("s100.render.tile.device_scale", job.DeviceScale);
+        activity.SetTag("s100.render.tile.generation", job.Generation);
+        activity.SetTag("s100.render.tile.viewport_epoch", job.ViewportEpoch);
+        activity.SetTag("s100.render.tile.queue_wait_ms", job.QueueWaitMs);
+        activity.SetTag("s100.render.tile.disk.enabled", job.DiskNamespace is not null);
+        activity.SetTag("s100.render.tile.worker.layer_active", job.LayerActiveWorkers);
+        activity.SetTag("s100.render.tile.worker.total_active", job.TotalActiveWorkers);
+        activity.SetTag("s100.render.tile.worker.total_max", MaxTotalWorkers);
+        return activity;
+    }
+
+    private static string FormatTileKeys(IReadOnlyList<TileKey> keys) =>
+        string.Join(';', keys.Select(static key => $"{key.Band}/{key.X}/{key.Y}"));
+
+    private enum TileJobPriority
+    {
+        Visible,
+        Predicted,
+        CrossBand,
+    }
+
+    internal enum TileRelevance
+    {
+        Irrelevant,
+        Speculative,
+        Visible,
+    }
+
+    internal readonly record struct TileViewport(
+        double CenterX,
+        double CenterY,
+        double CoverWidth,
+        double CoverHeight,
+        double Resolution,
+        float DeviceScale);
+
+    private sealed record TileJob(
+        IReadOnlyList<TileKey> Keys,
+        float DeviceScale,
+        long Generation,
+        long ViewportEpoch,
+        VectorScene Scene,
+        BaseSpatialIndex? BaseIndex,
+        TileJobPriority Priority,
+        string? DiskNamespace,
+        double? QueueWaitMs,
+        int LayerActiveWorkers,
+        int TotalActiveWorkers);
 
     /// <summary>
     /// Removes and returns the pending tile whose world centre is nearest the
@@ -2092,6 +2671,44 @@ public static class S100VectorTileRenderer
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// Removes the nearest pending tile and, when enabled, claims the other
+    /// pending tiles in its stable 2&#215;2 grid-aligned metatile. The seed is
+    /// always first, preserving center-priority latency; peers remain confined
+    /// to the caller's priority tier.
+    /// </summary>
+    internal static IReadOnlyList<TileKey> TakeMetatile(
+        HashSet<TileKey> pending, double centerX, double centerY, bool enabled)
+    {
+        if (pending.Count == 0)
+        {
+            return [];
+        }
+
+        var seed = TakeNearest(pending, centerX, centerY);
+        var result = new List<TileKey>(4) { seed };
+        if (!enabled)
+        {
+            return result;
+        }
+
+        var xStart = seed.X & ~1;
+        var yStart = seed.Y & ~1;
+        for (var y = yStart; y < yStart + 2; y++)
+        {
+            for (var x = xStart; x < xStart + 2; x++)
+            {
+                var peer = new TileKey(seed.Band, x, y);
+                if (peer != seed && pending.Remove(peer))
+                {
+                    result.Add(peer);
+                }
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -2317,8 +2934,14 @@ public static class S100VectorTileRenderer
     /// Rasterises a single tile (core + gutter) from the scene at its band
     /// resolution and the frame's device scale.
     /// </summary>
-    private static SKBitmap RasterizeTile(VectorScene scene, BaseSpatialIndex? baseIndex, TileKey key, float deviceScale)
+    internal static SKBitmap RasterizeTile(VectorScene scene, BaseSpatialIndex? baseIndex, TileKey key, float deviceScale)
     {
+        using var activity = S100Diag.Telemetry.ActivitySource.StartActivity(
+            "s100.render.tile.rasterize", ActivityKind.Internal);
+        activity?.SetTag("s100.render.tile.keys", FormatTileKeys([key]));
+        activity?.SetTag("s100.render.tile.count", 1);
+        activity?.SetTag("s100.render.tile.band", key.Band);
+
         var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
         var bandResolution = TileGrid.ResolutionForBand(key.Band);
         var gutterWorld = GutterDip * bandResolution;
@@ -2337,6 +2960,7 @@ public static class S100VectorTileRenderer
         var tileScene = baseIndex is null
             ? scene
             : new VectorScene(baseIndex.Query(fullMinX, fullMinY, fullMaxX, fullMaxY));
+        activity?.SetTag("s100.render.tile.candidate_operations", tileScene.Ops.Count);
 
         // Lossless (unclamped) inverse so WorldToScreen reproduces these exact
         // tile bounds. The top tile row's gutter pushes fullMaxY just past the
@@ -2349,6 +2973,8 @@ public static class S100VectorTileRenderer
         var sizeDip = TileGrid.TileSizeDip + 2 * GutterDip;
         var px = (int)Math.Round(sizeDip * deviceScale);
         px = Math.Clamp(px, 1, MaxImageDimension);
+        activity?.SetTag("s100.render.tile.width_px", px);
+        activity?.SetTag("s100.render.tile.height_px", px);
 
         var denom = S100VectorSceneRenderer.ScaleDenominatorFor(
             (minX + maxX) * 0.5, (minY + maxY) * 0.5, bandResolution);
@@ -2378,6 +3004,283 @@ public static class S100VectorTileRenderer
 
         return renderer.Render(tileScene, viewport);
     }
+
+    internal static IReadOnlyDictionary<TileKey, SKImage> RasterizeMetatile(
+        VectorScene scene,
+        BaseSpatialIndex? baseIndex,
+        IReadOnlyList<TileKey> keys,
+        float deviceScale)
+    {
+        var groups = PartitionMetatileForScale(scene, baseIndex, keys);
+        if (groups.Count > 1)
+        {
+            RecordMetatileFallback("scamin");
+        }
+
+        var result = new Dictionary<TileKey, SKImage>(keys.Count);
+        try
+        {
+            foreach (var group in groups)
+            {
+                if (group.Count == 1)
+                {
+                    using var bitmap = RasterizeTile(scene, baseIndex, group[0], deviceScale);
+                    result.Add(group[0], SKImage.FromBitmap(bitmap));
+                    continue;
+                }
+
+                var groupImages = RasterizeMetatileGroup(scene, baseIndex, group, deviceScale);
+                foreach (var (key, image) in groupImages)
+                {
+                    result.Add(key, image);
+                }
+            }
+        }
+        catch
+        {
+            DisposeImages(result.Values);
+            throw;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Keeps a multi-row metatile intact only when every candidate op has the
+    /// same SCAMIN result at every row denominator. Otherwise it splits by row;
+    /// all tiles in one row share an exact denominator.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<TileKey>> PartitionMetatileForScale(
+        VectorScene scene,
+        BaseSpatialIndex? baseIndex,
+        IReadOnlyList<TileKey> keys)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(keys);
+
+        if (keys.Count < 2 || keys.Select(key => key.Y).Distinct().Count() == 1)
+        {
+            return [keys];
+        }
+
+        var scopedScene = ScopeSceneForTiles(scene, baseIndex, keys);
+        var denominators = keys
+            .GroupBy(key => key.Y)
+            .Select(group =>
+            {
+                var key = group.First();
+                var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
+                return S100VectorSceneRenderer.ScaleDenominatorFor(
+                    (minX + maxX) * 0.5,
+                    (minY + maxY) * 0.5,
+                    TileGrid.ResolutionForBand(key.Band));
+            })
+            .ToArray();
+
+        foreach (var op in scopedScene.Ops)
+        {
+            var visible = ScaleVisibility.IsVisibleAtScale(op, denominators[0]);
+            for (var i = 1; i < denominators.Length; i++)
+            {
+                if (ScaleVisibility.IsVisibleAtScale(op, denominators[i]) != visible)
+                {
+                    return keys
+                        .GroupBy(key => key.Y)
+                        .OrderBy(group => group.Key)
+                        .Select(group => (IReadOnlyList<TileKey>)group.ToList())
+                        .ToList();
+                }
+            }
+        }
+
+        return [keys];
+    }
+
+    private static IReadOnlyDictionary<TileKey, SKImage> RasterizeMetatileGroup(
+        VectorScene scene,
+        BaseSpatialIndex? baseIndex,
+        IReadOnlyList<TileKey> keys,
+        float deviceScale)
+    {
+        using var activity = S100Diag.Telemetry.ActivitySource.StartActivity(
+            "s100.render.tile.rasterize", ActivityKind.Internal);
+        activity?.SetTag("s100.render.tile.keys", FormatTileKeys(keys));
+        activity?.SetTag("s100.render.tile.count", keys.Count);
+        activity?.SetTag("s100.render.tile.band", keys[0].Band);
+
+        var xMin = keys.Min(key => key.X);
+        var xMax = keys.Max(key => key.X);
+        var yMin = keys.Min(key => key.Y);
+        var yMax = keys.Max(key => key.Y);
+        var band = keys[0].Band;
+        var spanX = xMax - xMin + 1;
+        var spanY = yMax - yMin + 1;
+        var tilePx = Math.Max(
+            1,
+            (int)Math.Round(
+                (TileGrid.TileSizeDip + 2 * GutterDip) * deviceScale));
+        var exactTileStepPx = tilePx * TileGrid.TileSizeDip
+            / (TileGrid.TileSizeDip + 2 * GutterDip);
+        var tileStepPx = Math.Max(1, (int)Math.Round(exactTileStepPx));
+        if (Math.Abs(exactTileStepPx - tileStepPx) > 1e-9)
+        {
+            activity?.SetTag("s100.render.tile.rasterize.fallback", "scale");
+            RecordMetatileFallback("scale");
+            return RasterizeIndividualTiles(scene, baseIndex, keys, deviceScale);
+        }
+
+        var widthPx = (spanX - 1) * tileStepPx + tilePx;
+        var heightPx = (spanY - 1) * tileStepPx + tilePx;
+        if (widthPx > MaxImageDimension || heightPx > MaxImageDimension)
+        {
+            activity?.SetTag("s100.render.tile.rasterize.fallback", "dimension");
+            RecordMetatileFallback("dimension");
+            return RasterizeIndividualTiles(scene, baseIndex, keys, deviceScale);
+        }
+
+        var first = new TileKey(band, xMin, yMin);
+        var last = new TileKey(band, xMax, yMax);
+        var (blockMinX, _, _, blockMaxY) = TileGrid.TileWorldBounds(first);
+        var (_, blockMinY, blockMaxX, _) = TileGrid.TileWorldBounds(last);
+        var bandResolution = TileGrid.ResolutionForBand(band);
+        var gutterWorld = GutterDip * bandResolution;
+        var fullMinX = blockMinX - gutterWorld;
+        var fullMinY = blockMinY - gutterWorld;
+        var fullMaxX = blockMaxX + gutterWorld;
+        var fullMaxY = blockMaxY + gutterWorld;
+        var scopedScene = ScopeSceneForBounds(
+            scene, baseIndex, fullMinX, fullMinY, fullMaxX, fullMaxY);
+        activity?.SetTag("s100.render.tile.candidate_operations", scopedScene.Ops.Count);
+        activity?.SetTag("s100.render.tile.width_px", widthPx);
+        activity?.SetTag("s100.render.tile.height_px", heightPx);
+
+        var (minLon, minLat) = WebMercator.ToLonLat(
+            fullMinX, fullMinY, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(
+            fullMaxX, fullMaxY, clampLatitude: false);
+        var seedBounds = TileGrid.TileWorldBounds(keys[0]);
+        var viewport = new CoreViewport
+        {
+            MinLatitude = minLat,
+            MaxLatitude = maxLat,
+            MinLongitude = minLon,
+            MaxLongitude = maxLon,
+            WidthPixels = widthPx,
+            HeightPixels = heightPx,
+            ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(
+                (seedBounds.MinX + seedBounds.MaxX) * 0.5,
+                (seedBounds.MinY + seedBounds.MaxY) * 0.5,
+                bandResolution),
+        };
+
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = SceneRgbaColor.Transparent,
+            HonorScaleVisibility = true,
+            EnableSeamWrap = false,
+        };
+
+        var rasterStart = Stopwatch.GetTimestamp();
+        using var bitmap = renderer.Render(scopedScene, viewport);
+        S100Diag.Telemetry.MetatileRasterizeDuration.Record(
+            Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
+
+        var sliceStart = Stopwatch.GetTimestamp();
+        var result = new Dictionary<TileKey, SKImage>(keys.Count);
+        try
+        {
+            foreach (var key in keys)
+            {
+                var left = (key.X - xMin) * tileStepPx;
+                var top = (key.Y - yMin) * tileStepPx;
+                var subset = new SKBitmap();
+                if (!bitmap.ExtractSubset(
+                        subset, SKRectI.Create(left, top, tilePx, tilePx)))
+                {
+                    subset.Dispose();
+                    throw new InvalidOperationException(
+                        $"Could not slice metatile output for {key}.");
+                }
+
+                using (subset)
+                using (var copy = subset.Copy())
+                {
+                    result.Add(key, SKImage.FromBitmap(copy));
+                }
+            }
+        }
+        catch
+        {
+            DisposeImages(result.Values);
+            throw;
+        }
+
+        S100Diag.Telemetry.MetatileSliceDuration.Record(
+            Stopwatch.GetElapsedTime(sliceStart).TotalMilliseconds);
+        S100Diag.Telemetry.MetatileTiles.Record(keys.Count);
+        S100Diag.Telemetry.MetatileJobs.Add(1);
+        return result;
+    }
+
+    private static IReadOnlyDictionary<TileKey, SKImage> RasterizeIndividualTiles(
+        VectorScene scene,
+        BaseSpatialIndex? baseIndex,
+        IReadOnlyList<TileKey> keys,
+        float deviceScale)
+    {
+        var result = new Dictionary<TileKey, SKImage>(keys.Count);
+        try
+        {
+            foreach (var key in keys)
+            {
+                using var bitmap = RasterizeTile(scene, baseIndex, key, deviceScale);
+                result.Add(key, SKImage.FromBitmap(bitmap));
+            }
+        }
+        catch
+        {
+            DisposeImages(result.Values);
+            throw;
+        }
+
+        return result;
+    }
+
+    private static void DisposeImages(IEnumerable<SKImage> images)
+    {
+        foreach (var image in images)
+        {
+            image.Dispose();
+        }
+    }
+
+    private static VectorScene ScopeSceneForTiles(
+        VectorScene scene,
+        BaseSpatialIndex? baseIndex,
+        IReadOnlyList<TileKey> keys)
+    {
+        var bounds = keys.Select(TileGrid.TileWorldBounds).ToList();
+        var bandResolution = TileGrid.ResolutionForBand(keys[0].Band);
+        var gutterWorld = GutterDip * bandResolution;
+        return ScopeSceneForBounds(
+            scene,
+            baseIndex,
+            bounds.Min(bounds => bounds.MinX) - gutterWorld,
+            bounds.Min(bounds => bounds.MinY) - gutterWorld,
+            bounds.Max(bounds => bounds.MaxX) + gutterWorld,
+            bounds.Max(bounds => bounds.MaxY) + gutterWorld);
+    }
+
+    private static VectorScene ScopeSceneForBounds(
+        VectorScene scene,
+        BaseSpatialIndex? baseIndex,
+        double minX,
+        double minY,
+        double maxX,
+        double maxY) =>
+        baseIndex is null
+            ? scene
+            : new VectorScene(baseIndex.Query(minX, minY, maxX, maxY));
 
     /// <summary>Per-layer tiling state, held in a weak table keyed by layer.</summary>
     private sealed class TileState
@@ -2448,6 +3351,14 @@ public static class S100VectorTileRenderer
         // Populated only when the layer is otherwise idle (no cold visible misses
         // this frame, cache headroom to spare); rebuilt (cancelled) every frame.
         public readonly HashSet<TileKey> PendingCrossBand = new();
+
+        // Exact tile relevance for the latest viewport epoch. Workers consult
+        // these sets before raster and publication so an old-epoch job can be
+        // promoted, demoted, or discarded without cancelling still-useful work.
+        public readonly HashSet<TileKey> CurrentVisible = new();
+        public readonly HashSet<TileKey> CurrentSpeculative = new();
+        public TileViewport? CurrentViewport;
+        public long ViewportEpoch;
 
         // First-enqueue Stopwatch ticks for each cold visible tile still awaiting
         // publish, so the worker can record end-to-end cold latency (queue wait +

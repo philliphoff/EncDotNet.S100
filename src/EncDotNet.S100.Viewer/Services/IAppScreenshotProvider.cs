@@ -11,14 +11,14 @@ namespace EncDotNet.S100.Viewer.Services;
 /// The capture target is the live <c>MainWindow</c>, which only exists
 /// after DI is built. <see cref="Target"/> is therefore late-bound by
 /// the window during its construction — mirroring the
-/// <see cref="IMapHostAccessor"/> pattern — so services resolved earlier
+/// <see cref="IMapCapabilityAccessor{TCapability}"/> pattern — so services resolved earlier
 /// can hold the provider and read the target at capture time.
 /// </para>
 /// <para>
 /// Capturing the whole window yields a true "application" screenshot
 /// (chart plus surrounding chrome). When no window target is available
 /// the feedback service falls back to the map-only PNG produced by
-/// <see cref="IMapHost.RenderCurrentViewToPngAsync"/>.
+/// <see cref="IMapSnapshotRenderer.RenderCurrentViewToPngAsync"/>.
 /// </para>
 /// </remarks>
 internal interface IAppScreenshotProvider

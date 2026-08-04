@@ -110,6 +110,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Mcp\EncDotNet.S100.Mcp.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui.Avalonia\EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />

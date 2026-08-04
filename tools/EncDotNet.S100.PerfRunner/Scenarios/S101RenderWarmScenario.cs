@@ -28,10 +28,10 @@ internal sealed class S101RenderWarmScenario : IPerfScenario
         // Render() invokes the full pipeline including the Mapsui
         // display-list renderer — the returned layers are in-memory
         // Mapsui MemoryLayers, no UI thread required.
-        var result = ProcessorRenderBridge.Render(_processor);
+        var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
 
         // Touch the layer list to prevent dead-code elimination.
-        if (result.Layers.Count == 0)
+        if (layerCount == 0)
             throw new InvalidOperationException("Expected at least one layer from S-101 render.");
 
         return Task.CompletedTask;

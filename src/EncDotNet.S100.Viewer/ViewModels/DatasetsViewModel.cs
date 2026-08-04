@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -11,6 +13,22 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class DatasetEntry : ViewModelBase
 {
+    private readonly MapDatasetId _id;
+    private MapDataset? _mapDataset;
+
+    /// <summary>
+    /// Stable renderer-neutral identity projected from <see cref="MapDataset"/>
+    /// after the dataset has loaded.
+    /// </summary>
+    public MapDatasetId Id => _mapDataset?.Id ?? _id;
+
+    /// <summary>
+    /// Renderer-neutral loaded state projected by this view-model, or
+    /// <c>null</c> until the entry first loads. Lazy eviction retains the last
+    /// snapshot so user-controlled display state survives a later reload.
+    /// </summary>
+    public MapDataset? MapDataset => _mapDataset;
+
     public string FilePath { get; }
     public string DisplayName { get; }
     public string ProductSpec { get; }
@@ -122,7 +140,7 @@ internal sealed class DatasetEntry : ViewModelBase
     private Mapsui.MRect? _mercatorExtent;
     /// <summary>
     /// The dataset's EPSG:3857 (web-mercator) extent, captured from the
-    /// renderer's <c>DatasetResult.Extent</c> the first time the dataset is
+    /// renderer's <c>MapsuiDatasetResult.Extent</c> the first time the dataset is
     /// rendered. <see langword="null"/> until the dataset has been loaded (and
     /// for out-of-range time-gated entries that produced no layers). Used to
     /// zoom/pan the map to this dataset (double-click reveal) and to draw the
@@ -160,28 +178,23 @@ internal sealed class DatasetEntry : ViewModelBase
         set => SetProperty(ref _isLoaded, value);
     }
 
-    private bool _hasVersionWarning;
     /// <summary>
     /// True when the dataset's declared product-spec edition diverges from
     /// the edition this build implements in a way that may degrade rendering
     /// (issue #248). Drives the persistent warning badge in the dataset list.
     /// </summary>
-    public bool HasVersionWarning
-    {
-        get => _hasVersionWarning;
-        private set => SetProperty(ref _hasVersionWarning, value);
-    }
+    public bool HasVersionWarning => VersionAssessment?.IsWarning == true;
 
-    private string? _versionWarningTooltip;
     /// <summary>
     /// The human-readable warning shown as the badge tooltip, or <c>null</c>
     /// when <see cref="HasVersionWarning"/> is false.
     /// </summary>
-    public string? VersionWarningTooltip
-    {
-        get => _versionWarningTooltip;
-        private set => SetProperty(ref _versionWarningTooltip, value);
-    }
+    public string? VersionWarningTooltip =>
+        HasVersionWarning ? VersionAssessment?.BuildMessage() : null;
+
+    private SpecVersionAssessment? _versionAssessment;
+    private SpecVersionAssessment? VersionAssessment =>
+        _mapDataset?.VersionAssessment ?? _versionAssessment;
 
     /// <summary>
     /// Records the dataset's spec-version assessment, raising the warning
@@ -190,24 +203,20 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public void SetVersionAssessment(SpecVersionAssessment? assessment)
     {
-        if (assessment?.IsWarning == true)
-        {
-            VersionWarningTooltip = assessment.BuildMessage();
-            HasVersionWarning = true;
-        }
-        else
-        {
-            HasVersionWarning = false;
-            VersionWarningTooltip = null;
-        }
+        if (ReferenceEquals(VersionAssessment, assessment)) return;
+
+        _versionAssessment = assessment;
+        UpdateMapDataset();
+        OnPropertyChanged(nameof(HasVersionWarning));
+        OnPropertyChanged(nameof(VersionWarningTooltip));
     }
 
     // ── Per-dataset display state ─────────────────────────────────────
     //
     // These properties drive the underlying Mapsui ILayer.Enabled and
-    // ILayer.Opacity values via DatasetLoaderService. They survive
-    // re-renders (palette switches, time-step scrubs) because the
-    // loader re-applies them inside ReplaceLayers.
+    // ILayer.Opacity values via MapsuiMapSession. They survive
+    // re-renders (palette switches, time-step scrubs) because the session
+    // reapplies them when replacing generated layers.
 
     private bool _isVisible = true;
     /// <summary>
@@ -217,11 +226,33 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public bool IsVisible
     {
-        get => _isVisible;
+        get => _mapDataset?.IsVisible ?? _isVisible;
         set
         {
-            if (SetProperty(ref _isVisible, value))
+            if (IsVisible != value)
+            {
+                _isVisible = value;
+                UpdateMapDataset();
+                OnPropertyChanged();
                 OnPropertyChanged(nameof(RowOpacity));
+            }
+        }
+    }
+
+    private bool _isActive = true;
+    /// <summary>
+    /// Whether this dataset participates in S-98 composition and queries,
+    /// independently of <see cref="IsVisible"/>.
+    /// </summary>
+    public bool IsActive
+    {
+        get => _mapDataset?.IsActive ?? _isActive;
+        set
+        {
+            if (IsActive == value) return;
+            _isActive = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
         }
     }
 
@@ -232,11 +263,14 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public double Opacity
     {
-        get => _opacity;
+        get => _mapDataset?.Opacity ?? _opacity;
         set
         {
             var clamped = value < 0 ? 0 : value > 1 ? 1 : value;
-            SetProperty(ref _opacity, clamped);
+            if (Opacity == clamped) return;
+            _opacity = clamped;
+            UpdateMapDataset();
+            OnPropertyChanged();
         }
     }
 
@@ -244,7 +278,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// UI helper: dims the row text when the dataset is hidden or still
     /// deferred (registered from a large exchange set but not yet loaded).
     /// </summary>
-    public double RowOpacity => (!_isVisible || _isDeferred) ? 0.5 : 1.0;
+    public double RowOpacity => (!IsVisible || _isDeferred) ? 0.5 : 1.0;
 
     /// <summary>
     /// Flips <see cref="IsVisible"/>. Bound to the eye-icon button in
@@ -261,11 +295,11 @@ internal sealed class DatasetEntry : ViewModelBase
     // user can toggle each one independently. Single-layer products
     // leave this collection empty and the UI hides the disclosure
     // triangle. The collection is populated and reconciled by
-    // DatasetLoaderService inside ReplaceLayers — never reset, only
-    // mutated in place — so user toggles survive palette switches and
-    // time-step scrubs.
+    // MapsuiMapSession and projected into these view models, so user toggles
+    // survive palette switches and time-step scrubs.
 
     private readonly ObservableCollection<DatasetSubLayer> _subLayers = new();
+    private readonly HashSet<DatasetSubLayer> _projectedSubLayers = [];
     public ObservableCollection<DatasetSubLayer> SubLayers => _subLayers;
 
     /// <summary>
@@ -292,16 +326,21 @@ internal sealed class DatasetEntry : ViewModelBase
     private IReadOnlyList<DateTime>? _availableTimes;
     public IReadOnlyList<DateTime>? AvailableTimes
     {
-        get => _availableTimes;
+        get => _mapDataset?.AvailableTimes ?? _availableTimes;
         set
         {
-            if (SetProperty(ref _availableTimes, value))
+            if (!ReferenceEquals(_availableTimes, value))
+            {
+                _availableTimes = value;
+                UpdateMapDataset();
+                OnPropertyChanged();
                 OnPropertyChanged(nameof(HasTimeSteps));
+            }
         }
     }
 
     /// <summary>True when this dataset has at least one time sample.</summary>
-    public bool HasTimeSteps => _availableTimes is { Count: > 0 };
+    public bool HasTimeSteps => AvailableTimes is { Count: > 0 };
 
     private DateTime? _currentTime;
     /// <summary>
@@ -311,11 +350,16 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public DateTime? CurrentTime
     {
-        get => _currentTime;
+        get => _mapDataset?.CurrentTime ?? _currentTime;
         set
         {
-            if (SetProperty(ref _currentTime, value))
+            if (CurrentTime != value)
+            {
+                _currentTime = value;
+                UpdateMapDataset();
+                OnPropertyChanged();
                 OnPropertyChanged(nameof(CurrentTimeLabel));
+            }
         }
     }
 
@@ -325,7 +369,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <see cref="Strings.DatasetEntry_CurrentTimeFormat"/>.
     /// </summary>
     public string CurrentTimeLabel =>
-        _currentTime is { } t
+        CurrentTime is { } t
             ? string.Format(CultureInfo.CurrentCulture, Strings.DatasetEntry_CurrentTimeFormat, t)
             : string.Empty;
 
@@ -345,10 +389,10 @@ internal sealed class DatasetEntry : ViewModelBase
     /// by <see cref="Services.DatasetLoaderService"/> via
     /// <see cref="SetValidationReport"/>.
     /// </summary>
-    public ValidationReport? Validation => _validation;
+    public ValidationReport? Validation => _mapDataset?.Validation ?? _validation;
 
     /// <summary><c>true</c> when a rule pack ran (regardless of finding count).</summary>
-    public bool HasValidationRulePack => _validation is not null;
+    public bool HasValidationRulePack => Validation is not null;
 
     /// <summary>
     /// Read-only display models for the report's findings, in the
@@ -360,24 +404,24 @@ internal sealed class DatasetEntry : ViewModelBase
 
     /// <summary>Total findings across all severities.</summary>
     public int ValidationFindingCount =>
-        _validation?.Findings.Count > 0 ? _validation.Findings.Count : 0;
+        Validation?.Findings.Count > 0 ? Validation.Findings.Count : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Error"/> findings.</summary>
     public int ValidationErrorCount =>
-        _validation?.Findings.Count > 0
-            ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Error)
+        Validation?.Findings.Count > 0
+            ? Validation.Findings.Count(f => f.Severity == ValidationSeverity.Error)
             : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Warning"/> findings.</summary>
     public int ValidationWarningCount =>
-        _validation?.Findings.Count > 0
-            ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Warning)
+        Validation?.Findings.Count > 0
+            ? Validation.Findings.Count(f => f.Severity == ValidationSeverity.Warning)
             : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Info"/> findings.</summary>
     public int ValidationInfoCount =>
-        _validation?.Findings.Count > 0
-            ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Info)
+        Validation?.Findings.Count > 0
+            ? Validation.Findings.Count(f => f.Severity == ValidationSeverity.Info)
             : 0;
 
     /// <summary><c>true</c> when the report contains at least one finding.</summary>
@@ -444,7 +488,7 @@ internal sealed class DatasetEntry : ViewModelBase
     /// extent. Set by <see cref="DatasetsViewModel"/> once the entry
     /// is added to its <c>Entries</c> collection so finding
     /// view-models built by <see cref="SetValidationReport"/> can
-    /// drive <see cref="Services.IMapHost.ZoomToExtent"/> through it.
+    /// drive <see cref="Services.IMapViewportController.ZoomToExtent"/> through it.
     /// Stays <c>null</c> in tests that don't construct the
     /// view-model, in which case <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
     /// is disabled.
@@ -454,6 +498,7 @@ internal sealed class DatasetEntry : ViewModelBase
     public void SetValidationReport(ValidationReport? report)
     {
         _validation = report;
+        UpdateMapDataset();
         Findings = report is null || report.Findings.Count == 0
             ? Array.Empty<ValidationFindingViewModel>()
             : report.Findings.Select(f => new ValidationFindingViewModel(f, ZoomDispatcher)).ToArray();
@@ -506,11 +551,74 @@ internal sealed class DatasetEntry : ViewModelBase
         GeographicBounds = geographicBounds;
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
+        _id = new MapDatasetId(
+            filePath is { Length: > 0 }
+                ? System.IO.Path.GetFileName(filePath)
+                : DisplayName);
         UsageBand = Services.LazyLoading.CellUsageBand.TryParse(DisplayName)
             ?? Services.LazyLoading.CellUsageBand.TryParse(relativePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
 
-        _subLayers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSubLayers));
+        _subLayers.CollectionChanged += (_, _) =>
+        {
+            ReconcileSubLayerProjectionSubscriptions();
+            UpdateMapDataset();
+            OnPropertyChanged(nameof(HasSubLayers));
+        };
+    }
+
+    /// <summary>
+    /// Establishes the renderer-neutral state that becomes authoritative for
+    /// this loaded entry. Registration-only fields remain on the view-model.
+    /// </summary>
+    internal void SetLoadedState(DatasetMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _mapDataset = CreateMapDataset(metadata);
+        OnPropertyChanged(nameof(MapDataset));
+    }
+
+    private void UpdateMapDataset()
+    {
+        if (_mapDataset is null) return;
+        _mapDataset = CreateMapDataset(_mapDataset.Metadata);
+        OnPropertyChanged(nameof(MapDataset));
+    }
+
+    private MapDataset CreateMapDataset(DatasetMetadata metadata) => new(
+        _id,
+        DisplayName,
+        metadata,
+        _isVisible,
+        _isActive,
+        _opacity,
+        _availableTimes,
+        _currentTime,
+        _subLayers.Select(subLayer => subLayer.State).ToArray(),
+        _validation,
+        _versionAssessment);
+
+    private void ReconcileSubLayerProjectionSubscriptions()
+    {
+        foreach (var subLayer in _projectedSubLayers)
+        {
+            subLayer.PropertyChanged -= OnSubLayerProjectionChanged;
+        }
+        _projectedSubLayers.Clear();
+
+        foreach (var subLayer in _subLayers)
+        {
+            subLayer.PropertyChanged += OnSubLayerProjectionChanged;
+            _projectedSubLayers.Add(subLayer);
+        }
+    }
+
+    private void OnSubLayerProjectionChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DatasetSubLayer.State))
+        {
+            UpdateMapDataset();
+        }
     }
 }
 
@@ -518,37 +626,50 @@ internal sealed class DatasetEntry : ViewModelBase
 /// Represents one of the Mapsui layers a dataset is rendered as,
 /// surfaced with a per-layer visibility toggle and opacity slider.
 /// The combined effective state is computed by
-/// <see cref="Services.DatasetLoaderService"/>:
+/// <see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiMapSession"/>:
 ///   <c>layer.Enabled = parent.IsVisible &amp;&amp; sub.IsVisible</c> and
 ///   <c>layer.Opacity = parent.Opacity * sub.Opacity</c>.
 /// </summary>
 internal sealed class DatasetSubLayer : ViewModelBase
 {
+    private MapDatasetSubLayer _state;
+    private readonly string _displayName;
+
+    /// <summary>Renderer-neutral state projected by this view-model.</summary>
+    public MapDatasetSubLayer State => _state;
+
     /// <summary>
     /// Stable key supplied by the dataset processor (e.g.
     /// <c>"s111.arrows"</c>). Used to reconcile sub-layers across
     /// re-renders so a palette switch or time-scrub does not reset
     /// user-driven toggles.
     /// </summary>
-    public string Key { get; }
+    public string Key => _state.Key;
 
-    public string DisplayName { get; }
+    public string DisplayName => _displayName;
 
-    private bool _isVisible = true;
     public bool IsVisible
     {
-        get => _isVisible;
-        set => SetProperty(ref _isVisible, value);
+        get => _state.IsVisible;
+        set
+        {
+            if (_state.IsVisible == value) return;
+            _state = new MapDatasetSubLayer(Key, _state.Name, value, Opacity);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(State));
+        }
     }
 
-    private double _opacity = 1.0;
     public double Opacity
     {
-        get => _opacity;
+        get => _state.Opacity;
         set
         {
             var clamped = value < 0 ? 0 : value > 1 ? 1 : value;
-            SetProperty(ref _opacity, clamped);
+            if (_state.Opacity == clamped) return;
+            _state = new MapDatasetSubLayer(Key, _state.Name, IsVisible, clamped);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(State));
         }
     }
 
@@ -560,8 +681,8 @@ internal sealed class DatasetSubLayer : ViewModelBase
 
     public DatasetSubLayer(string key, string displayName)
     {
-        Key = key;
-        DisplayName = displayName;
+        _state = new MapDatasetSubLayer(key, key);
+        _displayName = displayName;
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
     }
 }
@@ -775,7 +896,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// <summary>
     /// Routes <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
     /// activations from individual finding view-models to the live
-    /// map's <see cref="Services.IMapHost.ZoomToExtent"/>. Set once by
+    /// map's <see cref="Services.IMapViewportController.ZoomToExtent"/>. Set once by
     /// the window after the map host is available; assigned to every
     /// entry currently in <see cref="Entries"/> and to entries added
     /// later.
@@ -834,7 +955,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// </summary>
     public event Action<string>? UnrecognizedFileEncountered;
 
-    public DatasetsViewModel(IDatasetLoaderService loader, GlobalTimeService? globalTime = null)
+    public DatasetsViewModel(IDatasetLoaderService loader)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
@@ -902,10 +1023,6 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 }
             }
         };
-
-        // Auto-unregister entries from the global time service when they
-        // are removed from the collection.
-        globalTime?.AttachTo(this);
     }
 
     public DatasetEntry Add(string filePath, string productSpec)

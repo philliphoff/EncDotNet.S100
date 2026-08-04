@@ -90,4 +90,37 @@ public class SettingsViewModelMapOptimizationsTests
 
         if (File.Exists(s.SettingsFilePath)) File.Delete(s.SettingsFilePath);
     }
+
+    [Fact]
+    public void Metatile_ReadsAndPersists_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileMetatileEnvExplicit)
+        {
+            return;
+        }
+
+        var original = RenderingOptimizations.TileMetatileEnabled;
+        var settings = NewSettings();
+        settings.TileMetatileEnabled = true;
+        try
+        {
+            var viewModel = new SettingsViewModel(settings);
+            Assert.True(viewModel.TileMetatileEnabled);
+            Assert.True(RenderingOptimizations.TileMetatileEnabled);
+
+            viewModel.TileMetatileEnabled = false;
+
+            Assert.False(settings.TileMetatileEnabled);
+            Assert.False(RenderingOptimizations.TileMetatileEnabled);
+            Assert.True(File.Exists(settings.SettingsFilePath));
+        }
+        finally
+        {
+            RenderingOptimizations.TileMetatileEnabled = original;
+            if (File.Exists(settings.SettingsFilePath))
+            {
+                File.Delete(settings.SettingsFilePath);
+            }
+        }
+    }
 }

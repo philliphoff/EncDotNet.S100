@@ -46,6 +46,22 @@ product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### Processor lifecycle ownership
+
+`DatasetProcessorOwner` is the renderer- and UI-neutral lifecycle boundary for
+processors loaded into a map. It is keyed by host-stable `MapDatasetId`, rejects
+duplicate identities without taking ownership of the rejected processor, and
+uses `DatasetProcessorLease` to defer removal disposal while a render or other
+operation is still using a processor. Disposing the owner deterministically
+retires every processor and disposes the current `IDisposable` processor
+implementations exactly once.
+
+The component belongs in this aggregate pipeline package because it owns
+`IDatasetProcessor` instances across product specifications while depending on
+neither Mapsui nor a UI framework. Layer rendering, S-98 composition, time
+registration, and presentation refresh remain outside this first lifecycle
+slice.
+
 ### Headless pick services and catalog (issue #480)
 
 The protocol-neutral "pick" logic — identify the vector features and
@@ -166,8 +182,9 @@ portrayal-output seam:
 
 Both build methods run under the processor's render gate and snapshot
 everything so the result is safe to convert in another assembly. The
-`payload → ILayer` conversion — and the Mapsui-typed `DatasetResult` —
-live in **`EncDotNet.S100.Renderers.Mapsui`** (`MapsuiDatasetRenderer`),
+`payload → ILayer` conversion — and the Mapsui-owned
+`MapsuiDatasetResult` — live in **`EncDotNet.S100.Renderers.Mapsui`**
+(`MapsuiDatasetRenderer`),
 which references this package (not the other way round). The map-free
 S-98 concepts (`IDisplayPlaneAuthority`, `DisplayPlaneAuthorityProvider`)
 stay here; the Mapsui-typed stack entries moved to the renderer.
@@ -175,6 +192,42 @@ stay here; the Mapsui-typed stack entries moved to the renderer.
 The `ProjNet`-based `ICrsTransformFactory` implementation lives in the
 separate **`EncDotNet.S100.Crs.ProjNet`** package, keeping CRS handling
 Mapsui-free too.
+
+### Renderer-neutral map presentation
+
+`MapPresentationState` is the immutable, UI- and renderer-neutral snapshot of
+presentation choices shared across every dataset on a map: palette, symbol and
+text scale, ECDIS settings, mariner settings, and the product-specific display
+modes carried by `EcdisDisplaySettings.ActiveDisplayModes`. Its constructor
+defensively freezes the ECDIS collections, so a host can safely reuse the
+snapshot across concurrent renders.
+
+Call `presentation.CreateRenderContext(processor, selectedTime)` to select the
+product-specific `RenderContext` from `processor.PortrayalSpec` and apply all
+map-wide choices in one step. S-104, S-111, and S-411 contexts carry the selected
+time; static products ignore it. `presentation.ApplyTo(context,
+processor.PortrayalSpec)` remains available when a caller needs to supply a
+request-specific context carrying a viewport, basemap, or instruction filter.
+
+`IMapPresentationController.SetPresentationAsync` is the corresponding
+application boundary for a host or session that owns loaded datasets. The
+controller accepts the immutable state explicitly and applies it asynchronously
+without exposing UI refresh events or renderer types. Implementations retain
+processor, refresh, and disposal ownership. The Mapsui backend consumes the
+snapshot directly in `MapsuiMapSession`, which owns product-context creation,
+layer rendering, S-98 composition, time gating, and refresh coalescing.
+
+`MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
+`MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,
+and temporal coverage) with independent visibility and active flags, opacity,
+available/current time, `MapDatasetSubLayer` state, `ValidationReport`, and
+`SpecVersionAssessment`. The contract contains no rendered layers, localized
+strings, UI commands, or framework events. The Viewer projects its existing
+loaded entry state into this model, while `MapsuiMapSession` treats it as the
+authoritative identity and display-state snapshot across layer replacements.
+The session also consumes `IInteroperabilityAuthorityProvider` and
+`MarinerSettings` to own S-98 ordering, suppression, authority changes, and the
+final active dataset layer band without coupling those concerns to the Viewer.
 
 ## Validation
 
@@ -321,7 +374,9 @@ for the full design rationale.
 
 ## Other utilities
 
-- `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
+- `MapPresentationState`, `IMapPresentationController`, `MapDataset`,
+  `MapDatasetId`, `MapDatasetSubLayer`,
+  `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
   `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
   blocks for the per-processor `Render` / `GetFeatureInfo` /
   `GetCoverageInfo` paths.

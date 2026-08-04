@@ -52,19 +52,28 @@ directly.
 
 ## Digital Signature Verification
 
-The library implements the S-100 Part 15 Data Protection Scheme for **signature verification** and a complementary **checksum/integrity** dimension. Exchange sets may include per-file digital signatures (DSA or ECDSA P-256 over SHA-256) embedded in `CATALOG.XML`, along with a certificate block referencing the signing data provider. Independently of any signature, each file's SHA-256 digest is computed and its presence/readability confirmed, so even an **unsigned** exchange set can be checked for missing or corrupt files.
+The library implements the S-100 Part 15 Data Protection Scheme for **signature verification** and a complementary **checksum/integrity** dimension. Exchange sets may include multiple per-file signatures (DSA or ECDSA over SHA-256) embedded in `CATALOG.XML`, including signatures over unencrypted, compressed, or encrypted data and distribution signatures that sign another signature's ASN.1 R/S bytes. Independently of any signature, each file's SHA-256 digest is computed and its presence/readability confirmed, so even an **unsigned** exchange set can be checked for missing or corrupt files.
 
 ### Model types
 
 | Type | Description | S-100 Part 15 ref |
 |---|---|---|
-| `DigitalSignatureAlgorithm` | Enum: `DSA`, `ECDSA` | §15-4.1 |
-| `DigitalSignatureValue` | Parsed `S100_SE_DigitalSignature` (id, certificateRef, raw signature bytes) | §15-4.2 |
+| `DigitalSignatureAlgorithm` | Legacy `DSA`/`ECDSA` plus the Part 15 file-transfer `ECDSA384SHA2` algorithm | §15-8.4, §15-8.7 |
+| `DigitalSignatureValue` | Parsed legacy, signature-on-data, or signature-on-signature value (id, certificateRef, raw signature bytes, and form-specific metadata) | §15-8.8, §15-8.11.3–6 |
+| `DigitalSignatureKind` / `SignatureDataStatus` | Signature form and the unencrypted/compressed/encrypted representation covered by a data signature | §15-8.11.3–6 |
+| `SignatureVerificationResult` | Per-signature outcome and structured failure reason | §15-8.8 |
 | `CertificateBlock` | Certificate collection from the catalogue (scheme administrator ID + certificate entries) | §15-5 |
 | `CertificateEntry` | Individual X.509 certificate (id, issuer, DER-encoded bytes) | §15-5.2 |
 | `CryptographicHash` | Parsed hash MRN `urn:mrn:iho:s100:hash:<alg>:<hex>` used to integrity-check a resource | §15-8.10, Table 15-12 |
 
-These are surfaced as properties on `DatasetDiscoveryMetadata`, `SupportFileDiscoveryMetadata`, `CatalogueDiscoveryMetadata` (via `DigitalSignatureAlgorithm`, `DigitalSignatureValue?`, and `ExpectedHash?`), and on `ExchangeCatalogue` (via `CertificateBlock?`).
+These are surfaced as properties on `DatasetDiscoveryMetadata`, `SupportFileDiscoveryMetadata`, and `CatalogueDiscoveryMetadata` (via `DigitalSignatureAlgorithm`, ordered `DigitalSignatures`, the compatibility `DigitalSignatureValue?`, and `ExpectedHash?`), and on `ExchangeCatalogue` (via `CertificateBlock?`).
+
+`ExchangeSetVerifier` verifies every signature on a resource. Signature IDs are
+unique catalogue-wide; `signatureRef` chains are resolved within the same
+resource entry, support forward references, and reject missing references,
+duplicates, cross-resource references, and cycles explicitly. The aggregate
+`FileVerificationResult.Outcome` remains compatible with existing callers,
+while `SignatureResults` exposes each signature's result.
 
 ### Verification API
 
@@ -155,9 +164,10 @@ The **confidentiality** dimension of Part 15 — reading **encrypted** datasets 
 | `S100Cipher` | AES-128 primitives: single-block key wrap/unwrap (`EncryptBlock`/`DecryptBlock`) and dataset modified-CBC `DecryptDataset`/`EncryptDataset` | §15-6 |
 | `HardwareId` | 16-byte Data Client system id (`HW_ID`) | §15-7.3.1.1 |
 | `UserPermit` | 46-char user permit: parse/validate (CRC-32), `Create`, and `DecryptHardwareId(M_KEY)` | §15-7.3 |
-| `DataPermit` | One `datasetPermit` record (`encryptedKey`, expiry, edition); `DecryptCellKey(HardwareId)` | §15-7.4.4 |
+| `DataPermit` | One `datasetPermit` record (`encryptedKey`, mandatory expiry, edition/issue identity) | §15-7.4.4 |
 | `PermitFile` / `PermitGroup` / `PermitHeader` | `PERMIT.XML` parser (namespace-tolerant 5.0/5.1) with `TryGetPermit` lookup | §15-7.4 |
-| `IDatasetKeyProvider` / `PermitKeyProvider` | Resolves a cell key per dataset from a permit + hardware id | §15-7 |
+| `StandaloneDigitalSignatureReader` / `PermitSignatureVerifier` | Parses `PERMIT.SIGN`, validates its certificate chain and ECDSA P-384/SHA-384 signature, and exposes the permit only after authentication | §15-7.4.5, §15-8.11.2 |
+| `IDatasetKeyProvider` / `PermitKeyProvider` | Resolves a cell key from an authenticated permit and enforces catalogue edition, issue-date, and expiry applicability | §15-7.4.4 |
 | `DecryptingAssetSource` | `IAssetSource` decorator that decrypts (and optionally decompresses) keyed files transparently | §15-5, §15-6 |
 
 **Crypto details** (all pinned to the §15 worked examples in unit tests): AES-128, PKCS#7 padding, and the §15-6.2.4 *modified CBC* mode (a random block is prepended before encryption and discarded on decryption, so no IV is transmitted). Cell keys and hardware ids are exactly one AES block and are wrapped with single-block ECB. Compression (§15-5.2) is ZIP/DEFLATE, applied *before* encryption; `DecryptingAssetSource` unzips the single-entry archive when `decompress` is set.
@@ -168,18 +178,50 @@ using EncDotNet.S100.ExchangeSets.Protection;
 // Hardware id either recovered from a user permit (needs the OEM M_KEY) or held by the client.
 HardwareId hwId = UserPermit.Parse(userPermitText).DecryptHardwareId(manufacturerKey);
 
-// Parse the licence and build a per-dataset key provider.
-PermitFile permits = PermitFile.Read("PERMIT.XML");
-var keys = new PermitKeyProvider(permits, hwId);
+// Authenticate the licence before any permit key can be used.
+await using Stream permitXml = File.OpenRead("PERMIT.XML");
+await using Stream permitSign = File.OpenRead("PERMIT.SIGN");
+PermitAuthenticationResult authentication =
+    await PermitSignatureVerifier.AuthenticateAsync(
+        permitXml, permitSign, "PERMIT.XML", trustAnchors);
+PermitFile permits = authentication.PermitFile
+    ?? throw new InvalidDataException(authentication.Verification.Detail);
+
+// Catalogue metadata constrains permit edition, issue date, and expiry.
+var keys = new PermitKeyProvider(permits, hwId, catalogue);
 
 // Wrap any IAssetSource so encrypted datasets read as plaintext.
 using IAssetSource source = new DecryptingAssetSource(fileSystemOrZipSource, keys, decompress: true);
 await using Stream plaintext = await source.OpenAsync("S-101/101GB40079ABCDEF.000");
 ```
 
-Because the digital signature is produced over the **unencrypted** resource (§15-8.9), an encrypted exchange set can be signature-verified simply by passing a `DecryptingAssetSource` as the `source` to `ExchangeSetVerifier.VerifyAsync(...)` — the verifier hashes the decrypted bytes through the existing `OpenContentForHashingAsync` seam, no override required.
+Legacy signatures over the **unencrypted** resource can verify an encrypted
+exchange set by passing a `DecryptingAssetSource` to
+`ExchangeSetVerifier.VerifyAsync(...)`. Catalogues using the explicit Part 15
+signature forms should instead use the stage-aware resolver below so one
+resource can carry signatures over multiple representations.
 
-**Not yet implemented:** parsing of the `dataStatus="encrypted"` attribute and the `S100_SE_SignatureOnData` / `S100_SE_SignatureOnSignature` forms (§15-8.11), the `PERMIT.SIGN` permit-file signature (§15-7.4.5), and any viewer/CLI surface for supplying permits and keys.
+For catalogues using the explicit Part 15 signature forms, pass the raw asset
+source to the verifier and supply the authenticated key provider to its
+stage-aware resolver:
+
+```csharp
+var contentResolver = new Part15SignatureContentResolver(keys);
+var verifier = new ExchangeSetVerifier(contentResolver);
+ExchangeSetVerificationResult verification =
+    await verifier.VerifyAsync(fileSystemOrZipSource, catalogue, trust);
+```
+
+An `encrypted` signature hashes the stored ciphertext without requiring a
+permit. A `compressed` signature decrypts only when necessary, and an
+`unencrypted` signature decrypts and/or decompresses according to the
+discovery metadata. This lets all representations and chained distribution
+signatures coexist on one resource.
+
+`PermitFile.Read(...)` remains available for metadata inspection, but returns an unauthenticated permit that `PermitKeyProvider` rejects. Production key use must flow through `PermitSignatureVerifier.AuthenticateAsync(...)`.
+
+Viewer/CLI workflows for supplying permits and keys remain separate from the
+library-level signature and decryption support.
 
 ### CLI
 
@@ -212,7 +254,7 @@ The IHO publishes test SA certificates for interoperability testing. For product
 ### Scope and limitations
 
 - **Verification only** — signing/authoring of exchange sets is not yet implemented.
-- **Decryption is implemented; encryption metadata parsing is not** — Part 15 §3 confidentiality (permits, cell-key unwrap, AES modified-CBC decryption, decompression) is supported via the `Protection` namespace (see above), but the catalogue-level `dataStatus`/`SignatureOnData` markers that flag *which* files are encrypted are not yet parsed, so encrypted files are recognised by the presence of a matching permit key.
+- **Decryption, permit authentication, and signature metadata are implemented** — Part 15 confidentiality and all catalogue-level signature forms are supported at the library level. Viewer/CLI permit-entry UX remains out of scope here.
 - **Checksum reference is opportunistic** — S-100 mandates no per-resource hash, so `NoChecksum` is the common (and non-failing) result for unsigned sets; hash-MRN placement is discovered best-effort.
 - File hashing uses streaming SHA-256 to avoid loading large HDF5 files into memory.
 

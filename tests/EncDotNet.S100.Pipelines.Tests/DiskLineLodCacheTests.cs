@@ -107,6 +107,21 @@ public class DiskLineLodCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task ConcurrentWritesPersistAllEntries()
+    {
+        var cache = new DiskLineLodCache(_dir, maxBytes: 64 * 1024 * 1024);
+        const int entryCount = 100;
+
+        await Task.WhenAll(Enumerable.Range(0, entryCount).Select(index =>
+            Task.Run(() => cache.GetOrCompute(
+                $"key-{index}",
+                () => Sample(index)))));
+
+        Assert.Equal(entryCount, cache.Misses);
+        Assert.Equal(entryCount, Directory.EnumerateFiles(_dir, "*.llod").Count());
+    }
+
+    [Fact]
     public void CorruptedFileFallsBackToMiss()
     {
         var cache = new DiskLineLodCache(_dir, maxBytes: 16 * 1024 * 1024);

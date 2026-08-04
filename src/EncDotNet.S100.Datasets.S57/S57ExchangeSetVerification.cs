@@ -103,6 +103,7 @@ public static class S57ExchangeSetVerification
         {
             FileName = file.FileName,
             Outcome = MapOutcome(file.SignatureOutcome),
+            SignatureResults = [],
             ChecksumOutcome = MapOutcome(file.ChecksumOutcome),
             Detail = ComposeDetail(file),
         };

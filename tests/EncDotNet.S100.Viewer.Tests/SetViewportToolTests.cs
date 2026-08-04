@@ -3,7 +3,6 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using Mapsui;
-using Mapsui.Layers;
 using ModelContextProtocol.Protocol;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -13,19 +12,12 @@ public class SetViewportToolTests
     private sealed record ExtentCall(double MinX, double MinY, double MaxX, double MaxY);
     private sealed record CenterCall(double X, double Y, double Resolution);
 
-    private sealed class RecordingMapHost : IMapHost
+    private sealed class RecordingMapHost : IMapViewportController
     {
-        public IChartRenderSubsystem RenderSubsystem { get; } = new MapsuiChartRenderSubsystem();
-
         public List<ExtentCall> ExtentCalls { get; } = new();
         public List<CenterCall> CenterCalls { get; } = new();
         public List<double> RotationCalls { get; } = new();
 
-        public void AddLayer(ILayer layer) { }
-        public void RemoveLayer(ILayer layer) { }
-        public void AddOverlayLayer(ILayer layer) { }
-        public void RemoveOverlayLayer(ILayer layer) { }
-        public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) { }
         public void ZoomToExtent(MRect extent) { }
 
         public void SetViewportToExtent(MRect mercatorExtent)
@@ -40,23 +32,16 @@ public class SetViewportToolTests
 
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
         public GeoPosition? TryGetViewportCenterWgs84() => null;
-        public (double Width, double Height)? TryGetViewportSizePx() => null;
-        public GeoPosition? TryScreenToWgs84(double xPx, double yPx) => null;
-        public GeoPosition? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
-
-        public Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, CancellationToken ct = default)
-            => Task.FromResult<byte[]?>(null);
     }
 
-    private sealed class FakeAccessor : IMapHostAccessor
-    {
-        public IMapHost? Current { get; set; }
-    }
-
-    private static (SetViewportTool tool, RecordingMapHost host) Make(IMapHost? hostOverride = null)
+    private static (SetViewportTool tool, RecordingMapHost host) Make(
+        IMapViewportController? hostOverride = null)
     {
         var host = (hostOverride as RecordingMapHost) ?? new RecordingMapHost();
-        var accessor = new FakeAccessor { Current = hostOverride is null ? host : hostOverride };
+        var accessor = new MapCapabilityAccessor<IMapViewportController>
+        {
+            Current = hostOverride ?? host,
+        };
         return (new SetViewportTool(accessor), host);
     }
 
@@ -184,7 +169,7 @@ public class SetViewportToolTests
     [Fact]
     public async Task Map_not_ready_when_accessor_returns_null()
     {
-        var accessor = new FakeAccessor { Current = null };
+        var accessor = new MapCapabilityAccessor<IMapViewportController>();
         var tool = new SetViewportTool(accessor);
 
         var result = await tool.InvokeAsync(new SetViewportRequest(

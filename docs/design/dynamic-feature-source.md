@@ -45,15 +45,15 @@ explicitly **out of scope** for this design and parked in §2.
 Each dataset processor (`IDatasetProcessor` implementations in
 `EncDotNet.S100.Datasets.Pipelines`) consumes a file, produces one or
 more Mapsui `ILayer` instances, and hands them to the viewer's
-`IMapHost.AddLayer` (the **dataset tier**). Two adjacent tiers
+`IMapLayerCollection.AddDatasetLayer` (the **dataset tier**). Two adjacent tiers
 already exist:
 
 - **Basemap tier** — beneath datasets, configured by the host.
 - **Overlay tier** — above datasets. Two precedents:
   - `MeasureOverlayLayer` (a `MemoryLayer` carried by `MeasureTool`)
     for in-flight measurement chrome.
-  - The in-flight **validation-findings overlay** (session
-    `303c3372`) proposes extending `IMapHost` with explicit
+  - The **validation-findings overlay** uses the focused layer collection's
+    explicit
     `AddOverlayLayer(ILayer)` / `RemoveOverlayLayer(ILayer)` to
     formalise this tier.
 
@@ -166,7 +166,7 @@ assembly that already owns the relevant dependency line:
    (`IServiceProvider.GetKeyedService<IDynamicFeatureRenderer>(source.Metadata.RendererKey)`),
    maintains a backing `MemoryLayer`, marshals updates to the UI
    thread, attaches the layer to the overlay tier via
-   `IMapHost.AddOverlayLayer`, and surfaces the source as a
+   `IMapLayerCollection.AddOverlayLayer`, and surfaces the source as a
    `LayerStackEntry` in the `DynamicArrows` plane of the Layer Stack
    UI.
 
@@ -199,7 +199,7 @@ adapter writes -->| IDynamicFeature   |
         MemoryLayer
               |
               v
-   IMapHost.AddOverlayLayer
+   IMapLayerCollection.AddOverlayLayer
               |
               v
         MapControl
@@ -486,12 +486,12 @@ namespace EncDotNet.S100.Viewer.DynamicSources;
 /// <summary>
 /// Subscribes to dynamic sources, resolves their renderers from DI by
 /// RendererKey, attaches a backing MemoryLayer to the overlay tier of
-/// IMapHost, marshals all Mapsui mutations to the UI thread, and
+/// IMapLayerCollection, marshals all Mapsui mutations to the UI thread, and
 /// publishes a LayerStackEntry per source.
 /// </summary>
 public sealed class DynamicSourceOverlayHost : IDisposable
 {
-    public DynamicSourceOverlayHost(IMapHost mapHost, IServiceProvider services);
+    public DynamicSourceOverlayHost(IMapLayerCollection layers, IServiceProvider services);
 
     /// <summary>
     /// Register a source. Resolves IDynamicFeatureRenderer keyed by
@@ -511,21 +511,19 @@ public sealed class DynamicSourceOverlayHost : IDisposable
 public sealed class DynamicSourceRegistration { }
 ```
 
-### 4.4 `IMapHost` overlay-tier methods
+### 4.4 `IMapLayerCollection` overlay-tier methods
 
-This design **reuses** the overlay-tier API proposed by the
-in-flight validation-findings session
-(`303c3372-5392-42f5-b7d5-4eca7e8bddb5`):
+This design reuses the focused layer-collection capability shared with the
+validation-findings overlay:
 
 ```csharp
-// EncDotNet.S100.Viewer.Services.IMapHost (added by validation-overlay PR)
+// EncDotNet.S100.Viewer.Services.IMapLayerCollection
 void AddOverlayLayer(ILayer layer);
 void RemoveOverlayLayer(ILayer layer);
 ```
 
-If that session adopts a different surface (a separate `IOverlayHost`,
-a collection property, etc.), this design follows the chosen shape.
-See §9.
+The capability delegates ordering and ownership to the reusable
+`MapsuiLayerBands` component.
 
 ---
 
@@ -842,7 +840,7 @@ debounce flush.
 **Options.**
 
 - (a) Headless: a `FakeDynamicFeatureSource` test helper drives
-  synthetic updates against a fake `IMapHost`. Default renderer
+  synthetic updates against a fake `IMapLayerCollection`. Default renderer
   covered by unit tests across each geometry kind. No Avalonia.
 - (b) Avalonia-headless test app with the real `MapControl`.
 - (c) Integration only — exercise via an end-to-end recorded log.
@@ -850,7 +848,7 @@ debounce flush.
 **Recommendation:** (a).
 
 **Rationale.** The overlay host is testable as a plain object given
-a fake `IMapHost`. The renderer is a pure function. The source
+a fake `IMapLayerCollection`. The renderer is a pure function. The source
 contract is event-based and trivially drivable from a test helper.
 
 Test surface for the implementation PR:
@@ -931,13 +929,11 @@ that each is a small follow-up PR.
 
 ## 6. Integration with existing systems
 
-### 6.1 `IMapHost` and the overlay tier
+### 6.1 `IMapLayerCollection` and the overlay tier
 
 The dynamic-source overlay attaches its backing `MemoryLayer` via
-the validation-overlay session's proposed
-`IMapHost.AddOverlayLayer(ILayer)` / `RemoveOverlayLayer(ILayer)`.
-That session is in flight; this design assumes the API lands and
-defers the bikeshed.
+`IMapLayerCollection.AddOverlayLayer(ILayer)` /
+`RemoveOverlayLayer(ILayer)`.
 
 Precedent for `MemoryLayer`-as-overlay:
 `src/EncDotNet.S100.Viewer/Tools/MeasureOverlayLayer.cs` and its
@@ -1008,8 +1004,7 @@ for an overlay-tier `MemoryLayer`. Both designs:
 
 - Sit above datasets in the overlay tier.
 - Use `MemoryLayer` as the backing surface.
-- Need an explicit `IMapHost` API (the validation session is
-  proposing it; this design reuses it).
+- Use the explicit `IMapLayerCollection` overlay API shared with validation.
 - Surface in the Layer Stack UI.
 
 The two designs deliberately do not share concrete glue (validation
@@ -1096,12 +1091,8 @@ them.
 
 ## 9. Open questions
 
-1. **`IMapHost.AddOverlayLayer` shape.** If the in-flight
-   validation-overlay session (`303c3372`) chooses a different
-   surface (separate `IOverlayHost`, `IMapHost.OverlayLayers`
-   collection, etc.), this design follows whichever shape lands.
-   Resolution: track the sibling session's final API, update the
-   §4.4 stub.
+1. **Overlay-layer shape (resolved).** The Viewer uses the focused
+   `IMapLayerCollection` capability, backed by `MapsuiLayerBands`.
 2. **`DynamicSourceMetadata.PreferredPlane`.** Should
    `DynamicSourceMetadata` allow a source to override the default
    `DynamicArrows` plane assignment (e.g. a weather-contour source

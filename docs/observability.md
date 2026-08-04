@@ -117,6 +117,72 @@ useful for orders-of-magnitude comparisons, not exact attribution.
 | `s100.symbol.cache.miss.count` | counter | `{misses}` | `s100.product` |
 | `s100.pattern.cache.hit.count` | counter | `{hits}` | `s100.product` |
 | `s100.pattern.cache.miss.count` | counter | `{misses}` | `s100.product` |
+| `s100.render.metatile.rasterize.duration` | histogram | `ms` | — |
+| `s100.render.metatile.slice.duration` | histogram | `ms` | — |
+| `s100.render.metatile.tiles` | histogram | `{tile}` | — |
+| `s100.render.metatile.jobs` | counter | `{job}` | — |
+| `s100.render.metatile.fallbacks` | counter | `{fallback}` | `reason` |
+| `s100.render.tile.rasterize.duration` | histogram | `ms` | — |
+| `s100.render.tile.cold.latency` | histogram | `ms` | — |
+| `s100.render.tile.visible.queue.depth` | histogram | `{tile}` | — |
+| `s100.render.tile.speculation.deferred` | counter | `{worker}` | `priority` |
+| `s100.render.tile.disk.write_queue.depth` | histogram | `{tile}` | — |
+| `s100.render.tile.disk.write_queue.discarded` | counter | `{tile}` | `reason` |
+
+Metatile metrics are emitted only when `S100_VECTOR_TILE_METATILE=1` (or the
+matching viewer setting is enabled). `rasterize.duration` is the undivided
+union-job time, `slice.duration` is the copy cost, and `tiles` measures achieved
+batch density. The fallback `reason` is `sparse`, `disk`, `scamin`, `dimension`,
+or `scale` (when integer pixel geometry cannot preserve the independent-tile
+projection at a fractional device scale). Existing
+`s100.render.tile.rasterize.duration` remains comparable between arms: a
+batched job records its total elapsed time divided across the logical tiles it
+produced.
+
+`s100.render.tile.speculation.deferred` counts predicted or cross-band worker
+admission attempts rejected while any layer still has visible cold work. A
+non-zero count confirms that process-wide visible-first scheduling is actively
+protecting the current viewport; sustained growth after the visible queue
+drains indicates stale active-layer registration.
+
+When tracing is enabled, the tiled renderer also emits an opt-in
+`s100.render.tile.job` span for each worker job. Child spans separate
+`disk_read`, `rasterize`, and `publish`. Job tags include tile keys,
+visible/predicted/cross-band priority, queue wait, active worker counts, cache
+outcome, viewport epoch, stale/published counts, stale-before-raster counts,
+and persistence enqueue results; raster spans include candidate paint operation
+count and output dimensions.
+
+Persistent cache writes run independently on a bounded, low-priority writer
+after tile publication. Root `s100.render.tile.cache.persist` spans describe
+that background work, with child `cache.encode`, `cache.file_write`, and
+`cache.sweep` spans. Queue overflow and duplicate requests are best-effort
+discards rather than render-worker backpressure. The discard `reason` may also
+be `stale` when a queued tile leaves the current viewport before snapshot,
+encoding, or atomic file commit. These spans are inert unless an
+`ActivityListener` subscribes, so ordinary viewer runs do not allocate trace
+records.
+
+Use `perfreport tile-report` to rank slow jobs and attribute their end-to-end
+latency (first visible enqueue through publish):
+
+```sh
+dotnet run --project tools/EncDotNet.S100.PerfReport -- \
+  tile-report /tmp/viewer-stress/tiles.jsonl --out /tmp/viewer-stress/tiles.md
+```
+
+Viewer paints taking at least 50 ms also emit an
+`s100.map.paint.slow` span. Its tags split the whole paint into summed
+instrumented style-renderer time and an uninstrumented remainder, and include
+the paint sequence and draw-call count. The sequence and completion timestamp
+match `get_render_stats.window.slowestFrame`, allowing a frame outlier to be
+correlated with tile jobs, persistence, and runtime traces.
+
+Tiled-layer composites taking at least 50 ms emit an
+`s100.render.tile.composite.slow` span tagged with the layer name, time waiting
+for the layer-state lock, time spent while holding it, cold exposure, and
+visible queue depth. This distinguishes compositor lock contention from
+expensive cache/GPU work inside the critical section.
 
 ### Skia renderer metrics (`EncDotNet.S100.Renderers.Skia`)
 

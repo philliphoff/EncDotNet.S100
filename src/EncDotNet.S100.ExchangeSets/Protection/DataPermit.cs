@@ -22,13 +22,13 @@ public sealed class DataPermit
     /// The dataset file name (optionally with extension) the permit applies to.
     /// </param>
     /// <param name="encryptedKey">The 16-byte encrypted cell key (<c>EK</c>).</param>
-    /// <param name="expiry">The licence expiry date, if present.</param>
+    /// <param name="expiry">The mandatory licence expiry date.</param>
     /// <param name="editionNumber">The edition number the permit applies to, if present.</param>
     /// <param name="issueDate">The dataset issue date, if present.</param>
     public DataPermit(
         string fileName,
         ReadOnlySpan<byte> encryptedKey,
-        DateOnly? expiry = null,
+        DateOnly expiry,
         int? editionNumber = null,
         DateOnly? issueDate = null)
     {
@@ -56,8 +56,8 @@ public sealed class DataPermit
     /// <summary>The 16-byte encrypted cell key (<c>EK</c>, §15-7.4.4).</summary>
     public ReadOnlySpan<byte> EncryptedKey => _encryptedKey;
 
-    /// <summary>The licence expiry date, if declared (§15-7.4.4).</summary>
-    public DateOnly? Expiry { get; }
+    /// <summary>The licence expiry date (§15-7.4.4).</summary>
+    public DateOnly Expiry { get; }
 
     /// <summary>The edition number the permit applies to, if declared.</summary>
     public int? EditionNumber { get; }
@@ -67,11 +67,10 @@ public sealed class DataPermit
 
     /// <summary>
     /// Indicates whether the permit has expired as of <paramref name="asOf"/>.
-    /// A permit with no declared expiry never expires.
     /// </summary>
     /// <param name="asOf">The date to evaluate against.</param>
     /// <returns><c>true</c> if the permit's expiry date is before <paramref name="asOf"/>.</returns>
-    public bool IsExpired(DateOnly asOf) => Expiry is { } expiry && expiry < asOf;
+    public bool IsExpired(DateOnly asOf) => Expiry < asOf;
 
     /// <summary>
     /// Indicates whether this permit applies to the dataset with the given file
@@ -101,12 +100,7 @@ public sealed class DataPermit
     }
 
 
-    /// <summary>
-    /// Unwraps the cell key for this permit using the Data Client's hardware id.
-    /// </summary>
-    /// <param name="hardwareId">The system hardware id.</param>
-    /// <returns>The 16-byte decrypted cell key.</returns>
-    public byte[] DecryptCellKey(HardwareId hardwareId)
+    internal byte[] DecryptCellKey(HardwareId hardwareId)
     {
         ArgumentNullException.ThrowIfNull(hardwareId);
         return S100Cipher.DecryptBlock(_encryptedKey, hardwareId.Value);

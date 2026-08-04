@@ -358,7 +358,7 @@ are deferred (§3.5) and gated on the IHO finishing the spec.
     features"* reading literally: the surface goes under the base
     chart's vector work.
 - **Codebase mapping:** S-104 and S-111 processors already split
-  into multiple sub-layers (`DatasetResult.Layers` +
+  into multiple sub-layers (`MapsuiDatasetResult.Layers` +
   `LayerNames`); the processor sets a per-sub-layer plane.
 
 ### 3.4 Summary table for v1
@@ -429,9 +429,10 @@ The existing `DisplayPlane` enum (UnderRadar / OverRadar) in
 exist side-by-side. Doc the relationship in the new
 `S98DisplayPlane`'s XML summary.
 
-### 4.2 `src/EncDotNet.S100.Datasets.Pipelines/`
+### 4.2 Renderer output and pipeline portrayal sources
 
-`DatasetResult` (in `DatasetPipelineFactory.cs:16`) grows an
+`MapsuiDatasetResult` (in
+`src/EncDotNet.S100.Renderers.Mapsui/MapsuiDatasetResult.cs`) grows an
 optional sibling to the existing `LayerNames`:
 
 ```
@@ -507,7 +508,7 @@ is the *only* place layers from different datasets are combined.
 It walks `_entryOrder` (user-controlled dataset stacking from the
 Datasets panel) bottom-up, concatenates each entry's
 `_entryLayers[entry]` in dataset-iteration order, and hands the
-result to `MapsuiMapHost.ReorderDatasetLayers`.
+result to `IMapLayerCollection.ReplaceDatasetLayers`.
 
 That means today every layer of dataset N sits below every layer
 of dataset N+1, regardless of plane. This is **Level 0** in S-98
@@ -535,7 +536,7 @@ result and the map host:
                          │
                          ▼
             ┌───────────────────────────────────┐
-            │ MapsuiMapHost.ReorderDatasetLayers│
+            │ IMapLayerCollection.ReplaceDatasetLayers │
             └───────────────────────────────────┘
 ```
 
@@ -572,7 +573,7 @@ hit test; we only reorder the dedup-survivors.
 
 - `ViewerDatasetCatalog.cs` — none expected.
 - `MainViewModel.cs` — none expected (it never assembles layers).
-- `MapsuiMapHost.cs` (i.e. `IMapHost.ReorderDatasetLayers`) — none;
+- `MapsuiMapHost.cs` (i.e. `IMapLayerCollection.ReplaceDatasetLayers`) — none;
   it already takes a flat ordered list.
 - `DatasetsViewModel.cs` — no changes; user-perceived ordering
   still flows through this VM.
@@ -997,8 +998,8 @@ above:
   — area / pattern fill ordering by `DrawingPriority`.
 - `src/EncDotNet.S100.Datasets.Pipelines/IDatasetProcessor.cs`
   — `IDatasetProcessor` contract.
-- `src/EncDotNet.S100.Datasets.Pipelines/DatasetPipelineFactory.cs:16-34`
-  — `DatasetResult` (extension point for `LayerPlanes` /
+- `src/EncDotNet.S100.Renderers.Mapsui/MapsuiDatasetResult.cs`
+  — `MapsuiDatasetResult` (extension point for `LayerPlanes` /
   `LayerWithinPlanePriorities`).
 - `src/EncDotNet.S100.Datasets.Pipelines/S101DatasetProcessor.cs:83`
   — `S101DatasetProcessor.Render`; the split point for §4.2.1.

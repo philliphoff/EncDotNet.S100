@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// need the registry hold the accessor and read
 /// <see cref="Current"/> (or subscribe to <see cref="SourcesChanged"/>)
 /// at invocation time. Mirrors the
-/// <c>IMapHostAccessor</c> / <c>MapHostAccessor</c> pattern already
+/// typed map-capability accessor pattern already
 /// established by the MCP wiring.
 /// </para>
 /// <para>

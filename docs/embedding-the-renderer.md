@@ -15,6 +15,86 @@ Neither package references Mapsui, Avalonia, or any GUI framework, so this is th
 seam to embed into a tile-serving web API, a batch image job, or the library half
 of a future web/WASM target.
 
+Hosts that own dataset processors can also capture map-wide portrayal choices in
+`MapPresentationState` from `EncDotNet.S100.Datasets.Pipelines`. The immutable
+snapshot carries palette, symbol/text scale, ECDIS and mariner settings, including
+per-product display modes, and projects them onto a product `RenderContext`:
+
+```csharp
+var presentation = new MapPresentationState(
+    PaletteType.Day,
+    symbolScale: 1.0,
+    textScale: 1.0,
+    ecdisSettings,
+    marinerSettings);
+
+DateTime? selectedTime = null;
+RenderContext context = presentation.CreateRenderContext(
+    processor,
+    selectedTime);
+```
+
+This presentation layer is renderer-neutral: it does not reference Mapsui,
+Avalonia, or SkiaSharp. The factory selects the product context and carries the
+selected time for S-104, S-111, and S-411. Hosts that need a request-specific
+viewport, basemap, or instruction filter can construct that context and call
+`presentation.ApplyTo(context, processor.PortrayalSpec)` instead. Hosts that
+manage loaded datasets can expose
+`IMapPresentationController.SetPresentationAsync(presentation, cancellationToken)`
+to apply the snapshot explicitly. The boundary does not own the supplied state
+or prescribe processor, layer, renderer, or UI lifecycles.
+
+Loaded dataset state has the same renderer-neutral seam:
+
+```csharp
+var dataset = new MapDataset(
+    new MapDatasetId("US5WA50M.000"),
+    "US5WA50M.000",
+    processor.Metadata,
+    availableTimes: timeSteps,
+    validation: processor.Validate(),
+    versionAssessment: processor.VersionAssessment);
+```
+
+`MapDataset` snapshots metadata and extent, independent visibility and active
+state, opacity, available/current time, sub-layer state, validation, and version
+assessment. It intentionally excludes rendered layers, UI commands, framework
+events, and localized strings so a future map session can own the state without
+depending on Viewer, Mapsui, or Avalonia.
+
+The Viewer now follows that boundary throughout its loaded-dataset lifecycle:
+its dataset and sub-layer view-models project `MapDataset` /
+`MapDatasetSubLayer` snapshots while retaining only UI commands, localized
+labels, selection, and registration metadata. Map-wide Viewer inputs are similarly projected into one current
+`MapPresentationState`, then applied through `IMapPresentationController`
+rather than a presentation-specific refresh event. `MapsuiMapSession` combines
+that state with its leased processors and selected dataset times, so neither
+render-context construction nor processor/layer ownership remains in Viewer
+state.
+
+The Viewer's live map adapter is also segregated by responsibility. Its
+`MapsuiMapHost` implements separate internal capabilities for layer-band
+collection, viewport/navigation, coordinate conversion, snapshot rendering, and
+redraw invalidation. Dataset loading receives only the layer and viewport
+capabilities; overlays receive only layer collection; MCP and feedback services
+use typed late-bound accessors for only the viewport, conversion, or snapshot
+capability they need. There is no aggregate `IMapHost` facade.
+
+This is an application-boundary cleanup rather than the final reusable session
+API. Layer ownership uses the reusable `MapsuiLayerBands` component against
+`Mapsui.Map`, and viewport behavior delegates to `MapsuiMapNavigator` against
+`Map.Navigator`. Both mutate the supplied map directly without requiring
+Avalonia. Automatic zoom after dataset load remains Viewer policy.
+
+Hosts that use Avalonia can opt into
+`EncDotNet.S100.Renderers.Mapsui.Avalonia`. Its disposable
+`AvaloniaMapsuiMapAdapter` attaches to a live `CaptureSynchronizedMapControl`
+and owns UI-thread invalidation, control-state coordinate conversion, current
+view PNG snapshots, and Avalonia control capture. The capture-synchronized
+control brackets the live Skia paint so offscreen capture cannot race shared GPU
+images. The optional adapter does not own datasets, processors, presentation,
+S-98 composition, or host UX.
+
 ## Why it matters
 
 This is the smallest seam for teams that already own portrayal outputs or want

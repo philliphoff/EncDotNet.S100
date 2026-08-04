@@ -147,7 +147,7 @@ public class VesselListViewModelTests
         }
 
         var host = new FakeMapHost();
-        var accessor = new MapHostAccessor { Current = host };
+        var accessor = new MapCapabilityAccessor<IMapViewportController> { Current = host };
 
         var sources = includeOwnShip
             ? new IDynamicFeatureSource[] { ais, ownShip }
@@ -483,7 +483,7 @@ public class VesselListViewModelTests
     [Fact]
     public void NoAisSource_PanelIsEmpty_NoThrow()
     {
-        var accessor = new MapHostAccessor { Current = new FakeMapHost() };
+        var accessor = new MapCapabilityAccessor<IMapViewportController> { Current = new FakeMapHost() };
 
         // Only an own-ship-keyed source, publishing nothing (overlay off);
         // no "vessel.ais" source present.
@@ -519,7 +519,7 @@ public class VesselListViewModelTests
     {
         // A DisabledAisFeatureSource models the overlay being switched off.
         var disabled = new DisabledAisFeatureSource();
-        var accessor = new MapHostAccessor { Current = new FakeMapHost() };
+        var accessor = new MapCapabilityAccessor<IMapViewportController> { Current = new FakeMapHost() };
 
         var vm = new VesselListViewModel(new IDynamicFeatureSource[] { disabled }, accessor);
 
@@ -543,7 +543,7 @@ public class VesselListViewModelTests
     [Fact]
     public void EmptyState_NoAisSource_ShowsEnableMessage()
     {
-        var accessor = new MapHostAccessor { Current = new FakeMapHost() };
+        var accessor = new MapCapabilityAccessor<IMapViewportController> { Current = new FakeMapHost() };
         // A source with an unrelated renderer key — the VM resolves no
         // "vessel.ais" source, so the overlay is treated as off.
         var misc = new FakeDynamicFeatureSource(

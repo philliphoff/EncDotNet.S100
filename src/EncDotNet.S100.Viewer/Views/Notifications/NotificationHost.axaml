@@ -151,9 +151,10 @@
                         <!--
                           Content and the floating close button share this cell so
                           the close button sits in the card's top-right corner and
-                          the action buttons right-align to the card edge (rather
-                          than to a narrower content column). The title reserves
-                          right padding so it never runs under the close button.
+                          the action buttons can wrap within the full card width
+                          rather than a narrower content column. The title
+                          reserves right padding so it never runs under the close
+                          button.
                         -->
                         <Grid Grid.Column="1">
                             <StackPanel Margin="10,12,10,12">
@@ -170,28 +171,32 @@
                                 <Button Classes="notificationLink"
                                         Content="{Binding ToggleExpandLabel}"
                                         Command="{Binding ToggleExpandCommand}"
-                                        IsVisible="{Binding ShowExpandToggle}" />
+                                        IsVisible="{Binding ShowExpandToggle}"
+                                        ToolTip.Tip="{Binding ToggleExpandLabel}" />
 
                                 <ContentControl Margin="0,8,0,0"
                                                 Content="{Binding CustomContent}"
                                                 IsVisible="{Binding HasCustomContent}" />
 
                                 <ItemsControl Margin="0,10,0,0"
-                                              HorizontalAlignment="Right"
+                                              HorizontalAlignment="Stretch"
                                               ItemsSource="{Binding Actions}"
                                               IsVisible="{Binding HasActions}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal" Spacing="8" />
+                                            <WrapPanel Orientation="Horizontal"
+                                                       HorizontalAlignment="Right" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:NotificationActionViewModel">
                                             <Button Classes="notificationAction"
+                                                    Margin="4"
                                                     Content="{Binding Label}"
                                                     Command="{Binding Command}"
                                                     Classes.Primary="{Binding IsPrimary}"
-                                                    Classes.Outline="{Binding IsSecondary}" />
+                                                    Classes.Outline="{Binding IsSecondary}"
+                                                    ToolTip.Tip="{Binding Label}" />
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

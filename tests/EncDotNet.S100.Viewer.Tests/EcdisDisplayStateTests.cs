@@ -91,6 +91,36 @@ public class EcdisDisplayStateTests
         Assert.Equal(new HashSet<int> { 11010, 11020 }, state.GetHidden("S-101"));
         Assert.Equal(1, raised);
     }
+
+    [Fact]
+    public void EcdisDisplayState_DisplayMode_RoundTripsThroughSnapshotAndHydrate()
+    {
+        var state = new EcdisDisplayState();
+        state.SetDisplayMode("S-411", S411DisplayModes.NavigationalModeId);
+
+        var snap = state.Snapshot();
+        Assert.Equal(S411DisplayModes.NavigationalModeId, snap.ActiveDisplayModes["S-411"]);
+
+        var restored = new EcdisDisplayState();
+        restored.Hydrate(
+            snap.Category,
+            snap.HiddenViewingGroups,
+            snap.HiddenDisplayPlanes,
+            snap.ActiveDisplayModes);
+
+        Assert.Equal(S411DisplayModes.NavigationalModeId, restored.GetDisplayMode("S-411"));
+    }
+
+    [Fact]
+    public void EcdisDisplayState_SetDisplayMode_NullClearsSelection()
+    {
+        var state = new EcdisDisplayState();
+        state.SetDisplayMode("S-411", S411DisplayModes.StageOfDevelopmentModeId);
+        state.SetDisplayMode("S-411", null);
+
+        Assert.Null(state.GetDisplayMode("S-411"));
+        Assert.False(state.Snapshot().ActiveDisplayModes.ContainsKey("S-411"));
+    }
 }
 
 public class ViewerSettingsEcdisRoundTripTests

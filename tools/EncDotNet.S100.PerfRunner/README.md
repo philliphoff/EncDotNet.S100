@@ -22,6 +22,14 @@ dotnet run --project tools/EncDotNet.S100.PerfRunner -- s101-portray-warm \
     --iterations 20 \
     --tag branch=main \
     --tag commit=abc1234
+
+# Saturate a running viewer's tile workers through its MCP endpoint
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- viewer-stress \
+    --port-file /tmp/viewer-stress/mcp.url \
+    --bbox 49.8,-6.5,59.0,2.0 \
+    --zoom-min 6 --zoom-max 12 \
+    --steps 96 --cycles 5 --step-delay-ms 0 \
+    --out /tmp/viewer-stress
 ```
 
 ## Scenarios
@@ -52,6 +60,55 @@ That means:
 
 Use PerfRunner to track pipeline regressions, and run a live viewer trace when
 you need warm-rasterise numbers.
+
+### Reusable live viewer stress run
+
+Build the Release viewer, then launch the binary with isolated settings/cache,
+the tiled render subsystem, MCP, and file telemetry:
+
+```bash
+mkdir -p /tmp/viewer-stress
+ENC_DOTNET_OTEL_FILE=/tmp/viewer-stress/tiles.jsonl \
+S100_RENDER_SUBSYSTEM=B \
+src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
+  --data-dir /tmp/viewer-stress/data \
+  --mcp --mcp-port-file /tmp/viewer-stress/mcp.url \
+  /path/to/exchange-set
+```
+
+Run `viewer-stress` from another terminal. The route is a deterministic WGS-84
+snake over `--bbox`; when `--bbox` is omitted, the command uses
+`list_datasets` to union the bounds of every loaded dataset. Zoom follows a
+triangle wave from `--zoom-min` to `--zoom-max` and back. Each cycle
+deliberately issues viewport changes without waiting for render idle, so
+`--step-delay-ms 0` creates maximum queue pressure. At the cycle boundary the
+command waits for the live map to settle, samples `get_render_stats`, and writes
+a JSON manifest containing every requested viewport and MCP round-trip time.
+The rolling render-stat window is reset before each cycle, so startup paints and
+earlier cycles cannot contaminate that cycle's maxima or percentiles.
+
+For a visible approximation of normal navigation, use
+`--scenario navigation --step-delay-ms 100`. This route performs separate
+incremental pan and zoom legs instead of changing position and zoom together.
+
+Analyze the trace directly:
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfReport -- \
+  tile-report /tmp/viewer-stress/tiles.jsonl \
+  --out /tmp/viewer-stress/tile-report.md
+
+dotnet run --project tools/EncDotNet.S100.PerfReport -- \
+  chrome-trace /tmp/viewer-stress/tiles.jsonl \
+  --out /tmp/viewer-stress/tile-timeline.json
+```
+
+`tile-report` reports P50/P95/P99 end-to-end tile latency and classifies each
+job by its dominant queue, raster, disk-read, disk-write, publish, or
+uninstrumented cost. Open the Chrome trace in Perfetto for the worker timeline.
+For method-level CPU attribution inside a costly raster span, simultaneously
+attach `dotnet-trace` to the viewer process and convert the resulting
+`.nettrace` to Speedscope.
 
 ### Live viewer warm-render trace recipe
 
@@ -107,12 +164,17 @@ Notes:
 
 ## Output
 
-Each run produces two files in the output directory:
+Each normal scenario run produces two files in the output directory:
 
 - `<timestamp>-<scenario>.jsonl` — newline-delimited JSON telemetry
   (spans + metrics).
 - `<timestamp>-<scenario>.md` — markdown summary with iteration
   statistics.
+
+`viewer-stress` instead produces `<timestamp>-viewer-stress.json`, a manifest
+of the driven route, MCP timings, render-idle result, and render statistics.
+The viewer process writes its own span/metric `.jsonl` to the path configured by
+`ENC_DOTNET_OTEL_FILE`.
 
 ### `.jsonl` schema (version 1)
 

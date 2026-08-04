@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// live-toggleable knobs.
 /// </para>
 /// <para>
-/// The "best" default is <see langword="true"/> for every knob; line geometry
+/// Defaults are selected independently from measured performance; line geometry
 /// simplification runs at <see cref="DefaultSimplificationTolerancePx"/> px. See
 /// <c>docs/design/mapsui-performance.md</c> for the measurements behind those
 /// choices.
@@ -85,6 +85,7 @@ public static class RenderingOptimizations
     private static double _tileBudgetMb;
     private static bool _tilePredictionEnabled;
     private static bool _tileCrossBandPrewarmEnabled;
+    private static bool _tileMetatileEnabled;
     private static bool _tileDiskCacheEnabled;
     private static double _tileDiskMb;
     private static bool _tileGpuResidencyEnabled;
@@ -139,12 +140,14 @@ public static class RenderingOptimizations
         // env var or the setter is still honoured on any tier.
         (_tileCrossBandPrewarmEnabled, TileCrossBandPrewarmEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_XBAND", defaultValue: tier != PerformanceProfile.LowEnd);
+        (_tileMetatileEnabled, TileMetatileEnvExplicit) =
+            SeedBool("S100_VECTOR_TILE_METATILE", defaultValue: false);
         (_tileDiskCacheEnabled, TileDiskCacheEnvExplicit) =
             SeedBool("S100_VECTOR_TILE_DISK", defaultValue: true);
         (_tileDiskMb, TileDiskMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_DISK_MB", MachineProfile.TileDiskMb(tier), MinTileDiskMb, MaxTileDiskMb);
         (_tileGpuResidencyEnabled, TileGpuResidencyEnvExplicit) =
-            SeedBool("S100_VECTOR_TILE_GPU", defaultValue: true);
+            SeedBool("S100_VECTOR_TILE_GPU", defaultValue: false);
         (_tileGpuBudgetMb, TileGpuBudgetMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_GPU_MB", MachineProfile.TileGpuBudgetMb(tier), MinTileGpuBudgetMb, MaxTileGpuBudgetMb);
         (_tileWorkerCount, TileWorkerCountEnvExplicit) =
@@ -346,6 +349,22 @@ public static class RenderingOptimizations
     public static bool TileCrossBandPrewarmEnvExplicit { get; }
 
     /// <summary>
+    /// Whether adjacent tile misses may be rasterised as one 2&#215;2 metatile
+    /// job and sliced back into tile-granular cache entries (issue&#160;#427).
+    /// Seeded from <c>S100_VECTOR_TILE_METATILE</c>; default off until the
+    /// real-corpus performance gate demonstrates a measurable gain. Read for
+    /// each worker job, so a change takes effect without rebuilding a dataset.
+    /// </summary>
+    public static bool TileMetatileEnabled
+    {
+        get => _tileMetatileEnabled;
+        set { if (!TileMetatileEnvExplicit) _tileMetatileEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="TileMetatileEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileMetatileEnvExplicit { get; }
+
+    /// <summary>
     /// Whether the persistent warm disk tile cache (Phase&#160;4) is enabled.
     /// Seeded from <c>S100_VECTOR_TILE_DISK</c> (default on). The shared disk
     /// cache is created once per process, so a change applies on restart.
@@ -393,7 +412,7 @@ public static class RenderingOptimizations
 
     /// <summary>
     /// Whether GPU texture residency (Phase&#160;5) is enabled for the tiled base
-    /// plane. Seeded from <c>S100_VECTOR_TILE_GPU</c> (default on). Read every
+    /// plane. Seeded from <c>S100_VECTOR_TILE_GPU</c> (default off). Read every
     /// frame, so a change takes effect live (inert on a software surface).
     /// </summary>
     public static bool TileGpuResidencyEnabled

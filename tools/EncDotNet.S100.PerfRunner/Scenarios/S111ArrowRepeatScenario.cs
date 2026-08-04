@@ -3,7 +3,7 @@ namespace EncDotNet.S100.PerfRunner.Scenarios;
 /// <summary>
 /// Burst-render scenario for the S-111 arrow renderer path introduced by
 /// issue #488. Loads the bundled DBOFS surface-current fixture once and
-/// invokes <see cref="ProcessorRenderBridge.Render"/>
+/// invokes <see cref="ProcessorRenderBridge.RenderLayerCount"/>
 /// <see cref="RepeatCount"/> times per iteration. This is the evidence
 /// scenario for the option-2 (coverage-only) wiring — the underlying
 /// path exercises <see cref="Renderers.Mapsui.MapsuiCoverageArrowRenderer"/>,
@@ -37,8 +37,7 @@ internal sealed class S111ArrowRepeatScenario : IPerfScenario
         int layerCount = 0;
         for (int i = 0; i < RepeatCount; i++)
         {
-            var result = ProcessorRenderBridge.Render(_processor);
-            layerCount = result.Layers.Count;
+            layerCount = ProcessorRenderBridge.RenderLayerCount(_processor);
         }
 
         if (layerCount == 0)

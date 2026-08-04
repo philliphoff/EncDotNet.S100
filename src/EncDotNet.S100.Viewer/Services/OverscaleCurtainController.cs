@@ -34,7 +34,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class OverscaleCurtainController : IDisposable
 {
-    private readonly IMapHost _mapHost;
+    private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private readonly IDatasetLoaderService _loader;
     private readonly IMapViewportNotifier _viewport;
@@ -49,7 +49,7 @@ internal sealed class OverscaleCurtainController : IDisposable
     /// Creates and attaches the controller. The map host must already be
     /// initialised so the curtain overlay lands above the chart slice.
     /// </summary>
-    /// <param name="mapHost">Target map host.</param>
+    /// <param name="layers">Target map layer collection.</param>
     /// <param name="datasets">The datasets view-model to observe.</param>
     /// <param name="loader">Supplies the overscale cell inputs.</param>
     /// <param name="viewport">Publishes viewport (resolution) changes.</param>
@@ -60,20 +60,20 @@ internal sealed class OverscaleCurtainController : IDisposable
     /// implementation.
     /// </param>
     public OverscaleCurtainController(
-        IMapHost mapHost,
+        IMapLayerCollection layers,
         DatasetsViewModel datasets,
         IDatasetLoaderService loader,
         IMapViewportNotifier viewport,
         SettingsViewModel settings,
         Action<Action>? marshal = null)
     {
-        ArgumentNullException.ThrowIfNull(mapHost);
+        ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(settings);
 
-        _mapHost = mapHost;
+        _layers = layers;
         _datasets = datasets;
         _loader = loader;
         _viewport = viewport;
@@ -94,7 +94,7 @@ internal sealed class OverscaleCurtainController : IDisposable
 
         _marshal(() =>
         {
-            _mapHost.AddOverlayLayer(_layer);
+            _layers.AddOverlayLayer(_layer);
             Rebuild();
         });
     }
@@ -201,6 +201,6 @@ internal sealed class OverscaleCurtainController : IDisposable
         _viewport.ViewportChanged -= OnViewportChanged;
         _settings.OverscaleIndicationChanged -= OnToggleChanged;
 
-        _marshal(() => _mapHost.RemoveOverlayLayer(_layer));
+        _marshal(() => _layers.RemoveOverlayLayer(_layer));
     }
 }

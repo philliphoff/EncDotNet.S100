@@ -43,6 +43,12 @@ public sealed class CatalogueDiscoveryMetadata
     public DigitalSignatureValue? DigitalSignatureValue { get; init; }
 
     /// <summary>
+    /// All digital signatures declared for this catalogue file, in catalogue order.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.8.</remarks>
+    public IReadOnlyList<DigitalSignatureValue> DigitalSignatures { get; init; } = [];
+
+    /// <summary>
     /// The declared cryptographic hash for this catalogue file, if the
     /// catalogue carries one. Used to integrity-check the file independently
     /// of any digital signature.

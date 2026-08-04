@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// Covers the Settings → "Render subsystem" knobs (issue #331):
 /// the A/B subsystem switch, the tiled scene mode, and the "B" tiled-pipeline
 /// optimization knobs. Each mirrors a <see cref="RenderingOptimizations"/>
-/// value, defaults to the "best" set, persists through <see cref="ViewerSettings"/>,
+/// value, uses its measured default, persists through <see cref="ViewerSettings"/>,
 /// and is shown disabled (the matching <c>*Editable</c> flag is false) when an
 /// explicit environment variable pins it.
 /// </summary>
@@ -20,7 +20,7 @@ public class SettingsViewModelRenderSubsystemTests
     }
 
     [Fact]
-    public void Defaults_BestSet_WhenMissing()
+    public void Defaults_MeasuredSet_WhenMissing()
     {
         if (RenderingOptimizations.RenderSubsystemEnvExplicit
             || RenderingOptimizations.SceneModeEnvExplicit)
@@ -34,7 +34,7 @@ public class SettingsViewModelRenderSubsystemTests
         Assert.Equal(VectorSceneMode.Tiled, vm.SelectedSceneMode);
         Assert.True(vm.TiledSceneSelected);
         Assert.True(vm.TilePredictionEnabled);
-        Assert.True(vm.TileGpuResidencyEnabled);
+        Assert.False(vm.TileGpuResidencyEnabled);
         Assert.True(vm.TileDiskCacheEnabled);
     }
 

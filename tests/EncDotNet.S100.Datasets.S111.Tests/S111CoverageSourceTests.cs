@@ -105,6 +105,20 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Equal(coverage.NumPointsLongitudinal, direction.GetLength(1));
     }
 
+    [SkippableFact]
+    public void Sample_StrideLargerThanSubset_RetainsIntersectingCell()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3));
+
+        Assert.Equal(1, sampled.Metadata.NumRows);
+        Assert.Equal(1, sampled.Metadata.NumColumns);
+        Assert.Single(sampled.Values["surfaceCurrentSpeed"]);
+        Assert.Single(sampled.Values["surfaceCurrentDirection"]);
+    }
+
     [Fact]
     public async Task PortrayalCatalogue_ResolveColorScheme_MapsSpeedToColors()
     {

@@ -178,6 +178,20 @@ is draggable and persisted. The panel opens on the Exchange sets tab,
 unless only loose datasets are loaded, in which case it opens on the
 Datasets tab.
 
+Internally, loaded rows project the renderer-neutral `MapDataset` and
+`MapDatasetSubLayer` snapshots; commands, localized labels, selection, and
+exchange-set registration details remain Viewer-only. Palette, ECDIS, scale,
+and mariner inputs are likewise consolidated into the current
+`MapPresentationState` before rendering and passed explicitly through
+`IMapPresentationController.SetPresentationAsync`. `MapsuiMapSession` now owns
+processor-to-layer rendering, replacement/removal, S-98 cross-product order and
+suppression, active/visible/opacity and sub-layer state application, scale
+windows, overlap suppression, time-aware registration and gating, render
+cancellation, and coalesced time/presentation refreshes. The Viewer loader
+coordinates files, catalogues, validation, notifications, and optional zoom.
+`MapPresentationState` creates product render contexts for the session, while
+`GlobalTimeService` only projects the session clock into timeline bindings.
+
 **Double-click a dataset row to reveal it** — the viewer ensures the
 dataset is loaded and then flies the map to that dataset's extent. This
 is the quickest way to locate a member of a wide-spread exchange set,
@@ -566,13 +580,20 @@ release:
   — the About dialog still truthfully shows the update so you can install
   it later, and you're still notified of *later* releases. The skipped
   version is remembered in your settings (`SkippedUpdateVersion`).
-- Update checks are throttled to roughly once per day and can be turned
-  off entirely; dev builds never check (so `0.0.0-dev` shows a neutral
-  "update checks unavailable" panel). To exercise the live check against
-  the real GitHub API from a dev build, launch with `S100_UPDATE_FORCE=1`
-  — it bypasses the dev-build gate for manual/agent verification only and
-  must never be set in shipped builds. See issue #379 for the broader
-  update-notification design.
+- After startup, a non-modal notification announces a newly available,
+  unskipped release. **View release** opens GitHub, **Remind me later**
+  dismisses the card until the next scheduled check, **Skip this version**
+  suppresses that release but not later ones, and **Stop checking**
+  disables automatic checks.
+- Update checks are throttled to roughly once per day across Viewer
+  launches and can be turned off entirely. Offline failures, throttled
+  checks, skipped releases, and development builds remain silent at
+  startup; `0.0.0-dev` shows a neutral "update checks unavailable" panel
+  in About. To exercise the live check against the real GitHub API from a
+  dev build, launch with `S100_UPDATE_FORCE=1` — it bypasses the dev-build
+  gate for manual/agent verification only and must never be set in shipped
+  builds. The Viewer links to GitHub but does not download or install an
+  update itself.
 
 ### Crash recovery (next-startup reporting)
 
@@ -942,10 +963,61 @@ The libraries do all the spec-aware work; the viewer is mainly
 glue + Avalonia views. To understand or extend any of it, start
 with the matching library README:
 
+The live `MapsuiMapHost` is Viewer composition, not a service contract.
+Consumers depend on focused interfaces for layer bands, viewport/navigation,
+coordinate conversion, snapshot rendering, or redraw invalidation. Late-bound
+services use typed `IMapCapabilityAccessor<TCapability>` instances, so no
+consumer regains the former monolithic map-host dependency. Layer ordering and
+ownership remain in the reusable `MapsuiLayerBands` component, while viewport
+behavior delegates to `MapsuiMapNavigator`; both operate on `Mapsui.Map`
+without Avalonia. The optional `EncDotNet.S100.Renderers.Mapsui.Avalonia`
+adapter owns live-control attachment, dispatcher use, invalidation, coordinate
+conversion, and framework capture. The Viewer retains automatic zoom-after-load,
+capability readiness, diagnostics, MCP/feedback policy, render-context
+construction, and host lifecycle. Time registration, product-specific
+snap/gating behavior, refresh cancellation, and render serialization live in
+`MapsuiMapSession`; the Viewer timeline is a projection of its time snapshot.
+The session reports its render lifecycle and refresh failures through structured
+events (`DatasetRenderStarted`/`DatasetRenderCompleted`/`DatasetRenderFailed`,
+`LayersChanged`, `TimeRangeChanged`, `CurrentTimeChanged`); the Viewer consumes
+them as host policy — projecting layer/time state and logging swallowed refresh
+failures (`DatasetRenderFailed` is best-effort and written to `Console.Error`,
+not toasted). The user-facing toast notifications and localized strings for the
+load lifecycle stay in the Viewer's own load path, not the session.
+
+### Viewer coordinator boundary
+
+`DatasetLoaderService` is now a thin Viewer coordinator: the reusable dataset
+render lifecycle — processor-to-layer rendering, replacement, ordering,
+visible/active state, S-98 composition, time gating, render-context
+construction, render serialization/cancellation, and processor ownership —
+lives in `MapsuiMapSession` and `DatasetProcessorOwner`
+(`EncDotNet.S100.Renderers.Mapsui` / `.Datasets.Pipelines`). The coordinator's
+render-orchestration methods (`RenderAndReplaceAsync`, `ReplaceLayersAsync`,
+`SetPresentationAsync`, `ReRenderAtTimeAsync`) are thin wrappers over that
+session. What the coordinator still owns is Viewer host policy:
+
+- **Load orchestration** — spec detection (`ResolveSpecOrWarn`), portrayal
+  catalogue prompts (`HasRequiredCatalogueOrWarn`), processor construction
+  (`CreateProcessorAsync`), and load-generation guarding for concurrent
+  loads/reloads.
+- **UI defaults** — post-registration policies (`ApplyPostRegistrationPolicies`):
+  duplicate-coverage collapse, S-104 gridded-surface default-hidden, S-101
+  update-report surfacing, and S-128 catalogue registration.
+- **Notifications** — the progress/success/cancel/error toasts and localized
+  strings (`CreateLoadProgressNotification`, `DriveTerminal`), plus recent-files
+  and the optional zoom-after-load framing.
+- **View-model projection** — mapping the session's renderer-neutral
+  `MapDataset`/sub-layer snapshots onto Viewer `DatasetEntry` view-models with
+  localized names and `INotifyPropertyChanged` wiring (`ProjectSessionState`).
+  This is inherently Viewer-side and does not belong in the UI-framework-free
+  session.
+
 - Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
 - Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
 - Per-product readers and validation rule packs — `EncDotNet.S100.Datasets.S*/README.md`
 - Vector + coverage + dynamic-feature renderers — [`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/README.md)
+- Optional Avalonia live-control adapter — [`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md)
 - MCP server foundation — [`EncDotNet.S100.Mcp.Tools`](../EncDotNet.S100.Mcp.Tools/README.md) and [`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md)
 
 Design notes for cross-cutting features:

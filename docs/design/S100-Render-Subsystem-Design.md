@@ -33,6 +33,23 @@ features ─▶ portrayal catalogue (MoonSharp / XSLT)
 
 Its one structural limit: it records *what Mapsui would draw* — it rides `GetFeatures` / `SortFeatures` and the per-feature style dispatch. The new subsystem cuts that tie by rasterizing **from `VectorScene` directly**, so the base plane no longer touches Mapsui's feature/style/layer model at all.
 
+### 1.1 Processor lifecycle seam
+
+Processor lifetime is independent of rendering backend and Viewer policy.
+`DatasetProcessorOwner` in `EncDotNet.S100.Datasets.Pipelines` owns processors
+by stable `MapDatasetId`. Registration is an explicit ownership transfer;
+duplicate identities are rejected without taking ownership. Removal makes a
+processor unavailable immediately but defers its `IDisposable` cleanup until
+active `DatasetProcessorLease` instances finish, so cancellation or concurrent
+remove cannot dispose a processor beneath an in-flight render.
+
+The Viewer `DatasetLoaderService` creates processors and coordinates catalogue
+prompts, notifications, recent files, validation, rendering, layer policy, and
+optional framing, but delegates registration, lookup, failed-load rollback,
+lazy-unload removal, shutdown, and disposal to that reusable owner. Layer
+replacement, S-98 composition, time registration, and presentation refresh
+remain Viewer responsibilities until later map-session extraction slices.
+
 ---
 
 ## 2. Prerequisite refactor (small, enabling)
@@ -104,7 +121,18 @@ EMA of recent viewport-center deltas → velocity estimate. Each tick the **warm
 
 Because both the current Mapsui path and the new subsystem consume the **same `VectorScene`**, A/B is apples-to-apples on identical portrayal.
 
-- **Switch at the `IMapHost` seam.** The viewer already late-binds `IMapHost` via `IMapHostAccessor`, constructed in `MainWindow` after the Avalonia `MapControl` exists. Introduce `IChartRenderSubsystem` with two implementations — `MapsuiSubsystem` (wraps today's path) and `TiledSceneSubsystem` (new) — and let `IMapHost` hold the active one.
+- **Switch at the map adapter seam.** `MainWindow` attaches the optional
+  `AvaloniaMapsuiMapAdapter` after the live `CaptureSynchronizedMapControl`
+  exists, then constructs the Viewer-owned `MapsuiMapHost`. The host implements
+  focused layer, viewport, coordinate, snapshot, and invalidation capabilities
+  and retains the active `IChartRenderSubsystem` lifecycle without exposing a
+  monolithic consumer contract. Layer ownership and viewport behavior delegate
+  to reusable `MapsuiLayerBands` and `MapsuiMapNavigator` components that
+  operate on `Mapsui.Map` without Avalonia. UI dispatch, live-control
+  invalidation, coordinate conversion, and framework capture live in
+  `EncDotNet.S100.Renderers.Mapsui.Avalonia`; Viewer telemetry subclasses its
+  capture-synchronized control without moving dataset or UX policy into the
+  adapter.
 - **Runtime toggle.** Extend the existing `RenderingOptimizations` flag pattern (env-pinnable bools) with `RenderSubsystem { Mapsui | TiledScene }`, surfaced in `SettingsViewModel` for hot-swap, and overridable by env var for benchmark runs.
 - **Side-by-side mode (optional, high value).** Split-view or toggle-overlay so the same gesture drives both subsystems for visual diffing of portrayal fidelity.
 - **Metrics.** Both renderers already carry `Diagnostics/Telemetry`. Standardize a comparison surface: frame time (p50/p95/p99), per-stage timing (scene query / rasterize / composite), tiles produced vs. evicted, cache hit rate, prediction hit rate, native bytes resident. Capture against fixed gesture scripts on reference cells (`101AU005PDB01` as the established baseline) so wins are defensible and regressions caught.
@@ -573,7 +601,60 @@ accrued idle time reached −43 %. **No transition regressed** in either arm
 path. Pre-warm cannot alter draw output — it only pre-rasterises tiles that a
 later zoom would draw identically — so visual parity is exact.
 
-### D.6 Open follow-ups (Phase 4+)
+### D.6 Metatile raster jobs (issue #427)
+
+Adjacent cold misses may be processed as a fixed, aligned 2×2 raster batch.
+The nearest pending tile remains the seed, and peers are claimed only from the
+same visible, predicted, or cross-band tier. One union viewport is rendered
+with a single outer gutter and sliced into independent core-plus-gutter images;
+cache keys, disk entries, cold timestamps, prediction state, eviction, and GPU
+residency remain logical-tile granular.
+
+SCAMIN remains exact despite latitude-dependent row denominators. Candidate
+operations are evaluated at each claimed row's denominator; a job splits into
+2×1 rows or singles when any visibility result differs. Oversized temporary
+surfaces and batches reduced to one miss by disk hits also fall back to the
+existing single-tile path. Fractional device scales also fall back when integer
+output dimensions cannot preserve the exact independent-tile world-to-pixel
+ratio. Visible slices publish together and request one redraw, while speculative
+slices do not redraw.
+
+`S100_VECTOR_TILE_METATILE` / `TileMetatileEnabled` is an opt-in A/B knob and
+defaults off pending performance results. Telemetry separates union raster
+time, slicing overhead, achieved tiles per job, completed jobs, and fallbacks
+(`reason=sparse|disk|scamin|dimension|scale`). Existing logical-tile raster
+duration receives the batch elapsed time divided by produced tiles so aggregate
+CPU comparisons remain meaningful. Synthetic slicing tests require exact
+pixels; the opt-in real UKHO S-101 test allows at most 0.1% differing decoded
+pixels with maximum channel delta 8 to accommodate subpixel antialiasing changes
+from the larger viewport origin.
+
+The shipping gate is a ≥10% median reduction in aggregate raster duration on a
+dense real cell, with no material cold-latency, idle-time, paint, memory, or
+fidelity regression. A neutral result is valid: the base spatial index already
+removes whole-scene traversal, so the remaining opportunity is limited to
+shared setup and overlapping candidate geometry.
+
+**Preliminary smoke A/B (not a shipping decision).** One isolated-cache pair on
+the dense UKHO cell `101GB00GB302045.000`, at the same 1600×1000 zoom-15
+viewport with disk, prediction, and cross-band pre-warm disabled, produced:
+
+| Measure | Off | On | Delta |
+|---|---:|---:|---:|
+| Logical-tile raster p50 | 30.47 ms | 19.16 ms | −37% |
+| Logical-tile raster p95 | 97.13 ms | 43.50 ms | −55% |
+| Cold visible-tile latency p95 | 293.5 ms | 136.5 ms | −53% |
+| Time to render idle | 275.9 ms | 306.8 ms | +11% |
+| Viewer paint p95 | 6.84 ms | 7.32 ms | +7% |
+| Peak process working set | 697 MiB | 818 MiB | +17% |
+
+The candidate achieved four tiles/job and median slice overhead was 5.92 ms
+against 72.25 ms union-raster time (8.2%). The raster signal is promising, but
+the single pair fails the idle, paint, and memory gates and is sensitive to
+process/load variance. The feature therefore remains default-off until the
+alternating warm-up plus ≥10-run protocol is completed.
+
+### D.7 Open follow-ups (Phase 4+)
 
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply.
 - A disk-backed tile cache + `styleStateHash` invalidation (palette/settings)

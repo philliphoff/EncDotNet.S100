@@ -434,6 +434,8 @@ internal static class Strings
     public static string Tooltip_TilePredictionEnabled => Get(nameof(Tooltip_TilePredictionEnabled));
     public static string Settings_TileCrossBandPrewarmEnabled => Get(nameof(Settings_TileCrossBandPrewarmEnabled));
     public static string Tooltip_TileCrossBandPrewarmEnabled => Get(nameof(Tooltip_TileCrossBandPrewarmEnabled));
+    public static string Settings_TileMetatileEnabled => Get(nameof(Settings_TileMetatileEnabled));
+    public static string Tooltip_TileMetatileEnabled => Get(nameof(Tooltip_TileMetatileEnabled));
     public static string Settings_TileBudgetMb => Get(nameof(Settings_TileBudgetMb));
     public static string Tooltip_TileBudgetMb => Get(nameof(Tooltip_TileBudgetMb));
     public static string Settings_PerformanceProfile => Get(nameof(Settings_PerformanceProfile));
@@ -660,6 +662,12 @@ internal static class Strings
     public static string Toast_PreviousCrashBody => Get(nameof(Toast_PreviousCrashBody));
     public static string Toast_PreviousCrashBodyMultiple => Get(nameof(Toast_PreviousCrashBodyMultiple));
     public static string Toast_PreviousCrashAction => Get(nameof(Toast_PreviousCrashAction));
+    public static string Toast_UpdateAvailableTitle => Get(nameof(Toast_UpdateAvailableTitle));
+    public static string Toast_UpdateAvailableBodyFormat => Get(nameof(Toast_UpdateAvailableBodyFormat));
+    public static string Toast_UpdateViewRelease => Get(nameof(Toast_UpdateViewRelease));
+    public static string Toast_UpdateRemindLater => Get(nameof(Toast_UpdateRemindLater));
+    public static string Toast_UpdateSkipVersion => Get(nameof(Toast_UpdateSkipVersion));
+    public static string Toast_UpdateStopChecking => Get(nameof(Toast_UpdateStopChecking));
 
     // Notification centre (custom notification mechanism)
     public static string Notification_Close => Get(nameof(Notification_Close));

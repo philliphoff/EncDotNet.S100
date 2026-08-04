@@ -181,6 +181,54 @@ public class TilePredictionTests
         Assert.Empty(TileGrid.PredictedTiles(0, 0, 0, 600, 100, 5, 10, 10));
     }
 
+    [Fact]
+    public void NextViewportEpoch_AdvancesOnlyWhenViewportChanges()
+    {
+        var viewport = new S100VectorTileRenderer.TileViewport(
+            CenterX: 10,
+            CenterY: 20,
+            CoverWidth: 800,
+            CoverHeight: 600,
+            Resolution: 4,
+            DeviceScale: 2);
+
+        var first = S100VectorTileRenderer.NextViewportEpoch(
+            currentEpoch: 0,
+            previous: null,
+            viewport);
+        var unchanged = S100VectorTileRenderer.NextViewportEpoch(
+            first,
+            viewport,
+            viewport);
+        var moved = S100VectorTileRenderer.NextViewportEpoch(
+            unchanged,
+            viewport,
+            viewport with { CenterX = 11 });
+
+        Assert.Equal(1, first);
+        Assert.Equal(first, unchanged);
+        Assert.Equal(first + 1, moved);
+    }
+
+    [Theory]
+    [InlineData(true, true, false, 2)]
+    [InlineData(true, false, true, 1)]
+    [InlineData(true, false, false, 0)]
+    [InlineData(false, true, true, 0)]
+    public void ClassifyTileRelevance_PromotesDemotesAndDropsStaleWork(
+        bool generationMatches,
+        bool isVisible,
+        bool isSpeculative,
+        int expected)
+    {
+        Assert.Equal(
+            (S100VectorTileRenderer.TileRelevance)expected,
+            S100VectorTileRenderer.ClassifyTileRelevance(
+                generationMatches,
+                isVisible,
+                isSpeculative));
+    }
+
     [Theory]
     [InlineData(true, false, true)]   // published visible tile -> repaint
     [InlineData(true, true, false)]   // published predicted (pre-warm) tile -> NO repaint
@@ -248,4 +296,3 @@ public class TilePredictionTests
         Assert.DoesNotContain(probe, raw);
     }
 }
-

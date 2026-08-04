@@ -36,6 +36,21 @@ internal sealed record RenderStatsSnapshot(
     long PaintSequence,
     DateTimeOffset CapturedAtUtc);
 
+/// <summary>Detailed attribution for the slowest paint retained in a rolling window.</summary>
+/// <param name="PaintSequence">Monotonic paint sequence.</param>
+/// <param name="CapturedAtUtc">UTC wall-clock time at paint completion.</param>
+/// <param name="FrameDurationMs">Whole-paint wall-clock duration.</param>
+/// <param name="StyleDurationMs">Cumulative instrumented style-renderer duration.</param>
+/// <param name="UninstrumentedDurationMs">Paint duration outside instrumented style renderers.</param>
+/// <param name="TotalDrawCalls">Total style-renderer draw calls.</param>
+internal sealed record SlowestRenderFrame(
+    long PaintSequence,
+    DateTimeOffset CapturedAtUtc,
+    double FrameDurationMs,
+    double StyleDurationMs,
+    double UninstrumentedDurationMs,
+    long TotalDrawCalls);
+
 /// <summary>
 /// Aggregate cost statistics over a rolling window of recently completed
 /// paints. Where <see cref="RenderStatsSnapshot"/> reports only the
@@ -54,6 +69,7 @@ internal sealed record RenderStatsSnapshot(
 /// <param name="VectorMeanMs">Mean per-paint cumulative <c>VectorStyle</c> draw duration over the window, in milliseconds.</param>
 /// <param name="VectorP95Ms">95th-percentile per-paint cumulative <c>VectorStyle</c> draw duration over the window, in milliseconds.</param>
 /// <param name="MaxTotalDrawCalls">Maximum total style draw calls in a single paint over the window.</param>
+/// <param name="SlowestFrame">Attribution for the maximum-duration paint, or <see langword="null"/> when empty.</param>
 internal sealed record RenderWindowStats(
     long Count,
     long FirstSequence,
@@ -64,10 +80,11 @@ internal sealed record RenderWindowStats(
     double VectorMaxMs,
     double VectorMeanMs,
     double VectorP95Ms,
-    long MaxTotalDrawCalls)
+    long MaxTotalDrawCalls,
+    SlowestRenderFrame? SlowestFrame)
 {
     /// <summary>An empty window (no paints retained).</summary>
-    public static RenderWindowStats Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static RenderWindowStats Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null);
 }
 
 /// <summary>Outcome of <see cref="IRenderActivityMonitor.WaitForIdleAsync"/>.</summary>

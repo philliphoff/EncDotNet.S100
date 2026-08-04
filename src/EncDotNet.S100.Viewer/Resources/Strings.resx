@@ -1089,6 +1089,12 @@
   <data name="Tooltip_TileCrossBandPrewarmEnabled" xml:space="preserve">
     <value>When idle, speculatively rasterize the adjacent zoom levels (±1 band) covering the current view, so a subsequent zoom starts warm. Runs at the lowest priority behind on-screen work. Takes effect immediately. Recommended on.</value>
   </data>
+  <data name="Settings_TileMetatileEnabled" xml:space="preserve">
+    <value>Batch adjacent tiles</value>
+  </data>
+  <data name="Tooltip_TileMetatileEnabled" xml:space="preserve">
+    <value>Rasterize adjacent cold tiles together, then slice them into normal cache entries. This experimental optimization is off by default until real-data measurements show a consistent gain.</value>
+  </data>
   <data name="Settings_TileBudgetMb" xml:space="preserve">
     <value>In-memory cache (MB)</value>
   </data>
@@ -1111,7 +1117,7 @@
     <value>GPU texture residency</value>
   </data>
   <data name="Tooltip_TileGpuResidencyEnabled" xml:space="preserve">
-    <value>Upload each warm tile to a GPU-resident texture once and reuse it every frame, instead of re-uploading the same pixels. Takes effect immediately; inert on a software-rendered surface. Recommended on.</value>
+    <value>Upload warm tiles to GPU-resident textures for reuse. Disabled by default because promotion and texture churn can stall large multi-layer views. Takes effect immediately; inert on a software-rendered surface.</value>
   </data>
   <data name="Settings_TileGpuBudgetMb" xml:space="preserve">
     <value>GPU residency (MB)</value>
@@ -1798,6 +1804,24 @@
   </data>
   <data name="Toast_PreviousCrashAction" xml:space="preserve">
     <value>Send feedback</value>
+  </data>
+  <data name="Toast_UpdateAvailableTitle" xml:space="preserve">
+    <value>Viewer update available</value>
+  </data>
+  <data name="Toast_UpdateAvailableBodyFormat" xml:space="preserve">
+    <value>Version {0} is available to download from GitHub.</value>
+  </data>
+  <data name="Toast_UpdateViewRelease" xml:space="preserve">
+    <value>View release</value>
+  </data>
+  <data name="Toast_UpdateRemindLater" xml:space="preserve">
+    <value>Remind me later</value>
+  </data>
+  <data name="Toast_UpdateSkipVersion" xml:space="preserve">
+    <value>Skip this version</value>
+  </data>
+  <data name="Toast_UpdateStopChecking" xml:space="preserve">
+    <value>Stop checking</value>
   </data>
 
   <!-- MCP server -->

@@ -21,7 +21,7 @@ public static class S111DatasetReader
     /// Reads an <see cref="S111Dataset"/> from the given HDF5 file. Throws
     /// <see cref="S100DatasetNotSupportedException"/> if the dataset is
     /// not dcf2 (regularly-gridded). Use <see cref="ReadAny"/> to handle
-    /// both dcf2 and dcf8.
+    /// dcf1, dcf2, dcf3, and dcf8.
     /// </summary>
     public static S111Dataset Read(IHdf5File file)
     {
@@ -29,22 +29,24 @@ public static class S111DatasetReader
         return any switch
         {
             S111DatasetData.GriddedCoverage g => g.Dataset,
-            S111DatasetData.StationSeries => throw new S100DatasetNotSupportedException(
+            S111DatasetData.StationSeries stationSeries => throw new S100DatasetNotSupportedException(
                 product: "S-111",
                 file: null,
-                feature: "data coding format 8 (time series at fixed stations)",
+                feature: $"data coding format {stationSeries.Dataset.DataCodingFormat} " +
+                    $"({DataCodingFormatName(stationSeries.Dataset.DataCodingFormat)})",
                 specReference: "S-100 Part 10c §10.2.1",
                 message: ExceptionMessageFormatter.FormatNotSupported(
                     "S-111", null,
-                    "data coding format 8 (time series at fixed stations)",
+                    $"data coding format {stationSeries.Dataset.DataCodingFormat} " +
+                        $"({DataCodingFormatName(stationSeries.Dataset.DataCodingFormat)})",
                     "S-100 Part 10c §10.2.1",
-                    "Use S111DatasetReader.ReadAny to handle dcf8 station series.")),
+                    "Use S111DatasetReader.ReadAny to handle station series.")),
             _ => throw new InvalidOperationException("Unhandled S111DatasetData variant."),
         };
     }
 
     /// <summary>
-    /// Reads either a dcf2 <see cref="S111Dataset"/> or a dcf8
+    /// Reads either a dcf2 <see cref="S111Dataset"/> or a dcf1/dcf3/dcf8
     /// <see cref="S111StationSeriesDataset"/> from the given HDF5 file,
     /// dispatching on the <c>/SurfaceCurrent/dataCodingFormat</c> attribute
     /// (S-100 Part 10c §10.2.1). Other data coding formats raise
@@ -53,7 +55,7 @@ public static class S111DatasetReader
     public static S111DatasetData ReadAny(IHdf5File file) => ReadAny(file, options: null);
 
     /// <summary>
-    /// Reads either a dcf2 <see cref="S111Dataset"/> or a dcf8
+    /// Reads either a dcf2 <see cref="S111Dataset"/> or a dcf1/dcf3/dcf8
     /// <see cref="S111StationSeriesDataset"/> from the given HDF5 file,
     /// dispatching on the <c>/SurfaceCurrent/dataCodingFormat</c> attribute
     /// (S-100 Part 10c §10.2.1). Other data coding formats raise
@@ -66,7 +68,7 @@ public static class S111DatasetReader
     /// (regular-grid) per-time-step <c>values</c> datasets are read lazily
     /// on first access rather than up front; the caller must keep
     /// <paramref name="file"/> open for the lifetime of the returned
-    /// dataset. dcf3/dcf8 (station-series) datasets always materialize
+    /// dataset. dcf1/dcf3/dcf8 (station-series) datasets always materialize
     /// fully and ignore this flag.
     /// </param>
     public static S111DatasetData ReadAny(IHdf5File file, S111ReadOptions? options)
@@ -77,9 +79,11 @@ public static class S111DatasetReader
 
         var root = file.Root;
 
-        int? horizontalCRS = root.AttributeExists("horizontalDatumValue")
-            ? (int)root.ReadInt64Attribute("horizontalDatumValue")
-            : null;
+        int? horizontalCRS = root.AttributeExists("horizontalCRS")
+            ? (int)root.ReadInt64Attribute("horizontalCRS")
+            : root.AttributeExists("horizontalDatumValue")
+                ? (int)root.ReadInt64Attribute("horizontalDatumValue")
+                : null;
 
         string? epoch = root.AttributeExists("epoch")
             ? root.ReadStringAttribute("epoch")
@@ -127,11 +131,11 @@ public static class S111DatasetReader
             ? (int)scGroup.ReadInt64Attribute("typeOfCurrentData")
             : null;
 
-        if (dataCodingFormat is 3 or 8)
+        if (dataCodingFormat is 1 or 3 or 8)
         {
-            var stations = dataCodingFormat == 3
-                ? ReadUngeorectifiedGrid(root, scGroup)
-                : ReadStationSeries(root, scGroup);
+            var stations = dataCodingFormat == 8
+                ? ReadStationSeries(root, scGroup)
+                : ReadTimeMajorStationSeries(scGroup, dataCodingFormat);
             DateTime? minTime = null, maxTime = null;
             foreach (var s in stations)
             {
@@ -201,9 +205,11 @@ public static class S111DatasetReader
 
         var root = file.Root;
 
-        int? horizontalCRS = root.AttributeExists("horizontalDatumValue")
-            ? (int)root.ReadInt64Attribute("horizontalDatumValue")
-            : null;
+        int? horizontalCRS = root.AttributeExists("horizontalCRS")
+            ? (int)root.ReadInt64Attribute("horizontalCRS")
+            : root.AttributeExists("horizontalDatumValue")
+                ? (int)root.ReadInt64Attribute("horizontalDatumValue")
+                : null;
 
         string? productSpecification = root.AttributeExists("productSpecification")
             ? root.ReadStringAttribute("productSpecification")
@@ -220,11 +226,11 @@ public static class S111DatasetReader
         BoundingBox? extent;
         TimeCoverage? time;
 
-        if (dataCodingFormat is 3 or 8)
+        if (dataCodingFormat is 1 or 3 or 8)
         {
-            var stations = dataCodingFormat == 3
-                ? ReadUngeorectifiedGrid(root, scGroup)
-                : ReadStationSeries(root, scGroup);
+            var stations = dataCodingFormat == 8
+                ? ReadStationSeries(root, scGroup)
+                : ReadTimeMajorStationSeries(scGroup, dataCodingFormat);
             extent = StationExtent(stations);
             time = StationTimeCoverage(stations);
         }
@@ -561,22 +567,24 @@ public static class S111DatasetReader
     };
 
     // -------------------------------------------------------------------
-    // dcf3 — ungeorectified grid (S-100 Part 10c §10.2.1)
+    // dcf1/dcf3 — time-major positioned values (S-111 Ed 2.0.0 §10.2.2.7)
     // -------------------------------------------------------------------
 
     /// <summary>
-    /// Reads an S-111 <em>data coding format 3</em> (ungeorectified grid)
-    /// dataset — each node has an explicit lat/lon from
-    /// <c>Positioning/geometryValues</c>, and each <c>Group_NNN</c> is a
-    /// time step with one <c>(speed, direction)</c> per node.
+    /// Reads an S-111 time-major DCF1 fixed-station or DCF3 ungeorectified
+    /// dataset. Each position has an explicit coordinate from
+    /// <c>Positioning/geometryValues</c>, and each <c>Group_NNN</c> is a time
+    /// step with one <c>(speed, direction)</c> record per position.
     /// </summary>
     /// <remarks>
-    /// DCF 3 is structurally a per-timestep snapshot of irregularly-positioned
-    /// nodes. To reuse the station-series rendering path, this method transposes
-    /// the data: each node becomes a <see cref="SurfaceCurrentStation"/> whose
-    /// time series is assembled from the node's value at each time step.
+    /// S-111 Edition 2.0.0 Tables 10-4 and 10-5 define DCF1 and DCF3 with the
+    /// same time-major array shape. This method transposes either shape into
+    /// <see cref="SurfaceCurrentStation"/> instances while retaining every
+    /// explicit values-group timestamp.
     /// </remarks>
-    private static IReadOnlyList<SurfaceCurrentStation> ReadUngeorectifiedGrid(IHdf5Group root, IHdf5Group scGroup)
+    private static IReadOnlyList<SurfaceCurrentStation> ReadTimeMajorStationSeries(
+        IHdf5Group scGroup,
+        int dataCodingFormat)
     {
         var allStations = new List<SurfaceCurrentStation>();
 
@@ -587,18 +595,25 @@ public static class S111DatasetReader
 
             var instance = scGroup.OpenGroup(instanceName);
             var instancePath = $"/SurfaceCurrent/{instanceName}";
-            ReadUngeorectifiedInstance(instance, instancePath, allStations);
+            ReadTimeMajorInstance(
+                instance,
+                instanceName,
+                instancePath,
+                dataCodingFormat,
+                allStations);
         }
 
         return allStations;
     }
 
-    private static void ReadUngeorectifiedInstance(
+    private static void ReadTimeMajorInstance(
         IHdf5Group instance,
+        string instanceName,
         string instancePath,
+        int dataCodingFormat,
         List<SurfaceCurrentStation> stations)
     {
-        const string spec = "S-100 Part 10c §10.2.1";
+        const string spec = "S-111 Edition 2.0.0 §10.2.2.6–10.2.2.9";
 
         // Read per-node positions from Positioning/geometryValues under this instance.
         var positions = ReadInstancePositions(instance, instancePath);
@@ -613,19 +628,8 @@ public static class S111DatasetReader
         if (timeGroupNames.Count == 0)
             return;
 
-        // Parse time info from the instance.
-        string firstTimeStr = instance.ReadRequiredStringAttribute(
-            "dateTimeOfFirstRecord", "S-111", null, instancePath, spec);
-        string lastTimeStr = instance.ReadRequiredStringAttribute(
-            "dateTimeOfLastRecord", "S-111", null, instancePath, spec);
-        DateTime firstTime = ParseTimestamp(firstTimeStr);
-        DateTime lastTime = ParseTimestamp(lastTimeStr);
-
-        long intervalSeconds = instance.ReadRequiredInt64Attribute(
-            "timeRecordInterval", "S-111", null, instancePath, spec);
-        var interval = TimeSpan.FromSeconds(intervalSeconds);
-
         int numberOfTimes = timeGroupNames.Count;
+        var sampleTimes = new DateTime[numberOfTimes];
 
         // Read all time steps: speeds[t][node], directions[t][node].
         var allSpeeds = new float[numberOfTimes][];
@@ -634,12 +638,39 @@ public static class S111DatasetReader
         for (int t = 0; t < numberOfTimes; t++)
         {
             var group = instance.OpenGroup(timeGroupNames[t]);
+            var groupPath = $"{instancePath}/{timeGroupNames[t]}";
+            sampleTimes[t] = ParseTimestamp(group.ReadRequiredStringAttribute(
+                "timePoint", "S-111", null, groupPath, spec));
+            if (t > 0 && sampleTimes[t] <= sampleTimes[t - 1])
+            {
+                throw new S100DatasetSchemaException(
+                    product: "S-111",
+                    file: null,
+                    groupPath: groupPath,
+                    attributeOrDataset: "timePoint",
+                    specReference: spec,
+                    message: ExceptionMessageFormatter.FormatSchema(
+                        "S-111", null, groupPath, "timePoint", spec)
+                    + " Values-group timestamps must be strictly increasing.");
+            }
+
             var values = ReadValues(group);
+            if (values.Length != nodeCount)
+            {
+                throw new S100DatasetSchemaException(
+                    product: "S-111",
+                    file: null,
+                    groupPath: groupPath,
+                    attributeOrDataset: "values",
+                    specReference: spec,
+                    message: ExceptionMessageFormatter.FormatSchema(
+                        "S-111", null, groupPath, "values", spec)
+                    + $" Expected {nodeCount} records but found {values.Length}.");
+            }
 
             var speeds = new float[nodeCount];
             var directions = new float[nodeCount];
-            int valCount = Math.Min(values.Length, nodeCount);
-            for (int n = 0; n < valCount; n++)
+            for (int n = 0; n < nodeCount; n++)
             {
                 speeds[n] = values[n].Speed;
                 directions[n] = values[n].Direction;
@@ -648,6 +679,8 @@ public static class S111DatasetReader
             allSpeeds[t] = speeds;
             allDirections[t] = directions;
         }
+
+        var interval = DeriveUniformInterval(sampleTimes);
 
         // Transpose to per-node station series.
         for (int n = 0; n < nodeCount; n++)
@@ -664,17 +697,35 @@ public static class S111DatasetReader
 
             stations.Add(new SurfaceCurrentStation
             {
-                Identifier = $"Node_{n + 1:D3}",
+                Identifier = dataCodingFormat == 1
+                    ? $"{instanceName}:Station_{n + 1:D3}"
+                    : $"{instanceName}:Node_{n + 1:D3}",
                 Latitude = lat,
                 Longitude = lon,
-                StartTime = firstTime,
-                EndTime = lastTime,
+                StartTime = sampleTimes[0],
+                EndTime = sampleTimes[^1],
                 TimeRecordInterval = interval,
+                SampleTimes = sampleTimes,
                 NumberOfTimes = numberOfTimes,
                 SpeedsMetresPerSecond = nodeSpeeds,
                 DirectionsDegreesTrue = nodeDirections,
             });
         }
+    }
+
+    private static TimeSpan DeriveUniformInterval(IReadOnlyList<DateTime> sampleTimes)
+    {
+        if (sampleTimes.Count < 2)
+            return TimeSpan.Zero;
+
+        var interval = sampleTimes[1] - sampleTimes[0];
+        for (int i = 2; i < sampleTimes.Count; i++)
+        {
+            if (sampleTimes[i] - sampleTimes[i - 1] != interval)
+                return TimeSpan.Zero;
+        }
+
+        return interval;
     }
 
     /// <summary>

@@ -61,6 +61,7 @@ public sealed class ValidateExchangeSetCommandTests : IDisposable
         Assert.True(root.GetProperty("hasMissingFiles").GetBoolean());
         var file = root.GetProperty("files")[0];
         Assert.Equal("FileMissing", file.GetProperty("checksumOutcome").GetString());
+        Assert.Empty(file.GetProperty("signatures").EnumerateArray());
     }
 
     [Fact]

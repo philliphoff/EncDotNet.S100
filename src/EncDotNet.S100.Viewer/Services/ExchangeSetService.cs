@@ -34,6 +34,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private readonly LazyLoading.ExchangeSetLazyLoadCoordinator? _lazyCoordinator;
     private readonly IDatasetMetadataReader? _metadataReader;
     private readonly Caching.IS57CatalogCache? _s57CatalogCache;
+    private readonly int _maxConcurrentLoads;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
@@ -43,7 +44,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         INotificationService notifications,
         LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null,
         IDatasetMetadataReader? metadataReader = null,
-        Caching.IS57CatalogCache? s57CatalogCache = null)
+        Caching.IS57CatalogCache? s57CatalogCache = null,
+        int? maxConcurrentLoads = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(notifications);
@@ -52,6 +54,25 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         _lazyCoordinator = lazyCoordinator;
         _metadataReader = metadataReader;
         _s57CatalogCache = s57CatalogCache;
+        _maxConcurrentLoads = maxConcurrentLoads switch
+        {
+            > 0 => maxConcurrentLoads.Value,
+            null => Math.Clamp(Environment.ProcessorCount / 4, 1, 4),
+            _ => throw new ArgumentOutOfRangeException(nameof(maxConcurrentLoads)),
+        };
+    }
+
+    private async Task LoadEntryAsync(DatasetEntry entry, SemaphoreSlim gate)
+    {
+        await gate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await _datasets.RequestLoadAsync(entry).ConfigureAwait(true);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>
@@ -231,6 +252,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             var skipMessages = new List<string>();
             var cancelled = false;
             var loadTasks = new List<Task>();
+            using var loadGate = new SemaphoreSlim(_maxConcurrentLoads);
 
             foreach (var item in plan)
             {
@@ -297,7 +319,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     minimumDisplayScale: metadata.ResolveMinimumDisplayScale(),
                     maximumDisplayScale: metadata.ResolveMaximumDisplayScale());
                 tracked.Entries.Add(entry);
-                loadTasks.Add(_datasets.RequestLoadAsync(entry));
+                loadTasks.Add(LoadEntryAsync(entry, loadGate));
                 dispatched++;
             }
 

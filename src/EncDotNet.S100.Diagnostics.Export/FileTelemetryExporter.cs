@@ -26,8 +26,7 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
 {
     private readonly BlockingCollection<string> _queue = new(boundedCapacity: 4096);
     private readonly Thread _writerThread;
-    private readonly string _path;
-    private readonly bool _appendToExisting;
+    private readonly TelemetryJsonFormat.TelemetryFileLease _file;
     private volatile bool _disposed;
 
     /// <summary>
@@ -60,15 +59,16 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
     public FileTelemetryExporter(string path, bool appendToExisting)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        _path = path;
-        _appendToExisting = appendToExisting;
+        var fullPath = Path.GetFullPath(path);
 
         // Ensure the directory exists.
-        var dir = Path.GetDirectoryName(path);
+        var dir = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(dir))
         {
             Directory.CreateDirectory(dir);
         }
+
+        _file = TelemetryJsonFormat.AcquireFile(fullPath, truncate: !appendToExisting);
 
         _writerThread = new Thread(WriterLoop)
         {
@@ -102,7 +102,9 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
             foreach (var tag in activity.TagObjects)
             {
                 if (tag.Value is not null)
-                    tags[tag.Key] = tag.Value.ToString()!;
+                {
+                    tags[tag.Key] = TelemetryJsonFormat.FormatTagValue(tag.Value);
+                }
             }
 
             var line = JsonSerializer.Serialize(new
@@ -131,8 +133,8 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
     protected override bool OnShutdown(int timeoutMilliseconds)
     {
         _queue.CompleteAdding();
-        _writerThread.Join(timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
-        return true;
+        return _writerThread.Join(
+            timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
     }
 
     /// <inheritdoc />
@@ -144,8 +146,11 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
         if (disposing)
         {
             _queue.CompleteAdding();
-            _writerThread.Join(5000);
-            _queue.Dispose();
+            if (_writerThread.Join(5000))
+            {
+                _queue.Dispose();
+                _file.Dispose();
+            }
         }
 
         base.Dispose(disposing);
@@ -153,15 +158,9 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
 
     private void WriterLoop()
     {
-        var fileMode = _appendToExisting ? FileMode.Append : FileMode.Create;
-        using var writer = new StreamWriter(
-            new FileStream(_path, fileMode, FileAccess.Write, FileShare.Read),
-            leaveOpen: false);
-
         foreach (var line in _queue.GetConsumingEnumerable())
         {
-            writer.WriteLine(line);
-            writer.Flush();
+            _file.WriteLine(line);
         }
     }
 }

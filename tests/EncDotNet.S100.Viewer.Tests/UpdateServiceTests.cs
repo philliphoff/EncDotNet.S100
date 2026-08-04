@@ -32,6 +32,30 @@ public sealed class UpdateServiceTests
         public AppVersionInfo Current { get; } = current;
     }
 
+    private sealed class BlockingReleaseClient(GitHubRelease release) : IGitHubReleaseClient
+    {
+        private readonly TaskCompletionSource _entered =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _continue =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _callCount;
+
+        public int CallCount => _callCount;
+
+        public Task Entered => _entered.Task;
+
+        public async Task<GitHubRelease?> GetLatestReleaseAsync(
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _callCount);
+            _entered.TrySetResult();
+            await _continue.Task.WaitAsync(cancellationToken);
+            return release;
+        }
+
+        public void Complete() => _continue.TrySetResult();
+    }
+
     private static AppVersionInfo Version(string version) => new(version, version, null, null);
 
     private static ViewerSettings InMemorySettings() => new()
@@ -243,6 +267,112 @@ public sealed class UpdateServiceTests
         time.Advance(UpdateService.ThrottleWindow);
         await service.CheckForUpdatesAsync(force: false);
         Assert.Equal(2, client.CallCount);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_PersistedRecentUpdate_RehydratesWithoutNetwork()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var settings = InMemorySettings();
+        settings.LastUpdateCheckUtc = now;
+        settings.LastKnownLatestVersion = "2.5.0";
+        settings.SkippedUpdateVersion = "2.5.0";
+        var client = new FakeReleaseClient(Release("v9.9.9"));
+        var service = CreateService(
+            client,
+            "2.4.1",
+            settings,
+            new FakeTimeProvider(now.AddHours(1)));
+
+        var status = await service.CheckForUpdatesAsync(force: false);
+
+        Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
+        Assert.Equal("2.5.0", status.LatestVersion);
+        Assert.True(status.IsSkipped);
+        Assert.True(status.IsCached);
+        Assert.Equal(0, client.CallCount);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_PersistedRecentFailure_RehydratesWithoutNetwork()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var settings = InMemorySettings();
+        settings.LastUpdateCheckUtc = now;
+        settings.LastKnownLatestVersion = null;
+        var client = new FakeReleaseClient(Release("v9.9.9"));
+        var service = CreateService(
+            client,
+            "2.4.1",
+            settings,
+            new FakeTimeProvider(now.AddHours(1)));
+
+        var status = await service.CheckForUpdatesAsync(force: false);
+
+        Assert.Equal(UpdateAvailability.CheckFailed, status.Availability);
+        Assert.True(status.IsCached);
+        Assert.Equal(0, client.CallCount);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_ForceBypassesPersistedThrottle()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var settings = InMemorySettings();
+        settings.LastUpdateCheckUtc = now;
+        settings.LastKnownLatestVersion = "2.5.0";
+        var client = new FakeReleaseClient(Release("v2.6.0"));
+        var service = CreateService(
+            client,
+            "2.4.1",
+            settings,
+            new FakeTimeProvider(now.AddHours(1)));
+
+        var status = await service.CheckForUpdatesAsync(force: true);
+
+        Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
+        Assert.Equal("2.6.0", status.LatestVersion);
+        Assert.False(status.IsCached);
+        Assert.Equal(1, client.CallCount);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_ExpiredPersistedThrottle_PerformsNetworkCheck()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var settings = InMemorySettings();
+        settings.LastUpdateCheckUtc = now - UpdateService.ThrottleWindow - TimeSpan.FromMinutes(1);
+        settings.LastKnownLatestVersion = "2.5.0";
+        var client = new FakeReleaseClient(Release("v2.6.0"));
+        var service = CreateService(client, "2.4.1", settings, new FakeTimeProvider(now));
+
+        var status = await service.CheckForUpdatesAsync(force: false);
+
+        Assert.Equal("2.6.0", status.LatestVersion);
+        Assert.False(status.IsCached);
+        Assert.Equal(1, client.CallCount);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_ConcurrentNonForcedCalls_ShareNetworkCheck()
+    {
+        var client = new BlockingReleaseClient(Release("v2.5.0"));
+        var service = CreateService(
+            client,
+            "2.4.1",
+            InMemorySettings(),
+            new FakeTimeProvider(DateTimeOffset.UtcNow));
+
+        var first = service.CheckForUpdatesAsync(force: false);
+        await client.Entered;
+        var second = service.CheckForUpdatesAsync(force: false);
+        client.Complete();
+
+        var statuses = await Task.WhenAll(first, second);
+
+        Assert.Equal(1, client.CallCount);
+        Assert.Contains(statuses, status => !status.IsCached);
+        Assert.Contains(statuses, status => status.IsCached);
     }
 
     // ---- JSON mapping ----------------------------------------------------

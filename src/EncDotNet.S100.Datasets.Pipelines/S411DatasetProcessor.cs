@@ -13,7 +13,9 @@ using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
+public sealed class S411DatasetProcessor :
+    GmlDatasetProcessorBase<S411Feature>,
+    ITimeAwareDatasetProcessor
 {
     private readonly S411Dataset _dataset;
     private ValidationReport? _validationReport;

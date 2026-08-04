@@ -9,20 +9,191 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 - **`MapsuiCoverageRenderer`** — `ICoverageRenderer<ILayer>` implementation that renders coverage data as a georeferenced raster overlay (S-102 / S-104 / S-111).
 - **`MapsuiCoverageArrowRenderer`** — renders current arrows (e.g. from S-111 data) as one vector `PointFeature` per selected grid cell, each carrying an SVG `ImageStyle`. Subsamples dense grids both by a grid cap (`MaxArrowsPerAxis`) and a viewport-aware screen-spacing floor (`MinArrowSpacingPixels`) so arrows stay legible and per-pan draw cost stays bounded.
 - **`MapsuiDisplayListRenderer`** — product-agnostic vector renderer that consumes a list of `DrawingInstruction`s plus an `IFeatureGeometryProvider` and produces a `MemoryLayer` of styled point/line/area/text features. Used by every S-100 vector product (S-101, S-124, S-129, S-421); no per-spec subclass is required.
-- **`MapsuiDatasetRenderer`** — the entry point that converts a dataset processor's renderer-neutral portrayal output into a Mapsui-typed `DatasetResult` (layers + extent). It consumes the `IVectorPortrayalSource` / `ICoveragePortrayalSource` seam exposed by `EncDotNet.S100.Datasets.Pipelines` and owns everything Mapsui-specific: the NTS pattern-clip cache, feature-type tagging, out-of-scale-band cap application, S-101 area/line `ILayer` build, the S-111 arrow renderer, and the Mapsui-typed S-98 layer-stack. This is the seed of the future multi-layer renderer in issue #213 (which will adopt `IS100DatasetRenderer<IReadOnlyList<ILayer>>`); adopting that interface later is purely additive.
+- **`MapsuiDatasetRenderer`** — the entry point that converts a dataset processor's renderer-neutral portrayal output into a Mapsui-owned `MapsuiDatasetResult` (layers + extent). It consumes the `IVectorPortrayalSource` / `ICoveragePortrayalSource` seam exposed by `EncDotNet.S100.Datasets.Pipelines` and owns everything Mapsui-specific: the NTS pattern-clip cache, feature-type tagging, out-of-scale-band cap application, S-101 area/line `ILayer` build, the S-111 arrow renderer, and the Mapsui-typed S-98 layer-stack. This is the seed of the future multi-layer renderer in issue #213 (which will adopt `IS100DatasetRenderer<IReadOnlyList<ILayer>>`); adopting that interface later is purely additive.
+- **`MapsuiMapSession`** — the first reusable map-session component. It
+  acquires processors through `DatasetProcessorOwner` leases, renders and
+  atomically replaces their layers, owns S-98 cross-product ordering and
+  suppression, and applies independent active/visible state, opacity,
+  persistent sub-layer state, cell scale windows, and overlapping-cell
+  suppression. It also registers time-aware processors, aggregates their
+  samples and coverage windows, applies S-104/S-111/S-411 snap and gating
+  rules, serializes render work, and cancels/coalesces superseded time and
+  presentation refreshes.
 
 > **Dependency direction (issue #189).** This package now references
 > `EncDotNet.S100.Datasets.Pipelines` (not the other way round), so that the
 > Pipelines assembly — and the headless facade / CLI built on it — stay
 > Mapsui-free. As a consequence this package **multi-targets `net10.0` only**
 > (it depends on the net10.0-only Pipelines assembly), whereas the rest of the
-> libraries multi-target `net8.0;net10.0`. The Mapsui-typed `DatasetResult`
-> keeps its original `EncDotNet.S100.Datasets.Pipelines` namespace (the type
-> physically moved here) so consumer `using` directives resolve unchanged.
+> libraries multi-target `net8.0;net10.0`. The Mapsui-typed
+> `MapsuiDatasetResult` is owned by this package and namespace.
 
 > **CRS transforms** moved to the Mapsui-free **`EncDotNet.S100.Crs.ProjNet`**
 > package (`ProjNetCrsTransformFactory`) so headless consumers can reproject
 > coverage products without linking a map renderer.
+
+## Initialization
+
+Call `S100MapsuiRendering.Register()` once during application startup, before
+installing any diagnostics that wrap Mapsui's renderer registry:
+
+```csharp
+S100MapsuiRendering.Register();
+```
+
+The method registers every S-100 style and custom-layer renderer in dependency
+order and is safe to call repeatedly. Applications must call this entry point
+before rendering S-100 layers; render operations do not mutate Mapsui's global
+renderer registry implicitly.
+
+## Rendering options
+
+`S100MapsuiOptions` captures Mapsui-specific configuration for a renderer or
+future map session. Its defaults are copied from the existing
+environment-backed `RenderingOptimizations` store, while explicit values let a
+reusable host configure rendering without mutating process-global state:
+
+```csharp
+var options = new S100MapsuiOptions
+{
+    RenderSubsystem = RenderSubsystemKind.TiledScene,
+    SceneMode = VectorSceneMode.Tiled,
+};
+var renderer = new MapsuiDatasetRenderer(
+    crsTransformFactory,
+    patternClipCache,
+    options);
+```
+
+The render subsystem and vector-scene mode are the first settings captured by
+this object. Other optimization settings will move from
+`RenderingOptimizations` incrementally. Omitting `options` preserves the
+existing live global behavior used by the Viewer and performance harnesses.
+When `patternClipCache` is omitted, the renderer retains an in-memory
+single-entry cache for its lifetime. Hosts can inject `DiskPatternClipCache`
+to share entries across renderers and process restarts.
+
+## Layer-band composition
+
+`MapsuiLayerBands` owns the ordered S-100 layer bands of an existing
+`Mapsui.Map` without depending on a UI-framework map control:
+
+```csharp
+var bands = new MapsuiLayerBands(map);
+bands.SetBasemapLayer(basemap);
+bands.AddDatasetLayer(datasetLayer);
+bands.AddOverlayLayer(validationLayer);
+bands.AddToolLayer(measureLayer);
+```
+
+The resulting order is always basemap → datasets → overlays → tools.
+`ReplaceDatasetLayers` authoritatively replaces or reorders only the dataset
+band, leaving the other bands in place. Each corresponding remove method
+removes only layers owned by that band. Calls mutate `Map.Layers` immediately;
+Avalonia, MAUI, and other UI hosts remain responsible for thread dispatch and
+redraw invalidation.
+
+`MapsuiMapSession` owns the dataset band on top of this primitive:
+
+```csharp
+using var session = new MapsuiMapSession(
+    bands,
+    processorOwner,
+    renderer,
+    interoperabilityAuthorityProvider);
+session.SetDataset(dataset, minimumDisplayScale, maximumDisplayScale);
+await session.RenderAsync(dataset.Id, presentation);
+session.SetCurrentTime(clock);
+await session.RefreshTimeAsync(presentation);
+session.SetOrder(bottomToTopDatasetIds);
+session.SetMarinerSettings(presentation.Mariner);
+```
+
+The processor must already be registered with `DatasetProcessorOwner`.
+Rendering holds a safe lease and replacement is transactional: cancellation,
+removal, a changed processor, or S-98 projection failure leaves the previous
+layers installed. Concurrent renders are latest-started-wins, so an older
+render cannot replace newer output or reinstall a removed dataset.
+
+Time-aware registration is derived from `ITimeAwareDatasetProcessor` when
+`SetDataset` is called. `GetTimeSnapshot` exposes the aggregate clock, sample
+list, range, and merged coverage segments. `SetCurrentTime` updates the clock
+immediately so host UI can track a drag; `RefreshTimeAsync` applies a 100 ms
+trailing debounce and cancels the preceding time refresh. S-104 selects the
+nearest sample, S-111 additionally hides files outside their forecast window
+(with one sample interval of seam tolerance), and S-411 selects the latest
+snapshot at or before the clock. `RefreshAsync` performs a latest-request-wins
+full presentation refresh while preserving those gates. All render entry
+points share one session gate; hosts must call and await them from the
+map-owning synchronization context.
+
+The session subscribes to `IInteroperabilityAuthorityProvider`, rebuilds the
+neutral cross-product stack with `LayerStackBuilder`, applies the authority's
+S-98 rules using the current mariner settings, and projects through
+`LayerStackProjector` inside the same dataset-band update. It retains both the
+complete ruled stack (`GetLayerStackEntries`, including inactive datasets for
+inspection) and the active Mapsui band (`GetStackedLayers`). Visibility, scale
+windows, and overlap clips are applied to the actual projected instances.
+This follows S-98 Ed.2.0.0 Main §9.2.1 and Annex A §8.4.1.
+
+The host supplies an immutable `MapPresentationState`; the session combines it
+with each leased processor and its selected time so
+`MapPresentationState.CreateRenderContext` owns product-context construction.
+Notifications and zoom policy remain host responsibilities. No `Map.AddS100`
+API is published yet.
+
+The session reports its lifecycle through structured events rather than
+notifications or localized strings, so a non-Viewer host can drive its own UI:
+
+- `DatasetRenderStarted` / `DatasetRenderCompleted` (`MapSessionDatasetRenderEventArgs`)
+  mark each dataset render for both `RenderAsync` and every dataset of a
+  coalesced refresh. The `Kind` (`MapSessionRenderKind`: `Render`, `TimeRefresh`,
+  `PresentationRefresh`) says what triggered it. `Started` fires only once a
+  processor lease is held (a dataset removed before that raises nothing).
+  `Completed` fires only on a successful render that installs layers; a render
+  that throws, is cancelled, or is superseded/removed *after* it begins raises
+  `Started` without `Completed` (a swallowed refresh failure instead raises
+  `DatasetRenderFailed`).
+- `DatasetRenderFailed` (`MapSessionDatasetRenderFailedEventArgs`) reports a
+  per-dataset failure the session **swallowed** during a coalesced refresh so the
+  other datasets keep rendering. A single `RenderAsync` surfaces its error by
+  **throwing** to the awaiting caller instead, so no failed event is raised there.
+- `LayersChanged` / `TimeRangeChanged` (`EventHandler`) and `CurrentTimeChanged`
+  (`MapSessionCurrentTimeEventArgs`) report projected-band and clock changes.
+
+## Viewport navigation
+
+`MapsuiMapNavigator` provides the small navigation surface already used by
+S-100 interactive hosts against an existing `Mapsui.Map`:
+
+```csharp
+var navigation = new MapsuiMapNavigator(map);
+navigation.ZoomToExtent(datasetExtent);
+navigation.CenterOn(new GeoPosition(latitude, longitude));
+```
+
+It supports padded dataset framing, exact scripted extent or
+center/resolution changes, rotation, WGS-84 recentering, and WGS-84 viewport
+center reporting. Exact scripted changes are instantaneous; framing and
+recentering accept animation durations while preserving their prior defaults.
+The adapter does not own the map, duplicate normal Mapsui gestures, marshal to
+a UI thread, invalidate a control, or automatically zoom after a load.
+Avalonia, MAUI, and other hosts retain those policies and thread-affinity
+responsibilities.
+
+## Optional Avalonia adapter
+
+Avalonia hosts can add
+[`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/)
+without coupling this base package to a UI framework. Its
+`AvaloniaMapsuiMapAdapter` attaches explicitly to a
+`CaptureSynchronizedMapControl` and owns UI-thread redraw, control-state
+coordinate conversion, current-view snapshots, and framework control capture.
+Disposal detaches the adapter without disposing the borrowed control or map.
+
+The optional package composes with `MapsuiLayerBands` and
+`MapsuiMapNavigator`; it does not own processors, dataset layers, S-98
+composition, presentation state, or automatic navigation policy.
 
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
@@ -42,8 +213,8 @@ collection / priority-clip / insert phase here.
 - Text alignment, mm offsets, and `textLine` start/end offsets (Relative or Absolute) are honoured per S-100 Part 9 §11.4.
 - `LineStyleProvider`, `SymbolProvider`, and `AreaFillProvider` callbacks let the host project plug in a portrayal catalogue without coupling the renderer to a specific dataset library.
 - **Scale-visibility limits are latitude-corrected.** S-100 Part 9 §11.1 scale denominators (per-feature `ScaleMinimum`/`ScaleMaximum`, and the cell-wide out-of-band cap derived from `DataCoverage.minimumDisplayScale`) are *true-scale* values, whereas a Mapsui `resolution` is metres/pixel at the EPSG:3857 equator. Because web-mercator inflates ground distance by `1/cos φ`, the equator-referenced resolution for a denominator is `denom × 0.00028 / cos φ` (`MapsuiDisplayListRenderer.DenominatorToResolution`). Per-feature limits convert at the feature's extent-centre latitude; the cell-wide cap converts at the layer's extent-centre latitude. Omitting the `cos φ` term (the prior behaviour) was only correct on the equator and suppressed detail roughly `1/cos φ` zoom levels too early — at φ ≈ 50.8° (≈ 1.58×) a cell's linework vanished about two-thirds of a zoom level before it should. This now matches the Skia headless backend, which already applies `cos(midLat)`.
-- **Cell-wide zoom-out window from the exchange-set catalogue (`ApplyCellScaleWindow`).** Independent of the in-file per-feature cap above, `MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale)` clamps every layer's `MaxVisible` to `DenominatorToResolution(minimumDisplayScale, φ)` at the layer's extent-centre latitude, where `minimumDisplayScale` is the *coarsest permitted* denominator resolved from the cell's `CATALOG.XML` `DataCoverage` entries (max of the per-coverage `minimumDisplayScale` values). It only ever **tightens** an existing `MaxVisible`. Unlike the M_COVR-derived per-feature cap (which applies to the linework sub-layer only), this window suppresses the **whole cell — area fills included** — once you zoom out past the cell's smallest-scale edge, so a finer cell drops out entirely and the coarser cell nested beneath it shows through. This is *hole-safe*: as you zoom out, finer cells (smaller `minimumDisplayScale`) drop first, always leaving a coarser cell underneath (issue #438, Phase 1). The zoom-*in* overlap edge (`maximumDisplayScale`) is **not** wired here because a finer cell usually covers only part of a coarser footprint; suppressing the coarser cell on zoom-in would leave open water blank between finer cells, so that is deferred to a coverage-polygon-clipping phase. The caller (`DatasetLoaderService`) gates this on the mariner `IgnoreScaleMinimum` setting and re-applies it on every re-render. For a **standalone-loaded cell** (no `CATALOG.XML`), the caller falls back to a `minimumDisplayScale` the processor derives from the dataset's own content (`DatasetResult.CellMinimumDisplayScale` — S-101 in-file `DataCoverage.minimumDisplayScale`, or the S-57 DSPM compilation scale), so an individually opened `.000` cell hides — with its out-of-scale extent border (issue #446) — exactly as it would inside an exchange set (issue #450 follow-up).
-- **Cross-cell coverage clip / "larger-scale-in" overlap suppression (`OverlapSuppression` + `CoverageClip`, issue #438 Phase 2).** The zoom-*in* seam Phase 1 deferred: where a finer, overlapping in-band cell provides coverage, the coarser cell must stop contributing (no depth-area / fill bleed under the harbour cell). This is done as a **true geometry clip** in screen space, not a scale cap, and it is **zoom-aware** — a finer cell only suppresses a coarser cell while the finer cell is itself visible at the current resolution, so zooming out (which drops the finer cell via the Phase 1 window) never leaves a blank hole in the coarser cell. Each cell's EPSG:4326 data-coverage footprint (`VectorPortrayalResult.CoverageAreas`) is projected to EPSG:3857 and carried on `DatasetResult.CoverageGeometry` (`MapsuiDatasetRenderer.ToMercatorCoverage`, `Buffer(0)`-normalized). `DatasetLoaderService` builds an `OverlapSuppressionCell` per loaded cell (`Layers`, `Coverage`, `ScaleDenominator` from `MinimumDisplayScale ?? CellMinimumDisplayScale`, and `CutoffResolution` = the cell's Phase 1 `ContentMaxVisibleResolution` drop-out) and calls `OverlapSuppression.Apply(cells)`, which for each cell gathers every **strictly finer** (smaller denominator) overlapping cell `F` as a `FinerCoverage(coverage(F), cutoff(F))` and attaches the list via `CoverageClip.Set(layer, finerCoverages)`. Equal-band siblings never mutually clip (that would erase shared borders); a cell with no finer overlap gets **no** entry (paints in full). Rather than pre-computing `coverage(C) − union(...)` in NTS (expensive per-zoom and `TopologyException`-prone), the custom layer renderers (`S100VectorTileRenderer`, `S100VectorSnapshotRenderer`) call `CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution)`, which projects an even-odd screen-space `SKPath` for **only** those finer coverages still visible at the live `resolution` (`cutoff is null || resolution <= cutoff`); the renderer then wraps its drawing in `SKCanvas.Save()` + one `ClipPath(path, SKClipOperation.Difference, antialias: true)` per active path + `Restore()`. Successive difference clips compose the union naturally, and each even-odd path preserves the finer cell's no-coverage holes so the coarser cell shows through them (*hole-safe*). The clip is **screen-space** so it never invalidates a cached tile — only the composite clip region varies per frame — and it stores world coordinates so a constant-zoom pan needs no recompute. `DatasetLoaderService` re-runs `Apply` on every load / unload / removal and gates the whole feature on `IgnoreScaleMinimum`.
+- **Cell-wide zoom-out window from the exchange-set catalogue (`ApplyCellScaleWindow`).** Independent of the in-file per-feature cap above, `MapsuiDatasetRenderer.ApplyCellScaleWindow(layers, minimumDisplayScale)` clamps every layer's `MaxVisible` to `DenominatorToResolution(minimumDisplayScale, φ)` at the layer's extent-centre latitude, where `minimumDisplayScale` is the *coarsest permitted* denominator resolved from the cell's `CATALOG.XML` `DataCoverage` entries (max of the per-coverage `minimumDisplayScale` values). It only ever **tightens** an existing `MaxVisible`. Unlike the M_COVR-derived per-feature cap (which applies to the linework sub-layer only), this window suppresses the **whole cell — area fills included** — once you zoom out past the cell's smallest-scale edge, so a finer cell drops out entirely and the coarser cell nested beneath it shows through. This is *hole-safe*: as you zoom out, finer cells (smaller `minimumDisplayScale`) drop first, always leaving a coarser cell underneath (issue #438, Phase 1). `MapsuiMapSession` gates the window on `IgnoreScaleMinimum`, prefers the host's catalogue scale, and falls back to `MapsuiDatasetResult.CellMinimumDisplayScale` for standalone cells.
+- **Cross-cell coverage clip / "larger-scale-in" overlap suppression (`OverlapSuppression` + `CoverageClip`, issue #438 Phase 2).** The zoom-*in* seam Phase 1 deferred: where a finer, overlapping in-band cell provides coverage, the coarser cell must stop contributing (no depth-area / fill bleed under the harbour cell). This is done as a **true geometry clip** in screen space, not a scale cap, and it is **zoom-aware** — a finer cell only suppresses a coarser cell while the finer cell is itself visible at the current resolution, so zooming out (which drops the finer cell via the Phase 1 window) never leaves a blank hole in the coarser cell. `MapsuiMapSession` recomputes the cells after render, replacement, removal, ordinary reorder, visibility, opacity, active-state, and sub-layer changes. It applies clips after host projection so S-98-filtered or rebuilt layers receive the same ordinary overlap behavior. Hidden, transparent, inactive, or lazily unloaded cells never suppress coarser content.
 
 ### Sharing processed-SVG and pattern-tile work across renders
 
@@ -91,7 +262,7 @@ megapixel grid).
 
 ## Dynamic feature sources
 
-`EncDotNet.S100.Renderers.Mapsui.DynamicSources` hosts the Mapsui-bound side of the dynamic-feature-source abstraction defined in `EncDotNet.S100.Core` (see [`docs/design/dynamic-feature-source.md`](../../docs/design/dynamic-feature-source.md)). Renderers turn `DynamicFeature` snapshots into Mapsui `IFeature` + `IStyle` instances that the viewer's `DynamicSourceOverlayHost` attaches to a `MemoryLayer` on the overlay tier of `IMapHost`.
+`EncDotNet.S100.Renderers.Mapsui.DynamicSources` hosts the Mapsui-bound side of the dynamic-feature-source abstraction defined in `EncDotNet.S100.Core` (see [`docs/design/dynamic-feature-source.md`](../../docs/design/dynamic-feature-source.md)). Renderers turn `DynamicFeature` snapshots into Mapsui `IFeature` + `IStyle` instances that the viewer's `DynamicSourceOverlayHost` attaches to a `MemoryLayer` through its focused map-layer collection capability.
 
 - **`IDynamicFeatureRenderer`** — `CanRender` + `Render` contract. Implementations are stateless functions of one feature; the overlay host owns the layer-level state and UI-thread marshalling.
 - **`DefaultDynamicFeatureRenderer`** — geometry-kind-dispatching fallback: coloured disc + optional speed-scaled heading line (six-minute predictor capped at 10 nm) for `Point`, stroked polyline for `Curve`, translucent fill + outline for `Surface`. Also the safety-net renderer when a source's `RendererKey` is `null` or unregistered.
@@ -113,26 +284,28 @@ megapixel grid).
 ## Performance instrumentation
 
 The renderer ships with optional OpenTelemetry instrumentation that
-attributes paint cost down to the style-renderer, layer, and geometry
-vertex count. All instruments are sub-millisecond per paint when no
-OTel listener is attached, so they are safe to leave in production
-builds.
+attributes paint cost down to the style-renderer, layer, source feature
+class, and geometry vertex count. All instruments are sub-millisecond
+per paint when no OTel listener is attached, so they are safe to leave
+in production builds.
 
 | Instrument | Unit | Tags | Purpose |
 |---|---|---|---|
 | `s100.map.paint.duration` | ms | — | Compositor-thread paint wall-time per frame |
 | `s100.map.paint.interval` | ms | — | Time between paints (idle gaps > 500 ms dropped) |
-| `s100.map.paint.style.calls` | count | `style`, `layer`, `points` | Style-renderer `Draw` calls per paint |
-| `s100.map.paint.style.duration` | ms | `style`, `layer`, `points` | Cumulative `Draw` duration per paint |
+| `s100.map.paint.style.calls` | count | `style`, `layer`, `points`, `featureClass` | Style-renderer `Draw` calls per paint |
+| `s100.map.paint.style.duration` | ms | `style`, `layer`, `points`, `featureClass` | Cumulative `Draw` duration per paint |
 | `s100.layer.get_features.duration` | ms | `layer` | Layer-level filter cost per `GetFeatures` call |
 | `s100.layer.get_features.visible` / `total` | count | `layer` | Visible / total feature counts per call |
 | `s100.layer.get_features.fps` | gauge | `layer` | Effective `GetFeatures` rate per layer |
 | `s100.pattern_fill.draw.duration` | ms | — | `AnchoredPatternFillRenderer` per-call cost |
 
-The `points` tag is bucketed (`1-9`, `10-99`, `100-999`, `1k-10k`,
-`10k-100k`, `100k+`) to keep histogram cardinality bounded while
-still revealing whether a layer's cost is driven by many cheap draws
-or a few expensive ones.
+The `points` tag is bucketed (`n/a`, `0`, `1-9`, `10-99`, `100-999`,
+`1k-10k`, `10k-100k`, `100k+`) to keep histogram cardinality bounded
+while still revealing whether a layer's cost is driven by many cheap draws
+or a few expensive ones. `featureClass` is the source Feature Catalogue type
+carried by S-101/S-57 features (for example, `DepthContour`); generated
+features and products that do not attach a source type use `(unclassified)`.
 
 To capture a measurement session, run the viewer with the OTel console
 exporter enabled:
@@ -143,7 +316,7 @@ ENC_DOTNET_OTEL_CONSOLE=1 OTEL_METRIC_EXPORT_INTERVAL=2000 \
 ```
 
 Histograms are emitted every 2 s with cumulative counts and per-bucket
-distributions. Aggregate by `(layer, points)` to identify which
+distributions. Aggregate by `(layer, featureClass, points)` to identify which
 geometries are dominating paint time — empirically, ~93% of paint cost
 on real-world S-101 datasets is spent on geometries with ≥100 vertices,
 with per-vertex cost ~1 µs. See
@@ -814,13 +987,37 @@ Its tiles flow through the existing prediction telemetry, so a zoom-transition
 A/B reads time-to-fill at the new band from `s100.render.tile.cold.latency` and
 the `s100.render.tile.prediction.hits` counter.
 
+### Metatile raster jobs (issue #427)
+
+The tiled renderer can claim pending tiles from one aligned 2×2 block and one
+priority tier, rasterise their union once, then slice the result back into
+ordinary tile-granular cache and disk entries. SCAMIN visibility is evaluated
+at every claimed row denominator; jobs split by row when visibility differs.
+Per-tile cold latency, prediction accounting, eviction, and redraw behaviour
+therefore remain unchanged.
+
+Metatiling is experimental and off by default. Enable it with
+`S100_VECTOR_TILE_METATILE=1`, the viewer's **Batch adjacent tiles** setting, or
+`RenderingOptimizations.TileMetatileEnabled`. Measure it with
+`s100.render.metatile.rasterize.duration`, `.slice.duration`, `.tiles`, `.jobs`,
+and `.fallbacks`; the fallback counter is tagged
+`reason=sparse|disk|scamin|dimension|scale`. The `scale` fallback preserves the
+single-tile projection when fractional device scaling cannot represent both the
+core and gutter as integer pixel spans. The feature should remain off unless
+real-cell A/B runs reduce aggregate tile raster duration without regressing
+cold latency, paint time, memory, or pixels.
+
 ### Persistent warm disk cache + `styleStateHash` (Phase 4)
 
 Below the in-memory hot cache sits a **persistent, on-disk warm tier**
 (`TileDiskCache`, design doc Appendix E): PNG-encoded tiles that survive a layer
 rebuild (a palette flip-back re-uses them) and a process restart. A tile missing
 from the hot cache is decoded from disk on the worker before any re-rasterise,
-and each freshly rasterised tile is persisted for future reuse.
+and visible raster results are published immediately before being offered to a
+bounded, process-wide write-behind queue. Prediction results are persisted only
+after becoming visible. The dedicated low-priority writer snapshots, encodes,
+and atomically stores accepted tiles; duplicate or overflow work is discarded
+rather than blocking a render worker.
 
 Correctness comes from the cache **namespace**,
 `SHA-256(productLayerSet | styleStateHash)` — a per-style-state subdirectory.
@@ -843,13 +1040,26 @@ so this extends the no-stale-portrayal guarantee to the persistent tier.
 > content change) in distinct namespaces.
 
 The cache mirrors `DiskPortrayalInstructionCache`: atomic temp+move writes,
-mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss; PNG codec
-work runs outside the lock. Knobs: `S100_VECTOR_TILE_DISK` (default on),
+mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss. Concurrent
+reads do not serialize behind persistence; one background writer owns PNG
+encoding, final-path mutation, and budget sweeps. Knobs:
+`S100_VECTOR_TILE_DISK` (default on),
 `S100_VECTOR_TILE_DISK_DIR` (default an OS-temp subdirectory),
 `S100_VECTOR_TILE_DISK_MB` (default 512). Telemetry counters
-`s100.render.tile.disk.hits` / `.writes`. **Verified (PDB01):** a Day→Night→Day
-palette flip produced two separate namespaces (no cross-style sharing); 163 tiles
-persisted, 198 served warm from disk on the flip-back instead of re-rasterising.
+`s100.render.tile.disk.hits` / `.writes`, plus
+`s100.render.tile.disk.write_queue.depth` / `.discarded`. **Verified (PDB01):**
+a Day→Night→Day palette flip produced two separate namespaces (no cross-style
+sharing); 163 tiles persisted, 198 served warm from disk on the flip-back
+instead of re-rasterising. The bounded queue drains during normal process exit;
+an abrupt process termination may discard outstanding best-effort writes.
+
+The write-behind path was also measured with a 360-step, 100 ms paced navigation
+route over 16 overlapping UK S-101 cells. Moving persistence off render workers
+reduced tile P95 from 781 ms to 49 ms, frame P95 from 23 ms to 12 ms, and
+viewport-command P95 from 92 ms to 2.3 ms while still completing 735 background
+writes. The same route with persistence disabled measured 30 ms, 8.8 ms, and
+3.1 ms respectively; the remaining gap is therefore no longer dominated by
+cache writes.
 
 ### GPU texture residency (Phase 5)
 
@@ -883,11 +1093,17 @@ held by a **process-wide registry** with a *strong* reference to the cache and a
 *weak* reference to its owning layer. The strong reference keeps the textures off
 the finalizer thread; when the layer is collected, the next render reconciles the
 registry and disposes the orphaned cache on the render thread under the live
-context. Knobs: `S100_VECTOR_TILE_GPU` (default on),
+context. Knobs: `S100_VECTOR_TILE_GPU` (default off),
 `S100_VECTOR_TILE_GPU_MB` (default 256). **Verified (PDB01):** four
 close-all + reopen cycles (each warming and abandoning a GPU cache) with no native
 crash, frames steady at 6–9 ms and a 96 % GPU hit ratio sustained across the
 cycles.
+
+GPU residency remains available as an opt-in for stable, repeatedly drawn views,
+but is disabled by default. A paced pan/zoom route over 13 UK S-101 cells showed
+that eager `ToTextureImage` promotion and texture churn can monopolize the
+compositor thread: GPU residency produced a 3,155 ms maximum frame and 591 ms
+P95, versus 123–160 ms maximum and 75–79 ms P95 without explicit residency.
 
 **Deferred GPU disposal + bounded backdrop (zoom-out safety):** `SKCanvas.DrawImage`
 is deferred — the texture is only dereferenced when Skia flushes *after* the render

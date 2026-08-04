@@ -6,6 +6,12 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// Base class for spec-specific render contexts passed to dataset processors.
 /// </summary>
+/// <remarks>
+/// Use <see cref="MapPresentationState.CreateRenderContext"/> to create the
+/// product context carrying map-wide palette, scale, ECDIS, mariner, and
+/// product-display choices. Use <see cref="MapPresentationState.ApplyTo"/> when
+/// projecting those choices onto a caller-constructed request context.
+/// </remarks>
 public abstract record RenderContext
 {
     /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>

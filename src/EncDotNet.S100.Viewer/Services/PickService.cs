@@ -171,9 +171,14 @@ internal sealed class PickService : IPickService
         using var __cmd = ViewerObservability.BeginCommand("pick.geographic");
 
         var hits = new List<PickHit>();
+        using var processors = _loader.AcquireProcessors();
         foreach (var feature in features)
         {
-            if (!TryResolveProcessorByDisplayName(feature.DatasetDisplayName, out var entry, out var processor))
+            if (!TryResolveProcessorByDisplayName(
+                    processors,
+                    feature.DatasetDisplayName,
+                    out var entry,
+                    out var processor))
                 continue;
 
             var info = processor.GetFeatureInfo(feature.FeatureRef);
@@ -194,11 +199,12 @@ internal sealed class PickService : IPickService
     }
 
     private bool TryResolveProcessorByDisplayName(
+        IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> processors,
         string displayName,
         out DatasetEntry owningEntry,
         out IDatasetProcessor processor)
     {
-        foreach (var (entry, proc) in _loader.Processors)
+        foreach (var (entry, proc) in processors)
         {
             if (string.Equals(entry.DisplayName, displayName, StringComparison.Ordinal))
             {
@@ -217,6 +223,7 @@ internal sealed class PickService : IPickService
     {
         var hits = new List<PickHit>();
         var seen = new HashSet<(IDatasetProcessor processor, string featureRef)>();
+        using var processors = _loader.AcquireProcessors();
 
         // PR-L1 (S-98): rank multi-hit picks by the current S-98 layer
         // stack so the user sees the topmost-painted feature first.
@@ -253,7 +260,11 @@ internal sealed class PickService : IPickService
             if (feature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
                 continue;
 
-            if (!TryResolveOwner(layer, out var owningEntry, out var processor))
+            if (!TryResolveOwner(
+                    processors,
+                    layer,
+                    out var owningEntry,
+                    out var processor))
                 continue;
 
             // A single feature can appear in multiple style sublayers (line
@@ -367,6 +378,7 @@ internal sealed class PickService : IPickService
     }
 
     private bool TryResolveOwner(
+        IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> processors,
         ILayer hitLayer,
         out DatasetEntry owningEntry,
         out IDatasetProcessor processor)
@@ -376,7 +388,7 @@ internal sealed class PickService : IPickService
             if (!Contains(layers, hitLayer))
                 continue;
 
-            if (_loader.Processors.TryGetValue(entry, out var proc))
+            if (processors.TryGetValue(entry, out var proc))
             {
                 owningEntry = entry;
                 processor = proc;
@@ -415,7 +427,8 @@ internal sealed class PickService : IPickService
         var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
         var time = _globalTime?.CurrentTime;
 
-        foreach (var (entry, processor) in _loader.Processors)
+        using var processors = _loader.AcquireProcessors();
+        foreach (var (entry, processor) in processors)
         {
             FeatureInfo? info;
             try
@@ -451,7 +464,8 @@ internal sealed class PickService : IPickService
         double latitude,
         double longitude)
     {
-        var probe = _depthProbe.Evaluate(_loader.Processors, hits, latitude, longitude);
+        using var processors = _loader.AcquireProcessors();
+        var probe = _depthProbe.Evaluate(processors, hits, latitude, longitude);
         if (probe.Class != EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water || probe.Depth is not { } result)
             return null;
 

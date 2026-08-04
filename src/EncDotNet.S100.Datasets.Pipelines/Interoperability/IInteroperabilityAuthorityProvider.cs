@@ -7,8 +7,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <remarks>
 /// <para>
 /// Components that participate in cross-dataset paint ordering
-/// (<c>DatasetLoaderService</c>, the future PR-L3 Layer Controls UI,
-/// any host-side picker) should depend on this provider rather than
+/// (<c>MapsuiMapSession</c>, headless compositors, or another map-session
+/// implementation) should depend on this provider rather than
 /// holding an <see cref="IInteroperabilityAuthority"/> reference
 /// directly. The active authority can change at runtime — e.g. a
 /// viewer setting that toggles between the S-98 policy and a strict

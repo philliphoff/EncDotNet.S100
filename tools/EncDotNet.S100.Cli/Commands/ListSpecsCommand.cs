@@ -11,9 +11,8 @@ namespace EncDotNet.S100.Cli.Commands;
 internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
 {
     /// <summary>
-    /// Specs whose processors expose the headless Skia render path. Coverage
-    /// specs (S-102/104/111) support gridded datasets only; fixed-station
-    /// (data coding format 3 / 8) datasets are rejected at render time.
+    /// Specs whose processors expose the headless Skia render path. S-104 and
+    /// S-111 support both gridded and positioned station/node glyph datasets.
     /// S-57 datasets are translated in-memory to S-101 and rendered through
     /// the S-101 portrayal pipeline.
     /// </summary>
@@ -52,9 +51,6 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
         }
 
         AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine(
-            "[grey]Coverage specs (S-102/104/111) render gridded datasets only; " +
-            "fixed-station datasets are not supported headlessly.[/]");
         return 0;
     }
 }

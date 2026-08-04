@@ -165,6 +165,25 @@ public class HeadlessCompositorTests
             "Expected a painted feature in the right half of the composite.");
     }
 
+    [Fact]
+    public void Render_places_projected_coverage_from_sampled_native_bounds()
+    {
+        var compositor = new HeadlessCompositor(new ScaledCrsTransformFactory());
+        var coverage = ProjectedCoverageSubset();
+        var viewport = SquareViewport(0, 2, 0, 2, 200);
+
+        using var bitmap = compositor.Render(
+            [coverage],
+            new HeadlessCompositeOptions
+            {
+                Viewport = viewport,
+                Background = new RgbaColor(255, 255, 255, 255),
+            });
+
+        Assert.Equal(new SKColor(0xFF, 0xFF, 0xFF), bitmap.GetPixel(20, 100));
+        Assert.Equal(new SKColor(0xFF, 0x00, 0x00), bitmap.GetPixel(105, 95));
+    }
+
     // ----------------------------------------------------------------
     // Issue #483 — S-104 water-level surface clipped to water areas.
     // End-to-end proof through the production compositor: the S-98 rule
@@ -391,6 +410,60 @@ public class HeadlessCompositorTests
         return HeadlessCompositeInput.ForCoverage(result);
     }
 
+    private static HeadlessCompositeInput ProjectedCoverageSubset()
+    {
+        var metadata = new GridMetadata
+        {
+            NumRows = 2,
+            NumColumns = 2,
+            OriginLatitude = 100.0,
+            OriginLongitude = 100.0,
+            SpacingLatitudinal = 10.0,
+            SpacingLongitudinal = 10.0,
+        };
+        var sampled = new SampledCoverage
+        {
+            Region = new GridRegion(10, 12, 10, 12, 1, 1),
+            Metadata = metadata,
+            Values = new Dictionary<string, float[]>
+            {
+                ["depth"] = [5.0f, 5.0f, 5.0f, 5.0f],
+            },
+        };
+        var styled = new StyledCoverageLayer
+        {
+            Coverage = sampled,
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(metadata, "TEST:PROJECTED"),
+            ColorScheme = new CoverageColorScheme
+            {
+                FieldName = "depth",
+                Bands =
+                [
+                    new ColorBand { MinValue = 0.0f, MaxValue = 10.0f, Color = "#FF0000" },
+                ],
+            },
+        };
+        var grid = new GridCoverageSubLayer
+        {
+            LayerKey = "projected.subset",
+            LayerName = "Projected subset",
+            Plane = S98DisplayPlane.Bathymetry,
+            Coverage = styled,
+            // Deliberately unrelated to the sampled grid. The compositor must
+            // use the sampled georeferencer metadata for spatial placement.
+            Viewport = SquareViewport(-50, 50, -50, 50, 100),
+        };
+        return HeadlessCompositeInput.ForCoverage(
+            new CoveragePortrayalResult
+            {
+                SubLayers = [grid],
+                Spec = new SpecRef("S-102", default),
+                SourceDatasetId = "projected.h5",
+                Info = "test",
+            });
+    }
+
     /// <summary>
     /// Builds an S-101 vector input with a single <c>LandArea</c> surface over
     /// the given WGS84 box, filled with <paramref name="fillHex"/>. The feature
@@ -428,5 +501,21 @@ public class HeadlessCompositorTests
         };
 
         return HeadlessCompositeInput.ForVector(result);
+    }
+
+    private sealed class ScaledCrsTransformFactory : ICrsTransformFactory
+    {
+        public ICrsTransform Create(string sourceCrs, string targetCrs) =>
+            sourceCrs == targetCrs
+                ? IdentityCrsTransform.Instance
+                : new ScaledCrsTransform();
+    }
+
+    private sealed class ScaledCrsTransform : ICrsTransform
+    {
+        public bool IsIdentity => false;
+
+        public (double X, double Y) Transform(double x, double y) =>
+            (x / 100.0, y / 100.0);
     }
 }

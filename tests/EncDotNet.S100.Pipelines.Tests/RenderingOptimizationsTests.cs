@@ -5,8 +5,9 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Validates <see cref="RenderingOptimizations"/>: the central, mutable config
 /// for the viewer's Settings → Map rendering-optimization knobs. The "best"
-/// default is on for every knob, and a programmatic write is honoured unless an
-/// explicit environment variable pins the value (the perf A/B harness).
+/// measured default is selected independently for each knob, and a programmatic
+/// write is honoured unless an explicit environment variable pins the value
+/// (the perf A/B harness).
 /// </summary>
 public class RenderingOptimizationsTests
 {
@@ -205,6 +206,39 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
+    public void TileGpuResidency_DefaultsOff_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileGpuResidencyEnvExplicit)
+        {
+            return;
+        }
+
+        Assert.False(RenderingOptimizations.TileGpuResidencyEnabled);
+    }
+
+    [Fact]
+    public void TileMetatile_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileMetatileEnvExplicit)
+        {
+            return;
+        }
+
+        var original = RenderingOptimizations.TileMetatileEnabled;
+        try
+        {
+            RenderingOptimizations.TileMetatileEnabled = false;
+            Assert.False(RenderingOptimizations.TileMetatileEnabled);
+            RenderingOptimizations.TileMetatileEnabled = true;
+            Assert.True(RenderingOptimizations.TileMetatileEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.TileMetatileEnabled = original;
+        }
+    }
+
+    [Fact]
     public void Profile_LowEnd_DisablesCrossBandPrewarm_WhenNotEnvPinned()
     {
         if (RenderingOptimizations.ProfileEnvExplicit ||
@@ -288,6 +322,7 @@ public class RenderingOptimizationsTests
     {
         Assert.Equal(RenderingOptimizations.TilePredictionEnabled, S100VectorTileRenderer.PredictionEnabled);
         Assert.Equal(RenderingOptimizations.TileCrossBandPrewarmEnabled, S100VectorTileRenderer.CrossBandPrewarmEnabled);
+        Assert.Equal(RenderingOptimizations.TileMetatileEnabled, S100VectorTileRenderer.MetatileEnabled);
         Assert.Equal(RenderingOptimizations.TileGpuResidencyEnabled, S100VectorTileRenderer.GpuResidencyEnabled);
         Assert.Equal(RenderingOptimizations.TileDiskCacheEnabled, S100VectorTileRenderer.DiskCacheEnabled);
         Assert.Equal(RenderingOptimizations.TileGutterDip, S100VectorTileRenderer.GutterDip);

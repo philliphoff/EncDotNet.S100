@@ -698,6 +698,30 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <summary>Whether the cross-band pre-warm knob is user-editable (not env-pinned).</summary>
     public bool TileCrossBandPrewarmEditable => !RenderingOptimizations.TileCrossBandPrewarmEnvExplicit;
 
+    private bool _tileMetatileEnabled;
+    /// <summary>
+    /// Whether adjacent cold misses are batched into 2&#215;2 metatile jobs
+    /// (issue&#160;#427). Read by each worker job, so the change takes effect
+    /// live. Not editable when pinned by <c>S100_VECTOR_TILE_METATILE</c>.
+    /// </summary>
+    public bool TileMetatileEnabled
+    {
+        get => _tileMetatileEnabled;
+        set
+        {
+            RenderingOptimizations.TileMetatileEnabled = value;
+            var effective = RenderingOptimizations.TileMetatileEnabled;
+            if (SetProperty(ref _tileMetatileEnabled, effective))
+            {
+                _settings.TileMetatileEnabled = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the metatile knob is user-editable (not env-pinned).</summary>
+    public bool TileMetatileEditable => !RenderingOptimizations.TileMetatileEnvExplicit;
+
     private bool _tileDiskCacheEnabled;
     /// <summary>
     /// Whether the warm disk tile cache is enabled. The shared cache is created
@@ -1109,6 +1133,13 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
 
         _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+
+        if (settings.TileMetatileEnabled is { } tileMetatile)
+        {
+            RenderingOptimizations.TileMetatileEnabled = tileMetatile;
+        }
+
+        _tileMetatileEnabled = RenderingOptimizations.TileMetatileEnabled;
 
         if (settings.TileDiskCacheEnabled is { } tileDisk)
         {

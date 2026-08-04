@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// Converts a dataset processor's Mapsui-free portrayal output
 /// (<see cref="IVectorPortrayalSource"/> / <see cref="ICoveragePortrayalSource"/>)
-/// into a Mapsui-typed <see cref="DatasetResult"/>. This is the Mapsui-aware
+/// into a Mapsui-typed <see cref="MapsuiDatasetResult"/>. This is the Mapsui-aware
 /// half of the portrayal-output seam: the processor (in the headless-facing
 /// <c>EncDotNet.S100.Datasets.Pipelines</c> assembly) builds an immutable
 /// snapshot of the dataset's portrayal, and this renderer rasterises it into
@@ -41,12 +41,12 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 public sealed class MapsuiDatasetRenderer
 {
     private readonly ICrsTransformFactory _crsTransformFactory;
-    private readonly IPatternClipCache? _patternClipCache;
+    private readonly S100MapsuiOptions? _options;
+    private readonly IPatternClipCache _patternClipCache;
 
     // The processor's portrayal build holds the processor's own render gate,
-    // but the Mapsui conversion below uses two per-processor, non-thread-safe
-    // resources — the pattern-clip cache and the render-asset cache — so the
-    // whole render is serialized per processor here.
+    // but the Mapsui conversion below uses a per-processor, non-thread-safe
+    // render-asset cache, so the whole render is serialized per processor here.
     private static readonly ConditionalWeakTable<IDatasetProcessor, SemaphoreSlim> RenderGates = new();
     private static readonly ConditionalWeakTable<IDatasetProcessor, MapsuiRenderAssetCache> AssetCaches = new();
 
@@ -62,16 +62,55 @@ public sealed class MapsuiDatasetRenderer
     /// <see cref="DiskPatternClipCache"/>) shared across every S-101 render, so
     /// the cold first open of a previously-seen cell skips the multi-second
     /// NetTopologySuite clip. When <see langword="null"/> an in-memory
-    /// single-slot cache is used per render.
+    /// single-slot cache is retained for the lifetime of this renderer.
     /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="crsTransformFactory"/> is
+    /// <see langword="null"/>.
+    /// </exception>
     public MapsuiDatasetRenderer(
         ICrsTransformFactory crsTransformFactory,
         IPatternClipCache? patternClipCache = null)
     {
         ArgumentNullException.ThrowIfNull(crsTransformFactory);
         _crsTransformFactory = crsTransformFactory;
-        _patternClipCache = patternClipCache;
+        _patternClipCache = patternClipCache ?? new InMemoryPatternClipCache();
     }
+
+    /// <summary>
+    /// Creates a new renderer with captured Mapsui rendering configuration.
+    /// </summary>
+    /// <param name="crsTransformFactory">
+    /// CRS transform factory used by the coverage / arrow renderers to project
+    /// the native grid CRS to EPSG:3857.
+    /// </param>
+    /// <param name="patternClipCache">
+    /// Optional process-wide pattern-fill priority-clip cache. When
+    /// <see langword="null"/> an in-memory single-slot cache is retained for the
+    /// lifetime of this renderer.
+    /// </param>
+    /// <param name="options">
+    /// Captured rendering configuration.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="crsTransformFactory"/> or
+    /// <paramref name="options"/> is <see langword="null"/>.
+    /// </exception>
+    public MapsuiDatasetRenderer(
+        ICrsTransformFactory crsTransformFactory,
+        IPatternClipCache? patternClipCache,
+        S100MapsuiOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(crsTransformFactory);
+        ArgumentNullException.ThrowIfNull(options);
+        _crsTransformFactory = crsTransformFactory;
+        _patternClipCache = patternClipCache ?? new InMemoryPatternClipCache();
+        _options = options;
+    }
+
+    internal long PatternClipCacheHits => _patternClipCache.Hits;
+
+    internal long PatternClipCacheMisses => _patternClipCache.Misses;
 
     /// <summary>
     /// Renders the supplied processor's portrayal into Mapsui layers.
@@ -86,7 +125,7 @@ public sealed class MapsuiDatasetRenderer
     /// <exception cref="NotSupportedException">
     /// Thrown when the processor exposes neither portrayal-output capability.
     /// </exception>
-    public async Task<DatasetResult> RenderAsync(
+    public async Task<MapsuiDatasetResult> RenderAsync(
         IDatasetProcessor processor,
         RenderContext? context = null,
         CancellationToken cancellationToken = default)
@@ -120,7 +159,7 @@ public sealed class MapsuiDatasetRenderer
         }
     }
 
-    private DatasetResult ConvertVector(IDatasetProcessor processor, VectorPortrayalResult result)
+    private MapsuiDatasetResult ConvertVector(IDatasetProcessor processor, VectorPortrayalResult result)
     {
         var assetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache());
 
@@ -137,7 +176,7 @@ public sealed class MapsuiDatasetRenderer
                 Palette = result.Palette,
                 AssetCache = assetCache,
                 PatternClipCache = sub.PatternClipCacheKey is not null
-                    ? (_patternClipCache ?? new InMemoryPatternClipCache())
+                    ? _patternClipCache
                     : null,
                 PatternClipCacheKey = sub.PatternClipCacheKey is not null
                     ? QualifyPatternClipKey(sub.PatternClipCacheKey)
@@ -147,6 +186,7 @@ public sealed class MapsuiDatasetRenderer
                 SymbolProvider = result.SymbolProvider,
                 AreaFillProvider = result.AreaFillProvider,
                 LineStyleProvider = result.LineStyleProvider,
+                Options = _options,
                 // TiledScene ("B") subsystem only: the Mapsui ("A") path enforces
                 // this cell-wide cap via per-feature MaxVisible below
                 // (ApplyOutOfScaleBandCap). Propagating it here lets the
@@ -204,7 +244,7 @@ public sealed class MapsuiDatasetRenderer
             ?? ToMercator(result.FallbackGeographicExtent)
             ?? new MRect(0, 0, 0, 0);
 
-        return new DatasetResult
+        return new MapsuiDatasetResult
         {
             Layers = layers,
             Extent = extent,
@@ -217,7 +257,7 @@ public sealed class MapsuiDatasetRenderer
         };
     }
 
-    private DatasetResult ConvertCoverage(CoveragePortrayalResult result)
+    private MapsuiDatasetResult ConvertCoverage(CoveragePortrayalResult result)
     {
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
@@ -278,7 +318,7 @@ public sealed class MapsuiDatasetRenderer
 
         var extent = union ?? fallback ?? new MRect(0, 0, 0, 0);
 
-        return new DatasetResult
+        return new MapsuiDatasetResult
         {
             Layers = layers,
             Extent = extent,

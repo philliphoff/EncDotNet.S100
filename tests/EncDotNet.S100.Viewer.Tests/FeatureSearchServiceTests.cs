@@ -20,7 +20,6 @@ public class FeatureSearchServiceTests
         }
         public string ProductSpec { get; }
         public SpecRef Spec { get; }
-        public Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public FeatureInfo? GetFeatureInfo(string featureRef) => null;
         public IEnumerable<FeatureSummary> EnumerateFeatures() => _features;
     }
@@ -33,7 +32,7 @@ public class FeatureSearchServiceTests
             = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
-        public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
+        public void Initialize(IMapLayerCollection layers, IMapViewportController viewport, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ReRenderAtTimeAsync(DateTime t, CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;

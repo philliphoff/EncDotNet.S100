@@ -2,7 +2,9 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Validation;
 using Mapsui.Layers;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -88,6 +90,48 @@ public class S111Dcf8ProcessorTests
 
             Assert.Contains("station:S1", refs);
             Assert.Contains("station:S2", refs);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task RenderHeadless_Dcf8_PaintsStationGlyphs()
+    {
+        var path = WriteFixture();
+        try
+        {
+            using var catalogues = new PortrayalCatalogueManager();
+            var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
+
+            using var bitmap = await processor.RenderHeadlessAsync(256, 256);
+
+            Assert.Contains(
+                Enumerable.Range(0, bitmap.Width).SelectMany(x =>
+                    Enumerable.Range(0, bitmap.Height).Select(y => bitmap.GetPixel(x, y))),
+                color => color != SKColors.White);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Validate_Dcf8_UsesStationRulesInsteadOfUnsupportedProjection()
+    {
+        var path = WriteFixture();
+        try
+        {
+            using var catalogues = new PortrayalCatalogueManager();
+            var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
+
+            var report = Assert.IsType<ValidationReport>(processor.Validate());
+
+            Assert.Empty(report.Findings);
+            Assert.Equal(3, report.RulesEvaluated);
         }
         finally
         {

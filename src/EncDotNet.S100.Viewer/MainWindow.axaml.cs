@@ -7,15 +7,16 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Services.Updates;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
-using Mapsui.Layers;
 using Mapsui.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,8 +30,12 @@ public partial class MainWindow : ShadUI.Window
     private readonly IPickService _pickService;
     private readonly IFileDialogService _fileDialog;
     private readonly IExchangeSetService _exchangeSetService;
+    private readonly IUpdateNotificationCoordinator? _updateNotificationCoordinator;
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
+    private readonly CancellationTokenSource _windowLifetimeCancellation = new();
+    private readonly MapsuiMapHost _mapHost;
+    private readonly Action _rendererRedrawHandler;
     private ValidationOverlayService? _validationOverlay;
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
     private Map? _renderActivityMap;
@@ -39,7 +44,6 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
-    private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
     private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
@@ -74,7 +78,8 @@ public partial class MainWindow : ShadUI.Window
                 "IPickService cannot be resolved without the application service provider.")),
             ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()),
             ResolveOrFallback<IExchangeSetService>(static () => throw new InvalidOperationException(
-                "IExchangeSetService cannot be resolved without the application service provider.")))
+                "IExchangeSetService cannot be resolved without the application service provider.")),
+            null)
     {
     }
 
@@ -99,7 +104,8 @@ public partial class MainWindow : ShadUI.Window
         IDatasetLoaderService loader,
         IPickService pickService,
         IFileDialogService fileDialog,
-        IExchangeSetService exchangeSetService)
+        IExchangeSetService exchangeSetService,
+        IUpdateNotificationCoordinator? updateNotificationCoordinator)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(catalogAggregator);
@@ -125,12 +131,28 @@ public partial class MainWindow : ShadUI.Window
         _pickService = pickService;
         _fileDialog = fileDialog;
         _exchangeSetService = exchangeSetService;
+        _updateNotificationCoordinator = updateNotificationCoordinator;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally.
-        var mapHost = new MapsuiMapHost(MapControl);
-        App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
+        var map = MapControl.Map
+            ?? throw new InvalidOperationException(
+                "The map control must have a map before creating the Viewer host.");
+        _mapHost = new MapsuiMapHost(
+            map,
+            AvaloniaMapsuiMapAdapter.Attach(MapControl),
+            App.Services.GetRequiredService<DatasetProcessorOwner>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>());
+        _rendererRedrawHandler = _mapHost.RequestRedraw;
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
+        // Snapshot is the MCP readiness gate, so publish it only after the
+        // coordinate and viewport capabilities used alongside it are attached.
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>().Current = _mapHost;
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
@@ -145,20 +167,24 @@ public partial class MainWindow : ShadUI.Window
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
             new ViewerUiController(_viewModel);
-        _loader.Initialize(mapHost, options);
+        _loader.Initialize(_mapHost, _mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
-        _viewModel.Datasets.ZoomDispatcher = mapHost.ZoomToExtent;
+        _viewModel.Datasets.ZoomDispatcher = _mapHost.ZoomToExtent;
         // Build the validation findings overlay layer that draws above
         // all dataset layers for the currently-selected dataset. The
         // service subscribes to the datasets view-model and lives for
         // the lifetime of the window.
-        _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
+        _validationOverlay = new ValidationOverlayService(_mapHost, _viewModel.Datasets);
 
         Closed += (_, _) =>
         {
+            _windowLifetimeCancellation.Cancel();
+            _windowLifetimeCancellation.Dispose();
+            App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();
             _validationOverlay?.Dispose();
             _validationOverlay = null;
+            ClearRendererRedrawHandlers();
             // Detach render-activity wiring so the static hub does not
             // outlive the window and a torn-down map is not probed.
             EncDotNet.S100.Viewer.Diagnostics.RenderActivityHub.Sink = null;
@@ -198,6 +224,10 @@ public partial class MainWindow : ShadUI.Window
             // MainViewModel / window are not kept alive after close.
             App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
             App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = null;
+            _mapHost.Dispose();
         };
         DataContext = _viewModel;
 
@@ -260,11 +290,8 @@ public partial class MainWindow : ShadUI.Window
         // land — zero network); the user can switch to None or Online in
         // Settings (or via --basemap). Keep a reference so swapping mode
         // can replace it live. Always sits at index 0, beneath datasets.
-        _basemapLayer = BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode);
-        if (_basemapLayer is not null)
-        {
-            MapControl.Map?.Layers.Add(_basemapLayer);
-        }
+        _mapHost.SetBasemapLayer(
+            BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode));
         _viewModel.Settings.BasemapModeChanged += OnBasemapModeChanged;
 
         // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
@@ -311,20 +338,20 @@ public partial class MainWindow : ShadUI.Window
         // replaced by the crisp image. Wired unconditionally (no-op unless the
         // prebuild is enabled) so toggling the prebuild on at runtime works
         // without a relaunch.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = () =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw =
+            _rendererRedrawHandler;
 
         // Same marshalling for the TiledScene ("B") subsystem: when a worker
         // publishes a freshly rasterised VectorScene image, request a single
         // UI-thread repaint that swaps the transient stale blit for the new image.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw = () =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw =
+            _rendererRedrawHandler;
 
         // Same marshalling for the Phase-2 tiled arm of the TiledScene subsystem:
         // when a worker publishes a freshly rasterised base-plane tile, request a
         // single UI-thread repaint that composites it into the visible mosaic.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw = () =>
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw =
+            _rendererRedrawHandler;
 
         // Bind the map-viewport notifier as early as possible so the
         // AIS overlay's zoom-gated decorator (resolved below via
@@ -349,7 +376,7 @@ public partial class MainWindow : ShadUI.Window
         // the overlay above the OSM tile layer rather than at index 0
         // (where the subsequently-added basemap would cover it).
         _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
-            mapHost,
+            _mapHost,
             App.Services,
             logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
 
@@ -387,7 +414,7 @@ public partial class MainWindow : ShadUI.Window
         // on the overlay tier in sync with the current pick report, so the
         // pick stays visible as the user (or an MCP agent) pans the map.
         _pickHighlightController = new EncDotNet.S100.Viewer.Services.PickHighlightController(
-            mapHost,
+            _mapHost,
             App.Services.GetRequiredService<PickReportViewModel>(),
             App.Services.GetRequiredService<ViewerDatasetCatalog>(),
             App.Services.GetRequiredService<
@@ -398,7 +425,7 @@ public partial class MainWindow : ShadUI.Window
         // datasets that have zoomed out past their display-scale minimum, so a
         // wide-spread exchange set still shows where its members are (#446).
         _extentIndicatorController = new EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController(
-            mapHost,
+            _mapHost,
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
@@ -407,7 +434,7 @@ public partial class MainWindow : ShadUI.Window
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).
         _overscaleCurtainController = new EncDotNet.S100.Viewer.Services.OverscaleCurtainController(
-            mapHost,
+            _mapHost,
             _viewModel.Datasets,
             _loader,
             App.Services.GetRequiredService<
@@ -525,6 +552,12 @@ public partial class MainWindow : ShadUI.Window
         // without a clean shutdown (a native crash, FailFast, kill, …).
         Opened += (_, _) => ReportPreviousUncleanShutdown();
 
+        if (_updateNotificationCoordinator is not null)
+        {
+            Opened += async (_, _) => await _updateNotificationCoordinator
+                .CheckAndNotifyAsync(_windowLifetimeCancellation.Token);
+        }
+
         // Developer aid (--demo-notifications): seed a representative set of
         // notification cards so the overlay's styling and behaviour can be
         // verified on-screen without loading real data.
@@ -574,6 +607,9 @@ public partial class MainWindow : ShadUI.Window
             .WithSeverity(NotificationSeverity.Warning)
             .WithContent("Some cells reference updates that were not applied.")
             .WithAction("Details", () => { })
+            .WithAction("Remind me later", () => { })
+            .WithAction("Skip this version", () => { })
+            .WithAction("Stop checking", () => { })
             .Persistent()
             .Show();
 
@@ -688,21 +724,32 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void OnBasemapModeChanged(BasemapMode mode)
     {
-        if (MapControl.Map is not { } map) return;
+        _mapHost.SetBasemapLayer(BasemapLayerFactory.TryCreate(mode));
+        _mapHost.RequestRedraw();
+    }
 
-        if (_basemapLayer is not null)
+    private void ClearRendererRedrawHandlers()
+    {
+        if (ReferenceEquals(
+            EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw,
+            _rendererRedrawHandler))
         {
-            map.Layers.Remove(_basemapLayer);
-            _basemapLayer = null;
+            EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = null;
         }
 
-        _basemapLayer = BasemapLayerFactory.TryCreate(mode);
-        if (_basemapLayer is not null)
+        if (ReferenceEquals(
+            EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw,
+            _rendererRedrawHandler))
         {
-            map.Layers.Insert(0, _basemapLayer);
+            EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw = null;
         }
 
-        MapControl.RefreshGraphics();
+        if (ReferenceEquals(
+            EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw,
+            _rendererRedrawHandler))
+        {
+            EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw = null;
+        }
     }
 
     /// <summary>
@@ -712,8 +759,6 @@ public partial class MainWindow : ShadUI.Window
     private bool TryFrameOnOwnShip(
         EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource source)
     {
-        if (MapControl.Map?.Navigator is not { } nav) return false;
-
         var feature = source.CurrentFeatures.FirstOrDefault();
         if (feature?.Coordinates is not { Count: > 0 } coords) return false;
 
@@ -722,7 +767,7 @@ public partial class MainWindow : ShadUI.Window
         // Harbour-scale resolution (~web-mercator zoom 13): close enough to
         // see the own-ship and its surroundings without losing context.
         const double resolution = 156543.03392804097 / (1 << 13);
-        nav.CenterOnAndZoomTo(new MPoint(x, y), resolution, duration: 0);
+        _mapHost.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
         return true;
     }
 
@@ -775,7 +820,7 @@ public partial class MainWindow : ShadUI.Window
             // snapshot. Short and fixed — the heavy waiting already
             // happened above on the load/render-quiesce signals.
             await Task.Delay(400);
-            CaptureScreenshot(_screenshotPath);
+            await CaptureScreenshotAsync(_screenshotPath);
 
             if (_closeAfterScreenshot)
             {
@@ -876,7 +921,6 @@ public partial class MainWindow : ShadUI.Window
     private void ApplyStartupViewport()
     {
         if (_startupOptions is not { } options) return;
-        if (MapControl.Map?.Navigator is not { } nav) return;
 
         if (options.ParsedBoundingBox is { } bbox)
         {
@@ -885,7 +929,7 @@ public partial class MainWindow : ShadUI.Window
             var extent = new MRect(minX, minY, maxX, maxY);
             if (extent.Width > 0 && extent.Height > 0)
             {
-                nav.ZoomToBox(extent, duration: 0);
+                _mapHost.SetViewportToExtent(extent);
             }
             return;
         }
@@ -896,7 +940,7 @@ public partial class MainWindow : ShadUI.Window
             // Standard web-mercator resolution (metres/pixel) at a given
             // 256-pixel-tile zoom level: 156543.03392804097 / 2^zoom.
             var resolution = 156543.03392804097 / Math.Pow(2, zoom);
-            nav.CenterOnAndZoomTo(new MPoint(x, y), resolution, duration: 0);
+            _mapHost.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
         }
     }
 
@@ -954,12 +998,15 @@ public partial class MainWindow : ShadUI.Window
         Resources["AccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(0x33, themed.R, themed.G, themed.B));
     }
 
-    private void CaptureScreenshot(string outputPath)
+    private Task CaptureScreenshotAsync(string outputPath)
     {
         // Full-window capture snapshots the whole window (panels,
         // toolbars, status bar); the default captures just the map.
         Control target = _fullWindowScreenshot ? this : MapControl;
-        _screenshotService.Capture(target, outputPath);
+        return _screenshotService.CaptureAsync(
+            target,
+            outputPath,
+            _windowLifetimeCancellation.Token);
     }
 
     /// <summary>
@@ -984,10 +1031,10 @@ public partial class MainWindow : ShadUI.Window
 
         var context = new MapToolContext(
             mapControl: MapControl,
-            addLayer: layer => MapControl.Map?.Layers.Add(layer),
-            removeLayer: layer => MapControl.Map?.Layers.Remove(layer),
+            addLayer: _mapHost.AddToolLayer,
+            removeLayer: _mapHost.RemoveToolLayer,
             setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
-            refreshGraphics: () => MapControl.RefreshGraphics(),
+            refreshGraphics: _mapHost.RequestRedraw,
             screenToLatLon: ScreenToLatLon,
             latLonToScreen: LatLonToScreen);
 
@@ -1021,7 +1068,7 @@ public partial class MainWindow : ShadUI.Window
             EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>();
 
         _routeOverlayLayer = EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Create();
-        MapControl.Map?.Layers.Add(_routeOverlayLayer);
+        _mapHost.AddToolLayer(_routeOverlayLayer);
 
         _routeStore.Changed += OnRouteStoreChanged;
         _routeAppearance.Changed += OnRouteStoreChanged;
@@ -1035,22 +1082,19 @@ public partial class MainWindow : ShadUI.Window
     /// <summary>
     /// Rebuilds the persistent route overlay from the current
     /// <see cref="EncDotNet.S100.Viewer.Services.RoutesService"/> state and
-    /// schedules a redraw. Re-adds the layer if a map rebuild dropped it.
+    /// schedules a redraw.
     /// </summary>
     private void RebuildRouteOverlay()
     {
         if (_routeOverlayLayer is null || _routeStore is null || _routeAppearance is null)
             return;
 
-        if (MapControl.Map is { } map && !map.Layers.Contains(_routeOverlayLayer))
-            map.Layers.Add(_routeOverlayLayer);
-
         EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Update(
             _routeOverlayLayer,
             _routeStore.Routes,
             _routeStore.SelectedWaypointIndex,
             _routeAppearance.Current);
-        MapControl.RefreshGraphics();
+        _mapHost.RequestRedraw();
     }
 
     /// <summary>
@@ -1218,11 +1262,8 @@ public partial class MainWindow : ShadUI.Window
             var framedEarly = false;
             void FrameEarly(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
             {
-                if (MapControl.Map?.Navigator is { } nav)
-                {
-                    ZoomToCatalogueBoundingBox(nav, bbox);
-                    framedEarly = true;
-                }
+                ZoomToCatalogueBoundingBox(bbox);
+                framedEarly = true;
             }
 
             Action<EncDotNet.S100.ExchangeSets.BoundingBox> onFramingReady = bbox =>
@@ -1253,10 +1294,9 @@ public partial class MainWindow : ShadUI.Window
             {
                 // Already framed up front — nothing to do.
             }
-            else if (result.UnionBoundingBox is { } bbox &&
-                MapControl.Map?.Navigator is { } nav)
+            else if (result.UnionBoundingBox is { } bbox)
             {
-                ZoomToCatalogueBoundingBox(nav, bbox);
+                ZoomToCatalogueBoundingBox(bbox);
             }
             else
             {
@@ -1346,7 +1386,7 @@ public partial class MainWindow : ShadUI.Window
             NotificationService.DefaultDelayFor(pending.Severity));
     }
 
-    private void ZoomToCatalogueBoundingBox(Mapsui.Navigator nav, EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+    private void ZoomToCatalogueBoundingBox(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
     {
         // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps
         // the input range, so polar catalogues degrade gracefully.
@@ -1357,7 +1397,7 @@ public partial class MainWindow : ShadUI.Window
         var extent = new MRect(minX, minY, maxX, maxY);
         if (extent.Width > 0 && extent.Height > 0)
         {
-            nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+            _mapHost.ZoomToExtent(extent, durationMilliseconds: 250);
         }
     }
 
@@ -1401,12 +1441,10 @@ public partial class MainWindow : ShadUI.Window
                 break;
         }
 
-        if (MapControl.Map?.Navigator is not { } nav) return;
-
         var extent = unionSlot[0] ?? MapControl.Map.Extent;
         if (extent is null || extent.Width <= 0 || extent.Height <= 0) return;
 
-        nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+        _mapHost.ZoomToExtent(extent, durationMilliseconds: 250);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

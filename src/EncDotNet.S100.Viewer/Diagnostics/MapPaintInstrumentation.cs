@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Reflection;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Diagnostics;
 using Mapsui;
 using Mapsui.Layers;
@@ -16,12 +17,11 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// <summary>
 /// Wraps Mapsui's per-style <see cref="IStyleRenderer"/> registrations
 /// so that every style draw is timed and counted, and the
-/// per-paint totals are emitted to OpenTelemetry tagged by style
-/// type. Combined with <see cref="InstrumentedMapControl"/>'s
-/// per-paint markers, this apportions the wall-clock paint
-/// duration across <c>VectorStyle</c>, <c>LabelStyle</c>,
-/// <c>SymbolStyle</c>, etc., so we can see which style class
-/// dominates a paint.
+/// per-paint totals are emitted to OpenTelemetry tagged by style,
+/// layer, point-count bucket, and source feature class. Combined with
+/// <see cref="InstrumentedMapControl"/>'s per-paint markers, this
+/// apportions the wall-clock paint duration across style and feature
+/// classes.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -74,21 +74,22 @@ internal static class MapPaintInstrumentation
         Meter.CreateHistogram<long>(
             name: "s100.map.paint.style.calls",
             unit: "{calls}",
-            description: "Number of style-renderer Draw calls per paint, tagged by style type.");
+            description: "Number of style-renderer Draw calls per paint, tagged by style, layer, point bucket, and feature class.");
 
     private static readonly Histogram<double> StyleDurationPerPaint =
         Meter.CreateHistogram<double>(
             name: "s100.map.paint.style.duration",
             unit: "ms",
-            description: "Cumulative duration of style-renderer Draw calls per paint, tagged by style type.");
+            description: "Cumulative duration of style-renderer Draw calls per paint, tagged by style, layer, point bucket, and feature class.");
 
     /// <summary>
-    /// Per (style-type, layer) accumulator for the in-flight paint.
+    /// Per (style-type, layer, point-bucket, feature-class) accumulator
+    /// for the in-flight paint.
     /// Mutated only on the compositor render thread (between
     /// <see cref="BeginPaint"/> and <see cref="EndPaintAndEmit"/>),
     /// so no locking is required.
     /// </summary>
-    private static readonly Dictionary<(string Style, string Layer, string PointBucket), StyleStats> PerPaint = new();
+    private static readonly Dictionary<PaintMetricKey, StyleStats> PerPaint = new();
 
     private sealed class StyleStats
     {
@@ -96,19 +97,18 @@ internal static class MapPaintInstrumentation
         public double DurationMs;
     }
 
+    internal readonly record struct PaintMetricKey(
+        string Style,
+        string Layer,
+        string PointBucket,
+        string FeatureClass);
+
     public static void Install()
     {
         lock (Sync)
         {
             if (_installed) return;
             _installed = true;
-
-            // Make sure our pattern-fill renderer is in the dict
-            // before we wrap. Subsequent registrations of the same
-            // style type overwrite, so this is safe even if Render()
-            // hasn't run yet.
-            EncDotNet.S100.Renderers.Mapsui.AnchoredPatternFillRenderer.Register();
-            EncDotNet.S100.Renderers.Mapsui.OverscaleCurtainRenderer.Register();
 
             var dictField = typeof(MapRenderer).GetField(
                 "_styleRenderers",
@@ -177,8 +177,9 @@ internal static class MapPaintInstrumentation
             var styleTag = new KeyValuePair<string, object?>("style", key.Style);
             var layerTag = new KeyValuePair<string, object?>("layer", key.Layer);
             var bucketTag = new KeyValuePair<string, object?>("points", key.PointBucket);
-            StyleCallsPerPaint.Record(stats.Calls, styleTag, layerTag, bucketTag);
-            StyleDurationPerPaint.Record(stats.DurationMs, styleTag, layerTag, bucketTag);
+            var featureClassTag = new KeyValuePair<string, object?>("featureClass", key.FeatureClass);
+            StyleCallsPerPaint.Record(stats.Calls, styleTag, layerTag, bucketTag, featureClassTag);
+            StyleDurationPerPaint.Record(stats.DurationMs, styleTag, layerTag, bucketTag, featureClassTag);
         }
     }
 
@@ -242,9 +243,31 @@ internal static class MapPaintInstrumentation
         _ => "100k+",
     };
 
-    private static StyleStats GetStats(string styleName, string layerName, string pointBucket)
+    internal static PaintMetricKey CreateMetricKey(string styleName, string layerName, IFeature feature)
     {
-        var key = (styleName, layerName, pointBucket);
+        ArgumentNullException.ThrowIfNull(feature);
+
+        var pointCount = (feature is GeometryFeature geometryFeature && geometryFeature.Geometry is not null)
+            ? geometryFeature.Geometry.NumPoints
+            : -1;
+        var featureClass = feature[FeatureTagKeys.FeatureType] as string;
+        if (string.IsNullOrWhiteSpace(featureClass))
+        {
+            featureClass = "(unclassified)";
+        }
+
+        return new PaintMetricKey(styleName, layerName, BucketPoints(pointCount), featureClass);
+    }
+
+    internal static void RecordDraw(PaintMetricKey key, double durationMs)
+    {
+        var stats = GetStats(key);
+        stats.Calls++;
+        stats.DurationMs += durationMs;
+    }
+
+    private static StyleStats GetStats(PaintMetricKey key)
+    {
         if (!PerPaint.TryGetValue(key, out var stats))
         {
             stats = new StyleStats();
@@ -281,10 +304,7 @@ internal static class MapPaintInstrumentation
             // exclusive on this control).
             if (_innerSkia is null) return false;
 
-            var pointCount = (feature is GeometryFeature gf && gf.Geometry is not null)
-                ? gf.Geometry.NumPoints
-                : -1;
-            var stats = GetStats(_styleName, layer.Name ?? "(unnamed)", BucketPoints(pointCount));
+            var key = CreateMetricKey(_styleName, layer.Name ?? "(unnamed)", feature);
             var startTimestamp = Stopwatch.GetTimestamp();
             try
             {
@@ -292,8 +312,7 @@ internal static class MapPaintInstrumentation
             }
             finally
             {
-                stats.Calls++;
-                stats.DurationMs += Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
+                RecordDraw(key, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
             }
         }
     }

@@ -1,5 +1,11 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -32,6 +38,39 @@ public class GlobalTimeServiceTests
         Assert.False(s.IsActive);
         Assert.Null(s.MinTime);
         Assert.Null(s.MaxTime);
+    }
+
+    [Fact]
+    public void AttachTo_publishes_existing_session_time_state()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = new MapsuiMapSession(
+            new MapsuiLayerBands(map),
+            owner,
+            new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),
+            new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()));
+        var time = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("timed");
+        Assert.True(owner.TryRegister(id, new SessionTimeProcessor(time)));
+        session.SetDataset(new MapDataset(
+            id,
+            id.Value,
+            new DatasetMetadata
+            {
+                Spec = new SpecRef("S-104", new SpecVersion(1, 0, 0)),
+            }));
+        var service = new GlobalTimeService();
+        var rangeChanged = 0;
+        DateTime? currentChanged = null;
+        service.RangeChanged += () => rangeChanged++;
+        service.CurrentTimeChanged += current => currentChanged = current;
+
+        service.AttachTo(session);
+
+        Assert.Equal(1, rangeChanged);
+        Assert.Equal(time, currentChanged);
+        Assert.Equal(time, service.CurrentTime);
     }
 
     [Fact]
@@ -152,5 +191,22 @@ public class GlobalTimeServiceTests
 
         vm.PreviousStepCommand.Execute(null);
         Assert.Equal(t2, s.CurrentTime);
+    }
+
+    private sealed class IdentityCrsTransformFactory : ICrsTransformFactory
+    {
+        public ICrsTransform Create(string sourceCrs, string targetCrs) =>
+            IdentityCrsTransform.Instance;
+    }
+
+    private sealed class SessionTimeProcessor(DateTime time) :
+        IDatasetProcessor,
+        ITimeAwareDatasetProcessor
+    {
+        public SpecRef Spec => new("S-104", new SpecVersion(1, 0, 0));
+
+        public IReadOnlyList<DateTime> AvailableTimes { get; } = [time];
+
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
     }
 }
