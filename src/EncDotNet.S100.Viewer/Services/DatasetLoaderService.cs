@@ -41,6 +41,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// or before the map control exists) disables the wait.
     /// </summary>
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
+    private readonly IMapViewportNotifier _viewportNotifier;
 
     private readonly Dictionary<MapDatasetId, DatasetEntry> _processorEntries = [];
     private readonly Dictionary<MapDatasetId, DatasetEntry> _sessionEntries = [];
@@ -71,6 +72,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         GlobalTimeService globalTime,
         INotificationService notifications,
         DatasetProcessorOwner processorOwner,
+        IMapViewportNotifier viewportNotifier,
         IRenderActivityMonitor? renderActivityMonitor = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -84,6 +86,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(notifications);
         ArgumentNullException.ThrowIfNull(processorOwner);
+        ArgumentNullException.ThrowIfNull(viewportNotifier);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -96,6 +99,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _globalTime = globalTime;
         _notifications = notifications;
         _processorOwner = processorOwner;
+        _viewportNotifier = viewportNotifier;
         _renderActivityMonitor = renderActivityMonitor;
 
     }
@@ -827,9 +831,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         using var __cmd = ViewerObservability.BeginCommand("presentation.apply");
         _mapSession?.SetMarinerSettings(presentation.Mariner);
         Volatile.Write(ref _presentation, presentation);
+        // Re-portray only the cells currently in view; off-view cells are
+        // deferred and re-portrayed lazily as they scroll in (see
+        // RefreshRevealedAsync). A null viewport (map not laid out yet) falls back
+        // to re-portraying everything.
         if (_mapSession is not null
             && await _mapSession.RefreshAsync(
                 presentation,
+                ToMercatorViewport(_viewportNotifier.Current),
                 cancellationToken).ConfigureAwait(true))
         {
             _notifications.Create(Strings.Toast_Success)
@@ -837,6 +846,43 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 .WithContent(Strings.Toast_SettingsApplied)
                 .Show();
         }
+    }
+
+    /// <summary>
+    /// Re-portrays cells that a prior viewport-gated presentation change deferred
+    /// as off-view and that now intersect <paramref name="snapshot"/>. Must be
+    /// invoked on the UI thread (it composes the map layer stack). A no-op when
+    /// the map is not initialized or the snapshot cannot be projected.
+    /// </summary>
+    public async Task RefreshRevealedAsync(MapViewportSnapshot? snapshot)
+    {
+        if (_mapSession is null)
+            return;
+        if (ToMercatorViewport(snapshot) is not { } viewport)
+            return;
+
+        await _mapSession.RefreshRevealedAsync(viewport).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Projects a lat/lon viewport snapshot to an EPSG:3857 rectangle for the
+    /// session's extent-based refresh gate, or <see langword="null"/> when the
+    /// snapshot is absent or degenerate.
+    /// </summary>
+    private static Mapsui.MRect? ToMercatorViewport(MapViewportSnapshot? snapshot)
+    {
+        if (snapshot is null
+            || snapshot.LongitudeSpanDegrees <= 0
+            || snapshot.LatitudeSpanDegrees <= 0)
+        {
+            return null;
+        }
+
+        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(
+            snapshot.MinLongitude, snapshot.MinLatitude);
+        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(
+            snapshot.MaxLongitude, snapshot.MaxLatitude);
+        return new Mapsui.MRect(minX, minY, maxX, maxY);
     }
 
     private async Task<MapsuiDatasetResult?> RenderAndReplaceAsync(

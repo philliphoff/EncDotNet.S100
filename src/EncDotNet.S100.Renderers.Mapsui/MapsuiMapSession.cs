@@ -59,6 +59,22 @@ public sealed class MapsuiMapSession : IDisposable
     private static readonly int MaxRefreshConcurrency =
         Math.Max(2, Environment.ProcessorCount / 2);
 
+    /// <summary>
+    /// The fraction of the viewport's width/height added as a margin on each
+    /// side when gating which cells a presentation refresh re-portrays now, so a
+    /// cell whose symbols or over-render reach just outside the visible box is
+    /// still refreshed eagerly rather than deferred to a reveal.
+    /// </summary>
+    private const double ViewportRefreshMarginFraction = 0.5;
+
+    /// <summary>
+    /// The most recent presentation applied by <see cref="RefreshAsync"/>, used
+    /// to re-portray a cell that was deferred as off-view when it later scrolls
+    /// into view (<see cref="RefreshRevealedAsync"/>). Immutable; a plain
+    /// reference read/write under <c>_sync</c> is sufficient.
+    /// </summary>
+    private MapPresentationState? _currentPresentation;
+
     /// <summary>Creates a Mapsui dataset-layer session.</summary>
     /// <param name="layerBands">The map layer bands the session will mutate.</param>
     /// <param name="processorOwner">The owner from which render leases are acquired.</param>
@@ -423,6 +439,8 @@ public sealed class MapsuiMapSession : IDisposable
             await RefreshCoreAsync(
                 presentation,
                 timeAwareOnly: true,
+                viewport: null,
+                staleOnly: false,
                 localCts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -440,11 +458,20 @@ public sealed class MapsuiMapSession : IDisposable
     }
 
     /// <summary>
-    /// Cancels the preceding full refresh and re-renders every registered
-    /// dataset through the shared render gate while preserving time gating.
+    /// Cancels the preceding full refresh and re-renders registered datasets
+    /// through the shared render gate while preserving time gating.
     /// </summary>
     /// <param name="presentation">
     /// The immutable map presentation used to construct product contexts.
+    /// </param>
+    /// <param name="viewport">
+    /// The current EPSG:3857 viewport, or <see langword="null"/> to re-portray
+    /// every registered dataset (the legacy behaviour). When supplied, only
+    /// cells whose extent intersects the viewport (grown by a margin) are
+    /// re-portrayed now; off-view cells are marked stale and re-portrayed lazily
+    /// by <see cref="RefreshRevealedAsync"/> when they scroll into view. This
+    /// keeps a presentation change over a large exchange set proportional to the
+    /// visible cell count rather than the loaded cell count.
     /// </param>
     /// <param name="cancellationToken">Cancels the requested refresh.</param>
     /// <returns>
@@ -453,6 +480,7 @@ public sealed class MapsuiMapSession : IDisposable
     /// </returns>
     public async Task<bool> RefreshAsync(
         MapPresentationState presentation,
+        MRect? viewport = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -461,6 +489,7 @@ public sealed class MapsuiMapSession : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
+            _currentPresentation = presentation;
             _presentationRefreshCts?.Cancel();
             localCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
@@ -472,6 +501,8 @@ public sealed class MapsuiMapSession : IDisposable
             await RefreshCoreAsync(
                 presentation,
                 timeAwareOnly: false,
+                viewport,
+                staleOnly: false,
                 localCts.Token).ConfigureAwait(true);
             return true;
         }
@@ -490,14 +521,69 @@ public sealed class MapsuiMapSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Re-portrays the cells that a prior viewport-gated <see cref="RefreshAsync"/>
+    /// deferred as off-view (<see cref="Entry.NeedsRefresh"/>) and that now
+    /// intersect <paramref name="viewport"/>, using the most recently applied
+    /// presentation. A no-op when no presentation has been applied yet or no
+    /// stale cell is in view. Intended to be driven (debounced) from the host's
+    /// viewport-changed signal so a deferred cell refreshes as it scrolls in.
+    /// </summary>
+    /// <param name="viewport">The current EPSG:3857 viewport.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when the pass ran to completion, or
+    /// <see langword="false"/> when it was cancelled/superseded.
+    /// </returns>
+    public async Task<bool> RefreshRevealedAsync(
+        MRect viewport,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        MapPresentationState? presentation;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            presentation = _currentPresentation;
+        }
+
+        if (presentation is null)
+            return false;
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: true,
+                cancellationToken).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
     private async Task RefreshCoreAsync(
         MapPresentationState presentation,
         bool timeAwareOnly,
+        MRect? viewport,
+        bool staleOnly,
         CancellationToken cancellationToken)
     {
         var kind = timeAwareOnly
             ? MapSessionRenderKind.TimeRefresh
             : MapSessionRenderKind.PresentationRefresh;
+
+        // Grow the viewport by a margin so a cell whose symbols/over-render reach
+        // just outside the visible box is refreshed eagerly rather than deferred.
+        var gate = viewport?.Grow(
+            viewport.Width * ViewportRefreshMarginFraction,
+            viewport.Height * ViewportRefreshMarginFraction);
+
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
@@ -534,7 +620,7 @@ public sealed class MapsuiMapSession : IDisposable
                 async (datasetId, ct) =>
                 {
                     if (await RefreshDatasetAsync(
-                        datasetId, presentation, timeAwareOnly, kind, ct)
+                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct)
                         .ConfigureAwait(false))
                     {
                         Interlocked.Exchange(ref needsCompose, 1);
@@ -569,20 +655,32 @@ public sealed class MapsuiMapSession : IDisposable
 
     /// <summary>
     /// Refreshes one dataset as part of a bulk <see cref="RefreshCoreAsync"/>
-    /// pass: applies the time-policy gate, clears a time-aware cell that has no
-    /// sample for the current clock, or re-portrays the cell with deferred
-    /// composition (<c>compose: false</c>). A per-dataset failure is surfaced as
-    /// <see cref="DatasetRenderFailed"/> and swallowed so siblings keep
-    /// refreshing; a cancellation still propagates to cancel the whole pass.
+    /// pass: applies the viewport and time-policy gates, clears a time-aware cell
+    /// that has no sample for the current clock, or re-portrays the cell with
+    /// deferred composition (<c>compose: false</c>).
+    /// <para>
+    /// Viewport gating (presentation refreshes only): when <paramref name="gate"/>
+    /// is non-null, a cell whose extent falls outside it is <em>not</em>
+    /// re-portrayed — a normal pass marks it stale (<see cref="Entry.NeedsRefresh"/>)
+    /// and a <paramref name="staleOnly"/> reveal pass skips any cell that is not
+    /// both stale and in view. Time refreshes pass a null gate and never touch
+    /// the stale flag, so presentation-staleness survives a time scrub.
+    /// </para>
+    /// <para>
+    /// A per-dataset failure is surfaced as <see cref="DatasetRenderFailed"/> and
+    /// swallowed so siblings keep refreshing; a cancellation still propagates.
     /// Safe to run concurrently for distinct datasets — it touches only this
     /// dataset's entry (under <c>_sync</c>) and the thread-safe portrayal
     /// pipeline. Returns <see langword="true"/> when a new rendering was applied
     /// and the stack therefore needs composing.
+    /// </para>
     /// </summary>
     private async Task<bool> RefreshDatasetAsync(
         MapDatasetId datasetId,
         MapPresentationState presentation,
         bool timeAwareOnly,
+        MRect? gate,
+        bool staleOnly,
         MapSessionRenderKind kind,
         CancellationToken cancellationToken)
     {
@@ -596,6 +694,34 @@ public sealed class MapsuiMapSession : IDisposable
             policy = entry.TimePolicy;
             if (timeAwareOnly && policy is null)
                 return false;
+
+            // Viewport gating and stale tracking apply to presentation refreshes
+            // and their reveal passes, never to time refreshes (gate is null and
+            // the stale flag is left untouched, so a time scrub does not clear a
+            // cell's presentation-staleness).
+            if (!timeAwareOnly)
+            {
+                var visible = gate is null
+                    || entry.Extent is null
+                    || entry.Extent.Intersects(gate);
+
+                if (staleOnly)
+                {
+                    // Reveal pass: only re-portray a cell previously deferred and
+                    // now back in view.
+                    if (!entry.NeedsRefresh || !visible)
+                        return false;
+                }
+                else if (!visible)
+                {
+                    // Off-view during a presentation change: defer it.
+                    entry.NeedsRefresh = true;
+                    return false;
+                }
+
+                // Committing to re-portray with the current presentation.
+                entry.NeedsRefresh = false;
+            }
 
             selectedTime = policy is not null && _time.Current is { } clock
                 ? policy.SnapTo(clock)
@@ -1785,6 +1911,13 @@ public sealed class MapsuiMapSession : IDisposable
         public IReadOnlyList<LayerStackEntry>? StackEntries { get; set; }
 
         public MRect? Extent { get; set; }
+
+        /// <summary>
+        /// Set when a presentation refresh deferred this cell because it was
+        /// off-view; a subsequent <see cref="RefreshRevealedAsync"/> re-portrays
+        /// it with <see cref="_currentPresentation"/> once it scrolls into view.
+        /// </summary>
+        public bool NeedsRefresh { get; set; }
 
         public string? Info { get; set; }
 

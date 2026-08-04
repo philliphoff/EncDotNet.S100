@@ -8,6 +8,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui;
 using Mapsui.Layers;
+using Mapsui.Projections;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -199,6 +200,53 @@ public sealed class MapsuiMapSessionTests
         Assert.True(await refresh);
         Assert.Equal(2, map.Layers.Count);
         Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
+    }
+
+    [Fact]
+    public async Task ViewportGatedRefreshDefersOffViewCellsAndRevealRefreshesThem()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        var nearId = new MapDatasetId("near");
+        var farId = new MapDatasetId("far");
+        var near = new StubProcessor(nearId.Value)
+        {
+            GeographicExtent = new GeographicBounds(-0.1, -0.1, 0.1, 0.1),
+        };
+        var far = new StubProcessor(farId.Value)
+        {
+            GeographicExtent = new GeographicBounds(99.9, -0.1, 100.1, 0.1),
+        };
+        Assert.True(owner.TryRegister(nearId, near));
+        Assert.True(owner.TryRegister(farId, far));
+        session.SetDataset(Dataset(nearId));
+        session.SetDataset(Dataset(farId));
+        await session.RenderAsync(nearId, MapPresentationState.Default);
+        await session.RenderAsync(farId, MapPresentationState.Default);
+        Assert.Equal(1, near.RenderCount);
+        Assert.Equal(1, far.RenderCount);
+        Assert.Equal(2, map.Layers.Count);
+
+        // Viewport-gated refresh covering only the near cell: the far cell is
+        // deferred, not re-portrayed.
+        Assert.True(await session.RefreshAsync(
+            MapPresentationState.Default, MercatorViewport(-1, -1, 1, 1)));
+        Assert.Equal(2, near.RenderCount);
+        Assert.Equal(1, far.RenderCount);
+        Assert.Equal(2, map.Layers.Count);
+
+        // A reveal pass over the far cell's area re-portrays it (and only it).
+        Assert.True(await session.RefreshRevealedAsync(MercatorViewport(99, -1, 101, 1)));
+        Assert.Equal(2, far.RenderCount);
+        Assert.Equal(2, near.RenderCount);
+        Assert.Equal(2, map.Layers.Count);
+
+        // A second reveal is a no-op — nothing is stale any more.
+        Assert.True(await session.RefreshRevealedAsync(MercatorViewport(99, -1, 101, 1)));
+        Assert.Equal(2, far.RenderCount);
+        Assert.Equal(2, near.RenderCount);
     }
 
     [Fact]
@@ -1109,6 +1157,14 @@ public sealed class MapsuiMapSessionTests
             authorityProvider ?? new InteroperabilityAuthorityProvider(
                 new InteroperabilityAuthority()));
 
+    private static MRect MercatorViewport(
+        double west, double south, double east, double north)
+    {
+        var (minX, minY) = SphericalMercator.FromLonLat(west, south);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(east, north);
+        return new MRect(minX, minY, maxX, maxY);
+    }
+
     private static MapDataset Dataset(
         MapDatasetId id,
         bool isVisible = true,
@@ -1171,6 +1227,13 @@ public sealed class MapsuiMapSessionTests
         public int? CellMinimumDisplayScale { get; set; }
 
         public IReadOnlyList<CoverageArea> CoverageAreas { get; set; } = [];
+
+        /// <summary>
+        /// When set, flows to the portrayal result's
+        /// <c>GeographicExtent</c> so the rendered entry gets a controllable
+        /// Web-Mercator extent (used to exercise viewport-gated refresh).
+        /// </summary>
+        public GeographicBounds? GeographicExtent { get; set; }
 
         public TimeSpan Delay { get; set; }
 
@@ -1252,6 +1315,7 @@ public sealed class MapsuiMapSessionTests
                     },
                 CellMinimumDisplayScale = CellMinimumDisplayScale,
                 CoverageAreas = CoverageAreas,
+                GeographicExtent = GeographicExtent,
             };
         }
 
