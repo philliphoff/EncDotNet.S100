@@ -66,6 +66,7 @@ public static class S100MapExtensions
             layerBands, processorOwner, renderer, authorityProvider);
         var navigator = new MapsuiMapNavigator(map);
 
-        return new S100MapSession(processorOwner, session, navigator);
+        return new S100MapSession(
+            processorOwner, session, navigator, options.DatasetPipelineFactory);
     }
 }

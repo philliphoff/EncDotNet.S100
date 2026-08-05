@@ -33,6 +33,9 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// <summary>The navigation surface bound to the same map.</summary>
     MapsuiMapNavigator Navigator { get; }
 
+    /// <summary>Loads datasets into this session from a file path.</summary>
+    IS100DatasetLoader Datasets { get; }
+
     /// <summary>Raised after the final dataset-band projection changes.</summary>
     event EventHandler? LayersChanged;
 

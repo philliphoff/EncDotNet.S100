@@ -12,18 +12,21 @@ internal sealed class S100MapSession : IS100MapSession
     private readonly DatasetProcessorOwner _processorOwner;
     private readonly MapsuiMapSession _session;
     private readonly MapsuiMapNavigator _navigator;
+    private readonly S100DatasetLoader _datasets;
     private MapPresentationState _presentation = MapPresentationState.Default;
     private bool _disposed;
 
     internal S100MapSession(
         DatasetProcessorOwner processorOwner,
         MapsuiMapSession session,
-        MapsuiMapNavigator navigator)
+        MapsuiMapNavigator navigator,
+        DatasetPipelineFactory? pipelineFactory = null)
     {
         _processorOwner = processorOwner
             ?? throw new ArgumentNullException(nameof(processorOwner));
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _navigator = navigator ?? throw new ArgumentNullException(nameof(navigator));
+        _datasets = new S100DatasetLoader(this, pipelineFactory);
 
         _session.LayersChanged += OnLayersChanged;
         _session.TimeRangeChanged += OnTimeRangeChanged;
@@ -50,6 +53,16 @@ internal sealed class S100MapSession : IS100MapSession
         {
             ThrowIfDisposed();
             return _navigator;
+        }
+    }
+
+    /// <inheritdoc />
+    public IS100DatasetLoader Datasets
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _datasets;
         }
     }
 

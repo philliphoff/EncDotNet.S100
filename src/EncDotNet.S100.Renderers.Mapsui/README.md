@@ -149,9 +149,13 @@ layer bands, processor ownership, the renderer, the session, and the navigator b
 hand or knows the renderer registration order:
 
 ```csharp
-using var s100 = map.AddS100(new ProjNetCrsTransformFactory());
+using var s100 = map.AddS100(new ProjNetCrsTransformFactory(), new S100MapsuiOptions
+{
+    DatasetPipelineFactory = pipelineFactory,   // enables loading from a path
+});
 
-await s100.AddDatasetAsync(mapDataset, processor);   // registers + renders
+await s100.Datasets.LoadAsync("cell.000");      // detect spec, build, render
+await s100.AddDatasetAsync(mapDataset, processor); // or add a pre-built processor
 await s100.SetPresentationAsync(presentation);
 await s100.SetTimeAsync(time);
 s100.ZoomToDataset(mapDataset.Id);
@@ -167,11 +171,19 @@ rotation stay with `Map.Navigator`; `ZoomToDataset` is an optional convenience.
 The reusable assembly ships no CRS implementation, so `crsTransformFactory` is a
 required argument (the coverage / arrow renderers need it); a host supplies
 `ProjNetCrsTransformFactory` from `EncDotNet.S100.Crs.ProjNet` or its own. The
-optional `S100MapsuiOptions` carries render-subsystem/scene configuration and an
-optional S-98 authority provider and pattern-clip cache. This first API renders
-**caller-supplied processors** via `AddDatasetAsync`; file / exchange-set
-loading (`Datasets.LoadAsync(path)`) and DI registration helpers are later
-additions.
+optional `S100MapsuiOptions` carries render-subsystem/scene configuration, an
+optional S-98 authority provider and pattern-clip cache, and the
+`DatasetPipelineFactory` used by `Datasets.LoadAsync`.
+
+`s100.Datasets.LoadAsync(path)` detects the product spec, builds a processor
+with the host-supplied `DatasetPipelineFactory` (an ENC `.000` base cell also
+picks up sibling `.001`/`.002` updates), constructs a renderer-neutral
+`MapDataset`, and registers + renders it — returning the dataset id. It covers a
+**single standalone file / cell**; exchange-set folder/ZIP loading and DI
+registration helpers are later additions. Hosts that only add pre-built
+processors via `AddDatasetAsync` need no factory. Load *policy* (duplicate-cell
+suppression, per-product default visibility, catalogue prompts, notifications)
+stays with the host — it is UX, not part of the reusable load.
 
 The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI

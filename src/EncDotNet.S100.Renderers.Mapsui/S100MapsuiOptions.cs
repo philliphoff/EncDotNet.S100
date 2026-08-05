@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -41,4 +42,15 @@ public sealed class S100MapsuiOptions
     /// cache is used for the session's lifetime.
     /// </summary>
     public IPatternClipCache? PatternClipCache { get; init; }
+
+    /// <summary>
+    /// Gets the fully-configured dataset pipeline factory used to build
+    /// processors when loading datasets from a path
+    /// (<see cref="IS100DatasetLoader.LoadAsync"/>). The host chooses which
+    /// products and portrayal catalogues the factory supports. When
+    /// <see langword="null"/>, path-based loading throws; the caller can still
+    /// add pre-built processors via
+    /// <see cref="IS100MapSession.AddDatasetAsync"/>.
+    /// </summary>
+    public DatasetPipelineFactory? DatasetPipelineFactory { get; init; }
 }
