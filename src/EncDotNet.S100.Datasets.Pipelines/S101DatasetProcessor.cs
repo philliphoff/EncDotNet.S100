@@ -1,5 +1,6 @@
 using System.Text;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S101.Validation;
@@ -1082,6 +1083,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // EnumerateFeatures' enumeration position.
         var feature = System.Linq.Enumerable.ElementAt(_featureIndex.Values, ordinal);
         return BuildFeatureInfo(feature);
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
+        double latitude, double longitude, double radiusMeters)
+    {
+        // Enumerate the same insertion-ordered feature index GetFeatureInfoAt
+        // indexes, so each hit's Ordinal round-trips to the same feature.
+        _featureIndex ??= BuildFeatureIndex();
+        return FeatureHitTester.HitTest(_featureIndex.Values, latitude, longitude, radiusMeters);
     }
 
     private void EnsureDecoder()

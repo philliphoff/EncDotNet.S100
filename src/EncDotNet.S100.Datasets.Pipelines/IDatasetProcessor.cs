@@ -112,6 +112,36 @@ public interface IDatasetProcessor
     FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time) => null;
 
     /// <summary>
+    /// Hit-tests this dataset's vector features against a geographic point,
+    /// returning every feature whose geometry contains the point (area
+    /// features) or lies within <paramref name="radiusMeters"/> of it (point /
+    /// curve features), in feature-enumeration order. The reusable geographic
+    /// complement to <see cref="GetCoverageInfo"/>: a caller resolves each hit
+    /// to full attributes via <see cref="GetFeatureInfoAt"/> (or
+    /// <see cref="GetFeatureInfo"/>) and ranks the results across datasets
+    /// itself — for example by a rendering paint stack, which the processor
+    /// contract deliberately knows nothing about.
+    /// </summary>
+    /// <param name="latitude">Pick latitude in WGS-84 degrees.</param>
+    /// <param name="longitude">Pick longitude in WGS-84 degrees.</param>
+    /// <param name="radiusMeters">
+    /// Search tolerance for point/curve features in metres; area features use
+    /// exact containment and ignore it. Negative or non-finite values are
+    /// treated as 0.
+    /// </param>
+    /// <returns>
+    /// The matching features in enumeration order — each
+    /// <see cref="FeatureGeometryHit.Ordinal"/> aligns with
+    /// <see cref="GetFeatureInfoAt"/> — or an empty list. Vector processors
+    /// override this; coverage / non-vector processors leave the default empty
+    /// implementation and expose picks through <see cref="GetCoverageInfo"/>
+    /// instead.
+    /// </returns>
+    IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
+        double latitude, double longitude, double radiusMeters)
+        => System.Array.Empty<FeatureGeometryHit>();
+
+    /// <summary>
     /// Enumerates a lightweight summary of every feature exposed by this
     /// processor — used to seed the viewer's feature-search index without
     /// forcing a full <see cref="GetFeatureInfo"/> call per feature.
