@@ -51,36 +51,28 @@ public class FeatureHitTesterTests
     }
 
     [Fact]
-    public void HitTest_OutsideAreaEdge_MatchesNearOnlyWithinRadius()
+    public void HitTest_OutsideArea_DoesNotMatchEvenWithinRadius()
     {
-        // Square edge is at 0.1°; pick ~55 m east of the edge (0.1005°).
+        // Square edge is at 0.1°; pick ~55 m east of the edge (0.1005°). Areas
+        // match by exact containment and ignore the radius, so even a very wide
+        // radius must not turn a just-outside pick into a hit.
         var features = new[] { Square("area", half: 0.1) };
 
-        var near = FeatureHitTester.HitTest(features, 0.0, 0.1005, radiusMeters: 200.0);
-        var tooTight = FeatureHitTester.HitTest(features, 0.0, 0.1005, radiusMeters: 10.0);
-
-        var hit = Assert.Single(near);
-        Assert.False(hit.Inside);
-        Assert.True(hit.DistanceMeters > 0.0);
-        Assert.Empty(tooTight);
+        Assert.Empty(FeatureHitTester.HitTest(features, 0.0, 0.1005, radiusMeters: 200.0));
+        Assert.Empty(FeatureHitTester.HitTest(features, 0.0, 0.1005, radiusMeters: 100_000.0));
     }
 
     [Fact]
-    public void HitTest_InsideHole_IsNotInside()
+    public void HitTest_InsideHole_DoesNotMatch()
     {
         // Exterior half 0.5° with a concentric hole of half 0.1°. The origin
-        // sits inside the hole, so it is not "inside" the area; the nearest
-        // ring edge (the hole) is ~11 km away.
+        // sits inside the hole, so it is not contained by the area — and since
+        // areas ignore the radius, it never matches however wide the radius.
         var hole = Ring(0.1);
         var features = new[] { Square("donut", half: 0.5, hole) };
 
-        var noMatch = FeatureHitTester.HitTest(features, 0.0, 0.0, radiusMeters: 100.0);
-        var edgeMatch = FeatureHitTester.HitTest(features, 0.0, 0.0, radiusMeters: 20_000.0);
-
-        Assert.Empty(noMatch);
-        var hit = Assert.Single(edgeMatch);
-        Assert.False(hit.Inside);
-        Assert.True(hit.DistanceMeters > 0.0);
+        Assert.Empty(FeatureHitTester.HitTest(features, 0.0, 0.0, radiusMeters: 100.0));
+        Assert.Empty(FeatureHitTester.HitTest(features, 0.0, 0.0, radiusMeters: 20_000.0));
     }
 
     [Fact]

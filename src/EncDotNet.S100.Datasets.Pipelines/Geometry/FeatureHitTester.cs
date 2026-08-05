@@ -46,9 +46,14 @@ public static class FeatureHitTester
         var ordinal = 0;
         foreach (var feature in features)
         {
+            // Area (surface) features match by exact containment and ignore the
+            // radius; point/curve features match within it. So a surface hit is
+            // always Inside=true and a point/curve hit always Inside=false.
             if (feature is not null
                 && GeometryDistance.Measure(feature, point) is { } distance
-                && (distance.Inside || distance.DistanceMeters <= radius))
+                && (distance.Primitive == S100GeometryType.Surface
+                    ? distance.Inside
+                    : distance.DistanceMeters <= radius))
             {
                 (hits ??= []).Add(new FeatureGeometryHit
                 {
