@@ -39,7 +39,12 @@ public static class S100MapsuiServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         if (optionsFactory is not null)
-            services.TryAddSingleton(optionsFactory);
+        {
+            // Explicit type argument so this binds the
+            // Func<IServiceProvider, TService> factory overload and registers
+            // S100MapsuiOptions (not the delegate itself).
+            services.TryAddSingleton<S100MapsuiOptions>(optionsFactory);
+        }
 
         // Transient (not singleton) so the factory captures the IServiceProvider
         // of whatever scope resolves it: a singleton would capture the root
