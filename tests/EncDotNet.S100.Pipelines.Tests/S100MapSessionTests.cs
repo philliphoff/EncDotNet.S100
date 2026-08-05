@@ -8,6 +8,7 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using Mapsui;
+using Mapsui.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -362,6 +363,196 @@ public class S100MapSessionTests
         using var s100 = factory.Create(map);
         Assert.NotNull(s100);
     }
+
+    [Fact]
+    public async Task PickAsyncRanksTopmostStackDatasetFirst()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var bottomId = new MapDatasetId("bottom");
+        var topId = new MapDatasetId("top");
+        await s100.AddDatasetAsync(
+            Dataset(bottomId),
+            new StubProcessor(bottomId.Value) { Hits = [Hit(0, "b", S100GeometryType.Surface)] });
+        await s100.AddDatasetAsync(
+            Dataset(topId),
+            new StubProcessor(topId.Value) { Hits = [Hit(0, "t", S100GeometryType.Surface)] });
+        s100.SetOrder([bottomId, topId]); // top painted last = topmost
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+
+        Assert.Equal([topId, bottomId], picks.Select(p => p.DatasetId));
+    }
+
+    [Fact]
+    public async Task PickAsyncRanksPointBeforeAreaWithinDataset()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                Hits =
+                [
+                    Hit(0, "area", S100GeometryType.Surface),
+                    Hit(1, "point", S100GeometryType.Point),
+                ],
+            });
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+
+        Assert.Equal(["point", "area"], picks.Select(p => p.Info.FeatureRef));
+    }
+
+    [Fact]
+    public async Task PickAsyncExcludesHiddenAndInactiveDatasets()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var shownId = new MapDatasetId("shown");
+        var hiddenId = new MapDatasetId("hidden");
+        var inactiveId = new MapDatasetId("inactive");
+        await s100.AddDatasetAsync(
+            Dataset(shownId),
+            new StubProcessor(shownId.Value) { Hits = [Hit(0, "s", S100GeometryType.Point)] });
+        await s100.AddDatasetAsync(
+            Dataset(hiddenId),
+            new StubProcessor(hiddenId.Value) { Hits = [Hit(0, "h", S100GeometryType.Point)] });
+        await s100.AddDatasetAsync(
+            Dataset(inactiveId),
+            new StubProcessor(inactiveId.Value) { Hits = [Hit(0, "i", S100GeometryType.Point)] });
+        s100.SetVisible(hiddenId, false);
+        s100.SetActive(inactiveId, false);
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+
+        Assert.Equal(shownId, Assert.Single(picks).DatasetId);
+    }
+
+    [Fact]
+    public async Task PickAsyncExcludesFullyTransparentDatasets()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] });
+        s100.SetOpacity(id, 0.0);
+
+        Assert.Empty(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+    }
+
+    [Fact]
+    public async Task PickAsyncReturnsCoverageSampleWhenNoVectorHit()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("coverage");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                Hits = [],
+                CoverageInfo = new FeatureInfo
+                {
+                    FeatureRef = "sample",
+                    FeatureType = "WaterLevel",
+                    Attributes = [],
+                },
+            });
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+
+        var pick = Assert.Single(picks);
+        Assert.True(pick.IsCoverage);
+        Assert.Equal("sample", pick.Info.FeatureRef);
+    }
+
+    [Fact]
+    public async Task PickAsyncHonorsMaxResults()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                Hits =
+                [
+                    Hit(0, "a", S100GeometryType.Point),
+                    Hit(1, "b", S100GeometryType.Point),
+                ],
+            });
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, MaxResults = 1 });
+
+        Assert.Single(picks);
+    }
+
+    [Fact]
+    public async Task PickAsyncReturnsEmptyWhenNothingHit()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+
+        Assert.Empty(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+    }
+
+    [SkippableFact]
+    public async Task PickAsyncResolvesFeaturesInRealS101Cell()
+    {
+        var basePath = Environment.GetEnvironmentVariable("ENCDOTNET_S101_BASE_CELL");
+        Skip.If(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
+        Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
+
+        using var map = new Map();
+        using var s100 = map.AddS100(
+            new ProjNetCrsTransformFactory(),
+            new S100MapsuiOptions { DatasetPipelineFactory = CreateFactory() });
+        var id = await s100.Datasets.LoadAsync(basePath!);
+
+        // Pick at the cell's extent centroid — a dense S-101 cell's area coverage
+        // (e.g. depth areas) all but guarantees a hit there.
+        var extent = s100.GetDataset(id)!.Extent!;
+        var (longitude, latitude) = SphericalMercator.ToLonLat(
+            extent.Centroid.X, extent.Centroid.Y);
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = latitude, Longitude = longitude });
+
+        Assert.NotEmpty(picks);
+        Assert.All(picks, p => Assert.Equal(id, p.DatasetId));
+        Assert.NotNull(picks[0].Info);
+    }
+
+    private static FeatureGeometryHit Hit(
+        int ordinal,
+        string reference,
+        S100GeometryType primitive,
+        bool inside = true,
+        double distanceMeters = 0.0) =>
+        new()
+        {
+            FeatureRef = reference,
+            Ordinal = ordinal,
+            FeatureType = "TEST",
+            Primitive = primitive,
+            Inside = inside,
+            DistanceMeters = distanceMeters,
+        };
 
     private static DatasetPipelineFactory CreateFactory()
     {
