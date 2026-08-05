@@ -137,6 +137,82 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
         });
 
     /// <summary>
+    /// The default point/curve pick tolerance in metres, mirroring
+    /// <see cref="EncDotNet.S100.Renderers.Mapsui.GeographicPickQuery.RadiusMeters"/>.
+    /// </summary>
+    public const double DefaultPickRadiusMeters = 50.0;
+
+    /// <summary>
+    /// Picks the S-100 features and coverage samples under a live-viewport pixel
+    /// by translating it to a geographic query against a session's
+    /// <see cref="EncDotNet.S100.Renderers.Mapsui.IS100MapQuery"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is the UI-framework interaction adapter for
+    /// <see cref="EncDotNet.S100.Renderers.Mapsui.IS100MapQuery.PickAsync"/>: it
+    /// reads the live viewport on the UI thread to convert the pixel to WGS-84
+    /// and to capture the current resolution (so the session can drop cells
+    /// scaled out at this zoom), then runs the pick off the UI thread. Pointer
+    /// gestures, hit panels, and selection remain the host's responsibility.
+    /// </remarks>
+    /// <param name="query">The session query surface to pick against.</param>
+    /// <param name="xPx">Horizontal live-control pixel coordinate.</param>
+    /// <param name="yPx">Vertical live-control pixel coordinate.</param>
+    /// <param name="radiusMeters">
+    /// Point/curve tolerance in metres; defaults to
+    /// <see cref="DefaultPickRadiusMeters"/>.
+    /// </param>
+    /// <param name="maxResults">
+    /// Optional cap on the returned picks (topmost-first).
+    /// </param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>
+    /// The ranked picks, topmost-first — empty when the pixel is invalid, the
+    /// viewport is not laid out, or the map CRS is unsupported.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="query"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The adapter is detached.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> is canceled.
+    /// </exception>
+    public async Task<IReadOnlyList<S100Pick>> PickAtScreenAsync(
+        IS100MapQuery query,
+        double xPx,
+        double yPx,
+        double radiusMeters = DefaultPickRadiusMeters,
+        int? maxResults = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var pickQuery = InvokeOnUiThread(
+            () => TryBuildScreenPickQuery(xPx, yPx, radiusMeters, maxResults));
+        if (pickQuery is null)
+        {
+            return Array.Empty<S100Pick>();
+        }
+
+        // Only a UI-thread caller can capture the UI sync-context. The default
+        // MapsuiMapSession.PickAsync resumes with ConfigureAwait(true); invoked
+        // directly from the UI thread its continuation would post back to that
+        // thread and a synchronous waiter (.GetAwaiter().GetResult()) would
+        // deadlock, so dispatch it onto the thread pool. Off the UI thread there
+        // is no context to capture, so call directly and skip the extra hop.
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return await Task.Run(
+                () => query.PickAsync(pickQuery, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return await query.PickAsync(pickQuery, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Converts a current-view snapshot pixel to WGS-84 using the same extent,
     /// fit, and rotation rules as <see cref="RenderCurrentViewToPngAsync"/>.
     /// </summary>
@@ -236,6 +312,46 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
     public void Dispose()
     {
         _disposed = true;
+    }
+
+    /// <summary>
+    /// Builds a geographic pick query from a live-viewport pixel on the UI
+    /// thread, or returns <see langword="null"/> when the pixel is invalid, the
+    /// viewport is not laid out, or the map CRS is unsupported.
+    /// </summary>
+    private GeographicPickQuery? TryBuildScreenPickQuery(
+        double xPx,
+        double yPx,
+        double radiusMeters,
+        int? maxResults)
+    {
+        if (!double.IsFinite(xPx) || !double.IsFinite(yPx))
+        {
+            return null;
+        }
+
+        var map = EnsureMapAttached();
+        var viewport = map.Navigator.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+        {
+            return null;
+        }
+
+        if (ToWgs84(viewport.ScreenToWorld(xPx, yPx), map.CRS) is not { } position)
+        {
+            return null;
+        }
+
+        return new GeographicPickQuery
+        {
+            Latitude = position.Latitude,
+            Longitude = position.Longitude,
+            RadiusMeters = radiusMeters,
+            // The live resolution lets the session's whole-cell scale window
+            // exclude cells scaled out at the current zoom.
+            Resolution = viewport.Resolution,
+            MaxResults = maxResults,
+        };
     }
 
     private static GeoPosition? ToWgs84(MPoint world, string? sourceCrs)
