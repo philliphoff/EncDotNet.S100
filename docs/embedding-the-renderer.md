@@ -85,7 +85,10 @@ hosts should instead call `map.AddS100(crsTransformFactory, options)`
 (`EncDotNet.S100.Renderers.Mapsui`), which composes the layer bands, processor
 ownership, dataset renderer, session, and navigator and returns a disposable
 `IS100MapSession` — see that package's README. It renders caller-supplied
-processors today; file/exchange-set loading and DI helpers are later additions.
+processors via `AddDatasetAsync`, and — when `options.DatasetPipelineFactory` is
+supplied — loads a single standalone file/cell from a path via
+`s100.Datasets.LoadAsync(path)`. Exchange-set folder/ZIP loading and DI helpers
+are later additions.
 
 Layer ownership uses the reusable `MapsuiLayerBands` component against
 `Mapsui.Map`, and viewport behavior delegates to `MapsuiMapNavigator` against

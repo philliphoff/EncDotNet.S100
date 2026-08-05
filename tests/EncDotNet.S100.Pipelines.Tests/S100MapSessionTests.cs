@@ -1,6 +1,12 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Specifications;
 using Mapsui;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -240,6 +246,59 @@ public class S100MapSessionTests
         Assert.Throws<ObjectDisposedException>(() => s100.GetDatasets());
         Assert.Throws<ObjectDisposedException>(() => s100.Session);
         Assert.Throws<ObjectDisposedException>(() => s100.Navigator);
+    }
+
+    [Fact]
+    public async Task LoadAsyncThrowsWhenNoPipelineFactoryConfigured()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+
+        // No DatasetPipelineFactory in options; the factory guard fires before
+        // the path is touched.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => s100.Datasets.LoadAsync("missing.000"));
+    }
+
+    [SkippableFact]
+    public async Task LoadAsyncLoadsRealS101CellAndRejectsDuplicate()
+    {
+        var basePath = Environment.GetEnvironmentVariable("ENCDOTNET_S101_BASE_CELL");
+        Skip.If(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
+        Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
+
+        using var map = new Map();
+        using var s100 = map.AddS100(
+            new ProjNetCrsTransformFactory(),
+            new S100MapsuiOptions { DatasetPipelineFactory = CreateFactory() });
+
+        var id = await s100.Datasets.LoadAsync(basePath!);
+
+        Assert.Equal(Path.GetFileName(basePath!), id.Value);
+        Assert.NotNull(s100.GetDataset(id));
+        Assert.NotEmpty(map.Layers);
+
+        // Re-loading the same path resolves to the same identity, which is
+        // already present, so the add is rejected.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => s100.Datasets.LoadAsync(basePath!));
+    }
+
+    private static DatasetPipelineFactory CreateFactory()
+    {
+        var pcManager = new PortrayalCatalogueManager();
+        foreach (var spec in Specification.AvailableSpecs)
+        {
+            if (Specification.HasPortrayalCatalogue(spec))
+                pcManager.SetSource(spec, Specification.CreatePortrayalCatalogueSource(spec));
+        }
+
+        return new DatasetPipelineFactory(
+            pcManager,
+            new MoonSharpLuaEngine(),
+            new ProjNetCrsTransformFactory(),
+            new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
+            new DisplayPlaneAuthorityProvider());
     }
 
     private static MapDataset Dataset(
