@@ -108,7 +108,16 @@ public class TileColdLatencyTelemetryTests
     [Fact]
     public void TileRasterize_emits_trace_with_tile_and_operation_context()
     {
+        // ActivityStopped fires on whatever thread the activity completes on,
+        // so unrelated renderer activities stopping concurrently can mutate the
+        // collection while we assert over it. The listener is process-global, so
+        // sibling tests rasterizing in parallel emit their own
+        // s100.render.tile.rasterize activities too. Scope the callback to this
+        // test's tile key, guard the list with a lock, and assert over a
+        // snapshot.
+        const string tileKeys = "3/2/4";
         var observed = new List<System.Diagnostics.Activity>();
+        var gate = new object();
         using var listener = new System.Diagnostics.ActivityListener
         {
             ShouldListenTo = source =>
@@ -116,7 +125,20 @@ public class TileColdLatencyTelemetryTests
             Sample = (ref System.Diagnostics.ActivityCreationOptions<
                 System.Diagnostics.ActivityContext> _) =>
                 System.Diagnostics.ActivitySamplingResult.AllData,
-            ActivityStopped = activity => observed.Add(activity),
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName != "s100.render.tile.rasterize"
+                    || (string?)activity.GetTagItem("s100.render.tile.keys")
+                        != tileKeys)
+                {
+                    return;
+                }
+
+                lock (gate)
+                {
+                    observed.Add(activity);
+                }
+            },
         };
         System.Diagnostics.ActivitySource.AddActivityListener(listener);
 
@@ -126,10 +148,14 @@ public class TileColdLatencyTelemetryTests
             new TileKey(3, 2, 4),
             deviceScale: 1);
 
-        var activity = Assert.Single(
-            observed,
-            activity => activity.OperationName == "s100.render.tile.rasterize");
-        Assert.Equal("3/2/4", activity.GetTagItem("s100.render.tile.keys"));
+        System.Diagnostics.Activity[] snapshot;
+        lock (gate)
+        {
+            snapshot = observed.ToArray();
+        }
+
+        var activity = Assert.Single(snapshot);
+        Assert.Equal(tileKeys, activity.GetTagItem("s100.render.tile.keys"));
         Assert.Equal(3, activity.GetTagItem("s100.render.tile.band"));
         Assert.Equal(0, activity.GetTagItem("s100.render.tile.candidate_operations"));
         Assert.NotNull(activity.GetTagItem("s100.render.tile.width_px"));
