@@ -1,5 +1,6 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Features;
@@ -376,6 +377,11 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             return null;
         return BuildFeatureInfo(Features[ordinal]);
     }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
+        double latitude, double longitude, double radiusMeters) =>
+        FeatureHitTester.HitTest(Features, latitude, longitude, radiusMeters);
 
     /// <inheritdoc/>
     public IEnumerable<FeatureSummary> EnumerateFeatures()
