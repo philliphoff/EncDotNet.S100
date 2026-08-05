@@ -1194,11 +1194,14 @@ public sealed class MapsuiMapSession : IDisposable
             {
                 if (!_entries.TryGetValue(id, out var entry))
                     continue;
-                if (!entry.Dataset.IsActive || !entry.Dataset.IsVisible || entry.Layers.Count == 0)
+                // Only datasets actually painted right now are pickable:
+                // IsDrawing covers active/visible/opacity and per-sub-layer
+                // visibility, and a missing stack index means the dataset is
+                // absent from the current S-98 projected stack (e.g. fully
+                // overlap-suppressed), so it is not on screen to pick.
+                if (!IsDrawing(entry) || !topStackIndex.TryGetValue(id.Value, out var index))
                     continue;
-                pickable.Add((
-                    id,
-                    topStackIndex.TryGetValue(id.Value, out var index) ? index : -1));
+                pickable.Add((id, index));
             }
         }
 

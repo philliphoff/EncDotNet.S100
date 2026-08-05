@@ -435,6 +435,21 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public async Task PickAsyncExcludesFullyTransparentDatasets()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] });
+        s100.SetOpacity(id, 0.0);
+
+        Assert.Empty(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+    }
+
+    [Fact]
     public async Task PickAsyncReturnsCoverageSampleWhenNoVectorHit()
     {
         using var map = new Map();
