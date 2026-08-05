@@ -37,11 +37,12 @@ internal sealed class S100DatasetLoader : IS100DatasetLoader
 
         var factory = _pipelineFactory;
 
-        // Derive a display name / default id from the file name. Trim any
-        // trailing separator first so a path ending in one does not yield an
-        // empty name (which would surface as a confusing MapDatasetId error).
-        var fileName = Path.GetFileName(
-            path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        // Trim any trailing separator so a path ending in one does not yield an
+        // empty file name (a confusing MapDatasetId error) and so the same,
+        // normalized path drives both name derivation and the actual load.
+        var normalizedPath = path.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fileName = Path.GetFileName(normalizedPath);
         if (string.IsNullOrWhiteSpace(fileName))
         {
             throw new ArgumentException(
@@ -50,10 +51,18 @@ internal sealed class S100DatasetLoader : IS100DatasetLoader
 
         var datasetId = id ?? new MapDatasetId(fileName);
 
+        // Fail fast on a duplicate id before the (slow) parse. AddDatasetAsync
+        // remains the authoritative guard against a concurrent add.
+        if (_session.GetDataset(datasetId) is not null)
+        {
+            throw new InvalidOperationException(
+                $"A dataset with id '{datasetId.Value}' is already loaded.");
+        }
+
         // Parsing a base cell is slow; build the processor off the calling
         // thread, mirroring the Viewer's load path.
         var processor = await Task.Run(
-            () => factory.CreateProcessorWithFilesystemUpdates(path),
+            () => factory.CreateProcessorWithFilesystemUpdates(normalizedPath),
             cancellationToken).ConfigureAwait(true);
 
         var dataset = new MapDataset(

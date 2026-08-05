@@ -21,8 +21,9 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <see cref="MapsuiMapSession"/>'s threading contract.
 /// </para>
 /// <para>
-/// This first API operates on caller-supplied processors via
-/// <see cref="AddDatasetAsync"/>; file/exchange-set loading is a later addition.
+/// Datasets can be added from a caller-supplied processor via
+/// <see cref="AddDatasetAsync"/>, or loaded from a single file/cell path via
+/// <see cref="Datasets"/>. Exchange-set folder/archive loading is a later addition.
 /// </para>
 /// </remarks>
 public interface IS100MapSession : IDisposable, IAsyncDisposable
