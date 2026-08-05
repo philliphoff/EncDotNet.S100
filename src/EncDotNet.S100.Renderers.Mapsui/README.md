@@ -182,11 +182,30 @@ optional S-98 authority provider and pattern-clip cache, and the
 with the host-supplied `DatasetPipelineFactory` (an ENC `.000` base cell also
 picks up sibling `.001`/`.002` updates), constructs a renderer-neutral
 `MapDataset`, and registers + renders it — returning the dataset id. It covers a
-**single standalone file / cell**; exchange-set folder/ZIP loading and DI
-registration helpers are later additions. Hosts that only add pre-built
-processors via `AddDatasetAsync` need no factory. Load *policy* (duplicate-cell
-suppression, per-product default visibility, catalogue prompts, notifications)
-stays with the host — it is UX, not part of the reusable load.
+**single standalone file / cell**; exchange-set folder/ZIP loading is a later
+addition. Hosts that only add pre-built processors via `AddDatasetAsync` need no
+factory. Load *policy* (duplicate-cell suppression, per-product default
+visibility, catalogue prompts, notifications) stays with the host — it is UX,
+not part of the reusable load.
+
+### Dependency injection (optional)
+
+Using Microsoft DI is optional — the calls above compose a session by hand. For
+DI hosts, `services.AddS100Mapsui()` registers an `IS100MapSessionFactory` that
+builds a session per `Map` from container-resolved dependencies:
+
+```csharp
+services.AddSingleton<ICrsTransformFactory>(new ProjNetCrsTransformFactory());
+services.AddS100Mapsui(_ => new S100MapsuiOptions { DatasetPipelineFactory = factory });
+// later, once a Map exists:
+using var s100 = provider.GetRequiredService<IS100MapSessionFactory>().Create(map);
+```
+
+`Create` resolves the (host-registered) `ICrsTransformFactory` and an optional
+`S100MapsuiOptions` and calls `AddS100`. The reusable assembly ships no CRS
+implementation, so the host must register one. The returned session is owned by
+the caller — dispose it when the map/window goes away; the container does not
+own it.
 
 The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI
