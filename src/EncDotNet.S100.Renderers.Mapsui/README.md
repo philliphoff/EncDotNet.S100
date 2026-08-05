@@ -154,11 +154,14 @@ using var s100 = map.AddS100(new ProjNetCrsTransformFactory(), new S100MapsuiOpt
     DatasetPipelineFactory = pipelineFactory,   // enables loading from a path
 });
 
-await s100.Datasets.LoadAsync("cell.000");      // detect spec, build, render
-await s100.AddDatasetAsync(mapDataset, processor); // or add a pre-built processor
+// Load from a path (detect spec, build, render) — returns the dataset id.
+var id = await s100.Datasets.LoadAsync("cell.000");
+// ...or add a pre-built processor instead:
+// await s100.AddDatasetAsync(mapDataset, processor);
+
 await s100.SetPresentationAsync(presentation);
 await s100.SetTimeAsync(time);
-s100.ZoomToDataset(mapDataset.Id);
+s100.ZoomToDataset(id);
 ```
 
 `AddS100` calls `S100MapsuiRendering.Register()` (idempotent) and builds a

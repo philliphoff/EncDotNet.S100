@@ -36,7 +36,19 @@ internal sealed class S100DatasetLoader : IS100DatasetLoader
         }
 
         var factory = _pipelineFactory;
-        var datasetId = id ?? new MapDatasetId(Path.GetFileName(path));
+
+        // Derive a display name / default id from the file name. Trim any
+        // trailing separator first so a path ending in one does not yield an
+        // empty name (which would surface as a confusing MapDatasetId error).
+        var fileName = Path.GetFileName(
+            path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrEmpty(fileName))
+        {
+            throw new ArgumentException(
+                $"Path '{path}' does not name a dataset file.", nameof(path));
+        }
+
+        var datasetId = id ?? new MapDatasetId(fileName);
 
         // Parsing a base cell is slow; build the processor off the calling
         // thread, mirroring the Viewer's load path.
@@ -46,7 +58,7 @@ internal sealed class S100DatasetLoader : IS100DatasetLoader
 
         var dataset = new MapDataset(
             datasetId,
-            Path.GetFileName(path),
+            fileName,
             processor.Metadata,
             versionAssessment: processor.VersionAssessment);
 
