@@ -763,7 +763,6 @@ public static class ExchangeCatalogueReader
             ? time
             : null;
     }
-=======
     private static bool IsSecurityNamespace(XNamespace xmlNamespace) =>
         S100SecurityNamespaces.Contains(xmlNamespace.NamespaceName);
 }
