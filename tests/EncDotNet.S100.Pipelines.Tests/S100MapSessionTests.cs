@@ -8,6 +8,7 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using Mapsui;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -282,6 +283,84 @@ public class S100MapSessionTests
         // already present, so the add is rejected.
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => s100.Datasets.LoadAsync(basePath!));
+    }
+
+    [Fact]
+    public async Task AddS100MapsuiFactoryCreatesUsableSession()
+    {
+        var provider = new ServiceCollection()
+            .AddSingleton<ICrsTransformFactory>(new IdentityCrsTransformFactory())
+            .AddS100Mapsui()
+            .BuildServiceProvider();
+
+        var factory = provider.GetRequiredService<IS100MapSessionFactory>();
+        using var map = new Map();
+        using var s100 = factory.Create(map);
+        var id = new MapDatasetId("dataset");
+
+        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
+        Assert.Single(map.Layers);
+    }
+
+    [Fact]
+    public void AddS100MapsuiCreateThrowsWithoutCrsTransformFactory()
+    {
+        var provider = new ServiceCollection()
+            .AddS100Mapsui()
+            .BuildServiceProvider();
+        var factory = provider.GetRequiredService<IS100MapSessionFactory>();
+        using var map = new Map();
+
+        Assert.Throws<InvalidOperationException>(() => factory.Create(map));
+    }
+
+    [Fact]
+    public void AddS100MapsuiRegistersTheSuppliedOptions()
+    {
+        var options = new S100MapsuiOptions
+        {
+            InteroperabilityAuthorityProvider =
+                new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()),
+        };
+        var provider = new ServiceCollection()
+            .AddSingleton<ICrsTransformFactory>(new IdentityCrsTransformFactory())
+            .AddS100Mapsui(_ => options)
+            .BuildServiceProvider();
+
+        Assert.Same(options, provider.GetRequiredService<S100MapsuiOptions>());
+        // The options-carrying session still composes.
+        using var map = new Map();
+        using var s100 = provider.GetRequiredService<IS100MapSessionFactory>().Create(map);
+        Assert.NotNull(s100);
+    }
+
+    [Fact]
+    public void AddS100MapsuiIsIdempotent()
+    {
+        var services = new ServiceCollection();
+        services.AddS100Mapsui();
+        services.AddS100Mapsui();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IS100MapSessionFactory));
+    }
+
+    [Fact]
+    public void AddS100MapsuiFactoryResolvesScopedDependencies()
+    {
+        // validateScopes: true makes resolving a scoped service from the root
+        // provider throw — which is exactly what a singleton factory capturing
+        // the root provider would do at Create time.
+        var provider = new ServiceCollection()
+            .AddScoped<ICrsTransformFactory>(_ => new IdentityCrsTransformFactory())
+            .AddS100Mapsui()
+            .BuildServiceProvider(validateScopes: true);
+
+        using var scope = provider.CreateScope();
+        var factory = scope.ServiceProvider.GetRequiredService<IS100MapSessionFactory>();
+        using var map = new Map();
+
+        using var s100 = factory.Create(map);
+        Assert.NotNull(s100);
     }
 
     private static DatasetPipelineFactory CreateFactory()
