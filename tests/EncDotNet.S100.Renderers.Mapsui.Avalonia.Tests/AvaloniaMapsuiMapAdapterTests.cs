@@ -294,6 +294,27 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public void PickAtScreen_returns_empty_without_querying_for_unlaid_out_viewport()
+    {
+        HeadlessTest.Run(() =>
+        {
+            // A map with no laid-out viewport (never sized) has width/height 0.
+            using var map = new Map();
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+            var recording = new RecordingMapQuery();
+
+            var picks = adapter
+                .PickAtScreenAsync(recording, 400, 300)
+                .GetAwaiter()
+                .GetResult();
+
+            Assert.Empty(picks);
+            Assert.Equal(0, recording.CallCount);
+        });
+    }
+
+    [Fact]
     public void PickAtScreen_returns_empty_without_querying_for_non_finite_pixel()
     {
         HeadlessTest.Run(() =>
@@ -328,7 +349,10 @@ public class AvaloniaMapsuiMapAdapterTests
             // back to a (potentially blocked) UI thread.
             await adapter.PickAtScreenAsync(recording, 400, 300);
 
-            Assert.False(recording.InvokedWithUiAccess);
+            // Non-null confirms the query actually ran; false confirms it ran
+            // off the UI thread.
+            Assert.NotNull(recording.InvokedWithUiAccess);
+            Assert.False(recording.InvokedWithUiAccess.Value);
             return true;
         });
     }
