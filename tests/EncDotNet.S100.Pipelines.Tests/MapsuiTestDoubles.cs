@@ -75,7 +75,32 @@ internal sealed class StubProcessor :
     public SpecRef Spec =>
         new(ProductSpec, new SpecVersion(1, 0, 0));
 
+    /// <summary>Configurable geographic hits returned by <see cref="HitTestFeatures"/>.</summary>
+    public IReadOnlyList<FeatureGeometryHit> Hits { get; set; } = [];
+
+    /// <summary>When set, returned by <see cref="GetCoverageInfo"/> (coverage stub).</summary>
+    public FeatureInfo? CoverageInfo { get; set; }
+
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
+        double latitude, double longitude, double radiusMeters) => Hits;
+
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        var hit = Hits.FirstOrDefault(h => h.Ordinal == ordinal);
+        return hit is null
+            ? null
+            : new FeatureInfo
+            {
+                FeatureRef = hit.FeatureRef,
+                FeatureType = hit.FeatureType,
+                Attributes = [],
+            };
+    }
+
+    public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time) =>
+        CoverageInfo;
 
     public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(
         RenderContext? context = null,

@@ -67,6 +67,16 @@ internal sealed class S100MapSession : IS100MapSession
     }
 
     /// <inheritdoc />
+    public IS100MapQuery Query
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _session.Query;
+        }
+    }
+
+    /// <inheritdoc />
     public event EventHandler? LayersChanged;
 
     /// <inheritdoc />

@@ -207,6 +207,26 @@ implementation, so the host must register one. The returned session is owned by
 the caller — dispose it when the map/window goes away; the container does not
 own it.
 
+### Picking
+
+`session.Query.PickAsync(...)` answers a geographic pick without a UI control:
+
+```csharp
+var picks = await session.Query.PickAsync(
+    new GeographicPickQuery { Latitude = 50.75, Longitude = -1.45 });
+// picks[0] is the topmost feature/coverage sample at that point
+```
+
+It hit-tests each currently-shown dataset (active, visible, and rendered/in-time)
+via `IDatasetProcessor.HitTestFeatures`, resolves each hit to full `FeatureInfo`
+(`GetFeatureInfoAt`), and — for coverage datasets with no vector hit — samples
+`GetCoverageInfo` at the session's current time. Results are ranked **topmost
+first by the S-98 paint stack**, then within a dataset by geometry specificity
+(point → curve → area) and distance. The query is purely geographic:
+screen→world conversion and pointer gestures stay in UI-framework interaction
+adapters, and zoom/scale filtering is a later addition. `RadiusMeters` (default
+50 m) sets the point/curve tolerance; `MaxResults` caps the topmost picks.
+
 The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI
 (these are re-exposed on `IS100MapSession`):

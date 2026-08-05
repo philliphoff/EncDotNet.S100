@@ -37,6 +37,9 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// <summary>Loads datasets into this session from a file path.</summary>
     IS100DatasetLoader Datasets { get; }
 
+    /// <summary>Geographic query surface (feature / coverage picking).</summary>
+    IS100MapQuery Query { get; }
+
     /// <summary>Raised after the final dataset-band projection changes.</summary>
     event EventHandler? LayersChanged;
 

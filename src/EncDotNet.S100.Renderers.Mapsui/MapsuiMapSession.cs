@@ -113,7 +113,14 @@ public sealed class MapsuiMapSession : IDisposable
         _renderer = renderer;
         _authorityProvider = authorityProvider;
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
+        Query = new S100MapQuery(this);
     }
+
+    /// <summary>
+    /// Reusable geographic query surface (feature / coverage picking) over the
+    /// session's currently-shown datasets.
+    /// </summary>
+    public IS100MapQuery Query { get; }
 
     /// <summary>
     /// Raised after the final dataset-band projection changes.
@@ -1158,6 +1165,132 @@ public sealed class MapsuiMapSession : IDisposable
         {
             return _stackedLayers.ToArray();
         }
+    }
+
+    /// <summary>
+    /// Picks features and coverage samples at a geographic point, ranked
+    /// topmost-first by the S-98 paint stack. Backs <see cref="Query"/>.
+    /// </summary>
+    internal async Task<IReadOnlyList<S100Pick>> PickAsync(
+        GeographicPickQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        // Snapshot the pick inputs under the lock: the pickable datasets (active,
+        // visible, currently rendered/in-time) and each one's top-most position
+        // in the S-98 paint stack, plus the current clock for coverage sampling.
+        List<(MapDatasetId Id, int StackRank)> pickable = [];
+        DateTime? currentTime;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            currentTime = _time.Current;
+            var topStackIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < _stackEntries.Count; i++)
+                topStackIndex[_stackEntries[i].SourceDatasetId] = i; // last wins = topmost
+
+            foreach (var id in _order)
+            {
+                if (!_entries.TryGetValue(id, out var entry))
+                    continue;
+                if (!entry.Dataset.IsActive || !entry.Dataset.IsVisible || entry.Layers.Count == 0)
+                    continue;
+                pickable.Add((
+                    id,
+                    topStackIndex.TryGetValue(id.Value, out var index) ? index : -1));
+            }
+        }
+
+        if (pickable.Count == 0)
+            return [];
+
+        var radius = double.IsFinite(query.RadiusMeters) && query.RadiusMeters > 0
+            ? query.RadiusMeters
+            : 0.0;
+
+        return await Task.Run(
+            () => PickCore(query, radius, currentTime, pickable, cancellationToken),
+            cancellationToken).ConfigureAwait(true);
+    }
+
+    private IReadOnlyList<S100Pick> PickCore(
+        GeographicPickQuery query,
+        double radius,
+        DateTime? currentTime,
+        List<(MapDatasetId Id, int StackRank)> pickable,
+        CancellationToken cancellationToken)
+    {
+        var ranked = new List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)>();
+        foreach (var (id, stackRank) in pickable)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_processorOwner.TryAcquire(id, out var lease))
+                continue;
+
+            using (lease)
+            {
+                var processor = lease.Processor;
+                var hits = processor.HitTestFeatures(query.Latitude, query.Longitude, radius);
+                if (hits.Count > 0)
+                {
+                    foreach (var hit in hits)
+                    {
+                        var info = processor.GetFeatureInfoAt(hit.Ordinal)
+                            ?? processor.GetFeatureInfo(hit.FeatureRef);
+                        if (info is null)
+                            continue;
+                        ranked.Add((
+                            stackRank,
+                            (int)hit.Primitive,
+                            hit.DistanceMeters,
+                            new S100Pick
+                            {
+                                DatasetId = id,
+                                Info = info,
+                                IsCoverage = false,
+                                FeatureType = hit.FeatureType,
+                                Primitive = hit.Primitive,
+                                Inside = hit.Inside,
+                                DistanceMeters = hit.DistanceMeters,
+                            }));
+                    }
+                }
+                else if (processor.GetCoverageInfo(query.Latitude, query.Longitude, currentTime)
+                    is { } coverage)
+                {
+                    // Coverage picks sort after a dataset's feature picks.
+                    ranked.Add((
+                        stackRank,
+                        int.MaxValue,
+                        double.MaxValue,
+                        new S100Pick
+                        {
+                            DatasetId = id,
+                            Info = coverage,
+                            IsCoverage = true,
+                            Inside = true,
+                            DistanceMeters = 0.0,
+                        }));
+                }
+            }
+        }
+
+        ranked.Sort(static (a, b) =>
+        {
+            // Higher stack index = painted later = on top → topmost first.
+            var byStack = b.StackRank.CompareTo(a.StackRank);
+            if (byStack != 0)
+                return byStack;
+            // Point (1) before Curve (2) before Surface (3).
+            var byPrimitive = a.PrimitiveRank.CompareTo(b.PrimitiveRank);
+            return byPrimitive != 0 ? byPrimitive : a.Distance.CompareTo(b.Distance);
+        });
+
+        IEnumerable<S100Pick> ordered = ranked.Select(entry => entry.Pick);
+        if (query.MaxResults is { } max)
+            ordered = ordered.Take(Math.Max(0, max));
+        return ordered.ToArray();
     }
 
     /// <summary>Removes every managed dataset layer and subscription.</summary>
