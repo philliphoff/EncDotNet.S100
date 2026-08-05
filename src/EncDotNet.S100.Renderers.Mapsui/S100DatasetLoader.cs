@@ -27,7 +27,7 @@ internal sealed class S100DatasetLoader : IS100DatasetLoader
         MapDatasetId? id = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (_pipelineFactory is null)
         {
             throw new InvalidOperationException(
@@ -42,7 +42,7 @@ internal sealed class S100DatasetLoader : IS100DatasetLoader
         // empty name (which would surface as a confusing MapDatasetId error).
         var fileName = Path.GetFileName(
             path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        if (string.IsNullOrEmpty(fileName))
+        if (string.IsNullOrWhiteSpace(fileName))
         {
             throw new ArgumentException(
                 $"Path '{path}' does not name a dataset file.", nameof(path));

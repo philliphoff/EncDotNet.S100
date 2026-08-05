@@ -26,7 +26,9 @@ public interface IS100DatasetLoader
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The identity of the loaded dataset.</returns>
-    /// <exception cref="ArgumentException"><paramref name="path"/> is null or empty.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="path"/> is null or white-space, or does not name a file.
+    /// </exception>
     /// <exception cref="InvalidOperationException">
     /// No <see cref="S100MapsuiOptions.DatasetPipelineFactory"/> was configured,
     /// or a dataset with the resolved identity is already loaded.
