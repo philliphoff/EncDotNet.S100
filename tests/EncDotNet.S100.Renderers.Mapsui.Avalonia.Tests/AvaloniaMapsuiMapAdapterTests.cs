@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Projections;
@@ -313,6 +314,26 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public async Task PickAtScreen_runs_query_off_the_ui_thread()
+    {
+        await HeadlessTest.RunAsync(async () =>
+        {
+            var map = CreateLaidOutMap();
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+            var recording = new ThreadRecordingMapQuery();
+
+            // On the UI thread. The query must be dispatched to the thread pool
+            // so a session using ConfigureAwait(true) can't post its continuation
+            // back to a (potentially blocked) UI thread.
+            await adapter.PickAtScreenAsync(recording, 400, 300);
+
+            Assert.False(recording.InvokedWithUiAccess);
+            return true;
+        });
+    }
+
+    [Fact]
     public async Task PickAtScreen_rejects_null_query()
     {
         await HeadlessTest.RunAsync(async () =>
@@ -341,6 +362,21 @@ public class AvaloniaMapsuiMapAdapterTests
         {
             LastQuery = query;
             CallCount++;
+            return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class ThreadRecordingMapQuery : IS100MapQuery
+    {
+        public bool? InvokedWithUiAccess { get; private set; }
+
+        public IReadOnlyList<S100Pick> Result { get; } = new List<S100Pick>();
+
+        public Task<IReadOnlyList<S100Pick>> PickAsync(
+            GeographicPickQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            InvokedWithUiAccess = Dispatcher.UIThread.CheckAccess();
             return Task.FromResult(Result);
         }
     }
