@@ -196,15 +196,20 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
             return Array.Empty<S100Pick>();
         }
 
-        // Dispatch the query onto the thread pool so it cannot capture the UI
-        // sync-context. The default MapsuiMapSession.PickAsync resumes with
-        // ConfigureAwait(true); invoked directly from the UI thread, its
-        // continuation would post back to that thread and a synchronous waiter
-        // (.GetAwaiter().GetResult()) would deadlock. Running it here also makes
-        // the "off the UI thread" contract hold for any IS100MapQuery.
-        return await Task.Run(
-            () => query.PickAsync(pickQuery, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
+        // Only a UI-thread caller can capture the UI sync-context. The default
+        // MapsuiMapSession.PickAsync resumes with ConfigureAwait(true); invoked
+        // directly from the UI thread its continuation would post back to that
+        // thread and a synchronous waiter (.GetAwaiter().GetResult()) would
+        // deadlock, so dispatch it onto the thread pool. Off the UI thread there
+        // is no context to capture, so call directly and skip the extra hop.
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return await Task.Run(
+                () => query.PickAsync(pickQuery, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        return await query.PickAsync(pickQuery, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

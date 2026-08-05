@@ -358,6 +358,27 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public async Task PickAtScreen_queries_directly_when_called_off_the_ui_thread()
+    {
+        await HeadlessTest.RunAsync(async () =>
+        {
+            var map = CreateLaidOutMap();
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+            var recording = new RecordingMapQuery();
+
+            // Called from a pool thread: the adapter hops to the UI thread only
+            // to read the viewport, then queries directly (no redundant Task.Run).
+            var picks = await Task.Run(
+                () => adapter.PickAtScreenAsync(recording, 400, 300));
+
+            Assert.Same(recording.Result, picks);
+            Assert.Equal(1, recording.CallCount);
+            return true;
+        });
+    }
+
+    [Fact]
     public async Task PickAtScreen_rejects_null_query()
     {
         await HeadlessTest.RunAsync(async () =>
