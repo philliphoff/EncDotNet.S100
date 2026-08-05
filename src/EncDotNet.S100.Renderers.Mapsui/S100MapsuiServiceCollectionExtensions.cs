@@ -41,7 +41,11 @@ public static class S100MapsuiServiceCollectionExtensions
         if (optionsFactory is not null)
             services.TryAddSingleton(optionsFactory);
 
-        services.TryAddSingleton<IS100MapSessionFactory, S100MapSessionFactory>();
+        // Transient (not singleton) so the factory captures the IServiceProvider
+        // of whatever scope resolves it: a singleton would capture the root
+        // provider and fail to resolve scoped dependencies (e.g. a scoped
+        // ICrsTransformFactory) from Create.
+        services.TryAddTransient<IS100MapSessionFactory, S100MapSessionFactory>();
         return services;
     }
 }

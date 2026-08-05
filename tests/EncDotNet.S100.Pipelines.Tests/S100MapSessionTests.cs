@@ -344,6 +344,25 @@ public class S100MapSessionTests
         Assert.Single(services, d => d.ServiceType == typeof(IS100MapSessionFactory));
     }
 
+    [Fact]
+    public void AddS100MapsuiFactoryResolvesScopedDependencies()
+    {
+        // validateScopes: true makes resolving a scoped service from the root
+        // provider throw — which is exactly what a singleton factory capturing
+        // the root provider would do at Create time.
+        var provider = new ServiceCollection()
+            .AddScoped<ICrsTransformFactory>(_ => new IdentityCrsTransformFactory())
+            .AddS100Mapsui()
+            .BuildServiceProvider(validateScopes: true);
+
+        using var scope = provider.CreateScope();
+        var factory = scope.ServiceProvider.GetRequiredService<IS100MapSessionFactory>();
+        using var map = new Map();
+
+        using var s100 = factory.Create(map);
+        Assert.NotNull(s100);
+    }
+
     private static DatasetPipelineFactory CreateFactory()
     {
         var pcManager = new PortrayalCatalogueManager();
