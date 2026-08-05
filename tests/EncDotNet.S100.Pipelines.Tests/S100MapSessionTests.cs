@@ -450,6 +450,87 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public async Task PickAsyncExcludesDatasetScaledOutAtResolution()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        // A cell minimum display scale gives the entry a whole-cell scale
+        // window; a resolution far coarser than its cutoff scales it out.
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                CellMinimumDisplayScale = 50_000,
+                Hits = [Hit(0, "x", S100GeometryType.Point)],
+            });
+
+        Assert.Empty(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 100_000 }));
+    }
+
+    [Fact]
+    public async Task PickAsyncIncludesDatasetWithinScaleWindowAtResolution()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                CellMinimumDisplayScale = 50_000,
+                Hits = [Hit(0, "x", S100GeometryType.Point)],
+            });
+
+        // A resolution finer (zoomed in) than the cutoff keeps the cell drawn.
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 0.001 });
+
+        Assert.Equal(id, Assert.Single(picks).DatasetId);
+    }
+
+    [Fact]
+    public async Task PickAsyncWithoutResolutionIgnoresScaleWindow()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                CellMinimumDisplayScale = 50_000,
+                Hits = [Hit(0, "x", S100GeometryType.Point)],
+            });
+
+        // Omitting Resolution disables scale filtering, so the same cell that a
+        // coarse resolution would exclude still participates (prior behavior).
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+
+        Assert.Equal(id, Assert.Single(picks).DatasetId);
+    }
+
+    [Fact]
+    public async Task PickAsyncIgnoresResolutionForCellWithoutScaleWindow()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        // No CellMinimumDisplayScale → no scale window → always pickable, even at
+        // a very coarse resolution.
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] });
+
+        var picks = await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 100_000 });
+
+        Assert.Equal(id, Assert.Single(picks).DatasetId);
+    }
+
+    [Fact]
     public async Task PickAsyncReturnsCoverageSampleWhenNoVectorHit()
     {
         using var map = new Map();

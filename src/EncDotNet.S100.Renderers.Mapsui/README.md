@@ -224,8 +224,17 @@ via `IDatasetProcessor.HitTestFeatures`, resolves each hit to full `FeatureInfo`
 first by the S-98 paint stack**, then within a dataset by geometry specificity
 (point → curve → area) and distance. The query is purely geographic:
 screen→world conversion and pointer gestures stay in UI-framework interaction
-adapters, and zoom/scale filtering is a later addition. `RadiusMeters` (default
-50 m) sets the point/curve tolerance; `MaxResults` caps the topmost picks.
+adapters. `RadiusMeters` (default 50 m) sets the point/curve tolerance;
+`MaxResults` caps the topmost picks.
+
+Supply the optional `Resolution` (metres/pixel, the unit of Mapsui's
+`Navigator.Viewport.Resolution`) to match what is actually painted at the current
+zoom: a dataset whose whole-cell scale window has scaled it out — the same
+catalogue-driven `ApplyCellScaleWindow` cutoff that drops a finer cell once you
+zoom past its smallest-scale edge — is excluded. A UI adapter reads its map's
+current resolution and passes it through; the query itself stays
+viewport-agnostic. Omit it (the default) to skip scale filtering. Per-feature
+scale limits *within* a still-drawn cell are not applied here.
 
 The session reports its lifecycle through structured events rather than
 notifications or localized strings, so a non-Viewer host can drive its own UI

@@ -24,6 +24,26 @@ public sealed record GeographicPickQuery
     public double RadiusMeters { get; init; } = 50.0;
 
     /// <summary>
+    /// Optional current viewport resolution in metres per pixel (EPSG:3857 /
+    /// SphericalMercator — the unit of Mapsui's
+    /// <c>Navigator.Viewport.Resolution</c>). When supplied, a dataset whose
+    /// whole-cell scale window (its minimum-display-scale cutoff) hides it at
+    /// this zoom is excluded, so picks match what is actually painted. When
+    /// <see langword="null"/> (the default) no scale filtering is applied and
+    /// every drawn dataset participates. Non-finite or non-positive values are
+    /// treated as <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// Filtering is at whole-cell granularity — the same catalogue-driven
+    /// zoom-out window (<c>ApplyCellScaleWindow</c>) that drops an entire finer
+    /// cell when you zoom past its smallest-scale edge. Per-feature scale limits
+    /// within a still-drawn cell are not applied here. The caller (a UI
+    /// interaction adapter) is responsible for reading its map's current
+    /// resolution; the query itself stays viewport-agnostic.
+    /// </remarks>
+    public double? Resolution { get; init; }
+
+    /// <summary>
     /// Optional cap on the number of returned picks (topmost-first). When
     /// <see langword="null"/>, all matches are returned.
     /// </summary>
