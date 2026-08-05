@@ -16,7 +16,9 @@ public interface IS100MapQuery
     /// participate. Each vector hit is resolved to full
     /// <see cref="Datasets.Pipelines.FeatureInfo"/>; coverage datasets with no
     /// vector hit contribute a coverage sample at the session's current time.
-    /// Zoom/scale filtering is not applied — the query is purely geographic.
+    /// When <see cref="GeographicPickQuery.Resolution"/> is supplied, a dataset
+    /// whose whole-cell scale window hides it at that zoom is excluded;
+    /// otherwise no scale filtering is applied.
     /// </remarks>
     /// <param name="query">The geographic pick request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>

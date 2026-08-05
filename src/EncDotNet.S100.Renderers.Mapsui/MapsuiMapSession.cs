@@ -1180,6 +1180,12 @@ public sealed class MapsuiMapSession : IDisposable
         // Snapshot the pick inputs under the lock: the pickable datasets (active,
         // visible, currently rendered/in-time) and each one's top-most position
         // in the S-98 paint stack, plus the current clock for coverage sampling.
+        // An optional viewport resolution (metres/pixel) lets the pick match
+        // what is actually painted at the current zoom. Non-finite / non-positive
+        // values mean "no scale filtering", matching a null query resolution.
+        double? scaleResolution =
+            query.Resolution is { } r && double.IsFinite(r) && r > 0 ? r : null;
+
         List<(MapDatasetId Id, int StackRank)> pickable = [];
         DateTime? currentTime;
         lock (_sync)
@@ -1200,6 +1206,16 @@ public sealed class MapsuiMapSession : IDisposable
                 // absent from the current S-98 projected stack (e.g. fully
                 // overlap-suppressed), so it is not on screen to pick.
                 if (!IsDrawing(entry) || !topStackIndex.TryGetValue(id.Value, out var index))
+                    continue;
+                // Whole-cell scale window: when the caller supplied a resolution
+                // and this cell's content is entirely scaled out at that zoom
+                // (the same ApplyCellScaleWindow cutoff that drops the finer cell
+                // when you zoom past its smallest-scale edge), it is not on screen
+                // to pick. A null cutoff means the cell has no minimum-display-scale
+                // window, so it is always pickable regardless of zoom.
+                if (scaleResolution is { } res
+                    && entry.ContentMaxVisibleResolution is { } cutoff
+                    && res > cutoff)
                     continue;
                 pickable.Add((id, index));
             }
