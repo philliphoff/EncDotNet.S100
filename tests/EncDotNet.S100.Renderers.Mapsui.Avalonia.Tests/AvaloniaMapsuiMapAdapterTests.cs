@@ -240,6 +240,111 @@ public class AvaloniaMapsuiMapAdapterTests
         Assert.Null(snapshot);
     }
 
+    [Fact]
+    public void PickAtScreen_translates_pixel_to_geographic_query()
+    {
+        HeadlessTest.Run(() =>
+        {
+            var map = CreateLaidOutMap();
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+            var recording = new RecordingMapQuery();
+
+            var picks = adapter
+                .PickAtScreenAsync(recording, 400, 300, radiusMeters: 25, maxResults: 3)
+                .GetAwaiter()
+                .GetResult();
+
+            // The pick is delegated to the session query unchanged.
+            Assert.Same(recording.Result, picks);
+            Assert.Equal(1, recording.CallCount);
+
+            // The center pixel maps to the map center (lon 20 / lat 10), the live
+            // resolution (100) rides along for scale filtering, and the tolerance
+            // and cap pass through.
+            var query = Assert.IsType<GeographicPickQuery>(recording.LastQuery);
+            Assert.Equal(10.0, query.Latitude, 6);
+            Assert.Equal(20.0, query.Longitude, 6);
+            Assert.Equal(100.0, query.Resolution!.Value, 6);
+            Assert.Equal(25.0, query.RadiusMeters, 6);
+            Assert.Equal(3, query.MaxResults);
+        });
+    }
+
+    [Fact]
+    public void PickAtScreen_returns_empty_without_querying_for_unsupported_crs()
+    {
+        HeadlessTest.Run(() =>
+        {
+            var map = CreateLaidOutMap();
+            map.CRS = "EPSG:32632";
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+            var recording = new RecordingMapQuery();
+
+            var picks = adapter
+                .PickAtScreenAsync(recording, 400, 300)
+                .GetAwaiter()
+                .GetResult();
+
+            Assert.Empty(picks);
+            Assert.Equal(0, recording.CallCount);
+        });
+    }
+
+    [Fact]
+    public void PickAtScreen_returns_empty_without_querying_for_non_finite_pixel()
+    {
+        HeadlessTest.Run(() =>
+        {
+            var map = CreateLaidOutMap();
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+            var recording = new RecordingMapQuery();
+
+            var picks = adapter
+                .PickAtScreenAsync(recording, double.NaN, 300)
+                .GetAwaiter()
+                .GetResult();
+
+            Assert.Empty(picks);
+            Assert.Equal(0, recording.CallCount);
+        });
+    }
+
+    [Fact]
+    public async Task PickAtScreen_rejects_null_query()
+    {
+        await HeadlessTest.RunAsync(async () =>
+        {
+            var map = CreateLaidOutMap();
+            var control = new CaptureSynchronizedMapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+
+            await Assert.ThrowsAsync<ArgumentNullException>(
+                () => adapter.PickAtScreenAsync(null!, 400, 300));
+            return true;
+        });
+    }
+
+    private sealed class RecordingMapQuery : IS100MapQuery
+    {
+        public GeographicPickQuery? LastQuery { get; private set; }
+
+        public int CallCount { get; private set; }
+
+        public IReadOnlyList<S100Pick> Result { get; } = new List<S100Pick>();
+
+        public Task<IReadOnlyList<S100Pick>> PickAsync(
+            GeographicPickQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            LastQuery = query;
+            CallCount++;
+            return Task.FromResult(Result);
+        }
+    }
+
     private static Map CreateLaidOutMap()
     {
         var map = new Map();

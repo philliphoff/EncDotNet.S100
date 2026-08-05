@@ -11,6 +11,7 @@ that require Avalonia:
 - explicit attachment to a live `CaptureSynchronizedMapControl`;
 - UI-thread redraw invalidation;
 - live-control and captured-image coordinate conversion;
+- pointer (screen-pixel) picking against a session's `IS100MapQuery`;
 - current-view PNG rendering without mutating the live navigator;
 - Avalonia `Control` PNG capture; and
 - capture/live-paint synchronization for shared Skia GPU resources.
@@ -39,6 +40,28 @@ painting.
 
 Coordinate conversion supports Mapsui's default `EPSG:3857` map CRS and returns
 `null` for maps whose CRS requires a different projection.
+
+### Pointer picking
+
+`PickAtScreenAsync` is the UI-side counterpart to the base package's
+[`session.Query.PickAsync`](../EncDotNet.S100.Renderers.Mapsui/README.md#picking).
+It reads the live viewport on the UI thread to convert a control pixel to
+WGS-84 and to capture the current resolution — so the session drops cells that
+are scaled out at this zoom — then runs the pick off the UI thread:
+
+```csharp
+using var s100 = map.AddS100(options);
+using var adapter = AvaloniaMapsuiMapAdapter.Attach(mapControl);
+
+// e.g. from a PointerPressed handler, with the pointer position in the control
+var picks = await adapter.PickAtScreenAsync(s100.Query, point.X, point.Y);
+// picks[0] is the topmost feature/coverage sample under the pointer
+```
+
+Pointer gestures, hit panels, and selection remain the host's responsibility.
+It returns an empty list (without querying) for a non-finite pixel, an
+unlaid-out viewport, or an unsupported map CRS. `radiusMeters` (default 50 m)
+sets the point/curve tolerance and `maxResults` caps the topmost picks.
 
 Whole-control or whole-window capture is available through
 `AvaloniaControlCapture.CapturePngAsync`. When the target contains a
