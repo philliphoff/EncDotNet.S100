@@ -253,6 +253,34 @@ public class S100PickHighlightLayerTests
     }
 
     [Fact]
+    public void Show_AreaCrossingAntimeridian_SkipsFillButStillOutlines()
+    {
+        var highlight = new S100PickHighlightLayer();
+
+        // A box spanning 179°E -> 179°W wraps the antimeridian: a single filled
+        // Mercator polygon would wrap the globe, so the fill is skipped while the
+        // (splitting) outline still conveys the shape.
+        highlight.Show(new S100FeatureGeometry
+        {
+            Primitive = S100GeometryType.Surface,
+            ExteriorRing =
+            [
+                new GeoPosition(0, 179.0),
+                new GeoPosition(0, -179.0),
+                new GeoPosition(1, -179.0),
+                new GeoPosition(1, 179.0),
+            ],
+        });
+
+        var features = ((MemoryLayer)highlight.Layer).Features!.Cast<GeometryFeature>().ToList();
+
+        // No faint fill: the fill feature is the only one with a null Line (it
+        // strokes nothing), so every drawn feature here is a split outline stroke.
+        Assert.NotEmpty(features);
+        Assert.All(features, f => Assert.NotNull(((VectorStyle)f.Styles.First()).Line));
+    }
+
+    [Fact]
     public void Show_CurveCrossingAntimeridian_SplitsIntoSubPaths()
     {
         var highlight = new S100PickHighlightLayer();

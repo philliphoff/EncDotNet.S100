@@ -158,6 +158,8 @@ public sealed class S100PickHighlightLayer
         // faint fill is skipped for shapes that wrap it; the outline (which does
         // split) still conveys the shape. This is a rare edge case for a single
         // picked feature.
+        if (WrapsAntimeridian(exterior)) return;
+
         var shell = ToLinearRing(exterior);
         if (shell is null) return;
 
@@ -177,6 +179,21 @@ public sealed class S100PickHighlightLayer
             Opacity = _style.AreaFillOpacity,
         });
         features.Add(feature);
+    }
+
+    /// <summary>
+    /// True when any edge of the ring (including the closing edge) jumps more
+    /// than 180° in longitude — i.e. the ring crosses the antimeridian, where a
+    /// single filled Mercator polygon would wrap the globe.
+    /// </summary>
+    private static bool WrapsAntimeridian(IReadOnlyList<GeoPosition> ring)
+    {
+        for (var i = 0; i < ring.Count; i++)
+        {
+            var delta = ring[(i + 1) % ring.Count].Longitude - ring[i].Longitude;
+            if (delta > 180.0 || delta < -180.0) return true;
+        }
+        return false;
     }
 
     private static LinearRing? ToLinearRing(IReadOnlyList<GeoPosition> ring)

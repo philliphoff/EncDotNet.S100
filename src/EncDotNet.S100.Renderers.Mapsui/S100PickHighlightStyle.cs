@@ -8,9 +8,9 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// Renderer-neutral and free of any application chrome or chart-palette
 /// coupling — a host chooses the accent to match its own theme. The defaults
 /// mirror the Viewer's pick-highlight look (a <c>#007ACC</c> accent, a faint
-/// 15% area fill, and a 0.9-opacity 3&#8239;px outline) so an application that
-/// adopts the reusable layer keeps a familiar appearance without configuring
-/// anything.
+/// 15% area fill, and a 0.9-opacity outline of width
+/// <see cref="OutlineWidth"/>) so an application that adopts the reusable layer
+/// keeps a familiar appearance without configuring anything.
 /// </remarks>
 public sealed record S100PickHighlightStyle
 {
