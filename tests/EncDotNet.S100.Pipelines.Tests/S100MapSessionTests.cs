@@ -1,5 +1,6 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
@@ -555,6 +556,35 @@ public class S100MapSessionTests
         var pick = Assert.Single(picks);
         Assert.True(pick.IsCoverage);
         Assert.Equal("sample", pick.Info.FeatureRef);
+        // Coverage samples have no vector geometry to outline.
+        Assert.Null(pick.Geometry);
+    }
+
+    [Fact]
+    public async Task PickAsyncPopulatesVectorFeatureGeometry()
+    {
+        using var map = new Map();
+        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var id = new MapDatasetId("dataset");
+        var geometry = new S100FeatureGeometry
+        {
+            Primitive = S100GeometryType.Point,
+            Points = [new GeoPosition(50.5, -1.2)],
+        };
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                Hits = [Hit(0, "x", S100GeometryType.Point)],
+                FeatureGeometry = geometry,
+            });
+
+        var pick = Assert.Single(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+
+        Assert.NotNull(pick.Geometry);
+        Assert.Equal(S100GeometryType.Point, pick.Geometry!.Primitive);
+        Assert.Equal(new GeoPosition(50.5, -1.2), Assert.Single(pick.Geometry.Points));
     }
 
     [Fact]
