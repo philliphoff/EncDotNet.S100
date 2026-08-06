@@ -233,6 +233,33 @@ processor exposes it via `GetFeatureGeometryAt`, so a host can outline or
 highlight the hit without reaching into a product's feature model. It is `null`
 for a coverage pick, or when the processor does not expose feature geometry.
 
+#### Highlighting a pick
+
+`S100PickHighlightLayer` is an optional, reusable Mapsui overlay that draws that
+geometry — the drawing complement to `PickAsync`, independent of any view model,
+catalogue, application palette, or Avalonia. Add its `Layer` to `Map.Layers`
+once, then call `Show` as picks change:
+
+```csharp
+var highlight = new S100PickHighlightLayer();       // optional: S100PickHighlightStyle
+map.Layers.Add(highlight.Layer);
+
+var picks = await session.Query.PickAsync(query);
+highlight.Show(picks.FirstOrDefault());             // outline the topmost hit
+// highlight.Show(picks);                            // or outline every hit
+// highlight.Clear();                                // remove the highlight
+```
+
+For each geometry it draws, in feature-space (so the outline scales with zoom and
+stays anchored as the map pans): a faint fill plus accent outline for an area's
+exterior ring and holes, an accent stroke per curve (split at the antimeridian),
+and an accent ring per point. A `null` pick or a coverage pick (no geometry)
+clears the layer. `S100PickHighlightStyle` tunes the accent colour and
+stroke/fill weights; the default matches the Viewer's look. The overlay draws
+only the feature outline — the *what*. A cursor-echo marker at the click point
+and chart-palette dimming are host UX and stay in the application (the Viewer
+keeps its own richer overlay for those).
+
 Supply the optional `Resolution` (metres/pixel, the unit of Mapsui's
 `Navigator.Viewport.Resolution`) to match what is actually painted at the current
 zoom: a dataset whose whole-cell scale window has scaled it out — the same
