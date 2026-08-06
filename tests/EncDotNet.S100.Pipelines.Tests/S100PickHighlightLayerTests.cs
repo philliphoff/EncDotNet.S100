@@ -281,6 +281,22 @@ public class S100PickHighlightLayerTests
     }
 
     [Fact]
+    public void Show_TwoPointCurveStraddlingAntimeridian_StillDrawsCrossing()
+    {
+        var highlight = new S100PickHighlightLayer();
+
+        // A bare 179°E -> 179°W segment straddles the antimeridian. The crossing
+        // segment must still be drawn (extended past the edge), not dropped.
+        highlight.Show(new S100FeatureGeometry
+        {
+            Primitive = S100GeometryType.Curve,
+            Curves = [[new GeoPosition(0, 179.0), new GeoPosition(0, -179.0)]],
+        });
+
+        Assert.Equal(1, FeatureCount(highlight.Layer));
+    }
+
+    [Fact]
     public void Show_CurveCrossingAntimeridian_SplitsIntoSubPaths()
     {
         var highlight = new S100PickHighlightLayer();

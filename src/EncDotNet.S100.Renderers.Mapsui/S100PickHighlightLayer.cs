@@ -279,8 +279,11 @@ public sealed class S100PickHighlightLayer
     /// Splits a coordinate sequence into sub-paths so no segment crosses the
     /// antimeridian (±180° longitude), unwrapping longitudes within each
     /// sub-path so a Mercator renderer draws straight lines without the
-    /// "wrap around the world" artifact. Mirrors the Viewer's marine-geodesy
-    /// helper; kept private so the reusable layer takes no Viewer dependency.
+    /// "wrap around the world" artifact. Based on the Viewer's marine-geodesy
+    /// helper (kept private so the reusable layer takes no Viewer dependency),
+    /// but extends the current sub-path to an unwrapped copy of the crossing
+    /// point so the crossing segment itself is drawn rather than dropped — a
+    /// 2-point curve straddling ±180° still renders, hugging the edge.
     /// </summary>
     private static IReadOnlyList<IReadOnlyList<GeoPosition>> SplitAtAntimeridian(
         IReadOnlyList<GeoPosition> points)
@@ -302,6 +305,13 @@ public sealed class S100PickHighlightLayer
             var rawDelta = pt.Longitude - prevLon;
             if (rawDelta > 180.0 || rawDelta < -180.0)
             {
+                // Extend the current sub-path to an unwrapped copy of the
+                // crossing point (continuing past ±180° in Mercator space) so
+                // the crossing segment is drawn to the edge, then start a fresh
+                // sub-path at the wrapped point on the far side.
+                var unwrappedCrossing = prevLon + (rawDelta > 0 ? rawDelta - 360.0 : rawDelta + 360.0);
+                current.Add(new GeoPosition(pt.Latitude, unwrappedCrossing));
+
                 current = new List<GeoPosition> { pt };
                 result.Add(current);
                 prevLon = pt.Longitude;
