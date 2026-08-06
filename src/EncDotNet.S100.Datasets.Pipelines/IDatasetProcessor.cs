@@ -89,6 +89,23 @@ public interface IDatasetProcessor
     FeatureInfo? GetFeatureInfoAt(int ordinal) => null;
 
     /// <summary>
+    /// Returns the renderer-neutral geometry of the feature at the given
+    /// enumeration ordinal — the same index reported by
+    /// <see cref="FeatureSummary.Ordinal"/> and carried by
+    /// <see cref="FeatureGeometryHit.Ordinal"/>, so a pick resolves to its
+    /// outline the same collision-free way <see cref="GetFeatureInfoAt"/>
+    /// resolves its attributes. Lets a host highlight or outline a picked
+    /// feature without reaching into a product's feature model.
+    /// </summary>
+    /// <returns>
+    /// The feature's geometry, or <c>null</c> when the ordinal is out of range
+    /// or this processor does not expose discrete vector features (coverage /
+    /// non-vector products leave the default and pick through
+    /// <see cref="GetCoverageInfo"/>).
+    /// </returns>
+    S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) => null;
+
+    /// <summary>
     /// Samples this dataset at the supplied geographic position and
     /// returns a synthetic <see cref="FeatureInfo"/> describing the
     /// underlying coverage value(s) — used by the viewer to provide a

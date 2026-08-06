@@ -66,6 +66,53 @@ public class DatasetProcessorHitTestTests
         Assert.Empty(processor.HitTestFeatures(0.0, 0.0, 1_000.0));
     }
 
+    [Fact]
+    public void Gml_GetFeatureGeometryAt_ResolvesHitOrdinalToDrawableGeometry()
+    {
+        var processor = new S411DatasetProcessor(
+            S411FixturePath,
+            CreateCatalogueManager(),
+            new DisplayPlaneAuthorityProvider(),
+            new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
+
+        Skip.If(processor.Metadata.Extent is null, "Processor did not derive an extent to aim the pick at.");
+        var extent = processor.Metadata.Extent!;
+        var centreLat = (extent.SouthLatitude + extent.NorthLatitude) / 2.0;
+        var centreLon = (extent.WestLongitude + extent.EastLongitude) / 2.0;
+
+        var hits = processor.HitTestFeatures(centreLat, centreLon, radiusMeters: 500_000.0);
+        Assert.NotEmpty(hits);
+
+        // Each hit's ordinal resolves to drawable geometry whose primitive
+        // matches the primitive the hit was measured against.
+        foreach (var hit in hits)
+        {
+            var geometry = processor.GetFeatureGeometryAt(hit.Ordinal);
+            Assert.NotNull(geometry);
+            Assert.True(geometry!.HasGeometry);
+            Assert.Equal(hit.Primitive, geometry.Primitive);
+        }
+    }
+
+    [Fact]
+    public void GetFeatureGeometryAt_OutOfRangeOrDefault_IsNull()
+    {
+        IDatasetProcessor processor = new BareProcessor();
+
+        // Default implementation (non-vector processor) returns null.
+        Assert.Null(processor.GetFeatureGeometryAt(0));
+
+        var gml = new S411DatasetProcessor(
+            S411FixturePath,
+            CreateCatalogueManager(),
+            new DisplayPlaneAuthorityProvider(),
+            new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
+
+        // Out-of-range ordinals return null rather than throwing.
+        Assert.Null(gml.GetFeatureGeometryAt(-1));
+        Assert.Null(gml.GetFeatureGeometryAt(int.MaxValue));
+    }
+
     /// <summary>
     /// Hit-tests the centre of the processor's extent with a radius wide enough
     /// to catch every feature in the cell, then asserts each hit resolves back

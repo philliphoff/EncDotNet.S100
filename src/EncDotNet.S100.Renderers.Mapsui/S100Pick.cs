@@ -17,6 +17,14 @@ public sealed record S100Pick
     public required FeatureInfo Info { get; init; }
 
     /// <summary>
+    /// The picked feature's renderer-neutral geometry (rings / curves / points
+    /// in WGS-84), for outlining or highlighting the hit. <see langword="null"/>
+    /// for a coverage pick, or when the owning processor does not expose the
+    /// feature's geometry.
+    /// </summary>
+    public S100FeatureGeometry? Geometry { get; init; }
+
+    /// <summary>
     /// <see langword="true"/> for a coverage sample (S-102 / S-104 / S-111 via
     /// <see cref="IDatasetProcessor.GetCoverageInfo"/>); <see langword="false"/>
     /// for a vector feature.

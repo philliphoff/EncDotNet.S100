@@ -1267,6 +1267,7 @@ public sealed class MapsuiMapSession : IDisposable
                             {
                                 DatasetId = id,
                                 Info = info,
+                                Geometry = processor.GetFeatureGeometryAt(hit.Ordinal),
                                 IsCoverage = false,
                                 FeatureType = hit.FeatureType,
                                 Primitive = hit.Primitive,

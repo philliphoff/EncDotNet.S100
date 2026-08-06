@@ -379,6 +379,22 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     }
 
     /// <inheritdoc/>
+    public S100FeatureGeometry? GetFeatureGeometryAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= Features.Count)
+            return null;
+        var feature = Features[ordinal];
+        return new S100FeatureGeometry
+        {
+            Primitive = feature.GeometryType,
+            Points = feature.Points,
+            Curves = feature.Curves,
+            ExteriorRing = feature.ExteriorRing,
+            InteriorRings = feature.InteriorRings,
+        };
+    }
+
+    /// <inheritdoc/>
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
         double latitude, double longitude, double radiusMeters) =>
         FeatureHitTester.HitTest(Features, latitude, longitude, radiusMeters);

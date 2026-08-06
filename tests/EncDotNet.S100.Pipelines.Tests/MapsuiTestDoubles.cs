@@ -81,7 +81,16 @@ internal sealed class StubProcessor :
     /// <summary>When set, returned by <see cref="GetCoverageInfo"/> (coverage stub).</summary>
     public FeatureInfo? CoverageInfo { get; set; }
 
+    /// <summary>
+    /// When set, returned by <see cref="GetFeatureGeometryAt"/> for any in-range
+    /// hit ordinal (pick-geometry stub).
+    /// </summary>
+    public S100FeatureGeometry? FeatureGeometry { get; set; }
+
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    public S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) =>
+        Hits.Any(h => h.Ordinal == ordinal) ? FeatureGeometry : null;
 
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
         double latitude, double longitude, double radiusMeters) => Hits;
