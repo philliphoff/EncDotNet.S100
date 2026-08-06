@@ -227,11 +227,11 @@ screen→world conversion and pointer gestures stay in UI-framework interaction
 adapters. `RadiusMeters` (default 50 m) sets the point/curve tolerance;
 `MaxResults` caps the topmost picks.
 
-Each vector `S100Pick` also carries the feature's renderer-neutral `Geometry`
-(`S100FeatureGeometry` — rings / curves / points in WGS-84, resolved from the
-same processor via `GetFeatureGeometryAt`), so a host can outline or highlight
-the hit without reaching into a product's feature model. It is `null` for a
-coverage pick.
+A vector `S100Pick` also carries the feature's renderer-neutral `Geometry`
+(`S100FeatureGeometry` — rings / curves / points in WGS-84) when the owning
+processor exposes it via `GetFeatureGeometryAt`, so a host can outline or
+highlight the hit without reaching into a product's feature model. It is `null`
+for a coverage pick, or when the processor does not expose feature geometry.
 
 Supply the optional `Resolution` (metres/pixel, the unit of Mapsui's
 `Navigator.Viewport.Resolution`) to match what is actually painted at the current
