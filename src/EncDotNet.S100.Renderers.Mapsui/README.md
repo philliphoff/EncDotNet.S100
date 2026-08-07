@@ -289,6 +289,47 @@ notifications or localized strings, so a non-Viewer host can drive its own UI
 - `LayersChanged` / `TimeRangeChanged` (`EventHandler`) and `CurrentTimeChanged`
   (`MapSessionCurrentTimeEventArgs`) report projected-band and clock changes.
 
+## Dataset extent indicators
+
+`S100DatasetExtentIndicatorLayer` is an optional, reusable Mapsui overlay that
+outlines the extents of loaded datasets which have zoomed out of scale — so a
+mariner framing a wide-spread exchange set still sees where the member datasets
+are and has a target to zoom toward. Like the pick-highlight layer it depends
+only on Mapsui, not on the session, a catalogue, an application palette, a view
+model, or Avalonia. Add its `Layer` once, then call `Show` as datasets,
+visibility, or zoom-cutoffs change:
+
+```csharp
+var extents = new S100DatasetExtentIndicatorLayer();   // optional: S100DatasetExtentIndicatorStyle
+map.Layers.Add(extents.Layer);
+
+extents.Show(new[]
+{
+    // extent in EPSG:3857 (Mapsui map units); MinVisible = the dataset's
+    // whole-cell zoom-out cutoff (metres/pixel), so the border appears exactly
+    // when the dataset's own content drops out. Pass 0 to always show it.
+    new S100DatasetExtentIndicator(dataset.MercatorExtent, dataset.ContentMaxVisibleResolution),
+});
+// extents.Show(indicators, accent);   // re-theme without rebuilding the layer
+// extents.Clear();                     // remove all indicators
+```
+
+Each indicator becomes one thin, dashed, unfilled accent rectangle whose border
+style is gated by `MinVisible` = the dataset's content cutoff, so Mapsui reveals
+it precisely when the viewport zooms out past the point where the dataset stops
+drawing and hides it again on zoom-in — the overlay is viewport-agnostic and
+needs no navigator subscription. `S100DatasetExtentIndicatorStyle` tunes the
+accent, stroke weight, opacity, and dash; the default matches the Viewer's look.
+
+The layer takes already-projected mercator rectangles: a host that captured
+extents in mercator (Mapsui's native units) passes them straight through, while a
+host holding geographic bounds projects them itself and splits any
+antimeridian-crossing footprint into two non-wrapping boxes — which projection,
+and how to treat wide footprints, is host policy. Deciding *which* datasets
+qualify (loaded-and-visible, out-of-scale, catalogue footprints for deferred
+cells) and the on/off toggle are likewise host policy; the Viewer keeps that in
+its own controller and drives this layer.
+
 ## Viewport navigation
 
 `MapsuiMapNavigator` provides the small navigation surface already used by

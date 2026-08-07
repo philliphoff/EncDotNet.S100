@@ -1,9 +1,9 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Threading;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
-using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -40,7 +40,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly SettingsViewModel _settings;
     private readonly Action<Action> _marshal;
-    private readonly MemoryLayer _layer;
+    private readonly S100DatasetExtentIndicatorLayer _extent;
     private readonly HashSet<DatasetEntry> _subscribed = new();
     private bool _disposed;
 
@@ -75,7 +75,9 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         _settings = settings;
         _marshal = marshal ?? DispatcherMarshal;
 
-        _layer = DatasetExtentIndicatorOverlayLayer.Create();
+        // Keep the historical layer name so anything that finds the overlay by
+        // name (z-order, diagnostics) is unaffected by the reusable-layer default.
+        _extent = new S100DatasetExtentIndicatorLayer(name: "Dataset Extent Indicators");
 
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
         foreach (var entry in _datasets.Entries)
@@ -86,7 +88,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
 
         _marshal(() =>
         {
-            _layers.AddOverlayLayer(_layer);
+            _layers.AddOverlayLayer(_extent.Layer);
             Rebuild();
         });
     }
@@ -146,7 +148,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     {
         if (_disposed) return;
 
-        var indicators = new List<DatasetExtentIndicator>();
+        var indicators = new List<S100DatasetExtentIndicator>();
 
         if (_settings.ShowOutOfScaleExtentIndicators)
         {
@@ -163,7 +165,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                     if (entry.IsVisible && entry.GeographicBounds is { } bounds)
                     {
                         foreach (var deferredExtent in ToMercatorExtents(bounds))
-                            indicators.Add(new DatasetExtentIndicator(deferredExtent, 0.0));
+                            indicators.Add(new S100DatasetExtentIndicator(deferredExtent, 0.0));
                     }
                     continue;
                 }
@@ -175,11 +177,11 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 if (entry.ContentMaxVisibleResolution is not { } cutoff)
                     continue;
 
-                indicators.Add(new DatasetExtentIndicator(extent, cutoff));
+                indicators.Add(new S100DatasetExtentIndicator(extent, cutoff));
             }
         }
 
-        DatasetExtentIndicatorOverlayLayer.Update(_layer, indicators, _appearance.Current.Accent);
+        _extent.Show(indicators, _appearance.Current.Accent);
     }
 
     /// <summary>
@@ -256,6 +258,6 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         _appearance.Changed -= OnAppearanceChanged;
         _settings.ExtentIndicatorsChanged -= OnToggleChanged;
 
-        _marshal(() => _layers.RemoveOverlayLayer(_layer));
+        _marshal(() => _layers.RemoveOverlayLayer(_extent.Layer));
     }
 }

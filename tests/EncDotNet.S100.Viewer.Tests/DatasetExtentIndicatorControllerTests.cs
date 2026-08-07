@@ -18,6 +18,10 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// </summary>
 public class DatasetExtentIndicatorControllerTests
 {
+    // The controller names its reusable S100DatasetExtentIndicatorLayer with this
+    // historical name (kept stable across the reusable-module extraction).
+    private const string LayerName = "Dataset Extent Indicators";
+
     private sealed class NoopLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
@@ -65,7 +69,7 @@ public class DatasetExtentIndicatorControllerTests
     private static int FeatureCount(FakeMapHost host)
     {
         var layer = host.OverlayLayers.OfType<MemoryLayer>()
-            .Single(l => l.Name == DatasetExtentIndicatorOverlayLayer.LayerName);
+            .Single(l => l.Name == LayerName);
         return layer.Features.Count();
     }
 
@@ -79,7 +83,7 @@ public class DatasetExtentIndicatorControllerTests
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
             marshal: a => a());
 
-        Assert.Contains(host.OverlayLayers, l => l.Name == DatasetExtentIndicatorOverlayLayer.LayerName);
+        Assert.Contains(host.OverlayLayers, l => l.Name == LayerName);
     }
 
     [Fact]
@@ -156,7 +160,7 @@ public class DatasetExtentIndicatorControllerTests
 
         controller.Dispose();
 
-        Assert.DoesNotContain(host.OverlayLayers, l => l.Name == DatasetExtentIndicatorOverlayLayer.LayerName);
+        Assert.DoesNotContain(host.OverlayLayers, l => l.Name == LayerName);
     }
 
     private sealed class StubAssetSource : IAssetSource
