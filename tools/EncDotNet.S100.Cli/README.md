@@ -416,10 +416,11 @@ Hosts the read-only S-100 [Model Context Protocol](https://modelcontextprotocol.
 tools over the **stdio** transport, so an MCP client that spawns this process can
 query the served datasets — features, attributes, spatial queries, and coverage
 samples — without a GUI viewer. The tools are the same read-only set the desktop
-viewer exposes (`list_datasets`, `describe_feature`, `query_features`, `find_at`,
-`identify_features`, `nearest_features`, `count_features`, `search_features`,
-`sample_coverage`, `sample_coverage_along`, `list_specs`, `list_time_steps`);
-none mutate data, load/unload datasets, or write files.
+viewer exposes (`list_datasets`, `describe_feature`, `describe_feature_type`,
+`query_features`, `find_at`, `identify_features`, `nearest_features`,
+`count_features`, `search_features`, `sample_coverage`, `sample_coverage_along`,
+`list_specs`, `list_time_steps`); none mutate data, load/unload datasets, or
+write files.
 
 The datasets to serve are specified up front, using the same input grammar as
 `s100 identify`: a single positional dataset, repeated `--layer` options, or an

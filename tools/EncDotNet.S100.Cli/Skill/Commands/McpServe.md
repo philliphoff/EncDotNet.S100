@@ -2,8 +2,8 @@
 
 `s100 mcp serve` turns this CLI into a Model Context Protocol server: it hosts
 the read-only S-100 query tools (`list_datasets`, `describe_feature`,
-`query_features`, `find_at`, `identify_features`, `nearest_features`,
-`count_features`, `search_features`, `sample_coverage`,
+`describe_feature_type`, `query_features`, `find_at`, `identify_features`,
+`nearest_features`, `count_features`, `search_features`, `sample_coverage`,
 `sample_coverage_along`, `list_specs`, `list_time_steps`) over the **stdio**
 transport, so an MCP client that spawns this process can query the datasets
 without a GUI.
