@@ -35,6 +35,13 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class DatasetExtentIndicatorController : IDisposable
 {
+    /// <summary>
+    /// The overlay layer's name. Kept stable across the reusable-layer extraction
+    /// (rather than the reusable default) because other code and tests match the
+    /// overlay by name; hoisted to a constant so the two can't drift.
+    /// </summary>
+    private const string OverlayLayerName = "Dataset Extent Indicators";
+
     private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
@@ -75,9 +82,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         _settings = settings;
         _marshal = marshal ?? DispatcherMarshal;
 
-        // Keep the historical layer name so anything that finds the overlay by
-        // name (z-order, diagnostics) is unaffected by the reusable-layer default.
-        _extent = new S100DatasetExtentIndicatorLayer(name: "Dataset Extent Indicators");
+        _extent = new S100DatasetExtentIndicatorLayer(name: OverlayLayerName);
 
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
         foreach (var entry in _datasets.Entries)

@@ -170,6 +170,17 @@ public class S100DatasetExtentIndicatorLayerTests
     }
 
     [Fact]
+    public void Style_DashArray_IsDefensivelyCopied()
+    {
+        // Mutating the array returned by the shared Default singleton must not
+        // change the default (nor any later-built pen).
+        var returned = S100DatasetExtentIndicatorStyle.Default.DashArray;
+        returned[0] = 999f;
+
+        Assert.NotEqual(999f, S100DatasetExtentIndicatorStyle.Default.DashArray[0]);
+    }
+
+    [Fact]
     public void Show_NullIndicators_Throws()
     {
         var overlay = new S100DatasetExtentIndicatorLayer();

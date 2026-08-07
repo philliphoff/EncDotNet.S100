@@ -136,9 +136,9 @@ public sealed class S100DatasetExtentIndicatorLayer
                     Width = _style.OutlineWidth,
                     PenStyle = PenStyle.UserDefined,
                     PenStrokeCap = PenStrokeCap.Round,
-                    // Clone so the Pen can't alias (and later mutate) the style's
-                    // shared array — Default is a singleton reused across pens.
-                    DashArray = (float[])_style.DashArray.Clone(),
+                    // The style returns a defensive copy, so each Pen owns its
+                    // own array and can't alias the shared (singleton) default.
+                    DashArray = _style.DashArray,
                 },
                 Opacity = _style.OutlineOpacity,
                 // Show the border only when zoomed out past the dataset's content

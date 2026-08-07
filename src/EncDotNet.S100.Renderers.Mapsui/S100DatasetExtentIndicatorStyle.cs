@@ -30,13 +30,25 @@ public sealed record S100DatasetExtentIndicatorStyle
     /// </summary>
     public float OutlineOpacity { get; init; } = 0.5f;
 
+    private readonly float[] _dashArray = { 0.01f, 3.0f };
+
     /// <summary>
     /// Dash pattern (multiples of <see cref="OutlineWidth"/>). A near-zero
     /// on-segment combined with a round stroke cap renders each dash as a round
     /// dot, which reads more cleanly than dashes at coarse zoom. Takes effect only
     /// with a user-defined pen style, which the layer selects.
     /// </summary>
-    public float[] DashArray { get; init; } = { 0.01f, 3.0f };
+    /// <remarks>
+    /// Defensively copied on both <c>init</c> and <c>get</c>, so the style —
+    /// including the shared <see cref="Default"/> singleton — stays effectively
+    /// immutable: a caller cannot mutate the pattern through the returned array.
+    /// A <see langword="null"/> assignment is treated as no dashes (a solid line).
+    /// </remarks>
+    public float[] DashArray
+    {
+        get => (float[])_dashArray.Clone();
+        init => _dashArray = value is null ? Array.Empty<float>() : (float[])value.Clone();
+    }
 
     /// <summary>The default appearance (Viewer-matching accent and weights).</summary>
     public static S100DatasetExtentIndicatorStyle Default { get; } = new();
