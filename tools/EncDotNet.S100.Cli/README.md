@@ -410,6 +410,42 @@ The written dataset can be inspected with `s100 info`, validated with
 and attribute mapping, allowed-value enforcement) are owned by
 `S57ToS101Translator`; this command only drives it and encodes the result.
 
+### `s100 mcp serve <dataset-or-exchange-set>`
+
+Hosts the read-only S-100 [Model Context Protocol](https://modelcontextprotocol.io)
+tools over the **stdio** transport, so an MCP client that spawns this process can
+query the served datasets — features, attributes, spatial queries, and coverage
+samples — without a GUI viewer. The tools are the same read-only set the desktop
+viewer exposes (`list_datasets`, `describe_feature`, `query_features`, `find_at`,
+`identify_features`, `nearest_features`, `count_features`, `search_features`,
+`sample_coverage`, `sample_coverage_along`, `list_specs`, `list_time_steps`);
+none mutate data, load/unload datasets, or write files.
+
+The datasets to serve are specified up front, using the same input grammar as
+`s100 identify`: a single positional dataset, repeated `--layer` options, or an
+exchange set (positional directory / `CATALOG.XML` / `.zip`, or `--from`). They
+are loaded once into an immutable catalog and served read-only; the process is
+the session boundary — spawn another `serve` for a different set.
+
+```
+s100 mcp serve dataset.h5
+s100 mcp serve --layer enc.000 --layer bathy.h5
+s100 mcp serve --from exchange-set.zip --only S101,S102
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--layer <path>` | — | Add a dataset to serve (repeatable). Mutually exclusive with the exchange-set form. |
+| `--from`, `--exchange-set <path>` | — | Serve every discoverable dataset in an exchange set. Mutually exclusive with `--layer`. |
+| `--only <specs>` | all | Exchange-set form only: restrict loading to a comma-separated spec list (e.g. `S101,S102`). |
+| `--debug` | off | Show a full stack trace on error. |
+
+Configure it as an MCP server with command `s100` and args
+`["mcp", "serve", "<dataset-or-exchange-set>"]`. **Standard output carries the
+MCP protocol** — startup notices, load warnings, and errors are written to
+standard error so they never corrupt the stream. The server runs until the
+client disconnects (stdin end-of-file) or it is interrupted.
+
 ## Supported specifications
 
 | Family | Specs | Path |

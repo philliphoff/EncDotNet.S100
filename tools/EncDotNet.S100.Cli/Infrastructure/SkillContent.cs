@@ -16,6 +16,7 @@ internal static class SkillContent
             ["identify"] = "Commands.Identify.md",
             ["list-specs"] = "Commands.ListSpecs.md",
             ["s57 convert"] = "Commands.S57Convert.md",
+            ["mcp serve"] = "Commands.McpServe.md",
         };
 
     public static IReadOnlyCollection<string> GuidedCommandPaths { get; } =
