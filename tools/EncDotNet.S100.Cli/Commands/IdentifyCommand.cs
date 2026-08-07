@@ -5,7 +5,6 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using Spectre.Console;
@@ -170,7 +169,9 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         var warnings = new List<string>();
         try
         {
-            var inputs = ResolveInputs(settings, warnings, out exchangeSetResolution);
+            var inputs = DatasetInputResolver.Resolve(
+                settings.Input, settings.Layers, settings.ExchangeSet, settings.Only,
+                warnings, out exchangeSetResolution);
             if (inputs.Count == 0)
             {
                 foreach (var warning in warnings)
@@ -229,94 +230,6 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         {
             exchangeSetResolution?.Dispose();
         }
-    }
-
-    /// <summary>
-    /// Resolves the command's input grammar to a list of dataset files, each
-    /// detected to its product specification and paired with an S-101 external
-    /// text resolver where applicable.
-    /// </summary>
-    private static List<FileDatasetInput> ResolveInputs(
-        Settings settings,
-        List<string> warnings,
-        out IDisposable? exchangeSetResolution)
-    {
-        exchangeSetResolution = null;
-        var inputs = new List<FileDatasetInput>();
-        var usedIds = new HashSet<string>(StringComparer.Ordinal);
-
-        var exchangeSetSource = !string.IsNullOrWhiteSpace(settings.ExchangeSet)
-            ? settings.ExchangeSet
-            : (settings.Layers.Length == 0 && !string.IsNullOrWhiteSpace(settings.Input)
-                && ExchangeSetInput.LooksLikeExchangeSet(settings.Input)
-                ? settings.Input
-                : null);
-
-        if (exchangeSetSource is not null)
-        {
-            IReadOnlySet<string>? only = null;
-            if (!string.IsNullOrWhiteSpace(settings.Only))
-                only = ParseOnlySpecs(settings.Only);
-
-            var resolution = ExchangeSetLayerResolution.Resolve(exchangeSetSource, only);
-            exchangeSetResolution = resolution;
-            warnings.AddRange(resolution.Warnings);
-
-            foreach (var layer in resolution.Layers)
-            {
-                var id = UniqueId(layer.RelativePath, usedIds);
-                inputs.Add(new FileDatasetInput(
-                    new DatasetId(id), layer.Spec, layer.Path,
-                    BuildExternalTextResolver(layer.Spec, layer.Path)));
-            }
-
-            return inputs;
-        }
-
-        var paths = settings.Layers.Length > 0
-            ? settings.Layers
-            : (string.IsNullOrWhiteSpace(settings.Input) ? [] : new[] { settings.Input! });
-
-        foreach (var path in paths)
-        {
-            if (!File.Exists(path))
-            {
-                warnings.Add($"Skipped missing dataset file: {path}");
-                continue;
-            }
-
-            var spec = DatasetPipelineFactory.DetectProductSpec(path);
-            if (spec is null)
-            {
-                warnings.Add($"Skipped unsupported dataset (no known product specification): {path}");
-                continue;
-            }
-
-            var id = UniqueId(Path.GetFileName(path), usedIds);
-            inputs.Add(new FileDatasetInput(
-                new DatasetId(id), spec, path, BuildExternalTextResolver(spec, path)));
-        }
-
-        return inputs;
-    }
-
-    /// <summary>
-    /// Builds a file-name → text resolver for an S-101 cell's
-    /// <c>fileReference</c> attributes (S-101 Feature Catalogue) rooted at the
-    /// cell's own directory, so referenced text is surfaced in the pick.
-    /// Returns <c>null</c> for non-S-101 specs.
-    /// </summary>
-    private static Func<string, string?>? BuildExternalTextResolver(string spec, string path)
-    {
-        if (spec is not ("S-101" or "S-57"))
-            return null;
-
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (string.IsNullOrEmpty(directory))
-            return null;
-
-        var source = FileSystemAssetSource.Create(directory);
-        return new ExternalTextFileResolver(source, Path.GetFileName(path)).AsDelegate();
     }
 
     /// <summary>
@@ -609,38 +522,12 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         _ => "?",
     };
 
-    private static string UniqueId(string candidate, HashSet<string> used)
-    {
-        var id = string.IsNullOrEmpty(candidate) ? "dataset" : candidate;
-        if (used.Add(id))
-            return id;
-
-        for (var i = 2; ; i++)
-        {
-            var next = $"{id}#{i}";
-            if (used.Add(next))
-                return next;
-        }
-    }
-
     private static string Truncate(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..maxLength] + "…";
 
     private static bool TryParseCoordinate(string? value, out double result) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
             && double.IsFinite(result);
-
-    private static IReadOnlySet<string> ParseOnlySpecs(string only) =>
-        only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(NormalizeOnlyToken)
-            .ToHashSet(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Normalises a spec token to the CATALOG.XML-comparable form the exchange
-    /// set resolver expects (digits only, e.g. <c>S101</c> → <c>S101</c>).
-    /// </summary>
-    private static string NormalizeOnlyToken(string token) =>
-        token.Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
 
     /// <summary>
     /// Normalises a spec token to the canonical <c>S-NNN</c> form used by

@@ -70,6 +70,17 @@ internal static class CliApp
                     .WithDescription("Convert an S-57 base cell to an S-101 dataset (ISO/IEC 8211).")
                     .WithExample("s57", "convert", "-o", "my-s101-dataset.000", "my-s57-dataset.000");
             });
+
+            config.AddBranch("mcp", mcp =>
+            {
+                mcp.SetDescription("Model Context Protocol (MCP) server operations.");
+
+                mcp.AddCommand<McpServeCommand>("serve")
+                    .WithDescription("Serve the read-only S-100 MCP tools over stdio for a fixed set of datasets, so an agent that spawns this process can query features and coverages without a GUI.")
+                    .WithExample("mcp", "serve", "dataset.h5")
+                    .WithExample("mcp", "serve", "--layer", "enc.000", "--layer", "bathy.h5")
+                    .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102");
+            });
         });
         return app;
     }
