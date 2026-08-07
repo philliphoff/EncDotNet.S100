@@ -94,10 +94,11 @@ public class S100OverscaleCurtainLayerTests
         overlay.Show(new[]
         {
             Region("Empty", 2.0, Gf.CreatePolygon()),   // empty geometry
+            new OverscaleRegion("Null", 3.0, null!),    // absent geometry
             Region("Coastal", 4.0, Rect(0, 0, 10, 10)),
         });
 
-        // Only the non-empty region becomes a feature.
+        // Only the non-empty, non-null region becomes a feature.
         Assert.Single(Features(overlay.Layer));
     }
 
