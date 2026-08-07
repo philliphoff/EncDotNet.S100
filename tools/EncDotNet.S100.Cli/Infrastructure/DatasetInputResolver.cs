@@ -141,7 +141,8 @@ internal static class DatasetInputResolver
 
     /// <summary>
     /// Normalises a spec token to the CATALOG.XML-comparable form the exchange
-    /// set resolver expects (digits only, e.g. <c>S-101</c> → <c>S101</c>).
+    /// set resolver expects: hyphens removed and upper-cased
+    /// (e.g. <c>s-101</c> → <c>S101</c>).
     /// </summary>
     private static string NormalizeOnlyToken(string token) =>
         token.Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
