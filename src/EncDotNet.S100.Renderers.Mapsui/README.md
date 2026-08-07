@@ -303,13 +303,16 @@ visibility, or zoom-cutoffs change:
 var extents = new S100DatasetExtentIndicatorLayer();   // optional: S100DatasetExtentIndicatorStyle
 map.Layers.Add(extents.Layer);
 
-extents.Show(new[]
-{
-    // extent in EPSG:3857 (Mapsui map units); MinVisible = the dataset's
-    // whole-cell zoom-out cutoff (metres/pixel), so the border appears exactly
-    // when the dataset's own content drops out. Pass 0 to always show it.
-    new S100DatasetExtentIndicator(dataset.MercatorExtent, dataset.ContentMaxVisibleResolution),
-});
+// One indicator per dataset that has both a captured mercator extent and a
+// whole-cell zoom-out cutoff — a dataset that never drops out needs no hint.
+// MapsuiMapDatasetSnapshot.Extent (EPSG:3857, Mapsui map units) and
+// .ContentMaxVisibleResolution (metres/pixel) are both nullable, hence the
+// filter. The cutoff becomes each border's MinVisible, so it appears exactly
+// when the dataset's own content drops out; pass 0 to always show it (e.g. an
+// unloaded catalogue footprint).
+extents.Show(session.GetDatasets()
+    .Where(d => d.Extent is not null && d.ContentMaxVisibleResolution is not null)
+    .Select(d => new S100DatasetExtentIndicator(d.Extent!, d.ContentMaxVisibleResolution!.Value)));
 // extents.Show(indicators, accent);   // re-theme without rebuilding the layer
 // extents.Clear();                     // remove all indicators
 ```

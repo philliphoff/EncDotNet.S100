@@ -136,7 +136,9 @@ public sealed class S100DatasetExtentIndicatorLayer
                     Width = _style.OutlineWidth,
                     PenStyle = PenStyle.UserDefined,
                     PenStrokeCap = PenStrokeCap.Round,
-                    DashArray = _style.DashArray,
+                    // Clone so the Pen can't alias (and later mutate) the style's
+                    // shared array — Default is a singleton reused across pens.
+                    DashArray = (float[])_style.DashArray.Clone(),
                 },
                 Opacity = _style.OutlineOpacity,
                 // Show the border only when zoomed out past the dataset's content
