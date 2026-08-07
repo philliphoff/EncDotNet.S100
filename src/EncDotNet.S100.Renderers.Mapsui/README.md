@@ -333,6 +333,43 @@ qualify (loaded-and-visible, out-of-scale, catalogue footprints for deferred
 cells) and the on/off toggle are likewise host policy; the Viewer keeps that in
 its own controller and drives this layer.
 
+## Overscale curtain
+
+`S100OverscaleCurtainLayer` is an optional, reusable Mapsui overlay that paints
+the S-52 / S-101 overscale "curtain" (`AP(OVERSC01)` Form A) — a subtle pattern
+of evenly spaced vertical lines — over the regions of loaded cells being
+displayed beyond their compilation scale. Like the pick-highlight and
+dataset-extent-indicator layers it depends only on Mapsui, not on the session, a
+catalogue, an application palette, a view model, or Avalonia. Add its `Layer`
+once, then call `Show` with the regions computed for the current zoom:
+
+```csharp
+var curtain = new S100OverscaleCurtainLayer();   // optional: OverscaleCurtainStyle
+map.Layers.Add(curtain.Layer);
+
+// Region geometry depends only on the loaded cells and the viewport resolution
+// (metres/pixel) — never on pan or rotation — so recompute it only when the zoom
+// or the set of loaded cells changes.
+var regions = OverscaleCurtain.ComputeRegions(overscaleCells, viewportResolution);
+curtain.Show(regions);
+// curtain.Clear();   // remove the curtain
+```
+
+`OverscaleCurtain.ComputeRegions` works in world (EPSG:3857) coordinates: it
+returns one region per overscaled cell, that cell's coverage with every
+strictly-finer overlapping cell subtracted so a finer cell's in-scale footprint
+stays curtain-free (S-52: the curtain marks only genuinely overscaled area). The
+layer fills each region with a shared `OverscaleCurtainStyle`, whose renderer
+draws world-anchored vertical strokes clipped to the region per frame — so the
+pattern stays crisp at any zoom and on HiDPI surfaces and moves with the chart
+during panning without any per-frame rebuild here. `OverscaleCurtainStyle` tunes
+the line spacing, width, and colour; the default matches the Viewer's look.
+
+Deciding *which* cells qualify (loaded, drawing, scale-bearing) and honouring the
+mariner's on/off toggle are host policy; the Viewer keeps that in its own
+controller — caching the last resolution, recomputing only on a zoom or
+dataset-set change — and drives this layer.
+
 ## Viewport navigation
 
 `MapsuiMapNavigator` provides the small navigation surface already used by
