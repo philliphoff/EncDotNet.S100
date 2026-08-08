@@ -45,6 +45,19 @@ public class S100ProductRegistryTests
     }
 
     [Fact]
+    public void Register_NormalizesNonCanonicalSpec_ResolvableByCanonical()
+    {
+        var registry = new S100ProductRegistry();
+        var registration = Fake("S101");
+
+        registry.Register(registration);
+
+        Assert.Same(registration, registry.Resolve("S-101"));
+        Assert.True(registry.IsRegistered("S-101"));
+        Assert.Contains("S-101", registry.RegisteredSpecs);
+    }
+
+    [Fact]
     public void Register_ReplacesExistingBySpec()
     {
         var registry = new S100ProductRegistry();

@@ -18,27 +18,30 @@ public sealed class S100ProductRegistry
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Registers (or replaces, by <see cref="S100ProductRegistration.Spec"/>) a
-    /// product.
+    /// Registers (or replaces, by normalized <see cref="S100ProductRegistration.Spec"/>)
+    /// a product. The spec is canonicalized on the way in (e.g. <c>"S101"</c> →
+    /// <c>"S-101"</c>) so a registration made under a non-canonical identifier is
+    /// still resolvable by the canonical spec that <see cref="DatasetPipelineFactory"/>
+    /// detection produces.
     /// </summary>
     public void Register(S100ProductRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentException.ThrowIfNullOrEmpty(registration.Spec);
-        _bySpec[registration.Spec] = registration;
+        _bySpec[NormalizeSpec(registration.Spec)] = registration;
     }
 
     /// <summary>Whether a product is registered for <paramref name="spec"/>.</summary>
-    public bool IsRegistered(string spec) => _bySpec.ContainsKey(spec);
+    public bool IsRegistered(string spec) => _bySpec.ContainsKey(NormalizeSpec(spec));
 
-    /// <summary>The canonical spec strings currently registered.</summary>
+    /// <summary>The registered spec keys (canonical where recognized).</summary>
     public IReadOnlyCollection<string> RegisteredSpecs => _bySpec.Keys;
 
     /// <summary>Looks up the registration for <paramref name="spec"/>.</summary>
     public bool TryResolve(
         string spec,
         [NotNullWhen(true)] out S100ProductRegistration? registration) =>
-        _bySpec.TryGetValue(spec, out registration);
+        _bySpec.TryGetValue(NormalizeSpec(spec), out registration);
 
     /// <summary>
     /// Resolves the registration for <paramref name="spec"/>, throwing
@@ -49,4 +52,19 @@ public sealed class S100ProductRegistry
             ? registration
             : throw new NotSupportedException(
                 $"No S-100 product is registered for specification '{spec}'.");
+
+    /// <summary>
+    /// Canonicalizes a spec key so registrations and look-ups agree regardless of
+    /// the exact identifier form used. Recognized S-100 product identifiers
+    /// (e.g. <c>"S101"</c>, <c>"s-101"</c>, <c>"  S-101  "</c>) collapse to their
+    /// canonical <c>"S-101"</c> form via
+    /// <see cref="DatasetPipelineFactory.MapProductIdentifierToSpec"/>; an
+    /// unrecognized identifier (a host's own product) is kept as-is apart from
+    /// trimming, and the dictionary's case-insensitive comparer handles casing.
+    /// </summary>
+    private static string NormalizeSpec(string spec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(spec);
+        return DatasetPipelineFactory.MapProductIdentifierToSpec(spec) ?? spec.Trim();
+    }
 }
