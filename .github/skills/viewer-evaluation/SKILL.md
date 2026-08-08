@@ -101,6 +101,7 @@ a `dotnet` host:
 
 ```bash
 dotnet build -c Release src/EncDotNet.S100.Viewer
+mkdir -p /tmp/eval
 nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
   --data-dir /tmp/eval/data --mcp --mcp-port-file /tmp/eval/mcp.url \
   >/tmp/eval/viewer.log 2>&1 & disown

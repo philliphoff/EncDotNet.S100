@@ -756,6 +756,7 @@ run is finished, stop the process from the OS (the viewer ignores
 SIGTERM, so use `kill -9 <pid>`).
 
 ```sh
+mkdir -p /tmp/run
 dotnet run --project src/EncDotNet.S100.Viewer -- \
   --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
   --bbox 47.5,-122.5,47.7,-122.1 --palette Night \
@@ -929,6 +930,7 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
    recording where the endpoint lands:
 
    ```sh
+   mkdir -p /tmp/run
    dotnet run --project src/EncDotNet.S100.Viewer -- \
      --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
      --bbox 47.5,-122.5,47.7,-122.1 \
