@@ -57,14 +57,27 @@ public sealed record SetViewportResult(
 /// <see cref="SetViewportRequest.RotationDegrees"/> is rejected rather than
 /// silently dropped. North-up (0) is the only supported value.
 /// </para>
+/// <para>
+/// Latitudes are validated against the composite renderer's practical Web
+/// Mercator limit (±<see cref="MaxMercatorLatitude"/>°), not the full WGS-84
+/// range: a value beyond it would be clamped at render time, so the echoed
+/// viewport would not match what is drawn. Such values are rejected up front.
+/// </para>
 /// </remarks>
 public sealed class SetViewportTool
 {
     /// <summary>The MCP tool name as exposed to clients.</summary>
     public const string Name = "set_viewport";
 
-    internal const double MinLat = -90.0;
-    internal const double MaxLat = 90.0;
+    /// <summary>
+    /// Practical EPSG:3857 (Web Mercator) latitude limit, ±85.05112878°. The
+    /// composite viewport builder clamps latitudes to this range, so accepting a
+    /// value beyond it would render something other than what the caller asked
+    /// for. Matches <c>CompositeViewportBuilder.MaxLatitude</c>.
+    /// </summary>
+    internal const double MaxMercatorLatitude = 85.05112878;
+    internal const double MinLat = -MaxMercatorLatitude;
+    internal const double MaxLat = MaxMercatorLatitude;
     internal const double MinLon = -180.0;
     internal const double MaxLon = 180.0;
 
@@ -205,14 +218,23 @@ public sealed class SetViewportTool
         });
 
         // Echo the resolved viewport the controller settled on (its own
-        // reference-surface framing of the box) so callers can verify.
+        // reference-surface framing of the box) so callers can verify. If the
+        // controller cannot report one, surface an error rather than a bogus
+        // (e.g. zero) scale that would contradict the "returns the applied
+        // viewport" contract.
         var applied = controller.Current;
+        if (applied is null)
+        {
+            return Err(new HostNotReady(
+                "the viewport controller did not report a resolved viewport after framing the bounding box"));
+        }
+
         return Ok(new SetViewportResult(
             Mode: "bounds",
-            CenterLongitude: applied?.CenterLongitude ?? (minLon + maxLon) / 2.0,
-            CenterLatitude: applied?.CenterLatitude ?? (minLat + maxLat) / 2.0,
-            ScaleDenominator: applied?.ScaleDenominator ?? 0.0,
-            RotationDegrees: applied?.RotationDegrees ?? 0.0,
+            CenterLongitude: applied.CenterLongitude,
+            CenterLatitude: applied.CenterLatitude,
+            ScaleDenominator: applied.ScaleDenominator,
+            RotationDegrees: applied.RotationDegrees,
             Previous: Format(previous)));
     }
 
@@ -221,7 +243,7 @@ public sealed class SetViewportTool
         if (double.IsNaN(value) || double.IsInfinity(value))
             return new InvalidArgument(name, $"value {value} is not a finite number");
         if (value < min || value > max)
-            return new InvalidArgument(name, $"value {value} is outside the WGS-84 range [{min}, {max}]");
+            return new InvalidArgument(name, $"value {value} is outside the supported range [{min}, {max}]");
         return null;
     }
 

@@ -120,6 +120,31 @@ public class SetViewportToolTests
         Assert.Equal("centerLongitude", error.Parameter);
     }
 
+    [Theory]
+    [InlineData(87.0)]    // beyond the Web Mercator limit
+    [InlineData(-86.0)]
+    public async Task CenterLatitudeBeyondMercatorLimit_IsInvalidArgument(double lat)
+    {
+        var host = new FakeViewport();
+
+        var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
+            .InvokeAsync(new SetViewportRequest(
+                CenterLongitude: -1.25, CenterLatitude: lat, ScaleDenominator: 50000))));
+        Assert.Equal("centerLatitude", error.Parameter);
+        Assert.Null(host.Current); // nothing applied
+    }
+
+    [Fact]
+    public async Task Bounds_WhenControllerCannotReportApplied_IsHostNotReady()
+    {
+        var host = new NullReportingViewport();
+
+        Assert.IsType<HostNotReady>(AssertErr(await new SetViewportTool(Accessor(host))
+            .InvokeAsync(new SetViewportRequest(
+                MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5))));
+        Assert.True(host.SetToBoundsCalled); // the bounds were applied before the echo failed
+    }
+
     [Fact]
     public async Task NonZeroRotation_IsRejected()
     {
@@ -223,5 +248,21 @@ public class SetViewportToolTests
             LastBounds = bounds;
             _viewport = null;
         }
+    }
+
+    /// <summary>
+    /// An <see cref="IViewportController"/> that accepts <see cref="SetToBounds"/>
+    /// but never reports a resolved viewport (<see cref="Current"/> stays null),
+    /// exercising the tool's guard against echoing a bogus scale.
+    /// </summary>
+    private sealed class NullReportingViewport : IViewportController
+    {
+        public bool SetToBoundsCalled { get; private set; }
+
+        public MapViewport? Current => null;
+
+        public void Set(MapViewport viewport) { }
+
+        public void SetToBounds(BoundingBox bounds) => SetToBoundsCalled = true;
     }
 }

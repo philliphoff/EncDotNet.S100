@@ -205,8 +205,8 @@ public static class S100MutableTools
         + "scale denominator) OR a WGS-84 bounding box "
         + "('minLongitude'/'minLatitude'/'maxLongitude'/'maxLatitude'), not both. The viewport is stored "
         + "geographically and re-fit to each render's pixel size. Rotation is north-up only "
-        + "('rotationDegrees' must be 0 or omitted). Returns the applied viewport and the previous one. "
-        + "MUTATING.";
+        + "('rotationDegrees' must be 0 or omitted). Latitudes must be within the Web Mercator limit "
+        + "(±85.05112878°). Returns the applied viewport and the previous one. MUTATING.";
 
     private static McpServerTool CreateSetViewport(SetViewportTool inner) =>
         McpServerTool.Create(
