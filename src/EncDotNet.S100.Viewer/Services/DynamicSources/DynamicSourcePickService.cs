@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.DynamicSources;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -8,15 +9,15 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
 /// <summary>
 /// Default <see cref="IDynamicSourcePickService"/> implementation.
-/// Delegates the geometric hit-test to
-/// <see cref="DynamicSourceHitTester"/> and projects each hit into a
+/// Delegates the geometric hit-test to the reusable
+/// <see cref="IS100DynamicSourceRegistry.HitTest"/> and projects each hit into a
 /// <see cref="DynamicPickHit"/> with localised attribute rows.
 /// </summary>
 internal sealed class DynamicSourcePickService : IDynamicSourcePickService
 {
-    private readonly IDynamicFeatureSourceRegistry _registry;
+    private readonly IS100DynamicSourceRegistry _registry;
 
-    public DynamicSourcePickService(IDynamicFeatureSourceRegistry registry)
+    public DynamicSourcePickService(IS100DynamicSourceRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
         _registry = registry;
@@ -27,10 +28,7 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
     {
         ArgumentNullException.ThrowIfNull(mapPoint);
 
-        var sources = _registry.GetVisibleSourceInstances();
-        if (sources.Count == 0) return Array.Empty<DynamicPickHit>();
-
-        var raw = DynamicSourceHitTester.HitTest(mapPoint, resolution, sources);
+        var raw = _registry.HitTest(mapPoint, resolution);
         if (raw.Count == 0) return Array.Empty<DynamicPickHit>();
 
         var hits = new List<DynamicPickHit>(raw.Count);
@@ -41,7 +39,7 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
         return hits;
     }
 
-    private static DynamicPickHit Project(DynamicHit hit)
+    private static DynamicPickHit Project(DynamicSourceHit hit)
     {
         var feature = hit.Feature;
         var (lat, lon) = feature.Coordinates[0];

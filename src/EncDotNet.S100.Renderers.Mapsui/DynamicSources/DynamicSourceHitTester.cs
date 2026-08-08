@@ -1,9 +1,8 @@
 using EncDotNet.S100.DynamicSources;
-using EncDotNet.S100.Pipelines.Vector;
 using Mapsui;
 using Mapsui.Projections;
 
-namespace EncDotNet.S100.Viewer.Services.DynamicSources;
+namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 /// <summary>
 /// Pure, stateless hit-tester for dynamic features.
@@ -22,10 +21,9 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// </para>
 /// <para>
 /// v1 treats every dynamic feature as a point regardless of its
-/// declared <see cref="GeometryType"/> — only point features ship
-/// today. Line / polygon dynamic features will get their own paths
-/// when a producer needs them; see
-/// <c>docs/design/dynamic-source-pick.md</c> §1 Q2.
+/// declared geometry type — only point features ship today. Line /
+/// polygon dynamic features will get their own paths when a producer
+/// needs them.
 /// </para>
 /// </remarks>
 internal static class DynamicSourceHitTester
@@ -48,7 +46,7 @@ internal static class DynamicSourceHitTester
     /// visible sources; the tester does not consult the registry
     /// itself.
     /// </param>
-    public static IReadOnlyList<DynamicHit> HitTest(
+    public static IReadOnlyList<DynamicSourceHit> HitTest(
         MPoint mapPoint,
         double resolution,
         IEnumerable<IDynamicFeatureSource> sources)
@@ -58,13 +56,13 @@ internal static class DynamicSourceHitTester
 
         if (resolution <= 0 || double.IsNaN(resolution) || double.IsInfinity(resolution))
         {
-            return Array.Empty<DynamicHit>();
+            return Array.Empty<DynamicSourceHit>();
         }
 
         var toleranceMapUnits = ToleranceDevicePixels * resolution;
         var toleranceSquared = toleranceMapUnits * toleranceMapUnits;
 
-        var hits = new List<DynamicHit>();
+        var hits = new List<DynamicSourceHit>();
         foreach (var source in sources)
         {
             if (source is null) continue;
@@ -96,13 +94,13 @@ internal static class DynamicSourceHitTester
 
                 if (insideHull)
                 {
-                    hits.Add(new DynamicHit(source, feature, 0.0));
+                    hits.Add(new DynamicSourceHit(source, feature, 0.0));
                     continue;
                 }
 
                 if (distSq <= toleranceSquared)
                 {
-                    hits.Add(new DynamicHit(source, feature, distance));
+                    hits.Add(new DynamicSourceHit(source, feature, distance));
                 }
             }
         }
@@ -176,13 +174,3 @@ internal static class DynamicSourceHitTester
         return inside;
     }
 }
-
-/// <summary>
-/// Single hit returned by <see cref="DynamicSourceHitTester"/>. Carries
-/// the owning source and the picked feature so the pick service can
-/// resolve display metadata.
-/// </summary>
-internal sealed record DynamicHit(
-    IDynamicFeatureSource Source,
-    DynamicFeature Feature,
-    double DistanceMapUnits);

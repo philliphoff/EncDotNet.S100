@@ -40,7 +40,7 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
     private Map? _renderActivityMap;
     private EventHandler? _renderActivityRefreshHandler;
-    private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
+    private EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
@@ -375,10 +375,17 @@ public partial class MainWindow : ShadUI.Window
         // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
         // the overlay above the OSM tile layer rather than at index 0
         // (where the subsequently-added basemap would cover it).
-        _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
+        _dynamicSourceOverlayHost = new EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost(
             _mapHost,
-            App.Services,
-            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
+            rendererKey => rendererKey is null
+                ? null
+                : App.Services.GetKeyedService<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IDynamicFeatureRenderer>(rendererKey),
+            marshal: action =>
+            {
+                if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) action();
+                else Avalonia.Threading.Dispatcher.UIThread.Post(action);
+            },
+            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost>>());
 
         // PR-D2.1: seed per-source visibility from persisted settings
         // *before* the Register loop so each source's MemoryLayer.Enabled

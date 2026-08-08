@@ -1,65 +1,73 @@
-using Avalonia.Threading;
 using EncDotNet.S100.DynamicSources;
-using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui;
 using Mapsui.Layers;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace EncDotNet.S100.Viewer.Services.DynamicSources;
+namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 /// <summary>
-/// Viewer-side glue that hosts <see cref="IDynamicFeatureSource"/>
-/// instances on the map's overlay tier.
+/// Reusable host that draws <see cref="IDynamicFeatureSource"/> instances on a
+/// map's overlay tier and exposes them as an <see cref="IS100DynamicSourceRegistry"/>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// For each registered source the host: (1) resolves the appropriate
-/// <see cref="IDynamicFeatureRenderer"/> from DI via
-/// <see cref="DynamicSourceMetadata.RendererKey"/>, falling back to
+/// For each registered source the host: (1) resolves an
+/// <see cref="IDynamicFeatureRenderer"/> via the caller-supplied resolver keyed
+/// by <see cref="DynamicSourceMetadata.RendererKey"/>, falling back to
 /// <see cref="DefaultDynamicFeatureRenderer"/> when the key is
 /// <see langword="null"/> or unresolved; (2) attaches a backing
-/// <see cref="MemoryLayer"/> to <see cref="IMapLayerCollection.AddOverlayLayer"/>;
-/// (3) subscribes to <see cref="IDynamicFeatureSource.Changed"/> and
-/// marshals updates onto the UI thread; and (4) rebuilds the layer's
-/// features on each (debounced) change.
+/// <see cref="MemoryLayer"/> to <see cref="IMapsuiOverlayLayerHost.AddOverlayLayer"/>;
+/// (3) subscribes to <see cref="IDynamicFeatureSource.Changed"/> and marshals
+/// updates onto the map thread; and (4) rebuilds the layer's features on each
+/// (debounced) change.
 /// </para>
 /// <para>
-/// Marshalling is performed through a caller-injectable callback so
-/// the host is unit-testable without spinning up Avalonia. The
-/// default delegates to <see cref="Dispatcher.UIThread"/>.
+/// This is the reusable extraction of the Viewer's dynamic-source overlay glue
+/// (issue #512, step 8). It depends only on Mapsui and the renderer-neutral
+/// <see cref="IDynamicFeatureSource"/> contract — not on Avalonia, a view model,
+/// or a DI container:
 /// </para>
+/// <list type="bullet">
+/// <item><description>
+/// <b>Marshalling</b> is a caller-injected <see cref="Action{T}"/>. The default
+/// runs inline (synchronously), suitable for headless or single-threaded hosts;
+/// a UI host passes a dispatcher marshal (e.g. one that posts to the UI thread).
+/// </description></item>
+/// <item><description>
+/// <b>Renderer resolution</b> is a caller-injected
+/// <see cref="Func{T, TResult}"/> so the host needs no
+/// <c>IServiceProvider</c>; a DI host passes a resolver over its keyed services.
+/// </description></item>
+/// </list>
 /// <para>
-/// v1 deliberately ignores the global time slider — see
-/// <c>docs/design/dynamic-feature-source.md</c> §5 Q8.
+/// v1 deliberately ignores the global time slider.
 /// </para>
 /// </remarks>
-internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSourceRegistry
+public sealed class S100DynamicSourceHost : IDisposable, IS100DynamicSourceRegistry
 {
-    private readonly IMapLayerCollection _layers;
-    private readonly IServiceProvider _services;
+    private readonly IMapsuiOverlayLayerHost _overlayHost;
+    private readonly Func<string?, IDynamicFeatureRenderer?> _rendererResolver;
     private readonly Action<Action> _marshal;
-    private readonly ILogger<DynamicSourceOverlayHost> _logger;
+    private readonly ILogger<S100DynamicSourceHost> _logger;
     /// <summary>
     /// Minimum time between full layer rebuilds for a single source.
-    /// PR-D3 made this matter: high-frequency sources (AIS at world
-    /// scale = 10–100+ events/sec, each touching 100s of features)
-    /// would otherwise pin the UI thread. The throttle is leading-
-    /// edge (first event in a quiet window rebuilds immediately) plus
-    /// trailing-edge (subsequent bursts collapse to one rebuild at
-    /// the end of the window) so own-ship's ~1 Hz cadence still
-    /// renders without perceptible delay.
+    /// High-frequency sources (AIS at world scale = 10–100+ events/sec,
+    /// each touching 100s of features) would otherwise pin the map
+    /// thread. The throttle is leading-edge (first event in a quiet
+    /// window rebuilds immediately) plus trailing-edge (subsequent
+    /// bursts collapse to one rebuild at the end of the window) so
+    /// own-ship's ~1 Hz cadence still renders without perceptible delay.
     /// </summary>
     private readonly TimeSpan _coalesceWindow;
     private readonly Dictionary<string, Registration> _byId = new(StringComparer.Ordinal);
-    // Registration order — preserved separately from _byId so the
-    // Layer Stack panel can render sources in the order they were
-    // registered (PR-D2.1 Q7). Mutated under _lock.
+    // Registration order — preserved separately from _byId so a host
+    // can render sources in the order they were registered. Mutated
+    // under _lock.
     private readonly List<Registration> _ordered = new();
     // Visibility map keyed by source id. Pre-seeded entries (set
     // before Register) survive a later Register call so persisted
-    // visibility from ViewerSettings can be applied without a race.
+    // visibility can be applied without a race.
     private readonly Dictionary<string, bool> _visibility = new(StringComparer.Ordinal);
     private readonly object _lock = new();
 
@@ -69,56 +77,52 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     public event Action? SourcesChanged;
 
     /// <summary>
-    /// Creates a new overlay host.
+    /// Creates a new dynamic-source host.
     /// </summary>
-    /// <param name="layers">
-    /// Target map layer collection. The map must already be initialised
-    /// (basemap added) before any source is registered; layers
-    /// added before initialisation are silently dropped by
-    /// <see cref="MapsuiMapHost"/>.
+    /// <param name="overlayHost">
+    /// Target overlay band. The map must already be initialised (basemap added)
+    /// before any source is registered when the host's overlay-insert policy
+    /// depends on it.
     /// </param>
-    /// <param name="services">
-    /// DI container used to resolve renderers via
-    /// <see cref="IKeyedServiceProvider.GetKeyedService"/>.
+    /// <param name="rendererResolver">
+    /// Resolves an <see cref="IDynamicFeatureRenderer"/> for a source's
+    /// <see cref="DynamicSourceMetadata.RendererKey"/>. Returns
+    /// <see langword="null"/> to fall back to the default renderer.
+    /// <see langword="null"/> for the whole delegate always uses the default
+    /// renderer.
     /// </param>
     /// <param name="marshal">
-    /// Optional override for UI-thread marshalling. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>. Tests inject a synchronous
-    /// or test-dispatcher-backed implementation.
+    /// Optional marshal onto the map thread. Defaults to inline (synchronous)
+    /// execution. A UI host passes a dispatcher-backed marshal.
     /// </param>
     /// <param name="logger">Optional logger.</param>
     /// <param name="coalesceWindow">
-    /// Minimum interval between full rebuilds of a single source's
-    /// layer. <see langword="null"/> uses the default 250 ms (AIS
-    /// at world scale streams 10–100+ events/sec; the default keeps
-    /// the UI responsive while still feeling live for own-ship's
-    /// ~1 Hz cadence). Tests pass <see cref="TimeSpan.Zero"/> to
-    /// disable the throttle and keep rebuilds synchronous.
+    /// Minimum interval between full rebuilds of a single source's layer.
+    /// <see langword="null"/> uses the default 250 ms. Pass
+    /// <see cref="TimeSpan.Zero"/> to disable the throttle and keep rebuilds
+    /// synchronous (used by tests).
     /// </param>
-    public DynamicSourceOverlayHost(
-        IMapLayerCollection layers,
-        IServiceProvider services,
+    public S100DynamicSourceHost(
+        IMapsuiOverlayLayerHost overlayHost,
+        Func<string?, IDynamicFeatureRenderer?>? rendererResolver = null,
         Action<Action>? marshal = null,
-        ILogger<DynamicSourceOverlayHost>? logger = null,
+        ILogger<S100DynamicSourceHost>? logger = null,
         TimeSpan? coalesceWindow = null)
     {
-        ArgumentNullException.ThrowIfNull(layers);
-        ArgumentNullException.ThrowIfNull(services);
-        _layers = layers;
-        _services = services;
-        _marshal = marshal ?? DispatcherMarshal;
-        _logger = logger ?? NullLogger<DynamicSourceOverlayHost>.Instance;
+        ArgumentNullException.ThrowIfNull(overlayHost);
+        _overlayHost = overlayHost;
+        _rendererResolver = rendererResolver ?? (static _ => null);
+        _marshal = marshal ?? (static action => action());
+        _logger = logger ?? NullLogger<S100DynamicSourceHost>.Instance;
         _coalesceWindow = coalesceWindow ?? TimeSpan.FromMilliseconds(250);
     }
 
     /// <summary>
-    /// Registers a source. Resolves
-    /// <see cref="IDynamicFeatureRenderer"/> keyed by
-    /// <c>source.Metadata.RendererKey</c>; falls back to the default
-    /// renderer when the key is <see langword="null"/> or
-    /// unregistered. The returned <see cref="IDisposable"/>
-    /// unregisters the source and detaches its overlay layer when
-    /// disposed.
+    /// Registers a source. Resolves <see cref="IDynamicFeatureRenderer"/> keyed
+    /// by <c>source.Metadata.RendererKey</c>; falls back to the default renderer
+    /// when the key is <see langword="null"/> or unresolved. The returned
+    /// <see cref="IDisposable"/> unregisters the source and detaches its overlay
+    /// layer when disposed.
     /// </summary>
     public IDisposable Register(IDynamicFeatureSource source)
     {
@@ -146,7 +150,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
             _ordered.Add(registration);
 
             // Apply any pre-seeded visibility (e.g. from settings
-            // restored before MainWindow constructed the host).
+            // restored before the host was constructed).
             initialVisible = !_visibility.TryGetValue(source.Id, out var v) || v;
             _visibility[source.Id] = initialVisible;
         }
@@ -155,7 +159,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
 
         _marshal(() =>
         {
-            _layers.AddOverlayLayer(layer);
+            _overlayHost.AddOverlayLayer(layer);
             Rebuild(registration);
             SourcesChanged?.Invoke();
         });
@@ -171,11 +175,11 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
             return DefaultRenderer;
         }
 
-        var resolved = _services.GetKeyedService<IDynamicFeatureRenderer>(rendererKey);
+        var resolved = _rendererResolver(rendererKey);
         if (resolved is not null) return resolved;
 
         _logger.LogWarning(
-            "No IDynamicFeatureRenderer registered under key '{RendererKey}' for source '{SourceId}'; falling back to default renderer.",
+            "No IDynamicFeatureRenderer resolved for key '{RendererKey}' (source '{SourceId}'); falling back to default renderer.",
             rendererKey,
             sourceId);
         return DefaultRenderer;
@@ -191,10 +195,10 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         registration.Layer.DataHasChanged();
     }
 
-    // Pure-CPU helper; safe to call off the UI thread because the
-    // renderer contract is pure (no Avalonia / Mapsui state mutation
-    // beyond constructing GeometryFeature/Style objects, which are
-    // POCOs until added to a layer).
+    // Pure-CPU helper; safe to call off the map thread because the
+    // renderer contract is pure (no Mapsui state mutation beyond
+    // constructing GeometryFeature/Style objects, which are POCOs
+    // until added to a layer).
     private static List<IFeature> RenderSnapshot(Registration registration)
     {
         var snapshot = registration.Source.CurrentFeatures;
@@ -210,15 +214,9 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         return features;
     }
 
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
-    }
-
     /// <summary>
-    /// Unregisters all sources and detaches their overlay layers.
-    /// Safe to call from any thread.
+    /// Unregisters all sources and detaches their overlay layers. Safe to call
+    /// from any thread.
     /// </summary>
     public void Dispose()
     {
@@ -281,6 +279,17 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     }
 
     /// <inheritdoc />
+    public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution)
+    {
+        ArgumentNullException.ThrowIfNull(mapPoint);
+
+        var sources = GetVisibleSourceInstances();
+        if (sources.Count == 0) return Array.Empty<DynamicSourceHit>();
+
+        return DynamicSourceHitTester.HitTest(mapPoint, resolution, sources);
+    }
+
+    /// <inheritdoc />
     public void SetVisible(string sourceId, bool visible)
     {
         ArgumentNullException.ThrowIfNull(sourceId);
@@ -309,7 +318,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         else
         {
             // Source not registered yet (seeding from settings).
-            // Still fire so subscribers re-render any stub VM rows
+            // Still fire so subscribers re-render any stub rows
             // that key off seeded values.
             SourcesChanged?.Invoke();
         }
@@ -321,14 +330,14 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         public IDynamicFeatureSource Source { get; }
         public IDynamicFeatureRenderer Renderer { get; }
         public MemoryLayer Layer { get; }
-        private readonly DynamicSourceOverlayHost _host;
+        private readonly S100DynamicSourceHost _host;
         private int _disposed;
 
         public Registration(
             IDynamicFeatureSource source,
             IDynamicFeatureRenderer renderer,
             MemoryLayer layer,
-            DynamicSourceOverlayHost host)
+            S100DynamicSourceHost host)
         {
             Source = source;
             Renderer = renderer;
@@ -339,17 +348,17 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         public void OnChanged(object? sender, DynamicFeaturesChanged e)
         {
             if (Volatile.Read(ref _disposed) != 0) return;
-            _host._marshal(HandleChangeOnUiThread);
+            _host._marshal(HandleChangeOnMapThread);
         }
 
-        // UI-thread only; _trailingScheduled, _backgroundInFlight, and
+        // Map-thread only; _trailingScheduled, _backgroundInFlight, and
         // _lastRebuildUtc are not synchronised because all reads/
         // writes happen here after the _marshal hop.
         private bool _trailingScheduled;
         private bool _backgroundInFlight;
         private DateTime _lastRebuildUtc = DateTime.MinValue;
 
-        private void HandleChangeOnUiThread()
+        private void HandleChangeOnMapThread()
         {
             if (Volatile.Read(ref _disposed) != 0) return;
 
@@ -390,10 +399,10 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
                 }), TaskScheduler.Default);
         }
 
-        // UI thread → background thread for the heavy render loop →
-        // UI thread to assign the result. Keeps long-running renders
+        // Map thread → background thread for the heavy render loop →
+        // map thread to assign the result. Keeps long-running renders
         // (AIS at world scale: 1000s of features × multiple styles
-        // each) off the UI thread so panning / zoom stay responsive.
+        // each) off the map thread so panning / zoom stay responsive.
         private void ScheduleBackgroundRebuild()
         {
             _backgroundInFlight = true;
@@ -448,7 +457,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
             }
             _host._marshal(() =>
             {
-                _host._layers.RemoveOverlayLayer(Layer);
+                _host._overlayHost.RemoveOverlayLayer(Layer);
                 _host.SourcesChanged?.Invoke();
             });
         }
@@ -457,7 +466,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             Source.Changed -= OnChanged;
-            _host._marshal(() => _host._layers.RemoveOverlayLayer(Layer));
+            _host._marshal(() => _host._overlayHost.RemoveOverlayLayer(Layer));
         }
     }
 }

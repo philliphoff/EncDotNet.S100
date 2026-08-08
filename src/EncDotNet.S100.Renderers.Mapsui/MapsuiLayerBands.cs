@@ -1,3 +1,4 @@
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -12,7 +13,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// to a UI thread. UI-framework hosts remain responsible for invoking it from
 /// the thread required by their map control.
 /// </remarks>
-public sealed class MapsuiLayerBands
+public sealed class MapsuiLayerBands : IMapsuiOverlayLayerHost
 {
     private readonly Map _map;
     private readonly HashSet<ILayer> _datasetLayers = [];

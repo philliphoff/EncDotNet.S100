@@ -273,7 +273,7 @@ public partial class App : Application
         {
             var pirateCoordinator = new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeCoordinator(
                 pirateController,
-                _services.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(),
+                _services.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IS100DynamicSourceRegistry>(),
                 _services.GetRequiredService<ViewerSettings>(),
                 enabled => settingsVm.OwnShipOverlayEnabled = enabled);
 
@@ -690,7 +690,7 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
 
         // PR-D? upgraded own-ship symbology: register OwnShipRenderer
-        // under the "ownship" key so DynamicSourceOverlayHost resolves
+        // under the "ownship" key so the dynamic-source host resolves
         // it for the own-ship source (RendererKey = "ownship").
         EncDotNet.S100.Renderers.Mapsui.DynamicSources.DynamicFeatureRendererServiceCollectionExtensions
             .AddDynamicFeatureRenderer<EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer>(
@@ -722,14 +722,14 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryOverride>()));
 
         // PR-D2.1: dynamic-source registry accessor. The real registry
-        // is the DynamicSourceOverlayHost constructed in MainWindow
+        // is the reusable S100DynamicSourceHost constructed in MainWindow
         // (it needs map layer capabilities, which only exist after the MapControl
         // initialises). The accessor is the indirection: view-models
-        // depend on it through IDynamicFeatureSourceRegistry; MainWindow
+        // depend on it through IS100DynamicSourceRegistry; MainWindow
         // assigns Current once the host is built. Mirrors
         // typed map capability accessors below.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>();
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(sp =>
+        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IS100DynamicSourceRegistry>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>());
 
         // MCP server (loopback-only, off by default). The catalog adapter

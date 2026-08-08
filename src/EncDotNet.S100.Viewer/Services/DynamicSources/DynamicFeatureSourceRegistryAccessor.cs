@@ -1,14 +1,16 @@
 using EncDotNet.S100.DynamicSources;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
 /// <summary>
-/// Late-bound accessor for the dynamic-source overlay host's
-/// <see cref="IDynamicFeatureSourceRegistry"/> surface (PR-D2.1).
+/// Late-bound accessor for the dynamic-source host's
+/// <see cref="IS100DynamicSourceRegistry"/> surface (PR-D2.1).
 /// </summary>
 /// <remarks>
 /// <para>
-/// The overlay host is constructed by <c>MainWindow</c> after the
+/// The dynamic-source host is constructed by <c>MainWindow</c> after the
 /// Avalonia <c>MapControl</c> exists, which happens after DI is built
 /// and after singletons like <c>LayerStackViewModel</c> have already
 /// been resolved. This accessor bridges that ordering: services that
@@ -26,9 +28,9 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// inner registry has attached yet.
 /// </para>
 /// </remarks>
-internal sealed class DynamicFeatureSourceRegistryAccessor : IDynamicFeatureSourceRegistry
+internal sealed class DynamicFeatureSourceRegistryAccessor : IS100DynamicSourceRegistry
 {
-    private IDynamicFeatureSourceRegistry? _current;
+    private IS100DynamicSourceRegistry? _current;
 
     /// <summary>
     /// The attached registry, or <see langword="null"/> when no host
@@ -37,7 +39,7 @@ internal sealed class DynamicFeatureSourceRegistryAccessor : IDynamicFeatureSour
     /// once so existing subscribers rebuild against the freshly
     /// attached registry.
     /// </summary>
-    public IDynamicFeatureSourceRegistry? Current
+    public IS100DynamicSourceRegistry? Current
     {
         get => _current;
         set
@@ -52,6 +54,12 @@ internal sealed class DynamicFeatureSourceRegistryAccessor : IDynamicFeatureSour
         }
     }
 
+    public IDisposable Register(IDynamicFeatureSource source) =>
+        _current is { } registry
+            ? registry.Register(source)
+            : throw new InvalidOperationException(
+                "No dynamic-source host is attached yet; register directly on the host instead.");
+
     public IReadOnlyList<DynamicSourceRegistrationInfo> Sources =>
         _current?.Sources ?? Array.Empty<DynamicSourceRegistrationInfo>();
 
@@ -59,6 +67,9 @@ internal sealed class DynamicFeatureSourceRegistryAccessor : IDynamicFeatureSour
 
     public IReadOnlyList<IDynamicFeatureSource> GetVisibleSourceInstances() =>
         _current?.GetVisibleSourceInstances() ?? Array.Empty<IDynamicFeatureSource>();
+
+    public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution) =>
+        _current?.HitTest(mapPoint, resolution) ?? Array.Empty<DynamicSourceHit>();
 
     public void SetVisible(string sourceId, bool visible) =>
         _current?.SetVisible(sourceId, visible);

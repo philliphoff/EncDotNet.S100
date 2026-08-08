@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Mapsui.Avalonia;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -20,6 +21,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class MapsuiMapHost :
     IMapLayerCollection,
+    IMapsuiOverlayLayerHost,
     IMapViewportController,
     IMapCoordinateConverter,
     IMapSnapshotRenderer,

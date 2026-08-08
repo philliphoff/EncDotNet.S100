@@ -1,3 +1,5 @@
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
 /// <summary>
@@ -21,13 +23,13 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 internal sealed class PirateModeCoordinator
 {
     private readonly PirateModeController _controller;
-    private readonly IDynamicFeatureSourceRegistry _registry;
+    private readonly IS100DynamicSourceRegistry _registry;
     private readonly ViewerSettings _settings;
     private readonly Action<bool> _setOverlayEnabled;
 
     public PirateModeCoordinator(
         PirateModeController controller,
-        IDynamicFeatureSourceRegistry registry,
+        IS100DynamicSourceRegistry registry,
         ViewerSettings settings,
         Action<bool> setOverlayEnabled)
     {
