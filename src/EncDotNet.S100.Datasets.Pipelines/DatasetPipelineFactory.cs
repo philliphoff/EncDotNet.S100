@@ -15,15 +15,10 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// Detects dataset type from file extension and creates
 /// the appropriate <see cref="IDatasetProcessor"/>.
 /// </summary>
-public sealed class DatasetPipelineFactory
+public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
 {
-    private readonly PortrayalCatalogueManager _catalogueManager;
-    private readonly ILuaEngine _luaEngine;
-    private readonly ICrsTransformFactory _crsTransformFactory;
-    private readonly FeatureCatalogueManager _featureCatalogueManager;
-    private readonly IDisplayPlaneAuthorityProvider _authorityProvider;
-    private readonly IPortrayalInstructionCache? _sharedInstructionCache;
-    private readonly ILineLodCache? _sharedLineLodCache;
+    private readonly S100ProductRegistry _registry;
+    private readonly DatasetProcessorServices _services;
 
     /// <summary>
     /// Creates a new factory. The supplied
@@ -59,6 +54,13 @@ public sealed class DatasetPipelineFactory
     /// simplification pass. When <see langword="null"/> the renderer's
     /// fast-line path falls back to today's inline simplification.
     /// </param>
+    /// <param name="productRegistry">
+    /// Optional set of products this factory can construct. When
+    /// <see langword="null"/> a default registry with every built-in product is
+    /// used (<see cref="S100Products.CreateDefaultRegistry"/>), preserving the
+    /// historical behaviour. Supply a custom registry to enable only a subset of
+    /// products (e.g. an S-101-only host) or to add a product of your own.
+    /// </param>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
@@ -66,7 +68,8 @@ public sealed class DatasetPipelineFactory
         FeatureCatalogueManager featureCatalogueManager,
         IDisplayPlaneAuthorityProvider authorityProvider,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        ILineLodCache? sharedLineLodCache = null)
+        ILineLodCache? sharedLineLodCache = null,
+        S100ProductRegistry? productRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(luaEngine);
@@ -74,13 +77,17 @@ public sealed class DatasetPipelineFactory
         ArgumentNullException.ThrowIfNull(featureCatalogueManager);
         ArgumentNullException.ThrowIfNull(authorityProvider);
 
-        _catalogueManager = catalogueManager;
-        _luaEngine = luaEngine;
-        _crsTransformFactory = crsTransformFactory;
-        _featureCatalogueManager = featureCatalogueManager;
-        _authorityProvider = authorityProvider;
-        _sharedInstructionCache = sharedInstructionCache;
-        _sharedLineLodCache = sharedLineLodCache;
+        _services = new DatasetProcessorServices
+        {
+            CatalogueManager = catalogueManager,
+            LuaEngine = luaEngine,
+            CrsTransformFactory = crsTransformFactory,
+            FeatureCatalogueManager = featureCatalogueManager,
+            AuthorityProvider = authorityProvider,
+            SharedInstructionCache = sharedInstructionCache,
+            SharedLineLodCache = sharedLineLodCache,
+        };
+        _registry = productRegistry ?? S100Products.CreateDefaultRegistry();
     }
 
     /// <summary>
@@ -395,25 +402,10 @@ public sealed class DatasetPipelineFactory
         var spec = DetectProductSpec(path)
             ?? throw new NotSupportedException($"Unrecognized dataset file: {Path.GetFileName(path)}");
 
-        return spec switch
-        {
-            "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedInstructionCache, _sharedLineLodCache),
-            "S-57" => new S57DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
-            "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
-            "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
-            "S-122" => new S122DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-124" => new S124DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-125" => new S125DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-127" => new S127DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-128" => new S128DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-129" => new S129DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-131" => new S131DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
-            "S-201" => new S201DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-411" => new S411DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-421" => new S421DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
-        };
+        if (!_registry.TryResolve(spec, out var registration))
+            throw new NotSupportedException($"Pipeline not implemented for {spec}.");
+
+        return registration.CreateFromPath(_services, path);
     }
 
     /// <summary>
@@ -451,25 +443,17 @@ public sealed class DatasetPipelineFactory
                 $"Unable to determine product specification for '{relativePath}' " +
                 $"(declared='{declaredProductSpec ?? "<none>"}').");
 
-        return spec switch
-        {
-            "S-102" => new S102DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedInstructionCache, supportFiles, _sharedLineLodCache),
-            "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
-            "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
-            "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),
-            "S-122" => new S122DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-124" => new S124DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-125" => new S125DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-127" => new S127DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-128" => new S128DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-129" => new S129DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-131" => new S131DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
-            "S-201" => new S201DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-411" => new S411DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            "S-421" => new S421DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
-            _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
-        };
+        if (!_registry.TryResolve(spec, out var registration))
+            throw new NotSupportedException($"Pipeline not implemented for {spec}.");
+
+        return registration.CreateFromSource(
+            _services,
+            new DatasetProcessorSourceRequest
+            {
+                Source = source,
+                RelativePath = relativePath,
+                SupportFiles = supportFiles,
+            });
     }
 
     /// <summary>
@@ -496,12 +480,12 @@ public sealed class DatasetPipelineFactory
             source,
             baseRelativePath,
             updateRelativePaths,
-            _catalogueManager,
-            _luaEngine,
-            _featureCatalogueManager,
-            _sharedInstructionCache,
+            _services.CatalogueManager,
+            _services.LuaEngine,
+            _services.FeatureCatalogueManager,
+            _services.SharedInstructionCache,
             supportFiles,
-            _sharedLineLodCache);
+            _services.SharedLineLodCache);
     }
 
     /// <summary>
@@ -535,12 +519,12 @@ public sealed class DatasetPipelineFactory
             source,
             baseRelative,
             updateRelatives,
-            _catalogueManager,
-            _luaEngine,
-            _featureCatalogueManager,
-            _sharedInstructionCache,
+            _services.CatalogueManager,
+            _services.LuaEngine,
+            _services.FeatureCatalogueManager,
+            _services.SharedInstructionCache,
             supportFiles: null,
-            _sharedLineLodCache);
+            _services.SharedLineLodCache);
     }
 
     /// <summary>
@@ -568,9 +552,9 @@ public sealed class DatasetPipelineFactory
             source,
             baseRelativePath,
             updateRelativePaths,
-            _catalogueManager,
-            _luaEngine,
-            _featureCatalogueManager);
+            _services.CatalogueManager,
+            _services.LuaEngine,
+            _services.FeatureCatalogueManager);
     }
 
     /// <summary>
