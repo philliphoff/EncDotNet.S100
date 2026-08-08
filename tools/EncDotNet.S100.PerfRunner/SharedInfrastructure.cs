@@ -33,6 +33,18 @@ internal static class SharedInfrastructure
         var factoryType = typeof(Datasets.Pipelines.DatasetPipelineFactory);
         var pipelinesAssembly = factoryType.Assembly;
 
+        // The renderer-neutral S-98 interoperability types keep the
+        // EncDotNet.S100.Datasets.Pipelines.Interoperability namespace but, as of
+        // issue #512 step 9, physically live in EncDotNet.S100.Core rather than
+        // the Datasets.Pipelines assembly. Resolve interop type names from either
+        // assembly so this reflection probe works against both the current
+        // library and older base-SHA binaries that still ship them in
+        // Datasets.Pipelines (perf-gate base comparison).
+        var coreAssembly = typeof(ICrsTransformFactory).Assembly;
+        Type? ResolveInteropType(string fullName) =>
+            pipelinesAssembly.GetType(fullName, throwOnError: false)
+            ?? coreAssembly.GetType(fullName, throwOnError: false);
+
         // Newest shape (issue #189 PR2): the Mapsui-free factory takes an
         // IDisplayPlaneAuthorityProvider in place of the former
         // IInteroperabilityAuthorityProvider (which moved to the Mapsui package).
@@ -42,9 +54,7 @@ internal static class SharedInfrastructure
         // leading prefix and let default values fill the rest, so this probe
         // survives future optional-parameter additions instead of throwing
         // MissingMethodException (see issue #491).
-        var displayPlaneProviderType = pipelinesAssembly.GetType(
-            "EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider",
-            throwOnError: false);
+        var displayPlaneProviderType = ResolveInteropType("EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider");
         if (displayPlaneProviderType is not null)
         {
             var displayPlaneCtor = FindConstructorMatchingPrefix(
@@ -56,9 +66,7 @@ internal static class SharedInfrastructure
                     typeof(FeatureCatalogueManager),
                     displayPlaneProviderType,
                 ]);
-            var displayPlaneImplType = pipelinesAssembly.GetType(
-                "EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider",
-                throwOnError: false);
+            var displayPlaneImplType = ResolveInteropType("EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider");
             if (displayPlaneCtor is not null && displayPlaneImplType is not null)
             {
                 var displayPlaneProvider = Activator.CreateInstance(displayPlaneImplType)!;
@@ -72,9 +80,7 @@ internal static class SharedInfrastructure
         // Resolved via reflection so this tooling stays compatible with base
         // SHA library binaries that do not yet expose the Interoperability
         // namespace.
-        var providerInterfaceType = pipelinesAssembly.GetType(
-            "EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider",
-            throwOnError: false);
+        var providerInterfaceType = ResolveInteropType("EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider");
         if (providerInterfaceType is not null)
         {
             var providerCtor = FindConstructorMatchingPrefix(
@@ -88,12 +94,8 @@ internal static class SharedInfrastructure
                 ]);
             if (providerCtor is not null)
             {
-                var authorityType = pipelinesAssembly.GetType(
-                    "EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority",
-                    throwOnError: false);
-                var providerImplType = pipelinesAssembly.GetType(
-                    "EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider",
-                    throwOnError: false);
+                var authorityType = ResolveInteropType("EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority");
+                var providerImplType = ResolveInteropType("EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider");
                 if (authorityType is not null && providerImplType is not null)
                 {
                     var authority = Activator.CreateInstance(authorityType)!;
