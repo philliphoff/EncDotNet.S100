@@ -27,7 +27,7 @@ public sealed class S100ProductRegistry
     public void Register(S100ProductRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
-        ArgumentException.ThrowIfNullOrEmpty(registration.Spec);
+        ArgumentException.ThrowIfNullOrWhiteSpace(registration.Spec);
         _bySpec[NormalizeSpec(registration.Spec)] = registration;
     }
 

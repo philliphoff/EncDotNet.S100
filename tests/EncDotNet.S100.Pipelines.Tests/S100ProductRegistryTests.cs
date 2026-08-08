@@ -57,6 +57,17 @@ public class S100ProductRegistryTests
         Assert.Contains("S-101", registry.RegisteredSpecs);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("   ")]
+    public void Register_RejectsBlankSpec(string spec)
+    {
+        var registry = new S100ProductRegistry();
+
+        Assert.Throws<ArgumentException>(() => registry.Register(Fake(spec)));
+    }
+
     [Fact]
     public void Register_ReplacesExistingBySpec()
     {
