@@ -100,8 +100,27 @@ public sealed class SetViewportTool
         ArgumentNullException.ThrowIfNull(request);
         ct.ThrowIfCancellationRequested();
 
+        // Rotation is a modifier on the centre+scale form, not a form selector,
+        // and the composite renderer is north-up only. Validate it globally (so a
+        // harmless rotationDegrees: 0 does not read as "centre+scale present" and
+        // wrongly trip the mutual-exclusivity check against a bounding box), and
+        // reject any non-zero / non-finite value rather than silently dropping it.
+        if (request.RotationDegrees is { } rot)
+        {
+            if (double.IsNaN(rot) || double.IsInfinity(rot))
+            {
+                return Err(new InvalidArgument("rotationDegrees", $"value {rot} is not a finite number"));
+            }
+            if (rot != 0.0)
+            {
+                return Err(new InvalidArgument(
+                    "rotationDegrees",
+                    $"value {rot} is not supported; the composite renderer is north-up only, so rotationDegrees must be 0"));
+            }
+        }
+
         var hasCenterAny = request.CenterLongitude.HasValue || request.CenterLatitude.HasValue
-            || request.ScaleDenominator.HasValue || request.RotationDegrees.HasValue;
+            || request.ScaleDenominator.HasValue;
         var hasBoundsAny = request.MinLongitude.HasValue || request.MinLatitude.HasValue
             || request.MaxLongitude.HasValue || request.MaxLatitude.HasValue;
 
@@ -152,19 +171,9 @@ public sealed class SetViewportTool
                 "scaleDenominator", $"value {scale} must be a positive, finite number"));
         }
 
-        // The composite Viewport has no rotation; reject a non-zero request
-        // rather than silently dropping it. Only north-up is supported.
+        // Rotation was validated globally in InvokeAsync (north-up only), so it is
+        // 0 here; carry it through explicitly for clarity.
         var rotation = request.RotationDegrees ?? 0.0;
-        if (double.IsNaN(rotation) || double.IsInfinity(rotation))
-        {
-            return Err(new InvalidArgument("rotationDegrees", $"value {rotation} is not a finite number"));
-        }
-        if (rotation != 0.0)
-        {
-            return Err(new InvalidArgument(
-                "rotationDegrees",
-                $"value {rotation} is not supported; the composite renderer is north-up only, so rotationDegrees must be 0"));
-        }
 
         var previous = controller.Current;
         controller.Set(new MapViewport(lon, lat, scale, rotation));

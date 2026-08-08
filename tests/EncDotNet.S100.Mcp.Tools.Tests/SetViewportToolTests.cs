@@ -65,6 +65,35 @@ public class SetViewportToolTests
     }
 
     [Fact]
+    public async Task Bounds_WithExplicitZeroRotation_IsAccepted()
+    {
+        // A client that always sends optional numeric fields (rotationDegrees: 0)
+        // alongside a bounding box must not trip the mutual-exclusivity check.
+        var host = new FakeViewport();
+
+        var value = AssertOk(await new SetViewportTool(Accessor(host)).InvokeAsync(
+            new SetViewportRequest(
+                MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5,
+                RotationDegrees: 0)));
+
+        Assert.Equal("bounds", value.Mode);
+        Assert.NotNull(host.LastBounds);
+    }
+
+    [Fact]
+    public async Task Bounds_WithNonZeroRotation_IsRejected()
+    {
+        var host = new FakeViewport();
+
+        var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
+            .InvokeAsync(new SetViewportRequest(
+                MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5,
+                RotationDegrees: 30))));
+        Assert.Equal("rotationDegrees", error.Parameter);
+        Assert.Null(host.LastBounds); // nothing applied
+    }
+
+    [Fact]
     public async Task MixingForms_IsInvalidArgument()
     {
         var host = new FakeViewport();

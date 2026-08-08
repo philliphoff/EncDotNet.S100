@@ -150,6 +150,18 @@ internal sealed class HeadlessS100Session
     {
         ArgumentNullException.ThrowIfNull(viewport);
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // The headless composite render path is north-up only (ResolveViewport
+        // uses centre + scale, not rotation). Reject a non-zero rotation here so
+        // Current can never report a rotated viewport the renderer will not honour
+        // — even when Set is called programmatically rather than via set_viewport.
+        if (viewport.RotationDegrees != 0.0)
+        {
+            throw new ArgumentException(
+                "The headless composite renderer is north-up only; RotationDegrees must be 0.",
+                nameof(viewport));
+        }
+
         lock (_gate)
         {
             _viewport = viewport;
