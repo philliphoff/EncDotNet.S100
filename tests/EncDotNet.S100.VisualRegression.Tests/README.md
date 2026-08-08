@@ -167,23 +167,32 @@ headlessly (per the `viewer-evaluation` skill / `docs/mcp-server.md`). The
 `S100_RENDER_SUBSYSTEM` env var selects the arm (`mapsui` = "A",
 `tiledscene` = "B")) and overrides the in-app flag.
 
-One-shot capture of the same cell + viewport through each arm:
+Capture of the same cell + viewport through each arm. The CLI presets the
+initial view (`--bbox` / `--palette` / `--display-category`) and enables the
+MCP server; the capture itself is an MCP call — there is no one-shot
+`--screenshot` CLI flag (it was removed in favour of the MCP tools):
 
 ```bash
 VIEW=src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer
 CELL=tests/datasets/S101/S-101/DATASET_FILES/101AA0000DS0009.000
+mkdir -p /tmp/eval
 
 for arm in mapsui tiledscene; do
   S100_RENDER_SUBSYSTEM=$arm "$VIEW" \
-    --ephemeral --window-size 800x600 \
+    --ephemeral --mcp --mcp-port-file /tmp/eval/mcp_$arm.url \
     --bbox -32.466667,61.5,-32.4417611,61.6145761 \
     --palette Day --display-category Standard \
-    --screenshot /tmp/eval/committed_$arm.png --exit-after-screenshot "$CELL"
+    "$CELL" &
+  PID=$!
+  # Poll /tmp/eval/mcp_$arm.url for the endpoint, connect an MCP client, then:
+  #   await_render_idle  →  render_to_image (save /tmp/eval/committed_$arm.png)
+  kill -9 "$PID"   # once the capture is written
 done
 ```
 
-`--bbox` is `south,west,north,east`. For rotation, drive the MCP server
-(`--mcp`) and set a rotated viewport before `render_to_image`; the headless
-harness cannot (rotated "B" yields a blank base plane by design). The viewer
-ignores SIGTERM — stop it with `kill -9 <pid>`. **Never commit** captured
-images, traces, or real ENC datasets.
+`--bbox` is `south,west,north,east`. For rotation, set a rotated viewport via
+`set_viewport` before `render_to_image`; the headless harness cannot (rotated
+"B" yields a blank base plane by design). The viewer ignores SIGTERM — stop it
+with `kill -9 <pid>`. See the `viewer-evaluation` skill / `docs/mcp-server.md`
+for the full capture loop. **Never commit** captured images, traces, or real
+ENC datasets.

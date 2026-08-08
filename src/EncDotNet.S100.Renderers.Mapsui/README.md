@@ -1409,8 +1409,8 @@ off-thread and are not mirrored.)
 **Graceful shutdown (Appendix F.10):** the rasterisation workers call into native
 Skia, so the process must not begin tearing down `libSkiaSharp` (managed-runtime
 exit → C++ `__cxa_finalize`) while a worker is mid-rasterise — that dereferences
-freed Skia globals and dies with a native `SIGSEGV` (seen on
-`--exit-after-screenshot`, latent on any quit). `S100VectorTileRenderer.ShutdownAndDrain(timeout)`
+freed Skia globals and dies with a native `SIGSEGV` (first seen on a fast
+headless quit, latent on any quit). `S100VectorTileRenderer.ShutdownAndDrain(timeout)`
 (backed by the one-way `WorkerDrainGate`) sets a permanent draining flag and
 blocks until in-flight workers finish; every worker `TryRegister`s before starting
 and a refused/late worker returns before any Skia call. The viewer calls it from

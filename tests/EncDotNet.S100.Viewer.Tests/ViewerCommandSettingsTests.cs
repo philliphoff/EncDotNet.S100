@@ -39,23 +39,6 @@ public class ViewerCommandSettingsTests
         Assert.Equal(expected, ViewerCommandSettings.TryParseBoundingBox(raw, out _, out _, out _, out _));
     }
 
-    [Theory]
-    [InlineData("1280x800", true, 1280, 800)]
-    [InlineData("1280X800", true, 1280, 800)]
-    [InlineData("1280,800", true, 1280, 800)]
-    [InlineData("0x800", false, 0, 0)]
-    [InlineData("1280", false, 0, 0)]
-    public void TryParseWindowSize_parses(string raw, bool expected, int w, int h)
-    {
-        var ok = ViewerCommandSettings.TryParseWindowSize(raw, out var gw, out var gh);
-        Assert.Equal(expected, ok);
-        if (expected)
-        {
-            Assert.Equal(w, gw);
-            Assert.Equal(h, gh);
-        }
-    }
-
     [Fact]
     public void Center_without_zoom_is_invalid()
     {
@@ -82,20 +65,6 @@ public class ViewerCommandSettingsTests
             BoundingBox = "47.5,-122.5,47.7,-122.1",
         };
         Assert.False(Ok(s));
-    }
-
-    [Fact]
-    public void Exit_after_screenshot_requires_screenshot()
-    {
-        Assert.False(Ok(new ViewerCommandSettings { ExitAfterScreenshot = true }));
-        Assert.True(Ok(new ViewerCommandSettings { ExitAfterScreenshot = true, ScreenshotPath = "/tmp/x.png" }));
-    }
-
-    [Fact]
-    public void Close_after_screenshot_requires_screenshot()
-    {
-        Assert.False(Ok(new ViewerCommandSettings { CloseAfterScreenshot = true }));
-        Assert.True(Ok(new ViewerCommandSettings { CloseAfterScreenshot = true, ScreenshotPath = "/tmp/x.png" }));
     }
 
     [Fact]

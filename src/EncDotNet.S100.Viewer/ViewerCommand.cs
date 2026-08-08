@@ -8,28 +8,6 @@ namespace EncDotNet.S100.Viewer;
 
 internal sealed class ViewerCommandSettings : CommandSettings
 {
-    // ── Capture ──────────────────────────────────────────────────────
-
-    [CommandOption("--screenshot <PATH>")]
-    [Description("Capture a screenshot of the map to the specified file path after loading.")]
-    public string? ScreenshotPath { get; set; }
-
-    [CommandOption("--exit-after-screenshot")]
-    [Description("Quit the viewer immediately after the screenshot has been captured (one-shot capture).")]
-    public bool ExitAfterScreenshot { get; set; }
-
-    [CommandOption("--close-after-screenshot")]
-    [Description("Unload all currently-loaded datasets after the screenshot has been captured (retention-test mode).")]
-    public bool CloseAfterScreenshot { get; set; }
-
-    [CommandOption("--full-window")]
-    [Description("Capture the entire viewer window (panels, toolbars, status bar) instead of just the map control.")]
-    public bool FullWindowScreenshot { get; set; }
-
-    [CommandOption("--window-size <SIZE>")]
-    [Description("Force the viewer window to a fixed size (e.g. 1280x800) so screenshots are reproducible across machines.")]
-    public string? WindowSize { get; set; }
-
     // ── Catalogues / datasets ────────────────────────────────────────
 
     [CommandOption("-f|--fc <PATH>")]
@@ -165,10 +143,6 @@ internal sealed class ViewerCommandSettings : CommandSettings
     public (double South, double West, double North, double East)? ParsedBoundingBox =>
         TryParseBoundingBox(BoundingBox, out var s, out var w, out var n, out var e) ? (s, w, n, e) : null;
 
-    /// <summary>Parsed window size as (width, height) in pixels, or <c>null</c>.</summary>
-    public (int Width, int Height)? ParsedWindowSize =>
-        TryParseWindowSize(WindowSize, out var w, out var h) ? (w, h) : null;
-
     /// <summary>Parsed own-ship position as (latitude, longitude), or <c>null</c>.</summary>
     public GeoPosition? ParsedOwnShipPosition =>
         TryParseLatLon(OwnShipPosition, out var lat, out var lon) ? new GeoPosition(lat, lon) : null;
@@ -196,10 +170,6 @@ internal sealed class ViewerCommandSettings : CommandSettings
         if (Center is not null && BoundingBox is not null)
             return Spectre.Console.ValidationResult.Error("--center/--zoom and --bbox are mutually exclusive.");
 
-        if (WindowSize is not null && !TryParseWindowSize(WindowSize, out _, out _))
-            return Spectre.Console.ValidationResult.Error(
-                $"--window-size must be 'WIDTHxHEIGHT' in pixels (got '{WindowSize}').");
-
         if (McpPort is { } port && (port < 0 || port > 65535))
             return Spectre.Console.ValidationResult.Error("--mcp-port must be between 0 and 65535.");
 
@@ -215,12 +185,6 @@ internal sealed class ViewerCommandSettings : CommandSettings
             !Enum.TryParse<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(DisplayCategory.Trim(), ignoreCase: true, out _))
             return Spectre.Console.ValidationResult.Error(
                 $"--display-category must be DisplayBase, Standard, OtherInformation, or All (got '{DisplayCategory}').");
-
-        if (ExitAfterScreenshot && ScreenshotPath is null)
-            return Spectre.Console.ValidationResult.Error("--exit-after-screenshot requires --screenshot.");
-
-        if (CloseAfterScreenshot && ScreenshotPath is null)
-            return Spectre.Console.ValidationResult.Error("--close-after-screenshot requires --screenshot.");
 
         if (Ephemeral && SettingsPath is not null)
             return Spectre.Console.ValidationResult.Error("--ephemeral and --settings are mutually exclusive.");
@@ -264,18 +228,6 @@ internal sealed class ViewerCommandSettings : CommandSettings
         return south is >= -90 and <= 90 && north is >= -90 and <= 90
             && west is >= -180 and <= 180 && east is >= -180 and <= 180
             && south < north && west < east;
-    }
-
-    internal static bool TryParseWindowSize(string? raw, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-        if (string.IsNullOrWhiteSpace(raw)) return false;
-        var parts = raw.Split(new[] { 'x', 'X', ',' }, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2) return false;
-        if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out width)) return false;
-        if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out height)) return false;
-        return width is > 0 and <= 10000 && height is > 0 and <= 10000;
     }
 }
 
