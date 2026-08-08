@@ -1,0 +1,43 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:adapter="clr-namespace:EncDotNet.S100.Renderers.Mapsui.Avalonia;assembly=EncDotNet.S100.Renderers.Mapsui.Avalonia"
+        x:Class="EncDotNet.S100.Samples.MapHost.MainWindow"
+        Width="1100" Height="750"
+        Title="S-100 Map Host Sample (Map.AddS100)">
+
+    <DockPanel>
+        <!-- Toolbar: every control drives the reusable IS100MapSession API. -->
+        <Border DockPanel.Dock="Top" Padding="8" BorderThickness="0,0,0,1"
+                BorderBrush="#33000000">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button x:Name="LoadButton" Content="Load cell" Click="OnLoad" />
+                <Button x:Name="UnloadButton" Content="Unload" Click="OnUnload" IsEnabled="False" />
+                <Button x:Name="ZoomButton" Content="Zoom to cell" Click="OnZoomToDataset" IsEnabled="False" />
+                <Separator Width="1" Margin="4,0" />
+                <TextBlock Text="Palette:" VerticalAlignment="Center" />
+                <Button x:Name="DayButton" Content="Day" Click="OnPaletteDay" IsEnabled="False" />
+                <Button x:Name="DuskButton" Content="Dusk" Click="OnPaletteDusk" IsEnabled="False" />
+                <Button x:Name="NightButton" Content="Night" Click="OnPaletteNight" IsEnabled="False" />
+                <Separator Width="1" Margin="4,0" />
+                <CheckBox x:Name="VisibleToggle" Content="Visible" IsChecked="True"
+                          IsEnabled="False" IsCheckedChanged="OnToggleVisible" />
+            </StackPanel>
+        </Border>
+
+        <!-- Status bar: shows load state and the latest geographic pick. -->
+        <Border DockPanel.Dock="Bottom" Padding="8,4" BorderThickness="0,1,0,0"
+                BorderBrush="#33000000">
+            <TextBlock x:Name="StatusText"
+                       Text="Click 'Load cell' to render the bundled S-101 cell. Click the map to pick features."
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!--
+          The reusable capture-synchronized Mapsui control from
+          Renderers.Mapsui.Avalonia. The window code-behind attaches an
+          AvaloniaMapsuiMapAdapter to it and drives a Map.AddS100 session over it.
+        -->
+        <adapter:CaptureSynchronizedMapControl x:Name="MapControl" />
+    </DockPanel>
+
+</Window>
