@@ -59,6 +59,11 @@ public static class S100Products
         CreateFromSource = (s, r) => new S57DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager),
+        // S-57 and S-101 share the ISO 8211 .000 extension; S-57 datasets carry a
+        // DSPM field in their DDR that S-101 datasets do not. This is the one
+        // product-specific rule detection needs, contributed here rather than
+        // hard-coded in the factory so detection honours the registry's product set.
+        Discriminate = static path => EncDotNet.S100.Datasets.S57.S57Dataset.IsS57File(path),
     };
 
     /// <summary>S-102 Bathymetric Surface.</summary>

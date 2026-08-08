@@ -21,6 +21,17 @@ public delegate IDatasetProcessor DatasetProcessorFromSource(
     DatasetProcessorSourceRequest request);
 
 /// <summary>
+/// Decides, from a dataset file's content, whether it belongs to a particular
+/// product. Used to disambiguate a file extension shared by more than one
+/// product: the ISO 8211 <c>.000</c> extension is used by both legacy S-57 and
+/// S-101, so the S-57 registration sniffs the ISO 8211 DDR for the S-57-only
+/// <c>DSPM</c> field. Returns <see langword="true"/> when the file belongs to
+/// the registering product.
+/// </summary>
+/// <param name="path">Path to the dataset file to inspect.</param>
+public delegate bool DatasetContentDiscriminator(string path);
+
+/// <summary>
 /// A dataset stored inside an <see cref="IAssetSource"/>, addressed for
 /// processor construction by a <see cref="DatasetProcessorFromSource"/>.
 /// </summary>
@@ -57,4 +68,15 @@ public sealed record S100ProductRegistration
 
     /// <summary>Constructs the product's processor from an asset source.</summary>
     public required DatasetProcessorFromSource CreateFromSource { get; init; }
+
+    /// <summary>
+    /// Optional content sniffer that claims a file whose extension is ambiguous
+    /// across products. Only meaningful for the S-57 registration today (S-57 and
+    /// S-101 both use the ISO 8211 <c>.000</c> extension);
+    /// <see langword="null"/> for products whose extension already identifies
+    /// them. <see cref="DatasetPipelineFactory"/> consults this only for the
+    /// products a registry actually contains, so a host that omits S-57 never
+    /// runs the S-57 sniff and treats every <c>.000</c> file as S-101.
+    /// </summary>
+    public DatasetContentDiscriminator? Discriminate { get; init; }
 }

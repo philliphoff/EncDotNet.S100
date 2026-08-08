@@ -131,6 +131,44 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         return null;
     }
 
+    /// <summary>
+    /// Registry-aware form of <see cref="DetectProductSpec(string)"/>: resolves
+    /// the ambiguous ISO 8211 <c>.000</c> extension (shared by S-57 and S-101)
+    /// using the S-57 content discriminator that <paramref name="registry"/>
+    /// actually offers. A registry without S-57 registered treats every
+    /// <c>.000</c> file as S-101, so detection never yields a spec the registry
+    /// cannot build. All other extensions (HDF5, GML) are product-agnostic and
+    /// detected exactly as the parameterless overload does.
+    /// </summary>
+    internal static string? DetectProductSpec(string path, S100ProductRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+
+        var ext = Path.GetExtension(path);
+        if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
+        {
+            // S-57 datasets carry a DSPM field in their ISO 8211 DDR which is
+            // not present in S-101 datasets; the S-57 registration contributes
+            // that content sniff. Only run it when the registry can actually
+            // build S-57 — otherwise the file is treated as S-101.
+            if (registry.TryResolve("S-57", out var s57) && s57.Discriminate is { } discriminate)
+            {
+                try
+                {
+                    if (discriminate(path))
+                        return "S-57";
+                }
+                catch
+                {
+                    // Fall through and treat as S-101.
+                }
+            }
+            return "S-101";
+        }
+
+        return DetectProductSpec(path);
+    }
+
     private static string DetectHdf5ProductSpec(string path)
     {
         try
@@ -399,7 +437,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// </summary>
     public IDatasetProcessor CreateProcessor(string path)
     {
-        var spec = DetectProductSpec(path)
+        var spec = DetectProductSpec(path, _registry)
             ?? throw new NotSupportedException($"Unrecognized dataset file: {Path.GetFileName(path)}");
 
         if (!_registry.TryResolve(spec, out var registration))
@@ -578,7 +616,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         if (updates.Count == 0)
             return CreateProcessor(baseFilePath);
 
-        var spec = DetectProductSpec(baseFilePath);
+        var spec = DetectProductSpec(baseFilePath, _registry);
         switch (spec)
         {
             case "S-101":
