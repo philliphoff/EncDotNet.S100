@@ -129,17 +129,17 @@ internal sealed class HeadlessS100Session
                 }
                 if (_bounds is { } b)
                 {
-                    // Resolve the box against the reference surface to echo a
-                    // representative scale; the centre is the box midpoint, which
-                    // the aspect-fit preserves.
+                    // Resolve the box against the reference surface, then echo the
+                    // centre and scale of that resolved rectangle. The centre is
+                    // taken from the resolved viewport (Mercator midpoint), not the
+                    // box's arithmetic midpoint, so it stays consistent with the
+                    // rectangle the aspect-fit actually produces.
                     var resolved = CompositeViewportBuilder.FromBoundingBox(
                         b.WestBoundLongitude, b.SouthBoundLatitude,
                         b.EastBoundLongitude, b.NorthBoundLatitude,
                         ReferenceWidthPx, ReferenceHeightPx);
-                    return new MapViewport(
-                        (b.WestBoundLongitude + b.EastBoundLongitude) / 2.0,
-                        (b.SouthBoundLatitude + b.NorthBoundLatitude) / 2.0,
-                        resolved.ScaleDenominator);
+                    var (centerLon, centerLat) = CompositeViewportBuilder.CenterOf(resolved);
+                    return new MapViewport(centerLon, centerLat, resolved.ScaleDenominator);
                 }
                 return null;
             }

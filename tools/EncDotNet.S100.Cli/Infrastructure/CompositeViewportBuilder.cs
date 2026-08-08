@@ -129,6 +129,24 @@ internal static class CompositeViewportBuilder
         return true;
     }
 
+    /// <summary>
+    /// The geographic centre (WGS-84) of <paramref name="viewport"/> — the
+    /// lon/lat under its centre pixel. Longitude is the plain midpoint (linear in
+    /// EPSG:3857 X); latitude is the midpoint in projected Y back-projected, so it
+    /// matches the point a centre+scale framing of the same rectangle sits on,
+    /// rather than the arithmetic mean of the latitude bounds (which Mercator
+    /// nonlinearity makes off-centre).
+    /// </summary>
+    public static (double Longitude, double Latitude) CenterOf(Viewport viewport)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        var (_, minY) = FromLonLat(viewport.MinLongitude, viewport.MinLatitude);
+        var (_, maxY) = FromLonLat(viewport.MinLongitude, viewport.MaxLatitude);
+        var (_, centerLat) = ToLonLat(0.0, (minY + maxY) / 2.0);
+        return ((viewport.MinLongitude + viewport.MaxLongitude) / 2.0, centerLat);
+    }
+
     private static Viewport BuildViewport(
         double minX, double minY, double maxX, double maxY, int width, int height)
     {

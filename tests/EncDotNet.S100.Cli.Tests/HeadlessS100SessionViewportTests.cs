@@ -39,7 +39,7 @@ public sealed class HeadlessS100SessionViewportTests
     }
 
     [Fact]
-    public void SetToBounds_EchoesMidpointCentreAndPositiveScale()
+    public void SetToBounds_EchoesResolvedCentreAndPositiveScale()
     {
         using var catalog = new HeadlessMutableCatalog();
         using var session = new HeadlessS100Session(catalog);
@@ -54,8 +54,12 @@ public sealed class HeadlessS100SessionViewportTests
         });
 
         var current = Assert.IsType<MapViewport>(controller.Current);
+        // Longitude is linear in Web Mercator, so the centre is the exact midpoint.
         Assert.Equal(-1.25, current.CenterLongitude, precision: 9);
-        Assert.Equal(50.25, current.CenterLatitude, precision: 9);
+        // Latitude is the Mercator midpoint of the box — close to, but not exactly,
+        // the arithmetic mean (50.25) because Mercator Y is nonlinear.
+        Assert.Equal(50.25, current.CenterLatitude, precision: 2);
+        Assert.NotEqual(50.25, current.CenterLatitude);
         Assert.True(current.ScaleDenominator > 0 && double.IsFinite(current.ScaleDenominator));
     }
 
