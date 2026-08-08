@@ -85,7 +85,7 @@ internal sealed class HeadlessS100Session
         get { lock (_gate) return _currentTime; }
     }
 
-    public IReadOnlyList<DateTime> AvailableSteps => CurrentSteps();
+    public IReadOnlyList<DateTime> AvailableSteps => StepsOf(_catalog.RenderHandles);
 
     public Task SetTimeAsync(DateTime time, CancellationToken cancellationToken = default)
     {
@@ -101,10 +101,20 @@ internal sealed class HeadlessS100Session
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var handles = _catalog.RenderHandles;
+        // Render under the catalog's render gate so the handles cannot be
+        // disposed by a concurrent close_dataset / close_all_datasets mid-render.
+        // The dimensions are captured in the closure (no shared render state).
+        return _catalog.RenderAsync(
+            (handles, token) => RenderCoreAsync(handles, widthPx, heightPx, token),
+            cancellationToken);
+    }
+
+    private async Task<byte[]?> RenderCoreAsync(
+        IReadOnlyList<S100Dataset> handles, int widthPx, int heightPx, CancellationToken cancellationToken)
+    {
         if (handles.Count == 0)
         {
-            return Task.FromResult<byte[]?>(null);
+            return null;
         }
 
         MapPresentationState presentation;
@@ -115,11 +125,8 @@ internal sealed class HeadlessS100Session
             time = _currentTime;
         }
 
-        // widthPx/heightPx are the literal output pixel dimensions, so the
-        // encoded PNG matches the size the tool reports back. pixelDensity is
-        // not applied here: the composite renderer has no DPI-aware pass to
-        // scale symbols by, and scaling the raster would make the PNG larger
-        // than the reported width/height (a v1 gap).
+        // The literal output pixel dimensions are used (pixelDensity is not
+        // applied — the composite renderer has no DPI-aware pass; a v1 gap).
         var layers = handles.Select(d => new S100Layer { Dataset = d }).ToList();
 
         var options = new S100CompositeOptions
@@ -130,33 +137,39 @@ internal sealed class HeadlessS100Session
             SymbolScale = presentation.SymbolScale,
             TextScale = presentation.TextScale,
             Mariner = presentation.Mariner,
-            TimeStep = ResolveTimeStepIndex(time),
+            TimeStep = ResolveTimeStepIndex(time, handles),
             DisplayModeId = ResolveDisplayModeId(presentation),
             Viewport = null, // auto-fit the union extent
         };
 
-        return RenderAsync(layers, options, cancellationToken);
+        return await _renderer.RenderAsync(layers, options, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<byte[]?> RenderAsync(
-        IReadOnlyList<S100Layer> layers, S100CompositeOptions options, CancellationToken ct)
-        => await _renderer.RenderAsync(layers, options, ct).ConfigureAwait(false);
+    private static List<DateTime> StepsOf(IReadOnlyList<S100Dataset> handles)
+    {
+        var steps = new List<DateTime>();
+        foreach (var handle in handles)
+        {
+            try
+            {
+                steps.AddRange(handle.AvailableTimes);
+            }
+            catch (ObjectDisposedException)
+            {
+                // The dataset was closed concurrently; skip it.
+            }
+        }
+        return steps.Distinct().OrderBy(t => t).ToList();
+    }
 
-    private List<DateTime> CurrentSteps() =>
-        _catalog.RenderHandles
-            .SelectMany(d => d.AvailableTimes)
-            .Distinct()
-            .OrderBy(t => t)
-            .ToList();
-
-    private int ResolveTimeStepIndex(DateTime? time)
+    private static int ResolveTimeStepIndex(DateTime? time, IReadOnlyList<S100Dataset> handles)
     {
         if (time is null)
         {
             return 0;
         }
 
-        var steps = CurrentSteps();
+        var steps = StepsOf(handles);
         if (steps.Count == 0)
         {
             return 0;

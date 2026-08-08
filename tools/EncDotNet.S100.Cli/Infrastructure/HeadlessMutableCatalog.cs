@@ -29,6 +29,12 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     private readonly HashSet<string> _usedIds = new(StringComparer.Ordinal);
     private readonly List<IDisposable> _resolutions = [];
 
+    // Serialises render use of the S100Dataset handles against their disposal, so
+    // a close_dataset / close_all_datasets cannot dispose a handle a render is
+    // using mid-flight (which would surface as an internal_error). Renders run
+    // one at a time; disposal waits for the in-flight render.
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
+
     private IReadOnlyList<LoadedDataset> _snapshot = [];
     private bool _disposed;
 
@@ -55,6 +61,49 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             {
                 return _entries.Select(e => e.Render).ToList();
             }
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="render"/> against a snapshot of the current render
+    /// handles while holding the render gate, so none of those handles can be
+    /// disposed by a concurrent <see cref="Remove"/> / <see cref="RemoveAll"/>
+    /// until the render completes. Renders are serialised with respect to each
+    /// other and to disposal.
+    /// </summary>
+    public async Task<byte[]?> RenderAsync(
+        Func<IReadOnlyList<S100Dataset>, CancellationToken, Task<byte[]?>> render,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(render);
+
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            IReadOnlyList<S100Dataset> handles;
+            lock (_gate)
+            {
+                handles = _entries.Select(e => e.Render).ToList();
+            }
+            return await render(handles, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    /// <summary>Disposes a render handle while holding the render gate.</summary>
+    private void DisposeHandle(S100Dataset handle)
+    {
+        _renderGate.Wait();
+        try
+        {
+            handle.Dispose();
+        }
+        finally
+        {
+            _renderGate.Release();
         }
     }
 
@@ -168,7 +217,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             UpdateSnapshotLocked();
         }
 
-        entry.Render.Dispose();
+        DisposeHandle(entry.Render);
         RaiseChanged(DatasetCatalogChangeKind.Removed, id);
         return true;
     }
@@ -190,9 +239,17 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             UpdateSnapshotLocked();
         }
 
-        foreach (var entry in removed)
+        _renderGate.Wait();
+        try
         {
-            entry.Render.Dispose();
+            foreach (var entry in removed)
+            {
+                entry.Render.Dispose();
+            }
+        }
+        finally
+        {
+            _renderGate.Release();
         }
         RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
         return removed.Count;
@@ -298,19 +355,30 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         if (_disposed) return;
         _disposed = true;
 
-        lock (_gate)
+        // Wait for any in-flight render before disposing the handles it uses.
+        _renderGate.Wait();
+        try
         {
-            foreach (var entry in _entries)
+            lock (_gate)
             {
-                entry.Render.Dispose();
-            }
-            _entries.Clear();
+                foreach (var entry in _entries)
+                {
+                    entry.Render.Dispose();
+                }
+                _entries.Clear();
 
-            foreach (var resolution in _resolutions)
-            {
-                resolution.Dispose();
+                foreach (var resolution in _resolutions)
+                {
+                    resolution.Dispose();
+                }
+                _resolutions.Clear();
             }
-            _resolutions.Clear();
         }
+        finally
+        {
+            _renderGate.Release();
+        }
+
+        _renderGate.Dispose();
     }
 }
