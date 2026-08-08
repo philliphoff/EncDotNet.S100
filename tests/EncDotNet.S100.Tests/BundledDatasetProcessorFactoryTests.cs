@@ -18,6 +18,19 @@ public sealed class BundledDatasetProcessorFactoryTests
         using var factory = BundledDatasetProcessorFactory.Create();
 
         Assert.IsAssignableFrom<Datasets.Pipelines.IDatasetProcessorFactory>(factory);
+        Assert.IsAssignableFrom<IDisposable>(factory);
+    }
+
+    [Fact]
+    public void CreateProcessor_AfterDispose_Throws()
+    {
+        var factory = BundledDatasetProcessorFactory.Create();
+        factory.Dispose();
+        factory.Dispose(); // idempotent
+
+        Assert.Throws<ObjectDisposedException>(() => factory.CreateProcessor("any.gml"));
+        Assert.Throws<ObjectDisposedException>(
+            () => factory.CreateProcessorWithFilesystemUpdates("any.gml"));
     }
 
     [SkippableFact]

@@ -26,6 +26,7 @@ namespace EncDotNet.S100;
 public sealed class BundledDatasetProcessorFactory : IDatasetProcessorFactory, IDisposable
 {
     private readonly S100PipelineHost _host;
+    private bool _disposed;
 
     private BundledDatasetProcessorFactory(S100PipelineHost host) => _host = host;
 
@@ -37,13 +38,25 @@ public sealed class BundledDatasetProcessorFactory : IDatasetProcessorFactory, I
         new(S100PipelineHost.Create());
 
     /// <inheritdoc />
-    public IDatasetProcessor CreateProcessor(string path) =>
-        _host.Factory.CreateProcessor(path);
+    public IDatasetProcessor CreateProcessor(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _host.Factory.CreateProcessor(path);
+    }
 
     /// <inheritdoc />
-    public IDatasetProcessor CreateProcessorWithFilesystemUpdates(string path) =>
-        _host.Factory.CreateProcessorWithFilesystemUpdates(path);
+    public IDatasetProcessor CreateProcessorWithFilesystemUpdates(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _host.Factory.CreateProcessorWithFilesystemUpdates(path);
+    }
 
     /// <summary>Releases the bundled catalogue managers and their caches.</summary>
-    public void Dispose() => _host.Dispose();
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _host.Dispose();
+    }
 }

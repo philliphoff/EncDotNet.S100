@@ -92,15 +92,27 @@ internal sealed class S100PipelineHost : IDisposable
     }
 
     /// <summary>Creates the dataset processor for the file at <paramref name="path"/>.</summary>
-    public IDatasetProcessor CreateProcessor(string path) => _factory.CreateProcessor(path);
+    public IDatasetProcessor CreateProcessor(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _factory.CreateProcessor(path);
+    }
 
     /// <summary>
     /// The bundled processor factory this host wraps, for in-assembly
     /// conveniences (e.g. <see cref="BundledDatasetProcessorFactory"/>) to expose
     /// publicly. Its lifetime is bound to this host: the catalogue managers it
-    /// closes over are released by <see cref="Dispose"/>.
+    /// closes over are released by <see cref="Dispose"/>, so it must not be used
+    /// after the host is disposed.
     /// </summary>
-    internal IDatasetProcessorFactory Factory => _factory;
+    internal IDatasetProcessorFactory Factory
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _factory;
+        }
+    }
 
     public void Dispose()
     {
