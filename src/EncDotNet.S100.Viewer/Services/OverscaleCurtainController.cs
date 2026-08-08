@@ -2,9 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Threading;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
-using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -34,13 +32,20 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class OverscaleCurtainController : IDisposable
 {
+    /// <summary>
+    /// The overlay layer's name. Kept stable across the reusable-layer extraction
+    /// (rather than the reusable default) so any name-based lookup or test keeps
+    /// matching; hoisted to a constant so the two can't drift.
+    /// </summary>
+    private const string OverlayLayerName = "Overscale Curtain";
+
     private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private readonly IDatasetLoaderService _loader;
     private readonly IMapViewportNotifier _viewport;
     private readonly SettingsViewModel _settings;
     private readonly Action<Action> _marshal;
-    private readonly MemoryLayer _layer;
+    private readonly S100OverscaleCurtainLayer _curtain;
     private readonly HashSet<DatasetEntry> _subscribed = new();
     private double _lastResolution = double.NaN;
     private bool _disposed;
@@ -80,7 +85,7 @@ internal sealed class OverscaleCurtainController : IDisposable
         _settings = settings;
         _marshal = marshal ?? DispatcherMarshal;
 
-        _layer = OverscaleCurtainOverlayLayer.Create();
+        _curtain = new S100OverscaleCurtainLayer(name: OverlayLayerName);
 
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
         foreach (var entry in _datasets.Entries)
@@ -94,7 +99,7 @@ internal sealed class OverscaleCurtainController : IDisposable
 
         _marshal(() =>
         {
-            _layers.AddOverlayLayer(_layer);
+            _layers.AddOverlayLayer(_curtain.Layer);
             Rebuild();
         });
     }
@@ -168,7 +173,7 @@ internal sealed class OverscaleCurtainController : IDisposable
                 regions = OverscaleCurtain.ComputeRegions(cells, _lastResolution);
         }
 
-        OverscaleCurtainOverlayLayer.Update(_layer, regions);
+        _curtain.Show(regions);
     }
 
     private static bool ResolutionsEqual(double a, double b)
@@ -201,6 +206,6 @@ internal sealed class OverscaleCurtainController : IDisposable
         _viewport.ViewportChanged -= OnViewportChanged;
         _settings.OverscaleIndicationChanged -= OnToggleChanged;
 
-        _marshal(() => _layers.RemoveOverlayLayer(_layer));
+        _marshal(() => _layers.RemoveOverlayLayer(_curtain.Layer));
     }
 }
