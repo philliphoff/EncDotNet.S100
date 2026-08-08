@@ -358,27 +358,25 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         _disposed = true;
 
         // Wait for any in-flight render before disposing the handles it uses.
+        // Acquire the render gate and dispose it while still holding the permit.
+        // Releasing before Dispose() would leave a window where a waiting
+        // render / handle-disposal acquires the permit and then throws when it
+        // releases it on the now-disposed semaphore. Not releasing means any
+        // remaining waiter simply observes ObjectDisposedException from its wait.
         _renderGate.Wait();
-        try
+        lock (_gate)
         {
-            lock (_gate)
+            foreach (var entry in _entries)
             {
-                foreach (var entry in _entries)
-                {
-                    entry.Render.Dispose();
-                }
-                _entries.Clear();
-
-                foreach (var resolution in _resolutions)
-                {
-                    resolution.Dispose();
-                }
-                _resolutions.Clear();
+                entry.Render.Dispose();
             }
-        }
-        finally
-        {
-            _renderGate.Release();
+            _entries.Clear();
+
+            foreach (var resolution in _resolutions)
+            {
+                resolution.Dispose();
+            }
+            _resolutions.Clear();
         }
 
         _renderGate.Dispose();
