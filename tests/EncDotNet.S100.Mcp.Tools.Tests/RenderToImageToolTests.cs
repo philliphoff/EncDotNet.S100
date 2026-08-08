@@ -68,7 +68,8 @@ public class RenderToImageToolTests
         var error = Assert.IsType<InvalidArgument>(
             AssertErr(await new RenderToImageTool(Accessor(host))
                 .InvokeAsync(new RenderToImageRequest(PixelDensity: density))));
-        Assert.Equal(nameof(RenderToImageRequest.PixelDensity), error.Parameter);
+        // The MCP surface uses the camelCase wire field name.
+        Assert.Equal("pixelDensity", error.Parameter);
         Assert.Null(host.LastCall);
     }
 

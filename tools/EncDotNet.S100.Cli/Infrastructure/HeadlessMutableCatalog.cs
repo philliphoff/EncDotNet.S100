@@ -15,10 +15,9 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// <remarks>
 /// <para>
 /// v1 known gaps (tracked for the unification follow-up): each dataset is parsed
-/// twice (projection + render handle); the composite renderer re-reads the path
-/// on each render, so any extracted exchange-set resources are held for the whole
-/// session and released only on <see cref="Dispose"/>; and the <c>spec</c> hint on
-/// <see cref="LoadAsync"/> is currently ignored (the product is auto-detected).
+/// twice (projection + render handle); and the composite renderer re-reads the
+/// path on each render, so any extracted exchange-set resources are held for the
+/// whole session and released only on <see cref="Dispose"/>.
 /// </para>
 /// </remarks>
 internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposable
@@ -153,11 +152,11 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         // Fail fast before any exchange-set resolution / dataset projection work.
         cancellationToken.ThrowIfCancellationRequested();
 
-        // specHint is currently ignored: DatasetInputResolver detects the product
-        // specification from the file. Tracked as a v1 gap.
+        // specHint forces the product spec for a single-file load (ignored for
+        // exchange sets); the resolver otherwise auto-detects.
         var warnings = new List<string>();
         var inputs = DatasetInputResolver.Resolve(
-            path, [], exchangeSet: null, only: null, warnings, out var resolution);
+            path, [], exchangeSet: null, only: null, warnings, out var resolution, specHint);
 
         foreach (var warning in warnings)
         {
@@ -295,12 +294,15 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             {
                 render = S100Dataset.Open(input.Path);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or InvalidOperationException or FormatException or NotSupportedException
+                or ArgumentException)
             {
-                // Treat a render-handle failure as a load failure so the session
-                // invariant holds: every catalog dataset is renderable. Adding a
-                // query-only entry would make open_dataset succeed while the
-                // dataset is silently absent from render_to_image.
+                // Treat an expected render-handle failure as a load failure so the
+                // session invariant holds: every catalog dataset is renderable.
+                // Adding a query-only entry would make open_dataset succeed while
+                // the dataset is silently absent from render_to_image. Unexpected
+                // exceptions (bugs) are left to propagate as internal_error.
                 Console.Error.WriteLine(
                     $"Skipped dataset '{input.Path}' (render handle failed): {ex.Message}");
                 _usedIds.Remove(id.Value);

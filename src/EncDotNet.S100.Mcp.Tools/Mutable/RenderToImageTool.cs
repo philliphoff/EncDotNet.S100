@@ -58,7 +58,7 @@ public sealed class RenderToImageTool
         if (request.PixelDensity is { } d && (double.IsNaN(d) || double.IsInfinity(d)))
         {
             return ToolResult<RenderToImageResult>.Err(new InvalidArgument(
-                nameof(request.PixelDensity), $"value {d} is not a finite number"));
+                "pixelDensity", $"value {d} is not a finite number"));
         }
 
         var renderer = _renderer.Current;
