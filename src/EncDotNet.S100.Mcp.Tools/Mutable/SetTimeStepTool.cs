@@ -54,15 +54,18 @@ public sealed class SetTimeStepTool
         var hasIndex = request.Index is not null;
         var hasTimestamp = !string.IsNullOrWhiteSpace(request.Timestamp);
 
+        // These are cross-field constraints; attribute them to a single real
+        // request property ("index") per InvalidArgument's contract, and spell
+        // out the index/timestamp relationship in the message.
         if (hasIndex && hasTimestamp)
         {
             return ToolResult<SetTimeStepResult>.Err(new InvalidArgument(
-                "index/timestamp", "supply either 'index' or 'timestamp', not both"));
+                "index", "supply either 'index' or 'timestamp', not both"));
         }
         if (!hasIndex && !hasTimestamp)
         {
             return ToolResult<SetTimeStepResult>.Err(new InvalidArgument(
-                "index/timestamp", "one of 'index' (0-based integer) or 'timestamp' (ISO-8601) is required"));
+                "index", "one of 'index' (0-based integer) or 'timestamp' (ISO-8601) is required"));
         }
 
         var controller = _time.Current;

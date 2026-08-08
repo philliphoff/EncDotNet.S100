@@ -153,7 +153,8 @@ public sealed class McpServeCommandTests
 
         await using var client = await McpClient.CreateAsync(transport, cancellationToken: cts.Token);
 
-        // Load the fixture a second time; the catalog de-duplicates the id.
+        // Load the fixture a second time; the catalog assigns a unique id by
+        // suffixing (e.g. "…#2") since the base id is already in use.
         var open = await client.CallToolAsync(
             "open_dataset",
             new Dictionary<string, object?> { ["path"] = dataset },
