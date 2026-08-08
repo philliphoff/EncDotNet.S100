@@ -29,7 +29,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 /// After activation, every viewport change triggers a debounced
 /// (trailing-edge) call to <see cref="AisDynamicFeatureSource.UpdateArea"/>
 /// so the wire bbox tracks what the user can see. The default
-/// debounce window is 250 ms — matching <c>DynamicSourceOverlayHost</c>
+/// debounce window is 250 ms — matching <c>S100DynamicSourceHost</c>
 /// — which keeps a single pan or zoom from triggering hundreds of
 /// re-subscribes.
 /// </para>
@@ -43,7 +43,7 @@ internal sealed class DeferredAisFeatureSource : IDynamicFeatureSource, IAsyncDi
     /// <summary>
     /// Default debounce window for the post-activation
     /// <c>UpdateArea</c> stream. Mirrors
-    /// <c>DynamicSourceOverlayHost._coalesceWindow</c>.
+    /// <c>S100DynamicSourceHost</c>'s coalesce window.
     /// </summary>
     public static readonly TimeSpan DefaultUpdateAreaDebounce = TimeSpan.FromMilliseconds(250);
 

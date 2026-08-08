@@ -65,8 +65,18 @@ public static class S100MapExtensions
         var session = new MapsuiMapSession(
             layerBands, processorOwner, renderer, authorityProvider);
         var navigator = new MapsuiMapNavigator(map);
+        var dynamicSourceHost = new DynamicSources.S100DynamicSourceHost(
+            layerBands,
+            options.DynamicFeatureRendererResolver,
+            options.DynamicSourceMarshal,
+            logger: null,
+            coalesceWindow: options.DynamicSourceCoalesceWindow);
 
         return new S100MapSession(
-            processorOwner, session, navigator, options.DatasetPipelineFactory);
+            processorOwner,
+            session,
+            navigator,
+            dynamicSourceHost,
+            options.DatasetPipelineFactory);
     }
 }

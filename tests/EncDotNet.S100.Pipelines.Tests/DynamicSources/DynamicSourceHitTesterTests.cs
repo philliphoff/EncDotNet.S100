@@ -2,11 +2,11 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Viewer.Services.DynamicSources;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui;
 using Mapsui.Projections;
 
-namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
+namespace EncDotNet.S100.Pipelines.Tests.DynamicSources;
 
 public class DynamicSourceHitTesterTests
 {

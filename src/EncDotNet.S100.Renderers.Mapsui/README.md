@@ -504,9 +504,15 @@ megapixel grid).
 
 ## Dynamic feature sources
 
-`EncDotNet.S100.Renderers.Mapsui.DynamicSources` hosts the Mapsui-bound side of the dynamic-feature-source abstraction defined in `EncDotNet.S100.Core` (see [`docs/design/dynamic-feature-source.md`](../../docs/design/dynamic-feature-source.md)). Renderers turn `DynamicFeature` snapshots into Mapsui `IFeature` + `IStyle` instances that the viewer's `DynamicSourceOverlayHost` attaches to a `MemoryLayer` through its focused map-layer collection capability.
+`EncDotNet.S100.Renderers.Mapsui.DynamicSources` hosts the Mapsui-bound side of the dynamic-feature-source abstraction defined in `EncDotNet.S100.Core` (see [`docs/design/dynamic-feature-source.md`](../../docs/design/dynamic-feature-source.md)). Renderers turn `DynamicFeature` snapshots into Mapsui `IFeature` + `IStyle` instances that the reusable `S100DynamicSourceHost` attaches to a `MemoryLayer` on the overlay band.
 
-- **`IDynamicFeatureRenderer`** — `CanRender` + `Render` contract. Implementations are stateless functions of one feature; the overlay host owns the layer-level state and UI-thread marshalling.
+- **`S100DynamicSourceHost`** — the reusable hosting lifecycle: it registers `IDynamicFeatureSource` instances as managed overlay layers, resolves each source's renderer, subscribes to `Changed`, coalesces high-frequency rebuilds, and offers geographic `HitTest`ing. It implements `IS100DynamicSourceRegistry` (registration set, per-source visibility, hit-testing) and depends only on Mapsui — not on Avalonia or a DI container:
+  - **Overlay target** is an `IMapsuiOverlayLayerHost` (implemented by `MapsuiLayerBands`), so the host attaches layers without knowing the concrete map adapter.
+  - **UI-thread marshalling** is an injectable `Action<Action>` (default: inline/synchronous). A UI host passes a dispatcher-backed marshal.
+  - **Renderer resolution** is an injectable `Func<string?, IDynamicFeatureRenderer?>` (default: always the fallback renderer). A DI host passes a resolver over its keyed services.
+
+  A reusable session exposes an owned instance via `IS100MapSession.DynamicSources`; a UI host can also construct one directly over its own layer-band adapter.
+- **`IDynamicFeatureRenderer`** — `CanRender` + `Render` contract. Implementations are stateless functions of one feature; the host owns the layer-level state and UI-thread marshalling.
 - **`DefaultDynamicFeatureRenderer`** — geometry-kind-dispatching fallback: coloured disc + optional speed-scaled heading line (six-minute predictor capped at 10 nm) for `Point`, stroked polyline for `Curve`, translucent fill + outline for `Surface`. Also the safety-net renderer when a source's `RendererKey` is `null` or unregistered.
 - **`OwnShipRenderer`** — own-ship symbology under key `"ownship"`. Draws a true-scale 5-vertex hull polygon when the on-screen vessel length exceeds `MinVesselPixels` (22 px ≈ 6 mm @ 96 dpi), a coloured disc otherwise, plus a heading vector with filled-triangle arrowhead in both modes and a CCRP cross at the GPS antenna in outline mode. Uses `DynamicFeature.VesselGeometry` (CCRP offsets) to place the hull around the antenna and gates the outline / pictogram via mutually-exclusive `MinVisible` / `MaxVisible` styles so the renderer stays viewport-agnostic. Falls back to pictogram-only when no `VesselGeometry` is supplied (e.g. AIS targets with unknown dimensions). See [`docs/design/own-ship-symbology.md`](../../docs/design/own-ship-symbology.md).
 - **`KindMatchingRenderer`** — dispatches by `DynamicFeature.Kind` via exact match or dot-namespaced prefix match (e.g. `"vessel"` matches `"vessel.cargo"`). Longest-key-first ordering keeps prefix matching deterministic.
@@ -521,7 +527,7 @@ megapixel grid).
   services.AddDynamicFeatureRenderer<MyVesselRenderer>("vessel");
   ```
 
-  The viewer's overlay host resolves the renderer at registration time via `IServiceProvider.GetKeyedService<IDynamicFeatureRenderer>(source.Metadata.RendererKey)`.
+  When composed through `AddS100Mapsui`, the session's `DynamicFeatureRendererResolver` defaults to `IServiceProvider.GetKeyedService<IDynamicFeatureRenderer>(source.Metadata.RendererKey)`, so keyed registrations resolve automatically.
 
 ## Performance instrumentation
 

@@ -2,9 +2,11 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
+using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
 
@@ -29,13 +31,15 @@ public sealed class PirateModeCoordinatorTests
         public void ClearOverride() { }
     }
 
-    private sealed class FakeRegistry : IDynamicFeatureSourceRegistry
+    private sealed class FakeRegistry : IS100DynamicSourceRegistry
     {
         public Dictionary<string, bool> Visible { get; } = new();
 
+        public IDisposable Register(IDynamicFeatureSource source) => throw new NotSupportedException();
         public IReadOnlyList<DynamicSourceRegistrationInfo> Sources => Array.Empty<DynamicSourceRegistrationInfo>();
         public bool GetVisible(string sourceId) => Visible.TryGetValue(sourceId, out var v) ? v : true;
         public IReadOnlyList<IDynamicFeatureSource> GetVisibleSourceInstances() => Array.Empty<IDynamicFeatureSource>();
+        public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution) => Array.Empty<DynamicSourceHit>();
         public void SetVisible(string sourceId, bool visible) => Visible[sourceId] = visible;
         public event Action? SourcesChanged { add { } remove { } }
     }

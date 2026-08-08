@@ -2,6 +2,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using Mapsui;
 using Mapsui.Projections;
@@ -13,9 +14,15 @@ public class DynamicSourcePickServiceTests
     private const double Lat = 47.6;
     private const double Lon = -122.3;
 
-    private sealed class FakeRegistry : IDynamicFeatureSourceRegistry
+    // Focused fake: the pick service under test is the localised projection, so
+    // this returns each visible source's features as hits directly (the
+    // geometric hit-test itself is covered by DynamicSourceHitTesterTests).
+    private sealed class FakeRegistry : IS100DynamicSourceRegistry
     {
         public List<IDynamicFeatureSource> Visible { get; } = new();
+
+        public IDisposable Register(IDynamicFeatureSource source) =>
+            throw new NotSupportedException();
 
         public IReadOnlyList<DynamicSourceRegistrationInfo> Sources =>
             Visible.Select(s => new DynamicSourceRegistrationInfo(s.Id, s.Metadata.DisplayName, s.Metadata.Description)).ToList();
@@ -23,6 +30,12 @@ public class DynamicSourcePickServiceTests
         public bool GetVisible(string sourceId) => Visible.Any(s => s.Id == sourceId);
         public void SetVisible(string sourceId, bool visible) { }
         public IReadOnlyList<IDynamicFeatureSource> GetVisibleSourceInstances() => Visible;
+
+        public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution) =>
+            Visible
+                .SelectMany(s => s.CurrentFeatures.Select(f => new DynamicSourceHit(s, f, 0.0)))
+                .ToList();
+
         public event Action? SourcesChanged { add { } remove { } }
     }
 

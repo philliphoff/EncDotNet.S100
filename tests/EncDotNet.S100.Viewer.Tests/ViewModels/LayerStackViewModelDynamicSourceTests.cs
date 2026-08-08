@@ -1,7 +1,8 @@
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Interoperability;
-using EncDotNet.S100.Viewer.Services.DynamicSources;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui;
 using Mapsui.Layers;
 using ControllableLoader = EncDotNet.S100.Viewer.Tests.LayerStackViewModelTests.ControllableLoader;
 
@@ -105,10 +106,13 @@ public class LayerStackViewModelDynamicSourceTests
     private static LayerStackEntry Entry(string id, S98DisplayPlane plane, int priority)
         => new(new MemoryLayer(id), new SubLayerStackItem(new SyntheticStackPayload(id), plane, priority, id));
 
-    private sealed class FakeRegistry : IDynamicFeatureSourceRegistry
+    private sealed class FakeRegistry : IS100DynamicSourceRegistry
     {
         private readonly List<DynamicSourceRegistrationInfo> _list = new();
         private readonly Dictionary<string, bool> _visible = new(StringComparer.Ordinal);
+
+        public IDisposable Register(EncDotNet.S100.DynamicSources.IDynamicFeatureSource source) =>
+            throw new NotSupportedException();
 
         public IReadOnlyList<DynamicSourceRegistrationInfo> Sources => _list;
         public event Action? SourcesChanged;
@@ -124,6 +128,9 @@ public class LayerStackViewModelDynamicSourceTests
 
         public IReadOnlyList<EncDotNet.S100.DynamicSources.IDynamicFeatureSource> GetVisibleSourceInstances() =>
             Array.Empty<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>();
+
+        public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution) =>
+            Array.Empty<DynamicSourceHit>();
 
         public void Add(DynamicSourceRegistrationInfo info)
         {

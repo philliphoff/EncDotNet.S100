@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -39,6 +40,15 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
 
     /// <summary>Geographic query surface (feature / coverage picking).</summary>
     IS100MapQuery Query { get; }
+
+    /// <summary>
+    /// The dynamic-source registry: registers push-driven
+    /// <see cref="EncDotNet.S100.DynamicSources.IDynamicFeatureSource"/>
+    /// instances (own-ship, AIS, …) as managed overlay layers over the same
+    /// map, with per-source visibility and geographic hit-testing. The session
+    /// owns the host and disposes it with the session.
+    /// </summary>
+    IS100DynamicSourceRegistry DynamicSources { get; }
 
     /// <summary>Raised after the final dataset-band projection changes.</summary>
     event EventHandler? LayersChanged;

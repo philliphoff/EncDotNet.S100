@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -14,7 +15,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// Additional renderer settings will move onto this type incrementally as the
 /// reusable Mapsui session API evolves.
 /// </remarks>
-public sealed class S100MapsuiOptions
+public sealed record S100MapsuiOptions
 {
     /// <summary>
     /// Gets the base-plane chart render subsystem.
@@ -53,4 +54,33 @@ public sealed class S100MapsuiOptions
     /// <see cref="IS100MapSession.AddDatasetAsync"/>.
     /// </summary>
     public DatasetPipelineFactory? DatasetPipelineFactory { get; init; }
+
+    /// <summary>
+    /// Gets the marshal used by the session's dynamic-source host to run overlay
+    /// mutations on the map thread. Dynamic sources publish changes from
+    /// arbitrary threads, so a UI host supplies a dispatcher-backed marshal
+    /// (e.g. one that posts to the UI thread). When <see langword="null"/>, the
+    /// host runs mutations inline (synchronously) on the caller's thread, which
+    /// suits headless or single-threaded hosts.
+    /// </summary>
+    public Action<Action>? DynamicSourceMarshal { get; init; }
+
+    /// <summary>
+    /// Gets the resolver the session's dynamic-source host uses to find an
+    /// <see cref="IDynamicFeatureRenderer"/> for a source's
+    /// <see cref="EncDotNet.S100.DynamicSources.DynamicSourceMetadata.RendererKey"/>.
+    /// Returns <see langword="null"/> for an unknown key to fall back to the
+    /// default renderer. When the whole delegate is <see langword="null"/>, every
+    /// source uses the default renderer. A DI host typically passes a resolver
+    /// over its keyed services.
+    /// </summary>
+    public Func<string?, IDynamicFeatureRenderer?>? DynamicFeatureRendererResolver { get; init; }
+
+    /// <summary>
+    /// Gets the minimum interval between full rebuilds of a single dynamic
+    /// source's overlay layer (a coalescing throttle for high-frequency
+    /// sources). When <see langword="null"/>, the host's default (250 ms) is
+    /// used.
+    /// </summary>
+    public TimeSpan? DynamicSourceCoalesceWindow { get; init; }
 }

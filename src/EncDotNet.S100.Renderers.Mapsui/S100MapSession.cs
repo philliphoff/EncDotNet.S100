@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -12,6 +13,7 @@ internal sealed class S100MapSession : IS100MapSession
     private readonly DatasetProcessorOwner _processorOwner;
     private readonly MapsuiMapSession _session;
     private readonly MapsuiMapNavigator _navigator;
+    private readonly S100DynamicSourceHost _dynamicSourceHost;
     private readonly S100DatasetLoader _datasets;
     private MapPresentationState _presentation = MapPresentationState.Default;
     private bool _disposed;
@@ -20,12 +22,15 @@ internal sealed class S100MapSession : IS100MapSession
         DatasetProcessorOwner processorOwner,
         MapsuiMapSession session,
         MapsuiMapNavigator navigator,
+        S100DynamicSourceHost dynamicSourceHost,
         DatasetPipelineFactory? pipelineFactory = null)
     {
         _processorOwner = processorOwner
             ?? throw new ArgumentNullException(nameof(processorOwner));
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _navigator = navigator ?? throw new ArgumentNullException(nameof(navigator));
+        _dynamicSourceHost = dynamicSourceHost
+            ?? throw new ArgumentNullException(nameof(dynamicSourceHost));
         _datasets = new S100DatasetLoader(this, pipelineFactory);
 
         _session.LayersChanged += OnLayersChanged;
@@ -73,6 +78,16 @@ internal sealed class S100MapSession : IS100MapSession
         {
             ThrowIfDisposed();
             return _session.Query;
+        }
+    }
+
+    /// <inheritdoc />
+    public IS100DynamicSourceRegistry DynamicSources
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _dynamicSourceHost;
         }
     }
 
@@ -329,6 +344,10 @@ internal sealed class S100MapSession : IS100MapSession
         _session.DatasetRenderStarted -= OnDatasetRenderStarted;
         _session.DatasetRenderCompleted -= OnDatasetRenderCompleted;
         _session.DatasetRenderFailed -= OnDatasetRenderFailed;
+
+        // Detach dynamic-source overlays first so no source keeps pushing into
+        // a layer whose band is about to be torn down.
+        _dynamicSourceHost.Dispose();
 
         // Dispose the session before the owner so no in-flight render holds a
         // lease past the owner's disposal, which retires and disposes every

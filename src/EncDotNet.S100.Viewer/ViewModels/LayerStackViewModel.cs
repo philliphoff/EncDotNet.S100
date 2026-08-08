@@ -2,9 +2,9 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.Services.DynamicSources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -32,7 +32,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class LayerStackViewModel : ViewModelBase
 {
     private readonly IDatasetLoaderService _loader;
-    private readonly IDynamicFeatureSourceRegistry? _dynamicSources;
+    private readonly IS100DynamicSourceRegistry? _dynamicSources;
     private readonly ITimeFormatProvider? _timeFormat;
     // PR-L4 reserve: kept on the field so the constructor still
     // captures it. _ = is enough to suppress unused-field warnings.
@@ -85,7 +85,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
 
     public LayerStackViewModel(
         IDatasetLoaderService loader,
-        IDynamicFeatureSourceRegistry? dynamicSources = null,
+        IS100DynamicSourceRegistry? dynamicSources = null,
         ITimeFormatProvider? timeFormat = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
@@ -163,7 +163,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
                 .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e));
 
             // Dynamic rows: registration order (preserved by
-            // IDynamicFeatureSourceRegistry.Sources). Placed below
+            // IS100DynamicSourceRegistry.Sources). Placed below
             // dataset rows in the panel since datasets typically
             // carry positive priorities; a future priority hint on
             // DynamicSourceMetadata could change this.
@@ -235,7 +235,7 @@ internal sealed class LayerStackPlaneViewModel : ViewModelBase
 /// One dynamic-feature-source child row in the Layer Stack panel
 /// (PR-D2.1) — its source id, display name, optional description,
 /// and a two-way bound <see cref="IsActive"/> checkbox routed
-/// through <see cref="IDynamicFeatureSourceRegistry.SetVisible"/>.
+/// through <see cref="IS100DynamicSourceRegistry.SetVisible"/>.
 /// </summary>
 /// <remarks>
 /// A sibling of <see cref="LayerStackEntryViewModel"/>: both inherit
@@ -245,7 +245,7 @@ internal sealed class LayerStackPlaneViewModel : ViewModelBase
 /// </remarks>
 internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
 {
-    private readonly IDynamicFeatureSourceRegistry _registry;
+    private readonly IS100DynamicSourceRegistry _registry;
 
     public string SourceId { get; }
     public string DisplayName { get; }
@@ -255,7 +255,7 @@ internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
     /// <summary>
     /// Whether the source's overlay layer is currently visible.
     /// Routes through
-    /// <see cref="IDynamicFeatureSourceRegistry.SetVisible"/>; the
+    /// <see cref="IS100DynamicSourceRegistry.SetVisible"/>; the
     /// registry's resulting <c>SourcesChanged</c> event triggers a
     /// VM rebuild so the new state surfaces immediately.
     /// </summary>
@@ -271,7 +271,7 @@ internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
     }
 
     public LayerStackDynamicEntryViewModel(
-        IDynamicFeatureSourceRegistry registry,
+        IS100DynamicSourceRegistry registry,
         DynamicSourceRegistrationInfo info)
     {
         ArgumentNullException.ThrowIfNull(registry);
