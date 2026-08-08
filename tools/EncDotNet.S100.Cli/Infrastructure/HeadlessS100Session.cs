@@ -33,6 +33,11 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// <item><description>
 /// The viewport auto-fits the union extent (no <c>set_viewport</c> yet).
 /// </description></item>
+/// <item><description>
+/// <c>render_to_image</c>'s <c>pixelDensity</c> is not applied — the render
+/// uses the requested width/height as literal output pixels, so the PNG matches
+/// the reported dimensions. HiDPI scaling would need a DPI-aware composite pass.
+/// </description></item>
 /// </list>
 /// </remarks>
 internal sealed class HeadlessS100Session
@@ -107,17 +112,17 @@ internal sealed class HeadlessS100Session
             time = _currentTime;
         }
 
-        // Honour the pixel-density multiplier by rendering at the scaled pixel
-        // extent; the tool echoes the logical width/height and the density.
-        var pxWidth = Math.Max(1, (int)Math.Round(widthPx * pixelDensity));
-        var pxHeight = Math.Max(1, (int)Math.Round(heightPx * pixelDensity));
-
+        // widthPx/heightPx are the literal output pixel dimensions, so the
+        // encoded PNG matches the size the tool reports back. pixelDensity is
+        // not applied here: the composite renderer has no DPI-aware pass to
+        // scale symbols by, and scaling the raster would make the PNG larger
+        // than the reported width/height (a v1 gap).
         var layers = handles.Select(d => new S100Layer { Dataset = d }).ToList();
 
         var options = new S100CompositeOptions
         {
-            Width = pxWidth,
-            Height = pxHeight,
+            Width = widthPx,
+            Height = heightPx,
             Palette = presentation.Palette,
             SymbolScale = presentation.SymbolScale,
             TextScale = presentation.TextScale,

@@ -66,17 +66,34 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     public void Seed(IEnumerable<FileDatasetInput> inputs, IDisposable? resolution)
     {
         ArgumentNullException.ThrowIfNull(inputs);
+
+        bool changed;
+        bool retainedResolution;
         lock (_gate)
         {
-            if (resolution is not null)
-            {
-                _resolutions.Add(resolution);
-            }
             var added = AddInputsLocked(inputs);
-            if (added.Count > 0)
+            changed = added.Count > 0;
+            // Only keep the extraction alive if it actually contributed a
+            // dataset; otherwise release it now instead of holding it for the
+            // whole session.
+            retainedResolution = changed && resolution is not null;
+            if (retainedResolution)
             {
-                PublishLocked(DatasetCatalogChangeKind.Batch, id: null);
+                _resolutions.Add(resolution!);
             }
+            if (changed)
+            {
+                UpdateSnapshotLocked();
+            }
+        }
+
+        if (!retainedResolution)
+        {
+            resolution?.Dispose();
+        }
+        if (changed)
+        {
+            RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
         }
     }
 
@@ -100,17 +117,31 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             : DatasetSourceKind.File;
 
         List<DatasetId> added;
+        bool retainedResolution;
         lock (_gate)
         {
-            if (resolution is not null)
-            {
-                _resolutions.Add(resolution);
-            }
             added = AddInputsLocked(inputs);
+            // Only keep the extraction alive if it actually contributed a
+            // dataset; a failed / empty load must not leak temp resources for
+            // the whole session.
+            retainedResolution = added.Count > 0 && resolution is not null;
+            if (retainedResolution)
+            {
+                _resolutions.Add(resolution!);
+            }
             if (added.Count > 0)
             {
-                PublishLocked(DatasetCatalogChangeKind.Batch, id: null);
+                UpdateSnapshotLocked();
             }
+        }
+
+        if (!retainedResolution)
+        {
+            resolution?.Dispose();
+        }
+        if (added.Count > 0)
+        {
+            RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
         }
 
         return Task.FromResult(new DatasetLoadOutcome(path, kind, added, TimedOut: false));
@@ -119,6 +150,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// <inheritdoc />
     public bool Remove(DatasetId id)
     {
+        Entry entry;
         lock (_gate)
         {
             var index = _entries.FindIndex(e => e.Loaded.Id.Equals(id));
@@ -127,35 +159,40 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
                 return false;
             }
 
-            var entry = _entries[index];
+            entry = _entries[index];
             _entries.RemoveAt(index);
             _usedIds.Remove(id.Value);
-            entry.Render?.Dispose();
-            PublishLocked(DatasetCatalogChangeKind.Removed, id);
-            return true;
+            UpdateSnapshotLocked();
         }
+
+        entry.Render?.Dispose();
+        RaiseChanged(DatasetCatalogChangeKind.Removed, id);
+        return true;
     }
 
     /// <inheritdoc />
     public int RemoveAll()
     {
+        List<Entry> removed;
         lock (_gate)
         {
-            var count = _entries.Count;
-            if (count == 0)
+            if (_entries.Count == 0)
             {
                 return 0;
             }
 
-            foreach (var entry in _entries)
-            {
-                entry.Render?.Dispose();
-            }
+            removed = [.. _entries];
             _entries.Clear();
             _usedIds.Clear();
-            PublishLocked(DatasetCatalogChangeKind.Batch, id: null);
-            return count;
+            UpdateSnapshotLocked();
         }
+
+        foreach (var entry in removed)
+        {
+            entry.Render?.Dispose();
+        }
+        RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
+        return removed.Count;
     }
 
     private List<DatasetId> AddInputsLocked(IEnumerable<FileDatasetInput> inputs)
@@ -227,9 +264,22 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         }
     }
 
-    private void PublishLocked(DatasetCatalogChangeKind kind, DatasetId? id)
+    /// <summary>
+    /// Refreshes the published <see cref="Datasets"/> snapshot from the current
+    /// entries. Call under <see cref="_gate"/>; raise <see cref="Changed"/> with
+    /// <see cref="RaiseChanged"/> after releasing the lock.
+    /// </summary>
+    private void UpdateSnapshotLocked()
     {
         Volatile.Write(ref _snapshot, _entries.Select(e => e.Loaded).ToList());
+    }
+
+    /// <summary>
+    /// Raises <see cref="Changed"/>. Invoked <b>outside</b> <see cref="_gate"/>
+    /// so a subscriber that re-enters the catalog cannot deadlock.
+    /// </summary>
+    private void RaiseChanged(DatasetCatalogChangeKind kind, DatasetId? id)
+    {
         Changed?.Invoke(this, new DatasetCatalogChangedEventArgs { Kind = kind, DatasetId = id });
     }
 
