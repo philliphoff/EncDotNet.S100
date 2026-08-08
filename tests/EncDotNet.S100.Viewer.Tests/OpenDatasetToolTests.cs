@@ -3,6 +3,12 @@ using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 
+// The shared Query namespace now also defines a DatasetLoadFailed error (added
+// for the mutable MCP tool set, #560). This test exercises the Viewer's own
+// OpenDatasetTool, which still raises the Viewer-internal one, so pin the name
+// to that until PR 1 consolidates the tool onto the shared error.
+using DatasetLoadFailed = EncDotNet.S100.Viewer.McpTools.DatasetLoadFailed;
+
 namespace EncDotNet.S100.Viewer.Tests;
 
 public class OpenDatasetToolTests

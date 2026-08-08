@@ -412,21 +412,34 @@ and attribute mapping, allowed-value enforcement) are owned by
 
 ### `s100 mcp serve <dataset-or-exchange-set>`
 
-Hosts the read-only S-100 [Model Context Protocol](https://modelcontextprotocol.io)
-tools over the **stdio** transport, so an MCP client that spawns this process can
-query the served datasets — features, attributes, spatial queries, and coverage
-samples — without a GUI viewer. The tools are the same read-only set the desktop
-viewer exposes (`list_datasets`, `describe_feature`, `describe_feature_type`,
-`query_features`, `find_at`, `identify_features`, `nearest_features`,
-`count_features`, `search_features`, `sample_coverage`, `sample_coverage_along`,
-`list_specs`, `list_time_steps`); none mutate data, load/unload datasets, or
-write files.
+Hosts the S-100 [Model Context Protocol](https://modelcontextprotocol.io) tools
+over the **stdio** transport, so an MCP client that spawns this process can work
+with the served datasets — without a GUI viewer. It serves two tool groups:
 
-The datasets to serve are specified up front, using the same input grammar as
-`s100 identify`: a single positional dataset, repeated `--layer` options, or an
-exchange set (positional directory / `CATALOG.XML` / `.zip`, or `--from`). They
-are loaded once into an immutable catalog and served read-only; the process is
-the session boundary — spawn another `serve` for a different set.
+- **Read-only query tools** (`list_datasets`, `describe_feature`,
+  `describe_feature_type`, `query_features`, `find_at`, `identify_features`,
+  `nearest_features`, `count_features`, `search_features`, `sample_coverage`,
+  `sample_coverage_along`, `list_specs`, `list_time_steps`) — features,
+  attributes, spatial queries, and coverage samples.
+- **Mutating session tools** (**mutable by default**) — `open_dataset`,
+  `close_dataset`, `close_all_datasets`, `set_palette`, `set_display_category`,
+  `set_display_mode`, `set_time_step`, and `render_to_image`, which returns a
+  headless PNG of the current session state as an MCP image block. These drive an
+  in-process headless Skia session (the same renderer behind `s100 render`);
+  they change only in-memory session state and never edit the source datasets or
+  write files. `open_dataset` loads additional file / exchange-set paths into the
+  live catalog mid-session.
+
+An initial set of datasets can be specified up front, using the same input
+grammar as `s100 identify`: a single positional dataset, repeated `--layer`
+options, or an exchange set (positional directory / `CATALOG.XML` / `.zip`, or
+`--from`). Further datasets can be added at runtime via `open_dataset`; the
+process is the session boundary — spawn another `serve` for an isolated session.
+
+> **v1 gaps:** the viewport auto-fits the datasets' union extent (no
+> `set_viewport` yet), and `set_display_category` updates session state but the
+> headless composite render does not yet reflect ECDIS category / viewing-group
+> selections.
 
 ```
 s100 mcp serve dataset.h5

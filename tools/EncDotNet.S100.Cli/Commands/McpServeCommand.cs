@@ -3,25 +3,35 @@ using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp;
+using EncDotNet.S100.Mcp.MutableTools;
+using EncDotNet.S100.Mcp.Tools.Mutable;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
-/// <c>s100 mcp serve</c> hosts the read-only S-100 MCP tool set over the
-/// <b>stdio</b> transport for a fixed set of datasets, so an agent that spawns
-/// this process can query features and sample coverages without a GUI viewer
-/// or an out-of-band HTTP endpoint.
+/// <c>s100 mcp serve</c> hosts the S-100 MCP tool set over the <b>stdio</b>
+/// transport for a fixed set of datasets, so an agent that spawns this process
+/// can query features, sample coverages, and drive a stateful session (palette,
+/// time step, headless render) without a GUI viewer or an out-of-band HTTP
+/// endpoint.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The datasets to serve are specified up front using the same input grammar
 /// as <c>s100 identify</c> / <c>s100 render</c>: a single positional dataset,
 /// repeated <c>--layer</c> options, or an exchange set (positional directory /
-/// <c>CATALOG.XML</c> / <c>.zip</c>, or <c>--from</c>). They are loaded into an
-/// immutable <see cref="FileDatasetCatalog"/> and served read-only; the process
-/// is the session boundary — spawn another to serve a different set.
+/// <c>CATALOG.XML</c> / <c>.zip</c>, or <c>--from</c>). They are loaded into a
+/// <see cref="FileDatasetCatalog"/> for the read-only query tools, and opened as
+/// resident render handles for the mutating tools; the process is the session
+/// boundary — spawn another to serve a different set.
+/// </para>
+/// <para>
+/// The server is <b>mutable by default</b>: alongside the read-only query tools
+/// it exposes the presentation / time / render tools (<c>set_palette</c>,
+/// <c>set_display_category</c>, <c>set_display_mode</c>, <c>set_time_step</c>,
+/// <c>render_to_image</c>), backed by an in-process headless Skia session.
 /// </para>
 /// <para>
 /// Standard output carries the MCP protocol, so every human-readable message
@@ -100,9 +110,18 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 return 2;
             }
 
-            var catalog = FileDatasetCatalog.Build(inputs, new ProjNetCrsTransformFactory());
-            foreach (var warning in catalog.Warnings)
-                Console.Error.WriteLine(warning);
+            // The mutable catalog is the single source of truth for the session:
+            // it holds each dataset both as a projected LoadedDataset (read tools)
+            // and an open render handle (headless renderer), and is what
+            // open_dataset / close_dataset mutate.
+            using var catalog = new HeadlessMutableCatalog(new ProjNetCrsTransformFactory());
+
+            // Ownership of any exchange-set extraction transfers to the catalog,
+            // which keeps it alive for the whole session (the composite renderer
+            // re-reads dataset paths on each render).
+            var toSeed = exchangeSetResolution;
+            exchangeSetResolution = null;
+            catalog.Seed(inputs, toSeed);
 
             if (catalog.Datasets.Count == 0)
             {
@@ -110,10 +129,20 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 return 2;
             }
 
-            Console.Error.WriteLine(
-                $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) over stdio (read-only). Ctrl-C to stop.");
+            // Mutable-by-default: the served tool set includes the mutating
+            // catalog / presentation / time / render tools, backed by an
+            // in-process headless session over the catalog above.
+            using var session = new HeadlessS100Session(catalog);
+            var additionalTools = S100MutableTools.Create(
+                presentation: new StaticCapabilityAccessor<IPresentationController>(session),
+                time: new StaticCapabilityAccessor<ITimeController>(session),
+                renderer: new StaticCapabilityAccessor<IImageRenderer>(session),
+                catalog: catalog);
 
-            await S100McpStdioHost.RunAsync(catalog);
+            Console.Error.WriteLine(
+                $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) over stdio (mutable). Ctrl-C to stop.");
+
+            await S100McpStdioHost.RunAsync(catalog, additionalTools);
             return 0;
         }
         catch (Exception ex)
