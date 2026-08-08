@@ -27,7 +27,7 @@ internal static class CompositeViewportBuilder
     private const double RadToDeg = 180.0 / Math.PI;
 
     /// <summary>Practical EPSG:3857 latitude limit (±85.05112878°).</summary>
-    private const double MaxLatitude = 85.05112878;
+    internal const double MaxLatitude = 85.05112878;
 
     /// <summary>
     /// Builds a viewport that frames the WGS-84 bounding box

@@ -78,6 +78,55 @@ public sealed class HeadlessS100SessionViewportTests
         Assert.Null(controller.Current); // nothing stored
     }
 
+    [Theory]
+    [InlineData(200.0, 50.0, 50000.0)]   // longitude out of range
+    [InlineData(-1.25, 87.0, 50000.0)]   // latitude beyond the Web Mercator limit
+    [InlineData(-1.25, 50.0, 0.0)]       // non-positive scale
+    [InlineData(-1.25, 50.0, double.NaN)] // non-finite scale
+    public void Set_WithInvalidFields_Throws(double lon, double lat, double scale)
+    {
+        using var catalog = new HeadlessMutableCatalog();
+        using var session = new HeadlessS100Session(catalog);
+        var controller = (IViewportController)session;
+
+        Assert.Throws<ArgumentException>(() => controller.Set(new MapViewport(lon, lat, scale)));
+        Assert.Null(controller.Current); // nothing stored
+    }
+
+    [Fact]
+    public void SetToBounds_WithInvertedBox_Throws()
+    {
+        using var catalog = new HeadlessMutableCatalog();
+        using var session = new HeadlessS100Session(catalog);
+        var controller = (IViewportController)session;
+
+        Assert.Throws<ArgumentException>(() => controller.SetToBounds(new BoundingBox
+        {
+            WestBoundLongitude = -1.0,
+            EastBoundLongitude = -1.5, // west >= east
+            SouthBoundLatitude = 50.0,
+            NorthBoundLatitude = 50.5,
+        }));
+        Assert.Null(controller.Current);
+    }
+
+    [Fact]
+    public void SetToBounds_WithOutOfRangeLatitude_Throws()
+    {
+        using var catalog = new HeadlessMutableCatalog();
+        using var session = new HeadlessS100Session(catalog);
+        var controller = (IViewportController)session;
+
+        Assert.Throws<ArgumentException>(() => controller.SetToBounds(new BoundingBox
+        {
+            WestBoundLongitude = -1.5,
+            EastBoundLongitude = -1.0,
+            SouthBoundLatitude = 80.0,
+            NorthBoundLatitude = 87.0, // beyond the Web Mercator limit
+        }));
+        Assert.Null(controller.Current);
+    }
+
     [Fact]
     public void Set_ThenSetToBounds_AreMutuallyExclusive()
     {

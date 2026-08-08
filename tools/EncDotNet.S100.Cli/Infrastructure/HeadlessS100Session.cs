@@ -154,14 +154,23 @@ internal sealed class HeadlessS100Session
         ArgumentNullException.ThrowIfNull(viewport);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // The headless composite render path is north-up only (ResolveViewport
-        // uses centre + scale, not rotation). Reject a non-zero rotation here so
-        // Current can never report a rotated viewport the renderer will not honour
-        // — even when Set is called programmatically rather than via set_viewport.
+        // Guard the public capability seam: a programmatic caller (not going
+        // through set_viewport, which validates first) must not be able to store a
+        // viewport the renderer can't honour or that would feed NaN / out-of-range
+        // values into CompositeViewportBuilder. The headless render path is
+        // north-up only (ResolveViewport uses centre + scale, not rotation).
         if (viewport.RotationDegrees != 0.0)
         {
             throw new ArgumentException(
                 "The headless composite renderer is north-up only; RotationDegrees must be 0.",
+                nameof(viewport));
+        }
+        ValidateLongitude(viewport.CenterLongitude, nameof(viewport));
+        ValidateLatitude(viewport.CenterLatitude, nameof(viewport));
+        if (!double.IsFinite(viewport.ScaleDenominator) || viewport.ScaleDenominator <= 0.0)
+        {
+            throw new ArgumentException(
+                $"ScaleDenominator must be a positive, finite number; got {viewport.ScaleDenominator}.",
                 nameof(viewport));
         }
 
@@ -176,10 +185,56 @@ internal sealed class HeadlessS100Session
     {
         ArgumentNullException.ThrowIfNull(bounds);
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Same seam guard as Set: reject non-finite / out-of-range edges and an
+        // inverted or antimeridian-crossing box, which CompositeViewportBuilder
+        // cannot frame correctly, before they can reach Current or a render.
+        ValidateLongitude(bounds.WestBoundLongitude, nameof(bounds));
+        ValidateLongitude(bounds.EastBoundLongitude, nameof(bounds));
+        ValidateLatitude(bounds.SouthBoundLatitude, nameof(bounds));
+        ValidateLatitude(bounds.NorthBoundLatitude, nameof(bounds));
+        if (bounds.WestBoundLongitude >= bounds.EastBoundLongitude)
+        {
+            throw new ArgumentException(
+                $"West ({bounds.WestBoundLongitude}) must be less than East ({bounds.EastBoundLongitude}); antimeridian crossing is not supported.",
+                nameof(bounds));
+        }
+        if (bounds.SouthBoundLatitude >= bounds.NorthBoundLatitude)
+        {
+            throw new ArgumentException(
+                $"South ({bounds.SouthBoundLatitude}) must be less than North ({bounds.NorthBoundLatitude}).",
+                nameof(bounds));
+        }
+
         lock (_gate)
         {
             _bounds = bounds;
             _viewport = null;
+        }
+    }
+
+    private const double MaxLongitude = 180.0;
+
+    private static void ValidateLongitude(double value, string paramName)
+    {
+        if (!double.IsFinite(value) || value < -MaxLongitude || value > MaxLongitude)
+        {
+            throw new ArgumentException(
+                $"Longitude {value} is outside the supported range [{-MaxLongitude}, {MaxLongitude}].",
+                paramName);
+        }
+    }
+
+    private static void ValidateLatitude(double value, string paramName)
+    {
+        if (!double.IsFinite(value)
+            || value < -CompositeViewportBuilder.MaxLatitude
+            || value > CompositeViewportBuilder.MaxLatitude)
+        {
+            throw new ArgumentException(
+                $"Latitude {value} is outside the Web Mercator range "
+                + $"[{-CompositeViewportBuilder.MaxLatitude}, {CompositeViewportBuilder.MaxLatitude}].",
+                paramName);
         }
     }
 
