@@ -20,7 +20,8 @@ constructor. In essence:
 ```csharp
 // 0. One call gives you an IDatasetProcessorFactory seeded with the official
 //    bundled catalogues for every product (from the EncDotNet.S100 package).
-var factory = BundledDatasetProcessorFactory.Create();
+//    It owns long-lived catalogue caches, so dispose it with the session.
+using var factory = BundledDatasetProcessorFactory.Create();
 
 // 1. Compose a session over a bare map. AddS100 returns the disposable
 //    IS100MapSession that owns all S-100 layers, processors, and rendering.

@@ -25,6 +25,7 @@ namespace EncDotNet.S100;
 internal sealed class S100PipelineHost : IDisposable
 {
     private readonly PortrayalCatalogueManager _portrayalManager;
+    private readonly FeatureCatalogueManager _featureManager;
     private readonly DatasetPipelineFactory _factory;
     private bool _disposed;
 
@@ -33,6 +34,7 @@ internal sealed class S100PipelineHost : IDisposable
         FeatureCatalogueManager featureManager)
     {
         _portrayalManager = portrayalManager;
+        _featureManager = featureManager;
         _factory = new DatasetPipelineFactory(
             portrayalManager,
             new MoonSharpLuaEngine(),
@@ -93,9 +95,10 @@ internal sealed class S100PipelineHost : IDisposable
     public IDatasetProcessor CreateProcessor(string path) => _factory.CreateProcessor(path);
 
     /// <summary>
-    /// The bundled processor factory this host wraps. Exposed for the public
-    /// <see cref="BundledDatasetProcessorFactory"/> convenience so a Mapsui (or
-    /// any) host can hand it to <c>S100MapsuiOptions.DatasetPipelineFactory</c>.
+    /// The bundled processor factory this host wraps, for in-assembly
+    /// conveniences (e.g. <see cref="BundledDatasetProcessorFactory"/>) to expose
+    /// publicly. Its lifetime is bound to this host: the catalogue managers it
+    /// closes over are released by <see cref="Dispose"/>.
     /// </summary>
     internal IDatasetProcessorFactory Factory => _factory;
 
@@ -104,6 +107,10 @@ internal sealed class S100PipelineHost : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        // Both catalogue managers own asset sources and parse caches that live
+        // for the host's lifetime (DatasetPipelineFactory itself is not
+        // IDisposable), so release both here.
         _portrayalManager.Dispose();
+        _featureManager.Dispose();
     }
 }
