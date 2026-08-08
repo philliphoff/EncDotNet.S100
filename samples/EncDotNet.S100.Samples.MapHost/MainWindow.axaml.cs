@@ -239,15 +239,23 @@ public partial class MainWindow : Window
     /// The dashed border is gated by the cell's content cutoff, so Mapsui reveals
     /// it only when the viewport zooms out past the point the cell stops drawing.
     /// </summary>
+    /// <remarks>
+    /// Only shown when the dataset reports a content cutoff
+    /// (<c>ContentMaxVisibleResolution</c>): with no cutoff the cell draws at
+    /// every zoom, so there is no "scaled out" state to indicate and an
+    /// always-on border would just be noise. (Passing <c>0</c> to
+    /// <see cref="S100DatasetExtentIndicator"/> is reserved for a different case
+    /// the module documents - a catalogue footprint whose cell is not yet loaded.)
+    /// </remarks>
     private void UpdateExtentIndicator()
     {
         if (_loadedDatasetId is { } id
-            && _session.GetDataset(id) is { Extent: { } extent } snapshot
+            && _session.GetDataset(id) is { Extent: { } extent, ContentMaxVisibleResolution: { } cutoff }
             && (VisibleToggle.IsChecked ?? true))
         {
             _extentIndicator.Show(new[]
             {
-                new S100DatasetExtentIndicator(extent, snapshot.ContentMaxVisibleResolution ?? 0),
+                new S100DatasetExtentIndicator(extent, cutoff),
             });
         }
         else

@@ -58,7 +58,9 @@ internal static class SmokeTest
 
         Console.WriteLine(
             $"Loaded {id}: {snapshot.Layers.Count} layer(s), extent "
-            + $"[{extent.MinX:F0},{extent.MinY:F0} .. {extent.MaxX:F0},{extent.MaxY:F0}] (EPSG:3857).");
+            + $"[{extent.MinX:F0},{extent.MinY:F0} .. {extent.MaxX:F0},{extent.MaxY:F0}] (EPSG:3857); "
+            + $"content cutoff (max visible resolution): "
+            + $"{(snapshot.ContentMaxVisibleResolution is { } r ? $"{r:F1} m/px" : "none")}.");
 
         session.ZoomToDataset(id);
         var resolution = map.Navigator.Viewport.Resolution;
