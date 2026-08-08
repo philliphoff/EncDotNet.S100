@@ -13,7 +13,7 @@ public sealed record RenderToImageRequest(
 public sealed record RenderToImageResult(
     [property: Description("Image width in pixels actually rendered (post-clamp / default).")] int Width,
     [property: Description("Image height in pixels actually rendered (post-clamp / default).")] int Height,
-    [property: Description("Pixel-density multiplier actually applied (post-clamp / default).")] double PixelDensity,
+    [property: Description("Pixel-density multiplier resolved for the request (post-clamp / default). A host may not apply it — the headless CLI render ignores density and encodes at the literal width/height.")] double PixelDensity,
     [property: Description("Image format identifier; always \"png\" in v1.")] string ImageFormat,
     [property: Description("PNG-encoded image bytes; surfaced separately as an MCP ImageContentBlock with mimeType image/png at the wire layer.")] byte[] ImageBytes,
     [property: Description("Optional human-readable note (e.g. \"defaulted size to 1024x768\").")] string? Notes);
