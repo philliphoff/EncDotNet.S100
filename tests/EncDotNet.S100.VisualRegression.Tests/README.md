@@ -182,9 +182,10 @@ for arm in mapsui tiledscene; do
     --bbox -32.466667,61.5,-32.4417611,61.6145761 \
     --palette Day --display-category Standard \
     "$CELL" &
+  PID=$!
   # Poll /tmp/eval/mcp_$arm.url for the endpoint, connect an MCP client, then:
   #   await_render_idle  →  render_to_image (save /tmp/eval/committed_$arm.png)
-  # Quit the process (kill -9 <pid>) when the capture is written.
+  kill -9 "$PID"   # once the capture is written
 done
 ```
 

@@ -141,8 +141,8 @@ public partial class App : Application
         // FailFast, kill, … — none of which the managed handlers above can
         // catch) and route it into the last-error tracker so the feedback
         // reporter and the startup notification can surface it. Disabled
-        // for ephemeral / one-shot screenshot runs so automation never
-        // writes a marker or reports a stale one.
+        // for ephemeral automation runs so automation never writes a
+        // marker or reports a stale one.
         DetectPreviousUncleanShutdown();
 
         // ShadUI resolves custom dialog content by an explicit
