@@ -330,9 +330,10 @@ public partial class App : Application
             // Drain the tiled renderer's background Skia workers before the
             // process tears down. Avalonia raises ShutdownRequested on every
             // exit path (explicit Shutdown(), last-window-close, OS quit), so
-            // hooking it here covers --exit-after-screenshot and normal quit
-            // alike. Without this, the managed runtime can begin destroying
-            // libSkiaSharp while a worker is mid-rasterise → native SIGSEGV.
+            // hooking it here covers every quit path — including an
+            // MCP-driven shutdown after a headless capture. Without this, the
+            // managed runtime can begin destroying libSkiaSharp while a worker
+            // is mid-rasterise → native SIGSEGV.
             desktop.ShutdownRequested += (_, _) =>
             {
                 // Flush any pending debounced route save so the last edit is
@@ -480,7 +481,6 @@ public partial class App : Application
         services.AddSingleton<IDataMaintenanceService, DataMaintenanceService>();
         services.AddSingleton<IApplicationControlService, ApplicationControlService>();
         services.AddSingleton<PortrayalCatalogueSeeder>();
-        services.AddSingleton<ScreenshotService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
         // Loads persisted routes at startup and writes them back (debounced)
@@ -939,7 +939,6 @@ public partial class App : Application
             sp.GetRequiredService<MainViewModel>(),
             sp.GetRequiredService<DatasetCatalogAggregator>(),
             sp.GetRequiredService<IRecentFilesService>(),
-            sp.GetRequiredService<ScreenshotService>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<IPickService>(),
             sp.GetRequiredService<IFileDialogService>(),
@@ -975,9 +974,9 @@ public partial class App : Application
     {
         var options = StartupOptions;
 
-        // Skip ephemeral / one-shot screenshot automation runs: they must
-        // leave no marker behind and must not surface a stale crash.
-        var enabled = !(options?.Ephemeral == true || options?.ExitAfterScreenshot == true);
+        // Skip ephemeral automation runs: they must leave no marker behind
+        // and must not surface a stale crash.
+        var enabled = !(options?.Ephemeral == true);
 
         var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0";
 

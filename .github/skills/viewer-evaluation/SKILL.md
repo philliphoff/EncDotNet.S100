@@ -2,10 +2,11 @@
 name: viewer-evaluation
 description: |
   Procedure for running an independent, automated evaluation loop
-  against the EncDotNet.S100 Avalonia viewer using its CLI flags and
-  embedded MCP server. Lets an agent launch the viewer headlessly,
-  load datasets, drive viewport / palette / display-category / time-step
-  / own-ship, capture screenshots, await render-idle, and read render
+  against the EncDotNet.S100 Avalonia viewer. The CLI launches and
+  isolates the process; its embedded MCP server drives everything after
+  that. Lets an agent launch the viewer headlessly, then over MCP load
+  datasets, drive viewport / palette / display-category / time-step /
+  own-ship, capture screenshots, await render-idle, and read render
   stats — then iterate. USE FOR: visually verifying a rendering or
   portrayal change; designing or reproducing integration/regression
   scenarios; measuring load/render performance; capturing reference
@@ -42,30 +43,38 @@ operating procedure.
   loop. Capture the finding, then **back it with a unit test or a
   small synthetic fixture** wherever the root cause lives in a library.
 
-## Two modes
+## How to drive it: MCP is the single control surface
 
-### A. One-shot capture (no MCP) — cheapest
-For a single deterministic screenshot, skip MCP entirely:
+**Image capture and all live state changes go over MCP — not CLI
+flags.** The CLI's job is to *launch and isolate* the process; once the
+window is up, an MCP client loads data, reframes, toggles
+palette/category/time-step/own-ship, captures images, and quits.
+There is deliberately **no** one-shot "load → screenshot → exit" CLI
+mode: it existed once (`--screenshot` / `--exit-after-screenshot` /
+`--window-size` / …) but was **removed** because it was unreliable and
+duplicated the MCP tools. Do not look for those flags — they are gone.
 
-```bash
-src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
-  --ephemeral --window-size 1600x1000 \
-  --bbox <south,west,north,east> \
-  --palette Day --display-category Standard \
-  --screenshot /tmp/eval/map.png --exit-after-screenshot \
-  path/to/dataset            # a .000 cell, .h5, .gml, or exchange-set folder/zip
-```
+The core capture loop is always:
 
-The screenshot is captured after render quiesces. `--center LAT,LON
---zoom N` is an alternative to `--bbox` (mutually exclusive; `--center`
-requires `--zoom`, range 0–24). Use this mode for before/after image
-diffs across a code change.
+> `open_dataset` → `set_viewport` → `await_render_idle` →
+> `render_to_image` (map surface) or `capture_app_screenshot` (whole
+> window)
 
-### B. Interactive MCP driving — for multi-step scenarios
-Use when you need to load → reframe → toggle palette/time-step → screenshot
-repeatedly within one process, or to read structured timing.
+with `set_palette` / `set_display_category` / `set_time_step` /
+`set_own_ship` interleaved as the scenario needs, and
+`close_all_datasets` when done. For a before/after image diff across a
+code change, run this loop twice (once per build) against the same
+viewport — reframing over `set_viewport` rather than relaunching.
 
-### C. Hand-off to a human for manual GUI testing
+The CLI flags that remain are launch-time presets and isolation only:
+`--ephemeral` / `--data-dir` (profile/cache isolation), `--mcp*` (enable
++ discover the server), `--bbox` / `--center`+`--zoom` / `--palette` /
+`--display-category` / `--time-step` / `--own-ship-*` (preset the
+*initial* view — the MCP tools change it thereafter), `--fc` / `--pc`
+(catalogue overrides, no MCP counterpart), `--basemap`, and the
+logging flags. Follow the procedure below.
+
+### Hand-off to a human for manual GUI testing
 When you launch the viewer for the **user** to click through (e.g. to
 verify a dialog or interaction), it must outlive your shell session. A
 plain `nohup … & disown` from a sync/attached command is killed when the
@@ -79,7 +88,7 @@ command's session is torn down — the GUI window dies seconds later.
 - Confirm it stayed up (`pgrep -f EncDotNet.S100.Viewer/bin`) before
   telling the user it's ready.
 
-## Procedure for mode B
+## Procedure: launch, then drive over MCP
 
 ### 1. Build, then launch the binary (not `dotnet run`)
 Build `Release` first so the PID you drive/trace is the app itself, not

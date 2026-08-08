@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -25,7 +24,6 @@ namespace EncDotNet.S100.Viewer;
 public partial class MainWindow : ShadUI.Window
 {
     private readonly IRecentFilesService _recentFiles;
-    private readonly ScreenshotService _screenshotService;
     private readonly IDatasetLoaderService _loader;
     private readonly IPickService _pickService;
     private readonly IFileDialogService _fileDialog;
@@ -48,10 +46,6 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
     private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
-    private string? _screenshotPath;
-    private bool _exitAfterScreenshot;
-    private bool _closeAfterScreenshot;
-    private bool _fullWindowScreenshot;
     private ViewerCommandSettings? _startupOptions;
     private Color _accentColor;
 
@@ -71,7 +65,6 @@ public partial class MainWindow : ShadUI.Window
             ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
             ResolveOrFallback<IRecentFilesService>(static () => throw new InvalidOperationException(
                 "IRecentFilesService cannot be resolved without the application service provider.")),
-            ResolveOrFallback<ScreenshotService>(static () => new ScreenshotService()),
             ResolveOrFallback<IDatasetLoaderService>(static () => throw new InvalidOperationException(
                 "IDatasetLoaderService cannot be resolved without the application service provider.")),
             ResolveOrFallback<IPickService>(static () => throw new InvalidOperationException(
@@ -100,7 +93,6 @@ public partial class MainWindow : ShadUI.Window
         MainViewModel viewModel,
         DatasetCatalogAggregator catalogAggregator,
         IRecentFilesService recentFiles,
-        ScreenshotService screenshotService,
         IDatasetLoaderService loader,
         IPickService pickService,
         IFileDialogService fileDialog,
@@ -110,7 +102,6 @@ public partial class MainWindow : ShadUI.Window
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(catalogAggregator);
         ArgumentNullException.ThrowIfNull(recentFiles);
-        ArgumentNullException.ThrowIfNull(screenshotService);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
         ArgumentNullException.ThrowIfNull(fileDialog);
@@ -126,7 +117,6 @@ public partial class MainWindow : ShadUI.Window
         _viewModel = viewModel;
         _catalogAggregator = catalogAggregator;
         _recentFiles = recentFiles;
-        _screenshotService = screenshotService;
         _loader = loader;
         _pickService = pickService;
         _fileDialog = fileDialog;
@@ -481,20 +471,6 @@ public partial class MainWindow : ShadUI.Window
 
         // Apply CLI options
         _startupOptions = options;
-        _screenshotPath = options?.ScreenshotPath;
-        _exitAfterScreenshot = options?.ExitAfterScreenshot ?? false;
-        _closeAfterScreenshot = options?.CloseAfterScreenshot ?? false;
-        _fullWindowScreenshot = options?.FullWindowScreenshot ?? false;
-
-        // A fixed window size makes screenshots reproducible across
-        // machines. Applied before the window is shown.
-        if (options?.ParsedWindowSize is { } size)
-        {
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            CanResize = true;
-            Width = size.Width;
-            Height = size.Height;
-        }
 
         // When an explicit startup viewport is requested, suppress the
         // per-dataset auto-zoom so the requested framing wins.
@@ -528,12 +504,10 @@ public partial class MainWindow : ShadUI.Window
         }
 
         // Run startup automation once the window is shown: load CLI
-        // datasets, drive the map to the requested state, and capture a
-        // screenshot — in a deterministic order so an agent gets a
-        // stable result.
+        // datasets and drive the map to the requested state — in a
+        // deterministic order so an agent gets a stable result.
         var datasetPaths = options?.Datasets?.Where(File.Exists).ToArray() ?? [];
         var needsAutomation = datasetPaths.Length > 0
-            || _screenshotPath is not null
             || options?.HasExplicitViewport == true
             || options?.TimeStep is not null;
         if (needsAutomation)
@@ -773,10 +747,9 @@ public partial class MainWindow : ShadUI.Window
 
     /// <summary>
     /// Deterministic startup sequence for headless/agent runs: load any
-    /// CLI datasets, wait for rendering to quiesce, drive the map to the
-    /// requested time step and viewport, then capture a screenshot and
-    /// optionally exit. Replaces the old fixed-delay screenshot path so
-    /// the capture reflects a settled render rather than a guess.
+    /// CLI datasets, wait for rendering to quiesce, then drive the map to
+    /// the requested time step and viewport. Live capture, further state
+    /// changes, and shutdown are driven over MCP once the window is up.
     /// </summary>
     private async Task RunStartupAutomationAsync(string[] datasetPaths)
     {
@@ -813,43 +786,6 @@ public partial class MainWindow : ShadUI.Window
 
         ApplyStartupOwnShip();
         ApplyStartupViewport();
-
-        if (_screenshotPath is not null)
-        {
-            // Let the final frame paint on the render thread before we
-            // snapshot. Short and fixed — the heavy waiting already
-            // happened above on the load/render-quiesce signals.
-            await Task.Delay(400);
-            await CaptureScreenshotAsync(_screenshotPath);
-
-            if (_closeAfterScreenshot)
-            {
-                CloseAllDatasets();
-            }
-
-            if (_exitAfterScreenshot)
-            {
-                if (Avalonia.Application.Current?.ApplicationLifetime
-                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-                {
-                    desktop.Shutdown();
-                }
-                else
-                {
-                    Close();
-                }
-            }
-        }
-    }
-
-    private void CloseAllDatasets()
-    {
-        var loaded = _viewModel.Datasets.Entries.ToArray();
-        foreach (var entry in loaded)
-        {
-            _viewModel.Datasets.Entries.Remove(entry);
-            _loader.RemoveEntry(entry);
-        }
     }
 
     /// <summary>
@@ -996,17 +932,6 @@ public partial class MainWindow : ShadUI.Window
         var themed = AccentColors.ForTheme(color, theme);
         Resources["AccentBrush"] = new SolidColorBrush(themed);
         Resources["AccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(0x33, themed.R, themed.G, themed.B));
-    }
-
-    private Task CaptureScreenshotAsync(string outputPath)
-    {
-        // Full-window capture snapshots the whole window (panels,
-        // toolbars, status bar); the default captures just the map.
-        Control target = _fullWindowScreenshot ? this : MapControl;
-        return _screenshotService.CaptureAsync(
-            target,
-            outputPath,
-            _windowLifetimeCancellation.Token);
     }
 
     /// <summary>

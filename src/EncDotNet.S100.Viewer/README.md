@@ -627,9 +627,9 @@ is decided the same way on **Windows, macOS, and Linux** — by process
 id *plus the OS process start time*, so a recycled PID is never
 mistaken for a still-running session.
 
-The markers are per-user and are **not** written for `--ephemeral` or
-one-shot `--exit-after-screenshot` automation runs, so agent harnesses
-never pollute them or surface a stale crash.
+The markers are per-user and are **not** written for `--ephemeral`
+automation runs, so agent harnesses never pollute them or surface a
+stale crash.
 
 
 A live "own ship" overlay sits alongside the static datasets,
@@ -743,11 +743,20 @@ MCP, and capture diagnostics — without touching the GUI or the user's
 persisted profile. The bare `viewer <datasets>` invocation continues
 to work unchanged; all flags below are additive.
 
+The CLI's job is to **launch and isolate** the process (profile
+redirection, MCP enablement, diagnostics) and optionally preset the
+initial view. Everything that **drives a running viewer** — capturing
+images, changing palette/category/time-step/viewport/own-ship
+mid-session, loading and unloading datasets, and quitting — is done
+over MCP once the window is up (see the tool list below). Prefer MCP
+for automation: it is the single, reliable control surface and reports
+structured results, where the old one-shot "load → screenshot → exit"
+CLI flags were removed in favour of it.
+
 ```sh
 dotnet run --project src/EncDotNet.S100.Viewer -- \
   --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
   --bbox 47.5,-122.5,47.7,-122.1 --palette Night \
-  --screenshot /tmp/run/map.png --close-after-screenshot --exit-after-screenshot \
   --log-file /tmp/run/viewer.log -v \
   path/to/dataset.h5
 ```
@@ -838,9 +847,10 @@ zoom-to-extent so the framing is reproducible.
 
 **Render state.** `--palette Day|Dusk|Night`,
 `--display-category DisplayBase|Standard|OtherInformation|All`, and
-`--time-step <index|ISO-8601-timestamp>` set the exact condition to
-capture before a screenshot. These override the persisted values for
-the run only.
+`--time-step <index|ISO-8601-timestamp>` preset the initial render
+condition at launch. These override the persisted values for the run
+only. To change any of them **mid-session**, use the `set_palette` /
+`set_display_category` / `set_time_step` MCP tools instead.
 
 **Basemap.** `--basemap None|Offline|Online` selects the basemap for
 the run, overriding the persisted setting (also exposed as a selector
@@ -868,19 +878,20 @@ source is a possible future enhancement.
 own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course
 over ground (degrees true `[0, 360)`), and `--own-ship-sog <MS>` sets
 its speed over ground (metres per second, `>= 0`). Applied after the
-datasets load and before any screenshot, independent of whether the
-own-ship overlay is currently shown.
+datasets load, independent of whether the own-ship overlay is
+currently shown. To reposition or steer mid-session, use the
+`set_own_ship` MCP tool.
 
-**Screenshots.** `--screenshot <PATH>` captures the map after the
-render has quiesced (rather than a fixed delay).
-`--close-after-screenshot` unloads all currently-loaded datasets right
-after capture (retention-test mode, keeps the app running unless
-`--exit-after-screenshot` is also set).
-`--exit-after-screenshot` makes it a one-shot capture-then-quit;
-`--full-window` captures the whole window (panels, toolbars, status
-bar) instead of just the map control; `--window-size <WIDTHxHEIGHT>`
-(e.g. `1280x800`) forces a fixed window size so captures are
-reproducible across machines.
+**Screenshots (over MCP).** Image capture is an MCP operation, not a
+CLI flag. `render_to_image` snapshots the map surface from a clone of
+the live map at any size/density, and `capture_app_screenshot`
+captures the whole application window (chart plus docks, panels,
+timeline, and status bar). Pair either with `await_render_idle` so the
+capture reflects a settled render. The old one-shot `--screenshot` /
+`--exit-after-screenshot` / `--close-after-screenshot` /
+`--full-window` / `--window-size` flags were removed — drive
+`open_dataset` → `set_viewport` → `await_render_idle` →
+`render_to_image` over MCP instead.
 
 **Logging / diagnostics.** `--log-file <PATH>` appends structured
 logs to a file, `-v` / `--verbose` raises the level to Debug, and
@@ -905,11 +916,7 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--own-ship-pos <LAT,LON>` | Place the simulated own-ship at a WGS-84 position |
 | `--own-ship-cog <DEG>` | Set own-ship course over ground (degrees true) |
 | `--own-ship-sog <MS>` | Set own-ship speed over ground (metres/second) |
-| `--screenshot <PATH>` | Capture the map after render quiesces |
-| `--close-after-screenshot` | Unload all datasets after the screenshot |
-| `--exit-after-screenshot` | Quit after the screenshot (one-shot) |
-| `--full-window` | Capture the whole window, not just the map |
-| `--window-size <WxH>` | Force a fixed window size |
+| `--basemap <MODE>` | Override the basemap (None / Offline / Online) |
 | `--log-file <PATH>` | Append structured logs to a file |
 | `--crash-log <PATH>` | Relocate the crash log |
 | `-v`, `--verbose` | Debug-level logging |
@@ -931,10 +938,10 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 3. Connect an MCP client to that endpoint and call `list_datasets`,
    `describe_feature`, `sample_coverage`, or `render_to_image` to
    inspect features/properties and snapshot the current view.
-4. For a pure capture loop (no MCP), drop `--mcp*` and add
-   `--screenshot /tmp/run/map.png --exit-after-screenshot`; the
-   process loads the data, frames the requested viewport, captures
-   once the render settles, and exits.
+4. To capture an image, call `await_render_idle` and then
+   `render_to_image` (map surface) or `capture_app_screenshot` (whole
+   window); when finished, drive `close_all_datasets` and quit the
+   process. This replaces the removed one-shot `--screenshot` flags.
 
 ## Settings persistence
 

@@ -279,7 +279,8 @@ public static class S100VectorTileRenderer
     /// tearing down — the managed runtime running the C++ <c>__cxa_finalize</c>
     /// destructors of <c>libSkiaSharp</c> — while a worker is mid-rasterise, the
     /// worker dereferences freed Skia globals and the process dies with a native
-    /// SIGSEGV (observed on <c>--exit-after-screenshot</c>). The host MUST call
+    /// SIGSEGV (first observed on a fast headless quit; latent on any quit).
+    /// The host MUST call
     /// <see cref="ShutdownAndDrain"/> before letting the process exit. See
     /// <see cref="WorkerDrainGate"/>.
     /// </summary>
