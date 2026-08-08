@@ -32,23 +32,22 @@
         * Renderers.Mapsui          - the Map.AddS100(...) extension + IS100MapSession
         * Renderers.Mapsui.Avalonia - CaptureSynchronizedMapControl + the pointer/redraw/capture adapter
         * Crs.ProjNet               - the ICrsTransformFactory AddS100 requires (the reusable assembly ships none)
-        * Datasets.Pipelines        - the DatasetPipelineFactory used by Datasets.LoadAsync
+        * EncDotNet.S100            - the convenience package's BundledDatasetProcessorFactory,
+                                      the one-call IDatasetProcessorFactory used by Datasets.LoadAsync
 
-      The four projects below (Portrayals / Specifications / Features /
-      Scripting.MoonSharp) are pulled in ONLY to bootstrap that
-      DatasetPipelineFactory by hand (see SampleS100Host.cs). That ceremony -
-      and the fact that Datasets.Pipelines transitively drags in every S-1xx
-      product - is exactly the package-coupling that issue #512 step 9 exists
-      to reduce; this sample is the first non-Viewer host that surfaces it.
+      As of issue #512 step 9, Renderers.Mapsui no longer references any S-100
+      product: Map.AddS100 takes an IDatasetProcessorFactory. This sample gets one
+      from BundledDatasetProcessorFactory (in the EncDotNet.S100 convenience
+      package), so the host no longer hand-wires Portrayals / Specifications /
+      Features / Scripting.MoonSharp or references Datasets.Pipelines directly -
+      the multi-project bootstrap this sample used to carry collapsed to a single
+      call. (The convenience package still pulls the products in transitively;
+      that is the batteries-included trade-off a host opts into by using it.)
     -->
     <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui.Avalonia\EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
-    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
-    <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
-    <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
-    <ProjectReference Include="..\..\src\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
-    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
   </ItemGroup>
 
   <ItemGroup>

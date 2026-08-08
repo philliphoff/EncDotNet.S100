@@ -28,12 +28,12 @@ internal static class SmokeTest
             return 1;
         }
 
-        using var host = SampleS100Host.Create();
+        using var processorFactory = BundledDatasetProcessorFactory.Create();
         var map = new Map { CRS = "EPSG:3857" };
 
         await using var session = map.AddS100(
             new ProjNetCrsTransformFactory(),
-            new S100MapsuiOptions { DatasetPipelineFactory = host.PipelineFactory });
+            new S100MapsuiOptions { DatasetPipelineFactory = processorFactory });
 
         // Give the map a viewport so framing and scale-aware picking have a
         // resolution to work with (a live control would supply this).

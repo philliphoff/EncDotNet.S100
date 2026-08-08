@@ -23,7 +23,7 @@ internal sealed class S100MapSession : IS100MapSession
         MapsuiMapSession session,
         MapsuiMapNavigator navigator,
         S100DynamicSourceHost dynamicSourceHost,
-        DatasetPipelineFactory? pipelineFactory = null)
+        IDatasetProcessorFactory? pipelineFactory = null)
     {
         _processorOwner = processorOwner
             ?? throw new ArgumentNullException(nameof(processorOwner));

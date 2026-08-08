@@ -45,15 +45,16 @@ public sealed record S100MapsuiOptions
     public IPatternClipCache? PatternClipCache { get; init; }
 
     /// <summary>
-    /// Gets the fully-configured dataset pipeline factory used to build
-    /// processors when loading datasets from a path
-    /// (<see cref="IS100DatasetLoader.LoadAsync"/>). The host chooses which
-    /// products and portrayal catalogues the factory supports. When
-    /// <see langword="null"/>, path-based loading throws; the caller can still
-    /// add pre-built processors via
+    /// Gets the dataset processor factory used to build processors when loading
+    /// datasets from a path (<see cref="IS100DatasetLoader.LoadAsync"/>). The
+    /// host chooses which products and portrayal catalogues the factory supports
+    /// — e.g. the built-in <c>DatasetPipelineFactory</c> from
+    /// <c>EncDotNet.S100.Datasets.Pipelines</c>, or one registering only a subset
+    /// of products. When <see langword="null"/>, path-based loading throws; the
+    /// caller can still add pre-built processors via
     /// <see cref="IS100MapSession.AddDatasetAsync"/>.
     /// </summary>
-    public DatasetPipelineFactory? DatasetPipelineFactory { get; init; }
+    public IDatasetProcessorFactory? DatasetPipelineFactory { get; init; }
 
     /// <summary>
     /// Gets the marshal used by the session's dynamic-source host to run overlay

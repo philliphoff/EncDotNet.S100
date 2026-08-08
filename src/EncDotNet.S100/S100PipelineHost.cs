@@ -92,6 +92,13 @@ internal sealed class S100PipelineHost : IDisposable
     /// <summary>Creates the dataset processor for the file at <paramref name="path"/>.</summary>
     public IDatasetProcessor CreateProcessor(string path) => _factory.CreateProcessor(path);
 
+    /// <summary>
+    /// The bundled processor factory this host wraps. Exposed for the public
+    /// <see cref="BundledDatasetProcessorFactory"/> convenience so a Mapsui (or
+    /// any) host can hand it to <c>S100MapsuiOptions.DatasetPipelineFactory</c>.
+    /// </summary>
+    internal IDatasetProcessorFactory Factory => _factory;
+
     public void Dispose()
     {
         if (_disposed)

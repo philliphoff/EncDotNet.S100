@@ -36,7 +36,7 @@ namespace EncDotNet.S100.Samples.MapHost;
 /// </remarks>
 public partial class MainWindow : Window
 {
-    private readonly SampleS100Host _host;
+    private readonly BundledDatasetProcessorFactory _processorFactory;
     private readonly IS100MapSession _session;
     private readonly AvaloniaMapsuiMapAdapter _adapter;
     private readonly S100PickHighlightLayer _highlight;
@@ -63,12 +63,14 @@ public partial class MainWindow : Window
 
         // ── 1. Compose an S-100 session over a bare Mapsui map ──────────────
         //
-        // SampleS100Host bootstraps a DatasetPipelineFactory from the bundled
-        // feature/portrayal catalogues; the session needs it to turn a file path
-        // into a rendered dataset (see SampleS100Host.cs). A host that only ever
-        // adds pre-built processors via IS100MapSession.AddDatasetAsync would not
-        // need one.
-        _host = SampleS100Host.Create();
+        // BundledDatasetProcessorFactory (from the EncDotNet.S100 convenience
+        // package) is the one-call replacement for hand-wiring the portrayal /
+        // feature catalogues, Lua engine, CRS factory, and product registry: it
+        // returns an IDatasetProcessorFactory seeded with the official bundled
+        // catalogues for every product. The session needs it to turn a file path
+        // into a rendered dataset. A host that only ever adds pre-built processors
+        // via IS100MapSession.AddDatasetAsync would not need one.
+        _processorFactory = BundledDatasetProcessorFactory.Create();
 
         // CRS = EPSG:3857: the reusable renderer projects every dataset to Web
         // Mercator, so the map must declare that CRS for the layers to line up
@@ -85,7 +87,7 @@ public partial class MainWindow : Window
         //   * options.DatasetPipelineFactory: enables Datasets.LoadAsync(path).
         _session = map.AddS100(
             new ProjNetCrsTransformFactory(),
-            new S100MapsuiOptions { DatasetPipelineFactory = _host.PipelineFactory });
+            new S100MapsuiOptions { DatasetPipelineFactory = _processorFactory });
 
         // ── 2. Bind the map to the live control and attach the Avalonia adapter ─
         //
@@ -344,7 +346,7 @@ public partial class MainWindow : Window
 
         _adapter.Dispose();
         _session.Dispose();
-        _host.Dispose();
+        _processorFactory.Dispose();
     }
 
     private void SetBusy(string message)
