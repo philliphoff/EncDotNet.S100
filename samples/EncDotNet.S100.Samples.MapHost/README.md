@@ -18,6 +18,11 @@ The whole embedding is the three steps in [`MainWindow`](MainWindow.axaml.cs)'s
 constructor. In essence:
 
 ```csharp
+// 0. One call gives you an IDatasetProcessorFactory seeded with the official
+//    bundled catalogues for every product (from the EncDotNet.S100 package).
+//    It owns long-lived catalogue caches, so dispose it with the session.
+using var factory = BundledDatasetProcessorFactory.Create();
+
 // 1. Compose a session over a bare map. AddS100 returns the disposable
 //    IS100MapSession that owns all S-100 layers, processors, and rendering.
 var map = new Map { CRS = "EPSG:3857" };
@@ -86,7 +91,6 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
 | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | [`MainWindow.axaml.cs`](MainWindow.axaml.cs)           | The integration itself: compose, attach, drive, dispose. Start here.          |
 | [`MainWindow.axaml`](MainWindow.axaml)                 | The toolbar and the reusable `CaptureSynchronizedMapControl`.                  |
-| [`SampleS100Host.cs`](SampleS100Host.cs)               | Bootstrapping the `DatasetPipelineFactory` from the bundled catalogues.        |
 | [`SmokeTest.cs`](SmokeTest.cs)                          | The same session driven headlessly (the `--smoke` path).                       |
 
 ## Wiring notes
@@ -95,9 +99,12 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
   Web Mercator and the pick adapter converts pointer pixels back to WGS-84.
 - The reusable assembly ships no CRS implementation, so the host supplies
   `ProjNetCrsTransformFactory` (`EncDotNet.S100.Crs.ProjNet`).
-- `Datasets.LoadAsync` needs a `DatasetPipelineFactory`. `SampleS100Host` builds
-  one by hand from the bundled catalogues — the same bootstrap the Viewer and
-  `s100` CLI perform.
+- `Datasets.LoadAsync` needs an `IDatasetProcessorFactory`.
+  `BundledDatasetProcessorFactory.Create()` (from the `EncDotNet.S100`
+  convenience package) returns one seeded with the bundled catalogues for every
+  product in a single call — no hand-wiring of the portrayal/feature catalogue
+  managers, Lua engine, CRS factory, or product registry. Dispose it with the
+  session.
 - The overlays (`S100DatasetExtentIndicatorLayer`, `S100PickHighlightLayer`) are
   entirely optional — add the ones you want to `Map.Layers` and drive them with
   `Show`/`Clear`. Omitting them changes nothing about dataset rendering.
@@ -111,14 +118,21 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
 > published `EncDotNet.S100.*` NuGet packages instead of the project references
 > this in-repo sample uses, but the code in `MainWindow` is identical.
 
-## A note on package coupling (feeds issue #512 step 9)
+## A note on package coupling (issue #512 step 9)
 
-To build that `DatasetPipelineFactory`, this sample must reference
-`Datasets.Pipelines` (which transitively pulls in **every** S-1xx product) plus
-`Portrayals`, `Specifications`, `Features`, and `Scripting.MoonSharp`. That
-weight is exactly the coupling step 9 aims to reduce (per-product registration,
-a leaner contracts package, and ideally a public one-call bundled-factory
-convenience). This sample is the concrete, non-Viewer host that surfaces it.
+`Map.AddS100` no longer references any S-100 product: it takes an
+`IDatasetProcessorFactory` (in `EncDotNet.S100.Core`), so the reusable Mapsui
+extension is product-free. This sample therefore references only
+`Renderers.Mapsui`, `Renderers.Mapsui.Avalonia`, `Crs.ProjNet`, and the
+`EncDotNet.S100` convenience package — the earlier hand-bootstrap that pulled in
+`Datasets.Pipelines`, `Portrayals`, `Specifications`, `Features`, and
+`Scripting.MoonSharp` collapsed to a single `BundledDatasetProcessorFactory.Create()`.
+
+The convenience factory still pulls the products in transitively — that is the
+batteries-included trade-off a host opts into by using it. A host that wants a
+smaller footprint can instead build its own `IDatasetProcessorFactory` (or a
+`DatasetPipelineFactory` with a subset `S100ProductRegistry`) and reference only
+the products it needs.
 
 The bundled `sample-cell.000` is the IHO S-101 test cell
 `101AA00DS0008.000`, linked from `tests/datasets/` so there is a single source

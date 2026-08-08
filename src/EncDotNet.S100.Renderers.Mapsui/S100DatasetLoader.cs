@@ -4,18 +4,18 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Default <see cref="IS100DatasetLoader"/> implementation. Builds a processor
-/// from a path with the host-supplied <see cref="DatasetPipelineFactory"/> and
+/// from a path with the host-supplied <see cref="IDatasetProcessorFactory"/> and
 /// hands it to the owning session's
 /// <see cref="IS100MapSession.AddDatasetAsync"/>.
 /// </summary>
 internal sealed class S100DatasetLoader : IS100DatasetLoader
 {
     private readonly IS100MapSession _session;
-    private readonly DatasetPipelineFactory? _pipelineFactory;
+    private readonly IDatasetProcessorFactory? _pipelineFactory;
 
     internal S100DatasetLoader(
         IS100MapSession session,
-        DatasetPipelineFactory? pipelineFactory)
+        IDatasetProcessorFactory? pipelineFactory)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _pipelineFactory = pipelineFactory;
