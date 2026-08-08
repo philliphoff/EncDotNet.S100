@@ -747,11 +747,13 @@ The CLI's job is to **launch and isolate** the process (profile
 redirection, MCP enablement, diagnostics) and optionally preset the
 initial view. Everything that **drives a running viewer** — capturing
 images, changing palette/category/time-step/viewport/own-ship
-mid-session, loading and unloading datasets, and quitting — is done
-over MCP once the window is up (see the tool list below). Prefer MCP
-for automation: it is the single, reliable control surface and reports
-structured results, where the old one-shot "load → screenshot → exit"
-CLI flags were removed in favour of it.
+mid-session, and loading and unloading datasets — is done over MCP once
+the window is up (see the tool list below). Prefer MCP for automation:
+it is the single, reliable control surface and reports structured
+results, where the old one-shot "load → screenshot → exit" CLI flags
+were removed in favour of it. There is no MCP shutdown tool — when the
+run is finished, stop the process from the OS (the viewer ignores
+SIGTERM, so use `kill -9 <pid>`).
 
 ```sh
 dotnet run --project src/EncDotNet.S100.Viewer -- \
@@ -940,8 +942,10 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
    inspect features/properties and snapshot the current view.
 4. To capture an image, call `await_render_idle` and then
    `render_to_image` (map surface) or `capture_app_screenshot` (whole
-   window); when finished, drive `close_all_datasets` and quit the
-   process. This replaces the removed one-shot `--screenshot` flags.
+   window); when finished, drive `close_all_datasets` and then stop the
+   process from the OS (`kill -9 <pid>` — the viewer ignores SIGTERM;
+   there is no MCP shutdown tool). This replaces the removed one-shot
+   `--screenshot` flags.
 
 ## Settings persistence
 

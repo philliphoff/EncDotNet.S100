@@ -48,11 +48,14 @@ operating procedure.
 **Image capture and all live state changes go over MCP — not CLI
 flags.** The CLI's job is to *launch and isolate* the process; once the
 window is up, an MCP client loads data, reframes, toggles
-palette/category/time-step/own-ship, captures images, and quits.
-There is deliberately **no** one-shot "load → screenshot → exit" CLI
-mode: it existed once (`--screenshot` / `--exit-after-screenshot` /
+palette/category/time-step/own-ship, and captures images. There is
+deliberately **no** one-shot "load → screenshot → exit" CLI mode: it
+existed once (`--screenshot` / `--exit-after-screenshot` /
 `--window-size` / …) but was **removed** because it was unreliable and
 duplicated the MCP tools. Do not look for those flags — they are gone.
+(There is likewise no MCP *shutdown* tool: when the run is done, stop
+the process from the OS with `kill -9 <pid>` — the viewer ignores
+SIGTERM.)
 
 The core capture loop is always:
 
@@ -62,9 +65,11 @@ The core capture loop is always:
 
 with `set_palette` / `set_display_category` / `set_time_step` /
 `set_own_ship` interleaved as the scenario needs, and
-`close_all_datasets` when done. For a before/after image diff across a
-code change, run this loop twice (once per build) against the same
-viewport — reframing over `set_viewport` rather than relaunching.
+`close_all_datasets` when done. Within one running process, reframe with
+`set_viewport` rather than relaunching between captures. For a
+before/after image diff across a code change you *do* relaunch — build,
+launch, run the loop, capture; then rebuild and repeat — driving both
+runs to the **same** viewport so the two images are comparable.
 
 The CLI flags that remain are launch-time presets and isolation only:
 `--ephemeral` / `--data-dir` (profile/cache isolation), `--mcp*` (enable
