@@ -27,12 +27,15 @@ namespace EncDotNet.S100.Samples.MapHost;
 internal sealed class SampleS100Host : IDisposable
 {
     private readonly PortrayalCatalogueManager _portrayalManager;
+    private readonly FeatureCatalogueManager _featureManager;
 
     private SampleS100Host(
         PortrayalCatalogueManager portrayalManager,
+        FeatureCatalogueManager featureManager,
         DatasetPipelineFactory pipelineFactory)
     {
         _portrayalManager = portrayalManager;
+        _featureManager = featureManager;
         PipelineFactory = pipelineFactory;
     }
 
@@ -62,8 +65,14 @@ internal sealed class SampleS100Host : IDisposable
             featureManager,
             new DisplayPlaneAuthorityProvider());
 
-        return new SampleS100Host(portrayalManager, pipelineFactory);
+        return new SampleS100Host(portrayalManager, featureManager, pipelineFactory);
     }
 
-    public void Dispose() => _portrayalManager.Dispose();
+    public void Dispose()
+    {
+        // Both catalogue managers are IDisposable (they own asset sources and
+        // parse caches); dispose both alongside the factory's lifetime.
+        _portrayalManager.Dispose();
+        _featureManager.Dispose();
+    }
 }
