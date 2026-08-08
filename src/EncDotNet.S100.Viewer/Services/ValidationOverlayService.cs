@@ -1,21 +1,24 @@
 using System.ComponentModel;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Maintains a single overlay-tier <see cref="MemoryLayer"/> that
-/// renders validation findings with spatial information for the
-/// currently-selected dataset. Built/replaced/torn down as the user
-/// changes selection so findings never "pile up" across datasets.
+/// Drives the reusable <see cref="S100ValidationFindingLayer"/> from the Viewer's
+/// dataset selection: it plots the spatially-located validation findings of the
+/// currently-selected dataset, rebuilding as selection or findings change so
+/// findings never "pile up" across datasets. The <em>drawing</em> (marker/box
+/// geometry and severity palette) lives in the reusable layer; this service owns
+/// only the viewer-specific policy — which dataset is shown and when to rebuild.
 /// </summary>
 internal sealed class ValidationOverlayService : IDisposable
 {
     private readonly IMapLayerCollection _layers;
     private readonly DatasetsViewModel _datasets;
     private DatasetEntry? _trackedEntry;
-    private MemoryLayer? _layer;
+    private S100ValidationFindingLayer? _overlay;
     private bool _disposed;
 
     public ValidationOverlayService(IMapLayerCollection layers, DatasetsViewModel datasets)
@@ -29,10 +32,10 @@ internal sealed class ValidationOverlayService : IDisposable
     }
 
     /// <summary>
-    /// Exposed for tests so they can assert layer state without
-    /// reaching into the (fake) map host.
+    /// Exposed for tests so they can assert layer state without reaching into the
+    /// (fake) map host. <c>null</c> when no overlay is currently attached.
     /// </summary>
-    internal MemoryLayer? CurrentLayer => _layer;
+    internal ILayer? CurrentLayer => _overlay?.Layer;
 
     private void OnDatasetsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -74,28 +77,30 @@ internal sealed class ValidationOverlayService : IDisposable
     private void Rebuild()
     {
         var entry = _trackedEntry;
-        var spatial = entry?.Findings.Where(f => f.HasSpatialLocation).ToArray();
-        var hasSpatial = spatial is { Length: > 0 };
+        var spatial = entry?.Findings
+            .Where(f => f.HasSpatialLocation)
+            .Select(f => new S100ValidationFinding(f.Severity, f.Point, f.BoundingBox))
+            .ToArray();
 
-        if (!hasSpatial)
+        if (spatial is not { Length: > 0 })
         {
             TeardownLayer();
             return;
         }
 
-        if (_layer is null)
+        if (_overlay is null)
         {
-            _layer = ValidationOverlayBuilder.Create();
-            _layers.AddOverlayLayer(_layer);
+            _overlay = new S100ValidationFindingLayer();
+            _layers.AddOverlayLayer(_overlay.Layer);
         }
-        ValidationOverlayBuilder.Update(_layer, spatial!);
+        _overlay.Show(spatial);
     }
 
     private void TeardownLayer()
     {
-        if (_layer is null) return;
-        _layers.RemoveOverlayLayer(_layer);
-        _layer = null;
+        if (_overlay is null) return;
+        _layers.RemoveOverlayLayer(_overlay.Layer);
+        _overlay = null;
     }
 
     public void Dispose()

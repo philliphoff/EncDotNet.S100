@@ -11,10 +11,11 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
 /// Unit tests for the validation findings overlay: the click-to-zoom
-/// command on <see cref="ValidationFindingViewModel"/>, the
+/// command on <see cref="ValidationFindingViewModel"/> and the
 /// <see cref="ValidationOverlayService"/> selection-driven layer
-/// lifecycle, and the severity → colour mapping in
-/// <see cref="ValidationOverlayBuilder"/>.
+/// lifecycle. The finding-drawing and severity → colour mapping now live
+/// in the reusable <c>S100ValidationFindingLayer</c> and are covered by its
+/// own tests in the pipelines test project.
 /// </summary>
 public class ValidationOverlayTests
 {
@@ -235,35 +236,6 @@ public class ValidationOverlayTests
 
         svc.Dispose();
         Assert.Empty(host.Overlays);
-    }
-
-    // ── Builder severity → colour mapping ────────────────────────────
-
-    [Fact]
-    public void Builder_MapsSeveritiesToBadgePalette()
-    {
-        var error = ValidationOverlayBuilder.SeverityColor(ValidationSeverity.Error);
-        var warning = ValidationOverlayBuilder.SeverityColor(ValidationSeverity.Warning);
-        var info = ValidationOverlayBuilder.SeverityColor(ValidationSeverity.Info);
-
-        Assert.Equal((0xD1, 0x34, 0x38), (error.R, error.G, error.B));
-        Assert.Equal((0xCA, 0x50, 0x10), (warning.R, warning.G, warning.B));
-        Assert.Equal((0x00, 0x7A, 0xCC), (info.R, info.G, info.B));
-    }
-
-    [Fact]
-    public void Builder_SkipsFindings_WithoutSpatialInfo()
-    {
-        var layer = ValidationOverlayBuilder.Create();
-        var vms = new[]
-        {
-            new ValidationFindingViewModel(Finding()),
-            new ValidationFindingViewModel(Finding(point: new GeoPosition(40, -70))),
-        };
-
-        ValidationOverlayBuilder.Update(layer, vms);
-
-        Assert.Equal(1, CountFeatures(layer));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

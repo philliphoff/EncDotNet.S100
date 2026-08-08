@@ -370,6 +370,39 @@ mariner's on/off toggle are host policy; the Viewer keeps that in its own
 controller — caching the last resolution, recomputing only on a zoom or
 dataset-set change — and drives this layer.
 
+## Validation findings
+
+`S100ValidationFindingLayer` is an optional, reusable Mapsui overlay that plots a
+dataset's spatially-located validation findings: a severity-coloured marker for a
+point finding and a translucent severity-coloured box for a bounding-box finding.
+Like the other reusable overlays it depends only on Mapsui and the
+renderer-neutral `ValidationSeverity` / `GeoPosition` / `BoundingBox` primitives —
+not on the session, a catalogue, an application palette, a view model, or
+Avalonia. Add its `Layer` once, then call `Show` with the findings to plot:
+
+```csharp
+var findings = new S100ValidationFindingLayer();   // optional: S100ValidationFindingStyle
+map.Layers.Add(findings.Layer);
+
+// One S100ValidationFinding per finding that carries a location. A finding may
+// carry a Point, a BoundingBox, both (two features), or neither (skipped).
+findings.Show(report.Findings
+    .Where(f => f.Point is not null || f.BoundingBox is not null)
+    .Select(f => new S100ValidationFinding(f.Severity, f.Point, f.BoundingBox)));
+// findings.Clear();   // remove the overlay contents
+```
+
+Findings are projected from WGS-84 to EPSG:3857 (Mapsui's native map units)
+internally, so a host passes geographic locations straight through. Each update
+replaces the overlay wholesale — finding counts are small.
+`S100ValidationFindingStyle` tunes the per-severity accent colours, the point
+marker/halo, and the bounding-box outline and fill alpha; the default matches the
+Viewer's validation-badge palette (red error, amber warning, blue info).
+
+Deciding *which* findings to plot and *when* to rebuild is host policy; the Viewer
+keeps that in a small selection-driven service that shows the findings of the
+currently-selected dataset and drives this layer.
+
 ## Viewport navigation
 
 `MapsuiMapNavigator` provides the small navigation surface already used by
