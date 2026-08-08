@@ -74,6 +74,8 @@ internal sealed class HeadlessS100Session
         MapPresentationState presentation, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(presentation);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
         lock (_gate) _presentation = presentation;
         return Task.CompletedTask;
     }
@@ -89,6 +91,8 @@ internal sealed class HeadlessS100Session
 
     public Task SetTimeAsync(DateTime time, CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
         lock (_gate) _currentTime = time;
         return Task.CompletedTask;
     }
