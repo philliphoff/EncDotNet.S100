@@ -32,7 +32,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     private IReadOnlyList<LoadedDataset> _snapshot = [];
     private bool _disposed;
 
-    private sealed record Entry(LoadedDataset Loaded, S100Dataset? Render);
+    private sealed record Entry(LoadedDataset Loaded, S100Dataset Render);
 
     /// <summary>Creates the catalog with an optional CRS transform factory.</summary>
     public HeadlessMutableCatalog(ICrsTransformFactory? transforms = null)
@@ -53,7 +53,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         {
             lock (_gate)
             {
-                return _entries.Where(e => e.Render is not null).Select(e => e.Render!).ToList();
+                return _entries.Select(e => e.Render).ToList();
             }
         }
     }
@@ -168,7 +168,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             UpdateSnapshotLocked();
         }
 
-        entry.Render?.Dispose();
+        entry.Render.Dispose();
         RaiseChanged(DatasetCatalogChangeKind.Removed, id);
         return true;
     }
@@ -192,7 +192,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 
         foreach (var entry in removed)
         {
-            entry.Render?.Dispose();
+            entry.Render.Dispose();
         }
         RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
         return removed.Count;
@@ -233,14 +233,21 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
                 continue;
             }
 
-            S100Dataset? render = null;
+            S100Dataset render;
             try
             {
                 render = S100Dataset.Open(input.Path);
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Skipped render handle for '{input.Path}': {ex.Message}");
+                // Treat a render-handle failure as a load failure so the session
+                // invariant holds: every catalog dataset is renderable. Adding a
+                // query-only entry would make open_dataset succeed while the
+                // dataset is silently absent from render_to_image.
+                Console.Error.WriteLine(
+                    $"Skipped dataset '{input.Path}' (render handle failed): {ex.Message}");
+                _usedIds.Remove(id.Value);
+                continue;
             }
 
             _entries.Add(new Entry(projected, render));
@@ -295,7 +302,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         {
             foreach (var entry in _entries)
             {
-                entry.Render?.Dispose();
+                entry.Render.Dispose();
             }
             _entries.Clear();
 
