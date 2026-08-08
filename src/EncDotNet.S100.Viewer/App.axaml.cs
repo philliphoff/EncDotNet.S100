@@ -330,10 +330,9 @@ public partial class App : Application
             // Drain the tiled renderer's background Skia workers before the
             // process tears down. Avalonia raises ShutdownRequested on every
             // exit path (explicit Shutdown(), last-window-close, OS quit), so
-            // hooking it here covers every quit path — including an
-            // MCP-driven shutdown after a headless capture. Without this, the
-            // managed runtime can begin destroying libSkiaSharp while a worker
-            // is mid-rasterise → native SIGSEGV.
+            // hooking it here covers every graceful quit path. Without this,
+            // the managed runtime can begin destroying libSkiaSharp while a
+            // worker is mid-rasterise → native SIGSEGV.
             desktop.ShutdownRequested += (_, _) =>
             {
                 // Flush any pending debounced route save so the last edit is
