@@ -57,12 +57,12 @@ public sealed class SetTimeStepTool
         if (hasIndex && hasTimestamp)
         {
             return ToolResult<SetTimeStepResult>.Err(new InvalidArgument(
-                "request", "supply either 'index' or 'timestamp', not both"));
+                "index/timestamp", "supply either 'index' or 'timestamp', not both"));
         }
         if (!hasIndex && !hasTimestamp)
         {
             return ToolResult<SetTimeStepResult>.Err(new InvalidArgument(
-                "request", "one of 'index' (0-based integer) or 'timestamp' (ISO-8601) is required"));
+                "index/timestamp", "one of 'index' (0-based integer) or 'timestamp' (ISO-8601) is required"));
         }
 
         var controller = _time.Current;

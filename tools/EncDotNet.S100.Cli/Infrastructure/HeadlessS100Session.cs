@@ -98,6 +98,9 @@ internal sealed class HeadlessS100Session
     public Task<byte[]?> RenderToPngAsync(
         int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+
         var handles = _catalog.RenderHandles;
         if (handles.Count == 0)
         {

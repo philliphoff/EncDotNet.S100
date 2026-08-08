@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Crs.ProjNet;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.MutableTools;
 using EncDotNet.S100.Mcp.Tools.Mutable;
@@ -19,19 +18,23 @@ namespace EncDotNet.S100.Cli.Commands;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The datasets to serve are specified up front using the same input grammar
+/// An initial set of datasets is specified up front using the same input grammar
 /// as <c>s100 identify</c> / <c>s100 render</c>: a single positional dataset,
 /// repeated <c>--layer</c> options, or an exchange set (positional directory /
 /// <c>CATALOG.XML</c> / <c>.zip</c>, or <c>--from</c>). They are loaded into a
-/// <see cref="FileDatasetCatalog"/> for the read-only query tools, and opened as
-/// resident render handles for the mutating tools; the process is the session
-/// boundary — spawn another to serve a different set.
+/// <see cref="HeadlessMutableCatalog"/>, which holds each dataset both as a
+/// projected read model (for the query tools) and an open render handle (for the
+/// headless renderer). Further datasets can be added at runtime via
+/// <c>open_dataset</c>; the process is the session boundary — spawn another to
+/// serve a different set.
 /// </para>
 /// <para>
 /// The server is <b>mutable by default</b>: alongside the read-only query tools
-/// it exposes the presentation / time / render tools (<c>set_palette</c>,
-/// <c>set_display_category</c>, <c>set_display_mode</c>, <c>set_time_step</c>,
-/// <c>render_to_image</c>), backed by an in-process headless Skia session.
+/// it exposes the catalog / presentation / time / render tools
+/// (<c>open_dataset</c>, <c>close_dataset</c>, <c>close_all_datasets</c>,
+/// <c>set_palette</c>, <c>set_display_category</c>, <c>set_display_mode</c>,
+/// <c>set_time_step</c>, <c>render_to_image</c>), backed by an in-process
+/// headless Skia session.
 /// </para>
 /// <para>
 /// Standard output carries the MCP protocol, so every human-readable message

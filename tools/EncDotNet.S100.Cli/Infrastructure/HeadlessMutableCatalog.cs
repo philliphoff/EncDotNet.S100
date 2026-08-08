@@ -101,6 +101,9 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     public Task<DatasetLoadOutcome> LoadAsync(
         string path, string? specHint = null, CancellationToken cancellationToken = default)
     {
+        // Fail fast before any exchange-set resolution / dataset projection work.
+        cancellationToken.ThrowIfCancellationRequested();
+
         // specHint is currently ignored: DatasetInputResolver detects the product
         // specification from the file. Tracked as a v1 gap.
         var warnings = new List<string>();
