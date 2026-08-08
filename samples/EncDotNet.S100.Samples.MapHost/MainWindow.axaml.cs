@@ -42,6 +42,13 @@ public partial class MainWindow : Window
     private readonly S100PickHighlightLayer _highlight;
     private readonly S100DatasetExtentIndicatorLayer _extentIndicator;
     private readonly Action _redraw;
+
+    // Whatever was installed on the process-global redraw hooks before us, so we
+    // restore rather than clobber on close (see the constructor / OnClosed).
+    private readonly Action? _prevSnapshotRedraw;
+    private readonly Action? _prevSceneRedraw;
+    private readonly Action? _prevTileRedraw;
+
     private readonly string _cellPath;
 
     // The presentation is immutable; palette buttons apply a modified copy.
@@ -95,8 +102,14 @@ public partial class MainWindow : Window
         // completion only through these process-global hooks. A host that does
         // not set them sees stale content after an in-place re-render (e.g. a
         // palette change) until an unrelated pan/zoom triggers Mapsui's own
-        // refresh - so point them at our redraw (and clear them in OnClosed).
-        // (Issue #512 tracks replacing these statics with a per-session seam.)
+        // refresh - so point them at our redraw. Because they are process-global
+        // we first capture whatever was installed and restore it in OnClosed,
+        // rather than clobbering another host in the same process. (Issue #512
+        // tracks replacing these statics with a per-session seam that would make
+        // all of this unnecessary.)
+        _prevSnapshotRedraw = S100VectorSnapshotRenderer.RequestRedraw;
+        _prevSceneRedraw = S100VectorSceneRenderer.RequestRedraw;
+        _prevTileRedraw = S100VectorTileRenderer.RequestRedraw;
         S100VectorSnapshotRenderer.RequestRedraw = _redraw;
         S100VectorSceneRenderer.RequestRedraw = _redraw;
         S100VectorTileRenderer.RequestRedraw = _redraw;
@@ -311,21 +324,22 @@ public partial class MainWindow : Window
         // frees its parse caches.
         MapControl.PointerReleased -= OnMapPointerReleased;
 
-        // Release the process-global redraw hooks, but only if they are still
-        // ours (guarding against a hypothetical second window having taken over).
+        // Restore the process-global redraw hooks to whatever preceded us, but
+        // only where ours is still the installed one (guarding against a newer
+        // handler having taken over).
         if (ReferenceEquals(S100VectorSnapshotRenderer.RequestRedraw, _redraw))
         {
-            S100VectorSnapshotRenderer.RequestRedraw = null;
+            S100VectorSnapshotRenderer.RequestRedraw = _prevSnapshotRedraw;
         }
 
         if (ReferenceEquals(S100VectorSceneRenderer.RequestRedraw, _redraw))
         {
-            S100VectorSceneRenderer.RequestRedraw = null;
+            S100VectorSceneRenderer.RequestRedraw = _prevSceneRedraw;
         }
 
         if (ReferenceEquals(S100VectorTileRenderer.RequestRedraw, _redraw))
         {
-            S100VectorTileRenderer.RequestRedraw = null;
+            S100VectorTileRenderer.RequestRedraw = _prevTileRedraw;
         }
 
         _adapter.Dispose();
