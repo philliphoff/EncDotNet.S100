@@ -1061,7 +1061,7 @@ worker still ran. Fix: a process-wide one-way drain gate
 (`WorkerDrainGate`, exposed as `S100VectorTileRenderer.ShutdownAndDrain`). The
 host calls it on `IClassicDesktopStyleApplicationLifetime.ShutdownRequested`
 (which Avalonia raises on every exit path — explicit `Shutdown()`,
-last-window-close, OS quit), so it covers a headless/MCP-driven quit and a
+last-window-close, OS quit), so it covers a headless/scripted quit and a
 normal quit alike. The gate sets a permanent draining flag and blocks (bounded, 5 s)
 until in-flight workers finish. Every worker `TryRegister`s before starting and
 `Complete`s in a `finally`; a worker refused at register time (or one that sees

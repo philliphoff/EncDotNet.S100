@@ -749,8 +749,9 @@ public partial class MainWindow : ShadUI.Window
     /// <summary>
     /// Deterministic startup sequence for headless/agent runs: load any
     /// CLI datasets, wait for rendering to quiesce, then drive the map to
-    /// the requested time step and viewport. Live capture, further state
-    /// changes, and shutdown are driven over MCP once the window is up.
+    /// the requested time step and viewport. Live capture and further
+    /// state changes are driven over MCP once the window is up; the
+    /// process itself is stopped from the OS (there is no MCP shutdown).
     /// </summary>
     private async Task RunStartupAutomationAsync(string[] datasetPaths)
     {
