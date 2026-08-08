@@ -65,6 +65,29 @@ public sealed class MapPresentationState
         Mariner = mariner;
     }
 
+    /// <summary>
+    /// Copy constructor used by the <c>With*</c> helpers. Replaces only the
+    /// fields supplied; unspecified fields carry over from
+    /// <paramref name="source"/>. The ECDIS snapshot is only re-taken when a
+    /// new <paramref name="ecdisDisplay"/> is supplied — <paramref name="source"/>'s
+    /// is already a defensive snapshot — so palette/scale/mariner changes reuse
+    /// its frozen collections without copying.
+    /// </summary>
+    private MapPresentationState(
+        MapPresentationState source,
+        PaletteType? palette = null,
+        double? symbolScale = null,
+        double? textScale = null,
+        EcdisDisplaySettings? ecdisDisplay = null,
+        MarinerSettings? mariner = null)
+    {
+        Palette = palette ?? source.Palette;
+        SymbolScale = symbolScale ?? source.SymbolScale;
+        TextScale = textScale ?? source.TextScale;
+        EcdisDisplay = ecdisDisplay is null ? source.EcdisDisplay : Snapshot(ecdisDisplay);
+        Mariner = mariner ?? source.Mariner;
+    }
+
     /// <summary>The S-100 colour palette applied across the map.</summary>
     public PaletteType Palette { get; }
 
@@ -82,6 +105,55 @@ public sealed class MapPresentationState
 
     /// <summary>Mariner-configurable portrayal settings.</summary>
     public MarinerSettings Mariner { get; }
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="Palette"/> replaced.
+    /// </summary>
+    /// <param name="palette">The colour palette to apply.</param>
+    public MapPresentationState WithPalette(PaletteType palette) =>
+        new(this, palette: palette);
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="SymbolScale"/> replaced.
+    /// </summary>
+    /// <param name="symbolScale">The global symbol scale factor.</param>
+    public MapPresentationState WithSymbolScale(double symbolScale) =>
+        new(this, symbolScale: symbolScale);
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="TextScale"/> replaced.
+    /// </summary>
+    /// <param name="textScale">The global text scale factor.</param>
+    public MapPresentationState WithTextScale(double textScale) =>
+        new(this, textScale: textScale);
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="EcdisDisplay"/> replaced.
+    /// The supplied settings are defensively snapshotted, matching the
+    /// constructor.
+    /// </summary>
+    /// <param name="ecdisDisplay">The ECDIS display settings to apply.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="ecdisDisplay"/> is <c>null</c>.
+    /// </exception>
+    public MapPresentationState WithEcdisDisplay(EcdisDisplaySettings ecdisDisplay)
+    {
+        ArgumentNullException.ThrowIfNull(ecdisDisplay);
+        return new(this, ecdisDisplay: ecdisDisplay);
+    }
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="Mariner"/> replaced.
+    /// </summary>
+    /// <param name="mariner">The mariner-configurable portrayal settings.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="mariner"/> is <c>null</c>.
+    /// </exception>
+    public MapPresentationState WithMariner(MarinerSettings mariner)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
+        return new(this, mariner: mariner);
+    }
 
     /// <summary>
     /// Applies this map-wide snapshot to a dataset-specific render context.

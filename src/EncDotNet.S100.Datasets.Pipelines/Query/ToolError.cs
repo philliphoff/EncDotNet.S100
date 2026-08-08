@@ -203,3 +203,28 @@ public sealed record TimeOutOfRange(
     [property: Description("Last time step available in the matched dataset, UTC ISO-8601; null when the dataset has no time steps.")] DateTimeOffset? DatasetLastTime) : ToolError(
     "time_out_of_range",
     $"Time query in '{Parameter}' [{WindowStart:o} .. {WindowEnd:o}] is outside the dataset's range.");
+
+/// <summary>
+/// A host capability required by a mutating tool is not yet initialised
+/// (e.g. the render surface or the dataset loader). The renderer-neutral
+/// analog of a host's internal "not ready" state, surfaced to callers so they
+/// can retry once the host has finished starting up.
+/// </summary>
+[Description("Raised when a host capability required by a mutating tool is not yet initialised; safe to retry once the host is ready.")]
+public sealed record HostNotReady(
+    [property: Description("Human-readable name of the capability or subsystem that is not ready.")] string What) : ToolError(
+    "host_not_ready",
+    $"Not ready: {What}.");
+
+/// <summary>
+/// A dataset path was recognised but produced no portrayable dataset — for
+/// example an exchange set that contained no datasets the host can portray, or
+/// a file that loaded but yielded nothing. Distinguished from
+/// <see cref="InvalidArgument"/> in that the argument was well-formed and the
+/// path existed; the load itself produced no usable result.
+/// </summary>
+[Description("Raised when a recognised dataset path produced no portrayable dataset (e.g. an empty or unsupported exchange set).")]
+public sealed record DatasetLoadFailed(
+    [property: Description("Human-readable reason the load produced no portrayable dataset; not localised.")] string Reason) : ToolError(
+    "dataset_load_failed",
+    $"Load failed: {Reason}.");

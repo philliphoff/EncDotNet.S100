@@ -165,6 +165,90 @@ public class MapPresentationStateTests
     }
 
     [Fact]
+    public void WithPalette_ReplacesOnlyPaletteAndPreservesEcdisReference()
+    {
+        var original = new MapPresentationState(
+            PaletteType.Day,
+            1.25,
+            1.5,
+            new EcdisDisplaySettings { Category = EcdisDisplayCategory.OtherInformation },
+            MarinerSettings.Default with { FourShades = true });
+
+        var updated = original.WithPalette(PaletteType.Night);
+
+        Assert.Equal(PaletteType.Night, updated.Palette);
+        // Everything else carries over unchanged...
+        Assert.Equal(1.25, updated.SymbolScale);
+        Assert.Equal(1.5, updated.TextScale);
+        Assert.Same(original.Mariner, updated.Mariner);
+        // ...and a non-ECDIS change reuses the already-frozen ECDIS snapshot
+        // rather than copying it again.
+        Assert.Same(original.EcdisDisplay, updated.EcdisDisplay);
+        // The original is untouched (immutability).
+        Assert.Equal(PaletteType.Day, original.Palette);
+    }
+
+    [Fact]
+    public void WithSymbolScale_And_WithTextScale_ReplaceOnlyThatScale()
+    {
+        var original = MapPresentationState.Default;
+
+        var symbol = original.WithSymbolScale(2.0);
+        Assert.Equal(2.0, symbol.SymbolScale);
+        Assert.Equal(original.TextScale, symbol.TextScale);
+        Assert.Equal(original.Palette, symbol.Palette);
+
+        var text = original.WithTextScale(0.5);
+        Assert.Equal(0.5, text.TextScale);
+        Assert.Equal(original.SymbolScale, text.SymbolScale);
+    }
+
+    [Fact]
+    public void WithEcdisDisplay_ReplacesEcdisAndDefensivelyCopiesCollections()
+    {
+        var hiddenGroups = new HashSet<int> { 10 };
+        var hiddenByProduct = new Dictionary<string, IReadOnlySet<int>>
+        {
+            ["S-101"] = hiddenGroups,
+        };
+        var replacement = new EcdisDisplaySettings
+        {
+            Category = EcdisDisplayCategory.DisplayBase,
+            HiddenViewingGroups = hiddenByProduct,
+        };
+
+        var updated = MapPresentationState.Default.WithEcdisDisplay(replacement);
+
+        // Mutating the source collections after the copy must not leak in.
+        hiddenGroups.Add(20);
+        hiddenByProduct.Clear();
+
+        Assert.Equal(EcdisDisplayCategory.DisplayBase, updated.EcdisDisplay.Category);
+        Assert.Equal([10], updated.EcdisDisplay.HiddenViewingGroups["s-101"]);
+        Assert.Equal(PaletteType.Day, updated.Palette);
+    }
+
+    [Fact]
+    public void WithMariner_ReplacesOnlyMariner()
+    {
+        var mariner = MarinerSettings.Default with { SimplifiedSymbols = true };
+
+        var updated = MapPresentationState.Default.WithMariner(mariner);
+
+        Assert.Same(mariner, updated.Mariner);
+        Assert.Equal(PaletteType.Day, updated.Palette);
+    }
+
+    [Fact]
+    public void WithEcdisDisplay_And_WithMariner_RejectNull()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => MapPresentationState.Default.WithEcdisDisplay(null!));
+        Assert.Throws<ArgumentNullException>(
+            () => MapPresentationState.Default.WithMariner(null!));
+    }
+
+    [Fact]
     public async Task PresentationControllerContract_AcceptsExplicitState()
     {
         var controller = new RecordingPresentationController();

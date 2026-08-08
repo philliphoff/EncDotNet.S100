@@ -90,7 +90,9 @@ public class AnnotationContractTests
         // reference records they contain. The suffix-based rule is the
         // codebase convention and naturally picks up sibling sessions'
         // future tools (e.g. FindAtRequest / FindAtResult).
-        if (t.Namespace == "EncDotNet.S100.Mcp.Tools" && IsRecordType(t))
+        if (t.Namespace is not null
+            && t.Namespace.StartsWith("EncDotNet.S100.Mcp.Tools", StringComparison.Ordinal)
+            && IsRecordType(t))
         {
             var name = t.Name;
             if (name.EndsWith("Request", StringComparison.Ordinal)) return true;

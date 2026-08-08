@@ -35,13 +35,20 @@ internal static class DatasetInputResolver
     /// once the catalog is no longer needed. <c>null</c> for the non-exchange
     /// forms.
     /// </param>
+    /// <param name="specHint">
+    /// Optional product-spec hint (e.g. <c>"S-102"</c>, <c>"s102"</c>) that
+    /// forces the spec for the <b>single-file</b> forms instead of
+    /// auto-detecting it. Ignored for the exchange-set form. When provided, the
+    /// file is loaded as that spec even if auto-detection would fail.
+    /// </param>
     public static List<FileDatasetInput> Resolve(
         string? input,
         string[] layers,
         string? exchangeSet,
         string? only,
         List<string> warnings,
-        out IDisposable? exchangeSetResolution)
+        out IDisposable? exchangeSetResolution,
+        string? specHint = null)
     {
         exchangeSetResolution = null;
         var inputs = new List<FileDatasetInput>();
@@ -87,7 +94,11 @@ internal static class DatasetInputResolver
                 continue;
             }
 
-            var spec = DatasetPipelineFactory.DetectProductSpec(path);
+            // A caller-supplied spec hint forces the product for the single-file
+            // forms; otherwise auto-detect from the file.
+            var spec = !string.IsNullOrWhiteSpace(specHint)
+                ? NormalizeSpecHint(specHint)
+                : DatasetPipelineFactory.DetectProductSpec(path);
             if (spec is null)
             {
                 warnings.Add($"Skipped unsupported dataset (no known product specification): {path}");
@@ -118,6 +129,22 @@ internal static class DatasetInputResolver
 
         var source = FileSystemAssetSource.Create(directory);
         return new ExternalTextFileResolver(source, Path.GetFileName(path)).AsDelegate();
+    }
+
+    /// <summary>
+    /// Normalises a product-spec hint to the canonical <c>S-NNN</c> form the
+    /// projector switches on (e.g. <c>"s102"</c>, <c>"S102"</c>, <c>"s-102"</c>
+    /// → <c>"S-102"</c>). An unrecognised shape is passed through trimmed so the
+    /// projector rejects it as unsupported.
+    /// </summary>
+    private static string NormalizeSpecHint(string hint)
+    {
+        var compact = hint.Trim().Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
+        if (compact.Length > 1 && compact[0] == 'S' && compact[1..].All(char.IsDigit))
+        {
+            return $"S-{compact[1..]}";
+        }
+        return hint.Trim();
     }
 
     private static string UniqueId(string candidate, HashSet<string> used)
