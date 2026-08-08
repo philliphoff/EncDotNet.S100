@@ -77,11 +77,11 @@ public sealed class CompositeViewportBuilderTests
         // Longitude is linear in Web Mercator, so it is the exact midpoint.
         Assert.Equal(-1.25, centerLon, precision: 9);
 
-        // Latitude is the projected midpoint back-projected: within the box,
-        // close to but not exactly the arithmetic mean (50.25).
+        // Latitude is the projected midpoint back-projected: within the box, and a
+        // small, non-zero step north of the arithmetic mean (50.25) — ≈ +6.6e-4°
+        // here — because Mercator Y accelerates with latitude.
         Assert.InRange(centerLat, 50.0, 50.5);
-        Assert.Equal(50.25, centerLat, precision: 2);
-        Assert.NotEqual(50.25, centerLat);
+        Assert.InRange(centerLat - 50.25, 1e-4, 5e-3);
 
         // Feeding the centre + resolved scale back through FromCenterScale
         // reproduces the same rectangle centre, confirming the echo is consistent.

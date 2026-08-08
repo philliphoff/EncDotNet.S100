@@ -67,7 +67,10 @@ internal sealed class HeadlessS100Session
     private MapViewport? _viewport;
     private BoundingBox? _bounds;
 
-    private bool _disposed;
+    // Volatile so a dispose on one thread is observed by the ObjectDisposedException
+    // guards on another; the guards themselves stay best-effort (a dispose racing an
+    // in-flight call may still slip through), consistent across the session's methods.
+    private volatile bool _disposed;
 
     /// <summary>Creates a session over the shared mutable catalog.</summary>
     /// <param name="catalog">
