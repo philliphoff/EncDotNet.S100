@@ -509,7 +509,8 @@ public partial class MainWindow : ShadUI.Window
         var datasetPaths = options?.Datasets?.Where(File.Exists).ToArray() ?? [];
         var needsAutomation = datasetPaths.Length > 0
             || options?.HasExplicitViewport == true
-            || options?.TimeStep is not null;
+            || options?.TimeStep is not null
+            || options?.HasOwnShipOption == true;
         if (needsAutomation)
         {
             Opened += async (_, _) => await RunStartupAutomationAsync(datasetPaths);
@@ -786,6 +787,17 @@ public partial class MainWindow : ShadUI.Window
 
         ApplyStartupOwnShip();
         ApplyStartupViewport();
+
+        // Own-ship-only launch (no datasets to auto-zoom, no explicit CLI
+        // viewport): frame the map on the own-ship we just positioned,
+        // matching the interactive framing path. With datasets or an
+        // explicit viewport, that framing wins instead.
+        if (datasetPaths.Length == 0
+            && _startupOptions?.HasOwnShipOption == true
+            && _startupOptions?.HasExplicitViewport != true)
+        {
+            await FrameOnOwnShipAtStartupAsync();
+        }
     }
 
     /// <summary>
