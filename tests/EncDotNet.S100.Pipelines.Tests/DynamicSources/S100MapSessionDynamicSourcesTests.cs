@@ -30,7 +30,10 @@ public class S100MapSessionDynamicSourcesTests
     {
         using var map = new Map();
         // Default (inline) marshal keeps the register/rebuild synchronous.
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new IdentityCrsTransformFactory(),
+        });
 
         var source = new FakeDynamicFeatureSource(
             "ownship", new DynamicSourceMetadata { DisplayName = "Own Ship" });

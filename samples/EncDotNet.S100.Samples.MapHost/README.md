@@ -26,9 +26,11 @@ using var factory = BundledDatasetProcessorFactory.Create();
 // 1. Compose a session over a bare map. AddS100 returns the disposable
 //    IS100MapSession that owns all S-100 layers, processors, and rendering.
 var map = new Map { CRS = "EPSG:3857" };
-var session = map.AddS100(
-    new ProjNetCrsTransformFactory(),                       // host supplies the CRS
-    new S100MapsuiOptions { DatasetPipelineFactory = factory }); // enables LoadAsync
+var session = map.AddS100(new S100MapsuiOptions
+{
+    CrsTransformFactory = new ProjNetCrsTransformFactory(),  // host supplies the CRS
+    DatasetPipelineFactory = factory,                        // enables LoadAsync
+});
 
 // 2. Bind the map to your Mapsui control and attach the framework adapter,
 //    which converts pointer pixels to geographic picks and drives redraws.
@@ -75,7 +77,7 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
 
 | Fitness capability (issue #512)        | API used                                              |
 | -------------------------------------- | ----------------------------------------------------- |
-| attach a session to an existing `Map`  | `map.AddS100(crsFactory, options)`                    |
+| attach a session to an existing `Map`  | `map.AddS100(options)`                                |
 | load / unload datasets                 | `session.Datasets.LoadAsync` / `session.RemoveDataset`|
 | change palette (Day / Dusk / Night)    | `session.SetPresentationAsync(state.WithPalette(...))`|
 | toggle a dataset                       | `session.SetVisible(id, …)`                           |

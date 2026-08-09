@@ -82,12 +82,15 @@ public partial class MainWindow : Window
         // disposing it (see OnClosed) releases all of them. Ownership lives only
         // on the returned instance - it is not stashed in a static table or
         // Map.Tag - so the host holds and disposes it explicitly.
-        //   * crsTransformFactory: required. The reusable assembly ships no CRS
-        //     implementation, so the host supplies one (ProjNet here).
+        //   * options.CrsTransformFactory: required. The reusable assembly ships
+        //     no CRS implementation, so the host supplies one (ProjNet here).
         //   * options.DatasetPipelineFactory: enables Datasets.LoadAsync(path).
         _session = map.AddS100(
-            new ProjNetCrsTransformFactory(),
-            new S100MapsuiOptions { DatasetPipelineFactory = _processorFactory });
+            new S100MapsuiOptions
+            {
+                CrsTransformFactory = new ProjNetCrsTransformFactory(),
+                DatasetPipelineFactory = _processorFactory,
+            });
 
         // ── 2. Bind the map to the live control and attach the Avalonia adapter ─
         //

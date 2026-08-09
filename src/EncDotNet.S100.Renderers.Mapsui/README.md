@@ -143,14 +143,17 @@ Notifications and zoom policy remain host responsibilities.
 
 ## `AddS100` extension
 
-`Map.AddS100(crsTransformFactory, options)` composes the pieces above in one call
-and returns a disposable `IS100MapSession` that owns them — a host no longer wires
-layer bands, processor ownership, the renderer, the session, and the navigator by
-hand or knows the renderer registration order:
+`Map.AddS100(options)` composes the pieces above in one call and returns a
+disposable `IS100MapSession` that owns them — a host no longer wires layer bands,
+processor ownership, the renderer, the session, and the navigator by hand or knows
+the renderer registration order. All collaborators are supplied on
+`S100MapsuiOptions`: the CRS transform factory, an optional pre-built renderer or
+shared processor owner (for a DI host), the pipeline factory, and so on.
 
 ```csharp
-using var s100 = map.AddS100(new ProjNetCrsTransformFactory(), new S100MapsuiOptions
+using var s100 = map.AddS100(new S100MapsuiOptions
 {
+    CrsTransformFactory = new ProjNetCrsTransformFactory(),  // host supplies the CRS
     DatasetPipelineFactory = pipelineFactory,   // enables loading from a path
 });
 

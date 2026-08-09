@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui;
@@ -24,11 +25,23 @@ internal sealed class S100MapSessionFactory : IS100MapSessionFactory
     {
         ArgumentNullException.ThrowIfNull(map);
 
-        // The reusable assembly ships no CRS implementation, so the host must
-        // register one (e.g. ProjNetCrsTransformFactory); a missing registration
-        // surfaces as a clear DI error here.
-        var crsTransformFactory = _services.GetRequiredService<ICrsTransformFactory>();
         var options = _services.GetService<S100MapsuiOptions>() ?? new S100MapsuiOptions();
+
+        // Share the container's registered collaborators when the options did
+        // not already carry them, so a host that registered a processor owner or
+        // a dataset renderer composes the session over the same instances its
+        // other services use rather than fresh, session-private copies.
+        if (options.ProcessorOwner is null
+            && _services.GetService<DatasetProcessorOwner>() is { } processorOwner)
+        {
+            options = options with { ProcessorOwner = processorOwner };
+        }
+
+        if (options.DatasetRenderer is null
+            && _services.GetService<MapsuiDatasetRenderer>() is { } datasetRenderer)
+        {
+            options = options with { DatasetRenderer = datasetRenderer };
+        }
 
         // Default the dynamic-source renderer resolver to the container's keyed
         // IDynamicFeatureRenderer services (registered via
@@ -43,6 +56,19 @@ internal sealed class S100MapSessionFactory : IS100MapSessionFactory
             };
         }
 
-        return map.AddS100(crsTransformFactory, options);
+        // Fold a DI-registered CRS factory into the options when the caller
+        // supplied neither one nor a prebuilt renderer (which carries its own).
+        // The reusable assembly ships no CRS implementation; a missing
+        // registration on the default-renderer path surfaces as a clear DI error
+        // here.
+        if (options.CrsTransformFactory is null && options.DatasetRenderer is null)
+        {
+            options = options with
+            {
+                CrsTransformFactory = _services.GetRequiredService<ICrsTransformFactory>(),
+            };
+        }
+
+        return map.AddS100(options);
     }
 }
