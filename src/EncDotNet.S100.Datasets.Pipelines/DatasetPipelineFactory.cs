@@ -91,15 +91,44 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     }
 
     /// <summary>
-    /// Returns the product spec identifier for the given file, or null if unrecognized.
+    /// The all-products registry backing the parameterless
+    /// <see cref="DetectProductSpec(string)"/>, so the batteries-included
+    /// detection and construction share one product set (including the S-57
+    /// <c>.000</c> content discriminator). Built once and never mutated.
     /// </summary>
-    public static string? DetectProductSpec(string path)
+    private static readonly S100ProductRegistry DefaultRegistry = S100Products.CreateDefaultRegistry();
+
+    /// <summary>
+    /// Returns the product spec identifier for the given file, or null if
+    /// unrecognized, using the batteries-included product set (every built-in
+    /// product, so a <c>.000</c> file is disambiguated S-57 vs S-101). Hosts that
+    /// build a factory from a subset registry get subset-aware detection through
+    /// the registry-aware overload the factory uses internally.
+    /// </summary>
+    public static string? DetectProductSpec(string path) => DetectProductSpec(path, DefaultRegistry);
+
+    /// <summary>
+    /// Registry-aware detection — the single implementation behind
+    /// <see cref="DetectProductSpec(string)"/>. Resolves the ambiguous ISO 8211
+    /// <c>.000</c> extension (shared by S-57 and S-101) using the S-57 content
+    /// discriminator that <paramref name="registry"/> actually offers: a registry
+    /// without S-57 registered treats every <c>.000</c> file as S-101 rather than
+    /// running the S-57 sniff, so it never reports an S-57 dataset it has no
+    /// registration to build. This narrows the discriminator to the registry's
+    /// product set; it does not otherwise guarantee the returned spec is buildable
+    /// (e.g. a registry lacking S-101 can still get <c>"S-101"</c> here —
+    /// construction then validates the spec against the registry and throws if
+    /// unregistered). HDF5 and GML datasets are product-agnostic and detected the
+    /// same way regardless of <paramref name="registry"/>.
+    /// </summary>
+    internal static string? DetectProductSpec(string path, S100ProductRegistry registry)
     {
+        ArgumentNullException.ThrowIfNull(registry);
+
         var ext = Path.GetExtension(path);
 
         // HDF5 files: inspect productSpecification attribute to distinguish S-102 vs S-111
         if (ext.Equals(".h5", StringComparison.OrdinalIgnoreCase) ||
-            ext.Equals(".H5", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".hdf5", StringComparison.OrdinalIgnoreCase))
         {
             return DetectHdf5ProductSpec(path);
@@ -108,21 +137,26 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         // S-101: ISO 8211 files (also S-57 — distinguished by content below).
         if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
         {
-            // S-57 datasets carry a DSPM field in their ISO 8211 DDR which is
-            // not present in S-101 datasets; use that as the discriminator.
-            try
+            // S-57 datasets carry a DSPM field in their ISO 8211 DDR which is not
+            // present in S-101 datasets; the S-57 registration contributes that
+            // content sniff. Only run it when the registry can actually build S-57
+            // — otherwise the file is treated as S-101.
+            if (registry.TryResolve("S-57", out var s57) && s57.Discriminate is { } discriminate)
             {
-                if (EncDotNet.S100.Datasets.S57.S57Dataset.IsS57File(path))
-                    return "S-57";
-            }
-            catch
-            {
-                // Fall through and treat as S-101.
+                try
+                {
+                    if (discriminate(path))
+                        return "S-57";
+                }
+                catch
+                {
+                    // Fall through and treat as S-101.
+                }
             }
             return "S-101";
         }
 
-        // S-124: GML encoded files
+        // S-124 and other GML-encoded products.
         if (ext.Equals(".gml", StringComparison.OrdinalIgnoreCase))
         {
             return DetectGmlProductSpec(path);
@@ -399,7 +433,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// </summary>
     public IDatasetProcessor CreateProcessor(string path)
     {
-        var spec = DetectProductSpec(path)
+        var spec = DetectProductSpec(path, _registry)
             ?? throw new NotSupportedException($"Unrecognized dataset file: {Path.GetFileName(path)}");
 
         if (!_registry.TryResolve(spec, out var registration))
@@ -578,7 +612,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         if (updates.Count == 0)
             return CreateProcessor(baseFilePath);
 
-        var spec = DetectProductSpec(baseFilePath);
+        var spec = DetectProductSpec(baseFilePath, _registry);
         switch (spec)
         {
             case "S-101":
