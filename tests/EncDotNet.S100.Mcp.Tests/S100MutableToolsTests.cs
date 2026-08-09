@@ -57,6 +57,51 @@ public class S100MutableToolsTests
     }
 
     [Fact]
+    public void Create_AddsViewportToolWhenViewportAccessorSupplied()
+    {
+        var tools = S100MutableTools.Create(
+            viewport: new StaticCapabilityAccessor<IViewportController>(new FakeViewport()));
+
+        Assert.Equal(new[] { "set_viewport" }, tools.Select(t => t.ProtocolTool.Name).ToArray());
+    }
+
+    [Fact]
+    public async Task SetViewport_RoundTripsOverTheWireAndMutatesTheController()
+    {
+        var host = new FakeViewport();
+        var catalog = McpTestHelpers.NewCatalog();
+
+        await using var server = new S100McpServer(catalog, new S100McpServerOptions
+        {
+            BindAddress = IPAddress.Loopback,
+            Port = 0,
+            AdditionalTools = S100MutableTools.Create(
+                viewport: new StaticCapabilityAccessor<IViewportController>(host)),
+        });
+        await server.StartAsync();
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var tools = await client.ListToolsAsync();
+        Assert.Contains(tools, t => t.Name == "set_viewport");
+
+        var result = await client.CallToolAsync(
+            "set_viewport",
+            new Dictionary<string, object?>
+            {
+                ["centerLongitude"] = -1.25,
+                ["centerLatitude"] = 50.5,
+                ["scaleDenominator"] = 50000,
+            });
+
+        Assert.False(result.IsError);
+        var json = JsonDocument.Parse(GetText(result)).RootElement;
+        Assert.Equal("center", json.GetProperty("mode").GetString());
+        Assert.Equal(50000, json.GetProperty("scaleDenominator").GetDouble());
+        Assert.NotNull(host.Current);
+        Assert.Equal(-1.25, host.Current!.CenterLongitude);
+    }
+
+    [Fact]
     public async Task RenderToImage_RoundTripsAsImageBlockPlusMetadata()
     {
         var png = new byte[] { 9, 8, 7, 6, 5 };
@@ -179,6 +224,19 @@ public class S100MutableToolsTests
 
         public Task SetTimeAsync(DateTime time, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+    }
+
+    private sealed class FakeViewport : IViewportController
+    {
+        public MapViewport? Current { get; private set; }
+
+        public void Set(MapViewport viewport) => Current = viewport;
+
+        public void SetToBounds(EncDotNet.S100.ExchangeSets.BoundingBox bounds)
+            => Current = new MapViewport(
+                (bounds.WestBoundLongitude + bounds.EastBoundLongitude) / 2.0,
+                (bounds.SouthBoundLatitude + bounds.NorthBoundLatitude) / 2.0,
+                1.0);
     }
 
     private sealed class FakeRenderer(byte[] png) : IImageRenderer

@@ -33,8 +33,8 @@ namespace EncDotNet.S100.Cli.Commands;
 /// it exposes the catalog / presentation / time / render tools
 /// (<c>open_dataset</c>, <c>close_dataset</c>, <c>close_all_datasets</c>,
 /// <c>set_palette</c>, <c>set_display_category</c>, <c>set_display_mode</c>,
-/// <c>set_time_step</c>, <c>render_to_image</c>), backed by an in-process
-/// headless Skia session.
+/// <c>set_time_step</c>, <c>set_viewport</c>, <c>render_to_image</c>), backed by
+/// an in-process headless Skia session.
 /// </para>
 /// <para>
 /// Standard output carries the MCP protocol, so every human-readable message
@@ -140,7 +140,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 presentation: new StaticCapabilityAccessor<IPresentationController>(session),
                 time: new StaticCapabilityAccessor<ITimeController>(session),
                 renderer: new StaticCapabilityAccessor<IImageRenderer>(session),
-                catalog: catalog);
+                catalog: catalog,
+                viewport: new StaticCapabilityAccessor<IViewportController>(session));
 
             Console.Error.WriteLine(
                 $"s100 mcp serve: serving {catalog.Datasets.Count} dataset(s) over stdio (mutable). Ctrl-C to stop.");

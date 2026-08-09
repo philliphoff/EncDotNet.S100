@@ -39,6 +39,7 @@ public sealed class McpServeCommandTests
         "set_display_mode",
         "set_palette",
         "set_time_step",
+        "set_viewport",
     ];
 
     private static string HostPath() =>

@@ -65,4 +65,30 @@ public sealed class CompositeViewportBuilderTests
         // is the mercator non-linearity between the centre and mean latitude).
         Assert.InRange(viewport.ScaleDenominator, scale * 0.99, scale * 1.01);
     }
+
+    [Fact]
+    public void CenterOf_returns_the_mercator_centre_not_the_arithmetic_mean()
+    {
+        var viewport = CompositeViewportBuilder.FromBoundingBox(
+            minLon: -1.5, minLat: 50.0, maxLon: -1.0, maxLat: 50.5, width: 400, height: 300);
+
+        var (centerLon, centerLat) = CompositeViewportBuilder.CenterOf(viewport);
+
+        // Longitude is linear in Web Mercator, so it is the exact midpoint.
+        Assert.Equal(-1.25, centerLon, precision: 9);
+
+        // Latitude is the projected midpoint back-projected: within the box, and a
+        // small, non-zero step north of the arithmetic mean (50.25) — ≈ +6.6e-4°
+        // here — because Mercator Y accelerates with latitude.
+        Assert.InRange(centerLat, 50.0, 50.5);
+        Assert.InRange(centerLat - 50.25, 1e-4, 5e-3);
+
+        // Feeding the centre + resolved scale back through FromCenterScale
+        // reproduces the same rectangle centre, confirming the echo is consistent.
+        var round = CompositeViewportBuilder.FromCenterScale(
+            centerLon, centerLat, viewport.ScaleDenominator, 400, 300);
+        var (roundLon, roundLat) = CompositeViewportBuilder.CenterOf(round);
+        Assert.Equal(centerLon, roundLon, precision: 6);
+        Assert.Equal(centerLat, roundLat, precision: 6);
+    }
 }

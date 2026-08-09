@@ -1,13 +1,15 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Mcp.Tools.Mutable;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
 /// <summary>
 /// The CLI's headless, renderer-neutral mutating session: it holds the shared
-/// presentation / time state and backs the mutating MCP capability interfaces
-/// (<see cref="IPresentationController"/>, <see cref="ITimeController"/>,
-/// <see cref="IImageRenderer"/>) over the Mapsui-free Skia composite pipeline.
+/// presentation / time / viewport state and backs the mutating MCP capability
+/// interfaces (<see cref="IPresentationController"/>, <see cref="ITimeController"/>,
+/// <see cref="IViewportController"/>, <see cref="IImageRenderer"/>) over the
+/// Mapsui-free Skia composite pipeline.
 /// The dataset set itself lives in the <see cref="HeadlessMutableCatalog"/> —
 /// the single source of truth shared with the read-only query tools — so the
 /// session always renders whatever is currently loaded, including datasets added
@@ -31,7 +33,9 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// renderer's contract), so repeated renders re-parse. Acceptable for v1.
 /// </description></item>
 /// <item><description>
-/// The viewport auto-fits the union extent (no <c>set_viewport</c> yet).
+/// The viewport auto-fits the union extent until <c>set_viewport</c> pins an
+/// explicit geographic viewport (centre + scale, or a framed bounding box),
+/// which is re-fit to each render's pixel size. Rotation is north-up only.
 /// </description></item>
 /// <item><description>
 /// <c>render_to_image</c>'s <c>pixelDensity</c> is not applied — the render
@@ -41,15 +45,32 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// </list>
 /// </remarks>
 internal sealed class HeadlessS100Session
-    : IPresentationController, ITimeController, IImageRenderer, IDisposable
+    : IPresentationController, ITimeController, IViewportController, IImageRenderer, IDisposable
 {
+    // Reference render surface used to resolve a bounding-box viewport into a
+    // representative MapViewport scale for IViewportController.Current. Matches
+    // render_to_image's default output size, so the echoed scale lines up with a
+    // subsequent default render. Every real render re-fits the box to its own
+    // pixel size (see ResolveViewport), so this is an introspection echo only.
+    private const int ReferenceWidthPx = 1024;
+    private const int ReferenceHeightPx = 768;
+
     private readonly HeadlessMutableCatalog _catalog;
     private readonly PngS100DatasetRenderer _renderer = new();
     private readonly object _gate = new();
 
     private MapPresentationState _presentation = MapPresentationState.Default;
     private DateTime? _currentTime;
-    private bool _disposed;
+
+    // Explicit geographic viewport state. Mutually exclusive: at most one is
+    // non-null. Both null means auto-fit the loaded datasets' union extent.
+    private MapViewport? _viewport;
+    private BoundingBox? _bounds;
+
+    // Volatile so a dispose on one thread is observed by the ObjectDisposedException
+    // guards on another; the guards themselves stay best-effort (a dispose racing an
+    // in-flight call may still slip through), consistent across the session's methods.
+    private volatile bool _disposed;
 
     /// <summary>Creates a session over the shared mutable catalog.</summary>
     /// <param name="catalog">
@@ -95,6 +116,152 @@ internal sealed class HeadlessS100Session
         cancellationToken.ThrowIfCancellationRequested();
         lock (_gate) _currentTime = time;
         return Task.CompletedTask;
+    }
+
+    // ---- IViewportController --------------------------------------------
+
+    MapViewport? IViewportController.Current
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_viewport is { } v)
+                {
+                    return v;
+                }
+                if (_bounds is { } b)
+                {
+                    // Resolve the box against the reference surface, then echo the
+                    // centre and scale of that resolved rectangle. The centre is
+                    // taken from the resolved viewport (Mercator midpoint), not the
+                    // box's arithmetic midpoint, so it stays consistent with the
+                    // rectangle the aspect-fit actually produces.
+                    var resolved = CompositeViewportBuilder.FromBoundingBox(
+                        b.WestBoundLongitude, b.SouthBoundLatitude,
+                        b.EastBoundLongitude, b.NorthBoundLatitude,
+                        ReferenceWidthPx, ReferenceHeightPx);
+                    var (centerLon, centerLat) = CompositeViewportBuilder.CenterOf(resolved);
+                    return new MapViewport(centerLon, centerLat, resolved.ScaleDenominator);
+                }
+                return null;
+            }
+        }
+    }
+
+    public void Set(MapViewport viewport)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Guard the public capability seam: a programmatic caller (not going
+        // through set_viewport, which validates first) must not be able to store a
+        // viewport the renderer can't honour or that would feed NaN / out-of-range
+        // values into CompositeViewportBuilder. The headless render path is
+        // north-up only (ResolveViewport uses centre + scale, not rotation).
+        if (viewport.RotationDegrees != 0.0)
+        {
+            throw new ArgumentException(
+                "The headless composite renderer is north-up only; RotationDegrees must be 0.",
+                nameof(viewport));
+        }
+        ValidateLongitude(viewport.CenterLongitude, nameof(viewport));
+        ValidateLatitude(viewport.CenterLatitude, nameof(viewport));
+        if (!double.IsFinite(viewport.ScaleDenominator) || viewport.ScaleDenominator <= 0.0)
+        {
+            throw new ArgumentException(
+                $"ScaleDenominator must be a positive, finite number; got {viewport.ScaleDenominator}.",
+                nameof(viewport));
+        }
+
+        lock (_gate)
+        {
+            _viewport = viewport;
+            _bounds = null;
+        }
+    }
+
+    public void SetToBounds(BoundingBox bounds)
+    {
+        ArgumentNullException.ThrowIfNull(bounds);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Same seam guard as Set: reject non-finite / out-of-range edges and an
+        // inverted or antimeridian-crossing box, which CompositeViewportBuilder
+        // cannot frame correctly, before they can reach Current or a render.
+        ValidateLongitude(bounds.WestBoundLongitude, nameof(bounds));
+        ValidateLongitude(bounds.EastBoundLongitude, nameof(bounds));
+        ValidateLatitude(bounds.SouthBoundLatitude, nameof(bounds));
+        ValidateLatitude(bounds.NorthBoundLatitude, nameof(bounds));
+        if (bounds.WestBoundLongitude >= bounds.EastBoundLongitude)
+        {
+            throw new ArgumentException(
+                $"West ({bounds.WestBoundLongitude}) must be less than East ({bounds.EastBoundLongitude}); antimeridian crossing is not supported.",
+                nameof(bounds));
+        }
+        if (bounds.SouthBoundLatitude >= bounds.NorthBoundLatitude)
+        {
+            throw new ArgumentException(
+                $"South ({bounds.SouthBoundLatitude}) must be less than North ({bounds.NorthBoundLatitude}).",
+                nameof(bounds));
+        }
+
+        lock (_gate)
+        {
+            _bounds = bounds;
+            _viewport = null;
+        }
+    }
+
+    private const double MaxLongitude = 180.0;
+
+    private static void ValidateLongitude(double value, string paramName)
+    {
+        if (!double.IsFinite(value) || value < -MaxLongitude || value > MaxLongitude)
+        {
+            throw new ArgumentException(
+                $"Longitude {value} is outside the supported range [{-MaxLongitude}, {MaxLongitude}].",
+                paramName);
+        }
+    }
+
+    private static void ValidateLatitude(double value, string paramName)
+    {
+        if (!double.IsFinite(value)
+            || value < -CompositeViewportBuilder.MaxLatitude
+            || value > CompositeViewportBuilder.MaxLatitude)
+        {
+            throw new ArgumentException(
+                $"Latitude {value} is outside the Web Mercator range "
+                + $"[{-CompositeViewportBuilder.MaxLatitude}, {CompositeViewportBuilder.MaxLatitude}].",
+                paramName);
+        }
+    }
+
+    /// <summary>
+    /// Resolves the current geographic viewport state to a pixel
+    /// <see cref="EncDotNet.S100.Pipelines.Viewport"/> for a
+    /// <paramref name="widthPx"/> × <paramref name="heightPx"/> render, or
+    /// <see langword="null"/> to keep the compositor's union auto-fit.
+    /// </summary>
+    private EncDotNet.S100.Pipelines.Viewport? ResolveViewport(int widthPx, int heightPx)
+    {
+        lock (_gate)
+        {
+            if (_viewport is { } v)
+            {
+                return CompositeViewportBuilder.FromCenterScale(
+                    v.CenterLongitude, v.CenterLatitude, v.ScaleDenominator, widthPx, heightPx);
+            }
+            if (_bounds is { } b)
+            {
+                return CompositeViewportBuilder.FromBoundingBox(
+                    b.WestBoundLongitude, b.SouthBoundLatitude,
+                    b.EastBoundLongitude, b.NorthBoundLatitude,
+                    widthPx, heightPx);
+            }
+            return null;
+        }
     }
 
     // ---- IImageRenderer -------------------------------------------------
@@ -143,7 +310,9 @@ internal sealed class HeadlessS100Session
             Mariner = presentation.Mariner,
             TimeStep = ResolveTimeStepIndex(time, handles),
             DisplayModeId = ResolveDisplayModeId(presentation),
-            Viewport = null, // auto-fit the union extent
+            // Resolve the explicit geographic viewport (if any) to this render's
+            // pixel size; null keeps the compositor's union auto-fit.
+            Viewport = ResolveViewport(widthPx, heightPx),
         };
 
         return await _renderer.RenderAsync(layers, options, cancellationToken).ConfigureAwait(false);
