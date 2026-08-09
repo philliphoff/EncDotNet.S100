@@ -22,13 +22,6 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// </para>
 /// <list type="bullet">
 /// <item><description>
-/// The composite render options (<see cref="S100CompositeOptions"/>) carry a
-/// reduced presentation model — palette, symbol/text scale, mariner, a single
-/// display-mode id, and a time-step index — so ECDIS <em>category</em>,
-/// viewing-group, and display-plane selections in
-/// <see cref="MapPresentationState"/> are not yet honoured here.
-/// </description></item>
-/// <item><description>
 /// Each render re-creates processors from the dataset paths (the composite
 /// renderer's contract), so repeated renders re-parse. Acceptable for v1.
 /// </description></item>
@@ -309,7 +302,12 @@ internal sealed class HeadlessS100Session
             TextScale = presentation.TextScale,
             Mariner = presentation.Mariner,
             TimeStep = ResolveTimeStepIndex(time, handles),
-            DisplayModeId = ResolveDisplayModeId(presentation),
+            // Carry the full ECDIS snapshot (category, hidden viewing groups /
+            // display planes, and per-spec display modes). The composite renderer
+            // resolves the per-spec display mode for each layer via
+            // FacadeRenderContextBuilder, matching the single-dataset
+            // MapPresentationState.ApplyTo projection.
+            EcdisDisplay = presentation.EcdisDisplay,
             // Resolve the explicit geographic viewport (if any) to this render's
             // pixel size; null keeps the compositor's union auto-fit.
             Viewport = ResolveViewport(widthPx, heightPx),
@@ -366,16 +364,6 @@ internal sealed class HeadlessS100Session
             }
         }
         return best;
-    }
-
-    private static string? ResolveDisplayModeId(MapPresentationState presentation)
-    {
-        var modes = presentation.EcdisDisplay.ActiveDisplayModes;
-        if (modes.TryGetValue("S-411", out var s411) && !string.IsNullOrEmpty(s411))
-        {
-            return s411;
-        }
-        return modes.Values.FirstOrDefault(v => !string.IsNullOrEmpty(v));
     }
 
     public void Dispose()

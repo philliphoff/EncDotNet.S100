@@ -229,6 +229,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             Background = options.Background,
             HiddenCategories = options.HiddenCategories,
             DisplayModeId = options.DisplayModeId,
+            EcdisDisplay = options.EcdisDisplay,
         };
         return FacadeRenderContextBuilder.Build(processor, rendererOptions) with
         {

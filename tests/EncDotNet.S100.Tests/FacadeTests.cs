@@ -181,6 +181,87 @@ public sealed class FacadeTests
     }
 
     [SkippableFact]
+    public void PngRenderer_Composite_PropagatesEcdisDisplayToRenderContext()
+    {
+        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+
+        using var dataset = S100Dataset.Open(S124Surface);
+        var ecdis = new Datasets.Pipelines.EcdisDisplaySettings
+        {
+            Category = Datasets.Pipelines.EcdisDisplayCategory.DisplayBase,
+        };
+        var options = new S100CompositeOptions { EcdisDisplay = ecdis };
+
+        var context = PngS100DatasetRenderer.BuildCompositeContext(
+            dataset.Processor,
+            options,
+            Pipelines.MarinerSettings.Default);
+
+        // The composite path must carry the full ECDIS snapshot onto each layer's
+        // render context (issue #567); before the fix this was always null and
+        // every processor fell back to its unfiltered "All" default.
+        Assert.Same(ecdis, context.EcdisDisplay);
+    }
+
+    [SkippableFact]
+    public void PngRenderer_Composite_PerSpecDisplayMode_OverridesGlobalDisplayModeId()
+    {
+        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+
+        using var dataset = S100Dataset.Open(S124Surface);
+        var spec = dataset.Processor.PortrayalSpec.Name; // "S-124"
+        var ecdis = new Datasets.Pipelines.EcdisDisplaySettings
+        {
+            ActiveDisplayModes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                [spec] = "PerSpecMode",
+            },
+        };
+        var options = new S100CompositeOptions
+        {
+            DisplayModeId = "GlobalMode",
+            EcdisDisplay = ecdis,
+        };
+
+        var context = PngS100DatasetRenderer.BuildCompositeContext(
+            dataset.Processor,
+            options,
+            Pipelines.MarinerSettings.Default);
+
+        // A per-spec ActiveDisplayModes entry wins over the global DisplayModeId,
+        // matching MapPresentationState.ApplyTo's projection semantics.
+        Assert.Equal("PerSpecMode", context.DisplayModeId);
+    }
+
+    [SkippableFact]
+    public void PngRenderer_Composite_GlobalDisplayModeId_UsedWhenNoPerSpecEntry()
+    {
+        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+
+        using var dataset = S100Dataset.Open(S124Surface);
+        var ecdis = new Datasets.Pipelines.EcdisDisplaySettings
+        {
+            // An entry for a different spec must not affect this layer.
+            ActiveDisplayModes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["S-411"] = "OtherSpecMode",
+            },
+        };
+        var options = new S100CompositeOptions
+        {
+            DisplayModeId = "GlobalMode",
+            EcdisDisplay = ecdis,
+        };
+
+        var context = PngS100DatasetRenderer.BuildCompositeContext(
+            dataset.Processor,
+            options,
+            Pipelines.MarinerSettings.Default);
+
+        Assert.Equal("GlobalMode", context.DisplayModeId);
+    }
+
+    [SkippableFact]
     public async Task PngRenderer_Composite_HiddenCategories_ChangesOutput()
     {
         Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
