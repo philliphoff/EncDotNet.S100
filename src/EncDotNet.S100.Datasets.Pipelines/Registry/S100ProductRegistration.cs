@@ -72,7 +72,7 @@ public sealed record S100ProductRegistration
     /// <summary>
     /// Optional content sniffer that claims a file whose extension is ambiguous
     /// across products. Only meaningful for the S-57 registration today (S-57 and
-    /// S-101 both use the ISO 8211 <c>.000</c> extension);
+    /// S-101 both use the ISO 8211 <c>.000</c> extension). It is
     /// <see langword="null"/> for products whose extension already identifies
     /// them. <see cref="DatasetPipelineFactory"/> consults this only for the
     /// products a registry actually contains, so a host that omits S-57 never
