@@ -15,6 +15,7 @@ internal sealed class S100MapSession : IS100MapSession
     private readonly MapsuiMapNavigator _navigator;
     private readonly S100DynamicSourceHost _dynamicSourceHost;
     private readonly S100DatasetLoader _datasets;
+    private readonly bool _ownsProcessorOwner;
     private MapPresentationState _presentation = MapPresentationState.Default;
     private bool _disposed;
 
@@ -23,10 +24,12 @@ internal sealed class S100MapSession : IS100MapSession
         MapsuiMapSession session,
         MapsuiMapNavigator navigator,
         S100DynamicSourceHost dynamicSourceHost,
-        IDatasetProcessorFactory? pipelineFactory = null)
+        IDatasetProcessorFactory? pipelineFactory = null,
+        bool ownsProcessorOwner = true)
     {
         _processorOwner = processorOwner
             ?? throw new ArgumentNullException(nameof(processorOwner));
+        _ownsProcessorOwner = ownsProcessorOwner;
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _navigator = navigator ?? throw new ArgumentNullException(nameof(navigator));
         _dynamicSourceHost = dynamicSourceHost
@@ -351,9 +354,14 @@ internal sealed class S100MapSession : IS100MapSession
 
         // Dispose the session before the owner so no in-flight render holds a
         // lease past the owner's disposal, which retires and disposes every
-        // registered processor.
+        // registered processor. Dispose the owner only when this session created
+        // it; an injected owner is borrowed and its lifetime belongs to the
+        // caller (e.g. a DI host sharing it across services).
         _session.Dispose();
-        _processorOwner.Dispose();
+        if (_ownsProcessorOwner)
+        {
+            _processorOwner.Dispose();
+        }
     }
 
     public ValueTask DisposeAsync()

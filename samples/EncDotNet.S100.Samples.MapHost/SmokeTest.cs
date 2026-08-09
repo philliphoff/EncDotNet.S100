@@ -32,8 +32,11 @@ internal static class SmokeTest
         var map = new Map { CRS = "EPSG:3857" };
 
         await using var session = map.AddS100(
-            new ProjNetCrsTransformFactory(),
-            new S100MapsuiOptions { DatasetPipelineFactory = processorFactory });
+            new S100MapsuiOptions
+            {
+                CrsTransformFactory = new ProjNetCrsTransformFactory(),
+                DatasetPipelineFactory = processorFactory,
+            });
 
         // Give the map a viewport so framing and scale-aware picking have a
         // resolution to work with (a live control would supply this).

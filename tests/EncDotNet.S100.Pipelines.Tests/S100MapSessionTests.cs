@@ -21,7 +21,7 @@ public class S100MapSessionTests
     {
         using var map = new Map();
 
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
 
         Assert.NotNull(s100);
         Assert.NotNull(s100.Session);
@@ -29,13 +29,72 @@ public class S100MapSessionTests
     }
 
     [Fact]
-    public void AddS100WithoutCrsTransformFactoryThrows()
+    public void AddS100WithoutCrsTransformFactoryOrRendererThrows()
     {
         using var map = new Map();
 
-        var ex = Assert.Throws<ArgumentNullException>(
-            () => map.AddS100(null!));
-        Assert.Equal("crsTransformFactory", ex.ParamName);
+        // With neither a CRS transform factory nor an injected renderer on the
+        // options there is nothing to build the default dataset renderer from.
+        var ex = Assert.Throws<ArgumentException>(
+            () => map.AddS100(new S100MapsuiOptions()));
+        Assert.Equal("options", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task AddS100UsesInjectedRendererAndNeedsNoCrsFactory()
+    {
+        using var map = new Map();
+        var renderer = new MapsuiDatasetRenderer(
+            new IdentityCrsTransformFactory(), null, new S100MapsuiOptions());
+
+        // A prebuilt renderer already carries a CRS factory, so none is required
+        // here; a working render proves the injected renderer is the one used
+        // (the default-renderer path would have thrown on the missing factory).
+        using var s100 = map.AddS100(
+            new S100MapsuiOptions { DatasetRenderer = renderer });
+        var id = new MapDatasetId("dataset");
+
+        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
+        Assert.Single(map.Layers);
+    }
+
+    [Fact]
+    public async Task DisposeDoesNotDisposeAnInjectedProcessorOwner()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var s100 = map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new IdentityCrsTransformFactory(),
+            ProcessorOwner = owner,
+        });
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value);
+        await s100.AddDatasetAsync(Dataset(id), processor);
+
+        s100.Dispose();
+
+        // The injected owner is borrowed: the session must not dispose it, so it
+        // is still populated (disposal clears its entries) and the processor it
+        // holds is left to the owner's lifetime rather than retired here.
+        Assert.Equal(0, processor.DisposeCount);
+        Assert.Equal(1, owner.Count);
+    }
+
+    [Fact]
+    public async Task DisposeDisposesASelfCreatedProcessorOwner()
+    {
+        using var map = new Map();
+        var s100 = IdentitySession(map);
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value);
+        await s100.AddDatasetAsync(Dataset(id), processor);
+
+        s100.Dispose();
+
+        // With no injected owner AddS100 created one and owns it, so disposing
+        // the session disposes the owner and every processor it holds.
+        Assert.Equal(1, processor.DisposeCount);
     }
 
     [Fact]
@@ -44,8 +103,8 @@ public class S100MapSessionTests
         using var map1 = new Map();
         using var map2 = new Map();
 
-        using var s1 = map1.AddS100(new IdentityCrsTransformFactory());
-        using var s2 = map2.AddS100(new IdentityCrsTransformFactory());
+        using var s1 = IdentitySession(map1);
+        using var s2 = IdentitySession(map2);
 
         Assert.NotSame(s1, s2);
     }
@@ -54,7 +113,7 @@ public class S100MapSessionTests
     public async Task AddDatasetAsyncRegistersProcessorAndInstallsLayer()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
 
@@ -70,7 +129,7 @@ public class S100MapSessionTests
     public async Task AddDatasetAsyncRejectsDuplicateIdentity()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
 
@@ -90,7 +149,7 @@ public class S100MapSessionTests
     public async Task AddDatasetAsyncFailsWhenRemovedBeforeLayersInstall()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var renderStarted =
             new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -118,7 +177,7 @@ public class S100MapSessionTests
     public async Task RemoveDatasetRemovesLayerAndDisposesProcessor()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
         await s100.AddDatasetAsync(Dataset(id), processor);
@@ -134,7 +193,7 @@ public class S100MapSessionTests
     public async Task SetVisibleDisablesTheInstalledLayer()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
 
@@ -148,7 +207,7 @@ public class S100MapSessionTests
     public async Task SetActiveAndSetOpacityProjectOntoDatasetState()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
 
@@ -164,7 +223,7 @@ public class S100MapSessionTests
     public void SetOpacityRejectsOutOfRangeValueNamingTheOpacityParameter()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
 
         var ex = Assert.Throws<ArgumentOutOfRangeException>(
             () => s100.SetOpacity(new MapDatasetId("dataset"), 1.5));
@@ -175,7 +234,7 @@ public class S100MapSessionTests
     public async Task SetPresentationAsyncReRendersDatasets()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
         await s100.AddDatasetAsync(Dataset(id), processor);
@@ -189,7 +248,7 @@ public class S100MapSessionTests
     public async Task SetTimeAsyncMovesTheClockForTimeAwareDatasets()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var times = new[] { first, first.AddMinutes(20), first.AddMinutes(40) };
         var id = new MapDatasetId("current");
@@ -211,7 +270,7 @@ public class S100MapSessionTests
     public async Task ZoomToDatasetIsANoOpForUnknownDatasetAndSafeForKnownExtent()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
 
@@ -224,7 +283,7 @@ public class S100MapSessionTests
     public async Task DatasetRenderCompletedIsRaisedThroughTheFacade()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var kinds = new List<MapSessionRenderKind>();
         s100.DatasetRenderCompleted += (_, e) => kinds.Add(e.Kind);
@@ -238,7 +297,7 @@ public class S100MapSessionTests
     public async Task DisposeDisposesOwnedProcessorsAndBlocksFurtherUse()
     {
         using var map = new Map();
-        var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
         await s100.AddDatasetAsync(Dataset(id), processor);
@@ -255,7 +314,7 @@ public class S100MapSessionTests
     public async Task LoadAsyncThrowsWhenNoPipelineFactoryConfigured()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
 
         // No DatasetPipelineFactory in options; the factory guard fires before
         // the path is touched.
@@ -271,9 +330,11 @@ public class S100MapSessionTests
         Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
 
         using var map = new Map();
-        using var s100 = map.AddS100(
-            new ProjNetCrsTransformFactory(),
-            new S100MapsuiOptions { DatasetPipelineFactory = CreateFactory() });
+        using var s100 = map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new ProjNetCrsTransformFactory(),
+            DatasetPipelineFactory = CreateFactory(),
+        });
 
         var id = await s100.Datasets.LoadAsync(basePath!);
 
@@ -314,6 +375,31 @@ public class S100MapSessionTests
         using var map = new Map();
 
         Assert.Throws<InvalidOperationException>(() => factory.Create(map));
+    }
+
+    [Fact]
+    public async Task AddS100MapsuiFactorySharesTheRegisteredProcessorOwner()
+    {
+        using var owner = new DatasetProcessorOwner();
+        var provider = new ServiceCollection()
+            .AddSingleton<ICrsTransformFactory>(new IdentityCrsTransformFactory())
+            .AddSingleton(owner)
+            .AddS100Mapsui()
+            .BuildServiceProvider();
+        var factory = provider.GetRequiredService<IS100MapSessionFactory>();
+        using var map = new Map();
+        var s100 = factory.Create(map);
+        var id = new MapDatasetId("dataset");
+        var processor = new StubProcessor(id.Value);
+        await s100.AddDatasetAsync(Dataset(id), processor);
+
+        s100.Dispose();
+
+        // The factory folded the DI-registered owner into the options, so the
+        // session borrowed it and left it — and its processors — for the
+        // container to dispose.
+        Assert.Equal(0, processor.DisposeCount);
+        Assert.Equal(1, owner.Count);
     }
 
     [Fact]
@@ -369,7 +455,7 @@ public class S100MapSessionTests
     public async Task PickAsyncRanksTopmostStackDatasetFirst()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var bottomId = new MapDatasetId("bottom");
         var topId = new MapDatasetId("top");
         await s100.AddDatasetAsync(
@@ -390,7 +476,7 @@ public class S100MapSessionTests
     public async Task PickAsyncRanksPointBeforeAreaWithinDataset()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(
             Dataset(id),
@@ -413,7 +499,7 @@ public class S100MapSessionTests
     public async Task PickAsyncExcludesHiddenAndInactiveDatasets()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var shownId = new MapDatasetId("shown");
         var hiddenId = new MapDatasetId("hidden");
         var inactiveId = new MapDatasetId("inactive");
@@ -439,7 +525,7 @@ public class S100MapSessionTests
     public async Task PickAsyncExcludesFullyTransparentDatasets()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(
             Dataset(id),
@@ -454,7 +540,7 @@ public class S100MapSessionTests
     public async Task PickAsyncExcludesDatasetScaledOutAtResolution()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         // A cell minimum display scale gives the entry a whole-cell scale
         // window; a resolution far coarser than its cutoff scales it out.
@@ -474,7 +560,7 @@ public class S100MapSessionTests
     public async Task PickAsyncIncludesDatasetWithinScaleWindowAtResolution()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(
             Dataset(id),
@@ -495,7 +581,7 @@ public class S100MapSessionTests
     public async Task PickAsyncWithoutResolutionIgnoresScaleWindow()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(
             Dataset(id),
@@ -517,7 +603,7 @@ public class S100MapSessionTests
     public async Task PickAsyncIgnoresResolutionForCellWithoutScaleWindow()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         // No CellMinimumDisplayScale → no scale window → always pickable, even at
         // a very coarse resolution.
@@ -535,7 +621,7 @@ public class S100MapSessionTests
     public async Task PickAsyncReturnsCoverageSampleWhenNoVectorHit()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("coverage");
         await s100.AddDatasetAsync(
             Dataset(id),
@@ -564,7 +650,7 @@ public class S100MapSessionTests
     public async Task PickAsyncPopulatesVectorFeatureGeometry()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var geometry = new S100FeatureGeometry
         {
@@ -591,7 +677,7 @@ public class S100MapSessionTests
     public async Task PickAsyncHonorsMaxResults()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(
             Dataset(id),
@@ -614,7 +700,7 @@ public class S100MapSessionTests
     public async Task PickAsyncReturnsEmptyWhenNothingHit()
     {
         using var map = new Map();
-        using var s100 = map.AddS100(new IdentityCrsTransformFactory());
+        using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
 
@@ -630,9 +716,11 @@ public class S100MapSessionTests
         Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
 
         using var map = new Map();
-        using var s100 = map.AddS100(
-            new ProjNetCrsTransformFactory(),
-            new S100MapsuiOptions { DatasetPipelineFactory = CreateFactory() });
+        using var s100 = map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new ProjNetCrsTransformFactory(),
+            DatasetPipelineFactory = CreateFactory(),
+        });
         var id = await s100.Datasets.LoadAsync(basePath!);
 
         // Pick at the cell's extent centroid — a dense S-101 cell's area coverage
@@ -648,6 +736,14 @@ public class S100MapSessionTests
         Assert.All(picks, p => Assert.Equal(id, p.DatasetId));
         Assert.NotNull(picks[0].Info);
     }
+
+    // Most tests only need a session over an identity CRS; this keeps the
+    // options-building noise out of each test body.
+    private static IS100MapSession IdentitySession(Map map) =>
+        map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new IdentityCrsTransformFactory(),
+        });
 
     private static FeatureGeometryHit Hit(
         int ordinal,

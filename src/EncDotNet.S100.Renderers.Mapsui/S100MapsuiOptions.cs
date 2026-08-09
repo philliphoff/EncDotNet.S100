@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -31,6 +32,16 @@ public sealed record S100MapsuiOptions
         RenderingOptimizations.SceneMode;
 
     /// <summary>
+    /// Gets the CRS transform factory used to build the default dataset renderer
+    /// (the coverage and arrow renderers project a native grid CRS to
+    /// EPSG:3857). Required unless a prebuilt <see cref="DatasetRenderer"/> is
+    /// supplied, since that renderer already carries its own. The reusable
+    /// assembly ships no CRS implementation, so a host that does not inject a
+    /// renderer supplies one here (e.g. <c>ProjNetCrsTransformFactory</c>).
+    /// </summary>
+    public ICrsTransformFactory? CrsTransformFactory { get; init; }
+
+    /// <summary>
     /// Gets the runtime S-98 cross-product ordering and suppression authority
     /// provider. When <see langword="null"/>,
     /// <see cref="S100MapExtensions.AddS100"/> uses a default runtime authority.
@@ -43,6 +54,27 @@ public sealed record S100MapsuiOptions
     /// cache is used for the session's lifetime.
     /// </summary>
     public IPatternClipCache? PatternClipCache { get; init; }
+
+    /// <summary>
+    /// Gets the processor owner from which the session acquires render leases.
+    /// When <see langword="null"/>, <see cref="S100MapExtensions.AddS100"/>
+    /// creates one and disposes it with the session. When supplied, the session
+    /// treats it as borrowed and never disposes it — the caller owns its
+    /// lifetime. A DI host passes a shared owner so other services (e.g. a
+    /// dataset-loading coordinator) acquire and register processors on the same
+    /// owner as the map session.
+    /// </summary>
+    public DatasetProcessorOwner? ProcessorOwner { get; init; }
+
+    /// <summary>
+    /// Gets the prebuilt processor-to-Mapsui dataset renderer. When
+    /// <see langword="null"/>, <see cref="S100MapExtensions.AddS100"/> builds one
+    /// from <see cref="CrsTransformFactory"/> and <see cref="PatternClipCache"/>.
+    /// When supplied, <see cref="CrsTransformFactory"/> is unused (the renderer
+    /// already carries its own). The renderer is not disposable, so ownership
+    /// carries no disposal obligation; a DI host passes a shared renderer.
+    /// </summary>
+    public MapsuiDatasetRenderer? DatasetRenderer { get; init; }
 
     /// <summary>
     /// Gets the dataset processor factory used to build processors when loading
