@@ -60,9 +60,10 @@ public static class S100Products
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager),
         // S-57 and S-101 share the ISO 8211 .000 extension; S-57 datasets carry a
-        // DSPM field in their DDR that S-101 datasets do not. This is the one
-        // product-specific rule detection needs, contributed here rather than
-        // hard-coded in the factory so detection honours the registry's product set.
+        // DSPM field in their DDR that S-101 datasets do not. Contributing this
+        // rule on the registration lets the registry-aware DetectProductSpec
+        // overload honour the registry's product set — it runs the sniff only
+        // when S-57 is registered.
         Discriminate = static path => EncDotNet.S100.Datasets.S57.S57Dataset.IsS57File(path),
     };
 
