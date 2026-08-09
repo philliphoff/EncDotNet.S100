@@ -136,9 +136,14 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// the ambiguous ISO 8211 <c>.000</c> extension (shared by S-57 and S-101)
     /// using the S-57 content discriminator that <paramref name="registry"/>
     /// actually offers. A registry without S-57 registered treats every
-    /// <c>.000</c> file as S-101, so detection never yields a spec the registry
-    /// cannot build. All other extensions (HDF5, GML) are product-agnostic and
-    /// detected exactly as the parameterless overload does.
+    /// <c>.000</c> file as S-101 rather than running the S-57 sniff, so it never
+    /// reports an S-57 dataset it has no registration to build. This narrows the
+    /// discriminator to the registry's product set; it does not otherwise
+    /// guarantee the returned spec is buildable (e.g. a registry lacking S-101
+    /// can still get <c>"S-101"</c> here — construction then validates the spec
+    /// against the registry and throws if unregistered). All other extensions
+    /// (HDF5, GML) are product-agnostic and detected exactly as the
+    /// parameterless overload does.
     /// </summary>
     internal static string? DetectProductSpec(string path, S100ProductRegistry registry)
     {
