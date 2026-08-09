@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -61,4 +62,16 @@ public sealed class S100RendererOptions
     /// mode. Ignored by catalogues that do not declare the given mode.
     /// </summary>
     public string? DisplayModeId { get; init; }
+
+    /// <summary>
+    /// Cross-spec ECDIS display settings — the display <em>category</em>
+    /// (DisplayBase / Standard / OtherInformation / All), per-spec hidden
+    /// viewing groups, and hidden display planes (S-100 Part 9 §11.6-11.7).
+    /// When <c>null</c> the dataset renders unfiltered (equivalent to
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory.All"/>
+    /// with nothing hidden). A per-spec entry in
+    /// <see cref="EcdisDisplaySettings.ActiveDisplayModes"/> wins over
+    /// <see cref="DisplayModeId"/>.
+    /// </summary>
+    public EcdisDisplaySettings? EcdisDisplay { get; init; }
 }

@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -81,4 +82,19 @@ public sealed class S100CompositeOptions
     /// catalogue's default mode.
     /// </summary>
     public string? DisplayModeId { get; init; }
+
+    /// <summary>
+    /// Cross-spec ECDIS display settings applied to every layer in the
+    /// composite — the display <em>category</em> (DisplayBase / Standard /
+    /// OtherInformation / All), per-spec hidden viewing groups, and hidden
+    /// display planes (S-100 Part 9 §11.6-11.7). When <c>null</c> every layer
+    /// renders unfiltered (equivalent to
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory.All"/>
+    /// with nothing hidden). A per-spec entry in
+    /// <see cref="EcdisDisplaySettings.ActiveDisplayModes"/> wins over
+    /// <see cref="DisplayModeId"/> for the layer of that spec, matching the
+    /// single-dataset <see cref="EncDotNet.S100.Datasets.Pipelines.MapPresentationState.ApplyTo"/>
+    /// projection.
+    /// </summary>
+    public EcdisDisplaySettings? EcdisDisplay { get; init; }
 }
