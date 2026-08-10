@@ -129,31 +129,13 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// </summary>
     private void DisposeProcessorsUnderGate(IEnumerable<IDatasetProcessor> processors)
     {
-        // Poll the gate with a bounded wait rather than an unbounded Wait().
-        // Dispose() acquires the gate and never releases it before disposing the
-        // semaphore, and SemaphoreSlim.Dispose() does not wake a blocked waiter, so
-        // an unbounded Wait() that raced shutdown could hang forever. The bounded
-        // wait still blocks a normal Remove/RemoveAll behind an in-flight render
-        // (it is woken the moment the render releases), but the moment disposal
-        // begins it stops waiting and disposes best-effort: no new render can start
-        // and the process is tearing down.
-        bool acquired = false;
-        while (!_disposed)
-        {
-            try
-            {
-                if (_renderGate.Wait(TimeSpan.FromMilliseconds(100)))
-                {
-                    acquired = true;
-                    break;
-                }
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-        }
-
+        // Hold the render gate across disposal so an in-flight render can never use
+        // a processor mid-disposal. This Wait() is bounded and cannot deadlock
+        // shutdown: the permit is only ever held by a render (for its duration) or
+        // by Dispose() (for its teardown), and both release it — Dispose() does not
+        // hold it forever, nor dispose the semaphore. So the disposal always runs
+        // while genuinely holding the gate: safe, never best-effort.
+        _renderGate.Wait();
         try
         {
             foreach (var processor in processors)
@@ -163,10 +145,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         }
         finally
         {
-            if (acquired)
-            {
-                _renderGate.Release();
-            }
+            _renderGate.Release();
         }
     }
 
@@ -432,35 +411,44 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         if (_disposed) return;
         _disposed = true;
 
-        // Wait for any in-flight render before disposing the processors it uses.
-        // Acquire the render gate and dispose it while still holding the permit.
-        // Releasing before Dispose() would leave a window where a waiting
-        // render / processor-disposal acquires the permit and then throws when it
-        // releases it on the now-disposed semaphore. Not releasing means any
-        // remaining waiter simply observes ObjectDisposedException from its wait.
+        // Drain any in-flight render (acquire the gate) before disposing the
+        // processors it may be using, then RELEASE the gate in the finally.
+        // Releasing — rather than holding the permit forever — lets a
+        // Remove/RemoveAll that raced past the disposed guard still acquire the
+        // gate and dispose its already-removed processor safely (the render is
+        // drained), instead of blocking forever behind a permit that never comes
+        // back. The SemaphoreSlim itself is deliberately not disposed: we never
+        // allocate its AvailableWaitHandle, so disposing it would be a no-op, and
+        // leaving it usable avoids stranding such a straggler with an
+        // ObjectDisposedException.
         _renderGate.Wait();
-        lock (_gate)
+        try
         {
-            foreach (var entry in _entries)
+            lock (_gate)
             {
-                (entry.Processor as IDisposable)?.Dispose();
-            }
-            _entries.Clear();
+                foreach (var entry in _entries)
+                {
+                    (entry.Processor as IDisposable)?.Dispose();
+                }
+                _entries.Clear();
 
-            foreach (var resolution in _resolutions)
-            {
-                resolution.Dispose();
+                foreach (var resolution in _resolutions)
+                {
+                    resolution.Dispose();
+                }
+                _resolutions.Clear();
             }
-            _resolutions.Clear();
+
+            // Release the shared factory (and its catalogue caches) after every
+            // processor built from it, but only when this catalog created it.
+            if (_ownsFactory && _factory is IDisposable disposableFactory)
+            {
+                disposableFactory.Dispose();
+            }
         }
-
-        // Release the shared factory (and its catalogue caches) after every
-        // processor built from it, but only when this catalog created it.
-        if (_ownsFactory && _factory is IDisposable disposableFactory)
+        finally
         {
-            disposableFactory.Dispose();
+            _renderGate.Release();
         }
-
-        _renderGate.Dispose();
     }
 }
