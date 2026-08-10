@@ -44,6 +44,30 @@ public sealed class BundledDatasetProcessorFactory : IDatasetProcessorFactory, I
         return _host.Factory.CreateProcessor(path);
     }
 
+    /// <summary>
+    /// Creates a processor for the file at <paramref name="path"/>, honouring an
+    /// optional caller-declared product specification
+    /// (<paramref name="declaredProductSpec"/>) — e.g. a <c>--spec</c> hint or an
+    /// exchange-set catalogue spec — instead of re-detecting it from the file.
+    /// When the declared spec is null, blank, or unrecognised, detection from the
+    /// file is used, identical to <see cref="CreateProcessor(string)"/>. Lets a
+    /// host load a dataset whose product cannot be sniffed from its bytes but is
+    /// known from an out-of-band source.
+    /// </summary>
+    public IDatasetProcessor CreateProcessor(string path, string? declaredProductSpec)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (string.IsNullOrWhiteSpace(declaredProductSpec))
+            return _host.Factory.CreateProcessor(path);
+
+        var full = System.IO.Path.GetFullPath(path);
+        var directory = System.IO.Path.GetDirectoryName(full)
+            ?? throw new ArgumentException("Path must include a directory.", nameof(path));
+        var source = Core.FileSystemAssetSource.Create(directory);
+        return _host.CreateProcessor(source, System.IO.Path.GetFileName(full), declaredProductSpec);
+    }
+
     /// <inheritdoc />
     public IDatasetProcessor CreateProcessorWithFilesystemUpdates(string path)
     {

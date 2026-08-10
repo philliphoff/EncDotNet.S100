@@ -289,7 +289,14 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             IDatasetProcessor processor;
             try
             {
-                processor = _factory.CreateProcessor(input.Path);
+                // Honour the resolved product spec (a --spec / specHint for a
+                // single file, or an exchange-set catalogue spec) so a dataset
+                // whose product cannot be sniffed from its bytes still loads with
+                // the correct processor. The bundled factory maps a declared spec
+                // straight through; other factories fall back to file detection.
+                processor = _factory is BundledDatasetProcessorFactory bundled
+                    ? bundled.CreateProcessor(input.Path, input.Spec)
+                    : _factory.CreateProcessor(input.Path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                 or InvalidOperationException or FormatException or NotSupportedException

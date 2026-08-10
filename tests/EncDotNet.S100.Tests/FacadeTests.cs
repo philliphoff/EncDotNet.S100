@@ -346,6 +346,39 @@ public sealed class FacadeTests
         }
     }
 
+    [SkippableFact]
+    public void BundledFactory_DeclaredSpec_RescuesFileWhoseExtensionDefeatsDetection()
+    {
+        // Issue #566 review: a declared product spec (a --spec hint or an
+        // exchange-set catalogue spec) must be honoured when building the resident
+        // processor, so a dataset whose product cannot be sniffed from its bytes /
+        // extension still loads. Detection keys off the extension, so an S-125
+        // GML saved as ".xml" is undetectable — but the declared spec rescues it.
+        Skip.IfNot(File.Exists(S125Point), "S-125 fixture not present.");
+
+        var xml = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        File.Copy(S125Point, xml, overwrite: true);
+        try
+        {
+            using var factory = BundledDatasetProcessorFactory.Create();
+
+            // Detection alone cannot classify a ".xml" file.
+            Assert.Throws<NotSupportedException>(() => factory.CreateProcessor(xml));
+
+            // The declared spec forces the S-125 pipeline.
+            var processor = factory.CreateProcessor(xml, "S-125");
+            try
+            {
+                Assert.Equal("S-125", processor.Spec.Name);
+            }
+            finally
+            {
+                (processor as IDisposable)?.Dispose();
+            }
+        }
+        finally { File.Delete(xml); }
+    }
+
     private static void AssertIsPng(byte[] bytes)
     {
         Assert.NotNull(bytes);

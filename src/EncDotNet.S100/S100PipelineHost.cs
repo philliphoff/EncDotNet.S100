@@ -99,6 +99,19 @@ internal sealed class S100PipelineHost : IDisposable
     }
 
     /// <summary>
+    /// Creates the dataset processor for <paramref name="relativePath"/> inside
+    /// <paramref name="source"/>, honouring a caller-declared product
+    /// specification (e.g. an exchange-set catalogue spec or a <c>--spec</c> hint)
+    /// instead of re-detecting it from the file content.
+    /// </summary>
+    public IDatasetProcessor CreateProcessor(
+        Core.IAssetSource source, string relativePath, string? declaredProductSpec)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _factory.CreateProcessor(source, relativePath, declaredProductSpec);
+    }
+
+    /// <summary>
     /// The bundled processor factory this host wraps, for in-assembly
     /// conveniences (e.g. <see cref="BundledDatasetProcessorFactory"/>) to expose
     /// publicly. Its lifetime is bound to this host: the catalogue managers it
