@@ -55,6 +55,14 @@ public sealed class HeadlessMutableCatalogParseOnceTests
             return inner.CreateProcessor(path);
         }
 
+        // Forward the declared-spec overload to the wrapped factory so a decorator
+        // does not silently drop the --spec / catalogue-spec capability.
+        public IDatasetProcessor CreateProcessor(string path, string? declaredProductSpec)
+        {
+            Interlocked.Increment(ref _createCount);
+            return inner.CreateProcessor(path, declaredProductSpec);
+        }
+
         public IDatasetProcessor CreateProcessorWithFilesystemUpdates(string path)
         {
             Interlocked.Increment(ref _createCount);
