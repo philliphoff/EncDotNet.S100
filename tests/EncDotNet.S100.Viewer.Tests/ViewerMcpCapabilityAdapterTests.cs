@@ -58,7 +58,12 @@ public class ViewerMcpCapabilityAdapterTests
         MapPresentationState state, string spec, string? modeId) =>
         state.WithEcdisDisplay(state.EcdisDisplay with
         {
-            ActiveDisplayModes = new Dictionary<string, string?> { [spec] = modeId },
+            // Match production: EcdisDisplaySettings.ActiveDisplayModes is keyed
+            // case-insensitively, so build the test dictionary the same way.
+            ActiveDisplayModes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                [spec] = modeId,
+            },
         });
 
     [Fact]
