@@ -31,5 +31,9 @@ public interface ILoadedDatasetProjection
     /// Allocates the <see cref="LoadedDatasetData"/> variant wrapping this
     /// processor's already-parsed model. Never re-reads the source bytes.
     /// </summary>
+    /// <returns>
+    /// The catalog payload wrapping the resident model (e.g. an
+    /// <c>S125DatasetData</c> or <c>S102CoverageData</c>).
+    /// </returns>
     LoadedDatasetData CreateLoadedData();
 }

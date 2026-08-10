@@ -54,6 +54,12 @@ public sealed class BundledDatasetProcessorFactory : IDatasetProcessorFactory, I
     /// host load a dataset whose product cannot be sniffed from its bytes but is
     /// known from an out-of-band source.
     /// </summary>
+    /// <param name="path">Path to the dataset file on the local file system.</param>
+    /// <param name="declaredProductSpec">
+    /// The caller-declared product specification (e.g. <c>"S-101"</c>), or
+    /// <c>null</c>/blank to detect the product from the file instead.
+    /// </param>
+    /// <returns>The dataset processor for the file.</returns>
     public IDatasetProcessor CreateProcessor(string path, string? declaredProductSpec)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
