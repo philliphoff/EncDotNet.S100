@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 
 namespace EncDotNet.S100.Mcp.Tools.Mutable;
@@ -22,6 +23,7 @@ public sealed record OpenDatasetResult(
     [property: Description("The path that was opened.")] string Path,
     [property: Description("How the path was loaded: \"file\" or \"exchangeSet\".")] string Kind,
     [property: Description("Number of datasets newly added to the catalog.")] int Count,
+    [property: Description("Wall-clock duration of the catalog load hot path, in milliseconds.")] double LoadDurationMs,
     [property: Description("Whether an exchange-set load did not settle before the host's ceiling.")] bool TimedOut,
     [property: Description("The datasets added to the catalog by this operation.")] IReadOnlyList<OpenedDataset> Datasets);
 
@@ -65,7 +67,20 @@ public sealed class OpenDatasetTool
                 "path", $"no file or directory exists at '{path}'"));
         }
 
-        var outcome = await _catalog.LoadAsync(path, request.Spec, ct).ConfigureAwait(false);
+        var stopwatch = Stopwatch.StartNew();
+        DatasetLoadOutcome outcome;
+        try
+        {
+            outcome = await _catalog.LoadAsync(path, request.Spec, ct).ConfigureAwait(false);
+        }
+        catch (DatasetCatalogNotReadyException ex)
+        {
+            // The host's load path is not initialised yet (e.g. the viewer
+            // before its window has wired up the loader). Surface a clean,
+            // retryable host_not_ready rather than an internal error.
+            return ToolResult<OpenDatasetResult>.Err(new HostNotReady(ex.Message));
+        }
+        var loadDurationMs = stopwatch.Elapsed.TotalMilliseconds;
 
         if (outcome.Added.Count == 0)
         {
@@ -94,6 +109,7 @@ public sealed class OpenDatasetTool
             Path: path,
             Kind: outcome.Kind == DatasetSourceKind.File ? "file" : "exchangeSet",
             Count: added,
+            LoadDurationMs: loadDurationMs,
             TimedOut: outcome.TimedOut,
             Datasets: datasets));
     }

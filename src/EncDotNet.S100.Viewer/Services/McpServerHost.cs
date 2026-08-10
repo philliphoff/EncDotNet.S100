@@ -319,12 +319,6 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivityMonitor)));
             tools.Add(GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivityMonitor)));
         }
-        if (_loadGateway is not null)
-        {
-            tools.Add(OpenDatasetMcpAdapter.Create(new OpenDatasetTool(_catalog, _loadGateway)));
-            tools.Add(CloseDatasetMcpAdapter.Create(new CloseDatasetTool(_catalog, _loadGateway)));
-            tools.Add(CloseAllDatasetsMcpAdapter.Create(new CloseAllDatasetsTool(_catalog, _loadGateway)));
-        }
         if (_ownShipHelm is not null)
         {
             tools.Add(SetOwnShipMcpAdapter.Create(new SetOwnShipTool(_ownShipHelm)));
@@ -380,12 +374,22 @@ internal sealed class McpServerHost : IAsyncDisposable
                     new ViewerTimeController(_globalTime))
                 : null;
 
-        if (presentation is null && time is null)
+        // open_dataset / close_dataset / close_all_datasets: the viewer's
+        // read-only catalog plus its UI-thread load gateway, presented as the
+        // shared mutable-catalog seam. Passed directly (not via an accessor)
+        // because the catalog exists for the whole session; readiness of the
+        // load path is handled inside the adapter.
+        Mutable.IMutableDatasetCatalog? catalog = _loadGateway is not null
+            ? new ViewerMutableDatasetCatalog(_catalog, _loadGateway)
+            : null;
+
+        if (presentation is null && time is null && catalog is null)
         {
             return;
         }
 
-        foreach (var tool in SharedMutableTools.Create(presentation: presentation, time: time))
+        foreach (var tool in SharedMutableTools.Create(
+            presentation: presentation, time: time, catalog: catalog))
         {
             tools.Add(tool);
         }
