@@ -112,17 +112,40 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         }
     }
 
-    /// <summary>Disposes a resident processor while holding the render gate.</summary>
-    private void DisposeProcessor(IDatasetProcessor processor)
+    /// <summary>
+    /// Disposes already-removed resident processors while holding the render gate,
+    /// so an in-flight render cannot use one mid-disposal. If the render gate is
+    /// already disposed — the catalog is being torn down on another thread — no
+    /// render can be running, so the processors are disposed best-effort: they
+    /// have been pulled from <see cref="_entries"/>, so <see cref="Dispose"/> no
+    /// longer tracks them and skipping here would leak them.
+    /// </summary>
+    private void DisposeProcessorsUnderGate(IEnumerable<IDatasetProcessor> processors)
     {
-        _renderGate.Wait();
+        bool acquired;
         try
         {
-            (processor as IDisposable)?.Dispose();
+            _renderGate.Wait();
+            acquired = true;
+        }
+        catch (ObjectDisposedException)
+        {
+            acquired = false;
+        }
+
+        try
+        {
+            foreach (var processor in processors)
+            {
+                (processor as IDisposable)?.Dispose();
+            }
         }
         finally
         {
-            _renderGate.Release();
+            if (acquired)
+            {
+                _renderGate.Release();
+            }
         }
     }
 
@@ -236,7 +259,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             UpdateSnapshotLocked();
         }
 
-        DisposeProcessor(entry.Processor);
+        DisposeProcessorsUnderGate([entry.Processor]);
         RaiseChanged(DatasetCatalogChangeKind.Removed, id);
         return true;
     }
@@ -258,18 +281,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             UpdateSnapshotLocked();
         }
 
-        _renderGate.Wait();
-        try
-        {
-            foreach (var entry in removed)
-            {
-                (entry.Processor as IDisposable)?.Dispose();
-            }
-        }
-        finally
-        {
-            _renderGate.Release();
-        }
+        DisposeProcessorsUnderGate(removed.Select(e => e.Processor));
         RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
         return removed.Count;
     }
