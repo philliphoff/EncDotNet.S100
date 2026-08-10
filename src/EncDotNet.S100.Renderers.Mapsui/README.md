@@ -169,16 +169,28 @@ s100.ZoomToDataset(id);
 
 `AddS100` calls `S100MapsuiRendering.Register()` (idempotent) and builds a
 `MapsuiLayerBands`, `DatasetProcessorOwner`, `MapsuiDatasetRenderer`,
-`MapsuiMapSession`, and `MapsuiMapNavigator`. Ownership lives only on the
+`MapsuiMapSession`, and `MapsuiMapNavigator` (borrowing any of the collaborators
+a DI host supplies on the options — see below). Ownership lives only on the
 returned instance — never in a static table or `Map.Tag` — and `Dispose`
-releases the session and every registered processor. Normal pan / zoom /
+releases the session and every processor it created. Normal pan / zoom /
 rotation stay with `Map.Navigator`; `ZoomToDataset` is an optional convenience.
 
-The reusable assembly ships no CRS implementation, so `crsTransformFactory` is a
-required argument (the coverage / arrow renderers need it); a host supplies
-`ProjNetCrsTransformFactory` from `EncDotNet.S100.Crs.ProjNet` or its own. The
-optional `S100MapsuiOptions` carries render-subsystem/scene configuration, an
-optional S-98 authority provider and pattern-clip cache, and the
+A host attaches its own decoration layers through `s100.Layers` — an
+`IS100MapLayerHost` exposing the basemap, overlay, and tool bands
+(`SetBasemapLayer`, `AddOverlayLayer`/`RemoveOverlayLayer`,
+`AddToolLayer`/`RemoveToolLayer`). These keep their z-order relative to the
+dataset layers as datasets come and go. The **dataset** band is intentionally
+not on this surface: the session owns and drives it through `AddDatasetAsync`,
+`RemoveDataset`, and `SetOrder`.
+
+Every collaborator is supplied on `S100MapsuiOptions`. The reusable assembly
+ships no CRS implementation, so `CrsTransformFactory` is required (the coverage /
+arrow renderers need it) unless a prebuilt `DatasetRenderer` — which already
+carries one — is supplied instead; a host uses `ProjNetCrsTransformFactory` from
+`EncDotNet.S100.Crs.ProjNet` or its own. The options also carry
+render-subsystem/scene configuration, an optional S-98 authority provider and
+pattern-clip cache, an optional shared `ProcessorOwner` (a DI host shares one
+across services; the session disposes only an owner it created), and the
 `DatasetPipelineFactory` used by `Datasets.LoadAsync`.
 
 `s100.Datasets.LoadAsync(path)` detects the product spec, builds a processor

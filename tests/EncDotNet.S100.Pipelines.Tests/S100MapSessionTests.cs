@@ -98,6 +98,52 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public async Task LayersAddOverlayLayerInstallsItAboveTheDatasetBand()
+    {
+        using var map = new Map();
+        using var s100 = IdentitySession(map);
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        var datasetLayer = Assert.Single(map.Layers);
+
+        var overlay = new Mapsui.Layers.MemoryLayer { Name = "overlay" };
+        s100.Layers.AddOverlayLayer(overlay);
+
+        // Installed on the map, above the dataset layer (higher index paints
+        // later = on top), through the session rather than Map.Layers directly.
+        var layers = map.Layers.ToList();
+        Assert.Contains(overlay, layers);
+        Assert.True(layers.IndexOf(overlay) > layers.IndexOf(datasetLayer));
+
+        s100.Layers.RemoveOverlayLayer(overlay);
+        Assert.DoesNotContain(overlay, map.Layers);
+    }
+
+    [Fact]
+    public void LayersRejectALayerAlreadyInAnotherBand()
+    {
+        using var map = new Map();
+        using var s100 = IdentitySession(map);
+        var layer = new Mapsui.Layers.MemoryLayer { Name = "shared" };
+        s100.Layers.AddOverlayLayer(layer);
+
+        // A layer can belong to only one managed band, so the same instance
+        // cannot also join the tool band.
+        Assert.Throws<ArgumentException>(() => s100.Layers.AddToolLayer(layer));
+    }
+
+    [Fact]
+    public void LayersThrowsAfterDispose()
+    {
+        using var map = new Map();
+        var s100 = IdentitySession(map);
+
+        s100.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => s100.Layers);
+    }
+
+    [Fact]
     public void AddS100IsIdempotentForRendererRegistration()
     {
         using var map1 = new Map();

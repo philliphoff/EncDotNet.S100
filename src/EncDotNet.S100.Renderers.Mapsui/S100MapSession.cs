@@ -13,6 +13,7 @@ internal sealed class S100MapSession : IS100MapSession
     private readonly DatasetProcessorOwner _processorOwner;
     private readonly MapsuiMapSession _session;
     private readonly MapsuiMapNavigator _navigator;
+    private readonly IS100MapLayerHost _layers;
     private readonly S100DynamicSourceHost _dynamicSourceHost;
     private readonly S100DatasetLoader _datasets;
     private readonly bool _ownsProcessorOwner;
@@ -23,6 +24,7 @@ internal sealed class S100MapSession : IS100MapSession
         DatasetProcessorOwner processorOwner,
         MapsuiMapSession session,
         MapsuiMapNavigator navigator,
+        IS100MapLayerHost layers,
         S100DynamicSourceHost dynamicSourceHost,
         IDatasetProcessorFactory? pipelineFactory = null,
         bool ownsProcessorOwner = true)
@@ -32,6 +34,7 @@ internal sealed class S100MapSession : IS100MapSession
         _ownsProcessorOwner = ownsProcessorOwner;
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _navigator = navigator ?? throw new ArgumentNullException(nameof(navigator));
+        _layers = layers ?? throw new ArgumentNullException(nameof(layers));
         _dynamicSourceHost = dynamicSourceHost
             ?? throw new ArgumentNullException(nameof(dynamicSourceHost));
         _datasets = new S100DatasetLoader(this, pipelineFactory);
@@ -61,6 +64,16 @@ internal sealed class S100MapSession : IS100MapSession
         {
             ThrowIfDisposed();
             return _navigator;
+        }
+    }
+
+    /// <inheritdoc />
+    public IS100MapLayerHost Layers
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _layers;
         }
     }
 

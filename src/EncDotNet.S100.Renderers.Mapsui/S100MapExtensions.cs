@@ -104,6 +104,7 @@ public static class S100MapExtensions
             processorOwner,
             session,
             navigator,
+            layerBands,
             dynamicSourceHost,
             options.DatasetPipelineFactory,
             ownsProcessorOwner);

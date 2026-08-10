@@ -83,6 +83,7 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
 | toggle a dataset                       | `session.SetVisible(id, …)`                           |
 | zoom via normal Mapsui navigation      | `MapControl` gestures + `session.ZoomToDataset(id)`   |
 | geographic pick + pointer adaptation   | `adapter.PickAtScreenAsync(session.Query, x, y)`      |
+| attach a host overlay layer            | `session.Layers.AddOverlayLayer(layer)`               |
 | highlight a pick                       | `S100PickHighlightLayer.Show(pick)`                   |
 | show the cell extent when zoomed out   | `S100DatasetExtentIndicatorLayer.Show(...)`           |
 | dispose everything                     | `session.Dispose()` / `adapter.Dispose()`             |
@@ -108,8 +109,10 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
   managers, Lua engine, CRS factory, or product registry. Dispose it with the
   session.
 - The overlays (`S100DatasetExtentIndicatorLayer`, `S100PickHighlightLayer`) are
-  entirely optional — add the ones you want to `Map.Layers` and drive them with
-  `Show`/`Clear`. Omitting them changes nothing about dataset rendering.
+  entirely optional — attach the ones you want through
+  `session.Layers.AddOverlayLayer(...)` (the session's host-facing overlay band,
+  above the dataset layers) and drive them with `Show`/`Clear`. Omitting them
+  changes nothing about dataset rendering.
 - Async re-renders (e.g. a palette change) repaint the control only if the host
   sets the `S100Vector{Snapshot,Scene,Tile}Renderer.RequestRedraw` hooks — this
   sample points them at the adapter's redraw and clears them on close. This is a
