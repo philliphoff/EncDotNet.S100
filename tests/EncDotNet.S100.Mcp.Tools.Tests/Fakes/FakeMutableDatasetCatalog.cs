@@ -30,10 +30,17 @@ internal sealed class FakeMutableDatasetCatalog : IMutableDatasetCatalog
     /// <summary>Number of <see cref="LoadAsync"/> calls observed.</summary>
     public int LoadCount { get; private set; }
 
+    /// <summary>When set, the next <see cref="LoadAsync"/> throws it instead of loading.</summary>
+    public Exception? NextLoadException { get; set; }
+
     public Task<DatasetLoadOutcome> LoadAsync(
         string path, string? specHint = null, CancellationToken cancellationToken = default)
     {
         LoadCount++;
+        if (NextLoadException is { } ex)
+        {
+            throw ex;
+        }
         _datasets.AddRange(NextLoad);
         var added = NextLoad.Select(d => d.Id).ToList();
         if (added.Count > 0)

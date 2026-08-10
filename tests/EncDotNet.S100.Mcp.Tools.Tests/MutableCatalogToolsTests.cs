@@ -30,7 +30,22 @@ public class MutableCatalogToolsTests
         Assert.Equal("cell.000", opened.Id);
         Assert.Equal("S-101", opened.Spec);
         Assert.Equal(10, opened.NorthLatitude);
+        Assert.True(value.LoadDurationMs >= 0);
         Assert.Single(catalog.Datasets);
+    }
+
+    [Fact]
+    public async Task OpenDataset_NotReadyCatalog_IsHostNotReady()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoadException = new DatasetCatalogNotReadyException("the loader is not ready"),
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<HostNotReady>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+        Assert.Contains("not ready", error.What);
     }
 
     [Fact]

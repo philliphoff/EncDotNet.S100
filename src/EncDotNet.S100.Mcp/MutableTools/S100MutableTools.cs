@@ -275,6 +275,7 @@ public static class S100MutableTools
                             ["path"] = v.Path,
                             ["kind"] = v.Kind,
                             ["count"] = v.Count,
+                            ["loadDurationMs"] = v.LoadDurationMs,
                             ["timedOut"] = v.TimedOut,
                             ["datasets"] = datasets,
                         };
