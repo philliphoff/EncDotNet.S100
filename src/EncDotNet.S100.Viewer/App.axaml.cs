@@ -772,7 +772,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
             sp.GetRequiredService<IGeographicPickPresenter>(),
             sp.GetRequiredService<IViewerUiControllerAccessor>(),
-            sp.GetRequiredService<IAppScreenshotProvider>()));
+            sp.GetRequiredService<IAppScreenshotProvider>(),
+            sp.GetRequiredService<MapPresentationStateProjection>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
