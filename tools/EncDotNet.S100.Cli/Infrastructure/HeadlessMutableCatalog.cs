@@ -129,15 +129,29 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// </summary>
     private void DisposeProcessorsUnderGate(IEnumerable<IDatasetProcessor> processors)
     {
-        bool acquired;
-        try
+        // Poll the gate with a bounded wait rather than an unbounded Wait().
+        // Dispose() acquires the gate and never releases it before disposing the
+        // semaphore, and SemaphoreSlim.Dispose() does not wake a blocked waiter, so
+        // an unbounded Wait() that raced shutdown could hang forever. The bounded
+        // wait still blocks a normal Remove/RemoveAll behind an in-flight render
+        // (it is woken the moment the render releases), but the moment disposal
+        // begins it stops waiting and disposes best-effort: no new render can start
+        // and the process is tearing down.
+        bool acquired = false;
+        while (!_disposed)
         {
-            _renderGate.Wait();
-            acquired = true;
-        }
-        catch (ObjectDisposedException)
-        {
-            acquired = false;
+            try
+            {
+                if (_renderGate.Wait(TimeSpan.FromMilliseconds(100)))
+                {
+                    acquired = true;
+                    break;
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
         }
 
         try
