@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S101;
@@ -22,7 +23,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="S101Document"/> and reusing the S-101 portrayal pipeline.
 /// Symbology is S-101 (not S-52); coverage is breadth-first.
 /// </summary>
-public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
+public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
 {
     // Serialises render calls so the catalogue's mutable palette / ECDIS
     // state is not mutated mid-build by a concurrent render.
@@ -59,6 +60,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// translation, so it is a cheap byproduct.
     /// </summary>
     public DatasetMetadata Metadata => _metadata ??= S57Dataset.ReadMetadata(_rawS57Document);
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_translatedDataset);
 
     public S57DatasetProcessor(
         string path,

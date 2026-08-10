@@ -298,6 +298,87 @@ public sealed class FacadeTests
             "Hiding all categories should change the composited output.");
     }
 
+    [SkippableFact]
+    public async Task PngRenderer_CompositesResidentProcessors_ReusableWithoutReparse()
+    {
+        // Issue #566: a host that keeps resident processors can composite them
+        // directly and repeatedly, with no per-render re-parse. One processor is
+        // parsed once (S100Dataset.Processor) and rendered twice.
+        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+
+        using var ds = S100Dataset.Open(S124Surface);
+        using var renderer = new PngS100DatasetRenderer();
+
+        var processors = new[] { ds.Processor };
+        var options = new S100CompositeOptions { Width = 256, Height = 256 };
+
+        AssertIsPng(await renderer.RenderAsync(processors, options));
+        // Same resident processor again — must still render (no disposal on the
+        // caller's processor by the renderer).
+        AssertIsPng(await renderer.RenderAsync(processors, options));
+    }
+
+    [SkippableFact]
+    public void ProjectFromProcessor_MatchesStreamProjection()
+    {
+        // Issue #566: projecting a LoadedDataset from a resident processor must
+        // yield the same catalog entry as parsing the bytes afresh — same spec,
+        // bounds, temporal coverage, and payload variant.
+        Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
+            "S-124 and S-125 fixtures not both present.");
+
+        foreach (var (spec, path) in new[] { ("S-124", S124Surface), ("S-125", S125Point) })
+        {
+            var id = new Datasets.Pipelines.Catalog.DatasetId("d");
+
+            using var ds = S100Dataset.Open(path);
+            var fromProcessor = Datasets.Pipelines.Catalog.LoadedDatasetProjector.Project(id, ds.Processor);
+
+            using var stream = File.OpenRead(path);
+            var fromStream = Datasets.Pipelines.Catalog.LoadedDatasetProjector.Project(id, spec, stream);
+
+            Assert.NotNull(fromProcessor);
+            Assert.NotNull(fromStream);
+            Assert.Equal(fromStream!.Spec, fromProcessor!.Spec);
+            Assert.Equal(fromStream.Bounds, fromProcessor.Bounds);
+            Assert.Equal(fromStream.TimeRange, fromProcessor.TimeRange);
+            Assert.Equal(fromStream.Data.GetType(), fromProcessor.Data.GetType());
+        }
+    }
+
+    [SkippableFact]
+    public void BundledFactory_DeclaredSpec_RescuesFileWhoseExtensionDefeatsDetection()
+    {
+        // Issue #566 review: a declared product spec (a --spec hint or an
+        // exchange-set catalogue spec) must be honoured when building the resident
+        // processor, so a dataset whose product cannot be sniffed from its bytes /
+        // extension still loads. Detection keys off the extension, so an S-125
+        // GML saved as ".xml" is undetectable — but the declared spec rescues it.
+        Skip.IfNot(File.Exists(S125Point), "S-125 fixture not present.");
+
+        var xml = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        File.Copy(S125Point, xml, overwrite: true);
+        try
+        {
+            using var factory = BundledDatasetProcessorFactory.Create();
+
+            // Detection alone cannot classify a ".xml" file.
+            Assert.Throws<NotSupportedException>(() => factory.CreateProcessor(xml));
+
+            // The declared spec forces the S-125 pipeline.
+            var processor = factory.CreateProcessor(xml, "S-125");
+            try
+            {
+                Assert.Equal("S-125", processor.Spec.Name);
+            }
+            finally
+            {
+                (processor as IDisposable)?.Dispose();
+            }
+        }
+        finally { File.Delete(xml); }
+    }
+
     private static void AssertIsPng(byte[] bytes)
     {
         Assert.NotNull(bytes);

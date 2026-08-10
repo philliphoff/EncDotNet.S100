@@ -112,17 +112,48 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         return RenderCompositeCoreAsync(layers, options, cancellationToken);
     }
 
+    /// <summary>
+    /// Composites a stack of <em>already-built</em> dataset processors into a
+    /// single PNG. Unlike the <see cref="S100Layer"/> overload, this parses
+    /// nothing: the caller owns the processors and their lifetime, so a host that
+    /// keeps resident processors (e.g. a mutable MCP session) can render the same
+    /// datasets repeatedly without re-reading their bytes on every call (issue
+    /// #566). Per-layer catalogue overrides are not applicable here — a processor
+    /// already baked its catalogues at construction.
+    /// </summary>
+    /// <param name="processors">
+    /// The datasets' processors, painted bottom-first (index 0 is the base
+    /// layer). Each must implement <c>IVectorPortrayalSource</c> or
+    /// <c>ICoveragePortrayalSource</c>. Not disposed by this method.
+    /// </param>
+    /// <param name="options">Composite render options; defaults when null.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public Task<byte[]> RenderAsync(
+        IReadOnlyList<IDatasetProcessor> processors,
+        S100CompositeOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(processors);
+        if (processors.Count == 0)
+            throw new ArgumentException("At least one processor is required to composite.", nameof(processors));
+        foreach (var processor in processors)
+            ArgumentNullException.ThrowIfNull(processor);
+
+        options ??= new S100CompositeOptions();
+        return CompositeAsync(processors, options, cancellationToken);
+    }
+
     private async Task<byte[]> RenderCompositeCoreAsync(
         IReadOnlyList<S100Layer> layers,
         S100CompositeOptions options,
         CancellationToken cancellationToken)
     {
-        var mariner = options.Mariner ?? MarinerSettings.Default;
-
-        // Build each layer's Mapsui-free portrayal result. Processors (and any
-        // per-layer override host) are disposed once every result is captured;
-        // the results are immutable snapshots safe to composite afterwards.
-        var inputs = new List<HeadlessCompositeInput>(layers.Count);
+        // Build each layer's processor (and any per-layer override host) from its
+        // path, then hand the processors to the shared compositing core. The
+        // processors and override hosts are disposed once compositing completes;
+        // the portrayal results the core captures are immutable snapshots.
+        var processors = new List<IDatasetProcessor>(layers.Count);
         var toDispose = new List<IDisposable>(layers.Count * 2);
         try
         {
@@ -138,56 +169,79 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
                 if (processor is IDisposable disposableProcessor)
                     toDispose.Add(disposableProcessor);
 
-                var context = BuildCompositeContext(processor, options, mariner);
-
-                switch (processor)
-                {
-                    case IVectorPortrayalSource vectorSource:
-                        {
-                            var result = await vectorSource
-                                .BuildVectorPortrayalAsync(context, cancellationToken)
-                                .ConfigureAwait(false);
-                            inputs.Add(HeadlessCompositeInput.ForVector(result));
-                            break;
-                        }
-
-                    case ICoveragePortrayalSource coverageSource:
-                        {
-                            var result = await coverageSource
-                                .BuildCoveragePortrayalAsync(context, cancellationToken)
-                                .ConfigureAwait(false);
-                            inputs.Add(HeadlessCompositeInput.ForCoverage(result));
-                            break;
-                        }
-
-                    default:
-                        throw new NotSupportedException(
-                            $"Headless compositing is not supported for {processor.Spec.Name}: "
-                            + "the processor implements neither IVectorPortrayalSource nor "
-                            + "ICoveragePortrayalSource.");
-                }
+                processors.Add(processor);
             }
 
-            var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-            var compositeOptions = new HeadlessCompositeOptions
-            {
-                Width = options.Width,
-                Height = options.Height,
-                Background = options.Background ?? new RgbaColor(255, 255, 255, 255),
-                Viewport = options.Viewport,
-                Mariner = mariner,
-                HiddenCategories = options.HiddenCategories,
-                Basemap = options.Basemap,
-            };
-
-            using var bitmap = compositor.Render(inputs, compositeOptions);
-            return EncodePng(bitmap);
+            return await CompositeAsync(processors, options, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             for (int i = toDispose.Count - 1; i >= 0; i--)
                 toDispose[i].Dispose();
         }
+    }
+
+    /// <summary>
+    /// Shared compositing core: builds each processor's Mapsui-free portrayal
+    /// result and composites them. Does not construct or dispose the processors —
+    /// both the path-based and resident-processor overloads funnel through here.
+    /// </summary>
+    private async Task<byte[]> CompositeAsync(
+        IReadOnlyList<IDatasetProcessor> processors,
+        S100CompositeOptions options,
+        CancellationToken cancellationToken)
+    {
+        var mariner = options.Mariner ?? MarinerSettings.Default;
+
+        var inputs = new List<HeadlessCompositeInput>(processors.Count);
+        foreach (var processor in processors)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var context = BuildCompositeContext(processor, options, mariner);
+
+            switch (processor)
+            {
+                case IVectorPortrayalSource vectorSource:
+                    {
+                        var result = await vectorSource
+                            .BuildVectorPortrayalAsync(context, cancellationToken)
+                            .ConfigureAwait(false);
+                        inputs.Add(HeadlessCompositeInput.ForVector(result));
+                        break;
+                    }
+
+                case ICoveragePortrayalSource coverageSource:
+                    {
+                        var result = await coverageSource
+                            .BuildCoveragePortrayalAsync(context, cancellationToken)
+                            .ConfigureAwait(false);
+                        inputs.Add(HeadlessCompositeInput.ForCoverage(result));
+                        break;
+                    }
+
+                default:
+                    throw new NotSupportedException(
+                        $"Headless compositing is not supported for {processor.Spec.Name}: "
+                        + "the processor implements neither IVectorPortrayalSource nor "
+                        + "ICoveragePortrayalSource.");
+            }
+        }
+
+        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
+        var compositeOptions = new HeadlessCompositeOptions
+        {
+            Width = options.Width,
+            Height = options.Height,
+            Background = options.Background ?? new RgbaColor(255, 255, 255, 255),
+            Viewport = options.Viewport,
+            Mariner = mariner,
+            HiddenCategories = options.HiddenCategories,
+            Basemap = options.Basemap,
+        };
+
+        using var bitmap = compositor.Render(inputs, compositeOptions);
+        return EncodePng(bitmap);
     }
 
     /// <summary>

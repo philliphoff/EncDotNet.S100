@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S128.DataModel;
@@ -17,6 +18,9 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
     private bool _validationCached;
     protected override string ProductDescription => "Catalogue of Nautical Products";
     protected override IReadOnlyList<S128Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S128DatasetData(_dataset);
 
     /// <summary>The parsed S-128 dataset backing this processor.</summary>
     public S128Dataset Dataset => _dataset;

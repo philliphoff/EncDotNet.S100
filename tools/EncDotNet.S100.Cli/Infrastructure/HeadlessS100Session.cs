@@ -22,8 +22,8 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// </para>
 /// <list type="bullet">
 /// <item><description>
-/// Each render re-creates processors from the dataset paths (the composite
-/// renderer's contract), so repeated renders re-parse. Acceptable for v1.
+/// Each render composites the catalog's resident processors directly, so a
+/// dataset is parsed once at load and never re-parsed per render (issue #566).
 /// </description></item>
 /// <item><description>
 /// The viewport auto-fits the union extent until <c>set_viewport</c> pins an
@@ -101,7 +101,7 @@ internal sealed class HeadlessS100Session
         get { lock (_gate) return _currentTime; }
     }
 
-    public IReadOnlyList<DateTime> AvailableSteps => StepsOf(_catalog.RenderHandles);
+    public IReadOnlyList<DateTime> AvailableSteps => StepsOf(_catalog.RenderProcessors);
 
     public Task SetTimeAsync(DateTime time, CancellationToken cancellationToken = default)
     {
@@ -265,18 +265,18 @@ internal sealed class HeadlessS100Session
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Render under the catalog's render gate so the handles cannot be
+        // Render under the catalog's render gate so the processors cannot be
         // disposed by a concurrent close_dataset / close_all_datasets mid-render.
         // The dimensions are captured in the closure (no shared render state).
         return _catalog.RenderAsync(
-            (handles, token) => RenderCoreAsync(handles, widthPx, heightPx, token),
+            (processors, token) => RenderCoreAsync(processors, widthPx, heightPx, token),
             cancellationToken);
     }
 
     private async Task<byte[]?> RenderCoreAsync(
-        IReadOnlyList<S100Dataset> handles, int widthPx, int heightPx, CancellationToken cancellationToken)
+        IReadOnlyList<IDatasetProcessor> processors, int widthPx, int heightPx, CancellationToken cancellationToken)
     {
-        if (handles.Count == 0)
+        if (processors.Count == 0)
         {
             return null;
         }
@@ -289,10 +289,6 @@ internal sealed class HeadlessS100Session
             time = _currentTime;
         }
 
-        // The literal output pixel dimensions are used (pixelDensity is not
-        // applied — the composite renderer has no DPI-aware pass; a v1 gap).
-        var layers = handles.Select(d => new S100Layer { Dataset = d }).ToList();
-
         var options = new S100CompositeOptions
         {
             Width = widthPx,
@@ -301,7 +297,7 @@ internal sealed class HeadlessS100Session
             SymbolScale = presentation.SymbolScale,
             TextScale = presentation.TextScale,
             Mariner = presentation.Mariner,
-            TimeStep = ResolveTimeStepIndex(time, handles),
+            TimeStep = ResolveTimeStepIndex(time, processors),
             // Carry the full ECDIS snapshot (category, hidden viewing groups /
             // display planes, and per-spec display modes). The composite renderer
             // resolves the per-spec display mode for each layer via
@@ -313,17 +309,24 @@ internal sealed class HeadlessS100Session
             Viewport = ResolveViewport(widthPx, heightPx),
         };
 
-        return await _renderer.RenderAsync(layers, options, cancellationToken).ConfigureAwait(false);
+        // Composite the resident processors directly — no per-render re-parse.
+        // The literal output pixel dimensions are used (pixelDensity is not
+        // applied — the composite renderer has no DPI-aware pass; a v1 gap).
+        return await _renderer.RenderAsync(processors, options, cancellationToken).ConfigureAwait(false);
     }
 
-    private static List<DateTime> StepsOf(IReadOnlyList<S100Dataset> handles)
+    private static List<DateTime> StepsOf(IReadOnlyList<IDatasetProcessor> processors)
     {
         var steps = new List<DateTime>();
-        foreach (var handle in handles)
+        foreach (var processor in processors)
         {
+            if (processor is not ITimeAwareDatasetProcessor timeAware)
+            {
+                continue;
+            }
             try
             {
-                steps.AddRange(handle.AvailableTimes);
+                steps.AddRange(timeAware.AvailableTimes);
             }
             catch (ObjectDisposedException)
             {
@@ -333,14 +336,14 @@ internal sealed class HeadlessS100Session
         return steps.Distinct().OrderBy(t => t).ToList();
     }
 
-    private static int ResolveTimeStepIndex(DateTime? time, IReadOnlyList<S100Dataset> handles)
+    private static int ResolveTimeStepIndex(DateTime? time, IReadOnlyList<IDatasetProcessor> processors)
     {
         if (time is null)
         {
             return 0;
         }
 
-        var steps = StepsOf(handles);
+        var steps = StepsOf(processors);
         if (steps.Count == 0)
         {
             return 0;

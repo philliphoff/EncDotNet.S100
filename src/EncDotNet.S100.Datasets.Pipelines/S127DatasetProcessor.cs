@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S127;
 using EncDotNet.S100.Datasets.S127.DataModel;
@@ -22,6 +23,9 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
     private bool _validationCached;
     protected override string ProductDescription => "Marine Resources and Services";
     protected override IReadOnlyList<S127Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S127DatasetData(_dataset);
 
     public S127DatasetProcessor(
         string path,

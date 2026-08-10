@@ -22,9 +22,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// as <c>s100 identify</c> / <c>s100 render</c>: a single positional dataset,
 /// repeated <c>--layer</c> options, or an exchange set (positional directory /
 /// <c>CATALOG.XML</c> / <c>.zip</c>, or <c>--from</c>). They are loaded into a
-/// <see cref="HeadlessMutableCatalog"/>, which holds each dataset both as a
-/// projected read model (for the query tools) and an open render handle (for the
-/// headless renderer). Further datasets can be added at runtime via
+/// <see cref="HeadlessMutableCatalog"/>, which parses each dataset once into a
+/// resident processor that feeds both the query tools (via a projected read
+/// model) and the headless renderer. Further datasets can be added at runtime via
 /// <c>open_dataset</c>; the process is the session boundary — spawn another to
 /// serve a different set.
 /// </para>

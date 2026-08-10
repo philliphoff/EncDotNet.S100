@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Validation;
@@ -21,7 +22,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// positioned station/node series (station-arrow point layers; S-111 Edition
 /// 2.0.0 §10.2.2.6–10.2.2.9).
 /// </summary>
-public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable
+public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection
 {
     // dcf2 only
     private readonly S111CoverageSource? _source;
@@ -92,6 +93,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// re-read (issue #467, WS1).
     /// </remarks>
     public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() =>
+        _source is not null ? new S111CoverageData(_source) : new S111StationSeriesData(_stationSeries!);
 
     private DatasetMetadata BuildMetadata()
     {

@@ -21,6 +21,27 @@ public interface IDatasetProcessorFactory
     IDatasetProcessor CreateProcessor(string path);
 
     /// <summary>
+    /// Creates a processor for the file at <paramref name="path"/>, honouring an
+    /// optional caller-declared product specification
+    /// (<paramref name="declaredProductSpec"/>) — e.g. a <c>--spec</c> hint or an
+    /// exchange-set catalogue spec — instead of detecting the product from the
+    /// file. The default implementation ignores the declared spec and behaves
+    /// exactly like <see cref="CreateProcessor(string)"/>; a factory that can map
+    /// a declared product (e.g. the bundled factory) overrides this. Defining it
+    /// on the interface lets a host request the declared-spec behaviour through
+    /// any <see cref="IDatasetProcessorFactory"/> — including a decorator that
+    /// forwards the call — rather than depending on a concrete factory type.
+    /// </summary>
+    /// <param name="path">Path to the dataset file on the local file system.</param>
+    /// <param name="declaredProductSpec">
+    /// The caller-declared product specification (e.g. <c>"S-101"</c>), or
+    /// <c>null</c>/blank to detect the product from the file instead.
+    /// </param>
+    /// <returns>The dataset processor for the file.</returns>
+    IDatasetProcessor CreateProcessor(string path, string? declaredProductSpec)
+        => CreateProcessor(path);
+
+    /// <summary>
     /// Creates a processor for the base cell file at <paramref name="path"/>,
     /// discovering and applying any sibling sequential update files that live in
     /// the same directory (S-57 / S-101 Part 10a). Products that never carry

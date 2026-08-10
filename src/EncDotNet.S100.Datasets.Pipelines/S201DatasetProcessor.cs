@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S201.DataModel;
@@ -26,6 +27,9 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
     protected override string ProductDescription => "Aids to Navigation Information";
     /// <inheritdoc />
     protected override IReadOnlyList<S201Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S201DatasetData(_dataset);
 
     /// <summary>Initializes a new <see cref="S201DatasetProcessor"/>.</summary>
     public S201DatasetProcessor(
