@@ -171,8 +171,10 @@ s100.ZoomToDataset(id);
 `MapsuiLayerBands`, `DatasetProcessorOwner`, `MapsuiDatasetRenderer`,
 `MapsuiMapSession`, and `MapsuiMapNavigator` (borrowing any of the collaborators
 a DI host supplies on the options — see below). Ownership lives only on the
-returned instance — never in a static table or `Map.Tag` — and `Dispose`
-releases the session and every processor it created. Normal pan / zoom /
+returned instance — never in a static table or `Map.Tag`. `Dispose` always
+disposes the session; it disposes the `DatasetProcessorOwner` (and, through it,
+every processor the owner holds) **only when `AddS100` created the owner** — an
+injected owner is borrowed and left to its caller's lifetime. Normal pan / zoom /
 rotation stay with `Map.Navigator`; `ZoomToDataset` is an optional convenience.
 
 A host attaches its own decoration layers through `s100.Layers` — an
