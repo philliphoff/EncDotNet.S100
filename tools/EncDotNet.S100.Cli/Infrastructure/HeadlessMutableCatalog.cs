@@ -121,11 +121,11 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 
     /// <summary>
     /// Disposes already-removed resident processors while holding the render gate,
-    /// so an in-flight render cannot use one mid-disposal. If the render gate is
-    /// already disposed — the catalog is being torn down on another thread — no
-    /// render can be running, so the processors are disposed best-effort: they
-    /// have been pulled from <see cref="_entries"/>, so <see cref="Dispose"/> no
-    /// longer tracks them and skipping here would leak them.
+    /// so an in-flight render can never use one mid-disposal. The wait is bounded
+    /// and always succeeds: the permit is only ever held by a render or by
+    /// <see cref="Dispose"/>'s teardown, both of which release it (Dispose does not
+    /// hold it forever, nor dispose the semaphore), so disposal here always runs
+    /// under the gate.
     /// </summary>
     private void DisposeProcessorsUnderGate(IEnumerable<IDatasetProcessor> processors)
     {
@@ -417,10 +417,11 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         // Remove/RemoveAll that raced past the disposed guard still acquire the
         // gate and dispose its already-removed processor safely (the render is
         // drained), instead of blocking forever behind a permit that never comes
-        // back. The SemaphoreSlim itself is deliberately not disposed: we never
-        // allocate its AvailableWaitHandle, so disposing it would be a no-op, and
-        // leaving it usable avoids stranding such a straggler with an
-        // ObjectDisposedException.
+        // back. The SemaphoreSlim itself is deliberately left undisposed: we never
+        // access its AvailableWaitHandle, so it holds no unmanaged wait handle to
+        // release and skipping Dispose() leaks nothing — whereas disposing it would
+        // mark it disposed and make a racing straggler's Wait()/Release() throw
+        // ObjectDisposedException. Leaving it usable is the point.
         _renderGate.Wait();
         try
         {
