@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S122.DataModel;
@@ -17,6 +18,9 @@ public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
     private bool _validationCached;
     protected override string ProductDescription => "Marine Protected Areas";
     protected override IReadOnlyList<S122Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S122DatasetData(_dataset);
 
     public S122DatasetProcessor(
         string path,

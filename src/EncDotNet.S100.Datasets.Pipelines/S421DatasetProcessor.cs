@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
@@ -17,6 +18,9 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
     private bool _validationCached;
     protected override string ProductDescription => "Route Plan";
     protected override IReadOnlyList<S421Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S421DatasetData(_dataset);
     protected override double MinExtentPadding => 0.05;
 
     public S421DatasetProcessor(

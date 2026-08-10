@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
@@ -16,7 +17,7 @@ using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, IDisposable
+public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, IDisposable, ILoadedDatasetProjection
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -39,6 +40,9 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// horizontal CRS — no HDF5 payload is re-read (issue #467, WS1).
     /// </remarks>
     public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() => new S102CoverageData(_source);
 
     private DatasetMetadata BuildMetadata()
     {

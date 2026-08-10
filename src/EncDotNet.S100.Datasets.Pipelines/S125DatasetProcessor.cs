@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S125;
 using EncDotNet.S100.Datasets.S125.DataModel;
@@ -24,6 +25,9 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
     /// <inheritdoc />
     protected override string ProductDescription => "Marine Aids to Navigation";
     protected override IReadOnlyList<S125Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S125DatasetData(_dataset);
 
     /// <summary>Initializes a new <see cref="S125DatasetProcessor"/>.</summary>
     public S125DatasetProcessor(

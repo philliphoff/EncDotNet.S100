@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S129.DataModel;
@@ -17,6 +18,9 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
     private bool _validationCached;
     protected override string ProductDescription => "Under Keel Clearance Management";
     protected override IReadOnlyList<S129Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S129DatasetData(_dataset);
 
     public S129DatasetProcessor(
         string path,

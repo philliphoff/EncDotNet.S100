@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -29,7 +30,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor, ILoadedDatasetProjection
     where TFeature : IS100Feature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
@@ -124,6 +125,14 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
     /// <summary>The parsed features from the dataset.</summary>
     protected abstract IReadOnlyList<TFeature> Features { get; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Each GML subclass wraps its resident, already-parsed model in the
+    /// matching <see cref="LoadedDatasetData"/> variant (e.g.
+    /// <c>new S125DatasetData(_dataset)</c>) — no second parse.
+    /// </remarks>
+    public abstract LoadedDatasetData CreateLoadedData();
 
     /// <summary>Creates the spec-appropriate feature XML source.</summary>
     protected abstract IFeatureXmlSource CreateFeatureXmlSource();

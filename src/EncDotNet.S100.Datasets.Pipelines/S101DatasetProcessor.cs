@@ -1,5 +1,6 @@
 using System.Text;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S101;
@@ -18,7 +19,7 @@ using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
+public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
 {
     private readonly S101Dataset _dataset;
     private readonly S101UpdateReport? _updateReport;
@@ -142,6 +143,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// (issue #467, WS1).
     /// </remarks>
     public DatasetMetadata Metadata => _metadata ??= _dataset.ReadMetadata();
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_dataset, _externalTextResolver);
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }

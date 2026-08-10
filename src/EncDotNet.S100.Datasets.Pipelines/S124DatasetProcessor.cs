@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S124.DataModel;
@@ -17,6 +18,9 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
     private bool _validationCached;
     protected override string ProductDescription => "Navigational Warnings";
     protected override IReadOnlyList<S124Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S124DatasetData(_dataset);
 
     public S124DatasetProcessor(
         string path,

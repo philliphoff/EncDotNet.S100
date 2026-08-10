@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S131.DataModel;
@@ -32,7 +33,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="S101DatasetProcessor"/>.
 /// </para>
 /// </remarks>
-public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource
+public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, ILoadedDatasetProjection
 {
     private readonly S131Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
@@ -48,6 +49,9 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     /// <inheritdoc/>
     public SpecRef Spec { get; }
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() => new S131DatasetData(_dataset);
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }

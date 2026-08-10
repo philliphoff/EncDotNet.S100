@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
@@ -22,6 +23,9 @@ public sealed class S411DatasetProcessor :
     private bool _validationCached;
     protected override string ProductDescription => "Sea Ice";
     protected override IReadOnlyList<S411Feature> Features => _dataset.Features;
+
+    /// <inheritdoc />
+    public override LoadedDatasetData CreateLoadedData() => new S411DatasetData(_dataset);
 
     /// <summary>
     /// Time samples this dataset can be rendered at. S-411 datasets are
