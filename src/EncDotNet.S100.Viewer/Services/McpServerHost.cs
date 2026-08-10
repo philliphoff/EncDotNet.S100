@@ -2,8 +2,11 @@ using System.Net;
 using System.Net.Sockets;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.McpTools;
+using EncDotNet.S100.Viewer.Services.McpCapabilities;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using Mutable = EncDotNet.S100.Mcp.Tools.Mutable;
+using SharedMutableTools = EncDotNet.S100.Mcp.MutableTools.S100MutableTools;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -27,6 +30,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IMapCapabilityAccessor<IMapViewportController>? _viewportAccessor;
     private readonly IMapCapabilityAccessor<IMapCoordinateConverter>? _coordinateAccessor;
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
+    private readonly MapPresentationStateProjection? _presentationProjection;
     private readonly GlobalTimeService? _globalTime;
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
     private readonly IDatasetLoadGateway? _loadGateway;
@@ -56,7 +60,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         RoutesService? routesService = null,
         IGeographicPickPresenter? pickPresenter = null,
         IViewerUiControllerAccessor? uiControllerAccessor = null,
-        IAppScreenshotProvider? appScreenshot = null)
+        IAppScreenshotProvider? appScreenshot = null,
+        MapPresentationStateProjection? presentationProjection = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -66,6 +71,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _viewportAccessor = viewportAccessor;
         _coordinateAccessor = coordinateAccessor;
         _renderStateAccessor = renderStateAccessor;
+        _presentationProjection = presentationProjection;
         _globalTime = globalTime;
         _renderActivityMonitor = renderActivityMonitor;
         _loadGateway = loadGateway;
@@ -297,16 +303,16 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(PickFeaturesMcpAdapter.Create(
                 new PickFeaturesTool(_coordinateAccessor, _catalog, _pickPresenter)));
         }
+        // Presentation (set_palette / set_display_category / set_display_mode)
+        // and time (set_time_step) now come from the shared, renderer-neutral
+        // S100MutableTools factory. The viewer adapts its own services onto the
+        // shared capability seams (ViewerPresentationController,
+        // ViewerTimeController) instead of carrying duplicate tool classes.
+        AddSharedMutableTools(tools);
+
         if (_renderStateAccessor is not null)
         {
-            tools.Add(SetPaletteMcpAdapter.Create(new SetPaletteTool(_renderStateAccessor)));
-            tools.Add(SetDisplayCategoryMcpAdapter.Create(new SetDisplayCategoryTool(_renderStateAccessor)));
-            tools.Add(SetDisplayModeMcpAdapter.Create(new SetDisplayModeTool(_renderStateAccessor)));
             tools.Add(SetRenderSubsystemMcpAdapter.Create(new SetRenderSubsystemTool(_renderStateAccessor)));
-        }
-        if (_globalTime is not null)
-        {
-            tools.Add(SetTimeStepMcpAdapter.Create(new SetTimeStepTool(_globalTime)));
         }
         if (_renderActivityMonitor is not null)
         {
@@ -347,6 +353,42 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(_routesService, invoker)));
         }
         return tools.Count == 0 ? null : tools;
+    }
+
+    /// <summary>
+    /// Appends the shared, renderer-neutral mutating tools the viewer can back
+    /// today — presentation (<c>set_palette</c> / <c>set_display_category</c> /
+    /// <c>set_display_mode</c>) and time (<c>set_time_step</c>) — bound to the
+    /// viewer's services through capability adapters. Each accessor is
+    /// <see langword="null"/> when its backing service is unavailable, so the
+    /// factory omits the corresponding tools.
+    /// </summary>
+    private void AddSharedMutableTools(System.Collections.Generic.List<McpServerTool> tools)
+    {
+        Mutable.ICapabilityAccessor<Mutable.IPresentationController>? presentation =
+            _renderStateAccessor is not null && _presentationProjection is not null
+                ? new DelegatingCapabilityAccessor<Mutable.IPresentationController>(() =>
+                    _renderStateAccessor.Current is { } controller
+                        ? new ViewerPresentationController(
+                            controller, _presentationProjection.CreateSnapshot)
+                        : null)
+                : null;
+
+        Mutable.ICapabilityAccessor<Mutable.ITimeController>? time =
+            _globalTime is not null
+                ? new Mutable.StaticCapabilityAccessor<Mutable.ITimeController>(
+                    new ViewerTimeController(_globalTime))
+                : null;
+
+        if (presentation is null && time is null)
+        {
+            return;
+        }
+
+        foreach (var tool in SharedMutableTools.Create(presentation: presentation, time: time))
+        {
+            tools.Add(tool);
+        }
     }
 
     private static bool IsPortInUse(Exception ex)
