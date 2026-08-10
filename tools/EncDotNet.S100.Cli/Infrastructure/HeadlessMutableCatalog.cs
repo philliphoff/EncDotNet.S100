@@ -41,7 +41,13 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     private readonly SemaphoreSlim _renderGate = new(1, 1);
 
     private IReadOnlyList<LoadedDataset> _snapshot = [];
-    private bool _disposed;
+
+    // Volatile so a dispose on one thread is observed by the ObjectDisposedException
+    // guards on the mutation / render entry points, letting a post-dispose call
+    // fail fast instead of blocking on the render gate (which Dispose acquires and
+    // never releases). The guards are best-effort — a dispose racing an in-flight
+    // call may still slip past the check — consistent with HeadlessS100Session.
+    private volatile bool _disposed;
 
     private sealed record Entry(LoadedDataset Loaded, IDatasetProcessor Processor);
 
@@ -95,6 +101,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(render);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -157,6 +164,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     public void Seed(IEnumerable<FileDatasetInput> inputs, IDisposable? resolution)
     {
         ArgumentNullException.ThrowIfNull(inputs);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         bool changed;
         bool retainedResolution;
@@ -193,6 +201,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         string path, string? specHint = null, CancellationToken cancellationToken = default)
     {
         // Fail fast before any exchange-set resolution / processor construction.
+        ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
         // specHint forces the product spec for a single-file load (ignored for
@@ -244,6 +253,8 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// <inheritdoc />
     public bool Remove(DatasetId id)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         Entry entry;
         lock (_gate)
         {
@@ -267,6 +278,8 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// <inheritdoc />
     public int RemoveAll()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         List<Entry> removed;
         lock (_gate)
         {
