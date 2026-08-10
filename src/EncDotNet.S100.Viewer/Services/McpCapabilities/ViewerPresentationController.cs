@@ -61,6 +61,7 @@ internal sealed class ViewerPresentationController(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(presentation);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var current = _readCurrent();
 
