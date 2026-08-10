@@ -79,8 +79,14 @@ internal sealed class ViewerPresentationController(
 
         // Forward every per-spec display-mode entry that differs, in either
         // direction (a newly-selected mode, a changed mode, or a cleared one).
-        var currentModes = current.EcdisDisplay.ActiveDisplayModes;
-        var nextModes = presentation.EcdisDisplay.ActiveDisplayModes;
+        // Production snapshots key ActiveDisplayModes case-insensitively; take
+        // OrdinalIgnoreCase views up front so the union keys and the value
+        // lookups below resolve under the same comparer regardless of how the
+        // source dictionaries were built.
+        var currentModes = new Dictionary<string, string?>(
+            current.EcdisDisplay.ActiveDisplayModes, StringComparer.OrdinalIgnoreCase);
+        var nextModes = new Dictionary<string, string?>(
+            presentation.EcdisDisplay.ActiveDisplayModes, StringComparer.OrdinalIgnoreCase);
         foreach (var spec in currentModes.Keys.Union(nextModes.Keys, StringComparer.OrdinalIgnoreCase))
         {
             var next = nextModes.GetValueOrDefault(spec);
