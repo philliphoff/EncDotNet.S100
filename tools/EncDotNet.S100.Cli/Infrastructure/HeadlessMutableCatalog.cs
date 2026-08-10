@@ -44,9 +44,9 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 
     // Volatile so a dispose on one thread is observed by the ObjectDisposedException
     // guards on the mutation / render entry points, letting a post-dispose call
-    // fail fast instead of blocking on the render gate (which Dispose acquires and
-    // never releases). The guards are best-effort — a dispose racing an in-flight
-    // call may still slip past the check — consistent with HeadlessS100Session.
+    // fail fast rather than doing pointless work against a torn-down catalog. The
+    // guards are best-effort — a dispose racing an in-flight call may still slip
+    // past the check — consistent with HeadlessS100Session.
     private volatile bool _disposed;
 
     private sealed record Entry(LoadedDataset Loaded, IDatasetProcessor Processor);
@@ -121,20 +121,21 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 
     /// <summary>
     /// Disposes already-removed resident processors while holding the render gate,
-    /// so an in-flight render can never use one mid-disposal. The wait is bounded
-    /// and always succeeds: the permit is only ever held by a render or by
-    /// <see cref="Dispose"/>'s teardown, both of which release it (Dispose does not
-    /// hold it forever, nor dispose the semaphore), so disposal here always runs
-    /// under the gate.
+    /// so an in-flight render can never use one mid-disposal. The wait blocks only
+    /// until whoever holds the permit returns it — an in-flight render, or
+    /// <see cref="Dispose"/>'s teardown — and both always release it (Dispose does
+    /// not hold it forever, nor dispose the semaphore), so this always acquires the
+    /// gate and disposal here always runs under it.
     /// </summary>
     private void DisposeProcessorsUnderGate(IEnumerable<IDatasetProcessor> processors)
     {
         // Hold the render gate across disposal so an in-flight render can never use
-        // a processor mid-disposal. This Wait() is bounded and cannot deadlock
-        // shutdown: the permit is only ever held by a render (for its duration) or
-        // by Dispose() (for its teardown), and both release it — Dispose() does not
-        // hold it forever, nor dispose the semaphore. So the disposal always runs
-        // while genuinely holding the gate: safe, never best-effort.
+        // a processor mid-disposal. This Wait() blocks only until whoever holds the
+        // permit returns it — a render (for its duration) or Dispose() (for its
+        // teardown) — and both always release it: Dispose() does not hold it forever,
+        // nor dispose the semaphore, so this cannot deadlock shutdown. The disposal
+        // therefore always runs while genuinely holding the gate: safe, never
+        // best-effort.
         _renderGate.Wait();
         try
         {
