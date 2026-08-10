@@ -144,7 +144,19 @@ public static class LoadedDatasetProjector
             data = s101 with { ExternalTextResolver = externalTextResolver };
         }
 
-        return BuildFromData(id, data, transforms);
+        var loaded = BuildFromData(id, data, transforms);
+
+        // The processor is authoritative about the dataset's product identity. A
+        // legacy S-57 cell is translated in-memory to the S-101 model and carries
+        // an S101DatasetData payload, so BuildFromData derives spec "S-101" from
+        // that payload — but the catalog entry must keep identity "S-57" (product
+        // identity vs. portrayal spec; see the Datasets.Pipelines README / issue
+        // #450). Preserve the processor's spec whenever its product name differs
+        // from the payload-derived one; native products already agree, so their
+        // projection is unchanged.
+        return processor.Spec.Name == loaded.Spec.Name
+            ? loaded
+            : loaded with { Spec = processor.Spec };
     }
 
     /// <summary>

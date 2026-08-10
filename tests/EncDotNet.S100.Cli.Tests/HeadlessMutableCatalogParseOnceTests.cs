@@ -31,6 +31,11 @@ public sealed class HeadlessMutableCatalogParseOnceTests
         Assert.Equal(1, counting.CreateCount);
         Assert.Single(catalog.Datasets);
 
+        // The fixture is a legacy S-57 cell: the catalog entry must keep product
+        // identity "S-57" even though it is portrayed through the translated S-101
+        // model (product identity vs. portrayal spec; issue #450).
+        Assert.Equal("S-57", catalog.Datasets[0].Spec.Name);
+
         using var session = new HeadlessS100Session(catalog);
         var renderer = (IImageRenderer)session;
 
