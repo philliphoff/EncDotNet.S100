@@ -45,15 +45,21 @@ internal sealed class ViewerImageRenderer(
             {
                 return null;
             }
-            if (size.Width < 1 || size.Height < 1
-                || double.IsNaN(size.Width) || double.IsNaN(size.Height)
-                || double.IsInfinity(size.Width) || double.IsInfinity(size.Height))
+            // Round, then range-check before the int cast: a NaN, sub-pixel, or
+            // out-of-int-range value (e.g. from an uninitialised layout) must not
+            // reach the cast, which would otherwise produce an unspecified int.
+            // +Inf is caught by the upper bound and -Inf by the lower.
+            var width = Math.Round(size.Width);
+            var height = Math.Round(size.Height);
+            if (double.IsNaN(width) || double.IsNaN(height)
+                || width < 1 || height < 1
+                || width > int.MaxValue || height > int.MaxValue)
             {
                 return null;
             }
             // Return the raw rounded live size; RenderToImageTool clamps it to the
             // supported render-dimension range for both the default and the echo.
-            return ((int)Math.Round(size.Width), (int)Math.Round(size.Height));
+            return ((int)width, (int)height);
         }
     }
 }

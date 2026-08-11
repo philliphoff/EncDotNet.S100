@@ -67,6 +67,7 @@ public class ViewerImageRendererTests
     [InlineData(100, 0)]
     [InlineData(double.NaN, 100)]
     [InlineData(100, double.PositiveInfinity)]
+    [InlineData(1e18, 100)]
     public void PreferredSize_is_null_for_a_degenerate_viewport(double width, double height)
     {
         var coords = new FakeCoordinates { ViewportSize = (width, height) };
