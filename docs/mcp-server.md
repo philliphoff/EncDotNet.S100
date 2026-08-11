@@ -191,16 +191,17 @@ as one or the other; this table is the canonical reference.
 
 ### Shared vs host-specific tool implementations
 
-Most of the mutating tools share one renderer-neutral implementation,
-built by `S100MutableTools` in `EncDotNet.S100.Mcp.Tools` over a small set
-of capability seams (`IPresentationController`, `ITimeController`,
-`IImageRenderer`, `IMutableDatasetCatalog`, `IViewportController`). Both
-the desktop viewer and the headless CLI session provide those
+Most of these tools share one renderer-neutral implementation. The tool
+logic and its capability seams (`IPresentationController`,
+`ITimeController`, `IImageRenderer`, `IMutableDatasetCatalog`,
+`IViewportController`) live in `EncDotNet.S100.Mcp.Tools`, and
+`S100MutableTools` (in `EncDotNet.S100.Mcp`) assembles them for a host.
+Both the desktop viewer and the headless CLI session provide those
 capabilities and so run the *same* tool code: `set_palette`,
 `set_display_category`, `set_display_mode`, `set_time_step`,
-`render_to_image`, `open_dataset`, `close_dataset`, and
-`close_all_datasets`. The viewer adapts its own services onto the seams
-(see `Services/McpCapabilities/`).
+`render_to_image` (read-only, but part of the same session tool set),
+`open_dataset`, `close_dataset`, and `close_all_datasets`. The viewer
+adapts its own services onto the seams (see `Services/McpCapabilities/`).
 
 A few tools stay host-specific where the hosts genuinely diverge, rather
 than being forced onto a shape that would fit neither well:
@@ -249,15 +250,16 @@ disturb the user's view or trigger a redraw on screen. Viewport,
 palette, time step, and loaded datasets reflect the user's current
 view exactly.
 
-`render_to_image` is one of the **shared mutating tools**: its tool
-logic lives in `EncDotNet.S100.Mcp.Tools` (`S100MutableTools` over the
-`IImageRenderer` capability seam), and each host supplies the renderer.
-The desktop viewer backs it with a snapshot of a clone of the live
-Mapsui `Map` (through a `ViewerImageRenderer` adapter); the headless CLI
-backs it with its Skia composite pipeline. Its inverse, `pick_features`,
-is still viewer-only — it needs the live navigator to project a screen
-pixel back to a geographic point, so a non-viewer host supplies its own
-equivalent.
+`render_to_image` is one of the **shared session tools** (read-only — it
+snapshots a clone of the live map without mutating it): its tool logic
+lives in `EncDotNet.S100.Mcp.Tools` over the `IImageRenderer` capability
+seam and is assembled by `S100MutableTools` (in `EncDotNet.S100.Mcp`),
+with each host supplying the renderer. The desktop viewer backs it with a
+snapshot of a clone of the live Mapsui `Map` (through a
+`ViewerImageRenderer` adapter); the headless CLI backs it with its Skia
+composite pipeline. Its inverse, `pick_features`, is still viewer-only —
+it needs the live navigator to project a screen pixel back to a
+geographic point, so a non-viewer host supplies its own equivalent.
 
 ## Sample agent prompts
 
