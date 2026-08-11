@@ -346,12 +346,16 @@ public static class S100MutableTools
         "Renders the current session state (loaded datasets, palette, time step, viewport) to a PNG "
         + "and returns it as an MCP ImageContentBlock alongside a JSON metadata block. Primary use "
         + "case: headless visual validation — open datasets, set a palette / time step, then render "
-        + "and inspect the image. Side-effect free. MUTATING session, but this call mutates nothing.";
+        + "and inspect the image. When both width and height are omitted the capture defaults to the "
+        + "renderer's live viewport size (when it has one) so it matches the on-screen view instead of "
+        + "letterboxing, and that size is echoed in the metadata as 'viewportWidth'/'viewportHeight' for "
+        + "aspect-matching or pixel picks; a headless renderer has none and defaults to 1024x768. "
+        + "Side-effect free. MUTATING session, but this call mutates nothing.";
 
     private static McpServerTool CreateRenderToImage(RenderToImageTool inner) =>
         McpServerTool.Create(
-            ([Description("Output image width in pixels; null defaults to 1024. Clamped to [64, 4096].")] int? width = null,
-             [Description("Output image height in pixels; null defaults to 768. Clamped to [64, 4096].")] int? height = null,
+            ([Description("Output image width in pixels. When both width and height are omitted, defaults to the renderer's live viewport width if it has one (echoed as viewportWidth), otherwise 1024. Clamped to [64, 4096].")] int? width = null,
+             [Description("Output image height in pixels. When both width and height are omitted, defaults to the renderer's live viewport height if it has one (echoed as viewportHeight), otherwise 768. Clamped to [64, 4096].")] int? height = null,
              [Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? pixelDensity = null,
              CancellationToken ct = default) =>
                 DispatchRenderAsync(() => inner.InvokeAsync(
