@@ -1,7 +1,6 @@
 using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
-using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -21,13 +20,18 @@ public class MapCapabilityBoundaryTests
     }
 
     [Fact]
-    public void Mapsui_host_composes_map_and_optional_avalonia_adapter()
+    public void Mapsui_host_attaches_through_the_capture_synchronized_control()
     {
         var constructor = Assert.Single(typeof(MapsuiMapHost).GetConstructors());
         var parameters = constructor.GetParameters();
 
-        Assert.Equal(typeof(Map), parameters[0].ParameterType);
-        Assert.Equal(typeof(AvaloniaMapsuiMapAdapter), parameters[1].ParameterType);
+        // The host now sets S-100 up through the public mapControl.AddS100 entry
+        // point, so it takes the live control and obtains the session and the
+        // Avalonia adapter from that single call — it no longer hand-builds a
+        // session over an externally-attached adapter.
+        Assert.Equal(typeof(CaptureSynchronizedMapControl), parameters[0].ParameterType);
+        Assert.DoesNotContain(
+            parameters, p => p.ParameterType == typeof(AvaloniaMapsuiMapAdapter));
     }
 
     [Fact]
