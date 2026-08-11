@@ -46,7 +46,7 @@ internal sealed record PickFeaturesResult(
 /// <summary>
 /// Resolves the vector features under a screen pixel (or a geographic
 /// point) on the live viewer map — the inverse of
-/// <see cref="RenderToImageTool"/>, closing the "pixels in, features out"
+/// the <c>render_to_image</c> tool, closing the "pixels in, features out"
 /// loop so automated portrayal QA can ask "what is drawn here?" about a
 /// specific spot in a captured image.
 /// </summary>

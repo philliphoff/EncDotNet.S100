@@ -345,10 +345,12 @@ internal sealed class McpServerHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Appends the shared, renderer-neutral mutating tools the viewer can back
-    /// today — presentation (<c>set_palette</c> / <c>set_display_category</c> /
-    /// <c>set_display_mode</c>) and time (<c>set_time_step</c>) — bound to the
-    /// viewer's services through capability adapters. Each accessor is
+    /// Appends the shared, renderer-neutral mutating tools the viewer can back —
+    /// presentation (<c>set_palette</c> / <c>set_display_category</c> /
+    /// <c>set_display_mode</c>), time (<c>set_time_step</c>), rendering
+    /// (<c>render_to_image</c>), and the dataset catalog (<c>open_dataset</c> /
+    /// <c>close_dataset</c> / <c>close_all_datasets</c>) — bound to the viewer's
+    /// services through capability adapters. Each capability is
     /// <see langword="null"/> when its backing service is unavailable, so the
     /// factory omits the corresponding tools.
     /// </summary>
