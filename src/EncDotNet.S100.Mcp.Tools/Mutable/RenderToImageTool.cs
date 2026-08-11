@@ -17,8 +17,8 @@ public sealed record RenderToImageResult(
     [property: Description("Image format identifier; always \"png\" in v1.")] string ImageFormat,
     [property: Description("PNG-encoded image bytes; surfaced separately as an MCP ImageContentBlock with mimeType image/png at the wire layer.")] byte[] ImageBytes,
     [property: Description("Optional human-readable note (e.g. \"defaulted size to 1024x768\").")] string? Notes,
-    [property: Description("The renderer's live viewport width in pixels at render time, or null when it has none (e.g. a headless host). Pass this and viewportHeight back as width/height to capture at the live aspect ratio, and as the image dimensions to a pixel pick.")] int? ViewportWidth = null,
-    [property: Description("The renderer's live viewport height in pixels at render time, or null when it has none.")] int? ViewportHeight = null);
+    [property: Description("The renderer's live viewport width in pixels at render time, or null when it has none (e.g. a headless host). Pass this and viewportHeight back as width/height to capture at the live aspect ratio. For a pixel pick, feed pick_features the rendered image's width/height (the width/height fields), not these — the two match only when the capture defaulted to the live size.")] int? ViewportWidth = null,
+    [property: Description("The renderer's live viewport height in pixels at render time, or null when it has none. See viewportWidth for how it relates to the image dimensions.")] int? ViewportHeight = null);
 
 /// <summary>
 /// Mutating-session tool that renders the current session state — loaded

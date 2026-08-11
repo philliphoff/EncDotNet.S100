@@ -351,7 +351,9 @@ public static class S100MutableTools
         + "letterboxing; a headless renderer has none and defaults to 1024x768. Independently, whenever "
         + "the renderer has a live viewport its size is echoed in the metadata as "
         + "'viewportWidth'/'viewportHeight' (even when explicit dimensions are supplied) for "
-        + "aspect-matching or pixel picks. Side-effect free. MUTATING session, but this call mutates nothing.";
+        + "aspect-matching; for a pixel pick, feed pick_features the rendered image's width/height "
+        + "instead, which match viewportWidth/Height only when the capture defaulted to the live size. "
+        + "Side-effect free. MUTATING session, but this call mutates nothing.";
 
     private static McpServerTool CreateRenderToImage(RenderToImageTool inner) =>
         McpServerTool.Create(
