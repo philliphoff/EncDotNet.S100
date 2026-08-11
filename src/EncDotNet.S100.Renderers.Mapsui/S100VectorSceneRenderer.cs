@@ -526,28 +526,8 @@ public static class S100VectorSceneRenderer
     {
         if (state.Owner.TryGetTarget(out var layer))
         {
-            RequestRepaint(layer);
+            VectorLayerRepaint.Request(layer);
         }
-    }
-
-    /// <summary>
-    /// Routes a background publish to the layer's repaint. An
-    /// <see cref="InstrumentedMemoryLayer"/> goes through its
-    /// <see cref="InstrumentedMemoryLayer.RequestRepaint"/> (which invokes the
-    /// session-stamped <see cref="InstrumentedMemoryLayer.RequestRedraw"/> sink,
-    /// or <c>DataHasChanged()</c> when none was wired); any other layer falls
-    /// back to <c>BaseLayer.DataHasChanged()</c> — matching the snapshot and tile
-    /// renderers.
-    /// </summary>
-    private static void RequestRepaint(ILayer layer)
-    {
-        if (layer is InstrumentedMemoryLayer instrumented)
-        {
-            instrumented.RequestRepaint();
-            return;
-        }
-
-        (layer as BaseLayer)?.DataHasChanged();
     }
 
     /// <summary>

@@ -709,7 +709,7 @@ public static class S100VectorTileRenderer
         {
             if (InvalidateViewport(state))
             {
-                RequestRepaint(layer);
+                VectorLayerRepaint.Request(layer);
             }
 
             return;
@@ -1141,7 +1141,7 @@ public static class S100VectorTileRenderer
         }
         if (requestAdmissionRetry)
         {
-            RequestRepaint(layer);
+            VectorLayerRepaint.Request(layer);
         }
 
         if (workersToStart > 0)
@@ -1200,27 +1200,8 @@ public static class S100VectorTileRenderer
         if (States.TryGetValue(layer, out var state)
             && InvalidateViewport(state))
         {
-            RequestRepaint(layer);
+            VectorLayerRepaint.Request(layer);
         }
-    }
-
-    /// <summary>
-    /// Routes a background publish to the layer's repaint. An
-    /// <see cref="InstrumentedMemoryLayer"/> goes through its
-    /// <see cref="InstrumentedMemoryLayer.RequestRepaint"/> (which invokes the
-    /// session-stamped <see cref="InstrumentedMemoryLayer.RequestRedraw"/> sink,
-    /// or <c>DataHasChanged()</c> when none was wired); any other layer falls
-    /// back to <c>BaseLayer.DataHasChanged()</c>.
-    /// </summary>
-    private static void RequestRepaint(ILayer layer)
-    {
-        if (layer is InstrumentedMemoryLayer instrumented)
-        {
-            instrumented.RequestRepaint();
-            return;
-        }
-
-        (layer as BaseLayer)?.DataHasChanged();
     }
 
     /// <summary>
@@ -1232,7 +1213,7 @@ public static class S100VectorTileRenderer
     {
         if (state.Owner.TryGetTarget(out var layer))
         {
-            RequestRepaint(layer);
+            VectorLayerRepaint.Request(layer);
         }
     }
 

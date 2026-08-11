@@ -1184,7 +1184,7 @@ public static class S100VectorSnapshotRenderer
                     Console.Error.WriteLine($"[VecSnapshot] PUBLISH res={resolution:G6} feats={featureCount}");
                 }
 
-                RequestRepaint(layer);
+                VectorLayerRepaint.Request(layer);
             }
             catch (Exception ex)
             {
@@ -1285,7 +1285,7 @@ public static class S100VectorSnapshotRenderer
                     Console.Error.WriteLine($"[VecSnapshot] PAN-PUBLISH res={resolution:G6} feats={featureCount}");
                 }
 
-                RequestRepaint(layer);
+                VectorLayerRepaint.Request(layer);
             }
             catch (Exception ex)
             {
@@ -1322,24 +1322,6 @@ public static class S100VectorSnapshotRenderer
         }
     }
 
-    /// <summary>
-    /// Routes a background publish to the layer's repaint. An
-    /// <see cref="InstrumentedMemoryLayer"/> goes through its
-    /// <see cref="InstrumentedMemoryLayer.RequestRepaint"/> (which invokes the
-    /// session-stamped <see cref="InstrumentedMemoryLayer.RequestRedraw"/> sink,
-    /// or <c>DataHasChanged()</c> when none was wired); any other layer falls
-    /// back to <c>BaseLayer.DataHasChanged()</c>.
-    /// </summary>
-    private static void RequestRepaint(ILayer layer)
-    {
-        if (layer is InstrumentedMemoryLayer instrumented)
-        {
-            instrumented.RequestRepaint();
-            return;
-        }
-
-        (layer as BaseLayer)?.DataHasChanged();
-    }
 
     /// <summary>
     /// Iterates the layer's visible features and dispatches each (feature, style)
