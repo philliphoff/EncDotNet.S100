@@ -212,6 +212,38 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public async Task RemovingADatasetClearsItsLayerRedrawSink()
+    {
+        using var map = new Map();
+        using var s100 = IdentitySession(map);
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        Assert.NotNull(layer.RequestRedraw);
+
+        s100.RemoveDataset(id);
+
+        // The removed layer is no longer installed, so its sink is cleared: a
+        // stray worker publish cannot invalidate the map and the delegate is
+        // released with the orphaned layer.
+        Assert.Null(layer.RequestRedraw);
+    }
+
+    [Fact]
+    public async Task DisposeClearsDatasetLayerRedrawSinks()
+    {
+        using var map = new Map();
+        var s100 = IdentitySession(map);
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+
+        s100.Dispose();
+
+        Assert.Null(layer.RequestRedraw);
+    }
+
+    [Fact]
     public void AddS100IsIdempotentForRendererRegistration()
     {
         using var map1 = new Map();

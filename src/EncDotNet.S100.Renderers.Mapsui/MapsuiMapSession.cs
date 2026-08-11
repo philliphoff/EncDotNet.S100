@@ -35,6 +35,7 @@ public sealed class MapsuiMapSession : IDisposable
     private readonly MapsuiDatasetRenderer _renderer;
     private readonly IInteroperabilityAuthorityProvider _authorityProvider;
     private readonly Action? _redrawRequested;
+    private readonly List<InstrumentedMemoryLayer> _stampedRedrawLayers = [];
     private readonly Dictionary<MapDatasetId, Entry> _entries = [];
     private readonly List<MapDatasetId> _order = [];
     private readonly ConditionalWeakTable<ILayer, LayerVisibilityRange> _visibilityRanges = new();
@@ -1343,6 +1344,12 @@ public sealed class MapsuiMapSession : IDisposable
             _stackEntries = [];
             _stackedLayers = [];
             _time = MapsuiMapTimeSnapshot.Empty;
+            foreach (var layer in _stampedRedrawLayers)
+            {
+                layer.RequestRedraw = null;
+            }
+
+            _stampedRedrawLayers.Clear();
             _layerBands.ReplaceDatasetLayers([]);
         }
     }
@@ -1366,11 +1373,27 @@ public sealed class MapsuiMapSession : IDisposable
     /// <summary>
     /// Stamps the session's redraw action onto every installed vector dataset
     /// layer so the background cached / scene / tile renderers can request a
-    /// repaint through the layer rather than a process-global hook. No-op when
-    /// the session was created without a redraw action.
+    /// repaint through the layer rather than a process-global hook, and clears it
+    /// from any previously-stamped layer that is no longer installed (so a stray
+    /// post-removal worker publish cannot invalidate the map and the redraw
+    /// delegate is released with the orphaned layer). No-op when the session was
+    /// created without a redraw action.
     /// </summary>
     private void StampRedrawSink(IReadOnlyList<ILayer> datasetLayers)
     {
+        // Drop the sink from layers that were installed before but are not in the
+        // new set (a re-render replaces a layer instance; a removal drops one).
+        // Reorder / visibility recompositions keep the same instances, so those
+        // stay stamped.
+        foreach (var prior in _stampedRedrawLayers)
+        {
+            if (!datasetLayers.Contains(prior))
+            {
+                prior.RequestRedraw = null;
+            }
+        }
+
+        _stampedRedrawLayers.Clear();
         if (_redrawRequested is not { } redraw)
         {
             return;
@@ -1381,6 +1404,7 @@ public sealed class MapsuiMapSession : IDisposable
             if (layer is InstrumentedMemoryLayer instrumented)
             {
                 instrumented.RequestRedraw = redraw;
+                _stampedRedrawLayers.Add(instrumented);
             }
         }
     }
