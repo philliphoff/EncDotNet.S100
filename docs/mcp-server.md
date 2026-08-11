@@ -192,12 +192,12 @@ as one or the other; this table is the canonical reference.
 ### Shared vs host-specific tool implementations
 
 Most of these tools share one renderer-neutral implementation. The tool
-logic and its capability seams (`IPresentationController`,
-`ITimeController`, `IImageRenderer`, `IMutableDatasetCatalog`,
-`IViewportController`) live in `EncDotNet.S100.Mcp.Tools`, and
+logic and its capability seams live in `EncDotNet.S100.Mcp.Tools`, and
 `S100MutableTools` (in `EncDotNet.S100.Mcp`) assembles them for a host.
-Both the desktop viewer and the headless CLI session provide those
-capabilities and so run the *same* tool code: `set_palette`,
+Both the desktop viewer and the headless CLI session provide the
+presentation, time, image-render, and dataset-catalog capabilities
+(`IPresentationController`, `ITimeController`, `IImageRenderer`,
+`IMutableDatasetCatalog`) and so run the *same* tool code: `set_palette`,
 `set_display_category`, `set_display_mode`, `set_time_step`,
 `render_to_image` (read-only, but part of the same session tool set),
 `open_dataset`, `close_dataset`, and `close_all_datasets`. The viewer
@@ -257,9 +257,9 @@ seam and is assembled by `S100MutableTools` (in `EncDotNet.S100.Mcp`),
 with each host supplying the renderer. The desktop viewer backs it with a
 snapshot of a clone of the live Mapsui `Map` (through a
 `ViewerImageRenderer` adapter); the headless CLI backs it with its Skia
-composite pipeline. Its inverse, `pick_features`, is still viewer-only —
-it needs the live navigator to project a screen pixel back to a
-geographic point, so a non-viewer host supplies its own equivalent.
+composite pipeline. Its inverse, `pick_features`, is viewer-only — it
+needs the live navigator to project a screen pixel back to a geographic
+point, and has no headless analogue.
 
 ## Sample agent prompts
 
