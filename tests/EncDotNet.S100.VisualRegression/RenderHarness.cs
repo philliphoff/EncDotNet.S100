@@ -286,8 +286,11 @@ public sealed class RenderHarness : IDisposable
         // The background tile / scene renderers repaint through each vector
         // layer's per-session redraw sink; stamp OnRedraw onto the instrumented
         // layers so a published tile wakes this settle loop (the headless
-        // analogue of a live host's UI-thread redraw).
+        // analogue of a live host's UI-thread redraw). Capture and restore any
+        // prior sink rather than clearing to null, so we never clobber a caller
+        // that had wired its own.
         var instrumented = map.Layers.OfType<InstrumentedMemoryLayer>().ToArray();
+        var priorSinks = Array.ConvertAll(instrumented, layer => layer.RequestRedraw);
         foreach (var layer in instrumented)
         {
             layer.RequestRedraw = OnRedraw;
@@ -319,9 +322,9 @@ public sealed class RenderHarness : IDisposable
         }
         finally
         {
-            foreach (var layer in instrumented)
+            for (var i = 0; i < instrumented.Length; i++)
             {
-                layer.RequestRedraw = null;
+                instrumented[i].RequestRedraw = priorSinks[i];
             }
         }
     }
