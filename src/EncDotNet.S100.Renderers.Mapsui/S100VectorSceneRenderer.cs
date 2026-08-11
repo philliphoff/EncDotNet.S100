@@ -517,13 +517,6 @@ public static class S100VectorSceneRenderer
     }
 
     /// <summary>
-    /// Per-layer render state: the bound scene, the current rasterised image and
-    /// its record anchor, and the worker coalescing fields. Held in a
-    /// <see cref="ConditionalWeakTable{TKey,TValue}"/> keyed by layer so a
-    /// rebuilt layer (palette / category / dataset change) discards its state
-    /// automatically.
-    /// </summary>
-    /// <summary>
     /// Routes a background publish to the owning layer's per-session redraw sink.
     /// The layer is held weakly (it is this state's key in <see cref="States"/>,
     /// so a strong reference would pin the entry); a collected layer simply
@@ -538,6 +531,13 @@ public static class S100VectorSceneRenderer
         }
     }
 
+    /// <summary>
+    /// Per-layer render state: the bound scene, the current rasterised image and
+    /// its record anchor, and the worker coalescing fields. Held in a
+    /// <see cref="ConditionalWeakTable{TKey,TValue}"/> keyed by layer so a
+    /// rebuilt layer (palette / category / dataset change) discards its state
+    /// automatically.
+    /// </summary>
     private sealed class SceneState
     {
         public SceneState(ILayer layer) => Owner = new WeakReference<ILayer>(layer);
