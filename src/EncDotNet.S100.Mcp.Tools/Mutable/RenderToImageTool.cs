@@ -5,8 +5,8 @@ namespace EncDotNet.S100.Mcp.Tools.Mutable;
 
 /// <summary>Request payload for <see cref="RenderToImageTool"/>.</summary>
 public sealed record RenderToImageRequest(
-    [property: Description("Output image width in pixels. When both width and height are omitted, defaults to the renderer's live viewport width if it has one (echoed as viewportWidth), otherwise 1024. Clamped to [64, 4096].")] int? Width = null,
-    [property: Description("Output image height in pixels. When both width and height are omitted, defaults to the renderer's live viewport height if it has one (echoed as viewportHeight), otherwise 768. Clamped to [64, 4096].")] int? Height = null,
+    [property: Description("Output image width in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport width if it has one, otherwise 1024. Independently, whenever the renderer has a live viewport its width is echoed as viewportWidth — even when explicit dimensions are supplied.")] int? Width = null,
+    [property: Description("Output image height in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport height if it has one, otherwise 768. Independently, whenever the renderer has a live viewport its height is echoed as viewportHeight — even when explicit dimensions are supplied.")] int? Height = null,
     [property: Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? PixelDensity = null);
 
 /// <summary>Result payload for <see cref="RenderToImageTool"/>.</summary>
