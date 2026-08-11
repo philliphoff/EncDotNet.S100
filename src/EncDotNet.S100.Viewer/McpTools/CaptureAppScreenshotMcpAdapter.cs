@@ -9,9 +9,9 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// <summary>
 /// Wraps a <see cref="CaptureAppScreenshotTool"/> as an
 /// <see cref="McpServerTool"/> so the viewer's <c>McpServerHost</c> can
-/// inject it into the hosted <c>S100McpServer</c>. Like
-/// <see cref="RenderToImageMcpAdapter"/> the success path returns the PNG
-/// as a first-class <see cref="ImageContentBlock"/> followed by a
+/// inject it into the hosted <c>S100McpServer</c>. Like the shared
+/// <c>render_to_image</c> tool, the success path returns the PNG as a
+/// first-class <see cref="ImageContentBlock"/> followed by a
 /// <see cref="TextContentBlock"/> carrying JSON metadata.
 /// </summary>
 internal static class CaptureAppScreenshotMcpAdapter

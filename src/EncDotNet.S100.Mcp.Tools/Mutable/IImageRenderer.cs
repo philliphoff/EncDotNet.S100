@@ -39,4 +39,20 @@ public interface IImageRenderer
         int heightPx,
         double pixelDensity,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The renderer's preferred output size in pixels when the caller omits both
+    /// dimensions, or <see langword="null"/> when it has none.
+    /// </summary>
+    /// <remarks>
+    /// The desktop viewer backs this with its live on-screen viewport size, so an
+    /// unsized <c>render_to_image</c> matches what the user sees pixel-for-pixel
+    /// (rather than letterboxing a fixed default against a differently shaped
+    /// viewport) and can be echoed back so an agent can request a matching aspect
+    /// ratio or feed the dimensions to a pixel pick. A headless renderer has no
+    /// on-screen viewport and returns <see langword="null"/>, leaving the calling
+    /// tool to apply its fixed default. Default-implemented as
+    /// <see langword="null"/> so only hosts with a live viewport need override it.
+    /// </remarks>
+    (int Width, int Height)? PreferredSize => null;
 }

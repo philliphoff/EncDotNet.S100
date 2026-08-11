@@ -289,11 +289,6 @@ internal sealed class McpServerHost : IAsyncDisposable
     private System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
     {
         var tools = new System.Collections.Generic.List<McpServerTool>();
-        if (_snapshotAccessor is not null && _coordinateAccessor is not null)
-        {
-            tools.Add(RenderToImageMcpAdapter.Create(
-                new RenderToImageTool(_snapshotAccessor, _coordinateAccessor)));
-        }
         if (_viewportAccessor is not null)
         {
             tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_viewportAccessor)));
@@ -374,6 +369,17 @@ internal sealed class McpServerHost : IAsyncDisposable
                     new ViewerTimeController(_globalTime))
                 : null;
 
+        // render_to_image: the viewer's live-map snapshot renderer, with its
+        // coordinate converter supplying the live viewport size for the unsized
+        // capture default and the echoed viewport dimensions.
+        Mutable.ICapabilityAccessor<Mutable.IImageRenderer>? renderer =
+            _snapshotAccessor is not null
+                ? new DelegatingCapabilityAccessor<Mutable.IImageRenderer>(() =>
+                    _snapshotAccessor.Current is { } snapshot
+                        ? new ViewerImageRenderer(snapshot, _coordinateAccessor?.Current)
+                        : null)
+                : null;
+
         // open_dataset / close_dataset / close_all_datasets: the viewer's
         // read-only catalog plus its UI-thread load gateway, presented as the
         // shared mutable-catalog seam. Passed directly (not via an accessor)
@@ -383,13 +389,13 @@ internal sealed class McpServerHost : IAsyncDisposable
             ? new ViewerMutableDatasetCatalog(_catalog, _loadGateway)
             : null;
 
-        if (presentation is null && time is null && catalog is null)
+        if (presentation is null && time is null && renderer is null && catalog is null)
         {
             return;
         }
 
         foreach (var tool in SharedMutableTools.Create(
-            presentation: presentation, time: time, catalog: catalog))
+            presentation: presentation, time: time, renderer: renderer, catalog: catalog))
         {
             tools.Add(tool);
         }

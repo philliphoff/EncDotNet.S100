@@ -44,6 +44,53 @@ public class RenderToImageToolTests
     }
 
     [Fact]
+    public async Task DefaultsToLiveViewportSize_WhenBothDimensionsOmitted()
+    {
+        var host = new FakeRenderer(FakePng) { PreferredSize = (1600, 900) };
+
+        var value = AssertOk(await new RenderToImageTool(Accessor(host))
+            .InvokeAsync(new RenderToImageRequest()));
+
+        Assert.Equal(1600, value.Width);
+        Assert.Equal(900, value.Height);
+        Assert.Equal((1600, 900, 1.0), host.LastCall);
+        Assert.Equal(1600, value.ViewportWidth);
+        Assert.Equal(900, value.ViewportHeight);
+        Assert.Contains("live viewport size", value.Notes);
+    }
+
+    [Fact]
+    public async Task EchoesLiveViewport_ButHonoursExplicitDimensions()
+    {
+        var host = new FakeRenderer(FakePng) { PreferredSize = (1600, 900) };
+
+        var value = AssertOk(await new RenderToImageTool(Accessor(host))
+            .InvokeAsync(new RenderToImageRequest(Width: 640, Height: 480)));
+
+        // Explicit dims win for the render; the live size is still echoed so an
+        // agent can request a matching aspect ratio or feed a pixel pick.
+        Assert.Equal(640, value.Width);
+        Assert.Equal(480, value.Height);
+        Assert.Equal((640, 480, 1.0), host.LastCall);
+        Assert.Equal(1600, value.ViewportWidth);
+        Assert.Equal(900, value.ViewportHeight);
+    }
+
+    [Fact]
+    public async Task NoPreferredSize_KeepsFixedDefaultAndNullViewport()
+    {
+        var host = new FakeRenderer(FakePng); // PreferredSize null (headless renderer)
+
+        var value = AssertOk(await new RenderToImageTool(Accessor(host))
+            .InvokeAsync(new RenderToImageRequest()));
+
+        Assert.Equal(1024, value.Width);
+        Assert.Equal(768, value.Height);
+        Assert.Null(value.ViewportWidth);
+        Assert.Null(value.ViewportHeight);
+    }
+
+    [Fact]
     public async Task ClampsOutOfRangeDimensionsAndDensity()
     {
         var host = new FakeRenderer(FakePng);
@@ -115,6 +162,8 @@ public class RenderToImageToolTests
     private sealed class FakeRenderer(byte[] png) : IImageRenderer
     {
         public (int Width, int Height, double Density)? LastCall { get; private set; }
+
+        public (int Width, int Height)? PreferredSize { get; set; }
 
         public Task<byte[]?> RenderToPngAsync(
             int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken = default)

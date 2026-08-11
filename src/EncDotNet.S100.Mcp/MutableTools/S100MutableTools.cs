@@ -388,6 +388,14 @@ public static class S100MutableTools
                 {
                     metadata["notes"] = value.Notes;
                 }
+                if (value.ViewportWidth is { } vw)
+                {
+                    metadata["viewportWidth"] = vw;
+                }
+                if (value.ViewportHeight is { } vh)
+                {
+                    metadata["viewportHeight"] = vh;
+                }
 
                 return new CallToolResult
                 {
