@@ -57,6 +57,36 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
             : new[] { new KeyValuePair<string, object?>("s100.product", product) };
     }
 
+    /// <summary>
+    /// Per-session redraw sink. The S-100 vector renderers rasterise cached /
+    /// scene / tile output on background threads and, when a settled image
+    /// publishes, call <see cref="RequestRepaint"/> to bring it on screen. A
+    /// session stamps this with an action that invalidates the attached map (see
+    /// <c>MapsuiMapSession</c> / <c>S100MapsuiOptions.RedrawMarshal</c>); when
+    /// <see langword="null"/> the renderer falls back to
+    /// <see cref="BaseLayer.DataHasChanged"/>. This replaces the former
+    /// process-global static redraw hooks with a per-layer (hence per-map) seam.
+    /// </summary>
+    public Action? RequestRedraw { get; set; }
+
+    /// <summary>
+    /// Requests a single repaint after a background publish: invokes
+    /// <see cref="RequestRedraw"/> when a session wired one, otherwise falls back
+    /// to <see cref="BaseLayer.DataHasChanged"/> so a session-less render (e.g. a
+    /// headless one-shot) still refreshes.
+    /// </summary>
+    public void RequestRepaint()
+    {
+        var redraw = RequestRedraw;
+        if (redraw is not null)
+        {
+            redraw();
+            return;
+        }
+
+        DataHasChanged();
+    }
+
     /// <inheritdoc />
     /// <remarks>
     /// Replicates <see cref="MemoryLayer.GetFeatures"/>'s extent-filter

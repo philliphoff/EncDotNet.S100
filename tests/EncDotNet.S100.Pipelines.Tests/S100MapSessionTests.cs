@@ -144,6 +144,74 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public void InstrumentedLayerRequestRepaintPrefersTheSinkThenFallsBackToDataHasChanged()
+    {
+        var layer = new InstrumentedMemoryLayer();
+        var dataChanged = 0;
+        layer.DataChanged += (_, _) => dataChanged++;
+
+        // No sink wired: a repaint falls back to DataHasChanged so a session-less
+        // render still refreshes.
+        layer.RequestRepaint();
+        Assert.Equal(1, dataChanged);
+
+        // With a sink: the repaint routes to it and does not also fire the
+        // DataHasChanged fallback.
+        var sinkCalls = 0;
+        layer.RequestRedraw = () => sinkCalls++;
+        layer.RequestRepaint();
+        Assert.Equal(1, sinkCalls);
+        Assert.Equal(1, dataChanged);
+    }
+
+    [Fact]
+    public async Task AddS100StampsRedrawSinkOnInstalledDatasetLayers()
+    {
+        using var map = new Map();
+        var marshalled = 0;
+        using var s100 = map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new IdentityCrsTransformFactory(),
+            RedrawMarshal = action =>
+            {
+                marshalled++;
+                action();
+            },
+        });
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+
+        // The session stamped its redraw action onto the installed vector layer,
+        // so a background publish routes through it — here driving the marshal.
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        Assert.NotNull(layer.RequestRedraw);
+        layer.RequestRepaint();
+        Assert.Equal(1, marshalled);
+    }
+
+    [Fact]
+    public async Task AddS100DefaultRedrawInvalidatesTheMap()
+    {
+        using var map = new Map();
+        var refreshes = 0;
+        map.RefreshGraphicsRequest += (_, _) => refreshes++;
+
+        // No RedrawMarshal supplied: the default redraw is Map.RefreshGraphics,
+        // which every Mapsui control repaints from.
+        using var s100 = map.AddS100(new S100MapsuiOptions
+        {
+            CrsTransformFactory = new IdentityCrsTransformFactory(),
+        });
+        var id = new MapDatasetId("dataset");
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+
+        var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
+        var before = refreshes;
+        layer.RequestRepaint();
+        Assert.True(refreshes > before);
+    }
+
+    [Fact]
     public void AddS100IsIdempotentForRendererRegistration()
     {
         using var map1 = new Map();

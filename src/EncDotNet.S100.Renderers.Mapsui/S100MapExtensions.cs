@@ -90,8 +90,17 @@ public static class S100MapExtensions
 
         var authorityProvider = options.InteroperabilityAuthorityProvider
             ?? new InteroperabilityAuthorityProvider(new InteroperabilityAuthority());
+
+        // The default redraw invalidates the attached map, which every Mapsui
+        // map control repaints from (Map.RefreshGraphics raises RefreshGraphicsRequest).
+        // A UI host that must invalidate on its dispatcher thread supplies a
+        // marshal; otherwise the redraw runs inline on the publishing thread.
+        Action refreshMap = map.RefreshGraphics;
+        var redraw = options.RedrawMarshal is { } marshal
+            ? () => marshal(refreshMap)
+            : refreshMap;
         var session = new MapsuiMapSession(
-            layerBands, processorOwner, renderer, authorityProvider);
+            layerBands, processorOwner, renderer, authorityProvider, redraw);
         var navigator = new MapsuiMapNavigator(map);
         var dynamicSourceHost = new DynamicSources.S100DynamicSourceHost(
             layerBands,

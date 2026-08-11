@@ -23,21 +23,20 @@ constructor. In essence:
 //    It owns long-lived catalogue caches, so dispose it with the session.
 using var factory = BundledDatasetProcessorFactory.Create();
 
-// 1. Compose a session over a bare map. AddS100 returns the disposable
-//    IS100MapSession that owns all S-100 layers, processors, and rendering.
+// 1. Attach a session to the control's map AND the Avalonia adapter in one call.
+//    mapControl.AddS100 returns the disposable IS100MapSession (owns all S-100
+//    layers, processors, and rendering) plus the adapter (pointer-pixel picks,
+//    snapshots), and wires a UI-thread redraw marshal so the background renderers
+//    repaint the live control automatically — no process-global hooks.
 var map = new Map { CRS = "EPSG:3857" };
-var session = map.AddS100(new S100MapsuiOptions
+mapControl.Map = map;
+var (session, adapter) = mapControl.AddS100(new S100MapsuiOptions
 {
     CrsTransformFactory = new ProjNetCrsTransformFactory(),  // host supplies the CRS
     DatasetPipelineFactory = factory,                        // enables LoadAsync
 });
 
-// 2. Bind the map to your Mapsui control and attach the framework adapter,
-//    which converts pointer pixels to geographic picks and drives redraws.
-mapControl.Map = map;
-var adapter = AvaloniaMapsuiMapAdapter.Attach(mapControl);
-
-// 3. Drive it. Navigation stays with Mapsui; the session adds S-100 operations.
+// 2. Drive it. Navigation stays with Mapsui; the session adds S-100 operations.
 var id = await session.Datasets.LoadAsync("cell.000");
 session.ZoomToDataset(id);
 await session.SetPresentationAsync(MapPresentationState.Default.WithPalette(PaletteType.Night));
@@ -113,11 +112,13 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
   `session.Layers.AddOverlayLayer(...)` (the session's host-facing overlay band,
   above the dataset layers) and drive them with `Show`/`Clear`. Omitting them
   changes nothing about dataset rendering.
-- Async re-renders (e.g. a palette change) repaint the control only if the host
-  sets the `S100Vector{Snapshot,Scene,Tile}Renderer.RequestRedraw` hooks — this
-  sample points them at the adapter's redraw and clears them on close. This is a
-  known rough edge tracked in issue #512 (a per-session redraw seam should
-  replace the process-global statics).
+- Async re-renders (e.g. a palette change) repaint the control automatically: the
+  background cached / scene / tile renderers signal completion through a
+  per-session redraw sink the session stamps onto each dataset layer, and
+  `mapControl.AddS100` wires that sink to a UI-thread `RefreshGraphics`. A host on
+  a bare `Map` can supply its own `S100MapsuiOptions.RedrawMarshal`; omitting it
+  redraws inline (fine for headless). This replaced the former process-global
+  `RequestRedraw` statics (issue #512).
 
 > **Consuming this out of repo?** A real application would reference the
 > published `EncDotNet.S100.*` NuGet packages instead of the project references

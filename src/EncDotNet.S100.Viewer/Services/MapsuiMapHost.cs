@@ -47,11 +47,16 @@ internal sealed class MapsuiMapHost :
         ArgumentNullException.ThrowIfNull(authorityProvider);
         _avaloniaAdapter = avaloniaAdapter;
         _layerBands = new MapsuiLayerBands(map);
+        // The adapter's RequestRedraw marshals a RefreshGraphics onto the UI
+        // thread; the session stamps it onto each dataset layer so the background
+        // cached / scene / tile renderers repaint through it — replacing the
+        // former process-global static redraw hooks.
         DatasetSession = new MapsuiMapSession(
             _layerBands,
             processorOwner,
             datasetRenderer,
-            authorityProvider);
+            authorityProvider,
+            _avaloniaAdapter.RequestRedraw);
         _mapNavigator = new MapsuiMapNavigator(map);
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();

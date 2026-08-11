@@ -162,16 +162,6 @@ public static class S100VectorSnapshotRenderer
     public static bool PrebuildEnabled => RenderingOptimizations.VectorSnapshotPrebuildEnabled;
 
     /// <summary>
-    /// Optional callback invoked (on a background thread) when an off-thread
-    /// prebuild publishes a freshly recorded image, so the host can request a
-    /// single repaint that swaps the transient scaled-stale blit for the crisp
-    /// image. When <c>null</c> the renderer falls back to
-    /// <c>BaseLayer.DataHasChanged()</c> on the recorded layer. The viewer may
-    /// set this to marshal a <c>RefreshGraphics()</c> onto the UI thread.
-    /// </summary>
-    public static Action? RequestRedraw { get; set; }
-
-    /// <summary>
     /// Margin, in screen pixels, recorded around the viewport on every edge. A
     /// pan can move up to this many pixels in any direction before the picture
     /// must be re-recorded, so a larger margin trades memory / record cost for
@@ -1333,16 +1323,17 @@ public static class S100VectorSnapshotRenderer
     }
 
     /// <summary>
-    /// Requests a single repaint after a background publish. Uses the host-supplied
-    /// <see cref="RequestRedraw"/> when set (so the viewer can marshal onto the UI
-    /// thread), otherwise falls back to <c>BaseLayer.DataHasChanged()</c>.
+    /// Requests a single repaint after a background publish. Routes to the
+    /// layer's per-session redraw sink
+    /// (<see cref="InstrumentedMemoryLayer.RequestRepaint"/>, which a session
+    /// wires to invalidate the attached map), falling back to
+    /// <c>BaseLayer.DataHasChanged()</c> for a session-less render.
     /// </summary>
     private static void RequestRepaint(ILayer layer)
     {
-        var redraw = RequestRedraw;
-        if (redraw is not null)
+        if (layer is InstrumentedMemoryLayer instrumented)
         {
-            redraw();
+            instrumented.RequestRepaint();
             return;
         }
 

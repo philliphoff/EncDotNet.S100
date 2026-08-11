@@ -45,7 +45,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// (bleed beyond the tile bounds) and hard-clipped to its core on composite, so
 /// lines and area fills stay continuous across seams. Finished tiles enter the
 /// native-byte-bounded <see cref="TileCache"/> and trigger a single repaint via
-/// <see cref="RequestRedraw"/>.
+/// the layer's per-session redraw sink.
 /// </para>
 /// <para>
 /// <b>Scope (Phase&#160;2).</b> Tiling + LRU cache + best-available compositor.
@@ -266,12 +266,6 @@ public static class S100VectorTileRenderer
         Console.Error.WriteLine($"[S100.DIAG] Render bailed (layer draws nothing): {reason}");
     }
 
-    /// <summary>
-    /// Invoked (on a worker thread) when a tile publishes, so the host can
-    /// request a single repaint. The viewer marshals a <c>RefreshGraphics()</c>
-    /// onto the UI thread.
-    /// </summary>
-    public static Action? RequestRedraw { get; set; }
 
     /// <summary>
     /// Process-wide graceful-shutdown gate for the background tile-rasterisation
@@ -563,7 +557,7 @@ public static class S100VectorTileRenderer
                 ? TileDiskCache.NamespaceFor(productLayerSet, styleStateHash)
                 : null;
 
-        var state = States.GetValue(layer, static _ => new TileState());
+        var state = States.GetValue(layer, static l => new TileState(l));
         lock (state.Sync)
         {
             var (baseScene, overlayScene) = PartitionScene(scene);
@@ -710,12 +704,12 @@ public static class S100VectorTileRenderer
         // worker publish — once per off-view cell. Culling here makes off-view
         // cells cost nothing. The CullMarginPx halo keeps edge cells (whose
         // symbols/over-render reach into the view) rendering.
-        var state = States.GetValue(layer, static _ => new TileState());
+        var state = States.GetValue(layer, static l => new TileState(l));
         if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, CullMarginPx))
         {
             if (InvalidateViewport(state))
             {
-                RequestRedraw?.Invoke();
+                RequestRepaint(layer);
             }
 
             return;
@@ -1147,7 +1141,7 @@ public static class S100VectorTileRenderer
         }
         if (requestAdmissionRetry)
         {
-            RequestRedraw?.Invoke();
+            RequestRepaint(layer);
         }
 
         if (workersToStart > 0)
@@ -1206,7 +1200,36 @@ public static class S100VectorTileRenderer
         if (States.TryGetValue(layer, out var state)
             && InvalidateViewport(state))
         {
-            RequestRedraw?.Invoke();
+            RequestRepaint(layer);
+        }
+    }
+
+    /// <summary>
+    /// Routes a background publish to the layer's per-session redraw sink
+    /// (<see cref="InstrumentedMemoryLayer.RequestRepaint"/>), falling back to
+    /// <c>BaseLayer.DataHasChanged()</c> for a session-less render.
+    /// </summary>
+    private static void RequestRepaint(ILayer layer)
+    {
+        if (layer is InstrumentedMemoryLayer instrumented)
+        {
+            instrumented.RequestRepaint();
+            return;
+        }
+
+        (layer as BaseLayer)?.DataHasChanged();
+    }
+
+    /// <summary>
+    /// Routes a worker-thread publish to the owning layer's redraw sink. The
+    /// layer is held weakly (it is this state's key in <see cref="States"/>, so a
+    /// strong reference would pin the entry); a collected layer yields no repaint.
+    /// </summary>
+    private static void RequestRepaint(TileState state)
+    {
+        if (state.Owner.TryGetTarget(out var layer))
+        {
+            RequestRepaint(layer);
         }
     }
 
@@ -2541,7 +2564,7 @@ public static class S100VectorTileRenderer
 
         if (publishedVisible)
         {
-            RequestRedraw?.Invoke();
+            RequestRepaint(state);
         }
     }
 
@@ -3286,6 +3309,15 @@ public static class S100VectorTileRenderer
     /// <summary>Per-layer tiling state, held in a weak table keyed by layer.</summary>
     private sealed class TileState
     {
+        public TileState(ILayer layer) => Owner = new WeakReference<ILayer>(layer);
+
+        /// <summary>
+        /// Weak back-reference to this state's owning layer (the weak-table key),
+        /// so a worker-thread publish can reach the layer's redraw sink without a
+        /// strong reference that would pin the entry.
+        /// </summary>
+        public readonly WeakReference<ILayer> Owner;
+
         public readonly object Sync = new();
 
         public VectorScene? Scene;
