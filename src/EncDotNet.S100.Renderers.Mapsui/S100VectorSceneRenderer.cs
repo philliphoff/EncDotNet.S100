@@ -531,10 +531,13 @@ public static class S100VectorSceneRenderer
     }
 
     /// <summary>
-    /// Routes a background publish to the layer's per-session redraw sink
-    /// (<see cref="InstrumentedMemoryLayer.RequestRepaint"/>), falling back to
-    /// <c>BaseLayer.DataHasChanged()</c> for a session-less render — matching the
-    /// snapshot and tile renderers.
+    /// Routes a background publish to the layer's repaint. An
+    /// <see cref="InstrumentedMemoryLayer"/> goes through its
+    /// <see cref="InstrumentedMemoryLayer.RequestRepaint"/> (which invokes the
+    /// session-stamped <see cref="InstrumentedMemoryLayer.RequestRedraw"/> sink,
+    /// or <c>DataHasChanged()</c> when none was wired); any other layer falls
+    /// back to <c>BaseLayer.DataHasChanged()</c> — matching the snapshot and tile
+    /// renderers.
     /// </summary>
     private static void RequestRepaint(ILayer layer)
     {

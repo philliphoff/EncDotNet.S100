@@ -1205,9 +1205,12 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Routes a background publish to the layer's per-session redraw sink
-    /// (<see cref="InstrumentedMemoryLayer.RequestRepaint"/>), falling back to
-    /// <c>BaseLayer.DataHasChanged()</c> for a session-less render.
+    /// Routes a background publish to the layer's repaint. An
+    /// <see cref="InstrumentedMemoryLayer"/> goes through its
+    /// <see cref="InstrumentedMemoryLayer.RequestRepaint"/> (which invokes the
+    /// session-stamped <see cref="InstrumentedMemoryLayer.RequestRedraw"/> sink,
+    /// or <c>DataHasChanged()</c> when none was wired); any other layer falls
+    /// back to <c>BaseLayer.DataHasChanged()</c>.
     /// </summary>
     private static void RequestRepaint(ILayer layer)
     {

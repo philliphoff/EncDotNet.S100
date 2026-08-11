@@ -991,9 +991,10 @@ instead of a single image, and hides the record-frame stall in four ways:
    than freezing.
 4. **Async record + repaint** — every off-thread record uses a dedicated
    `RenderService` (CPU-backed raster, safe to blit on the render thread) and,
-   on publish, requests a single repaint through the layer's per-session redraw
-   sink (`InstrumentedMemoryLayer.RequestRepaint`, which a session wires to
-   invalidate the attached map — see the `AddS100` section) so the crisp image
+   on publish, requests a single repaint via the layer's
+   `InstrumentedMemoryLayer.RequestRepaint`, which invokes the per-session redraw
+   sink the session stamped on `InstrumentedMemoryLayer.RequestRedraw` (it
+   invalidates the attached map — see the `AddS100` section) so the crisp image
    replaces the stale/translated blit.
 
 Pan re-records are at the *same* resolution (scale 1), so once a pan settles
