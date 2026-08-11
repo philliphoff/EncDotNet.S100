@@ -150,6 +150,14 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `set_leg_attributes` *(viewer only, **mutating**)* | Updates one leg (`legIndex`, in `[0, legCount)`): its `geometryType` (`loxodrome`\|`geodesic`) and/or navigational envelope (cross-track / channel limits, safety contour & depth, SOG/STW min & max, draft, static & dynamic UKC, safety margin, note — all metres/knots per S-421). All attributes optional; supplied values overwrite, omitted values are unchanged. Omit `routeId` to use the active route. Returns the route's full updated state. |
 | `set_route_info` *(viewer only, **mutating**)* | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`/`validityEnd`) and vessel particulars (`vesselName`/`vesselMmsi`/`vesselImo`/`vesselCallsign`/`vesselLengthMeters`/`vesselBeamMeters`; supplying any vessel field creates the vessel block). All fields optional; supplied values overwrite. Omit `routeId` to use the active route. Returns the route's full updated state. |
 
+> The **(viewer only)** tags above scope each tool to *this* server — the
+> surface a running viewer instance exposes. Most of the session tools are in
+> fact the shared implementation and are equally available from the headless
+> CLI host (`s100 mcp serve`); only the UI-bound tools are truly
+> viewer-specific. See
+> [Shared vs host-specific tool implementations](#shared-vs-host-specific-tool-implementations)
+> below for the exact split.
+
 ### Read-only vs mutating tools
 
 Tools fall into two groups:
