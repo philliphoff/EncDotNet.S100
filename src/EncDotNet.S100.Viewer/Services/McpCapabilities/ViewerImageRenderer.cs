@@ -12,9 +12,10 @@ namespace EncDotNet.S100.Viewer.Services.McpCapabilities;
 /// map. <see cref="PreferredSize"/> reports the live on-screen viewport size so
 /// an unsized <c>render_to_image</c> captures what the user sees pixel-for-pixel
 /// (rather than letterboxing the fixed default) and echoes those dimensions back
-/// for aspect-matching and pixel picks. The coordinate converter is optional; a
-/// null one (or a viewport not yet laid out) yields a null preferred size, and
-/// the tool falls back to its fixed default.
+/// for aspect-matching. (A pixel pick uses the rendered image's width/height,
+/// which match the echoed viewport size only when the capture defaulted to it.)
+/// The coordinate converter is optional; a null one (or a viewport not yet laid
+/// out) yields a null preferred size, and the tool falls back to its fixed default.
 /// </remarks>
 /// <param name="snapshot">The viewer's live-map snapshot renderer.</param>
 /// <param name="coordinates">
