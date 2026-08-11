@@ -122,17 +122,21 @@ public partial class MainWindow : Window
         // ── 3. Add the optional reusable overlays ──────────────────────────
         //
         // Both are self-contained Mapsui layers that depend only on Mapsui (not
-        // on the session, a catalogue, a palette, or a view model). Add each
-        // Layer to Map.Layers once, then drive it with Show/Clear. Order matters
-        // only for z-order; the highlight goes on top of the extent indicator.
+        // on the session, a catalogue, a palette, or a view model). Attach each
+        // through session.Layers.AddOverlayLayer so the session keeps them in the
+        // overlay band above the dataset layers — the host does not touch
+        // Map.Layers directly or track z-order itself. The session owns the
+        // dataset band; the basemap/overlay/tool bands are the host's to fill.
+        // Order within the band follows insertion, so the highlight (added last)
+        // sits on top of the extent indicator.
         //   * extent indicator: a dashed border around the cell, revealed by
         //     Mapsui exactly when the viewport zooms out past the cell's content
         //     cutoff, giving the mariner a target to zoom toward.
         //   * pick highlight: outlines the topmost picked feature.
         _extentIndicator = new S100DatasetExtentIndicatorLayer();
-        map.Layers.Add(_extentIndicator.Layer);
+        _session.Layers.AddOverlayLayer(_extentIndicator.Layer);
         _highlight = new S100PickHighlightLayer();
-        map.Layers.Add(_highlight.Layer);
+        _session.Layers.AddOverlayLayer(_highlight.Layer);
 
         // Pick on release so a click reports the S-100 features underneath while
         // ordinary drag-pan / wheel-zoom stay with the Mapsui control.

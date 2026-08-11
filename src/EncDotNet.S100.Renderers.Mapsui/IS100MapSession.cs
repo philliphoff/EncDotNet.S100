@@ -35,6 +35,16 @@ public interface IS100MapSession : IDisposable, IAsyncDisposable
     /// <summary>The navigation surface bound to the same map.</summary>
     MapsuiMapNavigator Navigator { get; }
 
+    /// <summary>
+    /// The host-facing basemap, overlay, and tool layer bands. A host attaches
+    /// its own decoration layers here (basemaps, pick highlights, extent
+    /// indicators, measure tools) so they keep their z-order relative to the
+    /// session's dataset layers. The dataset band is intentionally not exposed —
+    /// the session owns and drives it via <see cref="AddDatasetAsync"/>,
+    /// <see cref="RemoveDataset"/>, and <see cref="SetOrder"/>.
+    /// </summary>
+    IS100MapLayerHost Layers { get; }
+
     /// <summary>Loads datasets into this session from a file path.</summary>
     IS100DatasetLoader Datasets { get; }
 

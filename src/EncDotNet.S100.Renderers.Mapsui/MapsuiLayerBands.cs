@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// to a UI thread. UI-framework hosts remain responsible for invoking it from
 /// the thread required by their map control.
 /// </remarks>
-public sealed class MapsuiLayerBands : IMapsuiOverlayLayerHost
+public sealed class MapsuiLayerBands : IMapsuiOverlayLayerHost, IS100MapLayerHost
 {
     private readonly Map _map;
     private readonly HashSet<ILayer> _datasetLayers = [];
