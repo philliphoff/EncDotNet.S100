@@ -162,16 +162,6 @@ public static class S100VectorSnapshotRenderer
     public static bool PrebuildEnabled => RenderingOptimizations.VectorSnapshotPrebuildEnabled;
 
     /// <summary>
-    /// Optional callback invoked (on a background thread) when an off-thread
-    /// prebuild publishes a freshly recorded image, so the host can request a
-    /// single repaint that swaps the transient scaled-stale blit for the crisp
-    /// image. When <c>null</c> the renderer falls back to
-    /// <c>BaseLayer.DataHasChanged()</c> on the recorded layer. The viewer may
-    /// set this to marshal a <c>RefreshGraphics()</c> onto the UI thread.
-    /// </summary>
-    public static Action? RequestRedraw { get; set; }
-
-    /// <summary>
     /// Margin, in screen pixels, recorded around the viewport on every edge. A
     /// pan can move up to this many pixels in any direction before the picture
     /// must be re-recorded, so a larger margin trades memory / record cost for
@@ -1194,7 +1184,7 @@ public static class S100VectorSnapshotRenderer
                     Console.Error.WriteLine($"[VecSnapshot] PUBLISH res={resolution:G6} feats={featureCount}");
                 }
 
-                RequestRepaint(layer);
+                VectorLayerRepaint.Request(layer);
             }
             catch (Exception ex)
             {
@@ -1295,7 +1285,7 @@ public static class S100VectorSnapshotRenderer
                     Console.Error.WriteLine($"[VecSnapshot] PAN-PUBLISH res={resolution:G6} feats={featureCount}");
                 }
 
-                RequestRepaint(layer);
+                VectorLayerRepaint.Request(layer);
             }
             catch (Exception ex)
             {
@@ -1332,22 +1322,6 @@ public static class S100VectorSnapshotRenderer
         }
     }
 
-    /// <summary>
-    /// Requests a single repaint after a background publish. Uses the host-supplied
-    /// <see cref="RequestRedraw"/> when set (so the viewer can marshal onto the UI
-    /// thread), otherwise falls back to <c>BaseLayer.DataHasChanged()</c>.
-    /// </summary>
-    private static void RequestRepaint(ILayer layer)
-    {
-        var redraw = RequestRedraw;
-        if (redraw is not null)
-        {
-            redraw();
-            return;
-        }
-
-        (layer as BaseLayer)?.DataHasChanged();
-    }
 
     /// <summary>
     /// Iterates the layer's visible features and dispatches each (feature, style)

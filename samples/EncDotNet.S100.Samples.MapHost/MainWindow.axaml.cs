@@ -41,13 +41,6 @@ public partial class MainWindow : Window
     private readonly AvaloniaMapsuiMapAdapter _adapter;
     private readonly S100PickHighlightLayer _highlight;
     private readonly S100DatasetExtentIndicatorLayer _extentIndicator;
-    private readonly Action _redraw;
-
-    // Whatever was installed on the process-global redraw hooks before us, so we
-    // restore rather than clobber on close (see the constructor / OnClosed).
-    private readonly Action? _prevSnapshotRedraw;
-    private readonly Action? _prevSceneRedraw;
-    private readonly Action? _prevTileRedraw;
 
     private readonly string _cellPath;
 
@@ -77,47 +70,27 @@ public partial class MainWindow : Window
         // and for the pick adapter to convert pointer pixels back to WGS-84.
         var map = new Map { CRS = "EPSG:3857" };
 
-        // Map.AddS100 is THE entry point. It returns an IS100MapSession that owns
-        // the S-100 layer bands, processors, renderer, and navigation surface;
-        // disposing it (see OnClosed) releases all of them. Ownership lives only
-        // on the returned instance - it is not stashed in a static table or
-        // Map.Tag - so the host holds and disposes it explicitly.
+        // MapControl.AddS100 is THE entry point for an Avalonia host: it attaches
+        // the session to the control's map AND the Avalonia adapter to the control
+        // in one call, and wires a UI-thread redraw marshal so the background
+        // cached / scene / tile renderers repaint the live control when a settled
+        // image publishes off-thread (no process-global hooks). It returns the
+        // disposable session and adapter; ownership lives only on those instances
+        // - nothing is stashed in a static table or Map.Tag - so the host holds
+        // and disposes them explicitly (see OnClosed). The session is otherwise
+        // UI-framework-neutral; the adapter is the bridge to *this* framework
+        // (pointer-pixel picks, live redraw, snapshots), borrowing the control and
+        // map (disposing it does not dispose them).
         //   * options.CrsTransformFactory: required. The reusable assembly ships
         //     no CRS implementation, so the host supplies one (ProjNet here).
         //   * options.DatasetPipelineFactory: enables Datasets.LoadAsync(path).
-        _session = map.AddS100(
+        MapControl.Map = map;
+        (_session, _adapter) = MapControl.AddS100(
             new S100MapsuiOptions
             {
                 CrsTransformFactory = new ProjNetCrsTransformFactory(),
                 DatasetPipelineFactory = _processorFactory,
             });
-
-        // ── 2. Bind the map to the live control and attach the Avalonia adapter ─
-        //
-        // The session is UI-framework-neutral. AvaloniaMapsuiMapAdapter is the
-        // bridge to *this* framework: it converts pointer pixels to geographic
-        // pick queries, requests live redraws, and captures snapshots. It borrows
-        // the control and map (disposing it does not dispose them).
-        MapControl.Map = map;
-        _adapter = AvaloniaMapsuiMapAdapter.Attach(MapControl);
-        _redraw = _adapter.RequestRedraw;
-
-        // Redraw after async re-renders. The S-100 vector renderers rasterise
-        // cached / scene / tile output on background threads and signal
-        // completion only through these process-global hooks. A host that does
-        // not set them sees stale content after an in-place re-render (e.g. a
-        // palette change) until an unrelated pan/zoom triggers Mapsui's own
-        // refresh - so point them at our redraw. Because they are process-global
-        // we first capture whatever was installed and restore it in OnClosed,
-        // rather than clobbering another host in the same process. (Issue #512
-        // tracks replacing these statics with a per-session seam that would make
-        // all of this unnecessary.)
-        _prevSnapshotRedraw = S100VectorSnapshotRenderer.RequestRedraw;
-        _prevSceneRedraw = S100VectorSceneRenderer.RequestRedraw;
-        _prevTileRedraw = S100VectorTileRenderer.RequestRedraw;
-        S100VectorSnapshotRenderer.RequestRedraw = _redraw;
-        S100VectorSceneRenderer.RequestRedraw = _redraw;
-        S100VectorTileRenderer.RequestRedraw = _redraw;
 
         // ── 3. Add the optional reusable overlays ──────────────────────────
         //
@@ -332,25 +305,6 @@ public partial class MainWindow : Window
         // subscriptions, and caches; the adapter detaches; the catalogue host
         // frees its parse caches.
         MapControl.PointerReleased -= OnMapPointerReleased;
-
-        // Restore the process-global redraw hooks to whatever preceded us, but
-        // only where ours is still the installed one (guarding against a newer
-        // handler having taken over).
-        if (ReferenceEquals(S100VectorSnapshotRenderer.RequestRedraw, _redraw))
-        {
-            S100VectorSnapshotRenderer.RequestRedraw = _prevSnapshotRedraw;
-        }
-
-        if (ReferenceEquals(S100VectorSceneRenderer.RequestRedraw, _redraw))
-        {
-            S100VectorSceneRenderer.RequestRedraw = _prevSceneRedraw;
-        }
-
-        if (ReferenceEquals(S100VectorTileRenderer.RequestRedraw, _redraw))
-        {
-            S100VectorTileRenderer.RequestRedraw = _prevTileRedraw;
-        }
-
         _adapter.Dispose();
         _session.Dispose();
         _processorFactory.Dispose();

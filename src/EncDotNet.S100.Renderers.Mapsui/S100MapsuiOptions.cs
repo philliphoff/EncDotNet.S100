@@ -89,6 +89,18 @@ public sealed record S100MapsuiOptions
     public IDatasetProcessorFactory? DatasetPipelineFactory { get; init; }
 
     /// <summary>
+    /// Gets the marshal used to run the session's redraw on the host's UI thread.
+    /// The S-100 vector renderers rasterise cached / scene / tile output on
+    /// background threads; when a settled image publishes, the session invalidates
+    /// the attached map (<c>Map.RefreshGraphics()</c>) to bring it on screen. A UI
+    /// host whose control must be invalidated on its dispatcher thread supplies a
+    /// marshal (e.g. one that posts to the UI thread); when <see langword="null"/>
+    /// the redraw runs inline on the publishing thread, which suits headless or
+    /// single-threaded hosts.
+    /// </summary>
+    public Action<Action>? RedrawMarshal { get; init; }
+
+    /// <summary>
     /// Gets the marshal used by the session's dynamic-source host to run overlay
     /// mutations on the map thread. Dynamic sources publish changes from
     /// arbitrary threads, so a UI host supplies a dispatcher-backed marshal

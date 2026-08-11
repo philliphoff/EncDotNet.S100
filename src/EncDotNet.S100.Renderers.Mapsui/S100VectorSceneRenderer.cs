@@ -45,8 +45,9 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// viewport (zoom, or a pan past the recorded <see cref="MarginPx"/> margin) a
 /// fresh whole-viewport-plus-margin raster is scheduled on a worker; the stale
 /// image keeps blitting (translated) until the new one publishes, at which point
-/// <see cref="RequestRedraw"/> marshals a single repaint that swaps it in. Jobs
-/// are coalesced latest-wins per layer so a fast gesture never queues a backlog.
+/// the layer's per-session redraw sink marshals a single repaint that swaps it
+/// in. Jobs are coalesced latest-wins per layer so a fast gesture never queues a
+/// backlog.
 /// </para>
 /// <para>
 /// <b>Single surface (Phase&#160;1 scope).</b> One image per layer covering the
@@ -100,14 +101,6 @@ public static class S100VectorSceneRenderer
     /// </summary>
     private const int MaxImageDimension = 8192;
 
-    /// <summary>
-    /// Optional callback invoked (on a worker thread) when a freshly rasterised
-    /// image publishes, so the host can request a single repaint that swaps the
-    /// transient stale blit for the new image. When <see langword="null"/> the
-    /// new image is simply used on the next natural repaint. The viewer sets this
-    /// to marshal a <c>RefreshGraphics()</c> onto the UI thread.
-    /// </summary>
-    public static Action? RequestRedraw { get; set; }
 
     private static readonly ConditionalWeakTable<ILayer, SceneState> States = new();
 
@@ -154,7 +147,7 @@ public static class S100VectorSceneRenderer
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
 
-        var state = States.GetValue(layer, static _ => new SceneState());
+        var state = States.GetValue(layer, static l => new SceneState(l));
         lock (state.Sync)
         {
             state.Scene = scene;
@@ -205,7 +198,7 @@ public static class S100VectorSceneRenderer
             return;
         }
 
-        var state = States.GetValue(layer, static _ => new SceneState());
+        var state = States.GetValue(layer, static l => new SceneState(l));
 
         var deviceScale = canvas.TotalMatrix.ScaleX;
         if (deviceScale <= 0 || float.IsNaN(deviceScale))
@@ -401,7 +394,7 @@ public static class S100VectorSceneRenderer
 
             if (published)
             {
-                RequestRedraw?.Invoke();
+                RequestRepaint(state);
             }
 
             if (done)
@@ -524,6 +517,20 @@ public static class S100VectorSceneRenderer
     }
 
     /// <summary>
+    /// Routes a background publish to the owning layer's per-session redraw sink.
+    /// The layer is held weakly (it is this state's key in <see cref="States"/>,
+    /// so a strong reference would pin the entry); a collected layer simply
+    /// yields no repaint.
+    /// </summary>
+    private static void RequestRepaint(SceneState state)
+    {
+        if (state.Owner.TryGetTarget(out var layer))
+        {
+            VectorLayerRepaint.Request(layer);
+        }
+    }
+
+    /// <summary>
     /// Per-layer render state: the bound scene, the current rasterised image and
     /// its record anchor, and the worker coalescing fields. Held in a
     /// <see cref="ConditionalWeakTable{TKey,TValue}"/> keyed by layer so a
@@ -532,6 +539,10 @@ public static class S100VectorSceneRenderer
     /// </summary>
     private sealed class SceneState
     {
+        public SceneState(ILayer layer) => Owner = new WeakReference<ILayer>(layer);
+
+        public readonly WeakReference<ILayer> Owner;
+
         public readonly object Sync = new();
 
         public VectorScene? Scene;

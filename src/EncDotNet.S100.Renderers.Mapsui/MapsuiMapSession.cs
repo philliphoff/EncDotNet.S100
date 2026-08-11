@@ -34,6 +34,8 @@ public sealed class MapsuiMapSession : IDisposable
     private readonly DatasetProcessorOwner _processorOwner;
     private readonly MapsuiDatasetRenderer _renderer;
     private readonly IInteroperabilityAuthorityProvider _authorityProvider;
+    private readonly Action? _redrawRequested;
+    private readonly List<InstrumentedMemoryLayer> _stampedRedrawLayers = [];
     private readonly Dictionary<MapDatasetId, Entry> _entries = [];
     private readonly List<MapDatasetId> _order = [];
     private readonly ConditionalWeakTable<ILayer, LayerVisibilityRange> _visibilityRanges = new();
@@ -98,11 +100,21 @@ public sealed class MapsuiMapSession : IDisposable
     /// <param name="authorityProvider">
     /// The runtime S-98 cross-product ordering and suppression authority.
     /// </param>
+    /// <param name="redrawRequested">
+    /// Optional per-session redraw action, invoked (possibly from a background
+    /// thread) when a vector renderer publishes a settled cached / scene / tile
+    /// image so the host can repaint the map. The session stamps it onto every
+    /// dataset layer it installs. When <see langword="null"/> the renderers fall
+    /// back to <c>BaseLayer.DataHasChanged()</c>. Typically invalidates the
+    /// attached map (e.g. <c>Map.RefreshGraphics()</c>), optionally marshalled
+    /// onto a UI thread.
+    /// </param>
     public MapsuiMapSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer,
-        IInteroperabilityAuthorityProvider authorityProvider)
+        IInteroperabilityAuthorityProvider authorityProvider,
+        Action? redrawRequested = null)
     {
         ArgumentNullException.ThrowIfNull(layerBands);
         ArgumentNullException.ThrowIfNull(processorOwner);
@@ -112,6 +124,7 @@ public sealed class MapsuiMapSession : IDisposable
         _processorOwner = processorOwner;
         _renderer = renderer;
         _authorityProvider = authorityProvider;
+        _redrawRequested = redrawRequested;
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
         Query = new S100MapQuery(this);
     }
@@ -1331,6 +1344,12 @@ public sealed class MapsuiMapSession : IDisposable
             _stackEntries = [];
             _stackedLayers = [];
             _time = MapsuiMapTimeSnapshot.Empty;
+            foreach (var layer in _stampedRedrawLayers)
+            {
+                layer.RequestRedraw = null;
+            }
+
+            _stampedRedrawLayers.Clear();
             _layerBands.ReplaceDatasetLayers([]);
         }
     }
@@ -1344,9 +1363,50 @@ public sealed class MapsuiMapSession : IDisposable
         ApplyDisplayAndScaleToProjectedLayers(projected);
         ApplyOverlapSuppression(projected);
         UpdateContentCutoffs(projected);
-        _layerBands.ReplaceDatasetLayers(projected.Select(item => item.Layer).ToArray());
+        var datasetLayers = projected.Select(item => item.Layer).ToArray();
+        StampRedrawSink(datasetLayers);
+        _layerBands.ReplaceDatasetLayers(datasetLayers);
         _stackEntries = stackEntries;
         _stackedLayers = stackedLayers;
+    }
+
+    /// <summary>
+    /// Stamps the session's redraw action onto every installed vector dataset
+    /// layer so the background cached / scene / tile renderers can request a
+    /// repaint through the layer rather than a process-global hook, and clears it
+    /// from any previously-stamped layer that is no longer installed (so a stray
+    /// post-removal worker publish cannot invalidate the map and the redraw
+    /// delegate is released with the orphaned layer). No-op when the session was
+    /// created without a redraw action.
+    /// </summary>
+    private void StampRedrawSink(IReadOnlyList<ILayer> datasetLayers)
+    {
+        // Drop the sink from layers that were installed before but are not in the
+        // new set (a re-render replaces a layer instance; a removal drops one).
+        // Reorder / visibility recompositions keep the same instances, so those
+        // stay stamped.
+        foreach (var prior in _stampedRedrawLayers)
+        {
+            if (!datasetLayers.Contains(prior))
+            {
+                prior.RequestRedraw = null;
+            }
+        }
+
+        _stampedRedrawLayers.Clear();
+        if (_redrawRequested is not { } redraw)
+        {
+            return;
+        }
+
+        foreach (var layer in datasetLayers)
+        {
+            if (layer is InstrumentedMemoryLayer instrumented)
+            {
+                instrumented.RequestRedraw = redraw;
+                _stampedRedrawLayers.Add(instrumented);
+            }
+        }
     }
 
     private void ApplyDisplayAndScaleToSourceLayers(

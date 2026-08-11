@@ -195,6 +195,18 @@ pattern-clip cache, an optional shared `ProcessorOwner` (a DI host shares one
 across services; the session disposes only an owner it created), and the
 `DatasetPipelineFactory` used by `Datasets.LoadAsync`.
 
+**Redraw.** The background cached / scene / tile renderers rasterise off-thread;
+when a settled image publishes they request a repaint through a per-session
+redraw sink the session stamps onto each dataset layer
+(`InstrumentedMemoryLayer.RequestRedraw`) — replacing the former process-global
+static hooks. The default sink invalidates the attached map
+(`Map.RefreshGraphics()`, which every Mapsui control repaints from), so a
+headless host needs nothing. A UI host whose control must be invalidated on its
+dispatcher thread supplies `S100MapsuiOptions.RedrawMarshal` (an `Action<Action>`
+posting to the UI thread); on Avalonia, `mapControl.AddS100(...)` in
+`EncDotNet.S100.Renderers.Mapsui.Avalonia` wires that marshal (and attaches the
+map adapter) for you.
+
 `s100.Datasets.LoadAsync(path)` detects the product spec, builds a processor
 with the host-supplied `DatasetPipelineFactory` (an ENC `.000` base cell also
 picks up sibling `.001`/`.002` updates), constructs a renderer-neutral
@@ -979,10 +991,11 @@ instead of a single image, and hides the record-frame stall in four ways:
    than freezing.
 4. **Async record + repaint** — every off-thread record uses a dedicated
    `RenderService` (CPU-backed raster, safe to blit on the render thread) and,
-   on publish, requests a single repaint via
-   `S100VectorSnapshotRenderer.RequestRedraw` (the viewer marshals a
-   `RefreshGraphics()` onto the UI thread) so the crisp image replaces the
-   stale/translated blit.
+   on publish, requests a single repaint via the layer's
+   `InstrumentedMemoryLayer.RequestRepaint`, which invokes the per-session redraw
+   sink the session stamped on `InstrumentedMemoryLayer.RequestRedraw` (it
+   invalidates the attached map — see the `AddS100` section) so the crisp image
+   replaces the stale/translated blit.
 
 Pan re-records are at the *same* resolution (scale 1), so once a pan settles
 the displayed image is an exact, in-margin, scale-1 blit — pixel-identical to a
@@ -1042,8 +1055,9 @@ is latest-wins coalesced (a superseded request is dropped, never published) and
 honours scale-visibility (`ScaleDenominatorFor` derives the S-100 denominator
 from the EPSG:3857 resolution, the inverse of `DenominatorToResolution`) so the
 same SCAMIN detail shows/hides as the live frame. Rotated viewports draw
-nothing (north-up only in v1). On publish it calls `RequestRedraw` (the viewer
-marshals `RefreshGraphics()` onto the UI thread). Two telemetry histograms,
+nothing (north-up only in v1). On publish it requests a repaint through the
+layer's per-session redraw sink (which invalidates the attached map). Two
+telemetry histograms,
 `SceneRasterizeDuration` (worker) and `SceneCompositeDuration` (UI blit),
 attribute the two halves.
 

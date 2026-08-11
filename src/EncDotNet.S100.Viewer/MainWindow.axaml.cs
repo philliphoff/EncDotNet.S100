@@ -33,7 +33,6 @@ public partial class MainWindow : ShadUI.Window
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private readonly CancellationTokenSource _windowLifetimeCancellation = new();
     private readonly MapsuiMapHost _mapHost;
-    private readonly Action _rendererRedrawHandler;
     private ValidationOverlayService? _validationOverlay;
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
     private Map? _renderActivityMap;
@@ -137,7 +136,6 @@ public partial class MainWindow : ShadUI.Window
                 EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>());
-        _rendererRedrawHandler = _mapHost.RequestRedraw;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
         // Snapshot is the MCP readiness gate, so publish it only after the
@@ -174,7 +172,6 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();
             _validationOverlay?.Dispose();
             _validationOverlay = null;
-            ClearRendererRedrawHandlers();
             // Detach render-activity wiring so the static hub does not
             // outlive the window and a torn-down map is not probed.
             EncDotNet.S100.Viewer.Diagnostics.RenderActivityHub.Sink = null;
@@ -322,26 +319,10 @@ public partial class MainWindow : ShadUI.Window
             activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
         }
 
-        // When the off-thread vector-snapshot prebuild publishes a freshly
-        // recorded image on a background thread, marshal a single graphics
-        // refresh onto the UI thread so the transient scaled-stale blit is
-        // replaced by the crisp image. Wired unconditionally (no-op unless the
-        // prebuild is enabled) so toggling the prebuild on at runtime works
-        // without a relaunch.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw =
-            _rendererRedrawHandler;
-
-        // Same marshalling for the TiledScene ("B") subsystem: when a worker
-        // publishes a freshly rasterised VectorScene image, request a single
-        // UI-thread repaint that swaps the transient stale blit for the new image.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw =
-            _rendererRedrawHandler;
-
-        // Same marshalling for the Phase-2 tiled arm of the TiledScene subsystem:
-        // when a worker publishes a freshly rasterised base-plane tile, request a
-        // single UI-thread repaint that composites it into the visible mosaic.
-        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw =
-            _rendererRedrawHandler;
+        // The background vector-snapshot / scene / tile renderers repaint through
+        // a per-session redraw sink the session stamps onto each dataset layer
+        // (wired via MapsuiMapHost from the Avalonia adapter's UI-thread
+        // RefreshGraphics), so the window no longer sets process-global hooks.
 
         // Bind the map-viewport notifier as early as possible so the
         // AIS overlay's zoom-gated decorator (resolved below via
@@ -708,30 +689,6 @@ public partial class MainWindow : ShadUI.Window
     {
         _mapHost.SetBasemapLayer(BasemapLayerFactory.TryCreate(mode));
         _mapHost.RequestRedraw();
-    }
-
-    private void ClearRendererRedrawHandlers()
-    {
-        if (ReferenceEquals(
-            EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw,
-            _rendererRedrawHandler))
-        {
-            EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = null;
-        }
-
-        if (ReferenceEquals(
-            EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw,
-            _rendererRedrawHandler))
-        {
-            EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw = null;
-        }
-
-        if (ReferenceEquals(
-            EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw,
-            _rendererRedrawHandler))
-        {
-            EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw = null;
-        }
     }
 
     /// <summary>
