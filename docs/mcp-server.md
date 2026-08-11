@@ -189,6 +189,32 @@ Tools fall into two groups:
 Tool descriptions in the registered MCP catalogue identify each tool
 as one or the other; this table is the canonical reference.
 
+### Shared vs host-specific tool implementations
+
+Most of the mutating tools share one renderer-neutral implementation,
+built by `S100MutableTools` in `EncDotNet.S100.Mcp.Tools` over a small set
+of capability seams (`IPresentationController`, `ITimeController`,
+`IImageRenderer`, `IMutableDatasetCatalog`, `IViewportController`). Both
+the desktop viewer and the headless CLI session provide those
+capabilities and so run the *same* tool code: `set_palette`,
+`set_display_category`, `set_display_mode`, `set_time_step`,
+`render_to_image`, `open_dataset`, `close_dataset`, and
+`close_all_datasets`. The viewer adapts its own services onto the seams
+(see `Services/McpCapabilities/`).
+
+A few tools stay host-specific where the hosts genuinely diverge, rather
+than being forced onto a shape that would fit neither well:
+
+* `set_viewport` — the viewer drives a **live, rotatable** Mapsui map and
+  accepts a web-mercator **zoom** level; the CLI renders a **headless,
+  north-up** composite addressed by **scale denominator**. The two keep
+  separate implementations (the viewer's over `IMapViewportController`,
+  the CLI's over `IViewportController`) so the viewer retains arbitrary
+  rotation and zoom-level input.
+* `pick_features`, `set_render_subsystem`, `capture_app_screenshot`,
+  `set_own_ship`, panels, routes, and the render-observability tools —
+  these need the live viewer UI and have no headless analogue.
+
 ### Image content blocks (`render_to_image`)
 
 `render_to_image` is the first tool in this codebase to return non-text
@@ -223,13 +249,15 @@ disturb the user's view or trigger a redraw on screen. Viewport,
 palette, time step, and loaded datasets reflect the user's current
 view exactly.
 
-`render_to_image` is **viewer-only**: it is injected into the hosted
-MCP server by `EncDotNet.S100.Viewer` via the
-`S100McpServerOptions.AdditionalTools` extension point. The catalog-only
-`EncDotNet.S100.Mcp.Tools` library deliberately has no rendering
-dependency, so a non-viewer host supplies its own equivalent. The same
-applies to its inverse, `pick_features`, which needs the live navigator
-to project a screen pixel back to a geographic point.
+`render_to_image` is one of the **shared mutating tools**: its tool
+logic lives in `EncDotNet.S100.Mcp.Tools` (`S100MutableTools` over the
+`IImageRenderer` capability seam), and each host supplies the renderer.
+The desktop viewer backs it with a snapshot of a clone of the live
+Mapsui `Map` (through a `ViewerImageRenderer` adapter); the headless CLI
+backs it with its Skia composite pipeline. Its inverse, `pick_features`,
+is still viewer-only — it needs the live navigator to project a screen
+pixel back to a geographic point, so a non-viewer host supplies its own
+equivalent.
 
 ## Sample agent prompts
 
