@@ -10,14 +10,18 @@ using Mapsui.Layers;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Composes the Viewer's focused map capabilities over reusable Mapsui and
-/// Avalonia adapters.
+/// Composes the Viewer's focused map capabilities over the reusable S-100
+/// session obtained from <see cref="AvaloniaS100MapExtensions.AddS100"/>.
 /// </summary>
 /// <remarks>
-/// Layer ownership remains delegated to <see cref="MapsuiLayerBands"/>,
-/// navigation to <see cref="MapsuiMapNavigator"/>, and live-control behavior
-/// to <see cref="AvaloniaMapsuiMapAdapter"/>. This host retains only Viewer
-/// capability contracts and render-subsystem lifecycle.
+/// This host sets up S-100 the same way the MapHost sample does — one
+/// <see cref="AvaloniaS100MapExtensions.AddS100"/> call attaches the session to
+/// the control's map and the <see cref="AvaloniaMapsuiMapAdapter"/> to the
+/// control. The host then implements the Viewer's capability contracts by
+/// delegating band ownership to <see cref="IS100MapSession.Layers"/>, navigation
+/// to <see cref="IS100MapSession.Navigator"/>, and live-control behavior
+/// (redraw, snapshots, coordinate conversion) to the adapter. It retains only
+/// the Viewer-specific render-subsystem lifecycle on top of that.
 /// </remarks>
 internal sealed class MapsuiMapHost :
     IMapLayerCollection,
@@ -28,36 +32,38 @@ internal sealed class MapsuiMapHost :
     IMapInvalidator,
     IDisposable
 {
-    private readonly AvaloniaMapsuiMapAdapter _avaloniaAdapter;
-    private readonly MapsuiLayerBands _layerBands;
-    private readonly MapsuiMapNavigator _mapNavigator;
+    private readonly IS100MapSession _session;
+    private readonly AvaloniaMapsuiMapAdapter _adapter;
     private bool _disposed;
 
     public MapsuiMapHost(
-        Map map,
-        AvaloniaMapsuiMapAdapter avaloniaAdapter,
+        CaptureSynchronizedMapControl mapControl,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer datasetRenderer,
         IInteroperabilityAuthorityProvider authorityProvider)
     {
-        ArgumentNullException.ThrowIfNull(map);
-        ArgumentNullException.ThrowIfNull(avaloniaAdapter);
+        ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(processorOwner);
         ArgumentNullException.ThrowIfNull(datasetRenderer);
         ArgumentNullException.ThrowIfNull(authorityProvider);
-        _avaloniaAdapter = avaloniaAdapter;
-        _layerBands = new MapsuiLayerBands(map);
-        // The adapter's RequestRedraw marshals a RefreshGraphics onto the UI
-        // thread; the session stamps it onto each dataset layer so the background
-        // cached / scene / tile renderers repaint through it — replacing the
+
+        // The public entry point: attach the S-100 session to the control's map
+        // and the Avalonia adapter to the control in one call. The DI-shared
+        // processor owner and dataset renderer are injected as borrowed
+        // collaborators — the session never disposes them (other Viewer services
+        // acquire processor leases on the same owner and render through the same
+        // renderer), so their lifetime stays with DI. A prebuilt renderer already
+        // carries its own CRS transform factory, so none is supplied here. The
+        // adapter's UI-thread redraw is defaulted by AddS100, replacing the
         // former process-global static redraw hooks.
-        DatasetSession = new MapsuiMapSession(
-            _layerBands,
-            processorOwner,
-            datasetRenderer,
-            authorityProvider,
-            _avaloniaAdapter.RequestRedraw);
-        _mapNavigator = new MapsuiMapNavigator(map);
+        (_session, _adapter) = mapControl.AddS100(
+            new S100MapsuiOptions
+            {
+                ProcessorOwner = processorOwner,
+                DatasetRenderer = datasetRenderer,
+                InteroperabilityAuthorityProvider = authorityProvider,
+            });
+
         RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
         RenderSubsystem.Activate();
     }
@@ -65,65 +71,59 @@ internal sealed class MapsuiMapHost :
     /// <inheritdoc />
     public IChartRenderSubsystem RenderSubsystem { get; }
 
-    public MapsuiMapSession DatasetSession { get; }
+    /// <inheritdoc />
+    public MapsuiMapSession DatasetSession => _session.Session;
 
-    public void AddDatasetLayer(ILayer layer) => _layerBands.AddDatasetLayer(layer);
+    public void SetBasemapLayer(ILayer? layer) => _session.Layers.SetBasemapLayer(layer);
 
-    public void RemoveDatasetLayer(ILayer layer) => _layerBands.RemoveDatasetLayer(layer);
+    public void AddOverlayLayer(ILayer layer) => _session.Layers.AddOverlayLayer(layer);
 
-    public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) =>
-        _layerBands.ReplaceDatasetLayers(orderedDatasetLayers);
+    public void RemoveOverlayLayer(ILayer layer) => _session.Layers.RemoveOverlayLayer(layer);
 
-    public void SetBasemapLayer(ILayer? layer) => _layerBands.SetBasemapLayer(layer);
+    public void AddToolLayer(ILayer layer) => _session.Layers.AddToolLayer(layer);
 
-    public void AddOverlayLayer(ILayer layer) => _layerBands.AddOverlayLayer(layer);
+    public void RemoveToolLayer(ILayer layer) => _session.Layers.RemoveToolLayer(layer);
 
-    public void RemoveOverlayLayer(ILayer layer) => _layerBands.RemoveOverlayLayer(layer);
+    public void RequestRedraw() => _adapter.RequestRedraw();
 
-    public void AddToolLayer(ILayer layer) => _layerBands.AddToolLayer(layer);
-
-    public void RemoveToolLayer(ILayer layer) => _layerBands.RemoveToolLayer(layer);
-
-    public void RequestRedraw() => _avaloniaAdapter.RequestRedraw();
-
-    public void ZoomToExtent(MRect extent) => _mapNavigator.ZoomToExtent(extent);
+    public void ZoomToExtent(MRect extent) => _session.Navigator.ZoomToExtent(extent);
 
     public void ZoomToExtent(MRect extent, long durationMilliseconds) =>
-        _mapNavigator.ZoomToExtent(extent, durationMilliseconds);
+        _session.Navigator.ZoomToExtent(extent, durationMilliseconds);
 
     public void SetViewportToExtent(MRect mercatorExtent) =>
-        _mapNavigator.SetViewportToExtent(mercatorExtent);
+        _session.Navigator.SetViewportToExtent(mercatorExtent);
 
     public void SetViewportToCenterAndResolution(
         MPoint mercatorCenter,
         double resolution) =>
-        _mapNavigator.SetViewportToCenterAndResolution(mercatorCenter, resolution);
+        _session.Navigator.SetViewportToCenterAndResolution(mercatorCenter, resolution);
 
-    public void SetRotation(double degrees) => _mapNavigator.SetRotation(degrees);
+    public void SetRotation(double degrees) => _session.Navigator.SetRotation(degrees);
 
     public void CenterOn(
         double latitudeWgs84,
         double longitudeWgs84,
         long durationMs = 300) =>
-        _mapNavigator.CenterOn(
+        _session.Navigator.CenterOn(
             new GeoPosition(latitudeWgs84, longitudeWgs84),
             durationMs);
 
     public GeoPosition? TryGetViewportCenterWgs84() =>
-        _mapNavigator.TryGetViewportCenterWgs84();
+        _session.Navigator.TryGetViewportCenterWgs84();
 
     public (double Width, double Height)? TryGetViewportSizePx() =>
-        _avaloniaAdapter.TryGetViewportSizePx();
+        _adapter.TryGetViewportSizePx();
 
     public GeoPosition? TryScreenToWgs84(double xPx, double yPx) =>
-        _avaloniaAdapter.TryScreenToWgs84(xPx, yPx);
+        _adapter.TryScreenToWgs84(xPx, yPx);
 
     public GeoPosition? TryImagePixelToWgs84(
         double xPx,
         double yPx,
         int imageWidthPx,
         int imageHeightPx) =>
-        _avaloniaAdapter.TryImagePixelToWgs84(
+        _adapter.TryImagePixelToWgs84(
             xPx,
             yPx,
             imageWidthPx,
@@ -134,7 +134,7 @@ internal sealed class MapsuiMapHost :
         int heightPx,
         double pixelDensity,
         CancellationToken cancellationToken = default) =>
-        _avaloniaAdapter.RenderCurrentViewToPngAsync(
+        _adapter.RenderCurrentViewToPngAsync(
             widthPx,
             heightPx,
             pixelDensity,
@@ -148,8 +148,8 @@ internal sealed class MapsuiMapHost :
         }
 
         _disposed = true;
-        DatasetSession.Dispose();
+        _session.Dispose();
         RenderSubsystem.Deactivate();
-        _avaloniaAdapter.Dispose();
+        _adapter.Dispose();
     }
 }

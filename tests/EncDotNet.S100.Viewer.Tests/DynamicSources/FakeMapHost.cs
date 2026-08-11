@@ -14,17 +14,7 @@ internal sealed class FakeMapHost :
     IMapViewportController,
     IMapCoordinateConverter
 {
-    public List<ILayer> DatasetLayers { get; } = new();
     public List<ILayer> OverlayLayers { get; } = new();
-
-    public void AddDatasetLayer(ILayer layer) => DatasetLayers.Add(layer);
-    public void RemoveDatasetLayer(ILayer layer) => DatasetLayers.Remove(layer);
-
-    public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers)
-    {
-        DatasetLayers.Clear();
-        DatasetLayers.AddRange(orderedDatasetLayers);
-    }
 
     public void AddOverlayLayer(ILayer layer) => OverlayLayers.Add(layer);
     public void RemoveOverlayLayer(ILayer layer) => OverlayLayers.Remove(layer);

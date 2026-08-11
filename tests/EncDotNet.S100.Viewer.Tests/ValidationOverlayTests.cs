@@ -26,9 +26,6 @@ public class ValidationOverlayTests
         public List<MRect> ZoomCalls { get; } = new();
         public List<ILayer> Overlays { get; } = new();
 
-        public void AddDatasetLayer(ILayer layer) { }
-        public void RemoveDatasetLayer(ILayer layer) { }
-        public void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) { }
         public void SetBasemapLayer(ILayer? layer) { }
         public void AddToolLayer(ILayer layer) { }
         public void RemoveToolLayer(ILayer layer) { }

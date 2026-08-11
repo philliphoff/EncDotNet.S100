@@ -6,7 +6,6 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -124,13 +123,13 @@ public partial class MainWindow : ShadUI.Window
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
-        // loader subscribes to its own settings dependencies internally.
-        var map = MapControl.Map
-            ?? throw new InvalidOperationException(
-                "The map control must have a map before creating the Viewer host.");
+        // loader subscribes to its own settings dependencies internally. The
+        // host sets up S-100 through the public mapControl.AddS100 entry point
+        // (the same one the MapHost sample uses), sharing the DI processor owner
+        // and dataset renderer as borrowed collaborators so other Viewer
+        // services keep acquiring leases / rendering on the same instances.
         _mapHost = new MapsuiMapHost(
-            map,
-            AvaloniaMapsuiMapAdapter.Attach(MapControl),
+            MapControl,
             App.Services.GetRequiredService<DatasetProcessorOwner>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),

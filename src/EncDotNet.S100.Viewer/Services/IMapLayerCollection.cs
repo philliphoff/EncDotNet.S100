@@ -16,18 +16,13 @@ internal interface IMapLayerCollection
     /// <summary>
     /// Gets the reusable dataset-layer session when the host provides one.
     /// </summary>
+    /// <remarks>
+    /// The session owns and drives the dataset band itself (via
+    /// <see cref="IS100MapSession.AddDatasetAsync"/> and friends), so this
+    /// collection exposes only the host-fillable basemap, overlay, and tool
+    /// bands — never the dataset band.
+    /// </remarks>
     MapsuiMapSession? DatasetSession => null;
-
-    /// <summary>Adds a layer to the dataset band.</summary>
-    void AddDatasetLayer(ILayer layer);
-
-    /// <summary>Removes a layer from the dataset band.</summary>
-    void RemoveDatasetLayer(ILayer layer);
-
-    /// <summary>
-    /// Replaces the dataset band with the supplied authoritative sequence.
-    /// </summary>
-    void ReplaceDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers);
 
     /// <summary>Sets or clears the single basemap layer.</summary>
     void SetBasemapLayer(ILayer? layer);
