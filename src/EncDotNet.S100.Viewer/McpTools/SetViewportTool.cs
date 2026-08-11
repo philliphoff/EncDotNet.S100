@@ -43,8 +43,8 @@ internal sealed record SetViewportResult(
 /// Mutates the live viewer's navigator to a specific WGS-84 viewport
 /// so that scripted / agent-driven measurement runs can drive pan,
 /// zoom, and viewport-change scenarios from outside the GUI.
-/// Distinguished from <see cref="RenderToImageTool"/>, which is
-/// deliberately read-only and clones the Map: this tool intentionally
+/// Distinguished from the read-only <c>render_to_image</c> tool, which
+/// clones the Map: this tool intentionally
 /// mutates the live <see cref="IMapViewportController"/>.
 /// </summary>
 /// <remarks>

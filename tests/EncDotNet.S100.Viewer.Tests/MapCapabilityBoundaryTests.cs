@@ -45,19 +45,12 @@ public class MapCapabilityBoundaryTests
     public void Consumers_request_only_the_capabilities_they_use()
     {
         var initialize = typeof(DatasetLoaderService).GetMethod(nameof(DatasetLoaderService.Initialize));
-        var renderConstructor = Assert.Single(typeof(RenderToImageTool).GetConstructors());
         var setViewportConstructor = Assert.Single(typeof(SetViewportTool).GetConstructors());
         var pickConstructors = typeof(PickFeaturesTool).GetConstructors();
 
         Assert.NotNull(initialize);
         Assert.Equal(typeof(IMapLayerCollection), initialize!.GetParameters()[0].ParameterType);
         Assert.Equal(typeof(IMapViewportController), initialize.GetParameters()[1].ParameterType);
-        Assert.Equal(
-            typeof(IMapCapabilityAccessor<IMapSnapshotRenderer>),
-            renderConstructor.GetParameters()[0].ParameterType);
-        Assert.Equal(
-            typeof(IMapCapabilityAccessor<IMapCoordinateConverter>),
-            renderConstructor.GetParameters()[1].ParameterType);
         Assert.Equal(
             typeof(IMapCapabilityAccessor<IMapViewportController>),
             setViewportConstructor.GetParameters()[0].ParameterType);

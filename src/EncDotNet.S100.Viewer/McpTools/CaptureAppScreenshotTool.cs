@@ -18,8 +18,8 @@ internal sealed record CaptureAppScreenshotResult(
 /// the chart <em>plus</em> the surrounding chrome (activity docks,
 /// panels, timeline, status bar) — so MCP agents can visually verify
 /// non-rendering UX changes (e.g. that <see cref="SetPanelTool"/>
-/// actually opened a panel). This complements
-/// <see cref="RenderToImageTool"/>, which captures only the map surface.
+/// actually opened a panel). This complements the <c>render_to_image</c>
+/// tool, which captures only the map surface.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -29,10 +29,9 @@ internal sealed record CaptureAppScreenshotResult(
 /// returns a <see cref="WindowNotReady"/> error rather than throwing.
 /// </para>
 /// <para>
-/// Read-only and side-effect free: the window is not mutated. Like
-/// <see cref="RenderToImageTool"/> this is a viewer-injected tool — the
-/// catalog-only MCP surface has no window dependency, so a headless MCP
-/// host would need to supply its own equivalent.
+/// Read-only and side-effect free: the window is not mutated. This is a
+/// viewer-injected tool — the shared MCP surface has no window dependency,
+/// so a headless MCP host would need to supply its own equivalent.
 /// </para>
 /// </remarks>
 internal sealed class CaptureAppScreenshotTool

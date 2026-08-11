@@ -346,12 +346,19 @@ public static class S100MutableTools
         "Renders the current session state (loaded datasets, palette, time step, viewport) to a PNG "
         + "and returns it as an MCP ImageContentBlock alongside a JSON metadata block. Primary use "
         + "case: headless visual validation — open datasets, set a palette / time step, then render "
-        + "and inspect the image. Side-effect free. MUTATING session, but this call mutates nothing.";
+        + "and inspect the image. When both width and height are omitted the capture defaults to the "
+        + "renderer's live viewport size (when it has one) so it matches the on-screen view instead of "
+        + "letterboxing; a headless renderer has none and defaults to 1024x768. Independently, whenever "
+        + "the renderer has a live viewport its size is echoed in the metadata as "
+        + "'viewportWidth'/'viewportHeight' (even when explicit dimensions are supplied) for "
+        + "aspect-matching; for a pixel pick, feed pick_features the rendered image's width/height "
+        + "instead, which match viewportWidth/Height only when the capture defaulted to the live size. "
+        + "Side-effect free. MUTATING session, but this call mutates nothing.";
 
     private static McpServerTool CreateRenderToImage(RenderToImageTool inner) =>
         McpServerTool.Create(
-            ([Description("Output image width in pixels; null defaults to 1024. Clamped to [64, 4096].")] int? width = null,
-             [Description("Output image height in pixels; null defaults to 768. Clamped to [64, 4096].")] int? height = null,
+            ([Description("Output image width in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport width if it has one, otherwise 1024. Independently, whenever the renderer has a live viewport its width is echoed as viewportWidth — even when explicit dimensions are supplied.")] int? width = null,
+             [Description("Output image height in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport height if it has one, otherwise 768. Independently, whenever the renderer has a live viewport its height is echoed as viewportHeight — even when explicit dimensions are supplied.")] int? height = null,
              [Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? pixelDensity = null,
              CancellationToken ct = default) =>
                 DispatchRenderAsync(() => inner.InvokeAsync(
@@ -387,6 +394,14 @@ public static class S100MutableTools
                 if (value.Notes is not null)
                 {
                     metadata["notes"] = value.Notes;
+                }
+                if (value.ViewportWidth is { } vw)
+                {
+                    metadata["viewportWidth"] = vw;
+                }
+                if (value.ViewportHeight is { } vh)
+                {
+                    metadata["viewportHeight"] = vh;
                 }
 
                 return new CallToolResult

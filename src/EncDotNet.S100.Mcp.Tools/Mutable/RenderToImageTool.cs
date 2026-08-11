@@ -5,8 +5,8 @@ namespace EncDotNet.S100.Mcp.Tools.Mutable;
 
 /// <summary>Request payload for <see cref="RenderToImageTool"/>.</summary>
 public sealed record RenderToImageRequest(
-    [property: Description("Output image width in pixels; null defaults to 1024. Clamped to [64, 4096].")] int? Width = null,
-    [property: Description("Output image height in pixels; null defaults to 768. Clamped to [64, 4096].")] int? Height = null,
+    [property: Description("Output image width in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport width if it has one, otherwise 1024. Independently, whenever the renderer has a live viewport its width is echoed as viewportWidth — even when explicit dimensions are supplied.")] int? Width = null,
+    [property: Description("Output image height in pixels; clamped to [64, 4096]. When both width and height are omitted, defaults to the renderer's live viewport height if it has one, otherwise 768. Independently, whenever the renderer has a live viewport its height is echoed as viewportHeight — even when explicit dimensions are supplied.")] int? Height = null,
     [property: Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? PixelDensity = null);
 
 /// <summary>Result payload for <see cref="RenderToImageTool"/>.</summary>
@@ -16,7 +16,9 @@ public sealed record RenderToImageResult(
     [property: Description("Pixel-density multiplier resolved for the request (post-clamp / default). A host may not apply it — the headless CLI render ignores density and encodes at the literal width/height.")] double PixelDensity,
     [property: Description("Image format identifier; always \"png\" in v1.")] string ImageFormat,
     [property: Description("PNG-encoded image bytes; surfaced separately as an MCP ImageContentBlock with mimeType image/png at the wire layer.")] byte[] ImageBytes,
-    [property: Description("Optional human-readable note (e.g. \"defaulted size to 1024x768\").")] string? Notes);
+    [property: Description("Optional human-readable note (e.g. \"defaulted size to 1024x768\").")] string? Notes,
+    [property: Description("The renderer's live viewport width in pixels at render time, or null when it has none (e.g. a headless host). Pass this and viewportHeight back as width/height to capture at the live aspect ratio. For a pixel pick, feed pick_features the rendered image's width/height (the width/height fields), not these — the two match only when the capture defaulted to the live size.")] int? ViewportWidth = null,
+    [property: Description("The renderer's live viewport height in pixels at render time, or null when it has none. See viewportWidth for how it relates to the image dimensions.")] int? ViewportHeight = null);
 
 /// <summary>
 /// Mutating-session tool that renders the current session state — loaded
@@ -68,8 +70,20 @@ public sealed class RenderToImageTool
                 new HostNotReady("the image renderer is not attached yet"));
         }
 
-        var (width, widthClamped) = ResolveDimension(request.Width, DefaultWidth);
-        var (height, heightClamped) = ResolveDimension(request.Height, DefaultHeight);
+        var (viewportWidth, viewportHeight) = ResolvePreferred(renderer.PreferredSize);
+
+        // When the caller specifies neither dimension and the renderer has a live
+        // viewport, capture at that size so the snapshot matches what the user
+        // sees pixel-for-pixel — avoiding the letterboxing a fixed default would
+        // produce against a differently shaped viewport. A partial request (only
+        // one dimension) keeps the static fallback for the omitted side.
+        var useLiveDefaults = request.Width is null && request.Height is null
+            && viewportWidth is not null && viewportHeight is not null;
+
+        var (width, widthClamped) = ResolveDimension(
+            request.Width, useLiveDefaults ? viewportWidth!.Value : DefaultWidth);
+        var (height, heightClamped) = ResolveDimension(
+            request.Height, useLiveDefaults ? viewportHeight!.Value : DefaultHeight);
         var (density, densityClamped) = ResolveDensity(request.PixelDensity);
 
         var bytes = await renderer.RenderToPngAsync(width, height, density, ct).ConfigureAwait(false);
@@ -83,10 +97,23 @@ public sealed class RenderToImageTool
             request.Width is null, widthClamped,
             request.Height is null, heightClamped,
             request.PixelDensity is null, densityClamped,
-            width, height);
+            useLiveDefaults, width, height);
 
         return ToolResult<RenderToImageResult>.Ok(new RenderToImageResult(
-            width, height, density, "png", bytes, notes));
+            width, height, density, "png", bytes, notes, viewportWidth, viewportHeight));
+    }
+
+    /// <summary>
+    /// Clamps the renderer's preferred size to the render-dimension range, or
+    /// returns <c>(null, null)</c> when it has none or reports a degenerate size.
+    /// </summary>
+    private static (int? Width, int? Height) ResolvePreferred((int Width, int Height)? preferred)
+    {
+        if (preferred is not { } size) return (null, null);
+        if (size.Width < 1 || size.Height < 1) return (null, null);
+        return (
+            Math.Clamp(size.Width, MinDimension, MaxDimension),
+            Math.Clamp(size.Height, MinDimension, MaxDimension));
     }
 
     private static (int Value, bool Clamped) ResolveDimension(int? requested, int @default)
@@ -107,7 +134,7 @@ public sealed class RenderToImageTool
         bool widthDefaulted, bool widthClamped,
         bool heightDefaulted, bool heightClamped,
         bool densityDefaulted, bool densityClamped,
-        int width, int height)
+        bool usedLiveDefaults, int width, int height)
     {
         if (!widthDefaulted && !widthClamped
             && !heightDefaulted && !heightClamped
@@ -117,7 +144,11 @@ public sealed class RenderToImageTool
         }
 
         var parts = new List<string>(3);
-        if (widthDefaulted || heightDefaulted)
+        if (usedLiveDefaults)
+        {
+            parts.Add($"defaulted to live viewport size {width}x{height}");
+        }
+        else if (widthDefaulted || heightDefaulted)
         {
             parts.Add($"defaulted size to {(widthDefaulted ? DefaultWidth : width)}x{(heightDefaulted ? DefaultHeight : height)}");
         }

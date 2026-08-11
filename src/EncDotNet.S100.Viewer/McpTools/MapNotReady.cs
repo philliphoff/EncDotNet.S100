@@ -5,8 +5,9 @@ namespace EncDotNet.S100.Viewer.McpTools;
 
 /// <summary>
 /// The viewer's map control has not been initialised yet (or the
-/// snapshot path failed). Returned by <see cref="RenderToImageTool"/>
-/// when no PNG can be produced. Distinguished from
+/// snapshot path failed). Returned by the viewer's map-dependent MCP tools
+/// (e.g. <c>set_viewport</c>, <c>pick_features</c>) when the live map is not
+/// available. Distinguished from
 /// <see cref="InvalidArgument"/> in that the caller's request is
 /// well-formed; the host environment is simply not ready.
 /// </summary>
