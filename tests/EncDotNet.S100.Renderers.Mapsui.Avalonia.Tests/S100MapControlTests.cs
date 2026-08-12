@@ -53,6 +53,36 @@ public class S100MapControlTests
     }
 
     [Fact]
+    public void Configure_rejects_a_non_web_mercator_map()
+    {
+        HeadlessTest.Run(() =>
+        {
+            using var control = new S100MapControl
+            {
+                Map = new global::Mapsui.Map { CRS = "EPSG:4326" },
+            };
+
+            // The renderer and pick/coordinate adapters only work in Web Mercator,
+            // so a conflicting CRS fails fast instead of attaching a broken session.
+            Assert.Throws<InvalidOperationException>(() => control.Configure(IdentityOptions()));
+            Assert.False(control.IsConfigured);
+        });
+    }
+
+    [Fact]
+    public void Configure_normalizes_an_unset_map_crs()
+    {
+        HeadlessTest.Run(() =>
+        {
+            using var control = new S100MapControl { Map = new global::Mapsui.Map() };
+
+            control.Configure(IdentityOptions());
+
+            Assert.Equal("EPSG:3857", control.Map!.CRS);
+        });
+    }
+
+    [Fact]
     public void Configure_twice_throws()
     {
         HeadlessTest.Run(() =>

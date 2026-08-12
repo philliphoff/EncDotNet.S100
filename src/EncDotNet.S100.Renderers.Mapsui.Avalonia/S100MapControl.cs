@@ -97,7 +97,8 @@ public class S100MapControl : CaptureSynchronizedMapControl
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// The control is already configured, the call is not on Avalonia's UI thread,
-    /// or the map could not be attached.
+    /// the map could not be attached, or the control's map has a CRS other than
+    /// <c>EPSG:3857</c>.
     /// </exception>
     /// <exception cref="ObjectDisposedException">The control is disposed.</exception>
     public IS100MapSession Configure(S100MapsuiOptions options)
@@ -110,7 +111,28 @@ public class S100MapControl : CaptureSynchronizedMapControl
                 "The S-100 map control is already configured.");
         }
 
-        Map ??= new Map { CRS = "EPSG:3857" };
+        // The S-100 renderer projects every dataset to Web Mercator, and the
+        // adapter's coordinate conversion / picking only accept EPSG:3857 — so
+        // attaching over any other CRS yields a session that renders but whose
+        // picks are always empty and conversions always null. Create the map when
+        // absent, normalize an unset CRS, and fail fast on a conflicting one
+        // rather than attaching a silently-broken session.
+        if (Map is null)
+        {
+            Map = new Map { CRS = "EPSG:3857" };
+        }
+        else if (string.IsNullOrEmpty(Map.CRS))
+        {
+            Map.CRS = "EPSG:3857";
+        }
+        else if (!string.Equals(Map.CRS, "EPSG:3857", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"S100MapControl requires a map with CRS 'EPSG:3857' (Web Mercator); "
+                + $"the supplied map has CRS '{Map.CRS}'. The S-100 renderer and the "
+                + "pick / coordinate adapters project to and from Web Mercator.");
+        }
+
         (_session, _adapter) = this.AddS100(options);
         return _session;
     }
@@ -121,6 +143,7 @@ public class S100MapControl : CaptureSynchronizedMapControl
     /// <exception cref="InvalidOperationException">
     /// <see cref="Configure"/> has not been called.
     /// </exception>
+    /// <exception cref="ObjectDisposedException">The control is disposed.</exception>
     public void RequestRedraw() => Adapter.RequestRedraw();
 
     /// <summary>
@@ -136,6 +159,10 @@ public class S100MapControl : CaptureSynchronizedMapControl
     /// <returns>The ranked picks, topmost-first.</returns>
     /// <exception cref="InvalidOperationException">
     /// <see cref="Configure"/> has not been called.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The control is disposed.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> is canceled.
     /// </exception>
     public Task<IReadOnlyList<S100Pick>> PickAsync(
         double xPx,
