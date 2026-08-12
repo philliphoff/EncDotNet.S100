@@ -45,8 +45,17 @@ public MainWindow()
 
     MapView.PointerReleased += async (_, e) =>
     {
-        var p = e.GetPosition(MapView);
-        var picks = await MapView.PickAsync(p.X, p.Y);   // no adapter/Query plumbing
+        try
+        {
+            var p = e.GetPosition(MapView);
+            var picks = await MapView.PickAsync(p.X, p.Y);   // no adapter/Query plumbing
+            // … present picks[0], the topmost feature under the pointer …
+        }
+        catch (Exception ex)
+        {
+            // A real handler logs or surfaces this; an async-void event handler
+            // otherwise lets the exception escape as unhandled.
+        }
     };
 }
 

@@ -35,6 +35,13 @@ namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 /// </remarks>
 public class S100MapControl : CaptureSynchronizedMapControl
 {
+    /// <summary>
+    /// The Web Mercator CRS the S-100 renderer and the pick / coordinate adapters
+    /// require. <see cref="Configure"/> creates or normalizes the map to it and
+    /// rejects any other CRS.
+    /// </summary>
+    public const string WebMercatorCrs = "EPSG:3857";
+
     private IS100MapSession? _session;
     private AvaloniaMapsuiMapAdapter? _adapter;
     private bool _disposed;
@@ -119,22 +126,26 @@ public class S100MapControl : CaptureSynchronizedMapControl
         // rather than attaching a silently-broken session.
         if (Map is null)
         {
-            Map = new Map { CRS = "EPSG:3857" };
+            Map = new Map { CRS = WebMercatorCrs };
         }
         else if (string.IsNullOrEmpty(Map.CRS))
         {
-            Map.CRS = "EPSG:3857";
+            Map.CRS = WebMercatorCrs;
         }
-        else if (!string.Equals(Map.CRS, "EPSG:3857", StringComparison.OrdinalIgnoreCase))
+        else if (!string.Equals(Map.CRS, WebMercatorCrs, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"S100MapControl requires a map with CRS 'EPSG:3857' (Web Mercator); "
+                $"S100MapControl requires a map with CRS '{WebMercatorCrs}' (Web Mercator); "
                 + $"the supplied map has CRS '{Map.CRS}'. The S-100 renderer and the "
                 + "pick / coordinate adapters project to and from Web Mercator.");
         }
 
-        (_session, _adapter) = this.AddS100(options);
-        return _session;
+        // Capture into locals so the non-null contract is explicit — the fields
+        // are nullable, and returning one directly is not flow-tracked as non-null.
+        var (session, adapter) = this.AddS100(options);
+        _session = session;
+        _adapter = adapter;
+        return session;
     }
 
     /// <summary>
