@@ -120,6 +120,13 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
   redraws inline (fine for headless). This replaced the former process-global
   `RequestRedraw` statics (issue #512).
 
+> **Even less wiring?** This sample composes the session by hand
+> (`MapControl.AddS100(...)` + explicit adapter/session fields and disposal) to
+> show each step. A host that wants the batteries-included path can instead use
+> `S100MapControl` — a `MapControl` subclass that attaches and owns the session,
+> so setup is one `Configure(options)` call and teardown is one `Dispose()`. See
+> the [`Renderers.Mapsui.Avalonia` README](../../src/EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md#one-call-control-s100mapcontrol).
+
 > **Consuming this out of repo?** A real application would reference the
 > published `EncDotNet.S100.*` NuGet packages instead of the project references
 > this in-repo sample uses, but the code in `MainWindow` is identical.
