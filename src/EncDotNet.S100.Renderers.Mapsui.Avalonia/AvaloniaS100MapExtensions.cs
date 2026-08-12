@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 
@@ -15,8 +16,11 @@ public static class AvaloniaS100MapExtensions
     /// / scene / tile image publishes off-thread.
     /// </summary>
     /// <param name="mapControl">
-    /// The live control to attach to. Its <see cref="global::Mapsui.Map"/> must be
-    /// set before calling.
+    /// The live control to attach to. Any Mapsui Avalonia map control works; its
+    /// <see cref="global::Mapsui.Map"/> must be set before calling. Pass a
+    /// <see cref="CaptureSynchronizedMapControl"/> when the host renders the
+    /// current view to an image under a live paint and wants that capture
+    /// serialized against painting; a plain control is otherwise sufficient.
     /// </param>
     /// <param name="options">
     /// Rendering configuration for <see cref="S100MapExtensions.AddS100"/>. Supply
@@ -36,7 +40,7 @@ public static class AvaloniaS100MapExtensions
     /// The call is not on Avalonia's UI thread, or the control has no map.
     /// </exception>
     public static (IS100MapSession Session, AvaloniaMapsuiMapAdapter Adapter) AddS100(
-        this CaptureSynchronizedMapControl mapControl,
+        this MapControl mapControl,
         S100MapsuiOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(mapControl);

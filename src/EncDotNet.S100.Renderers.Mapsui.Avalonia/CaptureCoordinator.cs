@@ -128,11 +128,30 @@ internal static class CaptureCoordinator
     /// The drain still runs; only the redundant external gate is skipped.
     /// </para>
     /// </param>
+    /// <param name="synchronized">
+    /// Whether the map control participates in the live-paint gate (i.e. is a
+    /// <see cref="CaptureSynchronizedMapControl"/> whose render markers signal a
+    /// drain).
+    /// <para>
+    /// <see langword="true"/> (default): request a repaint and wait for the
+    /// control's live paint to drain the shared Skia/GPU resources before
+    /// capturing, so the capture never reads them mid-paint.
+    /// </para>
+    /// <para>
+    /// <see langword="false"/>: the control is a plain Mapsui map control that
+    /// never enters the gate, so no marker can ever signal a drain. Skip the
+    /// handshake entirely — waiting would only burn <see cref="CaptureDrainTimeout"/>
+    /// on a signal that can never arrive — and capture best-effort, unsynchronized
+    /// against any concurrent live paint. Captures still serialize against each
+    /// other through <see cref="CaptureSequence"/>.
+    /// </para>
+    /// </param>
     internal static async Task<byte[]?> CaptureDrainedAsync(
         Func<Task> requestRepaintAsync,
         Func<Task<byte[]?>> captureAsync,
         CancellationToken cancellationToken,
-        bool acquireGate = true)
+        bool acquireGate = true,
+        bool synchronized = true)
     {
         ArgumentNullException.ThrowIfNull(requestRepaintAsync);
         ArgumentNullException.ThrowIfNull(captureAsync);
@@ -142,6 +161,11 @@ internal static class CaptureCoordinator
         BeginCapture();
         try
         {
+            if (!synchronized)
+            {
+                return await captureAsync().ConfigureAwait(false);
+            }
+
             DiscardStaleDrainSignals();
             await requestRepaintAsync().ConfigureAwait(false);
             await DrainSignal.WaitAsync(CaptureDrainTimeout, cancellationToken)
