@@ -30,7 +30,8 @@
       EncDotNet.S100.Viewer or any Viewer service:
 
         * Renderers.Mapsui          - the Map.AddS100(...) extension + IS100MapSession
-        * Renderers.Mapsui.Avalonia - CaptureSynchronizedMapControl + the pointer/redraw/capture adapter
+        * Renderers.Mapsui.Avalonia - the pointer/redraw/capture adapter + MapControl.AddS100 (this sample
+                                      uses a stock Mapsui MapControl; the capture-synchronized subclass is optional)
         * Crs.ProjNet               - the ICrsTransformFactory AddS100 requires (the reusable assembly ships none)
         * EncDotNet.S100            - the convenience package's BundledDatasetProcessorFactory,
                                       the one-call IDatasetProcessorFactory used by Datasets.LoadAsync

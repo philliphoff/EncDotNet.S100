@@ -6,6 +6,7 @@ using Mapsui.Extensions;
 using Mapsui.Projections;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
+using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 
@@ -27,12 +28,12 @@ namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
 /// </remarks>
 public sealed class AvaloniaMapsuiMapAdapter : IDisposable
 {
-    private readonly CaptureSynchronizedMapControl _mapControl;
+    private readonly MapControl _mapControl;
     private readonly Map _map;
     private volatile bool _disposed;
 
     private AvaloniaMapsuiMapAdapter(
-        CaptureSynchronizedMapControl mapControl,
+        MapControl mapControl,
         Map map)
     {
         _mapControl = mapControl;
@@ -42,7 +43,12 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
     /// <summary>
     /// Attaches an adapter to an initialized live map control.
     /// </summary>
-    /// <param name="mapControl">The control to adapt.</param>
+    /// <param name="mapControl">
+    /// The control to adapt. Any Mapsui Avalonia map control works. A
+    /// <see cref="CaptureSynchronizedMapControl"/> additionally makes
+    /// <see cref="RenderCurrentViewToPngAsync"/> race-safe against live paints;
+    /// a plain control captures best-effort (see that method's remarks).
+    /// </param>
     /// <returns>A disposable adapter that borrows the control and its map.</returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="mapControl"/> is <see langword="null"/>.
@@ -51,7 +57,7 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
     /// The call is not on Avalonia's UI thread, or the control has no map.
     /// </exception>
     public static AvaloniaMapsuiMapAdapter Attach(
-        CaptureSynchronizedMapControl mapControl)
+        MapControl mapControl)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         if (!Dispatcher.UIThread.CheckAccess())
@@ -261,6 +267,17 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
     /// Renders the current live map view to PNG bytes without mutating the live
     /// navigator.
     /// </summary>
+    /// <remarks>
+    /// When the adapted control is a <see cref="CaptureSynchronizedMapControl"/>,
+    /// the capture is serialized against the control's live paint so it never
+    /// reads shared Skia/GPU resources mid-frame. Over a plain Mapsui map control
+    /// there is no gate to synchronize against, so the capture runs best-effort:
+    /// on a quiescent map it renders the current view, but it is not serialized
+    /// against a concurrent live paint touching the shared render resources, so
+    /// under active repaint the result can, in rare cases, be torn or partial.
+    /// Hosts that capture under an actively repainting map should adapt a
+    /// <see cref="CaptureSynchronizedMapControl"/>.
+    /// </remarks>
     /// <param name="widthPx">Output width in pixels.</param>
     /// <param name="heightPx">Output height in pixels.</param>
     /// <param name="pixelDensity">Output pixel-density multiplier.</param>
@@ -303,7 +320,11 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
                     heightPx,
                     pixelDensity,
                     cancellationToken)),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            // Only a capture-synchronized control drains the live paint through
+            // its render markers; over a plain control there is no drain to wait
+            // for, so capture unsynchronized (best-effort) rather than stalling.
+            synchronized: _mapControl is CaptureSynchronizedMapControl).ConfigureAwait(false);
     }
 
     /// <summary>

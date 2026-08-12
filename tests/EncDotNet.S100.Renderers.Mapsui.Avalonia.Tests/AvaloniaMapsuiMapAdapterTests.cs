@@ -124,6 +124,50 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public void Adapter_attaches_to_a_plain_map_control()
+    {
+        // Map.AddS100 / Attach accept any Mapsui MapControl: a host that never
+        // captures the view to an image needs no capture-synchronized subclass.
+        // The adapter is fully functional over a stock control - redraw and
+        // coordinate conversion behave identically.
+        HeadlessTest.Run(() =>
+        {
+            var map = CreateLaidOutMap();
+            var requested = false;
+            map.RefreshGraphicsRequest += (_, _) => requested = true;
+            var control = new global::Mapsui.UI.Avalonia.MapControl { Map = map };
+            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+
+            adapter.RequestRedraw();
+            var position = adapter.TryScreenToWgs84(400, 300);
+
+            Assert.True(requested);
+            Assert.NotNull(position);
+            Assert.Equal(10.0, position.Value.Latitude, 6);
+            Assert.Equal(20.0, position.Value.Longitude, 6);
+            Assert.Equal((800.0, 600.0), adapter.TryGetViewportSizePx());
+        });
+    }
+
+    [Fact]
+    public void Attach_and_AddS100_accept_a_plain_map_control_type()
+    {
+        // Lock the widened contract: neither entry point requires the
+        // capture-synchronized subclass, so the base Mapsui control binds.
+        var attachParam = typeof(AvaloniaMapsuiMapAdapter)
+            .GetMethod(nameof(AvaloniaMapsuiMapAdapter.Attach))!
+            .GetParameters()[0]
+            .ParameterType;
+        var addS100Param = typeof(AvaloniaS100MapExtensions)
+            .GetMethod(nameof(AvaloniaS100MapExtensions.AddS100))!
+            .GetParameters()[0]
+            .ParameterType;
+
+        Assert.Equal(typeof(global::Mapsui.UI.Avalonia.MapControl), attachParam);
+        Assert.Equal(typeof(global::Mapsui.UI.Avalonia.MapControl), addS100Param);
+    }
+
+    [Fact]
     public async Task Render_current_view_returns_png()
     {
         var png = await HeadlessTest.RunAsync(async () =>

@@ -92,7 +92,7 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
 | File                                                   | What it shows                                                                 |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | [`MainWindow.axaml.cs`](MainWindow.axaml.cs)           | The integration itself: compose, attach, drive, dispose. Start here.          |
-| [`MainWindow.axaml`](MainWindow.axaml)                 | The toolbar and the reusable `CaptureSynchronizedMapControl`.                  |
+| [`MainWindow.axaml`](MainWindow.axaml)                 | The toolbar and a stock Mapsui `MapControl` (`AddS100` needs no special subclass). |
 | [`SmokeTest.cs`](SmokeTest.cs)                          | The same session driven headlessly (the `--smoke` path).                       |
 
 ## Wiring notes

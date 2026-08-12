@@ -114,6 +114,34 @@ public class CaptureCoordinatorTests
     }
 
     [Fact]
+    public async Task CaptureDrained_unsynchronized_skips_the_repaint_drain_handshake()
+    {
+        // A plain (non-capture-synchronized) control never signals a drain, so
+        // synchronized: false must skip the repaint + drain wait entirely and
+        // capture directly - never stalling on a signal that can never arrive.
+        var order = new List<string>();
+        var result = await CaptureCoordinator.CaptureDrainedAsync(
+            () =>
+            {
+                order.Add("repaint");
+                return Task.CompletedTask;
+            },
+            () =>
+            {
+                order.Add("capture");
+                Assert.True(CaptureCoordinator.CaptureActive);
+                return Task.FromResult<byte[]?>([9]);
+            },
+            CancellationToken.None,
+            synchronized: false);
+
+        Assert.Equal(new byte[] { 9 }, result);
+        // The repaint request was skipped: only the capture ran.
+        Assert.Equal(["capture"], order);
+        Assert.False(CaptureCoordinator.CaptureActive);
+    }
+
+    [Fact]
     public async Task CaptureDrained_without_gate_lets_capture_reenter_live_paint()
     {
         // Reproduces the whole-control capture path: the capture callback renders

@@ -8,7 +8,7 @@ package remains UI-framework neutral. It owns layer creation,
 `MapsuiLayerBands`, and `MapsuiMapNavigator`. This package adds only mechanics
 that require Avalonia:
 
-- explicit attachment to a live `CaptureSynchronizedMapControl`;
+- explicit attachment to any live `Mapsui.UI.Avalonia.MapControl`;
 - UI-thread redraw invalidation;
 - live-control and captured-image coordinate conversion;
 - pointer (screen-pixel) picking against a session's `IS100MapQuery`;
@@ -32,11 +32,19 @@ var position = adapter.TryScreenToWgs84(x, y);
 var png = await adapter.RenderCurrentViewToPngAsync(1280, 800, 1.0);
 ```
 
-`Attach` must run on Avalonia's UI thread. The returned adapter borrows the
-control and map; disposing it detaches the adapter but does not dispose either
-object. Use `CaptureSynchronizedMapControl` (or a subclass) rather than a plain
-Mapsui `MapControl` so offscreen captures are serialized against live GPU
-painting.
+`Attach` (and `mapControl.AddS100(...)`) accept any Mapsui
+`MapControl` and must run on Avalonia's UI thread. The returned adapter borrows
+the control and map; disposing it detaches the adapter but does not dispose
+either object.
+
+`CaptureSynchronizedMapControl` is an optional `MapControl` subclass: attach it
+(rather than a plain control) only when the host renders the current view to an
+image — `RenderCurrentViewToPngAsync` — under a live paint and wants that capture
+serialized against painting over the shared Skia GPU resources. Over a plain
+control the capture runs best-effort: on a quiescent map it renders the current
+view, but it is not serialized against a concurrent live paint touching the
+shared resources, so under active repaint the result can occasionally be torn or
+partial. Hosts that never capture — most embeddings — need no subclass.
 
 Coordinate conversion supports Mapsui's default `EPSG:3857` map CRS and returns
 `null` for maps whose CRS requires a different projection.
