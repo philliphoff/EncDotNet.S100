@@ -98,6 +98,12 @@ public class S100MapControlTests
 
             // The control owns the session, so disposing it disposes the session.
             Assert.Throws<ObjectDisposedException>(() => session.GetDatasets());
+            // The control presents a self-contained disposed contract: accessors
+            // throw and IsConfigured reads false rather than handing back a
+            // disposed session/adapter.
+            Assert.False(control.IsConfigured);
+            Assert.Throws<ObjectDisposedException>(() => control.Session);
+            Assert.Throws<ObjectDisposedException>(() => control.Adapter);
         });
     }
 

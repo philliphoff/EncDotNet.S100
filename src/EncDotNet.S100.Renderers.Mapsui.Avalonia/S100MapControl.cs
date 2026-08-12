@@ -45,9 +45,16 @@ public class S100MapControl : CaptureSynchronizedMapControl
     /// <exception cref="InvalidOperationException">
     /// <see cref="Configure"/> has not been called.
     /// </exception>
-    public IS100MapSession Session =>
-        _session ?? throw new InvalidOperationException(
-            "The S-100 map control has not been configured yet. Call Configure first.");
+    /// <exception cref="ObjectDisposedException">The control is disposed.</exception>
+    public IS100MapSession Session
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _session ?? throw new InvalidOperationException(
+                "The S-100 map control has not been configured yet. Call Configure first.");
+        }
+    }
 
     /// <summary>
     /// The attached Avalonia adapter (redraw, coordinate conversion, capture,
@@ -56,14 +63,22 @@ public class S100MapControl : CaptureSynchronizedMapControl
     /// <exception cref="InvalidOperationException">
     /// <see cref="Configure"/> has not been called.
     /// </exception>
-    public AvaloniaMapsuiMapAdapter Adapter =>
-        _adapter ?? throw new InvalidOperationException(
-            "The S-100 map control has not been configured yet. Call Configure first.");
+    /// <exception cref="ObjectDisposedException">The control is disposed.</exception>
+    public AvaloniaMapsuiMapAdapter Adapter
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _adapter ?? throw new InvalidOperationException(
+                "The S-100 map control has not been configured yet. Call Configure first.");
+        }
+    }
 
     /// <summary>
-    /// Whether <see cref="Configure"/> has attached a session to this control.
+    /// Whether the control currently has a usable attached session — that is,
+    /// <see cref="Configure"/> has run and the control has not been disposed.
     /// </summary>
-    public bool IsConfigured => _session is not null;
+    public bool IsConfigured => !_disposed && _session is not null;
 
     /// <summary>
     /// Attaches an S-100 session and adapter to this control. Creates an
