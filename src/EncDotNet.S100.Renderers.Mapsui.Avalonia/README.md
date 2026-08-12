@@ -41,8 +41,10 @@ either object.
 (rather than a plain control) only when the host renders the current view to an
 image — `RenderCurrentViewToPngAsync` — under a live paint and wants that capture
 serialized against painting over the shared Skia GPU resources. Over a plain
-control the capture still produces a correct image but runs best-effort
-(unsynchronized). Hosts that never capture — most embeddings — need no subclass.
+control the capture runs best-effort: on a quiescent map it renders the current
+view, but it is not serialized against a concurrent live paint touching the
+shared resources, so under active repaint the result can occasionally be torn or
+partial. Hosts that never capture — most embeddings — need no subclass.
 
 Coordinate conversion supports Mapsui's default `EPSG:3857` map CRS and returns
 `null` for maps whose CRS requires a different projection.

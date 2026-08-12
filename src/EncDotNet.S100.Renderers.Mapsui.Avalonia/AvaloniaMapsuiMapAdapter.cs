@@ -272,9 +272,11 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
     /// the capture is serialized against the control's live paint so it never
     /// reads shared Skia/GPU resources mid-frame. Over a plain Mapsui map control
     /// there is no gate to synchronize against, so the capture runs best-effort:
-    /// it still produces a correct image, but a concurrent live paint could, in
-    /// rare cases, race the shared render resources. Hosts that capture under an
-    /// actively repainting map should adapt a <see cref="CaptureSynchronizedMapControl"/>.
+    /// on a quiescent map it renders the current view, but it is not serialized
+    /// against a concurrent live paint touching the shared render resources, so
+    /// under active repaint the result can, in rare cases, be torn or partial.
+    /// Hosts that capture under an actively repainting map should adapt a
+    /// <see cref="CaptureSynchronizedMapControl"/>.
     /// </remarks>
     /// <param name="widthPx">Output width in pixels.</param>
     /// <param name="heightPx">Output height in pixels.</param>
