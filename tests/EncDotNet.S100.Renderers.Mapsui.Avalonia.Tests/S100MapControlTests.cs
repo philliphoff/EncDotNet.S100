@@ -96,6 +96,25 @@ public class S100MapControlTests
     }
 
     [Fact]
+    public async Task Configure_requires_the_ui_thread()
+    {
+        // Configure mutates the control (map creation / CRS), so it guards the UI
+        // thread up front — before that mutation — rather than only relying on
+        // AddS100 to throw after the fact. Mirrors Attach_requires_ui_thread.
+        await HeadlessTest.RunAsync(async () =>
+        {
+            var control = new S100MapControl();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => Task.Run(() => control.Configure(IdentityOptions())));
+
+            Assert.False(control.IsConfigured);
+            control.Dispose();
+            return true;
+        });
+    }
+
+    [Fact]
     public void Configure_rejects_null_options()
     {
         HeadlessTest.Run(() =>

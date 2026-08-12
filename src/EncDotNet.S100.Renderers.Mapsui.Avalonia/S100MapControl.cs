@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using Mapsui;
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
@@ -116,6 +117,16 @@ public class S100MapControl : CaptureSynchronizedMapControl
         {
             throw new InvalidOperationException(
                 "The S-100 map control is already configured.");
+        }
+
+        // Fail fast off the UI thread before mutating the control. AddS100 also
+        // enforces this, but it runs after the Map / CRS mutation below, so an
+        // off-thread call would otherwise touch the control on the wrong thread
+        // and then throw, leaving it partially updated.
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            throw new InvalidOperationException(
+                "S100MapControl.Configure must be called on Avalonia's UI thread.");
         }
 
         // The S-100 renderer projects every dataset to Web Mercator, and the
