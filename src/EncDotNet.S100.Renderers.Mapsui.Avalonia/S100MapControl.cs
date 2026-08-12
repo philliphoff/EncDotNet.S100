@@ -139,8 +139,10 @@ public class S100MapControl : CaptureSynchronizedMapControl
         {
             Map = new Map { CRS = WebMercatorCrs };
         }
-        else if (string.IsNullOrEmpty(Map.CRS))
+        else if (string.IsNullOrWhiteSpace(Map.CRS))
         {
+            // Treat an unset-or-whitespace CRS as "not chosen" and normalize it,
+            // rather than routing a blank string into the conflicting-CRS branch.
             Map.CRS = WebMercatorCrs;
         }
         else if (!string.Equals(Map.CRS, WebMercatorCrs, StringComparison.OrdinalIgnoreCase))
@@ -211,6 +213,10 @@ public class S100MapControl : CaptureSynchronizedMapControl
             _disposed = true;
             _adapter?.Dispose();
             _session?.Dispose();
+            // Drop the references so a control instance kept alive after disposal
+            // does not retain the disposed session/adapter graphs (caches, layers).
+            _adapter = null;
+            _session = null;
         }
 
         base.Dispose(disposing);

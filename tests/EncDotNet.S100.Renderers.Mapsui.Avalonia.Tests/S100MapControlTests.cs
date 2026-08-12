@@ -69,12 +69,18 @@ public class S100MapControlTests
         });
     }
 
-    [Fact]
-    public void Configure_normalizes_an_unset_map_crs()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Configure_normalizes_an_unset_or_blank_map_crs(string? crs)
     {
         HeadlessTest.Run(() =>
         {
-            using var control = new S100MapControl { Map = new global::Mapsui.Map() };
+            using var control = new S100MapControl
+            {
+                Map = new global::Mapsui.Map { CRS = crs },
+            };
 
             control.Configure(IdentityOptions());
 
