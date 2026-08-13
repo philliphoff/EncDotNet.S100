@@ -9,6 +9,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// write is honoured unless an explicit environment variable pins the value
 /// (the perf A/B harness).
 /// </summary>
+[Collection(RenderingOptimizationsCollection.Name)]
 public class RenderingOptimizationsTests
 {
     [Fact]

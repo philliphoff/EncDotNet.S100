@@ -20,6 +20,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// cache is populated per feature, and toggling the flag off restores the
 /// original raw-resolution key so no state is orphaned.
 /// </summary>
+[Collection(RenderingOptimizationsCollection.Name)]
 public class CachedVectorStyleRendererLodTests : IDisposable
 {
     private static readonly RenderService Service = new();

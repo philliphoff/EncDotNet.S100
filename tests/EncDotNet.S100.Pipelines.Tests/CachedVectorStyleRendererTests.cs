@@ -19,6 +19,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// sub-pixel vertices when it is enabled (preserving endpoints), and delegate
 /// geometries it does not fast-path.
 /// </summary>
+[Collection(RenderingOptimizationsCollection.Name)]
 public class CachedVectorStyleRendererTests
 {
     private static readonly RenderService Service = new();
