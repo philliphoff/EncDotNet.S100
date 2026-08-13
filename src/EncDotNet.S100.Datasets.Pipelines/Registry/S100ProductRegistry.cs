@@ -37,6 +37,14 @@ public sealed class S100ProductRegistry
     /// <summary>The registered spec keys (canonical where recognized).</summary>
     public IReadOnlyCollection<string> RegisteredSpecs => _bySpec.Keys;
 
+    /// <summary>
+    /// The registered product registrations, in no particular order. Used by
+    /// <see cref="DatasetPipelineFactory"/> to run each product's own GML
+    /// content recognizer (<see cref="S100ProductRegistration.MatchGml"/>)
+    /// rather than a central per-product switch.
+    /// </summary>
+    public IReadOnlyCollection<S100ProductRegistration> Registrations => _bySpec.Values;
+
     /// <summary>Looks up the registration for <paramref name="spec"/>.</summary>
     public bool TryResolve(
         string spec,

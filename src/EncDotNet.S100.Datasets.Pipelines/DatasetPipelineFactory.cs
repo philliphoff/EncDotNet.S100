@@ -159,7 +159,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         // S-124 and other GML-encoded products.
         if (ext.Equals(".gml", StringComparison.OrdinalIgnoreCase))
         {
-            return DetectGmlProductSpec(path);
+            return DetectGmlProductSpec(path, registry);
         }
 
         return null;
@@ -189,14 +189,14 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         return "S-102";
     }
 
-    private static string? DetectGmlProductSpec(string path)
+    private static string? DetectGmlProductSpec(string path, S100ProductRegistry registry)
     {
         try
         {
             // Some GML files have leading whitespace before the XML declaration;
             // read as text, trim, and parse via a StringReader to tolerate this.
             var xml = File.ReadAllText(path).TrimStart();
-            return DetectGmlProductSpecFromXml(xml);
+            return DetectGmlProductSpecFromXml(xml, registry);
         }
         catch
         {
@@ -207,202 +207,78 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     }
 
     /// <summary>
-    /// Inspects the root element / declared namespaces / <c>productIdentifier</c>
-    /// of an already-loaded GML document body to determine its S-100 product
-    /// specification (e.g. <c>"S-411"</c>). Shared by the file-path and
-    /// asset-source detection paths so exchange-set datasets whose catalogue
-    /// omits a machine-readable <c>productIdentifier</c> (common for JCOMM S-411
-    /// sets) are still routed correctly. Returns <c>null</c> when unrecognized.
+    /// Determines the S-100 product specification (e.g. <c>"S-411"</c>) of an
+    /// already-loaded GML document body by reading its root element once and
+    /// returning the spec of the first product in <paramref name="registry"/>
+    /// whose <see cref="S100ProductRegistration.MatchGml"/> claims it. Each GML
+    /// product contributes its own recognition rule (namespace / local name /
+    /// <c>productIdentifier</c>) next to its construction registration in
+    /// <see cref="S100Products"/>, so there is no central per-product switch
+    /// here. Shared by the file-path and asset-source detection paths so
+    /// exchange-set datasets whose catalogue omits a machine-readable
+    /// <c>productIdentifier</c> (common for JCOMM S-411 sets) are still routed
+    /// correctly. Returns <c>null</c> when unrecognized.
     /// </summary>
-    private static string? DetectGmlProductSpecFromXml(string xml)
+    private static string? DetectGmlProductSpecFromXml(string xml, S100ProductRegistry registry)
     {
+        if (!TryReadGmlRoot(xml, out var root))
+            return null;
+
+        foreach (var registration in registry.Registrations)
+        {
+            if (registration.MatchGml is { } match && match(root))
+                // Return the canonical spec (mirroring how S100ProductRegistry
+                // canonicalizes its keys), so a product registered under a
+                // non-canonical identifier (e.g. "s124") is still detected as
+                // its canonical "S-124". Built-in registrations already carry a
+                // canonical Spec, so this is a no-op for them.
+                return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the root element of a GML document into a <see cref="GmlRootInfo"/>
+    /// (its namespace URI, local name, and the values of its attributes), or
+    /// returns <see langword="false"/> when the document has no element or cannot
+    /// be parsed. The per-product <see cref="S100ProductRegistration.MatchGml"/>
+    /// recognizers consume the result.
+    /// </summary>
+    private static bool TryReadGmlRoot(string xml, out GmlRootInfo root)
+    {
+        root = default;
         try
         {
             using var stringReader = new StringReader(xml);
-            using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null });
+            using var reader = System.Xml.XmlReader.Create(
+                stringReader,
+                new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null });
             while (reader.Read())
             {
-                if (reader.NodeType == System.Xml.XmlNodeType.Element)
+                if (reader.NodeType != System.Xml.XmlNodeType.Element)
+                    continue;
+
+                IReadOnlyList<string> attributeValues = Array.Empty<string>();
+                if (reader.MoveToFirstAttribute())
                 {
-                    // S-124 datasets have a root element in the S-124 namespace
-                    if (reader.NamespaceURI.Contains("S-124", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S124", StringComparison.OrdinalIgnoreCase))
+                    var values = new List<string>();
+                    do
                     {
-                        return "S-124";
-                    }
-
-                    // S-125 datasets use namespace http://www.iho.int/S125/1.0
-                    if (reader.NamespaceURI.Contains("S-125", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S125", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S125", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-125";
-                    }
-
-                    // S-128 — Catalogue of Nautical Products. Application
-                    // namespace is "http://www.iho.int/S128/2.0".
-                    if (reader.NamespaceURI.Contains("S-128", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S128", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S128", StringComparison.OrdinalIgnoreCase)
-                        || ContainsProductIdentifier(xml, "S-128"))
-                    {
-                        return "S-128";
-                    }
-
-                    // S-127 datasets declare the namespace "http://www.iho.int/S127/2.0".
-                    if (reader.NamespaceURI.Contains("S-127", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S127", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S127", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-127";
-                    }
-
-                    // S-129 datasets have a root element in the S-129 namespace
-                    if (reader.NamespaceURI.Contains("S-129", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S129", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S129", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-129";
-                    }
-
-                    // S-131 — Marine Harbour Infrastructure. Application
-                    // namespace is "http://www.iho.int/S131/1.0".
-                    if (reader.NamespaceURI.Contains("S-131", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S131", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S131", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-131";
-                    }
-
-                    // S-201 — Aids to Navigation Information. Real-world
-                    // datasets use one of three application-schema
-                    // namespaces:
-                    //   - "http://www.iho.int/S-201/gml/cs0/1.0" (XSD)
-                    //   - "http://www.iho.int/S-201/gml/cs0/2.0" (current)
-                    //   - "http://www.iho.int/201/gml/1.0"        (legacy)
-                    if (reader.NamespaceURI.Contains("S-201", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S201", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("/201/gml", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S201", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-201";
-                    }
-
-                    // S-421 datasets use the S421 namespace prefix and the
-                    // namespace URI "http://www.iho.int/S421/gml/cs0/1.0".
-                    if (reader.NamespaceURI.Contains("S-421", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S421", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S421", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-421";
-                    }
-
-                    // S-411 — JCOMM operational shape: root element is
-                    // <ice:IceDataSet xmlns:ice="http://www.jcomm.info/ice">.
-                    if (reader.LocalName.Equals("IceDataSet", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Equals("http://www.jcomm.info/ice", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S-411", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S411", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S411", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return "S-411";
-                    }
-                    // S-411 — IHO 1.2.1 sample shape: bare <Dataset> root with
-                    // no S-411 application-schema namespace; the spec is
-                    // declared via <S100:productIdentifier>S-411</S100:productIdentifier>.
-                    if (xml.Length > 0 && ContainsProductIdentifier(xml, "S-411"))
-                    {
-                        return "S-411";
-                    }
-
-                    // S-122 — Marine Protected Areas. The 2.0.0 sample dataset
-                    // is mis-labelled with the S-123 namespace
-                    // (xmlns:S123="http://www.iho.int/S123/gml/1.0") but its
-                    // <S100:productIdentifier> is "INT.IHO.S-122.x.y.z", so we
-                    // fall back to sniffing the productIdentifier element.
-                    if (reader.NamespaceURI.Contains("S-122", StringComparison.OrdinalIgnoreCase)
-                        || reader.NamespaceURI.Contains("S122", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S122", StringComparison.OrdinalIgnoreCase)
-                        || ContainsProductIdentifier(xml, "S-122"))
-                    {
-                        return "S-122";
-                    }
-
-                    // Generic GML DataSet fallback — inspect declared namespaces
-                    if (reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (reader.MoveToFirstAttribute())
-                        {
-                            do
-                            {
-                                if (reader.Value.Contains("S129", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-129", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-129";
-                                }
-
-                                if (reader.Value.Contains("S131", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-131", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-131";
-                                }
-
-                                if (reader.Value.Contains("S124", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-124", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-124";
-                                }
-
-                                if (reader.Value.Contains("S125", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-125", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-125";
-                                }
-
-                                if (reader.Value.Contains("S128", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-128", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-128";
-                                }
-
-                                if (reader.Value.Contains("S127", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-127", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-127";
-                                }
-
-                                if (reader.Value.Contains("S421", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-421", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-421";
-                                }
-
-                                if (reader.Value.Contains("S411", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-411", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-411";
-                                }
-
-                                if (reader.Value.Contains("S122", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-122", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-122";
-                                }
-
-                                if (reader.Value.Contains("S201", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("S-201", StringComparison.OrdinalIgnoreCase)
-                                    || reader.Value.Contains("/201/gml", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    return "S-201";
-                                }
-                            } while (reader.MoveToNextAttribute());
-                        }
-
-                        return null;
-                    }
-
-                    break;
+                        values.Add(reader.Value);
+                    } while (reader.MoveToNextAttribute());
+                    reader.MoveToElement();
+                    attributeValues = values;
                 }
+
+                root = new GmlRootInfo
+                {
+                    NamespaceUri = reader.NamespaceURI,
+                    LocalName = reader.LocalName,
+                    AttributeValues = attributeValues,
+                    Xml = xml,
+                };
+                return true;
             }
         }
         catch
@@ -410,21 +286,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             // Unable to parse – unknown
         }
 
-        return null;
-    }
-
-    private static bool ContainsProductIdentifier(string xml, string productId)
-    {
-        // Sniff the first 8KB of the document for an S-100
-        // <productIdentifier>{productId}</productIdentifier> element.
-        // Used for product specs (e.g. S-411 1.2.1 samples) that don't declare
-        // an application-schema namespace on the dataset root.
-        var span = xml.AsSpan(0, Math.Min(xml.Length, 8192));
-        var marker = "productIdentifier".AsSpan();
-        var idx = span.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (idx < 0) return false;
-        var rest = span[(idx + marker.Length)..];
-        return rest.IndexOf(productId.AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
+        return false;
     }
 
     /// <summary>
@@ -647,13 +509,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
                 ? "S-" + trimmed[1..]
                 : trimmed;
         normalized = normalized.ToUpperInvariant();
-        return normalized switch
-        {
-            "S-57" or "S-101" or "S-102" or "S-104" or "S-111"
-                or "S-122" or "S-124" or "S-125" or "S-127" or "S-128"
-                or "S-129" or "S-131" or "S-201" or "S-411" or "S-421" => normalized,
-            _ => null,
-        };
+        // The set of recognized identifiers is derived from the built-in product
+        // registrations (S100Products.KnownSpecs) rather than hard-coded here, so
+        // adding a product does not require editing this allow-list too.
+        return S100Products.KnownSpecs.Contains(normalized) ? normalized : null;
     }
 
     /// <summary>
@@ -766,7 +625,9 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
                     cancellationToken)
                 .ConfigureAwait(false);
             var xml = new string(buffer, 0, read).TrimStart();
-            return DetectGmlProductSpecFromXml(xml);
+            // Source sniffing is product-agnostic (no host registry in scope), so
+            // recognize against the full built-in product set.
+            return DetectGmlProductSpecFromXml(xml, DefaultRegistry);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

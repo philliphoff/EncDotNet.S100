@@ -20,21 +20,8 @@ public static class S100Products
     public static void RegisterAll(S100ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
-        registry.Register(S101);
-        registry.Register(S57);
-        registry.Register(S102);
-        registry.Register(S104);
-        registry.Register(S111);
-        registry.Register(S122);
-        registry.Register(S124);
-        registry.Register(S125);
-        registry.Register(S127);
-        registry.Register(S128);
-        registry.Register(S129);
-        registry.Register(S131);
-        registry.Register(S201);
-        registry.Register(S411);
-        registry.Register(S421);
+        foreach (var registration in All)
+            registry.Register(registration);
     }
 
     /// <summary>S-101 Electronic Navigational Chart.</summary>
@@ -105,7 +92,12 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S122DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        // The 2.0.0 sample dataset is mis-labelled with the S-123 namespace but
+        // its <productIdentifier> is "INT.IHO.S-122.x.y.z".
+        static d => Ns(d, "S-122", "S122") || Local(d, "S122")
+            || d.ContainsProductIdentifier("S-122")
+            || DataSetAttr(d, "S122", "S-122"));
 
     /// <summary>S-124 Navigational Warnings.</summary>
     public static S100ProductRegistration S124 { get; } = Gml(
@@ -114,7 +106,9 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S124DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        static d => Ns(d, "S-124") || Local(d, "S124")
+            || DataSetAttr(d, "S124", "S-124"));
 
     /// <summary>S-125 Marine Aids to Navigation.</summary>
     public static S100ProductRegistration S125 { get; } = Gml(
@@ -123,7 +117,9 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S125DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        static d => Ns(d, "S-125", "S125") || Local(d, "S125")
+            || DataSetAttr(d, "S125", "S-125"));
 
     /// <summary>S-127 Marine Traffic Management.</summary>
     public static S100ProductRegistration S127 { get; } = Gml(
@@ -132,7 +128,9 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S127DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        static d => Ns(d, "S-127", "S127") || Local(d, "S127")
+            || DataSetAttr(d, "S127", "S-127"));
 
     /// <summary>S-128 Catalogue of Nautical Products.</summary>
     public static S100ProductRegistration S128 { get; } = Gml(
@@ -141,7 +139,10 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S128DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        static d => Ns(d, "S-128", "S128") || Local(d, "S128")
+            || d.ContainsProductIdentifier("S-128")
+            || DataSetAttr(d, "S128", "S-128"));
 
     /// <summary>S-129 Under Keel Clearance Management.</summary>
     public static S100ProductRegistration S129 { get; } = Gml(
@@ -150,7 +151,9 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S129DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        static d => Ns(d, "S-129", "S129") || Local(d, "S129")
+            || DataSetAttr(d, "S129", "S-129"));
 
     /// <summary>S-131 Marine Harbour Infrastructure.</summary>
     public static S100ProductRegistration S131 { get; } = new()
@@ -161,6 +164,8 @@ public static class S100Products
         CreateFromSource = (s, r) => new S131DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager),
+        MatchGml = static d => Ns(d, "S-131", "S131") || Local(d, "S131")
+            || DataSetAttr(d, "S131", "S-131"),
     };
 
     /// <summary>S-201 Aids to Navigation Information.</summary>
@@ -170,7 +175,11 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S201DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        // Real-world S-201 uses one of three application-schema namespaces,
+        // including the legacy "http://www.iho.int/201/gml/1.0".
+        static d => Ns(d, "S-201", "S201", "/201/gml") || Local(d, "S201")
+            || DataSetAttr(d, "S201", "S-201", "/201/gml"));
 
     /// <summary>S-411 Ice Information (JCOMM).</summary>
     public static S100ProductRegistration S411 { get; } = Gml(
@@ -179,7 +188,15 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S411DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        // JCOMM operational shape roots at <ice:IceDataSet
+        // xmlns:ice="http://www.jcomm.info/ice">; the IHO 1.2.1 sample shape uses
+        // a bare <Dataset> whose spec is declared via <productIdentifier>.
+        static d => d.LocalName.Equals("IceDataSet", StringComparison.OrdinalIgnoreCase)
+            || d.NamespaceUri.Equals("http://www.jcomm.info/ice", StringComparison.OrdinalIgnoreCase)
+            || Ns(d, "S-411", "S411") || Local(d, "S411")
+            || d.ContainsProductIdentifier("S-411")
+            || DataSetAttr(d, "S411", "S-411"));
 
     /// <summary>S-421 Route Plan.</summary>
     public static S100ProductRegistration S421 { get; } = Gml(
@@ -188,11 +205,58 @@ public static class S100Products
             path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
         (s, r) => new S421DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager));
+            s.FeatureCatalogueManager),
+        static d => Ns(d, "S-421", "S421") || Local(d, "S421")
+            || DataSetAttr(d, "S421", "S-421"));
+
+    /// <summary>
+    /// Every built-in product registration, in a single place. Both
+    /// <see cref="RegisterAll"/> and <see cref="KnownSpecs"/> derive from this
+    /// list, so a new product is added here once.
+    /// </summary>
+    public static IReadOnlyList<S100ProductRegistration> All { get; } = Array.AsReadOnly(
+        new[]
+        {
+            S101, S57, S102, S104, S111, S122, S124, S125, S127, S128,
+            S129, S131, S201, S411, S421,
+        });
+
+    /// <summary>
+    /// The canonical spec strings of every built-in product. Backs
+    /// <see cref="DatasetPipelineFactory.MapProductIdentifierToSpec"/>'s
+    /// known-product allow-list so the set of recognized identifiers is derived
+    /// from the registrations rather than hard-coded a second time.
+    /// </summary>
+    internal static IReadOnlySet<string> KnownSpecs { get; } =
+        All.Select(r => r.Spec).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static S100ProductRegistration Gml(
         string spec,
         DatasetProcessorFromPath fromPath,
-        DatasetProcessorFromSource fromSource) =>
-        new() { Spec = spec, CreateFromPath = fromPath, CreateFromSource = fromSource };
+        DatasetProcessorFromSource fromSource,
+        DatasetGmlMatcher matchGml) =>
+        new()
+        {
+            Spec = spec,
+            CreateFromPath = fromPath,
+            CreateFromSource = fromSource,
+            MatchGml = matchGml,
+        };
+
+    /// <summary>Whether the root element's namespace URI contains any of <paramref name="tokens"/>.</summary>
+    private static bool Ns(GmlRootInfo d, params string[] tokens) =>
+        Array.Exists(tokens, t => d.NamespaceUri.Contains(t, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether the root element's local name contains <paramref name="token"/>.</summary>
+    private static bool Local(GmlRootInfo d, string token) =>
+        d.LocalName.Contains(token, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the root is a generic <c>&lt;DataSet&gt;</c> whose declared
+    /// namespaces (attribute values) contain any of <paramref name="tokens"/>.
+    /// </summary>
+    private static bool DataSetAttr(GmlRootInfo d, params string[] tokens) =>
+        d.IsDataSetRoot
+        && d.AttributeValues.Any(v =>
+            Array.Exists(tokens, t => v.Contains(t, StringComparison.OrdinalIgnoreCase)));
 }

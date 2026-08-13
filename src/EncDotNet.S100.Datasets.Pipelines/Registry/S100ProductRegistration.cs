@@ -79,4 +79,18 @@ public sealed record S100ProductRegistration
     /// runs the S-57 sniff and treats every <c>.000</c> file as S-101.
     /// </summary>
     public DatasetContentDiscriminator? Discriminate { get; init; }
+
+    /// <summary>
+    /// Optional recognizer for a GML-encoded product: given the parsed root of a
+    /// <c>.gml</c> document, decides whether the document belongs to this
+    /// product. This is what inverts the former central GML namespace
+    /// <c>switch</c> in <see cref="DatasetPipelineFactory"/> into data, so a new
+    /// GML product is recognized in the same place it is constructed. It is
+    /// <see langword="null"/> for non-GML products (S-101/S-57 ISO 8211,
+    /// S-102/S-104/S-111 HDF5), whose extension or header identifies them
+    /// instead. <see cref="DatasetPipelineFactory"/> reads the document root once
+    /// and returns the spec of the first registered product whose matcher claims
+    /// it.
+    /// </summary>
+    public DatasetGmlMatcher? MatchGml { get; init; }
 }

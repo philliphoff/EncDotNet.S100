@@ -46,6 +46,19 @@ product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+Detection is **data-driven per product**, not a central switch: each
+`S100ProductRegistration` in `S100Products` declares *both* how to
+construct its processor *and* how to recognize its files — the S-57 `.000`
+content sniff via `Discriminate`, and each GML product's namespace /
+`productIdentifier` shape via `MatchGml` (`DatasetGmlMatcher`, fed a
+parse-once `GmlRootInfo`). The factory reads a GML document's root once and
+returns the spec of the first registered product whose `MatchGml` claims
+it, so adding a GML product means adding one registration to `S100Products`
+— no edit to the factory. The recognized product-identifier set that
+`MapProductIdentifierToSpec` accepts is likewise derived from the built-in
+registration list (`S100Products.All`). The `.h5` coverage
+(S-102/104/111) header read stays in the factory as a small closed set.
+
 ### Processor lifecycle ownership
 
 `DatasetProcessorOwner` is the renderer- and UI-neutral lifecycle boundary for
