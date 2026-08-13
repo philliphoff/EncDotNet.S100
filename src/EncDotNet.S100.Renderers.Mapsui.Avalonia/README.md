@@ -8,6 +8,7 @@ package remains UI-framework neutral. It owns layer creation,
 `MapsuiLayerBands`, and `MapsuiMapNavigator`. This package adds only mechanics
 that require Avalonia:
 
+- a one-call `S100MapControl` that attaches and owns a session (see below);
 - explicit attachment to any live `Mapsui.UI.Avalonia.MapControl`;
 - UI-thread redraw invalidation;
 - live-control and captured-image coordinate conversion;
@@ -18,6 +19,58 @@ that require Avalonia:
 
 It does not own datasets, processors, S-98 composition, presentation state,
 automatic framing, or host UX policy.
+
+## One-call control (`S100MapControl`)
+
+`S100MapControl` is the smallest-wiring entry point: a `MapControl` subclass that
+attaches a session to itself and owns its lifetime. Drop it in XAML and call
+`Configure` once — it creates the `EPSG:3857` map, runs `AddS100`, and exposes the
+`Session` and `Adapter`. Disposing the control disposes both.
+
+```xml
+<s100:S100MapControl x:Name="MapView"
+     xmlns:s100="clr-namespace:EncDotNet.S100.Renderers.Mapsui.Avalonia;assembly=EncDotNet.S100.Renderers.Mapsui.Avalonia" />
+```
+
+```csharp
+public MainWindow()
+{
+    InitializeComponent();
+
+    MapView.Configure(new S100MapsuiOptions
+    {
+        CrsTransformFactory = new ProjNetCrsTransformFactory(),
+        DatasetPipelineFactory = BundledDatasetProcessorFactory.Create(),
+    });
+
+    MapView.PointerReleased += async (_, e) =>
+    {
+        try
+        {
+            var p = e.GetPosition(MapView);
+            var picks = await MapView.PickAsync(p.X, p.Y);   // no adapter/Query plumbing
+            // … present picks[0], the topmost feature under the pointer …
+        }
+        catch (Exception ex)
+        {
+            // A real handler logs or surfaces this; an async-void event handler
+            // otherwise lets the exception escape as unhandled.
+        }
+    };
+}
+
+protected override void OnClosed(EventArgs e)
+{
+    MapView.Dispose();   // disposes the session and adapter together
+    base.OnClosed(e);
+}
+```
+
+It derives from `CaptureSynchronizedMapControl`, so its captures are race-safe. A
+host that needs to inject shared collaborators, keep its own paint diagnostics,
+or otherwise drive the wiring itself uses `mapControl.AddS100(...)` on a plain
+control instead (below); `S100MapControl` is the convenience path, not the only
+one.
 
 ## Usage
 
