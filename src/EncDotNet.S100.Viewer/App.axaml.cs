@@ -735,9 +735,9 @@ public partial class App : Application
         // observes the existing dataset loader and re-opens dataset files
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
-        services.AddSingleton<MapCapabilityAccessor<IMapSnapshotRenderer>>();
-        services.AddSingleton<ICapabilityAccessor<IMapSnapshotRenderer>>(sp =>
-            sp.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>());
+        services.AddSingleton<MapCapabilityAccessor<IImageRenderer>>();
+        services.AddSingleton<ICapabilityAccessor<IImageRenderer>>(sp =>
+            sp.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>());
         services.AddSingleton<MapCapabilityAccessor<IMapViewportController>>();
         services.AddSingleton<ICapabilityAccessor<IMapViewportController>>(sp =>
             sp.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>());
@@ -760,7 +760,7 @@ public partial class App : Application
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
-            sp.GetRequiredService<ICapabilityAccessor<IMapSnapshotRenderer>>(),
+            sp.GetRequiredService<ICapabilityAccessor<IImageRenderer>>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapCoordinateConverter>>(),
             sp.GetService<ILoggerFactory>(),

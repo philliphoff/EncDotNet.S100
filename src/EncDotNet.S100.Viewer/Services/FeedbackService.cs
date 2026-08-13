@@ -37,7 +37,7 @@ internal sealed class FeedbackService : IFeedbackService
     private readonly IThemeService _theme;
     private readonly SettingsViewModel _settings;
     private readonly IAppScreenshotProvider _screenshot;
-    private readonly ICapabilityAccessor<IMapSnapshotRenderer> _mapSnapshotAccessor;
+    private readonly ICapabilityAccessor<IImageRenderer> _mapRendererAccessor;
 
     public FeedbackService(
         DatasetsViewModel datasets,
@@ -47,7 +47,7 @@ internal sealed class FeedbackService : IFeedbackService
         IThemeService theme,
         SettingsViewModel settings,
         IAppScreenshotProvider screenshot,
-        ICapabilityAccessor<IMapSnapshotRenderer> mapSnapshotAccessor)
+        ICapabilityAccessor<IImageRenderer> mapRendererAccessor)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);
@@ -56,7 +56,7 @@ internal sealed class FeedbackService : IFeedbackService
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(screenshot);
-        ArgumentNullException.ThrowIfNull(mapSnapshotAccessor);
+        ArgumentNullException.ThrowIfNull(mapRendererAccessor);
 
         _datasets = datasets;
         _viewport = viewport;
@@ -65,7 +65,7 @@ internal sealed class FeedbackService : IFeedbackService
         _theme = theme;
         _settings = settings;
         _screenshot = screenshot;
-        _mapSnapshotAccessor = mapSnapshotAccessor;
+        _mapRendererAccessor = mapRendererAccessor;
     }
 
     /// <inheritdoc />
@@ -174,13 +174,13 @@ internal sealed class FeedbackService : IFeedbackService
         }
 
         // Fallback: capture just the map if the window could not be rendered.
-        var renderer = _mapSnapshotAccessor.Current;
+        var renderer = _mapRendererAccessor.Current;
         if (renderer is null)
             return null;
 
         try
         {
-            return await renderer.RenderCurrentViewToPngAsync(1280, 800, 1.0, cancellationToken)
+            return await renderer.RenderToPngAsync(1280, 800, 1.0, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)

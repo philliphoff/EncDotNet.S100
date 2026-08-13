@@ -137,9 +137,9 @@ public partial class MainWindow : ShadUI.Window
                 EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>());
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
-        // Snapshot is the MCP readiness gate, so publish it only after the
-        // coordinate and viewport capabilities used alongside it are attached.
-        App.Services.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>().Current = _mapHost;
+        // The image renderer is the MCP readiness gate, so publish it only after
+        // the coordinate and viewport capabilities used alongside it are attached.
+        App.Services.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>().Current = _mapHost;
         // Let the feedback reporter capture the whole application window.
         App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
@@ -210,7 +210,7 @@ public partial class MainWindow : ShadUI.Window
             // MainViewModel / window are not kept alive after close.
             App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
             App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
-            App.Services.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>().Current = null;
             App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = null;
             App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = null;
             _mapHost.Dispose();

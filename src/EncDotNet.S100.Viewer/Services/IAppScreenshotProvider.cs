@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Capturing the whole window yields a true "application" screenshot
 /// (chart plus surrounding chrome). When no window target is available
 /// the feedback service falls back to the map-only PNG produced by
-/// <see cref="IMapSnapshotRenderer.RenderCurrentViewToPngAsync"/>.
+/// <see cref="EncDotNet.S100.Maps.IImageRenderer.RenderToPngAsync"/>.
 /// </para>
 /// </remarks>
 internal interface IAppScreenshotProvider
