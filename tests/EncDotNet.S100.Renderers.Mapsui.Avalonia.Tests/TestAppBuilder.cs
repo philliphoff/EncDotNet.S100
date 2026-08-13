@@ -4,6 +4,7 @@ using Avalonia.Headless;
 [assembly: AvaloniaTestApplication(
     typeof(EncDotNet.S100.Renderers.Mapsui.Avalonia.Tests.TestAppBuilder))]
 [assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
 
 namespace EncDotNet.S100.Renderers.Mapsui.Avalonia.Tests;
 
