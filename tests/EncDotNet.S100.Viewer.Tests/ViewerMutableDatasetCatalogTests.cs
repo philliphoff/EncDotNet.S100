@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.McpCapabilities;
 

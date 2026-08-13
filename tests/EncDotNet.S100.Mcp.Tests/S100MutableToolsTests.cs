@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp.MutableTools;
-using EncDotNet.S100.Mcp.Tools.Mutable;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tests;
@@ -232,10 +232,10 @@ public class S100MutableToolsTests
 
         public void Set(MapViewport viewport) => Current = viewport;
 
-        public void SetToBounds(EncDotNet.S100.ExchangeSets.BoundingBox bounds)
+        public void SetToBounds(BoundingBox bounds)
             => Current = new MapViewport(
-                (bounds.WestBoundLongitude + bounds.EastBoundLongitude) / 2.0,
-                (bounds.SouthBoundLatitude + bounds.NorthBoundLatitude) / 2.0,
+                (bounds.WestLongitude + bounds.EastLongitude) / 2.0,
+                (bounds.SouthLatitude + bounds.NorthLatitude) / 2.0,
                 1.0);
     }
 

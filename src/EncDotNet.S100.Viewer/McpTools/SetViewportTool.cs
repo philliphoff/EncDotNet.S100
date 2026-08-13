@@ -82,10 +82,10 @@ internal sealed class SetViewportTool
     // Mapsui Navigator wants. 156543.0339... = 2 * pi * 6378137 / 256.
     internal const double ResolutionAtZoomZero = 156543.03392804097;
 
-    private readonly IMapCapabilityAccessor<IMapViewportController> _accessor;
+    private readonly ICapabilityAccessor<IMapViewportController> _accessor;
 
     /// <summary>Creates a new <see cref="SetViewportTool"/>.</summary>
-    public SetViewportTool(IMapCapabilityAccessor<IMapViewportController> accessor)
+    public SetViewportTool(ICapabilityAccessor<IMapViewportController> accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         _accessor = accessor;

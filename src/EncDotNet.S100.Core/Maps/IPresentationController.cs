@@ -1,6 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 
-namespace EncDotNet.S100.Mcp.Tools.Mutable;
+namespace EncDotNet.S100.Maps;
 
 /// <summary>
 /// A readable, applicable presentation seam for the presentation-mutating tools

@@ -3,7 +3,6 @@ using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.MutableTools;
-using EncDotNet.S100.Mcp.Tools.Mutable;
 using Spectre.Console;
 using Spectre.Console.Cli;
 

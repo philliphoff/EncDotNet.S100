@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// The capture target is the live <c>MainWindow</c>, which only exists
 /// after DI is built. <see cref="Target"/> is therefore late-bound by
 /// the window during its construction — mirroring the
-/// <see cref="IMapCapabilityAccessor{TCapability}"/> pattern — so services resolved earlier
+/// <see cref="ICapabilityAccessor{TCapability}"/> pattern — so services resolved earlier
 /// can hold the provider and read the target at capture time.
 /// </para>
 /// <para>

@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.ExchangeSets;
-using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
@@ -131,8 +130,8 @@ internal sealed class HeadlessS100Session
                     // box's arithmetic midpoint, so it stays consistent with the
                     // rectangle the aspect-fit actually produces.
                     var resolved = CompositeViewportBuilder.FromBoundingBox(
-                        b.WestBoundLongitude, b.SouthBoundLatitude,
-                        b.EastBoundLongitude, b.NorthBoundLatitude,
+                        b.WestLongitude, b.SouthLatitude,
+                        b.EastLongitude, b.NorthLatitude,
                         ReferenceWidthPx, ReferenceHeightPx);
                     var (centerLon, centerLat) = CompositeViewportBuilder.CenterOf(resolved);
                     return new MapViewport(centerLon, centerLat, resolved.ScaleDenominator);
@@ -182,20 +181,20 @@ internal sealed class HeadlessS100Session
         // Same seam guard as Set: reject non-finite / out-of-range edges and an
         // inverted or antimeridian-crossing box, which CompositeViewportBuilder
         // cannot frame correctly, before they can reach Current or a render.
-        ValidateLongitude(bounds.WestBoundLongitude, nameof(bounds));
-        ValidateLongitude(bounds.EastBoundLongitude, nameof(bounds));
-        ValidateLatitude(bounds.SouthBoundLatitude, nameof(bounds));
-        ValidateLatitude(bounds.NorthBoundLatitude, nameof(bounds));
-        if (bounds.WestBoundLongitude >= bounds.EastBoundLongitude)
+        ValidateLongitude(bounds.WestLongitude, nameof(bounds));
+        ValidateLongitude(bounds.EastLongitude, nameof(bounds));
+        ValidateLatitude(bounds.SouthLatitude, nameof(bounds));
+        ValidateLatitude(bounds.NorthLatitude, nameof(bounds));
+        if (bounds.WestLongitude >= bounds.EastLongitude)
         {
             throw new ArgumentException(
-                $"West ({bounds.WestBoundLongitude}) must be less than East ({bounds.EastBoundLongitude}); antimeridian crossing is not supported.",
+                $"West ({bounds.WestLongitude}) must be less than East ({bounds.EastLongitude}); antimeridian crossing is not supported.",
                 nameof(bounds));
         }
-        if (bounds.SouthBoundLatitude >= bounds.NorthBoundLatitude)
+        if (bounds.SouthLatitude >= bounds.NorthLatitude)
         {
             throw new ArgumentException(
-                $"South ({bounds.SouthBoundLatitude}) must be less than North ({bounds.NorthBoundLatitude}).",
+                $"South ({bounds.SouthLatitude}) must be less than North ({bounds.NorthLatitude}).",
                 nameof(bounds));
         }
 
@@ -249,8 +248,8 @@ internal sealed class HeadlessS100Session
             if (_bounds is { } b)
             {
                 return CompositeViewportBuilder.FromBoundingBox(
-                    b.WestBoundLongitude, b.SouthBoundLatitude,
-                    b.EastBoundLongitude, b.NorthBoundLatitude,
+                    b.WestLongitude, b.SouthLatitude,
+                    b.EastLongitude, b.NorthLatitude,
                     widthPx, heightPx);
             }
             return null;

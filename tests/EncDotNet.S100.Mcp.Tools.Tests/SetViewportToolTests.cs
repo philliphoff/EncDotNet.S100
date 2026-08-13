@@ -1,6 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
@@ -58,10 +58,10 @@ public class SetViewportToolTests
 
         Assert.Equal("bounds", value.Mode);
         var bounds = Assert.IsType<BoundingBox>(host.LastBounds);
-        Assert.Equal(-1.5, bounds.WestBoundLongitude);
-        Assert.Equal(-1.0, bounds.EastBoundLongitude);
-        Assert.Equal(50.0, bounds.SouthBoundLatitude);
-        Assert.Equal(50.5, bounds.NorthBoundLatitude);
+        Assert.Equal(-1.5, bounds.WestLongitude);
+        Assert.Equal(-1.0, bounds.EastLongitude);
+        Assert.Equal(50.0, bounds.SouthLatitude);
+        Assert.Equal(50.5, bounds.NorthLatitude);
     }
 
     [Fact]
@@ -258,8 +258,8 @@ public class SetViewportToolTests
                 if (LastBounds is { } b)
                 {
                     return new MapViewport(
-                        (b.WestBoundLongitude + b.EastBoundLongitude) / 2.0,
-                        (b.SouthBoundLatitude + b.NorthBoundLatitude) / 2.0,
+                        (b.WestLongitude + b.EastLongitude) / 2.0,
+                        (b.SouthLatitude + b.NorthLatitude) / 2.0,
                         1.0);
                 }
                 return null;

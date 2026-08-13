@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Mcp.Tools.Mutable;
+namespace EncDotNet.S100.Maps;
 
 /// <summary>
 /// Renders the session's current state — loaded datasets, presentation, time,

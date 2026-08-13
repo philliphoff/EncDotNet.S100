@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Mcp.Tools.Mutable;
+namespace EncDotNet.S100.Maps;
 
 /// <summary>
 /// The map clock over time-aware products (S-104 / S-111 / S-411). Backs the

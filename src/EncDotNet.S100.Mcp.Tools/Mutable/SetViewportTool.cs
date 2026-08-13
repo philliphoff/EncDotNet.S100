@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools.Mutable;
 
@@ -218,13 +218,11 @@ public sealed class SetViewportTool
         }
 
         var previous = controller.Current;
-        controller.SetToBounds(new BoundingBox
-        {
-            WestBoundLongitude = minLon,
-            EastBoundLongitude = maxLon,
-            SouthBoundLatitude = minLat,
-            NorthBoundLatitude = maxLat,
-        });
+        controller.SetToBounds(new BoundingBox(
+            southLatitude: minLat,
+            westLongitude: minLon,
+            northLatitude: maxLat,
+            eastLongitude: maxLon));
 
         // Echo the resolved viewport the controller settled on (its own
         // reference-surface framing of the box) so callers can verify. If the

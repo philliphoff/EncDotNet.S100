@@ -1,6 +1,6 @@
-using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Hosting;
 
-namespace EncDotNet.S100.Mcp.Tools.Tests;
+namespace EncDotNet.S100.Core.Tests;
 
 public class StaticCapabilityAccessorTests
 {
