@@ -214,11 +214,12 @@ public static class S100Products
     /// <see cref="RegisterAll"/> and <see cref="KnownSpecs"/> derive from this
     /// list, so a new product is added here once.
     /// </summary>
-    public static IReadOnlyList<S100ProductRegistration> All { get; } =
-    [
-        S101, S57, S102, S104, S111, S122, S124, S125, S127, S128,
-        S129, S131, S201, S411, S421,
-    ];
+    public static IReadOnlyList<S100ProductRegistration> All { get; } = Array.AsReadOnly(
+        new[]
+        {
+            S101, S57, S102, S104, S111, S122, S124, S125, S127, S128,
+            S129, S131, S201, S411, S421,
+        });
 
     /// <summary>
     /// The canonical spec strings of every built-in product. Backs
