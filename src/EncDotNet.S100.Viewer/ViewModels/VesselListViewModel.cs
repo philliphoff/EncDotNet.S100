@@ -77,7 +77,7 @@ internal sealed class VesselListViewModel : ViewModelBase
     private readonly IDynamicFeatureSource? _ownShip;
     private readonly IHelmStatusProvider? _helmStatus;
     private readonly IDynamicFeatureSource? _helmTargetSource;
-    private readonly IMapCapabilityAccessor<IMapViewportController> _viewportAccessor;
+    private readonly ICapabilityAccessor<IMapViewportController> _viewportAccessor;
     private readonly DispatcherTimer? _timer;
     private readonly Dictionary<string, VesselListItem> _itemsById = new(StringComparer.Ordinal);
 
@@ -88,7 +88,7 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     public VesselListViewModel(
         IEnumerable<IDynamicFeatureSource> sources,
-        IMapCapabilityAccessor<IMapViewportController> viewportAccessor)
+        ICapabilityAccessor<IMapViewportController> viewportAccessor)
         : this(sources, viewportAccessor, helmStatus: null, helmTargetSource: null)
     {
     }
@@ -108,7 +108,7 @@ internal sealed class VesselListViewModel : ViewModelBase
     /// </param>
     public VesselListViewModel(
         IEnumerable<IDynamicFeatureSource> sources,
-        IMapCapabilityAccessor<IMapViewportController> viewportAccessor,
+        ICapabilityAccessor<IMapViewportController> viewportAccessor,
         IHelmStatusProvider? helmStatus,
         IDynamicFeatureSource? helmTargetSource)
     {

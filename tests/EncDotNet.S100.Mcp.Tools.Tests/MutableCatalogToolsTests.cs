@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Mutable;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;

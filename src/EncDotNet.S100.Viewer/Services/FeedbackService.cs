@@ -37,7 +37,7 @@ internal sealed class FeedbackService : IFeedbackService
     private readonly IThemeService _theme;
     private readonly SettingsViewModel _settings;
     private readonly IAppScreenshotProvider _screenshot;
-    private readonly IMapCapabilityAccessor<IMapSnapshotRenderer> _mapSnapshotAccessor;
+    private readonly ICapabilityAccessor<IMapSnapshotRenderer> _mapSnapshotAccessor;
 
     public FeedbackService(
         DatasetsViewModel datasets,
@@ -47,7 +47,7 @@ internal sealed class FeedbackService : IFeedbackService
         IThemeService theme,
         SettingsViewModel settings,
         IAppScreenshotProvider screenshot,
-        IMapCapabilityAccessor<IMapSnapshotRenderer> mapSnapshotAccessor)
+        ICapabilityAccessor<IMapSnapshotRenderer> mapSnapshotAccessor)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);

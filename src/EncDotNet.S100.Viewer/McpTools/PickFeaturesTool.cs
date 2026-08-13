@@ -79,13 +79,13 @@ internal sealed class PickFeaturesTool
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "pick_features";
 
-    private readonly IMapCapabilityAccessor<IMapCoordinateConverter> _accessor;
+    private readonly ICapabilityAccessor<IMapCoordinateConverter> _accessor;
     private readonly IdentifyFeaturesTool _identify;
     private readonly IGeographicPickPresenter? _presenter;
 
     /// <summary>Creates a new <see cref="PickFeaturesTool"/>.</summary>
     public PickFeaturesTool(
-        IMapCapabilityAccessor<IMapCoordinateConverter> accessor,
+        ICapabilityAccessor<IMapCoordinateConverter> accessor,
         IDatasetCatalog catalog)
         : this(accessor, catalog, presenter: null)
     {
@@ -97,7 +97,7 @@ internal sealed class PickFeaturesTool
     /// publishing the pick to the live viewer panel + highlight.
     /// </summary>
     public PickFeaturesTool(
-        IMapCapabilityAccessor<IMapCoordinateConverter> accessor,
+        ICapabilityAccessor<IMapCoordinateConverter> accessor,
         IDatasetCatalog catalog,
         IGeographicPickPresenter? presenter)
     {

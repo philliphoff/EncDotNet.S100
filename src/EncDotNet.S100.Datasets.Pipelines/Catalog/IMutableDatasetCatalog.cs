@@ -1,7 +1,6 @@
 using System.ComponentModel;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 
-namespace EncDotNet.S100.Mcp.Tools.Mutable;
+namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 
 /// <summary>
 /// The write side of an <see cref="IDatasetCatalog"/>: a catalog whose contents

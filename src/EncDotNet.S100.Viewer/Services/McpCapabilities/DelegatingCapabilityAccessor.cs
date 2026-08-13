@@ -1,5 +1,3 @@
-using EncDotNet.S100.Mcp.Tools.Mutable;
-
 namespace EncDotNet.S100.Viewer.Services.McpCapabilities;
 
 /// <summary>
@@ -10,7 +8,7 @@ namespace EncDotNet.S100.Viewer.Services.McpCapabilities;
 /// The desktop viewer's capabilities attach only after the map control and its
 /// view-models finish constructing, so the shared mutating tools must bind to
 /// them before they exist. This accessor bridges the viewer's own late-bound
-/// accessors (<see cref="IMapCapabilityAccessor{TCapability}"/>,
+/// accessors (<see cref="ICapabilityAccessor{TCapability}"/>,
 /// <see cref="IRenderStateControllerAccessor"/>) onto the shared
 /// <see cref="ICapabilityAccessor{TCapability}"/> the tools expect: the read
 /// delegate returns <see langword="null"/> while the underlying viewer service

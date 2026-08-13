@@ -1,6 +1,5 @@
 using EncDotNet.S100.Cli.Infrastructure;
-using EncDotNet.S100.ExchangeSets;
-using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -45,13 +44,11 @@ public sealed class HeadlessS100SessionViewportTests
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
-        controller.SetToBounds(new BoundingBox
-        {
-            WestBoundLongitude = -1.5,
-            EastBoundLongitude = -1.0,
-            SouthBoundLatitude = 50.0,
-            NorthBoundLatitude = 50.5,
-        });
+        controller.SetToBounds(new BoundingBox(
+            southLatitude: 50.0,
+            westLongitude: -1.5,
+            northLatitude: 50.5,
+            eastLongitude: -1.0));
 
         var current = Assert.IsType<MapViewport>(controller.Current);
         // Longitude is linear in Web Mercator, so the centre is the exact midpoint.
@@ -100,13 +97,11 @@ public sealed class HeadlessS100SessionViewportTests
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
-        Assert.Throws<ArgumentException>(() => controller.SetToBounds(new BoundingBox
-        {
-            WestBoundLongitude = -1.0,
-            EastBoundLongitude = -1.5, // west >= east
-            SouthBoundLatitude = 50.0,
-            NorthBoundLatitude = 50.5,
-        }));
+        Assert.Throws<ArgumentException>(() => controller.SetToBounds(new BoundingBox(
+            southLatitude: 50.0,
+            westLongitude: -1.0,
+            northLatitude: 50.5,
+            eastLongitude: -1.5))); // west >= east
         Assert.Null(controller.Current);
     }
 
@@ -117,13 +112,11 @@ public sealed class HeadlessS100SessionViewportTests
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
-        Assert.Throws<ArgumentException>(() => controller.SetToBounds(new BoundingBox
-        {
-            WestBoundLongitude = -1.5,
-            EastBoundLongitude = -1.0,
-            SouthBoundLatitude = 80.0,
-            NorthBoundLatitude = 87.0, // beyond the Web Mercator limit
-        }));
+        Assert.Throws<ArgumentException>(() => controller.SetToBounds(new BoundingBox(
+            southLatitude: 80.0,
+            westLongitude: -1.5,
+            northLatitude: 87.0, // beyond the Web Mercator limit
+            eastLongitude: -1.0)));
         Assert.Null(controller.Current);
     }
 
@@ -135,13 +128,11 @@ public sealed class HeadlessS100SessionViewportTests
         var controller = (IViewportController)session;
 
         controller.Set(new MapViewport(0, 0, 10000));
-        controller.SetToBounds(new BoundingBox
-        {
-            WestBoundLongitude = -1.5,
-            EastBoundLongitude = -1.0,
-            SouthBoundLatitude = 50.0,
-            NorthBoundLatitude = 50.5,
-        });
+        controller.SetToBounds(new BoundingBox(
+            southLatitude: 50.0,
+            westLongitude: -1.5,
+            northLatitude: 50.5,
+            eastLongitude: -1.0));
 
         // The bounds now win: the centre is the box midpoint, not (0,0).
         Assert.Equal(-1.25, controller.Current!.CenterLongitude, precision: 9);

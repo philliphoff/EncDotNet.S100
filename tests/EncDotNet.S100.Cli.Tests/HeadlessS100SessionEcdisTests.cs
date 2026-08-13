@@ -1,6 +1,5 @@
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Mcp.Tools.Mutable;
 
 namespace EncDotNet.S100.Cli.Tests;
 

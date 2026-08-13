@@ -56,12 +56,12 @@ public class MapCapabilityBoundaryTests
         Assert.Equal(typeof(IMapLayerCollection), initialize!.GetParameters()[0].ParameterType);
         Assert.Equal(typeof(IMapViewportController), initialize.GetParameters()[1].ParameterType);
         Assert.Equal(
-            typeof(IMapCapabilityAccessor<IMapViewportController>),
+            typeof(ICapabilityAccessor<IMapViewportController>),
             setViewportConstructor.GetParameters()[0].ParameterType);
         Assert.All(
             pickConstructors,
             constructor => Assert.Equal(
-                typeof(IMapCapabilityAccessor<IMapCoordinateConverter>),
+                typeof(ICapabilityAccessor<IMapCoordinateConverter>),
                 constructor.GetParameters()[0].ParameterType));
     }
 }

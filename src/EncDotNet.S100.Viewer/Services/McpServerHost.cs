@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Sockets;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services.McpCapabilities;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
-using Mutable = EncDotNet.S100.Mcp.Tools.Mutable;
 using SharedMutableTools = EncDotNet.S100.Mcp.MutableTools.S100MutableTools;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -26,9 +26,9 @@ internal sealed class McpServerHost : IAsyncDisposable
 {
     private readonly EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
-    private readonly IMapCapabilityAccessor<IMapSnapshotRenderer>? _snapshotAccessor;
-    private readonly IMapCapabilityAccessor<IMapViewportController>? _viewportAccessor;
-    private readonly IMapCapabilityAccessor<IMapCoordinateConverter>? _coordinateAccessor;
+    private readonly ICapabilityAccessor<IMapSnapshotRenderer>? _snapshotAccessor;
+    private readonly ICapabilityAccessor<IMapViewportController>? _viewportAccessor;
+    private readonly ICapabilityAccessor<IMapCoordinateConverter>? _coordinateAccessor;
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
     private readonly MapPresentationStateProjection? _presentationProjection;
     private readonly GlobalTimeService? _globalTime;
@@ -48,9 +48,9 @@ internal sealed class McpServerHost : IAsyncDisposable
     public McpServerHost(
         EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
-        IMapCapabilityAccessor<IMapSnapshotRenderer>? snapshotAccessor = null,
-        IMapCapabilityAccessor<IMapViewportController>? viewportAccessor = null,
-        IMapCapabilityAccessor<IMapCoordinateConverter>? coordinateAccessor = null,
+        ICapabilityAccessor<IMapSnapshotRenderer>? snapshotAccessor = null,
+        ICapabilityAccessor<IMapViewportController>? viewportAccessor = null,
+        ICapabilityAccessor<IMapCoordinateConverter>? coordinateAccessor = null,
         ILoggerFactory? loggers = null,
         IRenderStateControllerAccessor? renderStateAccessor = null,
         GlobalTimeService? globalTime = null,
@@ -356,27 +356,27 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// </summary>
     private void AddSharedMutableTools(System.Collections.Generic.List<McpServerTool> tools)
     {
-        Mutable.ICapabilityAccessor<Mutable.IPresentationController>? presentation =
+        ICapabilityAccessor<IPresentationController>? presentation =
             _renderStateAccessor is not null && _presentationProjection is not null
-                ? new DelegatingCapabilityAccessor<Mutable.IPresentationController>(() =>
+                ? new DelegatingCapabilityAccessor<IPresentationController>(() =>
                     _renderStateAccessor.Current is { } controller
                         ? new ViewerPresentationController(
                             controller, _presentationProjection.CreateSnapshot)
                         : null)
                 : null;
 
-        Mutable.ICapabilityAccessor<Mutable.ITimeController>? time =
+        ICapabilityAccessor<ITimeController>? time =
             _globalTime is not null
-                ? new Mutable.StaticCapabilityAccessor<Mutable.ITimeController>(
+                ? new StaticCapabilityAccessor<ITimeController>(
                     new ViewerTimeController(_globalTime))
                 : null;
 
         // render_to_image: the viewer's live-map snapshot renderer, with its
         // coordinate converter supplying the live viewport size for the unsized
         // capture default and the echoed viewport dimensions.
-        Mutable.ICapabilityAccessor<Mutable.IImageRenderer>? renderer =
+        ICapabilityAccessor<IImageRenderer>? renderer =
             _snapshotAccessor is not null
-                ? new DelegatingCapabilityAccessor<Mutable.IImageRenderer>(() =>
+                ? new DelegatingCapabilityAccessor<IImageRenderer>(() =>
                     _snapshotAccessor.Current is { } snapshot
                         ? new ViewerImageRenderer(snapshot, _coordinateAccessor?.Current)
                         : null)
@@ -387,7 +387,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         // shared mutable-catalog seam. Passed directly (not via an accessor)
         // because the catalog exists for the whole session; readiness of the
         // load path is handled inside the adapter.
-        Mutable.IMutableDatasetCatalog? catalog = _loadGateway is not null
+        IMutableDatasetCatalog? catalog = _loadGateway is not null
             ? new ViewerMutableDatasetCatalog(_catalog, _loadGateway)
             : null;
 

@@ -736,13 +736,13 @@ public partial class App : Application
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<MapCapabilityAccessor<IMapSnapshotRenderer>>();
-        services.AddSingleton<IMapCapabilityAccessor<IMapSnapshotRenderer>>(sp =>
+        services.AddSingleton<ICapabilityAccessor<IMapSnapshotRenderer>>(sp =>
             sp.GetRequiredService<MapCapabilityAccessor<IMapSnapshotRenderer>>());
         services.AddSingleton<MapCapabilityAccessor<IMapViewportController>>();
-        services.AddSingleton<IMapCapabilityAccessor<IMapViewportController>>(sp =>
+        services.AddSingleton<ICapabilityAccessor<IMapViewportController>>(sp =>
             sp.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>());
         services.AddSingleton<MapCapabilityAccessor<IMapCoordinateConverter>>();
-        services.AddSingleton<IMapCapabilityAccessor<IMapCoordinateConverter>>(sp =>
+        services.AddSingleton<ICapabilityAccessor<IMapCoordinateConverter>>(sp =>
             sp.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>());
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
         services.AddSingleton<IViewerUiControllerAccessor, ViewerUiControllerAccessor>();
@@ -760,9 +760,9 @@ public partial class App : Application
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
-            sp.GetRequiredService<IMapCapabilityAccessor<IMapSnapshotRenderer>>(),
-            sp.GetRequiredService<IMapCapabilityAccessor<IMapViewportController>>(),
-            sp.GetRequiredService<IMapCapabilityAccessor<IMapCoordinateConverter>>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapSnapshotRenderer>>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapCoordinateConverter>>(),
             sp.GetService<ILoggerFactory>(),
             sp.GetRequiredService<IRenderStateControllerAccessor>(),
             sp.GetRequiredService<GlobalTimeService>(),
@@ -787,7 +787,7 @@ public partial class App : Application
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
             sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
-            sp.GetRequiredService<IMapCapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         services.AddSingleton<SettingsViewModel>();

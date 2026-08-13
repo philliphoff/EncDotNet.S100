@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Mcp.Tools.Mutable;
+namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 
 /// <summary>
 /// Thrown by an <see cref="IMutableDatasetCatalog.LoadAsync"/> implementation

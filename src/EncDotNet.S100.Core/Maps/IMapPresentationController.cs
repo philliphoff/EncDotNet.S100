@@ -1,4 +1,6 @@
-namespace EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines;
+
+namespace EncDotNet.S100.Maps;
 
 /// <summary>
 /// Applies immutable map-wide presentation state to the datasets owned by a

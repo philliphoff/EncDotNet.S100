@@ -1,7 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
-using EncDotNet.S100.Mcp.Tools.Mutable;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Cli.Infrastructure;

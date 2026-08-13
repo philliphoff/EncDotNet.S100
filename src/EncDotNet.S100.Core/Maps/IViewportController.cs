@@ -1,7 +1,7 @@
 using System.ComponentModel;
-using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Pipelines;
 
-namespace EncDotNet.S100.Mcp.Tools.Mutable;
+namespace EncDotNet.S100.Maps;
 
 /// <summary>
 /// The geographic area and scale the session renders. Backs the
