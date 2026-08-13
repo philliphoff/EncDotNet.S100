@@ -28,7 +28,7 @@ internal sealed class MapsuiMapHost :
     IMapsuiOverlayLayerHost,
     IMapViewportController,
     IMapCoordinateConverter,
-    IMapSnapshotRenderer,
+    IImageRenderer,
     IMapInvalidator,
     IDisposable
 {
@@ -129,7 +129,7 @@ internal sealed class MapsuiMapHost :
             imageWidthPx,
             imageHeightPx);
 
-    public Task<byte[]?> RenderCurrentViewToPngAsync(
+    public Task<byte[]?> RenderToPngAsync(
         int widthPx,
         int heightPx,
         double pixelDensity,
@@ -139,6 +139,42 @@ internal sealed class MapsuiMapHost :
             heightPx,
             pixelDensity,
             cancellationToken);
+
+    /// <inheritdoc />
+    public (int Width, int Height)? PreferredSize => NormalizePreferredSize(TryGetViewportSizePx());
+
+    /// <summary>
+    /// Rounds and range-checks a live viewport size into an integer pixel size
+    /// usable as <see cref="IImageRenderer.PreferredSize"/>, or
+    /// <see langword="null"/> when the layout is degenerate (unset, sub-pixel,
+    /// NaN/Inf, or out of <see cref="int"/> range).
+    /// </summary>
+    /// <remarks>
+    /// Round, then range-check before the int cast: a NaN, sub-pixel, or
+    /// out-of-int-range value (e.g. from an uninitialised layout) must not reach
+    /// the cast, which would otherwise produce an unspecified int. +Inf is caught
+    /// by the upper bound and -Inf by the lower. The raw rounded live size is
+    /// returned; the render_to_image tool clamps it to the supported
+    /// render-dimension range for both the default and the echo.
+    /// </remarks>
+    internal static (int Width, int Height)? NormalizePreferredSize(
+        (double Width, double Height)? viewportSize)
+    {
+        if (viewportSize is not { } size)
+        {
+            return null;
+        }
+
+        var width = Math.Round(size.Width);
+        var height = Math.Round(size.Height);
+        if (double.IsNaN(width) || double.IsNaN(height)
+            || width < 1 || height < 1
+            || width > int.MaxValue || height > int.MaxValue)
+        {
+            return null;
+        }
+        return ((int)width, (int)height);
+    }
 
     public void Dispose()
     {

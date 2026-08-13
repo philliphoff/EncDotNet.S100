@@ -14,7 +14,11 @@ public class MapCapabilityBoundaryTests
         Assert.Contains(typeof(IMapLayerCollection), interfaces);
         Assert.Contains(typeof(IMapViewportController), interfaces);
         Assert.Contains(typeof(IMapCoordinateConverter), interfaces);
-        Assert.Contains(typeof(IMapSnapshotRenderer), interfaces);
+        // The host now speaks the reusable Core .Maps IImageRenderer contract
+        // directly (RenderToPngAsync + PreferredSize), replacing the former
+        // Viewer-private IMapSnapshotRenderer synonym and its ViewerImageRenderer
+        // adapter.
+        Assert.Contains(typeof(IImageRenderer), interfaces);
         Assert.Contains(typeof(IMapInvalidator), interfaces);
         Assert.Contains(typeof(IDisposable), interfaces);
     }
@@ -38,11 +42,11 @@ public class MapCapabilityBoundaryTests
     public void Late_bound_accessors_are_independent_by_capability()
     {
         var viewport = new MapCapabilityAccessor<IMapViewportController>();
-        var snapshot = new MapCapabilityAccessor<IMapSnapshotRenderer>();
+        var renderer = new MapCapabilityAccessor<IImageRenderer>();
 
         Assert.Null(viewport.Current);
-        Assert.Null(snapshot.Current);
-        Assert.NotEqual(viewport.GetType(), snapshot.GetType());
+        Assert.Null(renderer.Current);
+        Assert.NotEqual(viewport.GetType(), renderer.GetType());
     }
 
     [Fact]

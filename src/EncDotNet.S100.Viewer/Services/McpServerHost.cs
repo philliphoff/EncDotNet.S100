@@ -26,7 +26,7 @@ internal sealed class McpServerHost : IAsyncDisposable
 {
     private readonly EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
-    private readonly ICapabilityAccessor<IMapSnapshotRenderer>? _snapshotAccessor;
+    private readonly ICapabilityAccessor<IImageRenderer>? _imageAccessor;
     private readonly ICapabilityAccessor<IMapViewportController>? _viewportAccessor;
     private readonly ICapabilityAccessor<IMapCoordinateConverter>? _coordinateAccessor;
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
@@ -48,7 +48,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     public McpServerHost(
         EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
-        ICapabilityAccessor<IMapSnapshotRenderer>? snapshotAccessor = null,
+        ICapabilityAccessor<IImageRenderer>? imageAccessor = null,
         ICapabilityAccessor<IMapViewportController>? viewportAccessor = null,
         ICapabilityAccessor<IMapCoordinateConverter>? coordinateAccessor = null,
         ILoggerFactory? loggers = null,
@@ -67,7 +67,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
         _settings = settings;
-        _snapshotAccessor = snapshotAccessor;
+        _imageAccessor = imageAccessor;
         _viewportAccessor = viewportAccessor;
         _coordinateAccessor = coordinateAccessor;
         _renderStateAccessor = renderStateAccessor;
@@ -371,16 +371,11 @@ internal sealed class McpServerHost : IAsyncDisposable
                     new ViewerTimeController(_globalTime))
                 : null;
 
-        // render_to_image: the viewer's live-map snapshot renderer, with its
-        // coordinate converter supplying the live viewport size for the unsized
-        // capture default and the echoed viewport dimensions.
-        ICapabilityAccessor<IImageRenderer>? renderer =
-            _snapshotAccessor is not null
-                ? new DelegatingCapabilityAccessor<IImageRenderer>(() =>
-                    _snapshotAccessor.Current is { } snapshot
-                        ? new ViewerImageRenderer(snapshot, _coordinateAccessor?.Current)
-                        : null)
-                : null;
+        // render_to_image: the viewer's live map host implements the shared
+        // IImageRenderer directly — RenderToPngAsync snapshots the live Mapsui map
+        // and PreferredSize reports the live on-screen viewport size for the
+        // unsized-capture default and the echoed viewport dimensions.
+        ICapabilityAccessor<IImageRenderer>? renderer = _imageAccessor;
 
         // open_dataset / close_dataset / close_all_datasets: the viewer's
         // read-only catalog plus its UI-thread load gateway, presented as the
