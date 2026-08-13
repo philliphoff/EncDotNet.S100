@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// product's namespace / local name / <c>productIdentifier</c>, so at most one
 /// matcher claims any valid single-product dataset. Because of this the result
 /// does not depend on the order registrations are enumerated (the registry is
-/// unordered). Behaviour on a malformed document that declares more than one
+/// unordered). Behavior on a malformed document that declares more than one
 /// product's namespace is unspecified.
 /// </para>
 /// </summary>
