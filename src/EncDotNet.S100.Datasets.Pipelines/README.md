@@ -55,8 +55,8 @@ parse-once `GmlRootInfo`). The factory reads a GML document's root once and
 returns the spec of the first registered product whose `MatchGml` claims
 it, so adding a GML product means adding one registration to `S100Products`
 — no edit to the factory. The recognized product-identifier set that
-`MapProductIdentifierToSpec` accepts is likewise derived from the
-registrations (`S100Products.KnownSpecs`). The `.h5` coverage
+`MapProductIdentifierToSpec` accepts is likewise derived from the built-in
+registration list (`S100Products.All`). The `.h5` coverage
 (S-102/104/111) header read stays in the factory as a small closed set.
 
 ### Processor lifecycle ownership
