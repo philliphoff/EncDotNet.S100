@@ -1,12 +1,13 @@
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// xUnit collection that isolates every test which reads or writes the
-/// process-global <see cref="EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations"/>
-/// configuration. xUnit runs distinct test classes in parallel by default, so
-/// without this a writer (e.g. <see cref="CachedVectorStyleRendererLodTests"/>
-/// flipping <c>PrecomputedLineLodEnabled</c> on) can mutate the shared static
-/// mid-flight through a count-sensitive reader in another class (e.g.
+/// xUnit collection for tests that read or write the process-global
+/// <see cref="EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations"/>
+/// configuration; a test class opts in with <c>[Collection(Name)]</c>. xUnit
+/// runs distinct test classes in parallel by default, so without this a writer
+/// (e.g. <see cref="CachedVectorStyleRendererLodTests"/> flipping
+/// <c>PrecomputedLineLodEnabled</c> on) can mutate the shared static mid-flight
+/// through a count-sensitive reader in another class (e.g.
 /// <see cref="CachedVectorStyleRendererTests"/>), producing order-/timing-
 /// dependent failures. No shared fixture is needed — the coupling is the static
 /// config itself.
