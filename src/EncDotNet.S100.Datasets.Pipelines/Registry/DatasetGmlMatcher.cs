@@ -39,11 +39,12 @@ public readonly record struct GmlRootInfo
     public required IReadOnlyList<string> AttributeValues { get; init; }
 
     /// <summary>
-    /// A bounded text prefix of the document, used by
-    /// <see cref="ContainsProductIdentifier"/> to sniff an S-100
-    /// <c>productIdentifier</c> element for products (e.g. S-411 1.2.1 samples,
-    /// the mislabelled S-122 2.0.0 sample) that omit an application-schema
-    /// namespace on the root.
+    /// The document text — the whole document for file-path detection, or a
+    /// bounded leading prefix for exchange-set source sniffing. Only the leading
+    /// portion is ever inspected: <see cref="ContainsProductIdentifier"/> scans
+    /// the first 8&#160;KB for an S-100 <c>productIdentifier</c> element, used by
+    /// products (e.g. S-411 1.2.1 samples, the mislabelled S-122 2.0.0 sample)
+    /// that omit an application-schema namespace on the root.
     /// </summary>
     public required string Xml { get; init; }
 

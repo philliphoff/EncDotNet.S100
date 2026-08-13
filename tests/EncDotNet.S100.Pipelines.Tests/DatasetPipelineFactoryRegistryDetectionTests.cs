@@ -90,4 +90,33 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         Assert.True(S100Products.CreateDefaultRegistry().TryResolve("S-57", out var s57));
         Assert.NotNull(s57!.Discriminate);
     }
+
+    [Fact]
+    public void Gml_ProductRegisteredUnderNonCanonicalSpec_DetectsAsCanonical()
+    {
+        var dir = Directory.CreateTempSubdirectory("gml-detect-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "custom.gml");
+            File.WriteAllText(path, "<?xml version=\"1.0\"?><root xmlns=\"http://example/custom\"/>");
+
+            var registry = new S100ProductRegistry();
+            // A host registers a GML product under a non-canonical identifier; the
+            // registry canonicalizes its key but not registration.Spec, so detection
+            // must still return the canonical "S-124".
+            registry.Register(new S100ProductRegistration
+            {
+                Spec = "s124",
+                CreateFromPath = (_, _) => null!,
+                CreateFromSource = (_, _) => null!,
+                MatchGml = static _ => true,
+            });
+
+            Assert.Equal("S-124", DatasetPipelineFactory.DetectProductSpec(path, registry));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

@@ -227,7 +227,12 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         foreach (var registration in registry.Registrations)
         {
             if (registration.MatchGml is { } match && match(root))
-                return registration.Spec;
+                // Return the canonical spec (mirroring how S100ProductRegistry
+                // canonicalizes its keys), so a product registered under a
+                // non-canonical identifier (e.g. "s124") is still detected as
+                // its canonical "S-124". Built-in registrations already carry a
+                // canonical Spec, so this is a no-op for them.
+                return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
         }
 
         return null;
