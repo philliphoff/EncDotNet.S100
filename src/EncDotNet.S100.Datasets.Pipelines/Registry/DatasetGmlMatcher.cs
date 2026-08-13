@@ -57,7 +57,9 @@ public readonly record struct GmlRootInfo
     public required string Xml { get; init; }
 
     /// <summary>Whether the root element is a generic GML <c>&lt;DataSet&gt;</c>.</summary>
-    public bool IsDataSetRoot => LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase);
+    // Static string.Equals so a default(GmlRootInfo) (null LocalName) yields false
+    // rather than throwing — the struct is public and can be default-constructed.
+    public bool IsDataSetRoot => string.Equals(LocalName, "DataSet", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Sniffs the document prefix for an S-100
@@ -71,6 +73,8 @@ public readonly record struct GmlRootInfo
         // Validate up front: a null id would NRE on AsSpan, and an empty id would
         // spuriously match (IndexOf of an empty span returns 0).
         ArgumentException.ThrowIfNullOrEmpty(productId);
+        // Xml can be null on a default(GmlRootInfo); treat that as "no match".
+        if (string.IsNullOrEmpty(Xml)) return false;
         var span = Xml.AsSpan(0, Math.Min(Xml.Length, 8192));
         var marker = "productIdentifier".AsSpan();
         var idx = span.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
