@@ -150,6 +150,14 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `set_leg_attributes` *(viewer only, **mutating**)* | Updates one leg (`legIndex`, in `[0, legCount)`): its `geometryType` (`loxodrome`\|`geodesic`) and/or navigational envelope (cross-track / channel limits, safety contour & depth, SOG/STW min & max, draft, static & dynamic UKC, safety margin, note — all metres/knots per S-421). All attributes optional; supplied values overwrite, omitted values are unchanged. Omit `routeId` to use the active route. Returns the route's full updated state. |
 | `set_route_info` *(viewer only, **mutating**)* | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`/`validityEnd`) and vessel particulars (`vesselName`/`vesselMmsi`/`vesselImo`/`vesselCallsign`/`vesselLengthMeters`/`vesselBeamMeters`; supplying any vessel field creates the vessel block). All fields optional; supplied values overwrite. Omit `routeId` to use the active route. Returns the route's full updated state. |
 
+> The **(viewer only)** tags above scope each tool to *this* server — the
+> surface a running viewer instance exposes. Most of the session tools are in
+> fact the shared implementation and are equally available from the headless
+> CLI host (`s100 mcp serve`); only the UI-bound tools are truly
+> viewer-specific. See
+> [Shared vs host-specific tool implementations](#shared-vs-host-specific-tool-implementations)
+> below for the exact split.
+
 ### Read-only vs mutating tools
 
 Tools fall into two groups:
@@ -189,6 +197,33 @@ Tools fall into two groups:
 Tool descriptions in the registered MCP catalogue identify each tool
 as one or the other; this table is the canonical reference.
 
+### Shared vs host-specific tool implementations
+
+Most of these tools share one renderer-neutral implementation. The tool
+logic and its capability seams live in `EncDotNet.S100.Mcp.Tools`, and
+`S100MutableTools` (in `EncDotNet.S100.Mcp`) assembles them for a host.
+Both the desktop viewer and the headless CLI session provide the
+presentation, time, image-render, and dataset-catalog capabilities
+(`IPresentationController`, `ITimeController`, `IImageRenderer`,
+`IMutableDatasetCatalog`) and so run the *same* tool code: `set_palette`,
+`set_display_category`, `set_display_mode`, `set_time_step`,
+`render_to_image` (read-only, but part of the same session tool set),
+`open_dataset`, `close_dataset`, and `close_all_datasets`. The viewer
+adapts its own services onto the seams (see `Services/McpCapabilities/`).
+
+A few tools stay host-specific where the hosts genuinely diverge, rather
+than being forced onto a shape that would fit neither well:
+
+* `set_viewport` — the viewer drives a **live, rotatable** Mapsui map and
+  accepts a web-mercator **zoom** level; the CLI renders a **headless,
+  north-up** composite addressed by **scale denominator**. The two keep
+  separate implementations (the viewer's over `IMapViewportController`,
+  the CLI's over `IViewportController`) so the viewer retains arbitrary
+  rotation and zoom-level input.
+* `pick_features`, `set_render_subsystem`, `capture_app_screenshot`,
+  `set_own_ship`, panels, routes, and the render-observability tools —
+  these need the live viewer UI and have no headless analogue.
+
 ### Image content blocks (`render_to_image`)
 
 `render_to_image` is the first tool in this codebase to return non-text
@@ -223,13 +258,16 @@ disturb the user's view or trigger a redraw on screen. Viewport,
 palette, time step, and loaded datasets reflect the user's current
 view exactly.
 
-`render_to_image` is **viewer-only**: it is injected into the hosted
-MCP server by `EncDotNet.S100.Viewer` via the
-`S100McpServerOptions.AdditionalTools` extension point. The catalog-only
-`EncDotNet.S100.Mcp.Tools` library deliberately has no rendering
-dependency, so a non-viewer host supplies its own equivalent. The same
-applies to its inverse, `pick_features`, which needs the live navigator
-to project a screen pixel back to a geographic point.
+`render_to_image` is one of the **shared session tools** (read-only — it
+snapshots a clone of the live map without mutating it): its tool logic
+lives in `EncDotNet.S100.Mcp.Tools` over the `IImageRenderer` capability
+seam and is assembled by `S100MutableTools` (in `EncDotNet.S100.Mcp`),
+with each host supplying the renderer. The desktop viewer backs it with a
+snapshot of a clone of the live Mapsui `Map` (through a
+`ViewerImageRenderer` adapter); the headless CLI backs it with its Skia
+composite pipeline. Its inverse, `pick_features`, is viewer-only — it
+needs the live navigator to project a screen pixel back to a geographic
+point, and has no headless analogue.
 
 ## Sample agent prompts
 
