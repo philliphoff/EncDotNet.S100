@@ -9,6 +9,14 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// the document's root once (see <see cref="GmlRootInfo"/>) and returns the spec
 /// of the first registered product whose matcher claims it. Returns
 /// <see langword="true"/> when the document belongs to the registering product.
+/// <para>
+/// Matchers must be <b>mutually exclusive</b>: each recognizes only its own
+/// product's namespace / local name / <c>productIdentifier</c>, so at most one
+/// matcher claims any valid single-product dataset. Because of this the result
+/// does not depend on the order registrations are enumerated (the registry is
+/// unordered). Behaviour on a malformed document that declares more than one
+/// product's namespace is unspecified.
+/// </para>
 /// </summary>
 /// <param name="root">A cheap, parsed view of the document's root element.</param>
 public delegate bool DatasetGmlMatcher(GmlRootInfo root);

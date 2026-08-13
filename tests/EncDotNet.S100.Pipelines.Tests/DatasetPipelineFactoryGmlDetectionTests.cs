@@ -29,9 +29,20 @@ public class DatasetPipelineFactoryGmlDetectionTests
         var data = new TheoryData<string, string>();
         foreach (var (folder, spec) in map)
         {
-            var dir = ResolveDatasetsDirectory(folder);
-            if (dir is null) continue;
-            foreach (var gml in Directory.EnumerateFiles(dir, "*.gml"))
+            // These fixtures are committed to the repo, so a missing or empty
+            // folder is a real problem — fail loudly rather than silently
+            // dropping a product's detection coverage.
+            var dir = ResolveDatasetsDirectory(folder)
+                ?? throw new InvalidOperationException(
+                    $"Committed GML fixture folder 'tests/datasets/{folder}' was not found; " +
+                    "GML detection coverage requires it.");
+
+            var gmls = Directory.EnumerateFiles(dir, "*.gml").ToList();
+            if (gmls.Count == 0)
+                throw new InvalidOperationException(
+                    $"Committed GML fixture folder 'tests/datasets/{folder}' contains no .gml files.");
+
+            foreach (var gml in gmls)
                 data.Add(gml, spec);
         }
 
