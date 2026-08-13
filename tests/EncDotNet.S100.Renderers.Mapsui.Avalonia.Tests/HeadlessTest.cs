@@ -18,7 +18,11 @@ internal static class HeadlessTest
     {
         ArgumentNullException.ThrowIfNull(body);
         var session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(HeadlessTest).Assembly);
-        WaitWithTimeout(session.Dispatch(body, CancellationToken.None));
+        // WaitAsync bounds the wait and unwraps the body's exception in a single
+        // step; GetResult then bridges it back to this synchronous test entry.
+        WaitForDispatch(session.Dispatch(body, CancellationToken.None))
+            .GetAwaiter()
+            .GetResult();
     }
 
     public static T Run<T>(Func<T> body)
@@ -32,33 +36,40 @@ internal static class HeadlessTest
         return result!;
     }
 
-    public static async Task<T> RunAsync<T>(Func<Task<T>> body)
+    public static Task<T> RunAsync<T>(Func<Task<T>> body)
     {
         ArgumentNullException.ThrowIfNull(body);
         var session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(HeadlessTest).Assembly);
-        var dispatch = session.Dispatch(body, CancellationToken.None);
-        if (await Task.WhenAny(dispatch, Task.Delay(DispatchTimeout)).ConfigureAwait(false) != dispatch)
-        {
-            throw BrokenSessionTimeout();
-        }
-
-        return await dispatch.ConfigureAwait(false);
+        return WaitForDispatch(session.Dispatch(body, CancellationToken.None));
     }
 
-    private static void WaitWithTimeout(Task dispatch)
+    private static async Task<T> WaitForDispatch<T>(Task<T> dispatch)
     {
-        if (!dispatch.Wait(DispatchTimeout))
+        try
         {
-            throw BrokenSessionTimeout();
+            return await dispatch.WaitAsync(DispatchTimeout).ConfigureAwait(false);
         }
-
-        // Re-await the completed task so its exception (if any) propagates
-        // unwrapped rather than as an AggregateException from Wait.
-        dispatch.GetAwaiter().GetResult();
+        catch (TimeoutException exception)
+        {
+            throw BrokenSessionTimeout(exception);
+        }
     }
 
-    private static TimeoutException BrokenSessionTimeout() =>
+    private static async Task WaitForDispatch(Task dispatch)
+    {
+        try
+        {
+            await dispatch.WaitAsync(DispatchTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException exception)
+        {
+            throw BrokenSessionTimeout(exception);
+        }
+    }
+
+    private static TimeoutException BrokenSessionTimeout(TimeoutException inner) =>
         new($"The Avalonia headless dispatch did not complete within {DispatchTimeout.TotalSeconds:0}s. " +
             "The per-assembly UI dispatch loop has most likely died on an earlier test's " +
-            "Avalonia setup/teardown exception, which would otherwise hang the run indefinitely.");
+            "Avalonia setup/teardown exception, which would otherwise hang the run indefinitely.",
+            inner);
 }
