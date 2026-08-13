@@ -259,14 +259,16 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
                 if (reader.NodeType != System.Xml.XmlNodeType.Element)
                     continue;
 
-                var attributeValues = new List<string>();
+                IReadOnlyList<string> attributeValues = Array.Empty<string>();
                 if (reader.MoveToFirstAttribute())
                 {
+                    var values = new List<string>();
                     do
                     {
-                        attributeValues.Add(reader.Value);
+                        values.Add(reader.Value);
                     } while (reader.MoveToNextAttribute());
                     reader.MoveToElement();
+                    attributeValues = values;
                 }
 
                 root = new GmlRootInfo

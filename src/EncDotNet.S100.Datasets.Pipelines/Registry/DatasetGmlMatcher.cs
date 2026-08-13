@@ -68,6 +68,9 @@ public readonly record struct GmlRootInfo
     /// <param name="productId">The canonical product id to look for (e.g. <c>"S-411"</c>).</param>
     public bool ContainsProductIdentifier(string productId)
     {
+        // Validate up front: a null id would NRE on AsSpan, and an empty id would
+        // spuriously match (IndexOf of an empty span returns 0).
+        ArgumentException.ThrowIfNullOrEmpty(productId);
         var span = Xml.AsSpan(0, Math.Min(Xml.Length, 8192));
         var marker = "productIdentifier".AsSpan();
         var idx = span.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
