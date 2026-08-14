@@ -12,20 +12,23 @@ public sealed class HarnessOptions
     /// <summary>
     /// Which base-plane render subsystem to drive (the A/B switch tracked by
     /// issue #347 / <c>docs/design/S100-Render-Subsystem-Design.md</c>):
-    /// <see cref="RenderSubsystemKind.Mapsui"/> ("A", the default per-feature /
-    /// snapshot path) or <see cref="RenderSubsystemKind.TiledScene"/> ("B", the
-    /// tiled async renderer). When "B" is selected the harness drives a
-    /// <b>settle loop</b> (the base plane rasterises on a worker thread), so the
-    /// returned bitmap is the fully-composited frame — see
-    /// <see cref="RenderHarness.Render"/>. Default: <see cref="RenderSubsystemKind.Mapsui"/>.
+    /// <see cref="RenderSubsystemKind.Mapsui"/> ("A", the legacy per-feature /
+    /// snapshot path, being retired under #600) or
+    /// <see cref="RenderSubsystemKind.TiledScene"/> ("B", the tiled async
+    /// renderer that now ships as the viewer default). When "B" is selected the
+    /// harness drives a <b>settle loop</b> (the base plane rasterises on a worker
+    /// thread), so the returned bitmap is the fully-composited frame — see
+    /// <see cref="RenderHarness.Render"/>. Default:
+    /// <see cref="RenderSubsystemKind.TiledScene"/>, so the per-product golden
+    /// corpora guard what actually ships.
     /// </summary>
     /// <remarks>
-    /// Selecting "B" headlessly requires that the <c>S100_RENDER_SUBSYSTEM</c>
+    /// Driving "B" headlessly requires that the <c>S100_RENDER_SUBSYSTEM</c>
     /// environment variable is <b>not</b> set (an explicit env pin makes the
     /// subsystem property read-only). The harness restores the prior subsystem
     /// after each render.
     /// </remarks>
-    public RenderSubsystemKind RenderSubsystem { get; init; } = RenderSubsystemKind.Mapsui;
+    public RenderSubsystemKind RenderSubsystem { get; init; } = RenderSubsystemKind.TiledScene;
 
     /// <summary>
     /// For the <see cref="RenderSubsystemKind.TiledScene"/> ("B") settle loop:
