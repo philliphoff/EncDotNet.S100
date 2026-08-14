@@ -259,6 +259,16 @@ public sealed class RenderHarness : IDisposable
         // prior sink rather than clearing to null, so we never clobber a caller
         // that had wired its own.
         var instrumented = map.Layers.OfType<InstrumentedMemoryLayer>().ToArray();
+
+        // No async vector layer can publish a tile (e.g. a coverage-only render),
+        // so there is nothing to settle — a single frame is the final image. Skip
+        // the settle loop so such renders don't burn a full SettleQuietPeriod
+        // waiting for a redraw that never arrives.
+        if (instrumented.Length == 0)
+        {
+            return RenderFrame(map);
+        }
+
         var priorSinks = Array.ConvertAll(instrumented, layer => layer.RequestRedraw);
         foreach (var layer in instrumented)
         {
