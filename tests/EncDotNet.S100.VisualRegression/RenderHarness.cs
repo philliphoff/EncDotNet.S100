@@ -99,21 +99,11 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var prior = RenderingOptimizations.RenderSubsystem;
-        try
-        {
-            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+        var processor = _factory.CreateProcessor(path);
+        var context = BuildContext(processor, options);
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
-            var processor = _factory.CreateProcessor(path);
-            var context = BuildContext(processor, options);
-            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
-
-            return Rasterize(result, options);
-        }
-        finally
-        {
-            RenderingOptimizations.RenderSubsystem = prior;
-        }
+        return Rasterize(result, options);
     }
 
     /// <summary>
@@ -127,26 +117,16 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var prior = RenderingOptimizations.RenderSubsystem;
-        try
-        {
-            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+        var processor = _factory.CreateProcessor(path);
+        var context = BuildContext(processor, options);
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
-            var processor = _factory.CreateProcessor(path);
-            var context = BuildContext(processor, options);
-            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
-
-            return (Rasterize(result, options), result);
-        }
-        finally
-        {
-            RenderingOptimizations.RenderSubsystem = prior;
-        }
+        return (Rasterize(result, options), result);
     }
 
     /// <summary>
     /// Runs the dataset pipeline and Mapsui layer build for <paramref name="path"/>
-    /// under the subsystem selected in <paramref name="options"/> and returns the
+    /// (using the render options in <paramref name="options"/>) and returns the
     /// produced layers <b>without rasterising a frame</b>. Used by fidelity tests
     /// that inspect the bound tiled <c>VectorScene</c> (via
     /// <see cref="S100VectorTileRenderer.TryGetPartitionedScene"/>) at the paint-op
@@ -159,21 +139,11 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var prior = RenderingOptimizations.RenderSubsystem;
-        try
-        {
-            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+        var processor = _factory.CreateProcessor(path);
+        var context = BuildContext(processor, options);
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
-            var processor = _factory.CreateProcessor(path);
-            var context = BuildContext(processor, options);
-            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
-
-            return (result.Layers.ToList(), result.Extent);
-        }
-        finally
-        {
-            RenderingOptimizations.RenderSubsystem = prior;
-        }
+        return (result.Layers.ToList(), result.Extent);
     }
 
     private static RenderContext BuildContext(IDatasetProcessor processor, HarnessOptions options)
@@ -246,9 +216,7 @@ public sealed class RenderHarness : IDisposable
             }
         }
 
-        return options.RenderSubsystem == RenderSubsystemKind.TiledScene
-            ? RasterizeSettled(map, options)
-            : RenderFrame(map);
+        return RasterizeSettled(map, options);
     }
 
     /// <summary>
@@ -266,11 +234,12 @@ public sealed class RenderHarness : IDisposable
     }
 
     /// <summary>
-    /// Drives the TiledScene ("B") subsystem to a settled frame. Unlike the "A"
-    /// arm — where a single <see cref="MapRenderer.RenderToBitmapStream(Map, float, RenderFormat, int)"/>
-    /// produces the final pixels — the "B" base plane rasterises on a worker
-    /// thread: the first paint blits nothing and schedules a worker, which later
-    /// requests a repaint through the layer's redraw sink when a tile publishes.
+    /// Drives the tiled base-plane renderer to a settled frame. The base plane
+    /// rasterises on a worker thread, so a single
+    /// <see cref="MapRenderer.RenderToBitmapStream(Map, float, RenderFormat, int)"/>
+    /// would not produce the final pixels: the first paint blits nothing and
+    /// schedules a worker, which later requests a repaint through the layer's
+    /// redraw sink when a tile publishes.
     /// This loop is the headless analogue of the viewer's
     /// <c>await_render_idle</c>: it re-renders on every published tile and stops
     /// once no new tile arrives within <see cref="HarnessOptions.SettleQuietPeriod"/>
@@ -290,6 +259,16 @@ public sealed class RenderHarness : IDisposable
         // prior sink rather than clearing to null, so we never clobber a caller
         // that had wired its own.
         var instrumented = map.Layers.OfType<InstrumentedMemoryLayer>().ToArray();
+
+        // No async vector layer can publish a tile (e.g. a coverage-only render),
+        // so there is nothing to settle — a single frame is the final image. Skip
+        // the settle loop so such renders don't burn a full SettleQuietPeriod
+        // waiting for a redraw that never arrives.
+        if (instrumented.Length == 0)
+        {
+            return RenderFrame(map);
+        }
+
         var priorSinks = Array.ConvertAll(instrumented, layer => layer.RequestRedraw);
         foreach (var layer in instrumented)
         {

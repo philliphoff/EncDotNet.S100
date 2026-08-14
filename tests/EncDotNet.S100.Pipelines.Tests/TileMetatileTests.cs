@@ -133,11 +133,9 @@ public sealed class TileMetatileTests
         var path = ResolveRealCellPath();
         Skip.IfNot(File.Exists(path), $"Real S-101 trial cell not present: {path}");
 
-        var originalSubsystem = RenderingOptimizations.RenderSubsystem;
         IReadOnlyDictionary<TileKey, SKImage>? actual = null;
         try
         {
-            RenderingOptimizations.RenderSubsystem = RenderSubsystemKind.TiledScene;
             var processor = CreateFactory().CreateProcessor(path);
             var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
             var rendered = await renderer.RenderAsync(processor);
@@ -192,8 +190,6 @@ public sealed class TileMetatileTests
                     image.Dispose();
                 }
             }
-
-            RenderingOptimizations.RenderSubsystem = originalSubsystem;
         }
     }
 

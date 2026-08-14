@@ -1005,59 +1005,17 @@
   <data name="Tooltip_IgnoreScaleMinimum" xml:space="preserve">
     <value>Always portray features regardless of cell scale-minimum attribute (S-101 PC IgnoreScaleMinimum).</value>
   </data>
-  <data name="Settings_VectorSnapshotEnabled" xml:space="preserve">
-    <value>Raster snapshot on pan</value>
-  </data>
-  <data name="Tooltip_VectorSnapshotEnabled" xml:space="preserve">
-    <value>Record a settled vector layer to an image once and blit it under translation during pans, so a pan costs one textured blit instead of redrawing every feature. The biggest win on dense datasets; recommended on.</value>
-  </data>
-  <data name="Settings_VectorSnapshotPrebuildEnabled" xml:space="preserve">
-    <value>Off-thread snapshot prebuild</value>
-  </data>
-  <data name="Tooltip_VectorSnapshotPrebuildEnabled" xml:space="preserve">
-    <value>Rasterize snapshots on a background thread to hide the one-time record stall on zoom and during sustained pans. Only applies when "Raster snapshot on pan" is on. Recommended on.</value>
-  </data>
-  <data name="Settings_VectorPathCacheEnabled" xml:space="preserve">
-    <value>Cache projected vector paths</value>
-  </data>
-  <data name="Tooltip_VectorPathCacheEnabled" xml:space="preserve">
-    <value>Build each geometry's projected path once per zoom level and reuse it across pans, instead of rebuilding and re-stroking it every frame. Recommended on.</value>
-  </data>
-  <data name="Settings_GeometrySimplificationEnabled" xml:space="preserve">
-    <value>Simplify dense geometry</value>
-  </data>
-  <data name="Tooltip_GeometrySimplificationEnabled" xml:space="preserve">
-    <value>Drop on-screen sub-pixel detail from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on. Applies to line features only; polygon areas are always rendered vertex-exact.</value>
-  </data>
   <data name="Settings_MapSection" xml:space="preserve">
     <value>Map</value>
   </data>
   <data name="Settings_MapSection_Help" xml:space="preserve">
     <value>Background map and rendering performance options.</value>
   </data>
-  <data name="Settings_MapOptimizationsSubsection" xml:space="preserve">
-    <value>Rendering optimizations</value>
-  </data>
-  <data name="Settings_MapOptimizationsSubsection_Help" xml:space="preserve">
-    <value>Speed up panning and zooming on dense charts. All are on by default; turn one off only to compare rendering behaviour.</value>
-  </data>
   <data name="Settings_RenderSubsystemSubsection" xml:space="preserve">
-    <value>Render subsystem</value>
+    <value>Base-plane rendering</value>
   </data>
   <data name="Settings_RenderSubsystemSubsection_Help" xml:space="preserve">
-    <value>Choose the base-plane render subsystem and, for the tiled pipeline, tune its caching.</value>
-  </data>
-  <data name="Settings_RenderSubsystem" xml:space="preserve">
-    <value>Subsystem</value>
-  </data>
-  <data name="Tooltip_RenderSubsystem" xml:space="preserve">
-    <value>Select the base-plane render subsystem. "Standard" is the established feature/style/layer path; "Tiled" rasterizes the chart from the vector scene on worker threads for faster panning and zooming. Switching re-renders live.</value>
-  </data>
-  <data name="Settings_RenderSubsystem_Mapsui" xml:space="preserve">
-    <value>Standard</value>
-  </data>
-  <data name="Settings_RenderSubsystem_TiledScene" xml:space="preserve">
-    <value>Tiled</value>
+    <value>Tune the tiled base-plane renderer's scene mode and caching.</value>
   </data>
   <data name="Settings_SceneMode" xml:space="preserve">
     <value>Scene mode</value>

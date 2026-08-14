@@ -26,15 +26,13 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Why this is the "B" arm.</b> The "A" arm
-/// (<see cref="S100VectorSnapshotRenderer"/>) also collapses a settled layer to
-/// a single blittable raster, but it <i>records what Mapsui would draw</i> — it
-/// rides <c>GetFeatures</c> / <c>SortFeatures</c> and the per-feature style
-/// dispatch to produce the image. This renderer cuts that tie: it consumes the
-/// fully-resolved <see cref="VectorScene"/> (world coords in EPSG:3857, sizes in
-/// display px, colours resolved, symbols pre-processed, patterns pre-rasterised)
-/// and draws it with <see cref="SkiaDisplayListRenderer"/>, so the base plane no
-/// longer touches Mapsui's feature/style model at all.
+/// <b>Straight from the IR.</b> This renderer consumes the fully-resolved
+/// <see cref="VectorScene"/> (world coords in EPSG:3857, sizes in display px,
+/// colours resolved, symbols pre-processed, patterns pre-rasterised) and draws
+/// it with <see cref="SkiaDisplayListRenderer"/>, so the base plane never touches
+/// Mapsui's feature/style model — unlike the retired Mapsui snapshot arm (issue
+/// #600), which recorded what Mapsui would draw by riding <c>GetFeatures</c> /
+/// <c>SortFeatures</c> and the per-feature style dispatch.
 /// </para>
 /// <para>
 /// <b>Off the synchronous loop (the Phase&#160;1 goal).</b> The expensive
@@ -67,10 +65,10 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </para>
 /// <para>
 /// <b>Selection.</b> A fresh vector layer is tagged with
-/// <see cref="RendererName"/> only while the <c>TiledScene</c> subsystem is the
-/// active <see cref="RenderingOptimizations.RenderSubsystem"/> (the tagging is
-/// done by <see cref="MapsuiDisplayListRenderer"/>). <see cref="Register"/> wires
-/// the renderer into Mapsui once at startup.
+/// <see cref="RendererName"/> when <see cref="RenderingOptimizations.SceneMode"/>
+/// selects the single-surface arm (<see cref="VectorSceneMode.Single"/>); the
+/// tagging is done by <see cref="MapsuiDisplayListRenderer"/>. <see cref="Register"/>
+/// wires the renderer into Mapsui once at startup.
 /// </para>
 /// </remarks>
 public static class S100VectorSceneRenderer
@@ -87,8 +85,7 @@ public static class S100VectorSceneRenderer
     /// Margin, in screen pixels, rasterised around the viewport on every edge so
     /// a pan reveals already-rendered content out to the margin before a
     /// re-raster is needed. Read once from <c>S100_VECTOR_SCENE_MARGIN</c>
-    /// (default 256), mirroring <see cref="S100VectorSnapshotRenderer.MarginPx"/>
-    /// so the A/B arms record comparable over-render.
+    /// (default 256).
     /// </summary>
     public static double MarginPx { get; } = ReadMargin();
 
@@ -480,9 +477,8 @@ public static class S100VectorSceneRenderer
     /// cover <paramref name="width"/> × <paramref name="height"/> centred at
     /// (<paramref name="centerX"/>, <paramref name="centerY"/>) at
     /// <paramref name="resolution"/>: same resolution and the pan is within the
-    /// recorded margin on both axes. Mirrors
-    /// <see cref="S100VectorSnapshotRenderer.IsSnapshotValid"/> (minus the
-    /// feature-count check — the bound scene is immutable per generation).
+    /// recorded margin on both axes. The bound scene is immutable per generation,
+    /// so no feature-count check is needed.
     /// </summary>
     internal static bool IsValid(RecordAnchor anchor, double centerX, double centerY, double width, double height, double resolution)
     {
@@ -506,8 +502,7 @@ public static class S100VectorSceneRenderer
     /// <summary>
     /// The DIP-space top-left at which an image recorded at
     /// <paramref name="anchor"/> is blitted so its anchored world centre lands at
-    /// the correct screen position for the current (translated) viewport. Pure;
-    /// identical math to <see cref="S100VectorSnapshotRenderer.ComputeTranslate"/>.
+    /// the correct screen position for the current (translated) viewport. Pure.
     /// </summary>
     internal static (double tx, double ty) ComputeTranslate(RecordAnchor anchor, double centerX, double centerY, double width, double height, double resolution)
     {

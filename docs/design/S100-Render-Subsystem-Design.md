@@ -1,6 +1,17 @@
 # Tiled / Async Predictive Render Subsystem — Design & Plan
 
-**Status:** v0.2 draft · clean-sheet rendering core, switchable for A/B against the current path
+> **Update (#600): the "A" arm is retired.** The tiled/async **"B"** subsystem
+> described here is now the **sole** base-plane renderer. The legacy Mapsui
+> feature/style path ("A", `RenderSubsystemKind.Mapsui`) and the whole A/B
+> selection axis — the `RenderSubsystemKind` enum, the `S100_RENDER_SUBSYSTEM`
+> env knob, the snapshot/path-cache renderers, the `set_render_subsystem` MCP
+> tool, and the viewer's subsystem picker — have been removed. The A/B framing in
+> the sections and appendices below is retained as **historical design record**;
+> read "the B arm" as simply "the renderer". The within-B `VectorSceneMode`
+> (Tiled vs Single) selection axis remains. (The orphaned line-LOD pyramid
+> producer is retired separately under #601.)
+
+**Status:** v0.2 draft · clean-sheet rendering core, now the sole base-plane path (A retired, #600)
 **Scope:** `EncDotNet.S100` interactive viewer · base-plane portrayal rendering
 **Primary goal:** maximize pan smoothness · **Secondary:** zoom smoothness · **Means:** async-first, deferred work, anticipatory pre-warming
 

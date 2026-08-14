@@ -6,30 +6,25 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each flag is <i>seeded</i> from the legacy environment variable that used to
-/// be the sole control (so the performance A/B harness and headless tooling keep
-/// working unchanged), and may then be overridden at runtime by the viewer's
-/// settings.
+/// Each knob is <i>seeded</i> from the environment variable that used to be its
+/// sole control (so headless tooling and perf runs keep working unchanged), and
+/// may then be overridden at runtime by the viewer's settings.
 /// </para>
 /// <para>
 /// When an environment variable is <b>explicitly</b> set (present and non-empty)
 /// it takes precedence: the matching <c>…EnvExplicit</c> flag is <see langword="true"/>
 /// and subsequent programmatic writes are ignored. This keeps perf measurements
-/// faithful — a run started with <c>S100_VECTOR_PICTURE_SNAPSHOT=0</c> stays off
+/// faithful — a run started with <c>S100_VECTOR_TILE_METATILE=0</c> stays off
 /// regardless of the persisted user setting. Normal users (no env var) get fully
 /// live-toggleable knobs.
 /// </para>
 /// <para>
-/// Defaults are selected independently from measured performance; line geometry
-/// simplification runs at <see cref="DefaultSimplificationTolerancePx"/> px. See
-/// <c>docs/design/mapsui-performance.md</c> for the measurements behind those
-/// choices.
+/// See <c>docs/design/mapsui-performance.md</c> for the measurements behind the
+/// default choices.
 /// </para>
 /// </remarks>
 public static class RenderingOptimizations
 {
-    /// <summary>Default geometry-simplification tolerance, in screen pixels, used when the knob is on and no env override is present.</summary>
-    public const double DefaultSimplificationTolerancePx = 0.6;
 
     /// <summary>Default tiled-base-plane gutter, in DIP (<c>S100_VECTOR_TILE_GUTTER</c>).</summary>
     public const double DefaultTileGutterDip = 64.0;
@@ -74,12 +69,7 @@ public static class RenderingOptimizations
     public const int MaxTileWorkers = 8;
 
     private static PerformanceProfile _resolvedProfile;
-    private static bool _vectorSnapshotEnabled;
-    private static bool _vectorSnapshotPrebuildEnabled;
-    private static bool _vectorPathCacheEnabled;
-    private static bool _geometrySimplificationEnabled;
     private static bool _precomputedLineLodEnabled;
-    private static RenderSubsystemKind _renderSubsystem;
     private static VectorSceneMode _sceneMode;
     private static double _tileGutterDip;
     private static double _tileBudgetMb;
@@ -97,17 +87,6 @@ public static class RenderingOptimizations
     static RenderingOptimizations()
     {
         (_profile, ProfileEnvExplicit) = SeedProfile("S100_PERF_PROFILE", PerformanceProfile.Auto);
-        (_vectorSnapshotEnabled, VectorSnapshotEnvExplicit) =
-            SeedBool("S100_VECTOR_PICTURE_SNAPSHOT", defaultValue: true);
-
-        (_vectorSnapshotPrebuildEnabled, VectorSnapshotPrebuildEnvExplicit) =
-            SeedBool("S100_VECTOR_SNAPSHOT_PREBUILD", defaultValue: true);
-
-        (_vectorPathCacheEnabled, VectorPathCacheEnvExplicit) =
-            SeedBool("S100_VECTOR_PATH_CACHE", defaultValue: true);
-
-        (_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
-            SeedSimplification();
 
         // Precomputed line LOD pyramid (issue #489). Default OFF; the seven-gate
         // measurement pass in docs/design/mapsui-performance.md must clear
@@ -117,7 +96,6 @@ public static class RenderingOptimizations
         (_precomputedLineLodEnabled, PrecomputedLineLodEnvExplicit) =
             SeedBool("S100_VECTOR_LINE_LOD", defaultValue: false);
 
-        (_renderSubsystem, RenderSubsystemEnvExplicit) = SeedRenderSubsystem();
         (_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
 
         // The performance profile sets the *defaults* for the per-layer tile
@@ -159,81 +137,20 @@ public static class RenderingOptimizations
     }
 
     /// <summary>
-    /// Whether the raster vector-layer snapshot fast path
-    /// (<see cref="S100VectorSnapshotRenderer"/>) is enabled. Records a settled
-    /// layer once per (resolution, feature-set) and blits it under translation on
-    /// subsequent pans. Default on.
+    /// Whether the precomputed line LOD pyramid (issue #489) is built at dataset
+    /// open. When on, each line's coordinates are simplified once per feature
+    /// into a small tolerance-tagged pyramid (see
+    /// <c>EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid</c>). Seeded from
+    /// <c>S100_VECTOR_LINE_LOD</c>; default <b>off</b> until the seven-gate perf
+    /// pass in the design doc clears (see <c>docs/design/mapsui-performance.md</c>).
     /// </summary>
-    public static bool VectorSnapshotEnabled
-    {
-        get => _vectorSnapshotEnabled;
-        set { if (!VectorSnapshotEnvExplicit) _vectorSnapshotEnabled = value; }
-    }
-
-    /// <summary>True when <see cref="VectorSnapshotEnabled"/> is pinned by an explicit environment variable.</summary>
-    public static bool VectorSnapshotEnvExplicit { get; }
-
-    /// <summary>
-    /// Whether the off-thread snapshot prebuild is enabled. Hides the one-time
-    /// record stall on zoom and the sustained-pan record stall by rasterizing on
-    /// a background thread. Only meaningful when <see cref="VectorSnapshotEnabled"/>
-    /// is on. Default on.
-    /// </summary>
-    public static bool VectorSnapshotPrebuildEnabled
-    {
-        get => _vectorSnapshotPrebuildEnabled;
-        set { if (!VectorSnapshotPrebuildEnvExplicit) _vectorSnapshotPrebuildEnabled = value; }
-    }
-
-    /// <summary>True when <see cref="VectorSnapshotPrebuildEnabled"/> is pinned by an explicit environment variable.</summary>
-    public static bool VectorSnapshotPrebuildEnvExplicit { get; }
-
-    /// <summary>
-    /// Whether the translation-invariant vector path cache
-    /// (<see cref="CachedVectorStyleRenderer"/>) is enabled. Builds each
-    /// geometry's projected <c>SKPath</c> once per (feature, resolution) and
-    /// re-uses it across pans instead of rebuilding every frame. Default on.
-    /// </summary>
-    public static bool VectorPathCacheEnabled
-    {
-        get => _vectorPathCacheEnabled;
-        set { if (!VectorPathCacheEnvExplicit) _vectorPathCacheEnabled = value; }
-    }
-
-    /// <summary>True when <see cref="VectorPathCacheEnabled"/> is pinned by an explicit environment variable.</summary>
-    public static bool VectorPathCacheEnvExplicit { get; }
-
-    /// <summary>
-    /// Whether resolution-aware <b>line</b> simplification (dropping on-screen
-    /// sub-pixel detail from dense S-101 line geometries at path-build time) is
-    /// enabled. Applied inside <see cref="CachedVectorStyleRenderer"/> as inline
-    /// sub-pixel vertex dropping and therefore requires
-    /// <see cref="VectorPathCacheEnabled"/>. Polygons are always rendered
-    /// vertex-exact. Default on.
-    /// </summary>
-    public static bool GeometrySimplificationEnabled
-    {
-        get => _geometrySimplificationEnabled;
-        set { if (!GeometrySimplificationEnvExplicit) _geometrySimplificationEnabled = value; }
-    }
-
-    /// <summary>True when geometry simplification is pinned by an explicit <c>S100_VECTOR_SIMPLIFY_PX</c>.</summary>
-    public static bool GeometrySimplificationEnvExplicit { get; }
-
-    /// <summary>
-    /// Whether the precomputed line LOD pyramid (issue #489) is consumed at
-    /// SKPath-build time inside <see cref="CachedVectorStyleRenderer"/>. When
-    /// on, each line's coordinates are simplified once per feature into a
-    /// small tolerance-tagged pyramid (see
-    /// <c>EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid</c>) and the
-    /// pyramid level whose dropped detail is guaranteed sub-pixel at the
-    /// current viewport is used to build the <c>SKPath</c>. Pans within a
-    /// zoom band re-use the SKPath as today; the cold spike at a band change
-    /// no longer pays a full-resolution simplification pass because the
-    /// pyramid was built once. Seeded from <c>S100_VECTOR_LINE_LOD</c>;
-    /// default <b>off</b> until the seven-gate perf pass in the design doc
-    /// clears (see <c>docs/design/mapsui-performance.md</c>).
-    /// </summary>
+    /// <remarks>
+    /// The render-time consumer of the pyramid (the legacy Mapsui "A" fast-line
+    /// path) was retired with the A render arm under #600; only the pyramid
+    /// <em>producer</em> remains wired (the disk-cache injection in the viewer's
+    /// composition root). Retiring that orphaned producer — and this flag — is
+    /// tracked by #601.
+    /// </remarks>
     public static bool PrecomputedLineLodEnabled
     {
         get => _precomputedLineLodEnabled;
@@ -244,26 +161,9 @@ public static class RenderingOptimizations
     public static bool PrecomputedLineLodEnvExplicit { get; }
 
     /// <summary>
-    /// Selects the active base-plane chart render subsystem (the A/B switch for
-    /// the tiled/async render-subsystem redesign). <see cref="RenderSubsystemKind.Mapsui"/>
-    /// is the established Mapsui feature/style/layer path (the "A" arm);
-    /// <see cref="RenderSubsystemKind.TiledScene"/> selects the tiled/async
-    /// subsystem (the "B" arm). Seeded from <c>S100_RENDER_SUBSYSTEM</c>
-    /// (<c>mapsui</c> | <c>tiledscene</c>); default <see cref="RenderSubsystemKind.TiledScene"/>.
-    /// </summary>
-    public static RenderSubsystemKind RenderSubsystem
-    {
-        get => _renderSubsystem;
-        set { if (!RenderSubsystemEnvExplicit) _renderSubsystem = value; }
-    }
-
-    /// <summary>True when <see cref="RenderSubsystem"/> is pinned by an explicit environment variable.</summary>
-    public static bool RenderSubsystemEnvExplicit { get; }
-
-    /// <summary>
-    /// Within the <see cref="RenderSubsystemKind.TiledScene"/> ("B") arm, selects
-    /// the <see cref="VectorSceneMode.Tiled"/> Phase-2 tiled base plane (default)
-    /// or the <see cref="VectorSceneMode.Single"/> Phase-1 single-surface arm.
+    /// Selects the base-plane scene mode: the <see cref="VectorSceneMode.Tiled"/>
+    /// Phase-2 tiled base plane (default) or the <see cref="VectorSceneMode.Single"/>
+    /// Phase-1 single-surface arm.
     /// Seeded from <c>S100_VECTOR_SCENE_MODE</c> (<c>single</c> selects Phase&#160;1).
     /// Read at layer build time, so a change re-applies on the next re-render.
     /// </summary>
@@ -489,14 +389,6 @@ public static class RenderingOptimizations
         if (!TileCrossBandPrewarmEnvExplicit) _tileCrossBandPrewarmEnabled = tier != PerformanceProfile.LowEnd;
     }
 
-
-    /// <summary>
-    /// Pixel tolerance applied when <see cref="GeometrySimplificationEnabled"/> is
-    /// on. Seeded from <c>S100_VECTOR_SIMPLIFY_PX</c>, otherwise
-    /// <see cref="DefaultSimplificationTolerancePx"/>. Used by line simplification.
-    /// </summary>
-    public static double SimplificationTolerancePx { get; }
-
     private static (bool value, bool envExplicit) SeedBool(string envName, bool defaultValue)
     {
         var raw = Environment.GetEnvironmentVariable(envName);
@@ -507,36 +399,6 @@ public static class RenderingOptimizations
 
         var enabled = raw is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
         return (enabled, true);
-    }
-
-    private static (bool enabled, double tolerancePx, bool envExplicit) SeedSimplification()
-    {
-        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SIMPLIFY_PX");
-        if (!string.IsNullOrEmpty(raw)
-            && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
-        {
-            // A tolerance of 0 (or negative) means "vertex-exact" — i.e. the
-            // optimization is explicitly disabled.
-            return v > 0 ? (true, v, true) : (false, DefaultSimplificationTolerancePx, true);
-        }
-
-        return (true, DefaultSimplificationTolerancePx, false);
-    }
-
-    private static (RenderSubsystemKind kind, bool envExplicit) SeedRenderSubsystem()
-    {
-        var raw = Environment.GetEnvironmentVariable("S100_RENDER_SUBSYSTEM");
-        if (string.IsNullOrEmpty(raw))
-        {
-            return (RenderSubsystemKind.TiledScene, false);
-        }
-
-        var kind = raw.Trim().ToLowerInvariant() switch
-        {
-            "tiledscene" or "tiled" or "tile" or "b" => RenderSubsystemKind.TiledScene,
-            _ => RenderSubsystemKind.Mapsui,
-        };
-        return (kind, true);
     }
 
     private static (VectorSceneMode mode, bool envExplicit) SeedSceneMode()
@@ -596,8 +458,8 @@ public static class RenderingOptimizations
 }
 
 /// <summary>
-/// Within the <see cref="RenderSubsystemKind.TiledScene"/> arm, selects the
-/// tiled base plane (Phase&#160;2) or the single-surface arm (Phase&#160;1). See
+/// Selects the base-plane scene mode: the tiled base plane (Phase&#160;2) or the
+/// single-surface arm (Phase&#160;1). See
 /// <c>docs/design/S100-Render-Subsystem-Design.md</c>.
 /// </summary>
 public enum VectorSceneMode
@@ -614,26 +476,4 @@ public enum VectorSceneMode
     /// translation. Selected by <c>S100_VECTOR_SCENE_MODE=single</c>.
     /// </summary>
     Single = 1,
-}
-
-/// <summary>
-/// Selects the active base-plane chart render subsystem — the A/B switch for the
-/// tiled/async render-subsystem redesign (see
-/// <c>docs/design/S100-Render-Subsystem-Design.md</c>).
-/// </summary>
-public enum RenderSubsystemKind
-{
-    /// <summary>
-    /// The established Mapsui feature/style/layer rendering path (the "A" arm).
-    /// Retained as a selectable fallback; <see cref="TiledScene"/> is now the
-    /// default and the baseline against which this path is compared.
-    /// </summary>
-    Mapsui = 0,
-
-    /// <summary>
-    /// The tiled/async predictive render subsystem that rasterises the base
-    /// plane directly from the <c>VectorScene</c> IR (the "B" arm). This is the
-    /// default subsystem.
-    /// </summary>
-    TiledScene = 1,
 }

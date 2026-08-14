@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Renderers.Mapsui;
 
 namespace EncDotNet.S100.VisualRegression;
 
@@ -10,34 +9,14 @@ namespace EncDotNet.S100.VisualRegression;
 public sealed class HarnessOptions
 {
     /// <summary>
-    /// Which base-plane render subsystem to drive (the A/B switch tracked by
-    /// issue #347 / <c>docs/design/S100-Render-Subsystem-Design.md</c>):
-    /// <see cref="RenderSubsystemKind.Mapsui"/> ("A", the default per-feature /
-    /// snapshot path) or <see cref="RenderSubsystemKind.TiledScene"/> ("B", the
-    /// tiled async renderer). When "B" is selected the harness drives a
-    /// <b>settle loop</b> (the base plane rasterises on a worker thread), so the
-    /// returned bitmap is the fully-composited frame — see
-    /// <see cref="RenderHarness.Render"/>. Default: <see cref="RenderSubsystemKind.Mapsui"/>.
-    /// </summary>
-    /// <remarks>
-    /// Selecting "B" headlessly requires that the <c>S100_RENDER_SUBSYSTEM</c>
-    /// environment variable is <b>not</b> set (an explicit env pin makes the
-    /// subsystem property read-only). The harness restores the prior subsystem
-    /// after each render.
-    /// </remarks>
-    public RenderSubsystemKind RenderSubsystem { get; init; } = RenderSubsystemKind.Mapsui;
-
-    /// <summary>
-    /// For the <see cref="RenderSubsystemKind.TiledScene"/> ("B") settle loop:
-    /// how long the harness waits for the next worker-published tile before
-    /// declaring the base plane settled. A redraw request that arrives within
-    /// this window restarts the wait. Default: 250&#160;ms.
+    /// How long the harness waits for the next worker-published tile before
+    /// declaring the tiled base plane settled. A redraw request that arrives
+    /// within this window restarts the wait. Default: 250&#160;ms.
     /// </summary>
     public TimeSpan SettleQuietPeriod { get; init; } = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
-    /// For the <see cref="RenderSubsystemKind.TiledScene"/> ("B") settle loop:
-    /// the hard upper bound on total settle time before the harness gives up and
+    /// The hard upper bound on total settle time before the harness gives up and
     /// returns the best frame rendered so far. Default: 30&#160;s.
     /// </summary>
     public TimeSpan SettleTimeout { get; init; } = TimeSpan.FromSeconds(30);

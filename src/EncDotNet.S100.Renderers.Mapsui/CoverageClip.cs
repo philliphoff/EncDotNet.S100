@@ -30,10 +30,9 @@ internal readonly record struct FinerCoverage(Geometry Coverage, double CutoffRe
 /// ("larger-scale-in", issue #438 Phase 2). Each entry maps a base-chart
 /// <see cref="ILayer"/> to the set of finer, overlapping in-band cells
 /// (<see cref="FinerCoverage"/>) whose coverage it must not over-draw. The custom
-/// layer renderers (<see cref="S100VectorTileRenderer"/>,
-/// <see cref="S100VectorSnapshotRenderer"/>) look the set up per frame, project
-/// the finer coverages that are still visible at the live resolution to the
-/// viewport, and remove each from the drawable region with
+/// layer renderer (<see cref="S100VectorTileRenderer"/>) looks the set up per
+/// frame, projects the finer coverages that are still visible at the live
+/// resolution to the viewport, and removes each from the drawable region with
 /// <see cref="SKCanvas.ClipPath(SKPath, SKClipOperation, bool)"/> using
 /// <see cref="SKClipOperation.Difference"/> — so a coarser cell no longer
 /// over-draws where a finer, currently-visible cell provides coverage.

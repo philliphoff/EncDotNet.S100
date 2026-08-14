@@ -19,14 +19,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 public sealed record S100MapsuiOptions
 {
     /// <summary>
-    /// Gets the base-plane chart render subsystem.
-    /// </summary>
-    public RenderSubsystemKind RenderSubsystem { get; init; } =
-        RenderingOptimizations.RenderSubsystem;
-
-    /// <summary>
-    /// Gets the vector-scene rendering mode used by the
-    /// <see cref="RenderSubsystemKind.TiledScene"/> subsystem.
+    /// Gets the vector-scene rendering mode used by the tiled base-plane
+    /// renderer (tiled vs single-surface).
     /// </summary>
     public VectorSceneMode SceneMode { get; init; } =
         RenderingOptimizations.SceneMode;

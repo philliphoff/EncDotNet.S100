@@ -305,10 +305,6 @@ internal sealed class McpServerHost : IAsyncDisposable
         // ViewerTimeController) instead of carrying duplicate tool classes.
         AddSharedMutableTools(tools);
 
-        if (_renderStateAccessor is not null)
-        {
-            tools.Add(SetRenderSubsystemMcpAdapter.Create(new SetRenderSubsystemTool(_renderStateAccessor)));
-        }
         if (_renderActivityMonitor is not null)
         {
             tools.Add(AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivityMonitor)));

@@ -198,7 +198,7 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOverscaleIndication}" />
             </Grid>
 
-            <!-- Render subsystem A/B + tiled knobs (issue #331) -->
+            <!-- Base-plane tiled-renderer knobs (issue #331) -->
             <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
                        FontSize="12"
                        FontWeight="SemiBold"
@@ -207,68 +207,10 @@
                        FontSize="11"
                        Opacity="0.6"
                        TextWrapping="Wrap" />
-            <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystem}"
-                           FontSize="12" />
-                <ComboBox ItemsSource="{Binding AvailableRenderSubsystems}"
-                          SelectedItem="{Binding SelectedRenderSubsystem}"
-                          IsEnabled="{Binding RenderSubsystemEditable}"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_RenderSubsystem}"
-                          MinWidth="160"
-                          HorizontalAlignment="Left">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Converter={x:Static viewer:RenderSubsystemNameConverter.Instance}}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-            </StackPanel>
 
-            <!-- "Standard" (Mapsui) optimizations — shown below the subsystem
-                 selector, and only when the Standard arm is selected, so the
-                 panel never lists knobs that don't apply to the active
-                 renderer. -->
-            <StackPanel Spacing="16" IsVisible="{Binding MapsuiSelected}">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection}"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               Margin="0,8,0,0" />
-                    <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection_Help}"
-                               FontSize="11"
-                               Opacity="0.6"
-                               TextWrapping="Wrap" />
-                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotEnabled}">
-                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotEnabled}" />
-                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotEnabled}" />
-                    </Grid>
-                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                          Margin="16,0,0,0"
-                          IsEnabled="{Binding VectorSnapshotEnabled}"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotPrebuildEnabled}">
-                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotPrebuildEnabled}" />
-                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotPrebuildEnabled}" />
-                    </Grid>
-                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}">
-                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}" />
-                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorPathCacheEnabled}" />
-                    </Grid>
-                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                          Margin="16,0,0,0"
-                          IsEnabled="{Binding VectorPathCacheEnabled}"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}">
-                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_GeometrySimplificationEnabled}" />
-                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding GeometrySimplificationEnabled}" />
-                    </Grid>
-                </StackPanel>
-            </StackPanel>
-
-            <!-- "B" (tiled scene) knobs — shown only when the B arm is selected -->
+            <!-- Tiled scene knobs -->
             <StackPanel Spacing="12"
-                        Margin="16,0,0,0"
-                        IsVisible="{Binding TiledSceneSelected}">
+                        Margin="16,0,0,0">
                 <StackPanel Spacing="6">
                     <TextBlock Text="{x:Static loc:Strings.Settings_SceneMode}"
                                FontSize="12" />

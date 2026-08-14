@@ -443,139 +443,19 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _ignoreScaleMinimum, value)) { _settings.IgnoreScaleMinimum = value; RaiseMarinerChanged(); } }
     }
 
-    private bool _vectorSnapshotEnabled;
-    /// <summary>
-    /// Whether the raster vector-layer snapshot fast path is enabled. The "best"
-    /// default (on). Toggling pushes the value to
-    /// <see cref="RenderingOptimizations.VectorSnapshotEnabled"/> and triggers a
-    /// full re-render via <c>MarinerChanged</c> so layers are re-tagged.
-    /// </summary>
-    public bool VectorSnapshotEnabled
-    {
-        get => _vectorSnapshotEnabled;
-        set
-        {
-            if (SetProperty(ref _vectorSnapshotEnabled, value))
-            {
-                _settings.VectorSnapshotEnabled = value;
-                RenderingOptimizations.VectorSnapshotEnabled = value;
-                RaiseMarinerChanged();
-            }
-        }
-    }
+    // ── Base-plane tiled-pipeline knobs ────────────────────────────────────
+    // The tiled base-plane renderer's scene-mode and cache/prediction knobs. All
+    // values mirror RenderingOptimizations (the renderer source of truth) and
+    // persist to ViewerSettings; an explicit environment variable pins a knob (the
+    // perf harness), in which case the matching *Editable flag is false and the
+    // control is shown disabled.
 
-    private bool _vectorSnapshotPrebuildEnabled;
-    /// <summary>
-    /// Whether the off-thread snapshot prebuild is enabled. The "best" default
-    /// (on); only meaningful when <see cref="VectorSnapshotEnabled"/> is on.
-    /// </summary>
-    public bool VectorSnapshotPrebuildEnabled
-    {
-        get => _vectorSnapshotPrebuildEnabled;
-        set
-        {
-            if (SetProperty(ref _vectorSnapshotPrebuildEnabled, value))
-            {
-                _settings.VectorSnapshotPrebuildEnabled = value;
-                RenderingOptimizations.VectorSnapshotPrebuildEnabled = value;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    private bool _vectorPathCacheEnabled;
-    /// <summary>
-    /// Whether the translation-invariant vector path cache is enabled. The "best"
-    /// default (on).
-    /// </summary>
-    public bool VectorPathCacheEnabled
-    {
-        get => _vectorPathCacheEnabled;
-        set
-        {
-            if (SetProperty(ref _vectorPathCacheEnabled, value))
-            {
-                _settings.VectorPathCacheEnabled = value;
-                RenderingOptimizations.VectorPathCacheEnabled = value;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    private bool _geometrySimplificationEnabled;
-    /// <summary>
-    /// Whether resolution-aware <b>line</b> geometry simplification is enabled.
-    /// The "best" default (on); requires <see cref="VectorPathCacheEnabled"/>.
-    /// Polygons are always rendered vertex-exact.
-    /// </summary>
-    public bool GeometrySimplificationEnabled
-    {
-        get => _geometrySimplificationEnabled;
-        set
-        {
-            if (SetProperty(ref _geometrySimplificationEnabled, value))
-            {
-                _settings.GeometrySimplificationEnabled = value;
-                RenderingOptimizations.GeometrySimplificationEnabled = value;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    // ── Render subsystem (issue #331) ──────────────────────────────────────
-    // The A/B base-plane render-subsystem switch and the "B" tiled-pipeline
-    // optimization knobs. All values mirror RenderingOptimizations (the renderer
-    // source of truth) and persist to ViewerSettings; an explicit environment
-    // variable pins a knob (the perf A/B harness), in which case the matching
-    // *Editable flag is false and the control is shown disabled.
-
-    /// <summary>The selectable base-plane render subsystems (the A/B switch).</summary>
-    public static RenderSubsystemKind[] AvailableRenderSubsystems { get; } =
-        [RenderSubsystemKind.Mapsui, RenderSubsystemKind.TiledScene];
-
-    /// <summary>The selectable scene modes within the TiledScene ("B") arm.</summary>
+    /// <summary>The selectable scene modes for the tiled base plane.</summary>
     public static VectorSceneMode[] AvailableSceneModes { get; } =
         [VectorSceneMode.Tiled, VectorSceneMode.Single];
 
-    private RenderSubsystemKind _renderSubsystem;
-    /// <summary>
-    /// The active base-plane render subsystem — "A" (<see cref="RenderSubsystemKind.Mapsui"/>)
-    /// vs the "B" (<see cref="RenderSubsystemKind.TiledScene"/>).
-    /// Read per-render, so switching rebinds the active subsystem on the next
-    /// re-render. Disabled when pinned by <c>S100_RENDER_SUBSYSTEM</c>.
-    /// </summary>
-    public RenderSubsystemKind SelectedRenderSubsystem
-    {
-        get => _renderSubsystem;
-        set
-        {
-            if (SetProperty(ref _renderSubsystem, value))
-            {
-                _settings.RenderSubsystem = value.ToString();
-                RenderingOptimizations.RenderSubsystem = value;
-                OnPropertyChanged(nameof(MapsuiSelected));
-                OnPropertyChanged(nameof(TiledSceneSelected));
-                OnPropertyChanged(nameof(TiledModeActive));
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    /// <summary>Whether the subsystem switch is user-editable (not env-pinned).</summary>
-    public bool RenderSubsystemEditable => !RenderingOptimizations.RenderSubsystemEnvExplicit;
-
-    /// <summary>
-    /// True when the "A" (<see cref="RenderSubsystemKind.Mapsui"/>) arm is
-    /// selected — gates the snapshot / path-cache / geometry-simplification
-    /// optimization group so only the active subsystem's knobs are shown.
-    /// </summary>
-    public bool MapsuiSelected => _renderSubsystem == RenderSubsystemKind.Mapsui;
-
-    /// <summary>True when the "B" (TiledScene) arm is selected — gates the knob panel.</summary>
-    public bool TiledSceneSelected => _renderSubsystem == RenderSubsystemKind.TiledScene;
-
-    /// <summary>True when the tiled base plane is active (B arm + tiled scene mode) — gates the tiled knobs.</summary>
-    public bool TiledModeActive => TiledSceneSelected && _sceneMode == VectorSceneMode.Tiled;
+    /// <summary>True when the tiled base plane is active (tiled scene mode) — gates the tiled knobs.</summary>
+    public bool TiledModeActive => _sceneMode == VectorSceneMode.Tiled;
 
     private VectorSceneMode _sceneMode;
     /// <summary>
@@ -1064,32 +944,11 @@ internal sealed class SettingsViewModel : ViewModelBase
         _fullLightLines = settings.FullLightLines ?? def.FullLightLines;
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
-        _vectorSnapshotEnabled = settings.VectorSnapshotEnabled ?? true;
-        _vectorSnapshotPrebuildEnabled = settings.VectorSnapshotPrebuildEnabled ?? true;
-        _vectorPathCacheEnabled = settings.VectorPathCacheEnabled ?? true;
-        // Migrate the legacy line-only key forward to the unified geometry knob.
-        _geometrySimplificationEnabled =
-            settings.GeometrySimplificationEnabled ?? settings.LineSimplificationEnabled ?? true;
 
-        // Push the persisted render-optimization preferences into the renderer.
-        // Writes are ignored for any knob pinned by an explicit environment
-        // variable (the perf A/B harness), so harness runs stay faithful.
-        RenderingOptimizations.VectorSnapshotEnabled = _vectorSnapshotEnabled;
-        RenderingOptimizations.VectorSnapshotPrebuildEnabled = _vectorSnapshotPrebuildEnabled;
-        RenderingOptimizations.VectorPathCacheEnabled = _vectorPathCacheEnabled;
-        RenderingOptimizations.GeometrySimplificationEnabled = _geometrySimplificationEnabled;
-
-        // Render subsystem (issue #331): push the persisted A/B + tiled-knob
-        // preferences into the renderer (each write is ignored for any knob
-        // pinned by an explicit env var — the perf A/B harness), then read the
-        // value back so an env-pinned knob displays the effective (env) value.
-        if (Enum.TryParse<RenderSubsystemKind>(settings.RenderSubsystem, ignoreCase: true, out var subsystem))
-        {
-            RenderingOptimizations.RenderSubsystem = subsystem;
-        }
-
-        _renderSubsystem = RenderingOptimizations.RenderSubsystem;
-
+        // Tiled base-plane scene mode: push the persisted preference into the
+        // renderer (the write is ignored when pinned by an explicit env var — the
+        // perf harness), then read it back so an env-pinned value displays the
+        // effective (env) value.
         if (Enum.TryParse<VectorSceneMode>(settings.VectorSceneMode, ignoreCase: true, out var sceneMode))
         {
             RenderingOptimizations.SceneMode = sceneMode;

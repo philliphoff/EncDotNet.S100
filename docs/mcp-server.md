@@ -128,7 +128,6 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
 | `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
 | `set_display_mode` *(viewer only, **mutating**)* | Sets the live viewer's explicit per-spec display mode (S-100 Part 9 §11.7). Today only S-411 sea ice declares more than one mode: `ice-concentration` (default), `ice-sod` (stage of development), or `ice-navigational` — a **provisional** concentration-derived preview, *not* a POLARIS/RIO product. Accepts the same friendly tokens as the CLI `render --display-mode` flag, plus raw spec-native mode ids; an optional `spec` selects the product (defaults to `S-411`). Idempotent. Returns the applied and previous mode ids and whether the applied mode is `provisional`. This axis is independent of `set_display_category`. |
-| `set_render_subsystem` *(viewer only, **mutating**)* | Switches the live viewer's base-plane render subsystem between `Mapsui` (the "A" arm) and `TiledScene` (the experimental tiled/async "B" arm); the `A`/`B` shorthand is also accepted (case-insensitive). Read per-render, so the change rebinds the active subsystem on the next re-render. Idempotent — no-op when already at the requested subsystem. Returns the applied and previous subsystem. Refused when `S100_RENDER_SUBSYSTEM` pins the subsystem at startup. Intended for scripted A↔B soak runs that exercise the switch teardown path from outside the GUI. |
 | `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
 | `set_own_ship` *(viewer only, **mutating**)* | Positions and steers the simulated own-ship. Any subset of `lat`+`lon` (WGS-84 decimal degrees, supplied together), `cog` (course over ground, degrees true `[0, 360)`), `sog` (speed over ground, m/s `>= 0`), `heading` (gyro heading, degrees true — only applied together with `lat`/`lon`), and `hold` (`true` stops the vessel, `false` resumes) may be supplied; at least one actionable field is required. Works independently of the own-ship overlay's visibility, so it can pre-position the vessel before enabling the overlay or capturing a screenshot. Counterpart to the `--own-ship-pos` / `--own-ship-cog` / `--own-ship-sog` CLI flags, but applicable mid-session. |
 | `list_panels` *(viewer only, read-only)* | Lists the viewer's activity panels (the tabs in the left / right / bottom docks) and their current visibility, so an agent can drive and verify the non-render UX (action / report / timeline panels), not just the map. Each panel reports `id`, `title`, `dock` (`Left`\|`Right`\|`Bottom`), `available` (registered in the activity bar right now — a few panels are conditional, e.g. `Vessels` only while the AIS overlay is enabled and `Helm` only while own-ship tracking is enabled), `selected` (the active tab in its dock), `dockOpen` (its dock is expanded), and `showing` (actually visible = `available && selected && dockOpen`). Read-only — snapshots the activity bar without changing it. Call it to discover the valid panel ids for `set_panel` and again afterwards to confirm a show / hide took effect. |
@@ -184,7 +183,6 @@ Tools fall into two groups:
   `pick_features` with `select: true` (which publishes the pick to the
   Object Information panel and draws the pick highlight),
   `set_palette`, `set_display_category`, `set_display_mode`,
-  `set_render_subsystem`,
   `set_time_step`,
   `set_own_ship`, `open_dataset`, `close_dataset`,
   `close_all_datasets` (which
@@ -220,7 +218,7 @@ than being forced onto a shape that would fit neither well:
   separate implementations (the viewer's over `IMapViewportController`,
   the CLI's over `IViewportController`) so the viewer retains arbitrary
   rotation and zoom-level input.
-* `pick_features`, `set_render_subsystem`, `capture_app_screenshot`,
+* `pick_features`, `capture_app_screenshot`,
   `set_own_ship`, panels, routes, and the render-observability tools —
   these need the live viewer UI and have no headless analogue.
 

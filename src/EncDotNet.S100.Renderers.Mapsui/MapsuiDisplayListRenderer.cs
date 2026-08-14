@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -10,7 +9,6 @@ using EncDotNet.S100.Renderers.Skia;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
-using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using MapsuiColor = Mapsui.Styles.Color;
@@ -153,15 +151,6 @@ public sealed class MapsuiDisplayListRenderer
     public S100MapsuiOptions? Options { get; init; }
 
     /// <summary>
-    /// Optional per-render override of the active base-plane render subsystem
-    /// (see <see cref="S100MapsuiOptions.RenderSubsystem"/>). When set, this
-    /// render uses the specified arm regardless of captured or process-wide
-    /// configuration, without mutating global state — making arm-specific
-    /// behaviour deterministic and parallel-safe for tests and harnesses.
-    /// </summary>
-    public RenderSubsystemKind? RenderSubsystemOverride { get; init; }
-
-    /// <summary>
     /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
     /// the pivot-to-bounds-centre offset recovered from the raw SVG before
     /// <see cref="SvgProcessor"/> stripped its layout elements.  The relative
@@ -200,30 +189,15 @@ public sealed class MapsuiDisplayListRenderer
 
         S100Diag.Telemetry.InstructionsProcessed.Add(instructions.Count);
 
-        // 1. Sort instructions by rendering order: areas first, then lines, then points/text
-        //    Within same type, sort by DrawingPriority
-        var sorted = instructions
-            .OrderBy(i => i.Plane == Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
-            .ThenBy(i => i switch
-            {
-                AreaInstruction => 0,
-                LineInstruction => 1,
-                PointInstruction => 2,
-                TextInstruction => 3,
-                _ => 4,
-            })
-            .ThenBy(i => i.DrawingPriority)
-            .ToList();
-
-        // 2. Lower the non-pattern instructions into the shared, backend-agnostic
-        //    VectorScene. All S-100 Part 9 correctness (draw ordering, colour /
-        //    mm→px / symbol / line-style / text-anchor resolution, and the
-        //    lat/lon → EPSG:3857 projection half) now lives in VectorSceneBuilder;
-        //    the Mapsui-specific feature/style construction below merely consumes
-        //    that IR. Pattern fills are intentionally NOT represented in the IR for
-        //    this slice — they keep their dedicated collection / priority-clip /
-        //    insert phase below, so Mapsui pattern output is byte-for-byte
-        //    unchanged.
+        // Lower the instructions into the shared, backend-agnostic VectorScene.
+        // All S-100 Part 9 correctness (draw ordering, colour / mm→px / symbol /
+        // line-style / text-anchor resolution, and the lat/lon → EPSG:3857
+        // projection half) lives in VectorSceneBuilder; the Mapsui-specific
+        // feature construction below merely consumes that IR. This builder has no
+        // PatternResolver, so pattern fills are omitted from this scene — the
+        // Mapsui features built from it exist only to carry pick identity for
+        // hit-testing. A second, pattern-complete VectorScene (built below with
+        // the pattern resolver set) is what the tiled renderer actually paints.
         var builder = new Scene.VectorSceneBuilder
         {
             ResolveColor = Scene.ColorResolver.Create(Palette),
@@ -239,109 +213,12 @@ public sealed class MapsuiDisplayListRenderer
         // already been given a pick-target rectangle, so composite point
         // symbology emits exactly one rectangle per anchor (see the build loop).
         var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
-        var patternEntries = new List<(string PatternRef, int Priority, List<Polygon> Polygons)>();
-        var nonPatternedColorFillPolygons = new List<Polygon>();
-        int lastColorFillIndex = -1;
 
-        // Select the base-plane render subsystem up front (design §4/§5). The
-        // pattern bookkeeping, priority clip, and pattern-fill feature insertion
-        // below feed the Mapsui feature ("A") arm exclusively: those features are
-        // never rendered by the TiledScene ("B") arm (which paints patterns from
-        // the IR scene bound to the layer) and carry no pick identity, so they are
-        // pure dead weight there. Compute the arm now so the whole pattern phase
-        // can be skipped when the B arm is active.
-        var useTiledScene =
-            (RenderSubsystemOverride
-                ?? Options?.RenderSubsystem
-                ?? RenderingOptimizations.RenderSubsystem)
-                == RenderSubsystemKind.TiledScene;
-
-        // 3a. Pattern bookkeeping (A arm only): collect pattern polygons grouped
-        //     by (pattern, priority), plus the non-patterned colour fills (e.g.
-        //     land) that clip them. Pattern fills are merged per unique pattern so
-        //     overlapping polygons with the same globally-anchored pattern are
-        //     drawn exactly once. This mirrors the legacy single-pass collection
-        //     and is kept separate from the IR for this slice.
-        if (!useTiledScene)
-        {
-            var featuresWithPatterns = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var instruction in sorted)
-            {
-                if (instruction is AreaInstruction { AreaFillReference: not null } pa)
-                    featuresWithPatterns.Add(pa.FeatureReference);
-            }
-
-            foreach (var instruction in sorted)
-            {
-                var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
-
-                // LineInstructions with CoordinatesOverride carry their own
-                // synthetic geometry (from augmented rays/arcs) and don't need
-                // the feature's natural geometry to have coordinates.
-                bool hasAugmentedLine = instruction is LineInstruction { CoordinatesOverride: not null };
-                if (!hasAugmentedLine && (geom is null || geom.Coordinates.Count == 0))
-                    continue;
-
-                // Defer pattern fills for merging
-                if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern && geom is not null)
-                {
-                    // Inclusion gate: only collect the entry when the pattern
-                    // resolves to a tile under the current palette (patterns with
-                    // no resolvable asset are dropped, exactly as before). The
-                    // resolved tile is discarded here; grouping/merging keys on the
-                    // palette-independent pattern reference so the clip result is
-                    // palette-independent and cacheable. The tile is re-resolved
-                    // under the active palette after clipping.
-                    if (GetPatternTilePng(patternRef) is not null)
-                    {
-                        var polygon = CreatePolygonFromGeometry(geom);
-                        if (polygon is not null)
-                        {
-                            // Find existing entry with the same pattern reference and priority, or create a new one.
-                            // OrdinalIgnoreCase matches MapsuiRenderAssetCache's tile-resolution
-                            // comparer, so this grouping is exactly equivalent to the previous
-                            // ReferenceEquals(TilePng) grouping (same fillName -> same byte[] ref).
-                            var existing = patternEntries.Find(e =>
-                                string.Equals(e.PatternRef, patternRef, StringComparison.OrdinalIgnoreCase)
-                                && e.Priority == areaPattern.DrawingPriority);
-                            if (existing.PatternRef is not null)
-                            {
-                                existing.Polygons.Add(polygon);
-                            }
-                            else
-                            {
-                                patternEntries.Add((patternRef, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                // Track fully-opaque non-patterned colour fills (e.g. land areas)
-                // as pattern occluders. Translucent fills (Transparency > 0) do
-                // not fully hide underlying patterns, and PatternPriorityClipper
-                // treats every supplied polygon as a full occluder, so they are
-                // excluded here — matching the IR path's alpha == 255 gate (area
-                // fills are otherwise opaque; Transparency is their only source of
-                // translucency).
-                if (instruction is AreaInstruction { FillColor: not null } colorFill
-                    && geom is not null
-                    && colorFill.Transparency is null or <= 0
-                    && !featuresWithPatterns.Contains(colorFill.FeatureReference))
-                {
-                    var polygon = CreatePolygonFromGeometry(geom);
-                    if (polygon is not null)
-                        nonPatternedColorFillPolygons.Add(polygon);
-                }
-            }
-        }
-
-
-        // 3b. Build Mapsui features from the IR, in Part 9 draw order. Solid-area
-        //     ops mark the colour-fill boundary so merged patterns are inserted
-        //     after them (preventing a solid fill from occluding a pattern). The
-        //     scene contains the same non-pattern ops, in the same order, as the
-        //     legacy single-pass loop produced.
+        // Build Mapsui features from the IR, in Part 9 draw order. These features
+        // carry the pick identity used for hit-testing; the base plane itself is
+        // painted by the TiledScene renderer from the pattern-complete VectorScene
+        // bound to the layer below (patterns are rendered from the IR, so no
+        // Mapsui pattern-fill features are built here).
         foreach (var op in scene.Ops)
         {
             // A composite point symbol (e.g. a multi-digit sounding) emits one
@@ -360,63 +237,18 @@ public sealed class MapsuiDisplayListRenderer
                 continue;
 
             mapFeatures.Add(mapFeature);
-            if (op is Scene.AreaPaintOp)
-                lastColorFillIndex = mapFeatures.Count;
-        }
-
-        // Clip lower-priority pattern groups to exclude areas covered by
-        // higher-priority patterns so that, e.g., DIAMOND1 (priority 9)
-        // diamonds do not show through DQUAL (priority 12) pattern zones.
-        // Also clips all patterns against non-patterned color fill areas
-        // (e.g. land) so patterns don't bleed over land. A-arm only: the B arm
-        // renders patterns from the IR scene and skips this phase entirely.
-        if (!useTiledScene)
-        {
-            patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-            var clippedPatterns = PatternClipCache is not null && PatternClipCacheKey is not null
-                ? PatternClipCache.GetOrCompute(
-                    PatternClipCacheKey,
-                    () => ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons))
-                : ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
-
-            // Insert merged pattern fill features after all color fills but before
-            // lines/points/text. This ensures no solid fill can occlude a pattern.
-            // The tile is re-resolved here under the active palette (the clip
-            // geometry is palette-independent and may have come from the cache,
-            // which is shared across palettes).
-            int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
-            foreach (var (patternRef, _, geometry) in clippedPatterns)
-            {
-                var tile = GetPatternTilePicture(patternRef);
-                if (tile is null)
-                    continue;
-
-                var feature = new GeometryFeature(geometry);
-                feature.Styles.Add(new AnchoredPatternFillStyle
-                {
-                    Tile = tile.Value.Picture,
-                    TileRect = tile.Value.Rect,
-                });
-                mapFeatures.Insert(insertAt, feature);
-                insertAt++;
-            }
         }
 
         S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
         S100Diag.Telemetry.FrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-        // When the TiledScene ("B") arm is active, the layer is portrayed by
-        // S100VectorSceneRenderer rasterising the VectorScene IR directly on a
-        // worker — so build a *pattern-complete* scene (the Mapsui lowering above
-        // deliberately omits patterns; the B arm renders them from the IR) and
-        // bind it to the layer. Otherwise the snapshot ("A") arm (or the plain
-        // per-feature path) renders the Mapsui features built above (including the
-        // clipped pattern fills inserted in the A-arm-only phase).
-
-        // Within the TiledScene subsystem, the Phase-2 tiled renderer is the
-        // default; S100_VECTOR_SCENE_MODE=single selects the Phase-1
-        // single-surface arm for A/B comparison. Both consume the same scene.
+        // The layer is portrayed by the TiledScene renderer rasterising the
+        // VectorScene IR on a worker, so build a *pattern-complete* scene (the
+        // Mapsui lowering above deliberately omits patterns; the renderer paints
+        // them from the IR) and bind it to the layer. The Phase-2 tiled renderer
+        // is the default; S100_VECTOR_SCENE_MODE=single selects the Phase-1
+        // single-surface arm. Both consume the same scene.
         var tiledRendererName = TiledSceneModeIsTiled
             ? S100VectorTileRenderer.RendererName
             : S100VectorSceneRenderer.RendererName;
@@ -426,45 +258,32 @@ public sealed class MapsuiDisplayListRenderer
             Name = LayerName,
             Features = mapFeatures,
             Style = null,
-            // Route the settled vector layer through the picture-snapshot
-            // custom layer renderer when enabled, so pans replay a recorded
-            // SKPicture instead of re-iterating every feature. No-op (null)
-            // when the snapshot is disabled, leaving the normal per-feature
-            // path (with the translation-invariant path cache) in place. When
-            // the TiledScene subsystem is active it takes precedence.
-            CustomLayerRendererName = useTiledScene
-                ? tiledRendererName
-                : S100VectorSnapshotRenderer.Enabled
-                    ? S100VectorSnapshotRenderer.RendererName
-                    : null,
+            CustomLayerRendererName = tiledRendererName,
         };
 
-        if (useTiledScene)
+        var sceneBuilder = new Scene.VectorSceneBuilder
         {
-            var sceneBuilder = new Scene.VectorSceneBuilder
-            {
-                ResolveColor = Scene.ColorResolver.Create(Palette),
-                SymbolResolver = ResolveSymbolAsset,
-                LineStyleProvider = LineStyleProvider,
-                PatternResolver = GetPatternTilePng,
-                PatternClipCache = BuildPatternClipMemoizer(),
-                SymbolScale = SymbolScale,
-                TextScale = TextScale,
-                OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
-            };
-            var builtScene = sceneBuilder.Build(instructions, geometryProvider);
-            if (TiledSceneModeIsTiled)
-            {
-                S100VectorTileRenderer.BindScene(
-                    layer,
-                    builtScene,
-                    productLayerSet: Product ?? LayerName,
-                    styleStateHash: ComputeStyleStateHash(instructions));
-            }
-            else
-            {
-                S100VectorSceneRenderer.BindScene(layer, builtScene);
-            }
+            ResolveColor = Scene.ColorResolver.Create(Palette),
+            SymbolResolver = ResolveSymbolAsset,
+            LineStyleProvider = LineStyleProvider,
+            PatternResolver = GetPatternTilePng,
+            PatternClipCache = BuildPatternClipMemoizer(),
+            SymbolScale = SymbolScale,
+            TextScale = TextScale,
+            OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
+        };
+        var builtScene = sceneBuilder.Build(instructions, geometryProvider);
+        if (TiledSceneModeIsTiled)
+        {
+            S100VectorTileRenderer.BindScene(
+                layer,
+                builtScene,
+                productLayerSet: Product ?? LayerName,
+                styleStateHash: ComputeStyleStateHash(instructions));
+        }
+        else
+        {
+            S100VectorSceneRenderer.BindScene(layer, builtScene);
         }
 
         return layer;
@@ -869,62 +688,11 @@ public sealed class MapsuiDisplayListRenderer
 
     // ── Coordinate projection ──────────────────────────────────────────
 
-    private static Polygon? CreatePolygonFromGeometry(FeatureGeometry geometry)
-    {
-        var shell = BuildLinearRing(geometry.Coordinates);
-        if (shell is null)
-            return null;
-
-        if (geometry.InteriorRings.Count == 0)
-            return new Polygon(shell);
-
-        var holes = new List<LinearRing>(geometry.InteriorRings.Count);
-        foreach (var hole in geometry.InteriorRings)
-        {
-            var ring = BuildLinearRing(hole);
-            if (ring is not null)
-                holes.Add(ring);
-        }
-
-        return holes.Count == 0
-            ? new Polygon(shell)
-            : new Polygon(shell, holes.ToArray());
-    }
-
-    private static LinearRing? BuildLinearRing(IReadOnlyList<GeoPosition> coords)
-    {
-        if (coords.Count < 3)
-            return null;
-
-        var projected = ProjectCoordinates(coords);
-
-        // Close the ring if not already closed
-        if (projected.Count > 0 && !projected[0].Equals2D(projected[^1]))
-            projected.Add(new Coordinate(projected[0].X, projected[0].Y));
-
-        if (projected.Count < 4)
-            return null;
-
-        return new LinearRing(projected.ToArray());
-    }
-
-    private static List<Coordinate> ProjectCoordinates(IReadOnlyList<GeoPosition> coords)
-    {
-        var result = new List<Coordinate>(coords.Count);
-        foreach (var (lat, lon) in coords)
-        {
-            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-            result.Add(new Coordinate(mx, my));
-        }
-        return result;
-    }
-
     /// <summary>
     /// Builds an NTS polygon from already-projected EPSG:3857 ring coordinates
-    /// carried by an <see cref="Scene.AreaPaintOp"/>. Mirrors
-    /// <see cref="CreatePolygonFromGeometry"/> (closing + minimum-vertex guards)
-    /// but skips the lat/lon → EPSG:3857 projection, which the IR already
-    /// performed, so degenerate rings are dropped identically to the legacy path.
+    /// carried by an <see cref="Scene.AreaPaintOp"/> (closing + minimum-vertex
+    /// guards), skipping the lat/lon → EPSG:3857 projection the IR already
+    /// performed so degenerate rings are dropped consistently.
     /// </summary>
     private static Polygon? CreatePolygonFromWorld(
         IReadOnlyList<(double X, double Y)> shell,
@@ -1091,65 +859,6 @@ public sealed class MapsuiDisplayListRenderer
     }
 
     /// <summary>
-    /// In-memory cache of resolution-independent pattern tile pictures, keyed by
-    /// palette identity and area-fill name. Pictures are reused across the whole
-    /// render so the SVG is parsed and recorded only once per pattern.
-    /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (SkiaSharp.SKPicture Picture, SkiaSharp.SKRect Rect)?> _patternPictureCache = new();
-
-    /// <summary>
-    /// Returns the resolution-independent pattern tile picture (and its millimetre
-    /// repeat rectangle) for the given area-fill name, building and caching on
-    /// first access. Returns <c>null</c> when the fill or its symbol cannot be
-    /// resolved under the active palette.
-    /// </summary>
-    private (SkiaSharp.SKPicture Picture, SkiaSharp.SKRect Rect)? GetPatternTilePicture(string? fillName)
-    {
-        if (string.IsNullOrEmpty(fillName) || AreaFillProvider is null || SymbolProvider is null)
-            return null;
-
-        var paletteKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Palette!);
-        var key = string.Concat(paletteKey.ToString(System.Globalization.CultureInfo.InvariantCulture), "|", fillName);
-        return _patternPictureCache.GetOrAdd(key, _ => ProducePatternTilePicture(fillName));
-    }
-
-    private (SkiaSharp.SKPicture Picture, SkiaSharp.SKRect Rect)? ProducePatternTilePicture(string fillName)
-    {
-        try
-        {
-            var areaFill = AreaFillProvider!(fillName);
-            if (areaFill?.PatternSymbol is not null)
-            {
-                var svgContent = SymbolProvider!(areaFill.PatternSymbol);
-                if (svgContent is not null)
-                {
-                    var processed = SvgProcessor.Process(svgContent, Palette);
-                    var picture = SkiaSvgRasterizer.BuildPatternTilePicture(processed, areaFill, out var rect);
-                    if (picture is not null)
-                        return (picture, rect);
-                }
-            }
-        }
-        catch
-        {
-            // Area fill or symbol not found — skip pattern
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Clips lower-priority pattern groups by higher-priority pattern areas and by
-    /// the opaque non-patterned colour fills (e.g. land), so a lower-priority
-    /// pattern does not show through a higher-priority zone and no pattern bleeds
-    /// over land. Delegates to the shared, backend-neutral
-    /// <see cref="Scene.PatternPriorityClipper"/> so the Mapsui feature path and
-    /// the <see cref="Scene.VectorScene"/> IR path (headless Skia + TiledScene)
-    /// clip identically.
-    /// </summary>
-    /// <remarks>Entries must be sorted by ascending priority before calling;
-    /// results are returned in the same order.</remarks>
-    /// <summary>
     /// Adapts this renderer's <see cref="PatternClipCache"/> (an
     /// <see cref="IPatternClipCache"/> keyed by <see cref="PatternClipCacheKey"/>)
     /// into the <see cref="Scene.PatternClipMemoizer"/> consumed by
@@ -1176,22 +885,5 @@ public sealed class MapsuiDisplayListRenderer
             })
             .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
             .ToList();
-    }
-
-    private static List<(string PatternRef, int Priority, Geometry Geometry)> ClipPatternsByPriority(
-        List<(string PatternRef, int Priority, List<Polygon> Polygons)> entries,
-        List<Polygon> nonPatternedColorFills)
-    {
-        var groups = new List<Scene.PatternPriorityClipper.PatternGroup>(entries.Count);
-        foreach (var entry in entries)
-            groups.Add(new Scene.PatternPriorityClipper.PatternGroup(
-                entry.PatternRef, entry.Priority, entry.Polygons));
-
-        var clipped = Scene.PatternPriorityClipper.Clip(groups, nonPatternedColorFills);
-
-        var result = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
-        foreach (var c in clipped)
-            result.Add((c.PatternRef, c.Priority, c.Geometry));
-        return result;
     }
 }
