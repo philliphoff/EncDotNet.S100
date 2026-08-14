@@ -189,15 +189,15 @@ public sealed class MapsuiDisplayListRenderer
 
         S100Diag.Telemetry.InstructionsProcessed.Add(instructions.Count);
 
-        // Lower the non-pattern instructions into the shared, backend-agnostic
-        //    VectorScene. All S-100 Part 9 correctness (draw ordering, colour /
-        //    mm→px / symbol / line-style / text-anchor resolution, and the
-        //    lat/lon → EPSG:3857 projection half) now lives in VectorSceneBuilder;
-        //    the Mapsui-specific feature/style construction below merely consumes
-        //    that IR. Pattern fills are intentionally NOT represented in the IR for
-        //    this slice — they keep their dedicated collection / priority-clip /
-        //    insert phase below, so Mapsui pattern output is byte-for-byte
-        //    unchanged.
+        // Lower the instructions into the shared, backend-agnostic VectorScene.
+        // All S-100 Part 9 correctness (draw ordering, colour / mm→px / symbol /
+        // line-style / text-anchor resolution, and the lat/lon → EPSG:3857
+        // projection half) lives in VectorSceneBuilder; the Mapsui-specific
+        // feature construction below merely consumes that IR. This builder has no
+        // PatternResolver, so pattern fills are omitted from this scene — the
+        // Mapsui features built from it exist only to carry pick identity for
+        // hit-testing. A second, pattern-complete VectorScene (built below with
+        // the pattern resolver set) is what the tiled renderer actually paints.
         var builder = new Scene.VectorSceneBuilder
         {
             ResolveColor = Scene.ColorResolver.Create(Palette),

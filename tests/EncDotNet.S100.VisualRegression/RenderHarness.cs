@@ -126,7 +126,7 @@ public sealed class RenderHarness : IDisposable
 
     /// <summary>
     /// Runs the dataset pipeline and Mapsui layer build for <paramref name="path"/>
-    /// under the subsystem selected in <paramref name="options"/> and returns the
+    /// (using the render options in <paramref name="options"/>) and returns the
     /// produced layers <b>without rasterising a frame</b>. Used by fidelity tests
     /// that inspect the bound tiled <c>VectorScene</c> (via
     /// <see cref="S100VectorTileRenderer.TryGetPartitionedScene"/>) at the paint-op
