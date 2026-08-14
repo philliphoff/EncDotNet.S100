@@ -102,37 +102,6 @@ internal static class Telemetry
             description: "Pattern-tile cache misses during area-fill resolution (tile rasterisation triggered). Tagged with s100.product when the renderer is configured by a dataset processor.");
 
     /// <summary>
-    /// Hits in the <see cref="CachedVectorStyleRenderer"/> path cache. Recorded
-    /// per cached geometry per rendered frame; the hit-rate
-    /// (hits / (hits + misses)) measures steady-state pan effectiveness — a pan
-    /// at constant resolution should be all hits. Tagged with <c>s100.product</c>.
-    /// </summary>
-    public static readonly Counter<long> SimplifyCacheHit =
-        Meter.CreateCounter<long>(
-            name: "s100.simplify.cache.hit.count",
-            unit: "{hits}",
-            description: "Hits in the CachedVectorStyleRenderer path cache. Tagged with s100.product.");
-
-    /// <inheritdoc cref="SimplifyCacheHit"/>
-    public static readonly Counter<long> SimplifyCacheMiss =
-        Meter.CreateCounter<long>(
-            name: "s100.simplify.cache.miss.count",
-            unit: "{misses}",
-            description: "Misses in the CachedVectorStyleRenderer path cache (path build triggered). Tagged with s100.product.");
-
-    /// <summary>
-    /// Running total of coordinates retained in the
-    /// <see cref="CachedVectorStyleRenderer"/> path cache. Bounded by the
-    /// renderer's coordinate budget; this is the signal to watch for
-    /// cache-pressure tuning. Increments on cache adds, decrements on eviction.
-    /// </summary>
-    public static readonly UpDownCounter<long> SimplifyCacheCoordsTracked =
-        Meter.CreateUpDownCounter<long>(
-            name: "s100.simplify.cache.coords.tracked",
-            unit: "{coordinates}",
-            description: "Total coordinates currently retained in the CachedVectorStyleRenderer path cache. Tagged with s100.product.");
-
-    /// <summary>
     /// Wall-clock duration of a single Mapsui <c>GetFeatures(rect,resolution)</c>
     /// call on an <see cref="InstrumentedMemoryLayer"/>. Mapsui invokes this
     /// once per visible layer per rendered frame, so the histogram reflects
@@ -221,22 +190,6 @@ internal static class Telemetry
             name: "s100.layer.frame.interval",
             unit: "ms",
             description: "Inter-frame interval (gap between consecutive GetFeatures calls). Subtract LayerGetFeaturesDuration to estimate render+paint cost.");
-
-    /// <summary>
-    /// Per-call duration of <c>AnchoredPatternFillRenderer.Draw</c>, in
-    /// milliseconds. Pattern fills are the most expensive S-101 style
-    /// we render ourselves; this histogram quantifies their share of
-    /// post-filter frame time. Combined with
-    /// <see cref="LayerFrameInterval"/> minus
-    /// <see cref="LayerGetFeaturesDuration"/>, the residue is time
-    /// Mapsui's stock style renderers (vector / label / symbol) spent
-    /// on the layer.
-    /// </summary>
-    public static readonly Histogram<double> PatternFillDrawDuration =
-        Meter.CreateHistogram<double>(
-            name: "s100.style.pattern_fill.draw.duration",
-            unit: "ms",
-            description: "Per-call duration of AnchoredPatternFillRenderer.Draw (one call per pattern-fill feature per frame).");
 
     /// <summary>
     /// Wall-clock duration of a single off-thread <c>VectorScene</c>

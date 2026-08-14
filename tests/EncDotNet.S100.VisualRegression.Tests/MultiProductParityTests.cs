@@ -8,11 +8,11 @@ using SkiaSharp;
 namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>
-/// Durable multi-product A/B parity guard for the tiled async "B" base-plane
-/// renderer (<see cref="RenderSubsystemKind.TiledScene"/>), tracked by the
-/// "Multi-product / multi-dataset validation" item of issue #347. It converts
-/// the one-off A/B survey across the non-S-101 products into committed CI gates
-/// so a future change to "B" cannot silently regress a product's fidelity.
+/// Durable multi-product golden guard for the tiled base-plane renderer, tracked
+/// by the "Multi-product / multi-dataset validation" item of issue #347. It
+/// converts the one-off fidelity survey across the non-S-101 products into
+/// committed CI gates so a future change to the renderer cannot silently regress
+/// a product's fidelity.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -44,55 +44,9 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 public sealed class MultiProductParityTests
 {
     /// <summary>
-    /// Coverage products (S-102/104/111) must render byte-for-byte equivalent
-    /// through "A" and "B": the tiled subsystem swaps only the vector base
-    /// plane, leaving the HDF5 coverage raster path untouched. A divergence
-    /// here means "B" leaked into a path it must not affect.
-    /// </summary>
-    [SkippableTheory]
-    [InlineData("S102", "102US004MI1CI262227.h5")]
-    [InlineData("S104", "104US004SC1BO_20251217T12Z.h5")]
-    [InlineData("S111", "111US00_DBOFS_20260320T18Z_US4DE1BB.h5")]
-    public void Coverage_AbPixelIdentical(string product, string fileName)
-    {
-        var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);
-        Skip.IfNot(File.Exists(path), $"{product} test dataset not present: {path}");
-
-        using var harness = new RenderHarness();
-        using var aBitmap = harness.Render(path, new HarnessOptions
-        {
-            Width = 600,
-            Height = 600,
-            Palette = PaletteType.Day,
-        });
-        using var bBitmap = harness.Render(path, new HarnessOptions
-        {
-            Width = 600,
-            Height = 600,
-            Palette = PaletteType.Day,
-            RenderSubsystem = RenderSubsystemKind.TiledScene,
-        });
-
-        // Effectively an equality gate: a near-zero allowance only absorbs a
-        // stray compositor pixel, never a substantive rendering difference.
-        var comparer = new PerceptualImageComparer
-        {
-            MaxChannelDelta = 2,
-            MaxDifferentPixelFraction = 0.0005,
-        };
-        var result = comparer.Compare(
-            TestHelpers.EncodePng(aBitmap),
-            TestHelpers.EncodePng(bBitmap));
-
-        Assert.True(
-            result.AreEqual,
-            $"{product} coverage diverged between A and B (B must not touch the coverage plane): {result.Reason}");
-    }
-
-    /// <summary>
-    /// Renders one representative committed fixture per GML vector product
-    /// through the "B" subsystem and verifies it against a committed B-arm
-    /// golden — the per-product regression guard for the tiled renderer.
+    /// Renders one representative committed fixture per GML vector product and
+    /// verifies it against a committed golden — the per-product regression guard
+    /// for the tiled renderer.
     /// </summary>
     [SkippableTheory]
     [InlineData("S122", "122TESTDATASET.gml")]
@@ -116,7 +70,6 @@ public sealed class MultiProductParityTests
             Width = 600,
             Height = 600,
             Palette = PaletteType.Day,
-            RenderSubsystem = RenderSubsystemKind.TiledScene,
         });
 
         // Perceptual tolerance absorbs sub-pixel anti-aliasing drift in the
@@ -154,7 +107,6 @@ public sealed class MultiProductParityTests
             // "All" so no label is hidden by the Standard display filter — the
             // guard must see every label the portrayal emits.
             DisplayCategory = null,
-            RenderSubsystem = RenderSubsystemKind.TiledScene,
         });
 
         VectorScene? overlay = null;

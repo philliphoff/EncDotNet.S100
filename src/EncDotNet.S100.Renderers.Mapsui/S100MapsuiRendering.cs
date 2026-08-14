@@ -27,11 +27,8 @@ public static class S100MapsuiRendering
                 return;
             }
 
-            CachedVectorStyleRenderer.Register();
-            AnchoredPatternFillRenderer.Register();
             OverscaleCurtainRenderer.Register();
 
-            S100VectorSnapshotRenderer.Register();
             S100VectorSceneRenderer.Register();
             S100VectorTileRenderer.Register();
 

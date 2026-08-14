@@ -2,6 +2,18 @@
 
 Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection.
 
+> **Update (#600): the legacy "A" base-plane renderers are removed.** The
+> `VectorScene` IR is now the **sole** base-plane path, rasterised by
+> `S100VectorSceneRenderer` / `S100VectorTileRenderer`. The retired Mapsui
+> feature/style path took with it the `RenderSubsystemKind` switch, the
+> `S100_RENDER_SUBSYSTEM` env knob, and two large caches — the
+> translation-invariant path cache (`CachedVectorStyleRenderer`) and the raster
+> vector snapshot (`S100VectorSnapshotRenderer`). The **"Translation-invariant
+> vector path cache"**, **"Raster vector snapshot"**, and
+> **"Resolution-aware geometry simplification"** sections below are retained as
+> **historical record** and no longer describe live code. (The orphaned line-LOD
+> pyramid producer they reference is retired separately under #601.)
+
 ## Overview
 
 This library bridges the S-100 portrayal pipeline output to Mapsui map layers, including full CRS projection support (EPSG:3857 Web Mercator). Key types include:
@@ -56,7 +68,6 @@ reusable host configure rendering without mutating process-global state:
 ```csharp
 var options = new S100MapsuiOptions
 {
-    RenderSubsystem = RenderSubsystemKind.TiledScene,
     SceneMode = VectorSceneMode.Tiled,
 };
 var renderer = new MapsuiDatasetRenderer(
@@ -65,10 +76,10 @@ var renderer = new MapsuiDatasetRenderer(
     options);
 ```
 
-The render subsystem and vector-scene mode are the first settings captured by
-this object. Other optimization settings will move from
-`RenderingOptimizations` incrementally. Omitting `options` preserves the
-existing live global behavior used by the Viewer and performance harnesses.
+The vector-scene mode is captured by this object. Other optimization settings
+will move from `RenderingOptimizations` incrementally. Omitting `options`
+preserves the existing live global behavior used by the Viewer and performance
+harnesses.
 When `patternClipCache` is omitted, the renderer retains an in-memory
 single-entry cache for its lifetime. Hosts can inject `DiskPatternClipCache`
 to share entries across renderers and process restarts.

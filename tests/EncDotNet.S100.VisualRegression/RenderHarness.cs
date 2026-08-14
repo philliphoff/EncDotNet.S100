@@ -99,21 +99,11 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var prior = RenderingOptimizations.RenderSubsystem;
-        try
-        {
-            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+        var processor = _factory.CreateProcessor(path);
+        var context = BuildContext(processor, options);
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
-            var processor = _factory.CreateProcessor(path);
-            var context = BuildContext(processor, options);
-            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
-
-            return Rasterize(result, options);
-        }
-        finally
-        {
-            RenderingOptimizations.RenderSubsystem = prior;
-        }
+        return Rasterize(result, options);
     }
 
     /// <summary>
@@ -127,21 +117,11 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var prior = RenderingOptimizations.RenderSubsystem;
-        try
-        {
-            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+        var processor = _factory.CreateProcessor(path);
+        var context = BuildContext(processor, options);
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
-            var processor = _factory.CreateProcessor(path);
-            var context = BuildContext(processor, options);
-            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
-
-            return (Rasterize(result, options), result);
-        }
-        finally
-        {
-            RenderingOptimizations.RenderSubsystem = prior;
-        }
+        return (Rasterize(result, options), result);
     }
 
     /// <summary>
@@ -159,21 +139,11 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var prior = RenderingOptimizations.RenderSubsystem;
-        try
-        {
-            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+        var processor = _factory.CreateProcessor(path);
+        var context = BuildContext(processor, options);
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
-            var processor = _factory.CreateProcessor(path);
-            var context = BuildContext(processor, options);
-            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
-
-            return (result.Layers.ToList(), result.Extent);
-        }
-        finally
-        {
-            RenderingOptimizations.RenderSubsystem = prior;
-        }
+        return (result.Layers.ToList(), result.Extent);
     }
 
     private static RenderContext BuildContext(IDatasetProcessor processor, HarnessOptions options)
@@ -246,9 +216,7 @@ public sealed class RenderHarness : IDisposable
             }
         }
 
-        return options.RenderSubsystem == RenderSubsystemKind.TiledScene
-            ? RasterizeSettled(map, options)
-            : RenderFrame(map);
+        return RasterizeSettled(map, options);
     }
 
     /// <summary>
@@ -266,11 +234,12 @@ public sealed class RenderHarness : IDisposable
     }
 
     /// <summary>
-    /// Drives the TiledScene ("B") subsystem to a settled frame. Unlike the "A"
-    /// arm — where a single <see cref="MapRenderer.RenderToBitmapStream(Map, float, RenderFormat, int)"/>
-    /// produces the final pixels — the "B" base plane rasterises on a worker
-    /// thread: the first paint blits nothing and schedules a worker, which later
-    /// requests a repaint through the layer's redraw sink when a tile publishes.
+    /// Drives the tiled base-plane renderer to a settled frame. The base plane
+    /// rasterises on a worker thread, so a single
+    /// <see cref="MapRenderer.RenderToBitmapStream(Map, float, RenderFormat, int)"/>
+    /// would not produce the final pixels: the first paint blits nothing and
+    /// schedules a worker, which later requests a repaint through the layer's
+    /// redraw sink when a tile publishes.
     /// This loop is the headless analogue of the viewer's
     /// <c>await_render_idle</c>: it re-renders on every published tile and stops
     /// once no new tile arrives within <see cref="HarnessOptions.SettleQuietPeriod"/>
