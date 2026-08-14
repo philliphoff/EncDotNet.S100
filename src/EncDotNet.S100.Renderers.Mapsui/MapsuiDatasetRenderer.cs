@@ -187,11 +187,15 @@ public sealed class MapsuiDatasetRenderer
                 AreaFillProvider = result.AreaFillProvider,
                 LineStyleProvider = result.LineStyleProvider,
                 Options = _options,
-                // TiledScene ("B") subsystem only: the Mapsui ("A") path enforces
-                // this cell-wide cap via per-feature MaxVisible below
-                // (ApplyOutOfScaleBandCap). Propagating it here lets the
-                // VectorScene IR honour it too, so features without their own
-                // SCAMIN are hidden out of scale band in both subsystems.
+                // The out-of-scale-band cap is applied through two mechanisms that
+                // stay in sync, so features lacking their own SCAMIN are hidden out
+                // of band on both the rendered plane and in picking:
+                //  - OutOfBandMinDisplayScale here propagates the cap onto the
+                //    VectorScene IR, so the tiled renderer hides out-of-band
+                //    features in the *rendered* base plane;
+                //  - ApplyOutOfScaleBandCap below stamps the equivalent per-feature
+                //    MaxVisible onto the built Mapsui features, so *picking*
+                //    (GetFeatures) hides them too.
                 OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
                     ? result.OutOfBandMinDisplayScale
                     : null,
