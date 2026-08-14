@@ -23,10 +23,11 @@ public sealed class HarnessOptions
     /// corpora guard what actually ships.
     /// </summary>
     /// <remarks>
-    /// Driving "B" headlessly requires that the <c>S100_RENDER_SUBSYSTEM</c>
-    /// environment variable is <b>not</b> set (an explicit env pin makes the
-    /// subsystem property read-only). The harness restores the prior subsystem
-    /// after each render.
+    /// An explicit <c>S100_RENDER_SUBSYSTEM</c> environment variable pins the
+    /// subsystem and overrides this option (the underlying property is read-only
+    /// while pinned), so it only needs to be unset when you want this option to
+    /// switch subsystems. The harness restores the prior subsystem after each
+    /// render.
     /// </remarks>
     public RenderSubsystemKind RenderSubsystem { get; init; } = RenderSubsystemKind.TiledScene;
 
