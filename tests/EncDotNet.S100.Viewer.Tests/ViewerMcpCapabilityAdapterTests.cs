@@ -1,6 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.McpCapabilities;
 
@@ -18,8 +17,6 @@ public class ViewerMcpCapabilityAdapterTests
     {
         public PaletteType CurrentPalette { get; set; } = PaletteType.Day;
         public EcdisDisplayCategory CurrentDisplayCategory { get; set; } = EcdisDisplayCategory.Standard;
-        public RenderSubsystemKind CurrentRenderSubsystem { get; set; } = RenderSubsystemKind.Mapsui;
-        public bool RenderSubsystemPinned => false;
 
         public List<PaletteType> PaletteSets { get; } = [];
         public List<EcdisDisplayCategory> CategorySets { get; } = [];
@@ -36,12 +33,6 @@ public class ViewerMcpCapabilityAdapterTests
         {
             CategorySets.Add(category);
             CurrentDisplayCategory = category;
-            return Task.CompletedTask;
-        }
-
-        public Task SetRenderSubsystemAsync(RenderSubsystemKind subsystem, CancellationToken ct = default)
-        {
-            CurrentRenderSubsystem = subsystem;
             return Task.CompletedTask;
         }
 

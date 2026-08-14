@@ -1,7 +1,6 @@
 using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -36,10 +35,6 @@ internal sealed class ViewerRenderStateController : IRenderStateController
 
     public EcdisDisplayCategory CurrentDisplayCategory => _ecdis.Category;
 
-    public RenderSubsystemKind CurrentRenderSubsystem => _settings.SelectedRenderSubsystem;
-
-    public bool RenderSubsystemPinned => RenderingOptimizations.RenderSubsystemEnvExplicit;
-
     public async Task SetPaletteAsync(PaletteType palette, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -52,19 +47,6 @@ internal sealed class ViewerRenderStateController : IRenderStateController
         ct.ThrowIfCancellationRequested();
         if (_ecdis.Category == category) return;
         await Dispatcher.UIThread.InvokeAsync(() => _ecdis.SetCategory(category));
-    }
-
-    public async Task SetRenderSubsystemAsync(RenderSubsystemKind subsystem, CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        if (RenderingOptimizations.RenderSubsystemEnvExplicit)
-        {
-            throw new InvalidOperationException(
-                "The render subsystem is pinned by the S100_RENDER_SUBSYSTEM environment variable and cannot be switched at runtime.");
-        }
-
-        if (_settings.SelectedRenderSubsystem == subsystem) return;
-        await Dispatcher.UIThread.InvokeAsync(() => _settings.SelectedRenderSubsystem = subsystem);
     }
 
     public string? GetDisplayMode(string spec) => _ecdis.GetDisplayMode(spec);

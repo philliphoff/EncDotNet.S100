@@ -22,7 +22,7 @@ public class ViewerMcpAdapterJsonOptionsTests
 {
     private static JsonSerializerOptions OptionsFor(string adapterName)
     {
-        var adapter = typeof(SetRenderSubsystemMcpAdapter).Assembly.GetTypes()
+        var adapter = typeof(AwaitRenderIdleMcpAdapter).Assembly.GetTypes()
             .Single(t => t.Name == adapterName);
         var field = adapter.GetField("JsonOptions", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new InvalidOperationException($"{adapterName} has no private static JsonOptions field.");
@@ -30,7 +30,7 @@ public class ViewerMcpAdapterJsonOptionsTests
     }
 
     private static List<string> AdapterNames() =>
-        typeof(SetRenderSubsystemMcpAdapter).Assembly.GetTypes()
+        typeof(AwaitRenderIdleMcpAdapter).Assembly.GetTypes()
             .Where(t => t.Name.EndsWith("McpAdapter", StringComparison.Ordinal))
             .Where(t => t.GetField("JsonOptions", BindingFlags.NonPublic | BindingFlags.Static) is not null)
             .Select(t => t.Name)

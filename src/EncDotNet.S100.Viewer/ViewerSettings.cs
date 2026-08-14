@@ -181,63 +181,7 @@ internal sealed class ViewerSettings
     public bool? IgnoreScaleMinimum { get; set; }
 
     /// <summary>
-    /// Whether the raster vector-layer snapshot fast path is enabled
-    /// (<c>RenderingOptimizations.VectorSnapshotEnabled</c>). Records a settled
-    /// S-100 vector layer once per (resolution, feature-set) and blits it under
-    /// translation during pans, so a pan costs one textured blit instead of
-    /// re-drawing every feature. <see langword="null"/> in legacy settings files;
-    /// treated as the best default (on) by <see cref="SettingsViewModel"/>.
-    /// </summary>
-    public bool? VectorSnapshotEnabled { get; set; }
-
-    /// <summary>
-    /// Whether the off-thread snapshot prebuild is enabled
-    /// (<c>RenderingOptimizations.VectorSnapshotPrebuildEnabled</c>). Hides the
-    /// one-time record stall on zoom and the sustained-pan record stall by
-    /// rasterising on a background thread. Only meaningful when
-    /// <see cref="VectorSnapshotEnabled"/> is on. <see langword="null"/> → best
-    /// default (on).
-    /// </summary>
-    public bool? VectorSnapshotPrebuildEnabled { get; set; }
-
-    /// <summary>
-    /// Whether the translation-invariant vector path cache is enabled
-    /// (<c>RenderingOptimizations.VectorPathCacheEnabled</c>). Builds each
-    /// geometry's projected path once per (feature, resolution) and re-uses it
-    /// across pans. <see langword="null"/> → best default (on).
-    /// </summary>
-    public bool? VectorPathCacheEnabled { get; set; }
-
-    /// <summary>
-    /// Whether resolution-aware geometry simplification is enabled
-    /// (<c>RenderingOptimizations.GeometrySimplificationEnabled</c>). Drops
-    /// on-screen sub-pixel detail from dense S-100 line <b>and polygon</b>
-    /// geometries at path-build time (polygons via topology-preserving
-    /// simplification). Requires <see cref="VectorPathCacheEnabled"/>.
-    /// <see langword="null"/> → best default (on).
-    /// </summary>
-    public bool? GeometrySimplificationEnabled { get; set; }
-
-    /// <summary>
-    /// Deprecated: prior name for <see cref="GeometrySimplificationEnabled"/>
-    /// (line-only simplification). Still deserialized so existing settings
-    /// migrate forward; read only as a fallback when
-    /// <see cref="GeometrySimplificationEnabled"/> is unset. Do not write.
-    /// </summary>
-    public bool? LineSimplificationEnabled { get; set; }
-
-    /// <summary>
-    /// Active base-plane render subsystem (issue #331). One of "Mapsui" (the "A"
-    /// arm) or "TiledScene" (the "B" arm), matching
-    /// <see cref="Renderers.Mapsui.RenderSubsystemKind"/>. <see langword="null"/>
-    /// → best default ("TiledScene"). Mirrors
-    /// <c>RenderingOptimizations.RenderSubsystem</c> /
-    /// <c>S100_RENDER_SUBSYSTEM</c>.
-    /// </summary>
-    public string? RenderSubsystem { get; set; }
-
-    /// <summary>
-    /// Within the TiledScene ("B") arm, the base-plane scene mode (issue #331).
+    /// The base-plane scene mode (issue #331).
     /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
     /// matching <see cref="Renderers.Mapsui.VectorSceneMode"/>.
     /// <see langword="null"/> → best default ("Tiled"). Mirrors

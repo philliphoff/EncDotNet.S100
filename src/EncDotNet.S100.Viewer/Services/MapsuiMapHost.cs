@@ -63,13 +63,7 @@ internal sealed class MapsuiMapHost :
                 DatasetRenderer = datasetRenderer,
                 InteroperabilityAuthorityProvider = authorityProvider,
             });
-
-        RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
-        RenderSubsystem.Activate();
     }
-
-    /// <inheritdoc />
-    public IChartRenderSubsystem RenderSubsystem { get; }
 
     /// <inheritdoc />
     public MapsuiMapSession DatasetSession => _session.Session;
@@ -185,7 +179,6 @@ internal sealed class MapsuiMapHost :
 
         _disposed = true;
         _session.Dispose();
-        RenderSubsystem.Deactivate();
         _adapter.Dispose();
     }
 }

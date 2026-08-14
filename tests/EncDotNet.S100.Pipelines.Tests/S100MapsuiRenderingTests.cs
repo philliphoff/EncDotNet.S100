@@ -35,7 +35,6 @@ public class S100MapsuiRenderingTests
     {
         var options = new S100MapsuiOptions
         {
-            RenderSubsystem = RenderSubsystemKind.TiledScene,
             SceneMode = sceneMode,
         };
         var renderer = new MapsuiDatasetRenderer(
@@ -54,7 +53,6 @@ public class S100MapsuiRenderingTests
     {
         var options = new S100MapsuiOptions
         {
-            RenderSubsystem = RenderSubsystemKind.TiledScene,
             SceneMode = VectorSceneMode.Tiled,
         };
         var renderer = new MapsuiDatasetRenderer(
