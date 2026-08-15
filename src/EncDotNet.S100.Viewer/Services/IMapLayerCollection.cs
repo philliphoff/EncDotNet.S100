@@ -22,7 +22,7 @@ internal interface IMapLayerCollection
     /// collection exposes only the host-fillable basemap, overlay, and tool
     /// bands — never the dataset band.
     /// </remarks>
-    MapsuiMapSession? DatasetSession => null;
+    MapsuiDatasetLayerSession? DatasetSession => null;
 
     /// <summary>Sets or clears the single basemap layer.</summary>
     void SetBasemapLayer(ILayer? layer);

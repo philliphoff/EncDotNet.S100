@@ -50,7 +50,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly HashSet<DatasetEntry> _subscribedEntries = new();
 
     private IMapLayerCollection? _layerCollection;
-    private MapsuiMapSession? _mapSession;
+    private MapsuiDatasetLayerSession? _mapSession;
     private IMapViewportController? _viewport;
     private MapPresentationState _presentation;
 

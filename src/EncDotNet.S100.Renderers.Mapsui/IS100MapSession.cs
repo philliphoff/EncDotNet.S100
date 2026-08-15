@@ -11,6 +11,12 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 /// <remarks>
 /// <para>
+/// This is the library's public entry point and the middle of three tiers: it
+/// composes the inner <see cref="MapsuiDatasetLayerSession"/> (dataset-layer
+/// lifecycle only) and is in turn composed by an application's own host (e.g.
+/// the Viewer's <c>MapsuiMapHost</c>). Start here.
+/// </para>
+/// <para>
 /// Normal pan, zoom, and rotation stay with <c>Map.Navigator</c>; this session
 /// adds only S-100-specific operations plus the optional
 /// <see cref="ZoomToDataset"/> convenience.
@@ -19,7 +25,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// The rendering operations mutate <c>Map.Layers</c> and install generated
 /// layers on the calling synchronization context. Call and await them from the
 /// map-owning thread (e.g. a UI host's dispatcher thread), matching
-/// <see cref="MapsuiMapSession"/>'s threading contract.
+/// <see cref="MapsuiDatasetLayerSession"/>'s threading contract.
 /// </para>
 /// <para>
 /// Datasets can be added from a caller-supplied processor via
@@ -30,7 +36,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 public interface IS100MapSession : IDisposable, IAsyncDisposable
 {
     /// <summary>The underlying reusable dataset-layer session.</summary>
-    MapsuiMapSession Session { get; }
+    MapsuiDatasetLayerSession Session { get; }
 
     /// <summary>The navigation surface bound to the same map.</summary>
     MapsuiMapNavigator Navigator { get; }

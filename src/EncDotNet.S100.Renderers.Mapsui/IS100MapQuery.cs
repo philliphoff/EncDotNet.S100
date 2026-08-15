@@ -1,7 +1,7 @@
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// Reusable geographic query surface over a <see cref="MapsuiMapSession"/>'s
+/// Reusable geographic query surface over a <see cref="MapsuiDatasetLayerSession"/>'s
 /// currently-shown datasets.
 /// </summary>
 public interface IS100MapQuery

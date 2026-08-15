@@ -183,7 +183,7 @@ Internally, loaded rows project the renderer-neutral `MapDataset` and
 exchange-set registration details remain Viewer-only. Palette, ECDIS, scale,
 and mariner inputs are likewise consolidated into the current
 `MapPresentationState` before rendering and passed explicitly through
-`IMapPresentationController.SetPresentationAsync`. `MapsuiMapSession` now owns
+`IMapPresentationController.SetPresentationAsync`. `MapsuiDatasetLayerSession` now owns
 processor-to-layer rendering, replacement/removal, S-98 cross-product order and
 suppression, active/visible/opacity and sub-layer state application, scale
 windows, overlap suppression, time-aware registration and gating, render
@@ -989,7 +989,7 @@ conversion, and framework capture. The Viewer retains automatic zoom-after-load,
 capability readiness, diagnostics, MCP/feedback policy, render-context
 construction, and host lifecycle. Time registration, product-specific
 snap/gating behavior, refresh cancellation, and render serialization live in
-`MapsuiMapSession`; the Viewer timeline is a projection of its time snapshot.
+`MapsuiDatasetLayerSession`; the Viewer timeline is a projection of its time snapshot.
 The session reports its render lifecycle and refresh failures through structured
 events (`DatasetRenderStarted`/`DatasetRenderCompleted`/`DatasetRenderFailed`,
 `LayersChanged`, `TimeRangeChanged`, `CurrentTimeChanged`); the Viewer consumes
@@ -1004,7 +1004,7 @@ load lifecycle stay in the Viewer's own load path, not the session.
 render lifecycle — processor-to-layer rendering, replacement, ordering,
 visible/active state, S-98 composition, time gating, render-context
 construction, render serialization/cancellation, and processor ownership —
-lives in `MapsuiMapSession` and `DatasetProcessorOwner`
+lives in `MapsuiDatasetLayerSession` and `DatasetProcessorOwner`
 (`EncDotNet.S100.Renderers.Mapsui` / `.Datasets.Pipelines`). The coordinator's
 render-orchestration methods (`RenderAndReplaceAsync`, `ReplaceLayersAsync`,
 `SetPresentationAsync`, `ReRenderAtTimeAsync`) are thin wrappers over that

@@ -45,7 +45,7 @@ public class GlobalTimeServiceTests
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
-        using var session = new MapsuiMapSession(
+        using var session = new MapsuiDatasetLayerSession(
             new MapsuiLayerBands(map),
             owner,
             new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),

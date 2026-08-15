@@ -227,7 +227,7 @@ application boundary for a host or session that owns loaded datasets. The
 controller accepts the immutable state explicitly and applies it asynchronously
 without exposing UI refresh events or renderer types. Implementations retain
 processor, refresh, and disposal ownership. The Mapsui backend consumes the
-snapshot directly in `MapsuiMapSession`, which owns product-context creation,
+snapshot directly in `MapsuiDatasetLayerSession`, which owns product-context creation,
 layer rendering, S-98 composition, time gating, and refresh coalescing.
 
 `MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
@@ -236,7 +236,7 @@ and temporal coverage) with independent visibility and active flags, opacity,
 available/current time, `MapDatasetSubLayer` state, `ValidationReport`, and
 `SpecVersionAssessment`. The contract contains no rendered layers, localized
 strings, UI commands, or framework events. The Viewer projects its existing
-loaded entry state into this model, while `MapsuiMapSession` treats it as the
+loaded entry state into this model, while `MapsuiDatasetLayerSession` treats it as the
 authoritative identity and display-state snapshot across layer replacements.
 The session also consumes `IInteroperabilityAuthorityProvider` and
 `MarinerSettings` to own S-98 ordering, suppression, authority changes, and the

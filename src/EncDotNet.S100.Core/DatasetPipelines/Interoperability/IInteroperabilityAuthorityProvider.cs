@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <remarks>
 /// <para>
 /// Components that participate in cross-dataset paint ordering
-/// (<c>MapsuiMapSession</c>, headless compositors, or another map-session
+/// (<c>MapsuiDatasetLayerSession</c>, headless compositors, or another map-session
 /// implementation) should depend on this provider rather than
 /// holding an <see cref="IInteroperabilityAuthority"/> reference
 /// directly. The active authority can change at runtime — e.g. a

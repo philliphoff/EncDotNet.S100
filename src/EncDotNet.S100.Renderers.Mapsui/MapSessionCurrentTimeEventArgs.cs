@@ -2,7 +2,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Carries the new global map clock value after a
-/// <see cref="MapsuiMapSession"/> clock change.
+/// <see cref="MapsuiDatasetLayerSession"/> clock change.
 /// </summary>
 public sealed class MapSessionCurrentTimeEventArgs : EventArgs
 {

@@ -62,7 +62,7 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
     /// scene / tile output on background threads and, when a settled image
     /// publishes, call <see cref="RequestRepaint"/> to bring it on screen. A
     /// session stamps this with an action that invalidates the attached map (see
-    /// <c>MapsuiMapSession</c> / <c>S100MapsuiOptions.RedrawMarshal</c>); when
+    /// <c>MapsuiDatasetLayerSession</c> / <c>S100MapsuiOptions.RedrawMarshal</c>); when
     /// <see langword="null"/> the renderer falls back to
     /// <see cref="BaseLayer.DataHasChanged"/>. This replaces the former
     /// process-global static redraw hooks with a per-layer (hence per-map) seam.

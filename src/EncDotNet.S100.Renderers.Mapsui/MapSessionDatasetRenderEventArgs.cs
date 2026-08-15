@@ -3,7 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// Describes a <see cref="MapsuiMapSession"/> dataset render lifecycle event
+/// Describes a <see cref="MapsuiDatasetLayerSession"/> dataset render lifecycle event
 /// (started or completed).
 /// </summary>
 public class MapSessionDatasetRenderEventArgs : EventArgs
