@@ -13,6 +13,12 @@ Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS p
 > **"Resolution-aware geometry simplification"** sections below are retained as
 > **historical record** and no longer describe live code. (The orphaned line-LOD
 > pyramid producer they reference was retired under #601.)
+>
+> **Do not follow their instructions:** the types and knobs those sections
+> mention — `CachedVectorStyleRenderer`, `S100VectorSnapshotRenderer`,
+> `LineLodPyramid`, `RenderingOptimizations.PrecomputedLineLodEnabled`, and the
+> `S100_VECTOR_LINE_LOD` / `S100_VECTOR_SIMPLIFY_PX` / `S100_VECTOR_PATH_CACHE`
+> env vars — **no longer exist** after #600 / #601.
 
 ## Overview
 
@@ -700,6 +706,11 @@ hold a reference outside the lock); they are reclaimed by GC finalization.
   `docs/design/mapsui-performance.md`.
 
 ### Precomputed line LOD (opt-in)
+
+> **Removed (#601).** This whole feature — the pyramid, its caches, and the
+> `PrecomputedLineLodEnabled` / `S100_VECTOR_LINE_LOD` knob below — was retired
+> with the A arm's fast-line path. The text is kept only as the measurement
+> record; the identifiers it names no longer exist.
 
 An **opt-in** precomputed line-LOD pyramid replaces the inline radial-distance
 filter with a small pyramid of Douglas-Peucker levels
