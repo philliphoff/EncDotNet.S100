@@ -69,7 +69,6 @@ public static class RenderingOptimizations
     public const int MaxTileWorkers = 8;
 
     private static PerformanceProfile _resolvedProfile;
-    private static bool _precomputedLineLodEnabled;
     private static VectorSceneMode _sceneMode;
     private static double _tileGutterDip;
     private static double _tileBudgetMb;
@@ -87,14 +86,6 @@ public static class RenderingOptimizations
     static RenderingOptimizations()
     {
         (_profile, ProfileEnvExplicit) = SeedProfile("S100_PERF_PROFILE", PerformanceProfile.Auto);
-
-        // Precomputed line LOD pyramid (issue #489). Default OFF; the seven-gate
-        // measurement pass in docs/design/mapsui-performance.md must clear
-        // "≥50% cold-rebuild spike reduction, zero warm regression, no visual
-        // regression" on both the dense S-101 cell and the multi-cell AU IC-ENC
-        // set before we consider flipping this default.
-        (_precomputedLineLodEnabled, PrecomputedLineLodEnvExplicit) =
-            SeedBool("S100_VECTOR_LINE_LOD", defaultValue: false);
 
         (_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
 
@@ -135,30 +126,6 @@ public static class RenderingOptimizations
         TileDiskDirectoryEnvExplicit = !string.IsNullOrEmpty(diskDir);
         _tileDiskDirectory = TileDiskDirectoryEnvExplicit ? diskDir : null;
     }
-
-    /// <summary>
-    /// Whether the precomputed line LOD pyramid (issue #489) is built at dataset
-    /// open. When on, each line's coordinates are simplified once per feature
-    /// into a small tolerance-tagged pyramid (see
-    /// <c>EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid</c>). Seeded from
-    /// <c>S100_VECTOR_LINE_LOD</c>; default <b>off</b> until the seven-gate perf
-    /// pass in the design doc clears (see <c>docs/design/mapsui-performance.md</c>).
-    /// </summary>
-    /// <remarks>
-    /// The render-time consumer of the pyramid (the legacy Mapsui "A" fast-line
-    /// path) was retired with the A render arm under #600; only the pyramid
-    /// <em>producer</em> remains wired (the disk-cache injection in the viewer's
-    /// composition root). Retiring that orphaned producer — and this flag — is
-    /// tracked by #601.
-    /// </remarks>
-    public static bool PrecomputedLineLodEnabled
-    {
-        get => _precomputedLineLodEnabled;
-        set { if (!PrecomputedLineLodEnvExplicit) _precomputedLineLodEnabled = value; }
-    }
-
-    /// <summary>True when <see cref="PrecomputedLineLodEnabled"/> is pinned by an explicit environment variable.</summary>
-    public static bool PrecomputedLineLodEnvExplicit { get; }
 
     /// <summary>
     /// Selects the base-plane scene mode: the <see cref="VectorSceneMode.Tiled"/>

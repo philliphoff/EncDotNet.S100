@@ -23,7 +23,7 @@ public class DatasetProcessorHitTestTests
         Path.Combine(AppContext.BaseDirectory, "TestData", "S411", "display_modes.gml");
 
     // The densest known real S-101 trial cell, never committed. Present only
-    // locally alongside developer downloads (matches S101LineLodProcessorTests).
+    // locally alongside developer downloads.
     private static string DenseS101CellPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Downloads", "Complete S10X datasets", "S-101 Trial Cells",

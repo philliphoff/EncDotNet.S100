@@ -12,7 +12,7 @@ Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS p
 > vector path cache"**, **"Raster vector snapshot"**, and
 > **"Resolution-aware geometry simplification"** sections below are retained as
 > **historical record** and no longer describe live code. (The orphaned line-LOD
-> pyramid producer they reference is retired separately under #601.)
+> pyramid producer they reference was retired under #601.)
 
 ## Overview
 

@@ -111,19 +111,6 @@ internal sealed class ViewerDataPaths
             : Path.Combine(DefaultLocalDataDirectory, "S57CatalogCache");
 
     /// <summary>
-    /// Directory for the shared cross-session line-LOD pyramid disk cache
-    /// (issue #489, PR-3). Persists Douglas–Peucker-simplified copies of
-    /// S-101 line features so first-paint after a fresh open skips the
-    /// per-frame simplification pass, and the cost of pre-building the
-    /// pyramid at open is only paid on the very first open of a given
-    /// dataset (subsequent opens hit the disk cache).
-    /// </summary>
-    public string LineLodCacheDirectory =>
-        _baseDirectory is { } b
-            ? Path.Combine(b, "caches", "LineLodCache")
-            : Path.Combine(DefaultLocalDataDirectory, "LineLodCache");
-
-    /// <summary>
     /// Directory for the warm tile disk cache when a base directory is in
     /// use, or <see langword="null"/> to let the renderer pick its own
     /// default (the <c>S100_VECTOR_TILE_DISK_DIR</c> env var or an OS-temp
@@ -151,7 +138,6 @@ internal sealed class ViewerDataPaths
                 PortrayalInstructionCacheDirectory,
                 DatasetMetadataCacheDirectory,
                 S57CatalogCacheDirectory,
-                LineLodCacheDirectory,
             };
             if (TileDiskCacheDirectory is { } tiles)
             {

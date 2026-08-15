@@ -1,5 +1,15 @@
 # Mapsui rendering performance
 
+> **Historical (#600 / #601).** The per-feature Mapsui "A" render arm this page
+> optimises — and its optimizations described below (the translation-invariant
+> **path cache**, the **raster vector snapshot**, and **line simplification /
+> precomputed line-LOD**) — were **removed** when the A arm was retired (#600)
+> and its orphaned line-LOD producer was retired (#601). The base plane now
+> rasterises the `VectorScene` IR directly; see
+> `S100-Render-Subsystem-Design.md`. This page is kept as the measurement record
+> behind those (now-removed) choices. A future renderer wanting resolution-aware
+> line simplification should reintroduce it against the IR, not this path.
+
 This page records the May/June 2026 performance review of the
 Mapsui-based viewer pipeline (Avalonia frontend, SkiaSharp backend),
 the data captured, and the optimization plan that follows from it.
