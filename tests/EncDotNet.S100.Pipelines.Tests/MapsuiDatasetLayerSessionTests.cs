@@ -11,7 +11,7 @@ using Mapsui.Projections;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
-public sealed class MapsuiMapSessionTests
+public sealed class MapsuiDatasetLayerSessionTests
 {
     [Fact]
     public void S411ProcessorExposesSharedTimeCapability()
@@ -147,7 +147,7 @@ public sealed class MapsuiMapSessionTests
         Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
         // ...but the whole-stack composition — and the LayersChanged notification
         // that drives the live map redraw — happens exactly once for the batch,
-        // not once per cell. See MapsuiMapSession.RenderCoreAsync(compose).
+        // not once per cell. See MapsuiDatasetLayerSession.RenderCoreAsync(compose).
         Assert.Equal(1, layersChanged);
         Assert.Equal(3, map.Layers.Count);
     }
@@ -1186,7 +1186,7 @@ public sealed class MapsuiMapSessionTests
             session.GetTimeSnapshot().Current);
     }
 
-    private static MapsuiMapSession CreateSession(
+    private static MapsuiDatasetLayerSession CreateSession(
         Map map,
         DatasetProcessorOwner owner,
         IInteroperabilityAuthorityProvider? authorityProvider = null) =>

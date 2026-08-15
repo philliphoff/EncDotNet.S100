@@ -214,7 +214,7 @@ internal sealed class DatasetEntry : ViewModelBase
     // ── Per-dataset display state ─────────────────────────────────────
     //
     // These properties drive the underlying Mapsui ILayer.Enabled and
-    // ILayer.Opacity values via MapsuiMapSession. They survive
+    // ILayer.Opacity values via MapsuiDatasetLayerSession. They survive
     // re-renders (palette switches, time-step scrubs) because the session
     // reapplies them when replacing generated layers.
 
@@ -295,7 +295,7 @@ internal sealed class DatasetEntry : ViewModelBase
     // user can toggle each one independently. Single-layer products
     // leave this collection empty and the UI hides the disclosure
     // triangle. The collection is populated and reconciled by
-    // MapsuiMapSession and projected into these view models, so user toggles
+    // MapsuiDatasetLayerSession and projected into these view models, so user toggles
     // survive palette switches and time-step scrubs.
 
     private readonly ObservableCollection<DatasetSubLayer> _subLayers = new();
@@ -626,7 +626,7 @@ internal sealed class DatasetEntry : ViewModelBase
 /// Represents one of the Mapsui layers a dataset is rendered as,
 /// surfaced with a per-layer visibility toggle and opacity slider.
 /// The combined effective state is computed by
-/// <see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiMapSession"/>:
+/// <see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetLayerSession"/>:
 ///   <c>layer.Enabled = parent.IsVisible &amp;&amp; sub.IsVisible</c> and
 ///   <c>layer.Opacity = parent.Opacity * sub.Opacity</c>.
 /// </summary>

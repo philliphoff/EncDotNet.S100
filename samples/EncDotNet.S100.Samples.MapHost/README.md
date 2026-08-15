@@ -9,7 +9,7 @@ window, control, and interaction — **without referencing
 `EncDotNet.S100.Viewer`**.
 
 It is also the *first application-level caller of `Map.AddS100`*: the in-repo
-Viewer composes the lower-level `MapsuiMapSession` by hand, so until this sample
+Viewer composes the lower-level `MapsuiDatasetLayerSession` by hand, so until this sample
 the public extension had only test coverage.
 
 ## The integration in three steps

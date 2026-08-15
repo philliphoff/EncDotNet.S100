@@ -67,7 +67,7 @@ its dataset and sub-layer view-models project `MapDataset` /
 `MapDatasetSubLayer` snapshots while retaining only UI commands, localized
 labels, selection, and registration metadata. Map-wide Viewer inputs are similarly projected into one current
 `MapPresentationState`, then applied through `IMapPresentationController`
-rather than a presentation-specific refresh event. `MapsuiMapSession` combines
+rather than a presentation-specific refresh event. `MapsuiDatasetLayerSession` combines
 that state with its leased processors and selected dataset times, so neither
 render-context construction nor processor/layer ownership remains in Viewer
 state.

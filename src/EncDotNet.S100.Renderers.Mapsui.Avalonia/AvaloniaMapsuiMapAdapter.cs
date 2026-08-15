@@ -203,7 +203,7 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
         }
 
         // Only a UI-thread caller can capture the UI sync-context. The default
-        // MapsuiMapSession.PickAsync resumes with ConfigureAwait(true); invoked
+        // MapsuiDatasetLayerSession.PickAsync resumes with ConfigureAwait(true); invoked
         // directly from the UI thread its continuation would post back to that
         // thread and a synchronous waiter (.GetAwaiter().GetResult()) would
         // deadlock, so dispatch it onto the thread pool. Off the UI thread there

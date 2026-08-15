@@ -2,7 +2,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Immutable aggregate time state for the datasets registered with a
-/// <see cref="MapsuiMapSession"/>.
+/// <see cref="MapsuiDatasetLayerSession"/>.
 /// </summary>
 public sealed class MapsuiMapTimeSnapshot
 {

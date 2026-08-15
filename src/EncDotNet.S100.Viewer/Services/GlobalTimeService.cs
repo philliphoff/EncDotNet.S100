@@ -3,12 +3,12 @@ using EncDotNet.S100.Renderers.Mapsui;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Projects a <see cref="MapsuiMapSession"/>'s aggregate time state into the
+/// Projects a <see cref="MapsuiDatasetLayerSession"/>'s aggregate time state into the
 /// Viewer's global timeline model.
 /// </summary>
 internal sealed class GlobalTimeService
 {
-    private MapsuiMapSession? _session;
+    private MapsuiDatasetLayerSession? _session;
     private MapsuiMapTimeSnapshot _snapshot = MapsuiMapTimeSnapshot.Empty;
 
     /// <summary>The earliest sample across all registered datasets.</summary>
@@ -39,7 +39,7 @@ internal sealed class GlobalTimeService
     public event Action<DateTime>? CurrentTimeChanged;
 
     /// <summary>Attaches this Viewer projection to the reusable map session.</summary>
-    public void AttachTo(MapsuiMapSession session)
+    public void AttachTo(MapsuiDatasetLayerSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
         if (ReferenceEquals(_session, session))

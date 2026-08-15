@@ -3,7 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// Describes a <see cref="MapsuiMapSession"/> dataset render that failed while
+/// Describes a <see cref="MapsuiDatasetLayerSession"/> dataset render that failed while
 /// the session was refreshing other datasets and therefore swallowed the error
 /// to keep them rendering.
 /// </summary>
@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// This is raised only for failures the session absorbs during a coalesced
 /// refresh (<see cref="MapSessionRenderKind.TimeRefresh"/> or
 /// <see cref="MapSessionRenderKind.PresentationRefresh"/>). A single
-/// <see cref="MapsuiMapSession.RenderAsync"/> surfaces its error by throwing to
+/// <see cref="MapsuiDatasetLayerSession.RenderAsync"/> surfaces its error by throwing to
 /// the awaiting caller instead.
 /// </remarks>
 public sealed class MapSessionDatasetRenderFailedEventArgs : MapSessionDatasetRenderEventArgs

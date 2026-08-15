@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 internal sealed class S100MapSession : IS100MapSession
 {
     private readonly DatasetProcessorOwner _processorOwner;
-    private readonly MapsuiMapSession _session;
+    private readonly MapsuiDatasetLayerSession _session;
     private readonly MapsuiMapNavigator _navigator;
     private readonly IS100MapLayerHost _layers;
     private readonly S100DynamicSourceHost _dynamicSourceHost;
@@ -22,7 +22,7 @@ internal sealed class S100MapSession : IS100MapSession
 
     internal S100MapSession(
         DatasetProcessorOwner processorOwner,
-        MapsuiMapSession session,
+        MapsuiDatasetLayerSession session,
         MapsuiMapNavigator navigator,
         IS100MapLayerHost layers,
         S100DynamicSourceHost dynamicSourceHost,
@@ -48,7 +48,7 @@ internal sealed class S100MapSession : IS100MapSession
     }
 
     /// <inheritdoc />
-    public MapsuiMapSession Session
+    public MapsuiDatasetLayerSession Session
     {
         get
         {
@@ -285,7 +285,7 @@ internal sealed class S100MapSession : IS100MapSession
     /// current snapshot with the requested field overridden — the same way a
     /// host view-model would (visibility / active state / opacity are carried on
     /// <see cref="MapDataset"/>, which the session re-composes on
-    /// <see cref="MapsuiMapSession.SetDataset"/>).
+    /// <see cref="MapsuiDatasetLayerSession.SetDataset"/>).
     /// </summary>
     private void ApplyDatasetState(
         MapDatasetId datasetId,

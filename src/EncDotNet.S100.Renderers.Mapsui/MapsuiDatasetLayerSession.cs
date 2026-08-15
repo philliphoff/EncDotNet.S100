@@ -22,12 +22,20 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// Annex A §8.4.1.
 /// </para>
 /// <para>
+/// This is the innermost of three tiers, and the narrowest: it knows only about
+/// dataset layers. Above it, <see cref="IS100MapSession"/> composes this session
+/// with processor ownership, navigation, layer bands, and dynamic sources into
+/// the library's public entry point; above that, an application supplies its own
+/// host (e.g. the Viewer's <c>MapsuiMapHost</c>). Reach for this type directly
+/// only when you need dataset-layer lifecycle without the rest.
+/// </para>
+/// <para>
 /// Rendering work runs on a worker thread. The continuation that installs
 /// layers must resume on the map-owning thread; UI hosts should call and await
 /// <see cref="RenderAsync"/> from that thread.
 /// </para>
 /// </remarks>
-public sealed class MapsuiMapSession : IDisposable
+public sealed class MapsuiDatasetLayerSession : IDisposable
 {
     private readonly object _sync = new();
     private readonly MapsuiLayerBands _layerBands;
@@ -81,7 +89,7 @@ public sealed class MapsuiMapSession : IDisposable
     /// <param name="layerBands">The map layer bands the session will mutate.</param>
     /// <param name="processorOwner">The owner from which render leases are acquired.</param>
     /// <param name="renderer">The processor-to-Mapsui renderer.</param>
-    public MapsuiMapSession(
+    public MapsuiDatasetLayerSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer)
@@ -109,7 +117,7 @@ public sealed class MapsuiMapSession : IDisposable
     /// attached map (e.g. <c>Map.RefreshGraphics()</c>), optionally marshalled
     /// onto a UI thread.
     /// </param>
-    public MapsuiMapSession(
+    public MapsuiDatasetLayerSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer,

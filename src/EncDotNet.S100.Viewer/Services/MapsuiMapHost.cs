@@ -66,7 +66,7 @@ internal sealed class MapsuiMapHost :
     }
 
     /// <inheritdoc />
-    public MapsuiMapSession DatasetSession => _session.Session;
+    public MapsuiDatasetLayerSession DatasetSession => _session.Session;
 
     public void SetBasemapLayer(ILayer? layer) => _session.Layers.SetBasemapLayer(layer);
 

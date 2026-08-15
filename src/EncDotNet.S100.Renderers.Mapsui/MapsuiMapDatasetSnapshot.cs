@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Immutable snapshot of one dataset managed by a
-/// <see cref="MapsuiMapSession"/>.
+/// <see cref="MapsuiDatasetLayerSession"/>.
 /// </summary>
 public sealed class MapsuiMapDatasetSnapshot
 {
