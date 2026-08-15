@@ -38,10 +38,4 @@ public sealed class DatasetProcessorServices
     /// in-memory cache.
     /// </summary>
     public IPortrayalInstructionCache? SharedInstructionCache { get; init; }
-
-    /// <summary>
-    /// Optional process-wide line-LOD cache shared by every S-101 processor;
-    /// <see langword="null"/> falls back to the renderer's inline simplification.
-    /// </summary>
-    public ILineLodCache? SharedLineLodCache { get; init; }
 }

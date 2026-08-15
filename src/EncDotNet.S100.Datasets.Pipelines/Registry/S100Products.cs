@@ -30,11 +30,10 @@ public static class S100Products
         Spec = "S-101",
         CreateFromPath = (s, path) => new S101DatasetProcessor(
             path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
-            s.SharedInstructionCache, s.SharedLineLodCache),
+            s.SharedInstructionCache),
         CreateFromSource = (s, r) => new S101DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
-            s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles,
-            s.SharedLineLodCache),
+            s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles),
     };
 
     /// <summary>Legacy S-57 ENC (translated in-memory to S-101).</summary>

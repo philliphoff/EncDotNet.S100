@@ -440,19 +440,6 @@ public partial class App : Application
             const long maxBytes = 16L * 1024 * 1024;
             return new Services.Caching.DiskS57CatalogCache(cacheDir, maxBytes);
         });
-        services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>(sp =>
-        {
-            // One process-wide disk cache shared by every S-101 processor so
-            // the Douglas–Peucker LOD pyramid built for a line feature at
-            // dataset open (issue #489, PR-3) survives across restarts and
-            // across sibling processor instances. Key is
-            // (datasetContentHash, featureRef, toleranceLadderVersion) so
-            // entries auto-invalidate when the .000 bytes or the tolerance
-            // ladder change.
-            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().LineLodCacheDirectory;
-            const long maxBytes = 128L * 1024 * 1024;
-            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskLineLodCache(cacheDir, maxBytes);
-        });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
@@ -460,10 +447,7 @@ public partial class App : Application
                 new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(),
-                EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.PrecomputedLineLodEnabled
-                    ? sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache>()
-                    : null));
+                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>()));
 
         // The Mapsui renderer owns the processor -> ILayer conversion (issue
         // #189): it holds the process-wide pattern-clip cache and the CRS

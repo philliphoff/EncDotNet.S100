@@ -90,19 +90,6 @@ public sealed class VectorPortrayalResult
     public IReadOnlyDictionary<long, VectorFeatureTag>? FeatureTags { get; init; }
 
     /// <summary>
-    /// Precomputed line-LOD pyramids keyed by feature id, produced at dataset
-    /// open by S-101 (issue #489, PR-3). The Mapsui renderer copies each
-    /// pyramid onto its owning <c>IFeature</c> under the typed key
-    /// <c>CachedVectorStyleRenderer.LineLodPyramidKey</c> so the fast-line
-    /// paint path can skip the per-frame Douglas–Peucker pass.
-    /// Null / empty when no line pyramids were pre-built (feature is a
-    /// non-line, or the S-101 processor was constructed without an
-    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.ILineLodCache"/>
-    /// available at open).
-    /// </summary>
-    public IReadOnlyDictionary<long, EncDotNet.S100.Pipelines.Vector.Caching.LineLodPyramid>? LineLodPyramids { get; init; }
-
-    /// <summary>
     /// The most-permissive (largest) <c>DataCoverage.minimumDisplayScale</c>
     /// denominator across the cell, or null when no out-of-scale-band cap
     /// applies (e.g. the mariner's IgnoreScaleMinimum is set, or no usable

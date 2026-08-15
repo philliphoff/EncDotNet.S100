@@ -9,7 +9,7 @@
 > the sections and appendices below is retained as **historical design record**;
 > read "the B arm" as simply "the renderer". The within-B `VectorSceneMode`
 > (Tiled vs Single) selection axis remains. (The orphaned line-LOD pyramid
-> producer is retired separately under #601.)
+> producer was retired under #601.)
 
 **Status:** v0.2 draft · clean-sheet rendering core, now the sole base-plane path (A retired, #600)
 **Scope:** `EncDotNet.S100` interactive viewer · base-plane portrayal rendering

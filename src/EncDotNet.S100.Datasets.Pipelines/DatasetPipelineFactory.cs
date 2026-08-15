@@ -44,16 +44,6 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// bounded per-processor in-memory cache — the behaviour used by tools and
     /// tests.
     /// </param>
-    /// <param name="sharedLineLodCache">
-    /// Optional process-wide line-LOD cache (e.g. an
-    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.InMemoryLineLodCache"/>
-    /// or <see cref="EncDotNet.S100.Pipelines.Vector.Caching.DiskLineLodCache"/>)
-    /// shared by every S-101 processor this factory produces. When present, the
-    /// processor pre-builds the Douglas–Peucker LOD pyramid for every line
-    /// feature at open (issue #489, PR-3) so first-paint skips the per-frame
-    /// simplification pass. When <see langword="null"/> the renderer's
-    /// fast-line path falls back to today's inline simplification.
-    /// </param>
     /// <param name="productRegistry">
     /// Optional set of products this factory can construct. When
     /// <see langword="null"/> a default registry with every built-in product is
@@ -68,7 +58,6 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         FeatureCatalogueManager featureCatalogueManager,
         IDisplayPlaneAuthorityProvider authorityProvider,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        ILineLodCache? sharedLineLodCache = null,
         S100ProductRegistry? productRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -85,7 +74,6 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             FeatureCatalogueManager = featureCatalogueManager,
             AuthorityProvider = authorityProvider,
             SharedInstructionCache = sharedInstructionCache,
-            SharedLineLodCache = sharedLineLodCache,
         };
         _registry = productRegistry ?? S100Products.CreateDefaultRegistry();
     }
@@ -380,8 +368,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.LuaEngine,
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache,
-            supportFiles,
-            _services.SharedLineLodCache);
+            supportFiles);
     }
 
     /// <summary>
@@ -419,8 +406,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.LuaEngine,
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache,
-            supportFiles: null,
-            _services.SharedLineLodCache);
+            supportFiles: null);
     }
 
     /// <summary>
