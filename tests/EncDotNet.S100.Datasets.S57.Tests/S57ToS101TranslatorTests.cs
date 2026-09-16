@@ -618,6 +618,42 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_ForS401Target_UsesS401MappingAndDeclaresS401()
+    {
+        // RAPIDS (107) maps to S-101 Rapids, a class S-401 does not define.
+        var n1 = Node(1, 1000, 2000);
+        var rapids = Feat(recordId: 1, primitive: 1, objectClass: 107,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { rapids });
+        var diag = new S57TranslationDiagnostics();
+
+        var maritime = new S57ToS101Translator().Translate(doc);
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        Assert.Equal("Rapids", ClassOf(maritime, Assert.Single(maritime.Features)));
+        Assert.Empty(inland.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[107]);
+        Assert.Equal("S-401", inland.Identification.ProductSpecification);
+        Assert.Equal("1.3.0", inland.Identification.ProductSpecificationEdition);
+    }
+
+    [Fact]
+    public void S101FeatureAttributeBindings_DefinesFeatureType_FollowsCatalogue()
+    {
+        var s101 = S101FeatureAttributeBindings.Default;
+        var s401 = S101FeatureAttributeBindings.ForSpec("S-401");
+
+        Assert.True(s101.DefinesFeatureType("RangeSystem"));
+        Assert.False(s401.DefinesFeatureType("RangeSystem"));
+        Assert.False(s101.DefinesFeatureType("NoticeMark"));
+        Assert.True(s401.DefinesFeatureType("NoticeMark"));
+        Assert.True(s401.DefinesFeatureType("LandArea"));
+        Assert.False(s101.DefinesFeatureType("landarea"));
+        Assert.False(s101.DefinesFeatureType(null));
+        Assert.False(s101.DefinesFeatureType(""));
+    }
+
+    [Fact]
     public void ForTarget_NullTarget_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => S57ToS101Translator.ForTarget(null!, S57S101Mapping.Default));
@@ -1237,6 +1273,34 @@ public class S57ToS101TranslatorTests
         // Members carry no back-association (the collection is the navigable end).
         foreach (var m in new[] { navlne, rectrc, beacon })
             Assert.Empty(FeatureByLnam(s101, m).FeatureAssociations);
+    }
+
+    [Fact]
+    public void Translate_S401Target_RangeSystemCAggr_IsNotSynthesised()
+    {
+        // The same qualifying range system as above; S-401 has no RangeSystem class.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var n3 = Node(3, 1000, 2200);
+        var navlne = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var rectrc = Feat(2, 1, 109, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var beacon = Feat(3, 1, 9, featureIdentificationNumber: 12,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 3, 1, 0, 0) });
+        var aggr = Feat(4, 1, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 12) });
+        var diag = new S57TranslationDiagnostics();
+
+        var translated = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2, n3 },
+                features: new[] { navlne, rectrc, beacon, aggr }), diag);
+
+        Assert.Equal(0, diag.RangeSystemsEmitted);
+        Assert.Null(FeatureOfClass(translated, "RangeSystem"));
+        Assert.Empty(translated.FeatureAssociationCatalogue);
+        Assert.Equal(3, translated.Features.Count);
+        Assert.Equal(1, diag.UnmappedObjectClasses[400]);
     }
 
     [Fact]

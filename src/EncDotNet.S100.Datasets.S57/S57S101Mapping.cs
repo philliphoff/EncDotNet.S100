@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>
@@ -90,6 +92,60 @@ public sealed class S57S101Mapping
     /// producer uses additional object classes.
     /// </summary>
     public static S57S101Mapping Default { get; } = BuildDefault();
+
+    private static readonly ConcurrentDictionary<string, Lazy<S57S101Mapping>> BySpec =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The bundled mapping into the Feature Catalogue of
+    /// <paramref name="targetSpec"/>. For <c>"S-101"</c> this is
+    /// <see cref="Default"/>. For another product sharing the S-101 document
+    /// model, such as S-401, it is <see cref="Default"/> restricted to the
+    /// feature classes that product's bundled catalogue defines (see
+    /// <see cref="RestrictToFeatureTypes"/>). Built once per spec.
+    /// </summary>
+    /// <param name="targetSpec">The target product, e.g. <c>"S-401"</c>.</param>
+    /// <returns>The shared mapping for that product.</returns>
+    /// <exception cref="InvalidOperationException">No Feature Catalogue is bundled for <paramref name="targetSpec"/>.</exception>
+    public static S57S101Mapping ForSpec(string targetSpec)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetSpec);
+        if (string.Equals(targetSpec, S57TranslationTarget.S101.Spec, StringComparison.OrdinalIgnoreCase))
+            return Default;
+
+        return BySpec.GetOrAdd(targetSpec, static spec => new(() =>
+        {
+            var catalogue = S101FeatureAttributeBindings.ForSpec(spec);
+            return Default.RestrictToFeatureTypes(catalogue.DefinesFeatureType);
+        })).Value;
+    }
+
+    /// <summary>
+    /// Returns a copy of this mapping that only targets feature classes for
+    /// which <paramref name="isDefined"/> holds. A rule whose default class is
+    /// not defined keeps its OBJL but loses the default, so instances that no
+    /// remaining redirect claims are dropped (and reported as rule-dropped, not
+    /// unmapped); redirects to an undefined class are removed. Attribute rules
+    /// are carried over unchanged.
+    /// </summary>
+    /// <param name="isDefined">Whether the target Feature Catalogue defines a feature class code.</param>
+    /// <returns>The restricted mapping.</returns>
+    public S57S101Mapping RestrictToFeatureTypes(Func<string, bool> isDefined)
+    {
+        ArgumentNullException.ThrowIfNull(isDefined);
+
+        var features = new Dictionary<ushort, S57FeatureRule>(FeatureRules.Count);
+        foreach (var (objl, rule) in FeatureRules)
+        {
+            var defaultCode = rule.DefaultS101Code is { } code && isDefined(code) ? code : null;
+            var redirects = rule.Redirects.Where(r => isDefined(r.TargetS101Code)).ToArray();
+            features[objl] = defaultCode == rule.DefaultS101Code && redirects.Length == rule.Redirects.Count
+                ? rule
+                : rule with { DefaultS101Code = defaultCode, Redirects = redirects };
+        }
+
+        return new S57S101Mapping(features, new Dictionary<ushort, S57AttributeRule>(AttributeRules));
+    }
 
     // ── Legacy back-compat lookups ──────────────────────────────────────
 

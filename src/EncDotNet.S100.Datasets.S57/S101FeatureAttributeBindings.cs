@@ -34,16 +34,19 @@ public sealed class S101FeatureAttributeBindings
 {
     private readonly FrozenDictionary<string, FrozenSet<string>> _featureCodesByAttribute;
     private readonly FrozenSet<(string Feature, string Attribute)> _singleValuedBindings;
+    private readonly FrozenSet<string> _featureTypeCodes;
 
     private static readonly ConcurrentDictionary<string, Lazy<S101FeatureAttributeBindings>> BySpec =
         new(StringComparer.OrdinalIgnoreCase);
 
     private S101FeatureAttributeBindings(
         FrozenDictionary<string, FrozenSet<string>> featureCodesByAttribute,
-        FrozenSet<(string Feature, string Attribute)> singleValuedBindings)
+        FrozenSet<(string Feature, string Attribute)> singleValuedBindings,
+        FrozenSet<string> featureTypeCodes)
     {
         _featureCodesByAttribute = featureCodesByAttribute;
         _singleValuedBindings = singleValuedBindings;
+        _featureTypeCodes = featureTypeCodes;
     }
 
     /// <summary>
@@ -76,10 +79,13 @@ public sealed class S101FeatureAttributeBindings
 
         var byAttribute = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var singleValued = new HashSet<(string Feature, string Attribute)>();
+        var featureTypeCodes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var ft in catalogue.FeatureTypes)
         {
             if (string.IsNullOrEmpty(ft.Code))
                 continue;
+
+            featureTypeCodes.Add(ft.Code);
 
             foreach (var binding in ft.AttributeBindings)
             {
@@ -105,8 +111,19 @@ public sealed class S101FeatureAttributeBindings
             kvp => kvp.Value.ToFrozenSet(StringComparer.Ordinal),
             StringComparer.OrdinalIgnoreCase);
 
-        return new S101FeatureAttributeBindings(frozen, singleValued.ToFrozenSet());
+        return new S101FeatureAttributeBindings(
+            frozen, singleValued.ToFrozenSet(), featureTypeCodes.ToFrozenSet(StringComparer.Ordinal));
     }
+
+    /// <summary>
+    /// Returns <c>true</c> if the Feature Catalogue defines a feature class
+    /// named <paramref name="featureCode"/> (case-sensitive, as feature class
+    /// codes are). Lets a translation skip constructs its target product lacks,
+    /// such as S-101's <c>RangeSystem</c>, which S-401 does not define.
+    /// </summary>
+    /// <param name="featureCode">The feature class code, e.g. <c>"RangeSystem"</c>.</param>
+    public bool DefinesFeatureType(string? featureCode)
+        => !string.IsNullOrEmpty(featureCode) && _featureTypeCodes.Contains(featureCode);
 
     /// <summary>
     /// Returns <c>true</c> if the S-101 feature class named

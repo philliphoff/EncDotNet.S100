@@ -34,19 +34,28 @@ Key types:
   Catalogue Data Dictionary), and `10` (inland ENC, as declared by IENC
   producers such as USACE), plus a `TryParse` for the raw subfield value.
 - **`S57S101Mapping`** — embedded code-mapping table sourced from IHO's S-57 →
-  S-101 conversion guidance.
+  S-101 conversion guidance. `ForSpec(spec)` returns the table for a target
+  product: `Default` for S-101, and for S-401 `Default` restricted (via
+  `RestrictToFeatureTypes`) to the feature classes the bundled S-401
+  catalogue defines. The restriction clears 15 deep-sea and natural-feature
+  targets (e.g. `RAPIDS` → `Rapids`, `LITFLT` → `LightFloat`), which S-401
+  translation then reports as rule-dropped. Inland object classes are not
+  mapped yet.
 - **`S57TranslationTarget`** — the S-100 product a translation targets: the
   bundled Feature Catalogue its output is checked against and the product
   specification / edition the translated document declares. `S101` is the
-  default. S-101 and S-401 share the S-101 document model, so
-  `S57ToS101Translator.ForTarget(target, mapping)` builds a translator for
-  either; inland ENCs will target S-401 once an inland mapping table exists
-  (issue #608).
+  default; `S401` (edition 1.3.0) is for inland ENCs (issue #608). S-101 and
+  S-401 share the S-101 document model, so `S57ToS101Translator.ForTarget(target)`
+  builds a translator for either from the bundled mapping and catalogues
+  (`ForTarget(target, mapping)` takes a custom mapping). A target whose
+  catalogue has no `RangeSystem` class (S-401) skips the C_AGGR → RangeSystem
+  pass and reports those aggregations as unmapped.
 - **`S101AllowedEnumValues`** — lazy-loaded helper that consults a bundled
   Feature Catalogue to drop emitted enumerated attribute values that aren't
   permitted by the destination FC binding. `Default` reads the S-101 FC;
   `ForSpec(spec)` reads another bundled FC (e.g. S-401), loaded once per spec.
-  `S101FeatureAttributeBindings` follows the same `Default` / `ForSpec` shape.
+  `S101FeatureAttributeBindings` follows the same `Default` / `ForSpec` shape
+  and also answers `DefinesFeatureType(code)`.
 
 ## Translation behaviour
 
