@@ -27,6 +27,43 @@ public sealed class S57Dataset
     public int FeatureCount => Document.FeatureRecords.Count;
 
     /// <summary>
+    /// The S-57 product specification the dataset declares in its DSID
+    /// <c>PRSP</c> subfield (see <see cref="S57ProductSpecification"/>), or
+    /// <c>0</c> when it declares none.
+    /// </summary>
+    public int DeclaredProductSpecification => DeclaredProductSpecificationOf(Document);
+
+    /// <summary>
+    /// The S-100 product this dataset should be translated into:
+    /// <see cref="S57TranslationTarget.S401"/> for a cell declaring
+    /// <see cref="S57ProductSpecification.InlandElectronicNavigationalChart"/>,
+    /// otherwise <see cref="S57TranslationTarget.S101"/>.
+    /// </summary>
+    public S57TranslationTarget TranslationTarget => TranslationTargetFor(Document);
+
+    /// <summary>
+    /// The S-57 product specification <paramref name="document"/> declares in its
+    /// DSID <c>PRSP</c> subfield, or <c>0</c> when it has no DSID.
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    public static int DeclaredProductSpecificationOf(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return document.DataSetIdentification?.ProductSpecification ?? 0;
+    }
+
+    /// <summary>
+    /// The S-100 product <paramref name="document"/> should be translated into,
+    /// chosen from the S-57 product specification it declares (see
+    /// <see cref="TranslationTarget"/>).
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    public static S57TranslationTarget TranslationTargetFor(EncDotNet.S57.S57Document document)
+        => DeclaredProductSpecificationOf(document) == S57ProductSpecification.InlandElectronicNavigationalChart
+            ? S57TranslationTarget.S401
+            : S57TranslationTarget.S101;
+
+    /// <summary>
     /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-57
     /// base cell at <paramref name="path"/> — its (canonical) specification,
     /// geographic extent, and intended display-scale window — for phased /

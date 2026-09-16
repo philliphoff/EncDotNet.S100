@@ -24,6 +24,11 @@ Current highlights:
   S-101, and legacy S-57 apart inside the shared `.000` extension, and
   render / identify / query / describe support. No validation rule pack ships
   yet — `s100 validate` reports "no rules available" for S-401.
+- **S-57 inland ENCs** (cells declaring `DSID`/`PRSP` = 10, such as USACE
+  river charts) are now portrayed with the S-401 catalogues while keeping their
+  S-57 identity. Large inland cells that previously could not be opened now
+  load, thanks to the ISO 8211 reader fix in `EncDotNet.Iso8211` 0.6.1. Inland
+  object classes are not mapped yet.
 
 ### July 2026
 

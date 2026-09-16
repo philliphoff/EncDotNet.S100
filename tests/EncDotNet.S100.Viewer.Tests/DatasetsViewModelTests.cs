@@ -316,4 +316,37 @@ public class DatasetsViewModelTests
         Assert.Equal(0, zoomCount);
         Assert.Empty(loader.LoadCalls);
     }
+
+    [Fact]
+    public void EntryPortrayalSpecChanged_RaisedForListedEntriesOnly()
+    {
+        var vm = new DatasetsViewModel(new RecordingLoader());
+        var raised = 0;
+        vm.EntryPortrayalSpecChanged += (_, _) => raised++;
+        var inland = vm.Add("U37IL005.000", "S-57");
+        var other = vm.Add("US5MA1BO.000", "S-57");
+
+        inland.SetPortrayalSpec("S-401");
+        other.SetPortrayalSpec("S-101"); // unchanged: no notification
+        Assert.Equal(1, raised);
+
+        vm.RemoveCommand.Execute(inland);
+        inland.SetPortrayalSpec("S-101");
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public void EntryPortrayalSpecChanged_SurvivesReorder()
+    {
+        var vm = new DatasetsViewModel(new RecordingLoader());
+        var raised = 0;
+        vm.EntryPortrayalSpecChanged += (_, _) => raised++;
+        var first = vm.Add("A.000", "S-57");
+        vm.Add("B.000", "S-57");
+
+        vm.MoveDownCommand.Execute(first);
+        first.SetPortrayalSpec("S-401");
+
+        Assert.Equal(1, raised);
+    }
 }

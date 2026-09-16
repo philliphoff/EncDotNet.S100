@@ -1,7 +1,6 @@
 using System.Collections.Specialized;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
@@ -46,6 +45,7 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
         _datasets = datasets;
         _state.Changed += OnStateChanged;
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
+        _datasets.EntryPortrayalSpecChanged += OnEntryPortrayalSpecChanged;
 
         ToggleImportantCommand = new RelayCommand(() => Toggle(TextGroup.Important));
         ToggleOtherCommand = new RelayCommand(() => Toggle(TextGroup.Other));
@@ -138,6 +138,11 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
 
     private void OnStateChanged() => NotifyAll();
 
+    private void OnEntryPortrayalSpecChanged(object? sender, EventArgs e)
+    {
+        RebuildFromLoadedSpecs();
+    }
+
     private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RebuildFromLoadedSpecs();
@@ -149,12 +154,12 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void RebuildFromLoadedSpecs()
     {
-        // Find the first loaded vector spec that has text layers. An S-57 entry
-        // is portrayed as S-101 (SpecConventions), so map before resolving.
+        // Find the first loaded vector spec that has text layers, keyed on each
+        // entry's portrayal spec (an S-57 entry is portrayed as S-101 or S-401).
         string? matchedSpec = null;
         foreach (var entry in _datasets.Entries)
         {
-            var spec = SpecConventions.PortrayalSpecName(entry.ProductSpec);
+            var spec = entry.PortrayalSpec;
             if (_catalogueManager.HasCatalogue(spec))
             {
                 try
@@ -184,5 +189,6 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
     {
         _state.Changed -= OnStateChanged;
         _datasets.Entries.CollectionChanged -= OnEntriesChanged;
+        _datasets.EntryPortrayalSpecChanged -= OnEntryPortrayalSpecChanged;
     }
 }

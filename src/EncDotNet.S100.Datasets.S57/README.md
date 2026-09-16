@@ -17,7 +17,11 @@ Mappings follow the IHO *S-57 to S-101 Conversion Guidance* (S-101PT6 INF02A, dr
 Key types:
 
 - **`S57Dataset`** — entry point; opens a `.000` file and exposes the parsed
-  `EncDotNet.S57.S57Document` from the upstream package, plus a static
+  `EncDotNet.S57.S57Document` from the upstream package, the S-57 product
+  specification it declares (`DeclaredProductSpecification`) and the
+  `TranslationTarget` that follows from it (S-401 for an inland ENC, otherwise
+  S-101; static `TranslationTargetFor(document)` for an already-parsed
+  document), plus a static
   `IsS57File(path)` discriminator used by `EncDotNet.S100.Datasets.Pipelines`
   to disambiguate `.000` files that could otherwise be S-101. Also exposes a
   cheap `ReadMetadata` "peek" path (issue #460) that folds the WGS-84 extent

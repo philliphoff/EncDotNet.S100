@@ -35,7 +35,7 @@ enumerating features, and validating:
 | `S201DatasetProcessor` | S-201 | Vector (XSLT portrayal) |
 | `S411DatasetProcessor` | S-411 | Vector (XSLT portrayal) |
 | `S421DatasetProcessor` | S-421 | Vector (XSLT portrayal) |
-| `S57DatasetProcessor`  | S-57 (legacy) | Translates to S-101, then delegates to the S-101 vector pipeline |
+| `S57DatasetProcessor`  | S-57 (legacy) | Translates to S-101 (maritime ENC) or S-401 (inland ENC), then delegates to the S-101 vector pipeline with that product's catalogues |
 
 `DatasetPipelineFactory` discriminates an input file by extension,
 HDF5 signature, or GML application namespace and returns the matching
@@ -66,7 +66,8 @@ small integer naming its S-57 product specification — `1` for a maritime ENC,
 `10` for an inland ENC (IENC) — which `Iso8211RootInfo.DeclaresS57ProductSpecification`
 tests against the `S57ProductSpecification` codes. An inland S-57 cell is still
 an S-57 cell, so it keeps the `S-57` identity; the declared code only decides
-which catalogue portrays it (issue #608). A cell that declares no `PRSP`,
+which catalogue portrays it (issue #608, see *Product identity vs. portrayal
+spec*). A cell that declares no `PRSP`,
 or one whose product has no registration in the host's registry, falls back
 to S-101 — so a host that registers a subset never routes a cell to a
 product it cannot build. The recognized product-identifier set that
@@ -157,12 +158,22 @@ the CLI (`s100 info` / `render`) and the viewer's dataset list.
 Catalogue, Portrayal Catalogue, and ECDIS display conventions actually
 process and draw it. The two coincide for every native S-100 product and
 diverge only for legacy S-57 cells, which keep identity `S-57` while
-acting as `S-101` (they are translated in-memory and portrayed through the
-S-101 catalogue). The mapping lives in one place — `SpecConventions`
+acting as the S-100 product they are translated into in-memory. The
+conventional mapping lives in one place — `SpecConventions`
 (`PortrayalSpecFor(SpecRef)` / `PortrayalSpecName(string)`), which the
-default `PortrayalSpec` member delegates to. Callers resolving a catalogue,
-keying viewing-group / display-category state, or selecting a display mode
-must key off `PortrayalSpec`; callers labelling or validating use `Spec`.
+default `PortrayalSpec` member delegates to — and maps `S-57` to `S-101`.
+
+That is the whole story for a maritime ENC, but not for an inland one: an
+S-57 cell declaring the inland ENC product specification (`DSID`/`PRSP` = 10)
+is translated into S-401 and portrayed with the S-401 catalogues (issue #608),
+so `S57DatasetProcessor` overrides `PortrayalSpec` per cell. It falls back to
+S-101 when the host has no S-401 portrayal catalogue, so a host that registers
+only S-101 still loads inland cells. Callers resolving a catalogue, keying
+viewing-group / display-category state, or selecting a display mode must
+therefore key off the processor's `PortrayalSpec`; the string mapping is only
+a pre-load default (the viewer's `DatasetEntry.PortrayalSpec` starts from it
+and is corrected once the processor loads). Callers labelling or validating
+use `Spec`.
 
 ### S-101 sequential updates (S-100 Part 10a)
 
@@ -349,7 +360,10 @@ report. It runs two passes:
    (`S57PreTranslationRules.Default`) — things that don't survive
    translation, e.g. DSID / DSPM presence, `M_COVR` coverage.
 2. **Post-translation** rules over the translated S-101 document via
-   the standard `S101DatasetRules.Default`.
+   the standard `S101DatasetRules.Default`. This pass runs only for a
+   maritime cell: an inland cell is translated into S-401, which has no rule
+   pack (the S-101 pack asserts S-101 normative clauses), so its report is
+   the pre-translation pass alone.
 
 The two reports are joined by the internal `ConcatReports.Concat`
 helper, which preserves finding order, sums counters, and optionally

@@ -323,6 +323,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             ApplyPostRegistrationPolicies(entry, processor, spec, wasKnownBySession);
 
             entry.SetVersionAssessment(processor.VersionAssessment);
+            entry.SetPortrayalSpec(processor.PortrayalSpec.Name);
             entry.AvailableTimes = [];
             entry.CurrentTime = null;
             entry.SetLoadedState(processor.Metadata);
@@ -554,8 +555,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// <summary>
     /// Coordinator policy: ensures the portrayal catalogue a spec needs is
     /// present, warning the user and returning <see langword="false"/> if not.
-    /// S-104 ships a built-in catalogue; S-57 is portrayed with the S-101
-    /// catalogue (see <see cref="SpecConventions"/>).
+    /// S-104 ships a built-in catalogue; S-57 is checked against the S-101
+    /// catalogue (see <see cref="SpecConventions"/>). An inland S-57 cell is
+    /// portrayed with S-401, which the processor resolves when it is built; this
+    /// pre-load check cannot know which kind of S-57 cell it has.
     /// </summary>
     private bool HasRequiredCatalogueOrWarn(string spec)
     {
