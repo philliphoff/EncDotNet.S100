@@ -27,8 +27,10 @@ Current highlights:
 - **S-57 inland ENCs** (cells declaring `DSID`/`PRSP` = 10, such as USACE
   river charts) are now portrayed with the S-401 catalogues while keeping their
   S-57 identity. Large inland cells that previously could not be opened now
-  load, thanks to the ISO 8211 reader fix in `EncDotNet.Iso8211` 0.6.1. Inland
-  object classes are not mapped yet.
+  load, thanks to the ISO 8211 reader fix in `EncDotNet.Iso8211` 0.6.1. The
+  inland object classes and attributes of the IENC Feature Catalogue 2.4 are
+  translated to S-401, so inland bridges, distance marks, notice marks, and
+  waterway gauges now appear.
 
 ### July 2026
 

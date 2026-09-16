@@ -638,6 +638,92 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_InlandNoticeMark_S401TargetEmitsNoticeMark_S101ReportsUnmapped()
+    {
+        // notmrk (17050) with catnmk (17052) and wtwdis (17064), IENC FC 2.4.
+        var n1 = Node(1, 1000, 2000);
+        var notmrk = Feat(recordId: 1, primitive: 1, objectClass: 17050,
+            attributes: new[] { Attr(17052, "8"), Attr(17064, "13.5") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { notmrk });
+        var maritimeDiag = new S57TranslationDiagnostics();
+
+        var maritime = new S57ToS101Translator().Translate(doc, maritimeDiag);
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        Assert.Empty(maritime.Features);
+        Assert.Equal(1, maritimeDiag.UnmappedObjectClasses[17050]);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("NoticeMark", ClassOf(inland, feature));
+        var attributes = feature.Attributes.ToDictionary(
+            a => inland.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+        Assert.Equal("8", attributes["categoryOfNoticeMark"]);
+        Assert.Equal("13.5", attributes["waterwayDistance"]);
+    }
+
+    [Fact]
+    public void Translate_InlandTwin_S401Target_TranslatesLikeItsStandardClass()
+    {
+        // slcons (17032) with catslc (17012) and watlev (17104) translates as
+        // SLCONS / CATSLC / WATLEV would.
+        var n1 = Node(1, 1000, 2000);
+        var slcons = Feat(recordId: 1, primitive: 1, objectClass: 17032,
+            attributes: new[] { Attr(17012, "2"), Attr(17104, "3") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { slcons });
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("ShorelineConstruction", ClassOf(inland, feature));
+        var attributes = feature.Attributes.ToDictionary(
+            a => inland.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+        Assert.Equal("2", attributes["categoryOfShorelineConstruction"]);
+        Assert.Equal("3", attributes["waterLevelEffect"]);
+    }
+
+    [Fact]
+    public void Translate_InlandBridge_S401Target_CarriesBridgeCategories()
+    {
+        // USACE inland bridges (17011) carry the standard CATBRG (9); an
+        // inland bridge reuses the BRIDGE rule, so its categories convert too.
+        var n1 = Node(1, 1000, 2000);
+        var bridge = Feat(recordId: 1, primitive: 1, objectClass: 17011,
+            attributes: new[] { Attr(9, "3") }, // swing bridge
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { bridge });
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("Bridge", ClassOf(inland, feature));
+        var attributes = feature.Attributes.ToDictionary(
+            a => inland.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+        Assert.Equal("3", attributes["categoryOfOpeningBridge"]);
+        Assert.Equal("true", attributes["openingBridge"]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_DropsDeferredInlandAttribute()
+    {
+        // hunits (17103) is not converted yet and is reported as rule-dropped.
+        var n1 = Node(1, 1000, 2000);
+        var dismar = Feat(recordId: 1, primitive: 1, objectClass: 17004,
+            attributes: new[] { Attr(17103, "5"), Attr(17064, "11") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { dismar });
+        var diag = new S57TranslationDiagnostics();
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("DistanceMark", ClassOf(inland, feature));
+        Assert.Equal("waterwayDistance", inland.AttributeTypeCatalogue[Assert.Single(feature.Attributes).NumericCode]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[17103]);
+    }
+
+    [Fact]
     public void S101FeatureAttributeBindings_DefinesFeatureType_FollowsCatalogue()
     {
         var s101 = S101FeatureAttributeBindings.Default;
