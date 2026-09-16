@@ -23,7 +23,8 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-201** | Aids to Navigation Information (IALA, authority-to-authority exchange) — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-411** | Sea Ice Information — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-421** | Route Plans (IEC 63173-2) — GML encoded (S-100 Part 10b), XSLT portrayal |
-| **ISO 8211** | Record format used by S-101 datasets; read via `EncDotNet.Iso8211` NuGet package |
+| **S-401** | Inland ENC (IEHG) — ISO 8211 encoded; read and portrayed by the S-101 pipeline with the bundled IEHG catalogues. No validation rule pack |
+| **ISO 8211** | Record format used by S-101, S-401, and legacy S-57 datasets; read via `EncDotNet.Iso8211` NuGet package |
 | **ISO 19110** | Feature Catalogue schema; parsed by `EncDotNet.S100.Features` |
 | **HDF5** | Binary container used by S-102, S-104, S-111; accessed via the `IHdf5File`/`IHdf5Group` abstraction backed by PureHDF |
 

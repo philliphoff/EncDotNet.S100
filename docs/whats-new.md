@@ -17,6 +17,14 @@ Current highlights:
 
 ## 2026
 
+### September 2026
+
+- Added **S-401 (IEHG inland ENC)** as a first-class product: bundled IEHG
+  Feature and Portrayal Catalogues, content-based detection that tells S-401,
+  S-101, and legacy S-57 apart inside the shared `.000` extension, and
+  render / identify / query / describe support. No validation rule pack ships
+  yet — `s100 validate` reports "no rules available" for S-401.
+
 ### July 2026
 
 - Introduced audience-path onboarding and scenario-first docs flow.

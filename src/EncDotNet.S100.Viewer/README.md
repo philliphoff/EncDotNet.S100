@@ -75,6 +75,7 @@ the viewer is a GUI application and has no headless mode.
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ |
 | **S-411** | Sea Ice Information | GML | XSLT | ✅ |
 | **S-421** | Route Plans | GML | XSLT | ✅ |
+| **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 | ✅ (delegated) |
 
 Any combination of these can be loaded at once and rendered
@@ -503,8 +504,9 @@ from the list to compare variants.
 
 ## Validation
 
-Every supported product ships a normative **validation rule pack**
-keyed to the relevant IHO product specification. The **Validation**
+Every product marked ✅ above ships a normative **validation rule
+pack** keyed to the relevant IHO product specification (S-401 has none
+yet, and reports "no rules available"). The **Validation**
 activity-bar panel surfaces the findings for the selected dataset:
 
 - Each row shows the **rule id**, **severity** (Error / Warning /

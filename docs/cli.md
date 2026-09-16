@@ -91,7 +91,7 @@ The CLI detects a dataset's product specification from the file, runs that
 spec's portrayal pipeline — the same pipeline the Avalonia viewer uses, wired to
 the feature and portrayal catalogues bundled in the tool — and encodes the
 result to the requested image format (PNG by default; JPEG or WebP via
-`--format` or the output extension). Vector specs (S-101 and the GML products) and coverage specs
+`--format` or the output extension). Vector specs (S-101, S-401, and the GML products) and coverage specs
 (S-102/104/111) each rasterise through their own headless Skia renderer; for
 S-111 the current arrows are overlaid on the coverage. No UI or map projection
 stack is involved, so it runs anywhere .NET does.
