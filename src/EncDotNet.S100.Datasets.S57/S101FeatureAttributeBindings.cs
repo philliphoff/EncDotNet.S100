@@ -32,12 +32,16 @@ namespace EncDotNet.S100.Datasets.S57;
 public sealed class S101FeatureAttributeBindings
 {
     private readonly FrozenDictionary<string, FrozenSet<string>> _featureCodesByAttribute;
+    private readonly FrozenSet<(string Feature, string Attribute)> _singleValuedBindings;
 
     private static readonly Lazy<S101FeatureAttributeBindings> LazyDefault = new(LoadDefault);
 
-    private S101FeatureAttributeBindings(FrozenDictionary<string, FrozenSet<string>> featureCodesByAttribute)
+    private S101FeatureAttributeBindings(
+        FrozenDictionary<string, FrozenSet<string>> featureCodesByAttribute,
+        FrozenSet<(string Feature, string Attribute)> singleValuedBindings)
     {
         _featureCodesByAttribute = featureCodesByAttribute;
+        _singleValuedBindings = singleValuedBindings;
     }
 
     /// <summary>
@@ -54,6 +58,7 @@ public sealed class S101FeatureAttributeBindings
         ArgumentNullException.ThrowIfNull(catalogue);
 
         var byAttribute = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var singleValued = new HashSet<(string Feature, string Attribute)>();
         foreach (var ft in catalogue.FeatureTypes)
         {
             if (string.IsNullOrEmpty(ft.Code))
@@ -71,6 +76,10 @@ public sealed class S101FeatureAttributeBindings
                 }
 
                 set.Add(ft.Code);
+
+                var multiplicity = binding.Multiplicity;
+                if (!multiplicity.IsInfinite && multiplicity.Upper is <= 1)
+                    singleValued.Add((ft.Code, binding.AttributeRef));
             }
         }
 
@@ -79,7 +88,7 @@ public sealed class S101FeatureAttributeBindings
             kvp => kvp.Value.ToFrozenSet(StringComparer.Ordinal),
             StringComparer.OrdinalIgnoreCase);
 
-        return new S101FeatureAttributeBindings(frozen);
+        return new S101FeatureAttributeBindings(frozen, singleValued.ToFrozenSet());
     }
 
     /// <summary>
@@ -93,6 +102,25 @@ public sealed class S101FeatureAttributeBindings
             return false;
         return _featureCodesByAttribute.TryGetValue(attributeCode, out var features)
             && features.Contains(featureCode);
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> if the S-101 feature class named
+    /// <paramref name="featureCode"/> binds the attribute named
+    /// <paramref name="attributeCode"/> with an upper multiplicity of at most
+    /// one, so a feature instance may carry at most one occurrence of it.
+    /// </summary>
+    /// <param name="featureCode">S-101 feature class code (e.g. <c>Bridge</c>).</param>
+    /// <param name="attributeCode">S-101 attribute code (e.g. <c>bridgeConstruction</c>).</param>
+    /// <returns>
+    /// <c>true</c> for a [0..1] or [1..1] binding; <c>false</c> for a
+    /// multi-valued binding or when the feature does not bind the attribute.
+    /// </returns>
+    public bool IsSingleValued(string? featureCode, string attributeCode)
+    {
+        if (string.IsNullOrEmpty(featureCode) || string.IsNullOrEmpty(attributeCode))
+            return false;
+        return _singleValuedBindings.Contains((featureCode, attributeCode));
     }
 
     private static S101FeatureAttributeBindings LoadDefault()

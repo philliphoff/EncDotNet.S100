@@ -652,4 +652,73 @@ public class S57S101MappingTests
         var m = S57S101Mapping.Default;
         Assert.Equal("sectorBearing", m.ResolveAttributeCode(attl));
     }
+
+    // ── BRIDGE / CATBRG (S-65 Annex B § 4.8.10) ────────────────────────
+
+    [Theory]
+    [InlineData("1", "openingBridge", "false")]           // fixed bridge
+    [InlineData("2", "openingBridge", "true")]            // opening bridge
+    [InlineData("3", "categoryOfOpeningBridge", "3")]     // swing bridge
+    [InlineData("4", "categoryOfOpeningBridge", "4")]     // lifting bridge
+    [InlineData("5", "categoryOfOpeningBridge", "5")]     // bascule bridge
+    [InlineData("6", "bridgeConstruction", "3")]          // pontoon bridge
+    [InlineData("7", "categoryOfOpeningBridge", "7")]     // draw bridge
+    [InlineData("8", "bridgeConstruction", "5")]          // transporter bridge
+    [InlineData("9", "bridgeFunction", "3")]              // footbridge → pedestrian
+    [InlineData("10", "bridgeConstruction", "2")]         // viaduct
+    [InlineData("11", "bridgeFunction", "4")]             // aqueduct
+    [InlineData("12", "bridgeConstruction", "4")]         // suspension bridge
+    public void Bridge_CatbrgValue_MapsToS101BridgeAttribute(string s57Value, string expectedCode, string expectedValue)
+    {
+        var m = S57S101Mapping.Default;
+        var resolved = m.ResolveFeature(11, new Dictionary<string, string> { ["CATBRG"] = s57Value }); // BRIDGE
+        Assert.NotNull(resolved);
+        Assert.Equal("Bridge", resolved!.S101Code);
+
+        var attr = m.ResolveAttribute("CATBRG", s57Value, resolved);
+
+        Assert.NotNull(attr);
+        Assert.Equal(expectedCode, attr!.S101Code);
+        Assert.Equal(expectedValue, attr.Value);
+    }
+
+    [Fact]
+    public void Default_AttributeTargets_AreDefinedByS101Catalogue()
+    {
+        // Every S-101 attribute the default table can emit — rule defaults and
+        // per-feature / per-redirect overrides — must exist in the bundled
+        // S-101 Feature Catalogue.
+        using var stream = EncDotNet.S100.Specifications.Specification.TryOpenFeatureCatalogue("S-101");
+        Assert.NotNull(stream);
+        var fc = EncDotNet.S100.Features.FeatureCatalogueReader.Read(stream!);
+        var defined = fc.SimpleAttributes.Select(a => a.Code)
+            .Concat(fc.ComplexAttributes.Select(a => a.Code))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var m = S57S101Mapping.Default;
+        var targets = new List<(string Source, string Code)>();
+        foreach (var (attl, rule) in m.AttributeRules)
+        {
+            if (rule.DefaultS101Code is not null)
+                targets.Add(($"ATTL {attl} {rule.S57Acronym}", rule.DefaultS101Code));
+        }
+
+        foreach (var (objl, rule) in m.FeatureRules)
+        {
+            var overrides = rule.Redirects
+                .SelectMany(r => r.AttributeOverrides)
+                .Concat(rule.AttributeOverrides);
+            foreach (var (acronym, ov) in overrides)
+            {
+                var source = $"OBJL {objl} {rule.S57Acronym}/{acronym}";
+                if (ov.S101Code is not null)
+                    targets.Add((source, ov.S101Code));
+                targets.AddRange(ov.S101CodeByValue.Values.Select(code => (source, code)));
+            }
+        }
+
+        Assert.NotEmpty(targets);
+        var undefined = targets.Where(t => !defined.Contains(t.Code)).Select(t => $"{t.Source} → {t.Code}");
+        Assert.Empty(undefined);
+    }
 }

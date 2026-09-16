@@ -1974,6 +1974,110 @@ public class S57ToS101TranslatorTests
         Assert.Empty(feat.Attributes);
     }
 
+    // ── CATBRG → S-101 bridge category attributes (S-65 Annex B § 4.8.10) ──
+
+    private static List<(string Code, int Index, string Value)> BridgeAttributes(string catbrg, S57TranslationDiagnostics? diag = null)
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(11, Attr(9, catbrg)), diag);
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Bridge", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        return feat.Attributes
+            .Select(a => (s101.AttributeTypeCatalogue[a.NumericCode], (int)a.Index, a.Value))
+            .ToList();
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgSwing_SetsCategoryOfOpeningBridgeAndOpeningBridge()
+    {
+        var attrs = BridgeAttributes("3");
+
+        Assert.Equal(
+            [("categoryOfOpeningBridge", 1, "3"), ("openingBridge", 1, "true")],
+            attrs);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgFixed_SetsOpeningBridgeFalseOnly()
+    {
+        var attrs = BridgeAttributes("1");
+
+        Assert.Equal([("openingBridge", 1, "false")], attrs);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgOpeningPontoon_IsOpeningPontoonBridge()
+    {
+        // S-65 Annex B § 4.8.10: a pontoon bridge with an opening section is
+        // encoded CATBRG = 2,6 and converts to an opening bridge.
+        var attrs = BridgeAttributes("2,6");
+
+        Assert.Equal(
+            [("bridgeConstruction", 1, "3"), ("openingBridge", 1, "true")],
+            attrs);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgFunctions_EmitsEachBridgeFunctionOccurrence()
+    {
+        // bridgeFunction is multi-valued on Bridge; footbridge and aqueduct are
+        // not opening bridges.
+        var attrs = BridgeAttributes("9,11");
+
+        Assert.Equal(
+            [("bridgeFunction", 1, "3"), ("bridgeFunction", 2, "4"), ("openingBridge", 1, "false")],
+            attrs);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgMixedTargets_IndexesEachAttributeFromOne()
+    {
+        var attrs = BridgeAttributes("5,9,10");
+
+        Assert.Equal(
+            [
+                ("categoryOfOpeningBridge", 1, "5"),
+                ("bridgeFunction", 1, "3"),
+                ("bridgeConstruction", 1, "2"),
+                ("openingBridge", 1, "true"),
+            ],
+            attrs);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgTwoConstructions_KeepsFirstAndReportsDrop()
+    {
+        // bridgeConstruction is [0..1] on Bridge, so only the first
+        // construction survives; the second is reported as rule-dropped.
+        var diag = new S57TranslationDiagnostics();
+        var attrs = BridgeAttributes("6,12", diag);
+
+        Assert.Equal(
+            [("bridgeConstruction", 1, "3"), ("openingBridge", 1, "false")],
+            attrs);
+        Assert.Equal(1, diag.RuleDroppedAttributes[9]);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgUnknownValue_IsDroppedWithoutOpeningBridge()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var attrs = BridgeAttributes("13", diag);
+
+        Assert.Empty(attrs);
+        Assert.Equal(1, diag.DroppedEnumValues[new S57EnumValueDrop("categoryOfOpeningBridge", "13")]);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrg_NeverEmitsCategoryOfBridge()
+    {
+        var attrs = BridgeAttributes("1,2,3,4,5,6,7,8,9,10,11,12");
+
+        Assert.DoesNotContain(attrs, a => a.Code == "categoryOfBridge");
+        Assert.Single(attrs, a => a.Code == "openingBridge");
+        Assert.Contains(("openingBridge", 1, "true"), attrs);
+    }
+
     // ── SORDAT → reportedDate (feature binding-gated simple attribute) ────
 
     [Fact]

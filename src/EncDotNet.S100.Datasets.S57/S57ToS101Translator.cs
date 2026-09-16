@@ -415,6 +415,16 @@ public sealed class S57ToS101Translator
     private const string S101AttrMultiplicityKnown = "multiplicityKnown";
     private const string S101AttrNumberOfFeatures = "numberOfFeatures";
 
+    // S-57 CATBRG (Category of bridge, ATTL 9) is remodelled in S-101 into the
+    // enumerations bridgeConstruction / bridgeFunction / categoryOfOpeningBridge
+    // and the Boolean openingBridge, all bound on Bridge (S-65 Annex B § 4.8.10).
+    // The per-value targets come from the mapping (see DefaultRules); the
+    // translator assembles the list so that openingBridge is emitted once for
+    // the whole CATBRG value and single-valued targets keep one occurrence.
+    private const ushort S57AttrCatbrg = 9;    // CATBRG — category of bridge
+    private const string S101AttrOpeningBridge = "openingBridge";
+    private const string S101AttrCategoryOfOpeningBridge = "categoryOfOpeningBridge";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -1319,6 +1329,10 @@ public sealed class S57ToS101Translator
             // on the light classes that bind it.
             bool bindsMultiplicityOfFeatures = _featureBindings.Binds(feature.S101Code, S101AttrMultiplicityOfFeatures);
             string? mltyltValue = null;
+            // Bridge category source — CATBRG, assembled on the feature class
+            // that binds `openingBridge` (Bridge).
+            bool bindsOpeningBridge = _featureBindings.Binds(feature.S101Code, S101AttrOpeningBridge);
+            string? catbrgValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -1364,6 +1378,7 @@ public sealed class S57ToS101Translator
                     case S57AttrRadwal: if (bindsRadarWaveLength && !string.IsNullOrEmpty(a.Value)) radwalValue = a.Value; break;
                     case S57AttrCurvel: if (bindsSpeed && !string.IsNullOrEmpty(a.Value)) curvelValue = a.Value; break;
                     case S57AttrMltylt: if (bindsMultiplicityOfFeatures && !string.IsNullOrEmpty(a.Value)) mltyltValue = a.Value; break;
+                    case S57AttrCatbrg: if (bindsOpeningBridge && !string.IsNullOrEmpty(a.Value)) catbrgValue = a.Value; break;
                 }
             }
 
@@ -1461,6 +1476,11 @@ public sealed class S57ToS101Translator
                 // the `multiplicityOfFeatures` complex below rather than passed
                 // through.
                 if (bindsMultiplicityOfFeatures && a.AttributeCode is S57AttrMltylt)
+                    continue;
+
+                // On Bridge, CATBRG is split across the bridge category
+                // attributes below rather than passed through value by value.
+                if (bindsOpeningBridge && a.AttributeCode is S57AttrCatbrg)
                     continue;
 
                 // On feature classes that bind `reportedDate`, SORDAT is emitted
@@ -1712,6 +1732,12 @@ public sealed class S57ToS101Translator
             if (bindsMultiplicityOfFeatures && mltyltValue is not null)
             {
                 AppendMultiplicityOfFeaturesInstance(builder, mltyltValue);
+            }
+
+            // Append the bridge category attributes assembled from CATBRG.
+            if (bindsOpeningBridge && catbrgValue is not null)
+            {
+                AppendBridgeCategoryAttributes(builder, ownerObjl, feature, catbrgValue);
             }
 
             // Append `surfaceCharacteristics` complex-attribute instances. The
@@ -2147,6 +2173,91 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(knownCode, 1, "true"));
             var numberCode = GetOrAssignAttributeCode(S101AttrNumberOfFeatures);
             builder.Add(new S101Attribute(numberCode, 1, numberOfFeatures));
+        }
+
+        // Emits the S-101 bridge category attributes for an S-57 CATBRG list
+        // (S-65 Annex B § 4.8.10). Each listed value is resolved through the
+        // mapping to bridgeConstruction, bridgeFunction, categoryOfOpeningBridge
+        // or openingBridge. openingBridge is emitted once: true when any value
+        // denotes an opening bridge (CATBRG 2, or a categoryOfOpeningBridge
+        // value, which S-101 only allows on an opening bridge), otherwise false.
+        // A single-valued target (bridgeConstruction, categoryOfOpeningBridge)
+        // keeps its first value; later ones are dropped and reported.
+        private void AppendBridgeCategoryAttributes(
+            List<S101Attribute> builder,
+            ushort ownerObjl,
+            ResolvedFeature feature,
+            string catbrg)
+        {
+            if (!_mapping.AttributeRules.TryGetValue(S57AttrCatbrg, out var rule))
+            {
+                _diagnostics?.RecordUnmappedAttribute(ownerObjl, S57AttrCatbrg);
+                return;
+            }
+
+            bool? openingBridge = null;
+            var occurrences = new List<(string Code, List<string> Values)>();
+            foreach (var token in catbrg.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var resolved = _mapping.ResolveAttribute(rule.S57Acronym, token, feature);
+                if (resolved is null)
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrCatbrg);
+                    continue;
+                }
+
+                if (_allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(resolved.S101Code, resolved.Value))
+                {
+                    _diagnostics?.RecordDroppedEnumValue(resolved.S101Code, resolved.Value);
+                    continue;
+                }
+
+                if (resolved.S101Code == S101AttrOpeningBridge)
+                {
+                    if (!bool.TryParse(resolved.Value, out var isOpening))
+                    {
+                        _diagnostics?.RecordRuleDroppedAttribute(S57AttrCatbrg);
+                        continue;
+                    }
+                    openingBridge = openingBridge == true || isOpening;
+                    continue;
+                }
+
+                openingBridge = openingBridge == true
+                    || resolved.S101Code == S101AttrCategoryOfOpeningBridge;
+
+                var index = occurrences.FindIndex(o => o.Code == resolved.S101Code);
+                if (index < 0)
+                {
+                    occurrences.Add((resolved.S101Code, [resolved.Value]));
+                    continue;
+                }
+
+                var values = occurrences[index].Values;
+                if (values.Contains(resolved.Value))
+                    continue;
+                if (_featureBindings.IsSingleValued(feature.S101Code, resolved.S101Code))
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrCatbrg);
+                    continue;
+                }
+                values.Add(resolved.Value);
+            }
+
+            foreach (var (code, values) in occurrences)
+            {
+                var numeric = GetOrAssignAttributeCode(code);
+                ushort index = 1;
+                foreach (var value in values)
+                    builder.Add(new S101Attribute(numeric, index++, value));
+            }
+
+            if (openingBridge is { } opening)
+            {
+                builder.Add(new S101Attribute(
+                    GetOrAssignAttributeCode(S101AttrOpeningBridge), 1, opening ? "true" : "false"));
+            }
         }
 
         // Emits zero or more `surfaceCharacteristics` complex-attribute
