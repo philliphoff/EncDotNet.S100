@@ -524,6 +524,105 @@ public class S57ToS101TranslatorTests
         Assert.Contains("1234.5", values);
     }
 
+    // ── Translation target (issue #608) ──────────────────────────────
+
+    // S-401 is used here only because its bundled Feature Catalogue lists
+    // restriction value 28, which S-101's does not; the S-57 → S-101 mapping
+    // table is reused unchanged, so this exercises only the catalogue swap.
+    private static readonly S57TranslationTarget S401Target = new() { Spec = "S-401", Edition = "1.3.0" };
+
+    private static EncDotNet.S57.S57Document RestrictedAreaDocWithRestrn(string restrnValue)
+    {
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 112, // RESARE → RestrictedArea
+            attributes: new[] { Attr(131, restrnValue) }, // RESTRN → restriction (enum)
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+    }
+
+    [Fact]
+    public void Translate_DefaultTarget_DeclaresS101()
+    {
+        var translator = new S57ToS101Translator();
+
+        var s101 = translator.Translate(LandRegionDocWithCatlnd("1"));
+
+        Assert.Same(S57TranslationTarget.S101, translator.Target);
+        Assert.Equal("S-101", s101.Identification.ProductSpecification);
+        Assert.Equal("1.0.0", s101.Identification.ProductSpecificationEdition);
+    }
+
+    [Fact]
+    public void Translate_ForTarget_DeclaresTargetProduct()
+    {
+        var translator = S57ToS101Translator.ForTarget(S401Target, S57S101Mapping.Default);
+
+        var translated = translator.Translate(LandRegionDocWithCatlnd("1"));
+
+        Assert.Same(S401Target, translator.Target);
+        Assert.Equal("S-401", translated.Identification.ProductSpecification);
+        Assert.Equal("1.3.0", translated.Identification.ProductSpecificationEdition);
+    }
+
+    [Fact]
+    public void Translate_S101Target_DropsValueOnlyTheS401CatalogueAllows()
+    {
+        var s101 = new S57ToS101Translator().Translate(RestrictedAreaDocWithRestrn("28"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Fact]
+    public void Translate_ForTarget_ChecksValuesAgainstTargetCatalogue()
+    {
+        var translated = S57ToS101Translator.ForTarget(S401Target, S57S101Mapping.Default)
+            .Translate(RestrictedAreaDocWithRestrn("28"));
+
+        var feat = Assert.Single(translated.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("restriction", translated.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("28", attr.Value);
+    }
+
+    [Fact]
+    public void S101AllowedEnumValues_ForSpec_IsSharedPerCatalogue()
+    {
+        Assert.Same(S101AllowedEnumValues.Default, S101AllowedEnumValues.ForSpec("S-101"));
+        Assert.Same(S101AllowedEnumValues.ForSpec("S-401"), S101AllowedEnumValues.ForSpec("s-401"));
+        Assert.NotSame(S101AllowedEnumValues.Default, S101AllowedEnumValues.ForSpec("S-401"));
+    }
+
+    [Fact]
+    public void S101AllowedEnumValues_ForSpec_ReadsThatCatalogue()
+    {
+        Assert.False(S101AllowedEnumValues.Default.IsAllowed("restriction", "28"));
+        Assert.True(S101AllowedEnumValues.ForSpec("S-401").IsAllowed("restriction", "28"));
+    }
+
+    [Fact]
+    public void S101AllowedEnumValues_ForSpec_UnbundledCatalogue_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => S101AllowedEnumValues.ForSpec("S-999"));
+        Assert.Throws<ArgumentException>(() => S101AllowedEnumValues.ForSpec(" "));
+    }
+
+    [Fact]
+    public void S101FeatureAttributeBindings_ForSpec_ReadsThatCatalogue()
+    {
+        // NoticeMark is an inland feature class that only S-401 defines.
+        Assert.Same(S101FeatureAttributeBindings.Default, S101FeatureAttributeBindings.ForSpec("S-101"));
+        Assert.False(S101FeatureAttributeBindings.Default.Binds("NoticeMark", "featureName"));
+        Assert.True(S101FeatureAttributeBindings.ForSpec("S-401").Binds("NoticeMark", "featureName"));
+    }
+
+    [Fact]
+    public void ForTarget_NullTarget_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => S57ToS101Translator.ForTarget(null!, S57S101Mapping.Default));
+    }
+
     [Fact]
     public void S101AllowedEnumValues_Default_KnowsCommonEnumeratedAttributes()
     {

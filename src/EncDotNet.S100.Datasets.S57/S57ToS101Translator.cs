@@ -434,6 +434,7 @@ public sealed class S57ToS101Translator
     private readonly S57S101Mapping _mapping;
     private readonly S101AllowedEnumValues? _allowedEnumValues;
     private readonly S101FeatureAttributeBindings _featureBindings;
+    private readonly S57TranslationTarget _target;
 
     /// <summary>Creates a translator using <see cref="S57S101Mapping.Default"/>.</summary>
     public S57ToS101Translator() : this(S57S101Mapping.Default, S101AllowedEnumValues.Default) { }
@@ -461,13 +462,49 @@ public sealed class S57ToS101Translator
         S57S101Mapping mapping,
         S101AllowedEnumValues? allowedEnumValues,
         S101FeatureAttributeBindings featureBindings)
+        : this(mapping, allowedEnumValues, featureBindings, S57TranslationTarget.S101) { }
+
+    /// <summary>
+    /// Creates a translator into <paramref name="target"/> using the supplied
+    /// code mapping, allowable-value lookup, and feature/attribute binding lookup.
+    /// The lookups should be built from <paramref name="target"/>'s Feature
+    /// Catalogue; <see cref="ForTarget"/> wires the bundled ones.
+    /// </summary>
+    public S57ToS101Translator(
+        S57S101Mapping mapping,
+        S101AllowedEnumValues? allowedEnumValues,
+        S101FeatureAttributeBindings featureBindings,
+        S57TranslationTarget target)
     {
         ArgumentNullException.ThrowIfNull(mapping);
         ArgumentNullException.ThrowIfNull(featureBindings);
+        ArgumentNullException.ThrowIfNull(target);
         _mapping = mapping;
         _allowedEnumValues = allowedEnumValues;
         _featureBindings = featureBindings;
+        _target = target;
     }
+
+    /// <summary>
+    /// Creates a translator into <paramref name="target"/> whose enumerate-value
+    /// and complex-attribute checks use the bundled Feature Catalogue of
+    /// <see cref="S57TranslationTarget.Spec"/>.
+    /// </summary>
+    /// <param name="target">The S-100 product to translate into.</param>
+    /// <param name="mapping">The S-57 code mapping into <paramref name="target"/>'s feature catalogue.</param>
+    /// <returns>A translator targeting <paramref name="target"/>.</returns>
+    public static S57ToS101Translator ForTarget(S57TranslationTarget target, S57S101Mapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return new S57ToS101Translator(
+            mapping,
+            S101AllowedEnumValues.ForSpec(target.Spec),
+            S101FeatureAttributeBindings.ForSpec(target.Spec),
+            target);
+    }
+
+    /// <summary>The S-100 product this translator targets.</summary>
+    public S57TranslationTarget Target => _target;
 
     /// <summary>
     /// Translates an <see cref="S57Dataset"/> into an <see cref="S101Document"/>.
@@ -527,8 +564,8 @@ public sealed class S57ToS101Translator
             {
                 RecordName = 10,
                 RecordId = 1,
-                ProductSpecification = "S-101",
-                ProductSpecificationEdition = "1.0.0",
+                ProductSpecification = _target.Spec,
+                ProductSpecificationEdition = _target.Edition,
                 DatasetName = dsid?.DataSetName ?? "",
                 DatasetTitle = dsid?.DataSetName ?? "",
                 DatasetReferenceDate = dsid?.IssueDate ?? "",
