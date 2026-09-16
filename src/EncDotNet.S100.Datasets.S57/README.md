@@ -29,6 +29,10 @@ Key types:
   an `S101Document` by remapping object/attribute codes, exploding multi-point
   soundings, synthesising the `information` complex attribute from textual
   fields, and converting nodes/edges/area-rings into S-101 spatial primitives.
+- **`S57ProductSpecification`** — the S-57 product specification codes a cell
+  declares in its `DSID`/`PRSP` subfield: `1` (maritime ENC), `2` (Object
+  Catalogue Data Dictionary), and `10` (inland ENC, as declared by IENC
+  producers such as USACE), plus a `TryParse` for the raw subfield value.
 - **`S57S101Mapping`** — embedded code-mapping table sourced from IHO's S-57 →
   S-101 conversion guidance.
 - **`S101AllowedEnumValues`** — lazy-loaded helper that consults the bundled

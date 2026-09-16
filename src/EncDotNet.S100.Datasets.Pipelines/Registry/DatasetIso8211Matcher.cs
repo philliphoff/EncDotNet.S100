@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.S57;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -33,16 +34,20 @@ public delegate bool DatasetIso8211Matcher(Iso8211RootInfo root);
 /// product's <see cref="DatasetIso8211Matcher"/> so it can recognize its own
 /// datasets without re-reading the file. S-100 ISO 8211 products (S-101, S-401)
 /// declare themselves in the <c>DSID</c> field's <c>PRSP</c> subfield (e.g.
-/// <c>INT.IHO.S-401.1.2</c>); legacy S-57 has no <c>PRSP</c> and is instead
-/// identified by the presence of its <c>DSPM</c> field (S-57 Ed 3.1 Appendix
-/// B.1; S-100 Edition 5.2.1 Part 10a).
+/// <c>INT.IHO.S-401.1.2</c>). Legacy S-57 is identified instead by the presence
+/// of its <c>DSPM</c> field; its <c>PRSP</c> holds a small integer naming the
+/// S-57 product specification (<c>1</c> for a maritime ENC, <c>10</c> for an
+/// inland ENC), not an S-100 product identifier (S-57 Ed 3.1 Part 3 §7.3.1.1;
+/// S-100 Edition 5.2.1 Part 10a).
 /// </summary>
 public readonly record struct Iso8211RootInfo
 {
     /// <summary>
-    /// The declared product specification (<c>DSID</c>/<c>PRSP</c>), e.g.
-    /// <c>INT.IHO.S-101.1.0.2</c>. Empty when the dataset declares none (legacy
-    /// S-57, or a non-conformant S-100 cell).
+    /// The declared product specification (<c>DSID</c>/<c>PRSP</c>): an S-100
+    /// product identifier such as <c>INT.IHO.S-101.1.0.2</c>, or for legacy S-57
+    /// the decimal digits of its numeric code (e.g. <c>10</c>; see
+    /// <see cref="DeclaresS57ProductSpecification"/>). Empty when the dataset
+    /// declares none (a non-conformant cell).
     /// </summary>
     public required string ProductSpecification { get; init; }
 
@@ -79,4 +84,19 @@ public readonly record struct Iso8211RootInfo
             && SpecName.TryNormalize(productId, out var wanted)
             && string.Equals(declared, wanted, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Whether this is a legacy S-57 dataset (<see cref="HasDataSetParameterField"/>)
+    /// whose <see cref="ProductSpecification"/> declares the S-57 product
+    /// specification <paramref name="code"/> — e.g.
+    /// <see cref="S57ProductSpecification.InlandElectronicNavigationalChart"/> for an
+    /// inland ENC. S-57 declares the product specification as a small integer
+    /// rather than the S-100 long-form identifier (S-57 Edition 3.1 Part 3
+    /// §7.3.1.1), so an S-100 cell never satisfies this test.
+    /// </summary>
+    /// <param name="code">The S-57 product specification code to look for.</param>
+    public bool DeclaresS57ProductSpecification(int code)
+        => HasDataSetParameterField
+            && S57ProductSpecification.TryParse(ProductSpecification, out var declared)
+            && declared == code;
 }

@@ -61,7 +61,12 @@ The `.000` extension is shared by three products, so the envelope decides:
 S-57 is claimed by the S-57-only `DSPM` field in its Data Descriptive
 Record, while S-101 and S-401 (IEHG inland ENC) are claimed by the product
 identifier each declares in its `DSID` record's `PRSP` subfield
-(`INT.IHO.S-101.…` / `INT.IHO.S-401.…`). A cell that declares no `PRSP`,
+(`INT.IHO.S-101.…` / `INT.IHO.S-401.…`). An S-57 cell's `PRSP` is instead a
+small integer naming its S-57 product specification — `1` for a maritime ENC,
+`10` for an inland ENC (IENC) — which `Iso8211RootInfo.DeclaresS57ProductSpecification`
+tests against the `S57ProductSpecification` codes. An inland S-57 cell is still
+an S-57 cell, so it keeps the `S-57` identity; the declared code only decides
+which catalogue portrays it (issue #608). A cell that declares no `PRSP`,
 or one whose product has no registration in the host's registry, falls back
 to S-101 — so a host that registers a subset never routes a cell to a
 product it cannot build. The recognized product-identifier set that
