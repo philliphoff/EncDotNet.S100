@@ -30,6 +30,12 @@ content/
   S125/
     ...
   S129/
+  S401/
+    README.md          (IEHG provenance + attribution)
+    fc/
+      FeatureCatalogue.xml
+    pc/
+      ...
   S411/
     ...
   S421/

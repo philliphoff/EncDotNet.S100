@@ -124,6 +124,28 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private static readonly EcdisDisplaySettings UnfilteredEcdisDisplay =
         new() { Category = EcdisDisplayCategory.All };
 
+    /// <summary>
+    /// Default catalogue spec for this processor: S-101 ENC.
+    /// </summary>
+    internal const string DefaultSpec = "S-101";
+
+    /// <summary>
+    /// The product spec whose Feature/Portrayal Catalogues this processor
+    /// resolves, and which it stamps on its portrayal output. S-401 (inland
+    /// ENC) shares the S-100 Part 10a ISO 8211 encoding and the Part 9A Lua
+    /// portrayal model with S-101, so it reuses this processor with its own
+    /// catalogues rather than cloning the pipeline.
+    /// </summary>
+    private readonly string _catalogueSpec;
+
+    /// <summary>
+    /// Lower-case, hyphen-free spec used to prefix this processor's vector
+    /// sub-layer keys (<c>s101.areas</c> / <c>s101.linework</c> for S-101,
+    /// <c>s401.*</c> for inland ENC).
+    /// </summary>
+    private string LayerKeyPrefix =>
+        _catalogueSpec.Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
+
     public SpecRef Spec { get; }
 
     private DatasetMetadata? _metadata;
@@ -153,8 +175,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPortrayalInstructionCache? sharedInstructionCache = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache, CreateFileSystemResolver(path))
+        IPortrayalInstructionCache? sharedInstructionCache = null,
+        string spec = DefaultSpec)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache, CreateFileSystemResolver(path), spec)
     {
     }
 
@@ -170,7 +193,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        IReadOnlyDictionary<string, string>? supportFiles = null)
+        IReadOnlyDictionary<string, string>? supportFiles = null,
+        string spec = DefaultSpec)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
@@ -178,7 +202,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            new ExternalTextFileResolver(source, relativePath, supportFiles).AsDelegate())
+            new ExternalTextFileResolver(source, relativePath, supportFiles).AsDelegate(),
+            spec)
     {
     }
 
@@ -198,7 +223,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        IReadOnlyDictionary<string, string>? supportFiles = null)
+        IReadOnlyDictionary<string, string>? supportFiles = null,
+        string spec = DefaultSpec)
         : this(
             PrepareWithUpdates(source, baseRelativePath, updateRelativePaths),
             AssetSourceHelpers.GetFileName(baseRelativePath),
@@ -206,7 +232,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            new ExternalTextFileResolver(source, baseRelativePath, supportFiles).AsDelegate())
+            new ExternalTextFileResolver(source, baseRelativePath, supportFiles).AsDelegate(),
+            spec)
     {
     }
 
@@ -217,7 +244,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache,
-        Func<string, string?>? externalTextResolver = null)
+        Func<string, string?>? externalTextResolver = null,
+        string spec = DefaultSpec)
         : this(
             PrepareFromStream(datasetStream),
             fileName,
@@ -225,7 +253,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            externalTextResolver)
+            externalTextResolver,
+            spec)
     {
     }
 
@@ -236,11 +265,14 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache,
-        Func<string, string?>? externalTextResolver = null)
+        Func<string, string?>? externalTextResolver = null,
+        string spec = DefaultSpec)
     {
+        ArgumentException.ThrowIfNullOrEmpty(spec);
         _fileName = fileName;
         _luaEngine = luaEngine;
-        _provider = catalogueManager.GetProvider("S-101");
+        _catalogueSpec = spec;
+        _provider = catalogueManager.GetProvider(_catalogueSpec);
         _catalogueManager = catalogueManager;
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
         _externalTextResolver = externalTextResolver;
@@ -254,8 +286,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var declaredEdition = _dataset.Document.Identification?.ProductSpecificationEdition;
         Spec = !string.IsNullOrWhiteSpace(declaredEdition)
             && SpecVersion.TryParse(declaredEdition, out var s101Edition)
-            ? new SpecRef("S-101", s101Edition)
-            : new SpecRef("S-101", default);
+            ? new SpecRef(_catalogueSpec, s101Edition)
+            : new SpecRef(_catalogueSpec, default);
 
         // Content-addressed hash of the raw dataset bytes (including any applied
         // updates), used as the dataset scope prefix in the pattern-clip cache
@@ -620,9 +652,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         try
         {
             var mariner = context?.Mariner ?? MarinerSettings.Default;
-            var fc = _featureCatalogueManager.GetCatalogue("S-101")
+            var fc = _featureCatalogueManager.GetCatalogue(_catalogueSpec)
                 ?? throw new InvalidOperationException(
-                    "S-101 feature catalogue is required to render the dataset but none was provided.");
+                    $"{_catalogueSpec} feature catalogue is required to render the dataset but none was provided.");
 
             var s101Cat = _catalogue;
             await s101Cat.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
@@ -668,9 +700,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     {
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
-        var fc = _featureCatalogueManager.GetCatalogue("S-101")
+        var fc = _featureCatalogueManager.GetCatalogue(_catalogueSpec)
             ?? throw new InvalidOperationException(
-                "S-101 feature catalogue is required to render the dataset but none was provided.");
+                $"{_catalogueSpec} feature catalogue is required to render the dataset but none was provided.");
 
         Console.WriteLine("[S101] Starting Part 9 vector portrayal pipeline...");
 
@@ -695,7 +727,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // cached list when neither changed (e.g. a Day/Dusk/Night palette
         // switch, the dominant re-render trigger), skipping the Lua
         // pipeline. Guarded by _renderGate (held for this whole render).
-        var cacheKey = BuildPortrayalCacheKey(mariner, ecdisSettings);
+        var cacheKey = BuildPortrayalCacheKey(mariner, ecdisSettings, _catalogueSpec);
         IReadOnlyList<DrawingInstruction> prepared;
         if (_cachedPortrayalInstructions is not null
             && string.Equals(_cachedPortrayalKey, cacheKey, StringComparison.Ordinal))
@@ -785,8 +817,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
                 // fills live here, so this sub-layer carries the clip key.
                 new VectorSubLayer
                 {
-                    LayerKey = "s101.areas",
-                    LayerName = $"S-101 (areas): {_fileName}",
+                    LayerKey = $"{LayerKeyPrefix}.areas",
+                    LayerName = $"{_catalogueSpec} (areas): {_fileName}",
                     Instructions = areaInstructions,
                     Plane = S98DisplayPlane.BaseChartUnder,
                     WithinPlanePriority = 0,
@@ -799,8 +831,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
                 // the out-of-scale-band declutter cap and no pattern fills.
                 new VectorSubLayer
                 {
-                    LayerKey = "s101.linework",
-                    LayerName = $"S-101 (lines): {_fileName}",
+                    LayerKey = $"{LayerKeyPrefix}.linework",
+                    LayerName = $"{_catalogueSpec} (lines): {_fileName}",
                     Instructions = otherInstructions,
                     Plane = S98DisplayPlane.BaseChartOver,
                     WithinPlanePriority = 0,
@@ -811,8 +843,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             },
             Palette = palette,
             GeometryProvider = geometryProvider,
-            Product = "S-101",
-            Spec = new SpecRef("S-101", default),
+            Product = _catalogueSpec,
+            Spec = new SpecRef(_catalogueSpec, default),
             SourceDatasetId = _fileName,
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
@@ -820,7 +852,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
-            LayerNames = new[] { "s101.areas", "s101.linework" },
+            LayerNames = new[] { $"{LayerKeyPrefix}.areas", $"{LayerKeyPrefix}.linework" },
             FeatureTags = featureTags,
             OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
@@ -860,8 +892,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// every <see cref="MarinerSettings"/> field (S-101 PC context
     /// parameters fed to the Part 9A Lua rules, incl. NationalLanguage)
     /// plus the effective ECDIS display state applied to the catalogue
-    /// (display category and the S-101 hidden viewing groups / hidden
-    /// display planes that drive VectorPipeline stage-6 filtering).
+    /// (display category and the hidden viewing groups / hidden display
+    /// planes, scoped to <paramref name="spec"/>, that drive VectorPipeline
+    /// stage-6 filtering).
     /// </summary>
     /// <remarks>
     /// The key deliberately excludes palette and symbol/text scale: the
@@ -870,7 +903,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// Two ECDIS categories that resolve to the same display mode merely
     /// over-invalidate (an extra cache miss), never under-invalidate.
     /// </remarks>
-    internal static string BuildPortrayalCacheKey(MarinerSettings mariner, EcdisDisplaySettings ecdis)
+    /// <param name="mariner">Mariner display preferences.</param>
+    /// <param name="ecdis">Effective ECDIS display state.</param>
+    /// <param name="spec">
+    /// Catalogue spec whose hidden viewing groups scope the key (<c>"S-101"</c>
+    /// or <c>"S-401"</c>).
+    /// </param>
+    internal static string BuildPortrayalCacheKey(
+        MarinerSettings mariner,
+        EcdisDisplaySettings ecdis,
+        string spec = DefaultSpec)
     {
         ArgumentNullException.ThrowIfNull(mariner);
         ArgumentNullException.ThrowIfNull(ecdis);
@@ -894,11 +936,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
         sb.Append(";e:").Append((int)ecdis.Category);
 
-        // Hidden S-101 viewing groups (sorted for order-independence).
-        // "S-101" is this processor's catalogue Spec.Name, matching the
-        // key EcdisDisplayExtensions.ApplyTo reads.
+        // Hidden viewing groups (sorted for order-independence) keyed by this
+        // processor's catalogue spec (S-101 or S-401), matching the key
+        // EcdisDisplayExtensions.ApplyTo reads.
         sb.Append(";vg:");
-        if (ecdis.HiddenViewingGroups.TryGetValue("S-101", out var hiddenVg))
+        if (ecdis.HiddenViewingGroups.TryGetValue(spec, out var hiddenVg))
         {
             foreach (var id in hiddenVg.OrderBy(static x => x))
                 sb.Append(id).Append(',');
@@ -1037,6 +1079,17 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// </remarks>
     public ValidationReport? Validate()
     {
+        // The bundled rule pack asserts S-101 normative clauses (its findings
+        // carry S101-R-* rule ids), so it must not be run against an S-401
+        // inland cell read through this same processor: the products share an
+        // encoding, not a rule set. Returning null is the contract's "no rule
+        // pack for this spec" answer (distinct from an empty report, which
+        // means "rules ran and found nothing") and is what the CLI reports as
+        // "no rules available". An S-401 pack can be built from the IEHG
+        // S-158:401 validation checks when those leave draft.
+        if (!string.Equals(_catalogueSpec, DefaultSpec, StringComparison.Ordinal))
+            return null;
+
         if (!_validationCached)
         {
             EnsureDecoder();

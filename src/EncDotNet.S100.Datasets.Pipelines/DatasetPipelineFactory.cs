@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.Iso8211;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.ExchangeSets;
@@ -98,16 +99,22 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <summary>
     /// Registry-aware detection — the single implementation behind
     /// <see cref="DetectProductSpec(string)"/>. Resolves the ambiguous ISO 8211
-    /// <c>.000</c> extension (shared by S-57 and S-101) using the S-57 content
-    /// discriminator that <paramref name="registry"/> actually offers: a registry
-    /// without S-57 registered treats every <c>.000</c> file as S-101 rather than
-    /// running the S-57 sniff, so it never reports an S-57 dataset it has no
-    /// registration to build. This narrows the discriminator to the registry's
-    /// product set; it does not otherwise guarantee the returned spec is buildable
-    /// (e.g. a registry lacking S-101 can still get <c>"S-101"</c> here —
-    /// construction then validates the spec against the registry and throws if
-    /// unregistered). HDF5 and GML datasets are product-agnostic and detected the
-    /// same way regardless of <paramref name="registry"/>.
+    /// <c>.000</c> extension (shared by S-57, S-101, and S-401 inland ENC) by
+    /// reading the dataset envelope once and returning the spec of the first
+    /// product in <paramref name="registry"/> whose
+    /// <see cref="S100ProductRegistration.MatchIso8211"/> claims it — S-57 by its
+    /// DSPM field, the S-100 products by their declared <c>PRSP</c> product
+    /// identifier. A registry without S-57 registered therefore never reports an
+    /// S-57 dataset it has no registration to build, and the same holds for
+    /// S-401. When no registration claims the file (an early or non-conformant
+    /// cell declaring no <c>PRSP</c>) detection falls back to <c>"S-101"</c>,
+    /// preserving the historical behaviour. This narrows detection to the
+    /// registry's product set; it does not otherwise guarantee the returned spec
+    /// is buildable (e.g. a registry lacking S-101 can still get <c>"S-101"</c>
+    /// from the fallback — construction then validates the spec against the
+    /// registry and throws if unregistered). HDF5 and GML datasets are
+    /// product-agnostic and detected the same way regardless of
+    /// <paramref name="registry"/>.
     /// </summary>
     internal static string? DetectProductSpec(string path, S100ProductRegistry registry)
     {
@@ -122,25 +129,23 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             return DetectHdf5ProductSpec(path);
         }
 
-        // S-101: ISO 8211 files (also S-57 — distinguished by content below).
+        // ISO 8211 files: S-57, S-101, and S-401 all use the .000 extension, so
+        // the envelope decides. Read it once and let each registered product
+        // recognize its own datasets (mirrors the GML path below).
         if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
         {
-            // S-57 datasets carry a DSPM field in their ISO 8211 DDR which is not
-            // present in S-101 datasets; the S-57 registration contributes that
-            // content sniff. Only run it when the registry can actually build S-57
-            // — otherwise the file is treated as S-101.
-            if (registry.TryResolve("S-57", out var s57) && s57.Discriminate is { } discriminate)
+            if (TryReadIso8211Root(path, out var root))
             {
-                try
+                foreach (var registration in registry.Registrations)
                 {
-                    if (discriminate(path))
-                        return "S-57";
-                }
-                catch
-                {
-                    // Fall through and treat as S-101.
+                    if (registration.MatchIso8211 is { } match && match(root))
+                        // Return the canonical spec, mirroring the GML path.
+                        return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
                 }
             }
+
+            // Unreadable, or claimed by nobody (a cell declaring no PRSP):
+            // treat it as S-101, which is what this factory has always done.
             return "S-101";
         }
 
@@ -151,6 +156,65 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reads an ISO 8211 dataset's envelope into an <see cref="Iso8211RootInfo"/>
+    /// — its declared product and encoding specification (the <c>DSID</c> field's
+    /// <c>PRSP</c> / <c>ENSP</c> subfields) and whether the Data Descriptive
+    /// Record defines the S-57-only <c>DSPM</c> field — or returns
+    /// <see langword="false"/> when the file cannot be read as ISO 8211. The
+    /// per-product <see cref="S100ProductRegistration.MatchIso8211"/> recognizers
+    /// consume the result, so the file is parsed once no matter how many products
+    /// are registered. S-100 Edition 5.2.1 Part 10a; S-57 Ed 3.1 Appendix B.1.
+    /// </summary>
+    private static bool TryReadIso8211Root(string path, out Iso8211RootInfo root)
+    {
+        root = default;
+        try
+        {
+            var iso = Iso8211DocumentReader.ReadFromFile(path);
+            if (iso.DataDescriptiveRecord is null)
+                return false;
+
+            var ddr = Iso8211DataDescriptiveRecordReader.Read(iso.DataDescriptiveRecord);
+
+            var productSpecification = "";
+            var encodingSpecification = "";
+
+            // DSID is the first data record in a conformant S-100 cell; S-57
+            // carries a DSID too but without the PRSP/ENSP subfields, which is
+            // why the DSPM field below is what identifies it.
+            var dsidDefinition = ddr.GetFieldDefinition("DSID");
+            if (dsidDefinition is not null)
+            {
+                foreach (var record in iso.DataRecords)
+                {
+                    if (record.GetFieldByTag("DSID") is not { } dsid)
+                        continue;
+
+                    var reader = new Iso8211FieldReader(dsidDefinition, dsid.Data);
+                    if (reader.TryGetSubfield<string>("PRSP", out var prsp))
+                        productSpecification = prsp ?? "";
+                    if (reader.TryGetSubfield<string>("ENSP", out var ensp))
+                        encodingSpecification = ensp ?? "";
+                    break;
+                }
+            }
+
+            root = new Iso8211RootInfo
+            {
+                ProductSpecification = productSpecification,
+                EncodingSpecification = encodingSpecification,
+                HasDataSetParameterField = ddr.GetFieldDefinition("DSPM") is not null,
+            };
+            return true;
+        }
+        catch
+        {
+            // Not readable as ISO 8211 — unknown.
+            return false;
+        }
     }
 
     private static string DetectHdf5ProductSpec(string path)
@@ -350,11 +414,17 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <param name="source">The asset source backing the exchange set.</param>
     /// <param name="baseRelativePath">Source-relative path of the base cell (<c>….000</c>).</param>
     /// <param name="updateRelativePaths">Source-relative paths of the update files, in ascending update-number order.</param>
+    /// <param name="spec">
+    /// The product whose catalogues portray the cell: <c>"S-101"</c> (default) or
+    /// <c>"S-401"</c> for inland ENC, which shares the Part 10a encoding and the
+    /// Part 9A Lua portrayal model.
+    /// </param>
     public IDatasetProcessor CreateS101ProcessorWithUpdates(
         IAssetSource source,
         string baseRelativePath,
         IReadOnlyList<string> updateRelativePaths,
-        IReadOnlyDictionary<string, string>? supportFiles = null)
+        IReadOnlyDictionary<string, string>? supportFiles = null,
+        string spec = "S-101")
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(baseRelativePath);
@@ -368,7 +438,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.LuaEngine,
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache,
-            supportFiles);
+            supportFiles,
+            spec);
     }
 
     /// <summary>
@@ -382,9 +453,14 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// </summary>
     /// <param name="baseFilePath">Path to the base cell file (<c>….000</c>).</param>
     /// <param name="updateFilePaths">Paths of the sibling update files, in ascending update-number order.</param>
+    /// <param name="spec">
+    /// The product whose catalogues portray the cell: <c>"S-101"</c> (default) or
+    /// <c>"S-401"</c> for inland ENC.
+    /// </param>
     public IDatasetProcessor CreateS101ProcessorWithUpdates(
         string baseFilePath,
-        IReadOnlyList<string> updateFilePaths)
+        IReadOnlyList<string> updateFilePaths,
+        string spec = "S-101")
     {
         ArgumentException.ThrowIfNullOrEmpty(baseFilePath);
         ArgumentNullException.ThrowIfNull(updateFilePaths);
@@ -406,7 +482,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.LuaEngine,
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache,
-            supportFiles: null);
+            supportFiles: null,
+            spec: spec);
     }
 
     /// <summary>
@@ -444,9 +521,9 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <paramref name="baseFilePath"/>, discovering and applying any sibling
     /// sequential update files (<c>….001</c>, <c>….002</c>, …) that live in the
     /// same directory. This gives a single dropped <c>.000</c> cell the same
-    /// up-to-date rendering as one loaded from an exchange set. S-57 and S-101
-    /// cells (told apart by the <c>DSPM</c> content sniff in
-    /// <see cref="DetectProductSpec"/>) both apply updates via their respective
+    /// up-to-date rendering as one loaded from an exchange set. S-57, S-101, and
+    /// S-401 cells (told apart by the ISO 8211 envelope in
+    /// <see cref="DetectProductSpec"/>) all apply updates via their respective
     /// <c>*WithUpdates</c> path; any other product, or a base cell with no
     /// updates on disk, falls back to <see cref="CreateProcessor(string)"/>.
     /// S-57 Ed 3.1 App B.1 / S-100 Part 10a.
@@ -464,7 +541,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         switch (spec)
         {
             case "S-101":
-                return CreateS101ProcessorWithUpdates(baseFilePath, updates);
+            case "S-401":
+                return CreateS101ProcessorWithUpdates(baseFilePath, updates, spec);
             case "S-57":
                 var directory = Path.GetDirectoryName(Path.GetFullPath(baseFilePath))
                     ?? throw new ArgumentException(

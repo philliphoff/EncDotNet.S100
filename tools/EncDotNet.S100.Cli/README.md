@@ -464,7 +464,7 @@ client disconnects (stdin end-of-file) or it is interrupted.
 
 | Family | Specs | Path |
 |---|---|---|
-| Vector (ISO 8211) | S-101, S-57 (translated to S-101) | `HeadlessVectorRenderer` |
+| Vector (ISO 8211) | S-101, S-401 (IEHG inland ENC, own catalogues), S-57 (translated to S-101) | `HeadlessVectorRenderer` |
 | Vector (GML) | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | `HeadlessVectorRenderer` |
 | Coverage (HDF5) | S-102; S-104 DCF1/2/8; S-111 DCF1/2/3/8 | Coverage and point-glyph headless renderers |
 

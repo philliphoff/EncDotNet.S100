@@ -20,6 +20,9 @@ internal static class FacadeRenderContextBuilder
         RenderContext context = processor.Spec.Name switch
         {
             "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
+            // S-401 inland ENC renders through the S-101 pipeline with its own
+            // catalogues, so it takes the same render context.
+            "S-401" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
             "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
             "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
             "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },

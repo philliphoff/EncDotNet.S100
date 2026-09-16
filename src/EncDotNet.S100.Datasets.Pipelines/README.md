@@ -48,13 +48,23 @@ dataset entry.
 
 Detection is **data-driven per product**, not a central switch: each
 `S100ProductRegistration` in `S100Products` declares *both* how to
-construct its processor *and* how to recognize its files — the S-57 `.000`
-content sniff via `Discriminate`, and each GML product's namespace /
-`productIdentifier` shape via `MatchGml` (`DatasetGmlMatcher`, fed a
-parse-once `GmlRootInfo`). The factory reads a GML document's root once and
-returns the spec of the first registered product whose `MatchGml` claims
-it, so adding a GML product means adding one registration to `S100Products`
-— no edit to the factory. The recognized product-identifier set that
+construct its processor *and* how to recognize its files — each GML
+product's namespace / `productIdentifier` shape via `MatchGml`
+(`DatasetGmlMatcher`, fed a parse-once `GmlRootInfo`), and each ISO 8211
+product's envelope shape via `MatchIso8211` (`DatasetIso8211Matcher`, fed a
+read-once `Iso8211RootInfo`). The factory reads a GML document's root — or
+an ISO 8211 dataset's envelope — once and returns the spec of the first
+registered product whose matcher claims it, so adding a product means
+adding one registration to `S100Products` — no edit to the factory.
+
+The `.000` extension is shared by three products, so the envelope decides:
+S-57 is claimed by the S-57-only `DSPM` field in its Data Descriptive
+Record, while S-101 and S-401 (IEHG inland ENC) are claimed by the product
+identifier each declares in its `DSID` record's `PRSP` subfield
+(`INT.IHO.S-101.…` / `INT.IHO.S-401.…`). A cell that declares no `PRSP`,
+or one whose product has no registration in the host's registry, falls back
+to S-101 — so a host that registers a subset never routes a cell to a
+product it cannot build. The recognized product-identifier set that
 `MapProductIdentifierToSpec` accepts is likewise derived from the built-in
 registration list (`S100Products.All`). The `.h5` coverage
 (S-102/104/111) header read stays in the factory as a small closed set.

@@ -109,7 +109,8 @@ public class S100ProductRegistryTests
         string[] expected =
         [
             "S-57", "S-101", "S-102", "S-104", "S-111", "S-122", "S-124",
-            "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-411", "S-421",
+            "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-401",
+            "S-411", "S-421",
         ];
 
         var registry = S100Products.CreateDefaultRegistry();

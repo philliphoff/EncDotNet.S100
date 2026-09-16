@@ -42,6 +42,10 @@ public static class SupportedSpecEditions
             ["S-129"] = [new SpecVersion(2, 0, 0)],
             ["S-131"] = [new SpecVersion(1, 0, 0)],
             ["S-201"] = [new SpecVersion(2, 0, 0)],
+            // S-401 (IEHG inland ENC) edition 1.2.0 is the released
+            // implementation-and-testing edition; 1.3.0 corrects its Feature
+            // Catalogue and encoding guide. Both are read.
+            ["S-401"] = [new SpecVersion(1, 2, 0), new SpecVersion(1, 3, 0)],
             ["S-411"] = [new SpecVersion(1, 2, 1)],
             ["S-421"] = [new SpecVersion(1, 0, 0)],
         };

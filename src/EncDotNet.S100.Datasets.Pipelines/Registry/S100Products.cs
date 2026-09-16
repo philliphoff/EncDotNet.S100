@@ -34,6 +34,29 @@ public static class S100Products
         CreateFromSource = (s, r) => new S101DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles),
+        // S-101 declares itself in the ISO 8211 DSID/PRSP subfield
+        // (INT.IHO.S-101.…), which is what tells it apart from S-401 — the other
+        // S-100 product sharing the .000 extension.
+        MatchIso8211 = static root => root.DeclaresProduct("S-101"),
+    };
+
+    /// <summary>
+    /// S-401 Inland ENC (IEHG). Shares the S-100 Part 10a ISO 8211 encoding and
+    /// the Part 9A Lua portrayal model with S-101, so it reuses
+    /// <see cref="S101DatasetProcessor"/> with its own Feature and Portrayal
+    /// Catalogues rather than cloning the pipeline.
+    /// </summary>
+    public static S100ProductRegistration S401 { get; } = new()
+    {
+        Spec = "S-401",
+        CreateFromPath = (s, path) => new S101DatasetProcessor(
+            path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
+            s.SharedInstructionCache, "S-401"),
+        CreateFromSource = (s, r) => new S101DatasetProcessor(
+            r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
+            s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles,
+            "S-401"),
+        MatchIso8211 = static root => root.DeclaresProduct("S-401"),
     };
 
     /// <summary>Legacy S-57 ENC (translated in-memory to S-101).</summary>
@@ -45,12 +68,12 @@ public static class S100Products
         CreateFromSource = (s, r) => new S57DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager),
-        // S-57 and S-101 share the ISO 8211 .000 extension; S-57 datasets carry a
-        // DSPM field in their DDR that S-101 datasets do not. Contributing this
-        // rule on the registration lets the registry-aware DetectProductSpec
-        // overload honour the registry's product set — it runs the sniff only
-        // when S-57 is registered.
-        Discriminate = static path => EncDotNet.S100.Datasets.S57.S57Dataset.IsS57File(path),
+        // S-57 shares the ISO 8211 .000 extension with S-101 and S-401 but
+        // declares no PRSP product identifier; it is instead identified by the
+        // S-57-only DSPM field in its DDR. Contributing this rule on the
+        // registration lets the registry-aware DetectProductSpec overload honour
+        // the registry's product set — a registry without S-57 never claims one.
+        MatchIso8211 = static root => root.HasDataSetParameterField,
     };
 
     /// <summary>S-102 Bathymetric Surface.</summary>
@@ -217,7 +240,7 @@ public static class S100Products
         new[]
         {
             S101, S57, S102, S104, S111, S122, S124, S125, S127, S128,
-            S129, S131, S201, S411, S421,
+            S129, S131, S201, S401, S411, S421,
         });
 
     /// <summary>

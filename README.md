@@ -70,8 +70,8 @@ fixture — `dotnet run` it with no setup.
 
 ## Supported standards
 
-Every supported product ships a reader, a portrayal pipeline, and a
-normative validation rule pack.
+Every supported product ships a reader and a portrayal pipeline, and
+every product with a ✅ below ships a normative validation rule pack.
 
 | Standard | Subject | Encoding | Portrayal | Validation pack |
 |---|---|---|---|---|
@@ -89,7 +89,17 @@ normative validation rule pack.
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ |
 | **S-411** | Sea Ice Information | GML | XSLT | ✅ |
 | **S-421** | Route Plans | GML | XSLT | ✅ |
+| **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) |
+
+S-401 (IEHG inland ENC) shares the S-100 Part 10a ISO 8211 encoding and
+the Part 9A Lua portrayal model with S-101, so it is read and portrayed
+through the S-101 pipeline with the bundled IEHG Feature and Portrayal
+Catalogues (see `EncDotNet.S100.Specifications/content/S401/README.md`
+for their provenance). S-401 cells are told apart from S-101 and S-57
+cells by the product identifier each declares in its ISO 8211 `DSID`
+record. Edition 1.3.0 of the S-401 Portrayal Catalogue is still a draft
+and no validation rule pack ships yet.
 
 S-57 cells are translated to the in-memory S-101 model and rendered
 through the S-101 portrayal pipeline; validation runs as two passes

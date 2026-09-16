@@ -170,7 +170,10 @@ public static class LoadedDatasetProjector
         string spec, Stream stream, Func<string, string?>? externalTextResolver)
         => spec switch
         {
-            "S-101" or "S-57" => new S101DatasetData(S101Dataset.Open(stream), externalTextResolver),
+            // S-401 inland ENC is read by the same Part 10a reader and carries
+            // the same payload; BuildFromData keeps its declared identity via the
+            // dataset's DSID product specification.
+            "S-101" or "S-57" or "S-401" => new S101DatasetData(S101Dataset.Open(stream), externalTextResolver),
             "S-102" => OpenS102(stream),
             "S-104" => OpenS104(stream),
             "S-111" => OpenS111(stream),

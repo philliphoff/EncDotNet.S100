@@ -88,6 +88,7 @@ public sealed class ListSpecsTool
         "S-129",
         "S-131",
         "S-201",
+        "S-401",
         "S-411",
         "S-421",
     ];
@@ -101,7 +102,7 @@ public sealed class ListSpecsTool
     {
         "S-101",
         "S-122", "S-124", "S-125", "S-127", "S-128",
-        "S-129", "S-131", "S-201", "S-411", "S-421",
+        "S-129", "S-131", "S-201", "S-401", "S-411", "S-421",
     };
 
     // Specs SampleCoverageTool routes to a sampler.
@@ -122,7 +123,7 @@ public sealed class ListSpecsTool
     {
         "S-101", "S-102", "S-104", "S-111", "S-124",
         "S-122", "S-125", "S-127", "S-128", "S-129",
-        "S-131", "S-201", "S-411", "S-421",
+        "S-131", "S-201", "S-401", "S-411", "S-421",
     };
 
     private readonly IDatasetCatalog _catalog;
