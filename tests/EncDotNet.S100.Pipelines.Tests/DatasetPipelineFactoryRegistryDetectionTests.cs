@@ -3,21 +3,22 @@ using EncDotNet.S100.Datasets.Pipelines;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Coverage for the registry-aware detection seam (issue #512 step 9d): the
-/// ambiguous ISO 8211 <c>.000</c> extension (shared by S-57 and S-101) is
-/// resolved by the S-57 content discriminator a registry actually offers, rather
-/// than a hard-coded call into the S-57 assembly. These tests drive the
-/// discriminator with fakes, so they neither touch the filesystem nor need real
-/// datasets.
+/// Coverage for the registry-aware detection seam (issue #512 step 9d, extended
+/// for S-401 inland ENC): the ambiguous ISO 8211 <c>.000</c> extension — shared
+/// by S-57, S-101, and S-401 — is resolved by reading the dataset envelope once
+/// and letting each registration's <see cref="DatasetIso8211Matcher"/> claim its
+/// own files, rather than by a hard-coded call into the S-57 assembly. The
+/// S-100 cells used here are synthesized with <see cref="S101DocumentWriter"/>,
+/// so these tests need no committed sample datasets.
 /// </summary>
 public class DatasetPipelineFactoryRegistryDetectionTests
 {
-    private static S100ProductRegistration S57With(DatasetContentDiscriminator? discriminate) => new()
+    private static S100ProductRegistration Iso8211(string spec, DatasetIso8211Matcher? match) => new()
     {
-        Spec = "S-57",
+        Spec = spec,
         CreateFromPath = (_, _) => null!,
         CreateFromSource = (_, _) => null!,
-        Discriminate = discriminate,
+        MatchIso8211 = match,
     };
 
     private static S100ProductRegistration Plain(string spec) => new()
@@ -27,51 +28,129 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         CreateFromSource = (_, _) => null!,
     };
 
-    [Fact]
-    public void Iso8211_WhenS57DiscriminatorClaimsFile_ReturnsS57()
+    private static void WithTempDirectory(Action<string> body)
     {
-        var registry = new S100ProductRegistry();
-        registry.Register(S57With(static _ => true));
-
-        Assert.Equal("S-57", DatasetPipelineFactory.DetectProductSpec("cell.000", registry));
+        var dir = Directory.CreateTempSubdirectory("iso8211-detect-").FullName;
+        try
+        {
+            body(dir);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]
-    public void Iso8211_WhenS57DiscriminatorDeclinesFile_ReturnsS101()
+    public void Iso8211_CellDeclaringS401_DetectsAsS401() => WithTempDirectory(dir =>
     {
-        var registry = new S100ProductRegistry();
-        registry.Register(S57With(static _ => false));
+        var path = SyntheticIso8211Cell.Write(dir, "401003TEST.000", "INT.IHO.S-401.1.2");
 
-        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec("cell.000", registry));
-    }
+        Assert.Equal("S-401", DatasetPipelineFactory.DetectProductSpec(path));
+    });
 
     [Fact]
-    public void Iso8211_WhenRegistryHasNoS57_ReturnsS101()
+    public void Iso8211_CellDeclaringS101_DetectsAsS101() => WithTempDirectory(dir =>
     {
+        var path = SyntheticIso8211Cell.Write(dir, "101AA00DS.000", "INT.IHO.S-101.1.0.2");
+
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path));
+    });
+
+    [Fact]
+    public void Iso8211_CellDeclaringNoProduct_FallsBackToS101() => WithTempDirectory(dir =>
+    {
+        // Early / non-conformant cells carry no PRSP; nothing claims them and
+        // detection keeps its historical S-101 answer.
+        var path = SyntheticIso8211Cell.Write(dir, "NOPRSP.000", "");
+
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path));
+    });
+
+    [Fact]
+    public void Iso8211_WhenRegistryOmitsS401_FallsBackToS101() => WithTempDirectory(dir =>
+    {
+        var path = SyntheticIso8211Cell.Write(dir, "401003TEST.000", "INT.IHO.S-401.1.2");
+
+        // A host that registered only S-101 has no S-401 registration to build,
+        // so the S-401 matcher never runs and the cell falls back to S-101.
         var registry = new S100ProductRegistry();
-        // S-57 is intentionally absent: with no S-57 registration there is no
-        // discriminator to consult, so every .000 file is treated as S-101.
+        registry.Register(Iso8211("S-101", static root => root.DeclaresProduct("S-101")));
+
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
+    });
+
+    [Fact]
+    public void Iso8211_WhenMatcherClaimsFile_ReturnsThatProduct() => WithTempDirectory(dir =>
+    {
+        var path = SyntheticIso8211Cell.Write(dir, "cell.000", "INT.IHO.S-101.1.0.2");
+
+        var registry = new S100ProductRegistry();
+        registry.Register(Iso8211("S-57", static _ => true));
+
+        Assert.Equal("S-57", DatasetPipelineFactory.DetectProductSpec(path, registry));
+    });
+
+    [Fact]
+    public void Iso8211_WhenRegistryHasNoMatchers_ReturnsS101() => WithTempDirectory(dir =>
+    {
+        var path = SyntheticIso8211Cell.Write(dir, "cell.000", "INT.IHO.S-401.1.2");
+
+        var registry = new S100ProductRegistry();
         registry.Register(Plain("S-101"));
 
-        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec("cell.000", registry));
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
+    });
+
+    [Fact]
+    public void Iso8211_WhenS57RegisteredWithoutMatcher_ReturnsS101() => WithTempDirectory(dir =>
+    {
+        var path = SyntheticIso8211Cell.Write(dir, "cell.000", "INT.IHO.S-101.1.0.2");
+
+        var registry = new S100ProductRegistry();
+        registry.Register(Iso8211("S-57", match: null));
+
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
+    });
+
+    [Fact]
+    public void Iso8211_UnreadableFile_FallsBackToS101()
+    {
+        // The envelope cannot be read (the file does not exist); detection keeps
+        // the historical S-101 answer rather than throwing.
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec("missing-cell.000"));
     }
 
     [Fact]
-    public void Iso8211_WhenS57RegisteredWithoutDiscriminator_ReturnsS101()
+    public void DefaultRegistry_Iso8211Products_ContributeMatchers()
     {
-        var registry = new S100ProductRegistry();
-        registry.Register(S57With(discriminate: null));
+        var registry = S100Products.CreateDefaultRegistry();
 
-        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec("cell.000", registry));
+        Assert.True(registry.TryResolve("S-57", out var s57));
+        Assert.NotNull(s57!.MatchIso8211);
+        Assert.True(registry.TryResolve("S-101", out var s101));
+        Assert.NotNull(s101!.MatchIso8211);
+        Assert.True(registry.TryResolve("S-401", out var s401));
+        Assert.NotNull(s401!.MatchIso8211);
     }
 
-    [Fact]
-    public void Iso8211_WhenDiscriminatorThrows_FallsBackToS101()
+    [Theory]
+    [InlineData("INT.IHO.S-401.1.2", "S-401", true)]
+    [InlineData("INT.IHO.S-101.1.0.2", "S-101", true)]
+    [InlineData("INT.IHO.S-101.1.0.2", "S-401", false)]
+    [InlineData("", "S-401", false)]
+    [InlineData("not a product id", "S-401", false)]
+    public void Iso8211RootInfo_DeclaresProduct_ComparesCanonicalSpecs(
+        string declared, string productId, bool expected)
     {
-        var registry = new S100ProductRegistry();
-        registry.Register(S57With(static _ => throw new IOException("boom")));
+        var root = new Iso8211RootInfo
+        {
+            ProductSpecification = declared,
+            EncodingSpecification = "S-100 Part 10a",
+            HasDataSetParameterField = false,
+        };
 
-        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec("cell.000", registry));
+        Assert.Equal(expected, root.DeclaresProduct(productId));
     }
 
     [Fact]
@@ -82,13 +161,6 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         // Unknown extension is product-agnostic and resolves to null regardless
         // of the registry's contents (same as the parameterless overload).
         Assert.Null(DatasetPipelineFactory.DetectProductSpec("mystery.dat", registry));
-    }
-
-    [Fact]
-    public void DefaultRegistry_S57Registration_ContributesADiscriminator()
-    {
-        Assert.True(S100Products.CreateDefaultRegistry().TryResolve("S-57", out var s57));
-        Assert.NotNull(s57!.Discriminate);
     }
 
     [Fact]

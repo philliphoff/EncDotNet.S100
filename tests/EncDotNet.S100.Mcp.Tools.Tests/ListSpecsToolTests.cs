@@ -76,6 +76,15 @@ public class ListSpecsToolTests
         Assert.True(s101.Capabilities.CanDescribeFeature);
         Assert.False(s101.Capabilities.CanListTimeSteps);
 
+        // S-401 inland ENC is ISO 8211-encoded and read by the S-101 pipeline,
+        // so its features are queryable and describable through the same
+        // accessor/describer; it is not a coverage product.
+        var s401 = value.Specs.Single(s => s.Name == "S-401");
+        Assert.False(s401.Capabilities.CanSampleCoverage);
+        Assert.True(s401.Capabilities.CanQueryFeatures);
+        Assert.True(s401.Capabilities.CanDescribeFeature);
+        Assert.False(s401.Capabilities.CanListTimeSteps);
+
         // S-104 / S-111 are time-varying coverage products.
         var s104 = value.Specs.Single(s => s.Name == "S-104");
         var s111 = value.Specs.Single(s => s.Name == "S-111");

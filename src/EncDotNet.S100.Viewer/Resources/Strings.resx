@@ -565,6 +565,9 @@
   <data name="SpecName_S201" xml:space="preserve">
     <value>Aids to Navigation Information</value>
   </data>
+  <data name="SpecName_S401" xml:space="preserve">
+    <value>Inland Electronic Navigational Chart</value>
+  </data>
   <data name="SpecName_S411" xml:space="preserve">
     <value>Sea Ice Information</value>
   </data>

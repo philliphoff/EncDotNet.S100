@@ -64,7 +64,20 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// </summary>
     private const string DepthUnit = "metres";
 
-    public string SpecName => "S-101";
+    /// <inheritdoc />
+    public string SpecName { get; }
+
+    /// <summary>
+    /// Creates a describer for <paramref name="specName"/>. S-401 (IEHG inland
+    /// ENC) is read by the same ISO 8211 pipeline and exposes the same
+    /// <see cref="S101DatasetData"/>, so it reuses this describer under its own
+    /// spec name rather than duplicating the record walk.
+    /// </summary>
+    public S101FeatureDescriber(string specName = "S-101")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(specName);
+        SpecName = specName;
+    }
 
     public ToolResult<DescribeFeatureResult> Describe(FeatureDescriberContext context)
     {

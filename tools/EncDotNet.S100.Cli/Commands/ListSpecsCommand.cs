@@ -14,13 +14,15 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
     /// Specs whose processors expose the headless Skia render path. S-104 and
     /// S-111 support both gridded and positioned station/node glyph datasets.
     /// S-57 datasets are translated in-memory to S-101 and rendered through
-    /// the S-101 portrayal pipeline.
+    /// the S-101 portrayal pipeline; S-401 (inland ENC) is read by that same
+    /// pipeline with its own catalogues.
     /// </summary>
     private static readonly HashSet<string> HeadlessSpecs = new(StringComparer.Ordinal)
     {
         "S-57",
         "S-101", "S-102", "S-104", "S-111",
-        "S-122", "S-124", "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-411", "S-421",
+        "S-122", "S-124", "S-125", "S-127", "S-128", "S-129", "S-131", "S-201",
+        "S-401", "S-411", "S-421",
     };
 
     internal sealed class Settings : CommandSettings

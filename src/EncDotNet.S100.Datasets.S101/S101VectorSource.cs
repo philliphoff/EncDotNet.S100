@@ -61,13 +61,20 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
 
     private static SpecRef BuildSpec(S101Document doc)
     {
+        // The DSID declares the product (PRSP, e.g. INT.IHO.S-401.1.2). S-401
+        // inland ENC is carried by this same Part 10a model, so honour what the
+        // dataset says rather than assuming S-101; anything unrecognized — and
+        // the S-57 → S-101 translation, which declares "S-101" — keeps S-101.
+        var declared = doc.Identification?.ProductSpecification;
+        var name = SpecName.TryNormalize(declared, out var canonical) ? canonical : "S-101";
+
         var edition = doc.Identification?.ProductSpecificationEdition;
         if (!string.IsNullOrWhiteSpace(edition)
             && SpecVersion.TryParse(edition, out var v))
         {
-            return new SpecRef("S-101", v);
+            return new SpecRef(name, v);
         }
-        return new SpecRef("S-101", default);
+        return new SpecRef(name, default);
     }
 
     /// <summary>

@@ -21,17 +21,6 @@ public delegate IDatasetProcessor DatasetProcessorFromSource(
     DatasetProcessorSourceRequest request);
 
 /// <summary>
-/// Decides, from a dataset file's content, whether it belongs to a particular
-/// product. Used to disambiguate a file extension shared by more than one
-/// product: the ISO 8211 <c>.000</c> extension is used by both legacy S-57 and
-/// S-101, so the S-57 registration sniffs the ISO 8211 DDR for the S-57-only
-/// <c>DSPM</c> field. Returns <see langword="true"/> when the file belongs to
-/// the registering product.
-/// </summary>
-/// <param name="path">Path to the dataset file to inspect.</param>
-public delegate bool DatasetContentDiscriminator(string path);
-
-/// <summary>
 /// A dataset stored inside an <see cref="IAssetSource"/>, addressed for
 /// processor construction by a <see cref="DatasetProcessorFromSource"/>.
 /// </summary>
@@ -70,15 +59,20 @@ public sealed record S100ProductRegistration
     public required DatasetProcessorFromSource CreateFromSource { get; init; }
 
     /// <summary>
-    /// Optional content sniffer that claims a file whose extension is ambiguous
-    /// across products. Only meaningful for the S-57 registration today (S-57 and
-    /// S-101 both use the ISO 8211 <c>.000</c> extension). It is
-    /// <see langword="null"/> for products whose extension already identifies
-    /// them. <see cref="DatasetPipelineFactory"/> consults this only for the
-    /// products a registry actually contains, so a host that omits S-57 never
-    /// runs the S-57 sniff and treats every <c>.000</c> file as S-101.
+    /// Optional recognizer for an ISO 8211-encoded product: given the parsed
+    /// envelope of a <c>.000</c> dataset, decides whether the file belongs to
+    /// this product. The <c>.000</c> extension is shared by legacy S-57, S-101,
+    /// and S-401 (inland ENC), so the extension alone cannot route the file.
+    /// This inverts the former central S-57-vs-S-101 sniff in
+    /// <see cref="DatasetPipelineFactory"/> into data, so a new ISO 8211 product
+    /// is recognized in the same place it is constructed — the ISO 8211 sibling
+    /// of <see cref="MatchGml"/>. It is <see langword="null"/> for products whose
+    /// extension already identifies them. <see cref="DatasetPipelineFactory"/>
+    /// reads the envelope once and returns the spec of the first registered
+    /// product whose matcher claims it, so a host that omits S-57 never
+    /// misroutes a cell to a product it cannot build.
     /// </summary>
-    public DatasetContentDiscriminator? Discriminate { get; init; }
+    public DatasetIso8211Matcher? MatchIso8211 { get; init; }
 
     /// <summary>
     /// Optional recognizer for a GML-encoded product: given the parsed root of a

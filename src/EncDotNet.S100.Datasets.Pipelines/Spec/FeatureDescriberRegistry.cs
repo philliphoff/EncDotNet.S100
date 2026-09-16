@@ -25,6 +25,8 @@ public sealed class FeatureDescriberRegistry
     public static FeatureDescriberRegistry Default { get; } = new FeatureDescriberRegistry(
     [
         new S101FeatureDescriber(),
+        // S-401 inland ENC shares the S-101 ISO 8211 record model.
+        new S101FeatureDescriber("S-401"),
         new S102FeatureDescriber(),
         new S104FeatureDescriber(),
         new S111FeatureDescriber(),

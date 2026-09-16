@@ -31,9 +31,10 @@ public sealed class DefaultDisplayPlaneAuthority : IDisplayPlaneAuthority
 
         return productSpec switch
         {
-            // S-101 ENC / S-57. Split between fills and line work per
-            // S-98 Annex A §A-6.9.1 (so S-102 lands between them).
-            "S-101" or "S-57" => string.Equals(kind, "area", StringComparison.OrdinalIgnoreCase)
+            // S-101 ENC / S-57 / S-401 inland ENC. Split between fills and line
+            // work per S-98 Annex A §A-6.9.1 (so S-102 lands between them).
+            // S-401 is the inland base chart and occupies the same planes.
+            "S-101" or "S-57" or "S-401" => string.Equals(kind, "area", StringComparison.OrdinalIgnoreCase)
                 ? S98DisplayPlane.BaseChartUnder
                 : S98DisplayPlane.BaseChartOver,
 
