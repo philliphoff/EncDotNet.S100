@@ -9,7 +9,8 @@ it can also report a dataset's product specification (`info`), validate a
 dataset against its specification's normative rule pack (`validate`), perform a
 headless ECDIS-style "pick" of the features and coverage values at a point
 across one or more layers (`identify`), and
-convert an S-57 base cell to an S-101 dataset (`s57 convert`). It is
+convert an S-57 base cell to an S-101 dataset, or an inland ENC cell to an
+S-401 dataset (`s57 convert`). It is
 intended as the basis for batch scripts (for example, generating previews of
 sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
@@ -387,6 +388,15 @@ encoded `.000` file (S-100 Part 10a). The source is translated to an
 `S101Document` in memory with the same `S57ToS101Translator` the render/validate
 paths use, then encoded with `S101DocumentWriter`.
 
+An S-57 **inland** ENC (its `DSID` declares `PRSP` = 10, e.g. a USACE river
+chart) is written as an S-401 (IEHG inland ENC) dataset instead, so its inland
+features are kept. The product is chosen from the cell after sibling updates
+are folded in. `--target s101` or `--target s401` overrides the choice. Forcing
+`s101` on an inland cell drops the inland features that have no S-101
+equivalent. Forcing `s401` on a maritime cell works but prints a warning. The
+summary line and the `--report` JSON (`product`, `productEdition`,
+`detectedProduct`) state which product was written.
+
 Sibling sequential update files (`.001`, `.002`, …) sitting next to the base
 cell are auto-discovered and folded in (S-57 Part 3 dataset updating) before
 translation, so a converted cell reflects its up-to-date state. Pass
@@ -396,11 +406,14 @@ write the full diagnostics as JSON.
 
 ```
 s100 s57 convert -o my-s101-dataset.000 my-s57-dataset.000
+s100 s57 convert -o my-s401-dataset.000 my-inland-s57-dataset.000
+s100 s57 convert --target s101 -o my-s101-dataset.000 my-inland-s57-dataset.000
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `-o`, `--output <path>` | _required_ | Path of the S-101 dataset file to write. |
+| `-o`, `--output <path>` | _required_ | Path of the S-101 or S-401 dataset file to write. |
+| `--target <target>` | `auto` | Product to write: `auto` (S-401 for an inland ENC, S-101 otherwise), `s101`, or `s401`. |
 | `--report <path>` | off | Write a machine-readable (JSON) translation diagnostics report. |
 | `--no-updates` | off | Do not auto-discover and fold sibling update files before converting. |
 | `--debug` | off | Show a full stack trace on error. |

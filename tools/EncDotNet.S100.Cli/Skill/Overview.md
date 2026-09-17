@@ -11,7 +11,7 @@ command offers it, and treat paths as local filesystem paths.
 | Validate a dataset or verify an exchange set | `s100 validate` |
 | Query features or coverage values at a position | `s100 identify` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
-| Convert an S-57 base cell to S-101 | `s100 s57 convert` |
+| Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
 | Serve the read-only query tools to an MCP client over stdio | `s100 mcp serve` |
 
 ## General operating guidance

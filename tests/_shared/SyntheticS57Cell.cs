@@ -1,6 +1,6 @@
 using EncDotNet.Iso8211;
 
-namespace EncDotNet.S100.Pipelines.Tests;
+namespace EncDotNet.S100.TestSupport;
 
 /// <summary>
 /// Writes S-57 cells that declare a chosen product specification (<c>DSID</c>/

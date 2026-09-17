@@ -67,8 +67,10 @@ internal static class CliApp
                 s57.SetDescription("S-57 (IHO S-57 / ENC) specific operations.");
 
                 s57.AddCommand<S57ConvertCommand>("convert")
-                    .WithDescription("Convert an S-57 base cell to an S-101 dataset (ISO/IEC 8211).")
-                    .WithExample("s57", "convert", "-o", "my-s101-dataset.000", "my-s57-dataset.000");
+                    .WithDescription("Convert an S-57 base cell to an S-101 dataset, or an inland ENC cell to an S-401 dataset (ISO/IEC 8211).")
+                    .WithExample("s57", "convert", "-o", "my-s101-dataset.000", "my-s57-dataset.000")
+                    .WithExample("s57", "convert", "-o", "my-s401-dataset.000", "my-inland-s57-dataset.000")
+                    .WithExample("s57", "convert", "--target", "s101", "-o", "my-s101-dataset.000", "my-inland-s57-dataset.000");
             });
 
             config.AddBranch("mcp", mcp =>
