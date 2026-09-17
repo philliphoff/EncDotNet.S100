@@ -503,6 +503,19 @@ public sealed class S57ToS101Translator
             target);
     }
 
+    /// <summary>
+    /// Creates a translator into <paramref name="target"/> using the bundled
+    /// mapping and Feature Catalogue lookups for
+    /// <see cref="S57TranslationTarget.Spec"/> (see <see cref="S57S101Mapping.ForSpec"/>).
+    /// </summary>
+    /// <param name="target">The S-100 product to translate into.</param>
+    /// <returns>A translator targeting <paramref name="target"/>.</returns>
+    public static S57ToS101Translator ForTarget(S57TranslationTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return ForTarget(target, S57S101Mapping.ForSpec(target.Spec));
+    }
+
     /// <summary>The S-100 product this translator targets.</summary>
     public S57TranslationTarget Target => _target;
 
@@ -893,6 +906,15 @@ public sealed class S57ToS101Translator
         private void EmitRangeSystems(List<EncDotNet.S57.S57FeatureRecord> aggregations)
         {
             if (aggregations.Count == 0) return;
+
+            // RangeSystem is an S-101 construct; a target whose Feature Catalogue
+            // does not define it (S-401) has no home for any C_AGGR.
+            if (!_featureBindings.DefinesFeatureType(S101ClassRangeSystem))
+            {
+                foreach (var _ in aggregations)
+                    _diagnostics?.RecordUnmappedObjectClass(CAggrObjl);
+                return;
+            }
 
             // Index every S-57 feature by LNAM so C_AGGR members (referenced by
             // long name, not RCNM/RCID) can be resolved to their object class.

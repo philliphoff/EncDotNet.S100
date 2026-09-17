@@ -721,4 +721,93 @@ public class S57S101MappingTests
         var undefined = targets.Where(t => !defined.Contains(t.Code)).Select(t => $"{t.Source} → {t.Code}");
         Assert.Empty(undefined);
     }
+
+    // ── Mapping per target product (issue #608) ──────────────────────
+
+    [Fact]
+    public void ForSpec_S101_IsDefault()
+    {
+        Assert.Same(S57S101Mapping.Default, S57S101Mapping.ForSpec("S-101"));
+        Assert.Same(S57S101Mapping.Default, S57S101Mapping.ForSpec("s-101"));
+    }
+
+    [Fact]
+    public void ForSpec_S401_IsSharedAndDistinct()
+    {
+        var s401 = S57S101Mapping.ForSpec("S-401");
+
+        Assert.Same(s401, S57S101Mapping.ForSpec("S-401"));
+        Assert.NotSame(S57S101Mapping.Default, s401);
+    }
+
+    [Fact]
+    public void ForSpec_S401_OnlyTargetsClassesTheS401CatalogueDefines()
+    {
+        var catalogue = S101FeatureAttributeBindings.ForSpec("S-401");
+
+        foreach (var rule in S57S101Mapping.ForSpec("S-401").FeatureRules.Values)
+        {
+            if (rule.DefaultS101Code is { } code)
+                Assert.True(catalogue.DefinesFeatureType(code), $"{rule.S57Acronym} → {code}");
+            foreach (var redirect in rule.Redirects)
+                Assert.True(catalogue.DefinesFeatureType(redirect.TargetS101Code), $"{rule.S57Acronym} → {redirect.TargetS101Code}");
+        }
+    }
+
+    [Fact]
+    public void ForSpec_S401_KeepsEveryObjectClassSoDropsAreReportedAsRuleDrops()
+    {
+        var s401 = S57S101Mapping.ForSpec("S-401");
+
+        Assert.Equal(S57S101Mapping.Default.FeatureRules.Keys.Order(), s401.FeatureRules.Keys.Order());
+        Assert.Equal(S57S101Mapping.Default.AttributeRules.Keys.Order(), s401.AttributeRules.Keys.Order());
+
+        // RAPIDS → Rapids (S-101 only) loses its target; COALNE → Coastline keeps it.
+        Assert.Equal("Rapids", S57S101Mapping.Default.ResolveFeatureCode(107));
+        Assert.Null(s401.ResolveFeatureCode(107));
+        Assert.Equal("Coastline", s401.ResolveFeatureCode(30));
+    }
+
+    [Fact]
+    public void Default_RestrictedToS101Catalogue_IsUnchanged()
+    {
+        // The default table must only target classes the S-101 FC defines.
+        var restricted = S57S101Mapping.Default.RestrictToFeatureTypes(
+            S101FeatureAttributeBindings.Default.DefinesFeatureType);
+
+        foreach (var (objl, rule) in S57S101Mapping.Default.FeatureRules)
+            Assert.Same(rule, restricted.FeatureRules[objl]);
+    }
+
+    [Fact]
+    public void RestrictToFeatureTypes_RemovesRedirectsToUndefinedClasses()
+    {
+        var mapping = new S57S101Mapping.Builder()
+            .AddFeatureRule(new S57FeatureRule
+            {
+                Objl = 33,
+                S57Acronym = "CTRPNT",
+                DefaultS101Code = "Kept",
+                Redirects =
+                [
+                    new S57FeatureRedirect { ConditionAttribute = "CATCTR", ConditionValues = ["1"], TargetS101Code = "Gone" },
+                    new S57FeatureRedirect { ConditionAttribute = "CATCTR", ConditionValues = ["5"], TargetS101Code = "Kept" },
+                ],
+            })
+            .Build();
+
+        var restricted = mapping.RestrictToFeatureTypes(code => code == "Kept");
+
+        var rule = restricted.FeatureRules[33];
+        Assert.Equal("Kept", rule.DefaultS101Code);
+        Assert.Equal("Kept", Assert.Single(rule.Redirects).TargetS101Code);
+        Assert.Throws<ArgumentNullException>(() => mapping.RestrictToFeatureTypes(null!));
+    }
+
+    [Fact]
+    public void ForSpec_UnbundledOrBlankSpec_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => S57S101Mapping.ForSpec("S-999"));
+        Assert.Throws<ArgumentException>(() => S57S101Mapping.ForSpec(""));
+    }
 }
