@@ -466,6 +466,7 @@ public sealed class S57ToS101Translator
     private const string S101AttrVerticalClearanceOpen = "verticalClearanceOpen";
     private const string S101AttrVerticalClearanceValue = "verticalClearanceValue";
     private const string S101AttrVerticalClearanceUnlimited = "verticalClearanceUnlimited";
+    private const string S101AttrVerticalClearanceSafe = "verticalClearanceSafe";
     private const string S101AttrHorizontalDistanceUncertainty = "horizontalDistanceUncertainty";
     private const string S101AttrVerticalDatum = "verticalDatum";
     private const string S101AttrScaleMinimum = "scaleMinimum";
@@ -473,6 +474,26 @@ public sealed class S57ToS101Translator
     private const string S101AttrVisualProminence = "visualProminence";
     private const string CategoryOfLandmarkBridge = "26";
     private const string VisualProminenceNotConspicuous = "2";
+
+    // ── Vertical clearances on features other than bridge spans ─────────
+    // S-65 Annex B (Ed 1.2.0) §2.2.4.3 and the IEHG S-57 ENC to S-401
+    // Conversion Guidance (Ed 1.3.0 draft 2) clauses 3.13 (Cable Overhead),
+    // 3.26 (Conveyor), 3.27 (Crane) and 3.55 (Gate). Every S-101/S-401
+    // vertical clearance is a complex whose `verticalClearanceValue` carries
+    // the S-57 value, so the attribute rules target the complex (VERCLR →
+    // verticalClearanceFixed, VERCCL → verticalClearanceClosed, VERCOP →
+    // verticalClearanceOpen, VERCSA → verticalClearanceSafe; the S-401 Gate
+    // rule sends VERCLR to verticalClearanceOpen) and the translator builds
+    // the instance on a feature class that binds it. VERACC nests in each
+    // instance with a known value as verticalUncertainty.uncertaintyFixed. A
+    // clearance whose complex the feature does not bind is rule-dropped.
+    private static readonly HashSet<string> VerticalClearanceComplexes = new(StringComparer.Ordinal)
+    {
+        S101AttrVerticalClearanceFixed,
+        S101AttrVerticalClearanceClosed,
+        S101AttrVerticalClearanceOpen,
+        S101AttrVerticalClearanceSafe,
+    };
 
     // CATBRG values classed as opening bridges in S-101 (opening bridge,
     // swing, lifting, bascule, draw). Pontoon (6) is opening only when
@@ -2260,6 +2281,13 @@ public sealed class S57ToS101Translator
             // Bridge clearance / accuracy / vertical-datum attributes belong to
             // the decomposed span (BuildBridgeSpan), never to the Bridge itself.
             bool isBridge = IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassBridge;
+            // Vertical clearance sources — any rule targeting a vertical
+            // clearance complex, collected in the pass-through loop below; VERACC
+            // qualifies them, on the feature classes that bind one.
+            bool bindsVerticalClearance = VerticalClearanceComplexes.Any(
+                c => _featureBindings.Binds(feature.S101Code, c));
+            var verticalClearances = new List<(string Complex, string Value)>();
+            string? veraccValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -2306,6 +2334,7 @@ public sealed class S57ToS101Translator
                     case S57AttrCurvel: if (bindsSpeed && !string.IsNullOrEmpty(a.Value)) curvelValue = a.Value; break;
                     case S57AttrMltylt: if (bindsMultiplicityOfFeatures && !string.IsNullOrEmpty(a.Value)) mltyltValue = a.Value; break;
                     case S57AttrCatbrg: if (bindsOpeningBridge && !string.IsNullOrEmpty(a.Value)) catbrgValue = a.Value; break;
+                    case S57AttrVeracc: if (bindsVerticalClearance && !isBridge && !string.IsNullOrEmpty(a.Value)) veraccValue = a.Value; break;
                 }
             }
 
@@ -2416,6 +2445,11 @@ public sealed class S57ToS101Translator
                 if (bindsOpeningBridge && a.AttributeCode is S57AttrCatbrg)
                     continue;
 
+                // VERACC nests in the vertical clearance complex(es) assembled
+                // below on the feature classes that bind one.
+                if (bindsVerticalClearance && a.AttributeCode is S57AttrVeracc)
+                    continue;
+
                 // On feature classes that bind `reportedDate`, SORDAT is emitted
                 // here as that top-level simple attribute (S100_TruncatedDate),
                 // the S-57 date value carried verbatim. On a feature that does
@@ -2450,6 +2484,23 @@ public sealed class S57ToS101Translator
                         && !_featureBindings.Binds(feature.S101Code, resolved.S101Code)))
                 {
                     _diagnostics?.RecordRuleDroppedAttribute(attl);
+                    continue;
+                }
+
+                // A rule targeting a vertical clearance complex feeds that
+                // complex's verticalClearanceValue (assembled below) when the
+                // feature binds it; each complex binds at most once.
+                if (VerticalClearanceComplexes.Contains(resolved.S101Code))
+                {
+                    if (_featureBindings.Binds(feature.S101Code, resolved.S101Code)
+                        && !verticalClearances.Exists(c => c.Complex == resolved.S101Code))
+                    {
+                        verticalClearances.Add((resolved.S101Code, resolved.Value));
+                    }
+                    else
+                    {
+                        _diagnostics?.RecordRuleDroppedAttribute(attl);
+                    }
                     continue;
                 }
 
@@ -2641,6 +2692,28 @@ public sealed class S57ToS101Translator
                     ? S101AttrHorizontalClearanceOpen
                     : S101AttrHorizontalClearanceFixed;
                 AppendHorizontalClearanceInstance(builder, complexName, horclrValue);
+            }
+
+            // Append the vertical clearance complex instances. A present S-57
+            // value, even an empty (unknown) one, yields the instance, as for
+            // bridge spans: the mandatory verticalClearanceValue is populated
+            // as empty (null), except on verticalClearanceOpen, whose value is
+            // optional and whose mandatory verticalClearanceUnlimited is false
+            // because a clearance was given.
+            foreach (var (complex, value) in verticalClearances)
+            {
+                bool open = complex == S101AttrVerticalClearanceOpen;
+                AppendVerticalClearanceInstance(
+                    builder,
+                    complex,
+                    unlimited: open ? false : null,
+                    open && value.Length == 0 ? null : value,
+                    veraccValue);
+            }
+            if (veraccValue is not null && !verticalClearances.Exists(c => c.Value.Length > 0))
+            {
+                // No known clearance value for the accuracy to qualify.
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrVeracc);
             }
 
             // Append the `valueOfLocalMagneticAnomaly` complex-attribute

@@ -109,7 +109,8 @@ public sealed class S57S101Mapping
     /// for S-401: an anchorage area whose <c>CATACH</c> is 8 (small craft mooring
     /// area) becomes <c>MooringArea</c>, and <c>CATACH</c> 10 becomes
     /// <c>categoryOfAnchorage</c> 16 (IEHG S-57 ENC to S-401 Conversion Guidance
-    /// clauses 3.3, 3.4 and 3.85). Built once per spec.
+    /// clauses 3.3, 3.4 and 3.85). A gate's <c>VERCLR</c> becomes
+    /// <c>verticalClearanceOpen</c> (clause 3.55). Built once per spec.
     /// </summary>
     /// <param name="targetSpec">The target product, e.g. <c>"S-401"</c>.</param>
     /// <returns>The shared mapping for that product.</returns>
@@ -146,6 +147,10 @@ public sealed class S57S101Mapping
             builder.AddFeatureRule(rule);
         foreach (var rule in S401AnchorageRules.AttributeRules(standard))
             builder.AddAttributeRule(rule);
+
+        // S-401-only gate rule (VERCLR → verticalClearanceOpen).
+        foreach (var rule in S401GateRules.FeatureRules(standard))
+            builder.AddFeatureRule(rule);
         return builder.Build();
     }
 

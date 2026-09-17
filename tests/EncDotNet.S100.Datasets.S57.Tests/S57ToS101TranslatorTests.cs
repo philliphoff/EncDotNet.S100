@@ -3162,6 +3162,110 @@ public class S57ToS101TranslatorTests
         Assert.Equal("2", TopLevelValue(s401, feat, "visualProminence"));
     }
 
+    // ── Vertical clearances on non-bridge features (S-65 Annex B § 2.2.4.3; IEHG 3.13/3.55) ──
+
+    private const int AttlVercsa = 184;
+
+    private static readonly string[] VerticalClearanceComplexes =
+    [
+        "verticalClearanceFixed", "verticalClearanceClosed", "verticalClearanceOpen", "verticalClearanceSafe",
+    ];
+
+    private static IReadOnlyList<S101Attribute> ClearanceComplex(
+        S101Document doc, S101FeatureRecord feat, string complexCode)
+        => ComplexInstanceStrict(doc, feat.Attributes, complexCode, 1, VerticalClearanceComplexes).ToList();
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-401")]
+    public void Translate_OverheadCableWithVerclr_AssemblesVerticalClearanceFixed(string spec)
+    {
+        // CBLOHD (OBJL 21) → CableOverhead, which binds verticalClearanceFixed
+        // and verticalClearanceSafe. VERCLR/VERCSA feed each complex's
+        // verticalClearanceValue; VERACC nests as verticalUncertainty.
+        var target = spec == "S-401" ? S57TranslationTarget.S401 : S57TranslationTarget.S101;
+        var doc = S57ToS101Translator.ForTarget(target).Translate(LineFeatureWithS57Attributes(21,
+            Attr(AttlVerclr, "25.5"), Attr(AttlVercsa, "20"), Attr(AttlVeracc, "0.5")));
+
+        var feat = SingleOfClass(doc, "CableOverhead");
+        var fixedClearance = ClearanceComplex(doc, feat, "verticalClearanceFixed");
+        Assert.Equal("25.5", GetSubAttribute(doc, fixedClearance, "verticalClearanceValue"));
+        Assert.Equal("0.5", GetSubAttribute(doc, fixedClearance, "uncertaintyFixed"));
+        var safeClearance = ClearanceComplex(doc, feat, "verticalClearanceSafe");
+        Assert.Equal(string.Empty, safeClearance[0].Value);
+        Assert.Equal("20", GetSubAttribute(doc, safeClearance, "verticalClearanceValue"));
+
+        // Each value sits inside its complex; none is emitted flat.
+        Assert.Equal(["verticalClearanceFixed", "verticalClearanceValue", "verticalUncertainty", "uncertaintyFixed",
+            "verticalClearanceSafe", "verticalClearanceValue", "verticalUncertainty", "uncertaintyFixed"],
+            AttributeNames(doc, feat));
+    }
+
+    [Fact]
+    public void Translate_OverheadCableWithEmptyVerclr_EmitsUnknownValueAndDropsVeracc()
+    {
+        // An empty (unknown) VERCLR still yields the complex, with the mandatory
+        // verticalClearanceValue empty; VERACC has no known value to qualify.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(21, Attr(AttlVerclr, ""), Attr(AttlVeracc, "0.5")), diag);
+
+        var feat = SingleOfClass(s101, "CableOverhead");
+        var fixedClearance = ClearanceComplex(s101, feat, "verticalClearanceFixed");
+        Assert.Equal(string.Empty, GetSubAttribute(s101, fixedClearance, "verticalClearanceValue"));
+        Assert.DoesNotContain("uncertaintyFixed", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVeracc]);
+    }
+
+    [Fact]
+    public void Translate_GateWithVerclr_S101Target_DropsIt()
+    {
+        // S-101 Gate binds only verticalClearanceOpen, and S-65 Annex B gives no
+        // rule for a gate's VERCLR, so it is dropped (with its VERACC).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(61, Attr(AttlVerclr, "4"), Attr(AttlVeracc, "0.1")), diag);
+
+        var feat = SingleOfClass(s101, "Gate");
+        Assert.DoesNotContain("verticalClearanceValue", AttributeNames(s101, feat));
+        Assert.DoesNotContain("verticalClearanceOpen", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVerclr]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVeracc]);
+    }
+
+    [Theory]
+    [InlineData(61)]    // GATCON
+    [InlineData(17031)] // gatcon
+    public void Translate_GateWithVerclr_S401Target_AssemblesVerticalClearanceOpen(ushort objl)
+    {
+        // IEHG S-57 ENC to S-401 Conversion Guidance clause 3.55: VERCLR →
+        // verticalClearanceOpen.verticalClearanceValue, VERACC →
+        // verticalUncertainty.uncertaintyFixed. A given clearance is not unlimited.
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(objl, Attr(AttlVerclr, "4"), Attr(AttlVeracc, "0.1")));
+
+        var feat = SingleOfClass(s401, "Gate");
+        var open = ClearanceComplex(s401, feat, "verticalClearanceOpen");
+        Assert.Equal("false", GetSubAttribute(s401, open, "verticalClearanceUnlimited"));
+        Assert.Equal("4", GetSubAttribute(s401, open, "verticalClearanceValue"));
+        Assert.Equal("0.1", GetSubAttribute(s401, open, "uncertaintyFixed"));
+    }
+
+    [Fact]
+    public void Translate_VerclrOnFeatureWithoutClearance_IsRuleDropped()
+    {
+        // A light binds no vertical clearance at all, so VERCLR is dropped and
+        // VERACC stays unmapped, as before.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(75, Attr(75, "1"), Attr(AttlVerclr, "4"), Attr(AttlVeracc, "0.1")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.DoesNotContain(AttributeNames(s101, feat), n => n.StartsWith("verticalClearance", StringComparison.Ordinal));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVerclr]);
+        Assert.Equal(1, diag.UnmappedAttributes[new S57AttributeDrop(75, (ushort)AttlVeracc)]);
+    }
+
     // ── CATBRG → S-101 bridge category attributes (S-65 Annex B § 4.8.10) ──
 
     private static List<(string Code, int Index, string Value)> BridgeAttributes(string catbrg, S57TranslationDiagnostics? diag = null)
