@@ -80,7 +80,7 @@ internal static class InlandRules
         yield return F(17065, "trnbsn", "TurningBasin"); // Turning basin
         yield return F(17066, "wtware", "WaterwayArea"); // Waterway area
         yield return F(17067, "wtwgag", "WaterwayGauge"); // Waterway gauge
-        // tisdge: S-401 models time schedules as information, not as a feature class; not converted yet.
+        // tisdge: no S-401 feature class; the translator emits a TimeScheduleInGeneral information record.
         yield return F(17068, "tisdge", null); // Time Schedule - in general
         yield return F(17069, "vehtrf", "VehicleTransfer"); // Vehicle transfer
         yield return F(17070, "excnst", "ExceptionalNavigationStructure"); // Exceptional navigation structure
@@ -150,18 +150,18 @@ internal static class InlandRules
         yield return A(17089, "sdrlev", "nameOfSoundingDatumReferenceLevel"); // Name of Sounding datum reference level
         yield return A(17090, "vcrlev", "nameOfVerticalRiverDatumReferenceLevel"); // Name of vertical river datum reference level
         yield return A(17091, "catvtr", "categoryOfVehicleTransfer"); // Category of vehicle transfer
-        // cattab: S-401 binds categoryOfTimeAndBehaviour on information types (time schedules), not on features; not converted yet.
-        yield return A(17092, "cattab", null); // Category of time and behaviour
-        // schref: S-401 binds timeScheduleReference on information types (time schedules), not on features; not converted yet.
-        yield return A(17093, "schref", null); // Time Schedule Reference
-        // useshp: S-401 binds useOfShip on information types, not on features; not converted yet.
-        yield return A(17094, "useshp", null); // Use of Ship
+        // cattab: bound on the S-401 TimeScheduleInGeneral information type, which the translator emits for tisdge.
+        yield return A(17092, "cattab", "categoryOfTimeAndBehaviour"); // Category of time and behaviour
+        // schref: bound on the S-401 TimeScheduleInGeneral information type, which the translator emits for tisdge.
+        yield return A(17093, "schref", "timeScheduleReference"); // Time Schedule Reference
+        // useshp: bound on the S-401 TimeScheduleInGeneral information type, which the translator emits for tisdge.
+        yield return A(17094, "useshp", "useOfShip"); // Use of Ship
         yield return A(17095, "curvhw", "currentVelocityAtHighWaterLevel"); // Current velocity at high water level
         yield return A(17096, "curvlw", "currentVelocityAtLowWaterLevel"); // Current velocity at low water level
         yield return A(17097, "curvmw", "currentVelocityAtMeanWaterLevel"); // Current velocity at mean water level
         yield return A(17098, "curvow", "currentVelocityAtOtherWaterLevel"); // Current velocity at other water level
-        // aptref: S-401 binds averagePassingTimeReference on information types, not on features; not converted yet.
-        yield return A(17099, "aptref", null); // Average Passing Time Reference
+        // aptref: bound on the S-401 TimeScheduleInGeneral information type, which the translator emits for tisdge.
+        yield return A(17099, "aptref", "averagePassingTimeReference"); // Average Passing Time Reference
         yield return A(17100, "catexs", "categoryOfExceptionalStructure"); // Category of exceptional structure
         yield return TwinA(standard, 17101, "catcbl", 11); // Category of cable (twin of CATCBL)
         yield return TwinA(standard, 17102, "cathlk", 31); // Category of hulk (twin of CATHLK)
@@ -208,8 +208,8 @@ internal static class InlandRules
         yield return A(18034, "catplg", null); // Category of plug
         // shrnum: numberOfShoreConnectors is a sub-attribute of an S-401 complex attribute (shore power); not assembled yet.
         yield return A(18035, "shrnum", null); // Number of shore connectors
-        // shptyp: S-401 binds typeOfShip on information types, not on features; not converted yet.
-        yield return A(33066, "shptyp", null); // Type of Ship
+        // shptyp: bound on the S-401 TimeScheduleInGeneral information type, which the translator emits for tisdge.
+        yield return A(33066, "shptyp", "typeOfShip"); // Type of Ship
     }
 
     // hunits → distanceUnitOfMeasurement (conversion guidance §2.1.4, table 2.3):

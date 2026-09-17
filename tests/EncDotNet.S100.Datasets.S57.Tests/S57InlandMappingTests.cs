@@ -246,12 +246,15 @@ public class S57InlandMappingTests
     }
 
     [Fact]
-    public void S401Mapping_InlandAttributeTargets_AreBoundDirectlyByAFeatureType()
+    public void S401Mapping_InlandAttributeTargets_AreBoundByAFeatureOrInformationType()
     {
-        // A target that S-401 only uses inside a complex attribute or on an
-        // information type cannot be emitted as a feature's simple attribute.
-        var bound = S401Catalogue.Value.FeatureTypes
+        // A target must be bound directly by a feature type, or by the
+        // information type the translator emits for a time schedule; the
+        // translator gates the latter off features.
+        var catalogue = S401Catalogue.Value;
+        var bound = catalogue.FeatureTypes
             .SelectMany(ft => ft.AttributeBindings)
+            .Concat(catalogue.InformationTypes.Single(it => it.Code == "TimeScheduleInGeneral").AttributeBindings)
             .Select(b => b.AttributeRef)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -260,6 +263,22 @@ public class S57InlandMappingTests
             if (rule.DefaultS101Code is { } code)
                 Assert.True(bound.Contains(code), $"{rule.S57Acronym} → {code}");
         }
+    }
+
+    [Theory]
+    // Bound on S-401 TimeScheduleInGeneral (alias tisdge).
+    [InlineData(17092, "cattab", "categoryOfTimeAndBehaviour")]
+    [InlineData(17093, "schref", "timeScheduleReference")]
+    [InlineData(17094, "useshp", "useOfShip")]
+    [InlineData(17099, "aptref", "averagePassingTimeReference")]
+    [InlineData(33066, "shptyp", "typeOfShip")]
+    public void S401Mapping_MapsTimeScheduleAttributes(int attl, string acronym, string target)
+    {
+        var rule = S401.AttributeRules[(ushort)attl];
+
+        Assert.Equal(acronym, rule.S57Acronym);
+        Assert.Equal(target, rule.DefaultS101Code);
+        Assert.True(S101FeatureAttributeBindings.ForSpec("S-401").Binds("TimeScheduleInGeneral", target));
     }
 
     [Fact]

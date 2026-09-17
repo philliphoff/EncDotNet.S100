@@ -36,6 +36,7 @@ public sealed class S101FeatureAttributeBindings
     private readonly FrozenSet<(string Feature, string Attribute)> _singleValuedBindings;
     private readonly FrozenSet<string> _featureTypeCodes;
     private readonly FrozenSet<string> _attributeCodes;
+    private readonly FrozenSet<(string Feature, string Association, string InformationType)> _informationBindings;
 
     private static readonly ConcurrentDictionary<string, Lazy<S101FeatureAttributeBindings>> BySpec =
         new(StringComparer.OrdinalIgnoreCase);
@@ -44,12 +45,14 @@ public sealed class S101FeatureAttributeBindings
         FrozenDictionary<string, FrozenSet<string>> featureCodesByAttribute,
         FrozenSet<(string Feature, string Attribute)> singleValuedBindings,
         FrozenSet<string> featureTypeCodes,
-        FrozenSet<string> attributeCodes)
+        FrozenSet<string> attributeCodes,
+        FrozenSet<(string Feature, string Association, string InformationType)> informationBindings)
     {
         _featureCodesByAttribute = featureCodesByAttribute;
         _singleValuedBindings = singleValuedBindings;
         _featureTypeCodes = featureTypeCodes;
         _attributeCodes = attributeCodes;
+        _informationBindings = informationBindings;
     }
 
     /// <summary>
@@ -83,14 +86,31 @@ public sealed class S101FeatureAttributeBindings
         var byAttribute = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var singleValued = new HashSet<(string Feature, string Attribute)>();
         var featureTypeCodes = new HashSet<string>(StringComparer.Ordinal);
+        var informationBindings = new HashSet<(string Feature, string Association, string InformationType)>();
         foreach (var ft in catalogue.FeatureTypes)
         {
             if (string.IsNullOrEmpty(ft.Code))
                 continue;
 
             featureTypeCodes.Add(ft.Code);
+            IndexAttributeBindings(ft.Code, ft.AttributeBindings);
 
-            foreach (var binding in ft.AttributeBindings)
+            foreach (var binding in ft.InformationBindings)
+            {
+                foreach (var informationType in binding.InformationTypeRefs)
+                    informationBindings.Add((ft.Code, binding.AssociationRef, informationType));
+            }
+        }
+
+        foreach (var it in catalogue.InformationTypes)
+        {
+            if (!string.IsNullOrEmpty(it.Code))
+                IndexAttributeBindings(it.Code, it.AttributeBindings);
+        }
+
+        void IndexAttributeBindings(string ownerCode, IEnumerable<AttributeBinding> bindings)
+        {
+            foreach (var binding in bindings)
             {
                 if (string.IsNullOrEmpty(binding.AttributeRef))
                     continue;
@@ -101,11 +121,11 @@ public sealed class S101FeatureAttributeBindings
                     byAttribute[binding.AttributeRef] = set;
                 }
 
-                set.Add(ft.Code);
+                set.Add(ownerCode);
 
                 var multiplicity = binding.Multiplicity;
                 if (!multiplicity.IsInfinite && multiplicity.Upper is <= 1)
-                    singleValued.Add((ft.Code, binding.AttributeRef));
+                    singleValued.Add((ownerCode, binding.AttributeRef));
             }
         }
 
@@ -123,7 +143,8 @@ public sealed class S101FeatureAttributeBindings
             frozen,
             singleValued.ToFrozenSet(),
             featureTypeCodes.ToFrozenSet(StringComparer.Ordinal),
-            attributeCodes);
+            attributeCodes,
+            informationBindings.ToFrozenSet());
     }
 
     /// <summary>
@@ -146,7 +167,7 @@ public sealed class S101FeatureAttributeBindings
         => !string.IsNullOrEmpty(attributeCode) && _attributeCodes.Contains(attributeCode);
 
     /// <summary>
-    /// Returns <c>true</c> if the S-101 feature class named
+    /// Returns <c>true</c> if the feature class (or information type) named
     /// <paramref name="featureCode"/> directly binds the attribute named
     /// <paramref name="attributeCode"/> in the Feature Catalogue.
     /// </summary>
@@ -176,6 +197,22 @@ public sealed class S101FeatureAttributeBindings
             return false;
         return _singleValuedBindings.Contains((featureCode, attributeCode));
     }
+
+    /// <summary>
+    /// Returns <c>true</c> if the feature class named <paramref name="featureCode"/>
+    /// may be linked to an instance of the information type named
+    /// <paramref name="informationTypeCode"/> through the information
+    /// association named <paramref name="associationCode"/>. S-401, for
+    /// instance, lets <c>LockBasin</c> reach <c>TimeScheduleInGeneral</c> through
+    /// <c>AdditionalInformation</c>, but not <c>Bridge</c>.
+    /// </summary>
+    /// <param name="featureCode">The feature class code, e.g. <c>"LockBasin"</c>.</param>
+    /// <param name="associationCode">The information association code, e.g. <c>"AdditionalInformation"</c>.</param>
+    /// <param name="informationTypeCode">The information type code, e.g. <c>"TimeScheduleInGeneral"</c>.</param>
+    /// <returns><c>true</c> when the feature class declares that information binding.</returns>
+    public bool BindsInformationType(string? featureCode, string associationCode, string informationTypeCode)
+        => !string.IsNullOrEmpty(featureCode)
+            && _informationBindings.Contains((featureCode, associationCode, informationTypeCode));
 
     private static S101FeatureAttributeBindings Load(string catalogueSpec)
     {

@@ -327,6 +327,7 @@ public static class FeatureCatalogueReader
             AssociationRef = (string)element.Element(S100FC + "association")!.Attribute("ref")!,
             RoleRef = (string)element.Element(S100FC + "role")!.Attribute("ref")!,
             FeatureTypeRef = (string)element.Element(S100FC + "featureType")!.Attribute("ref")!,
+            FeatureTypeRefs = element.Elements(S100FC + "featureType").Select(e => (string)e.Attribute("ref")!).ToList(),
             RoleType = (string?)element.Attribute("roleType"),
         };
     }
@@ -339,6 +340,7 @@ public static class FeatureCatalogueReader
             AssociationRef = (string)element.Element(S100FC + "association")!.Attribute("ref")!,
             RoleRef = (string)element.Element(S100FC + "role")!.Attribute("ref")!,
             InformationTypeRef = (string)element.Element(S100FC + "informationType")!.Attribute("ref")!,
+            InformationTypeRefs = element.Elements(S100FC + "informationType").Select(e => (string)e.Attribute("ref")!).ToList(),
             RoleType = (string?)element.Attribute("roleType"),
         };
     }
