@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -55,6 +56,61 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         var path = SyntheticIso8211Cell.Write(dir, "101AA00DS.000", "INT.IHO.S-101.1.0.2");
 
         Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path));
+    });
+
+    [Theory]
+    [InlineData(S57ProductSpecification.ElectronicNavigationalChart)]
+    [InlineData(S57ProductSpecification.InlandElectronicNavigationalChart)]
+    public void Iso8211_S57Cell_DetectsAsS57WhateverItsProductSpecification(byte productSpecification) =>
+        WithTempDirectory(dir =>
+        {
+            // An inland ENC is an S-57 cell like any other, so it keeps the S-57
+            // identity; what it declares only selects how it is portrayed.
+            var path = SyntheticS57Cell.Write(dir, "U37TEST.000", productSpecification);
+
+            Assert.Equal("S-57", DatasetPipelineFactory.DetectProductSpec(path));
+        });
+
+    [Theory]
+    [InlineData(S57ProductSpecification.ElectronicNavigationalChart, false)]
+    [InlineData(S57ProductSpecification.InlandElectronicNavigationalChart, true)]
+    public void Iso8211_S57Cell_EnvelopeExposesDeclaredProductSpecification(
+        byte productSpecification, bool expectInland) => WithTempDirectory(dir =>
+        {
+            var path = SyntheticS57Cell.Write(dir, "U37TEST.000", productSpecification);
+            Iso8211RootInfo? captured = null;
+            var registry = new S100ProductRegistry();
+            registry.Register(Iso8211("S-57", root =>
+            {
+                captured = root;
+                return root.HasDataSetParameterField;
+            }));
+
+            DatasetPipelineFactory.DetectProductSpec(path, registry);
+
+            Assert.NotNull(captured);
+            Assert.Equal(expectInland, captured.Value.DeclaresS57ProductSpecification(
+                S57ProductSpecification.InlandElectronicNavigationalChart));
+            Assert.Equal(!expectInland, captured.Value.DeclaresS57ProductSpecification(
+                S57ProductSpecification.ElectronicNavigationalChart));
+            // The numeric S-57 code must never read as an S-100 product identifier.
+            Assert.False(captured.Value.DeclaresProduct("S-401"));
+            Assert.False(captured.Value.DeclaresProduct("S-101"));
+        });
+
+    [Fact]
+    public void Iso8211_InlandS57Cell_IsNotClaimedByS401() => WithTempDirectory(dir =>
+    {
+        var path = SyntheticS57Cell.Write(
+            dir, "U37TEST.000", S57ProductSpecification.InlandElectronicNavigationalChart);
+
+        // With only S-101 and S-401 registered, nothing claims an S-57 cell, so it
+        // falls back to S-101 rather than being mistaken for an S-401 dataset.
+        var registry = new S100ProductRegistry();
+        registry.Register(S100Products.S101);
+        registry.Register(S100Products.S401);
+
+        Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
     });
 
     [Fact]
@@ -151,6 +207,35 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         };
 
         Assert.Equal(expected, root.DeclaresProduct(productId));
+    }
+
+    [Theory]
+    [InlineData("10", true, 10, true)]
+    [InlineData(" 10 ", true, 10, true)]
+    [InlineData("1", true, 10, false)]
+    [InlineData("1", true, 1, true)]
+    [InlineData("10", false, 10, false)]
+    [InlineData("INT.IHO.S-401.1.2", false, 10, false)]
+    [InlineData("", true, 10, false)]
+    [InlineData("ENC", true, 1, false)]
+    public void Iso8211RootInfo_DeclaresS57ProductSpecification_RequiresS57Envelope(
+        string declared, bool hasDataSetParameterField, int code, bool expected)
+    {
+        var root = new Iso8211RootInfo
+        {
+            ProductSpecification = declared,
+            EncodingSpecification = "",
+            HasDataSetParameterField = hasDataSetParameterField,
+        };
+
+        Assert.Equal(expected, root.DeclaresS57ProductSpecification(code));
+    }
+
+    [Fact]
+    public void Iso8211RootInfo_Default_DeclaresNoS57ProductSpecification()
+    {
+        Assert.False(default(Iso8211RootInfo).DeclaresS57ProductSpecification(
+            S57ProductSpecification.InlandElectronicNavigationalChart));
     }
 
     [Fact]

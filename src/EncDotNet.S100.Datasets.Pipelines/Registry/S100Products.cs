@@ -69,8 +69,10 @@ public static class S100Products
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager),
         // S-57 shares the ISO 8211 .000 extension with S-101 and S-401 but
-        // declares no PRSP product identifier; it is instead identified by the
-        // S-57-only DSPM field in its DDR. Contributing this rule on the
+        // declares no S-100 PRSP product identifier (its PRSP is a numeric S-57
+        // code); it is instead identified by the S-57-only DSPM field in its DDR.
+        // That covers inland ENCs too (PRSP 10): they are S-57 cells, so they
+        // keep the S-57 identity. Contributing this rule on the
         // registration lets the registry-aware DetectProductSpec overload honour
         // the registry's product set — a registry without S-57 never claims one.
         MatchIso8211 = static root => root.HasDataSetParameterField,

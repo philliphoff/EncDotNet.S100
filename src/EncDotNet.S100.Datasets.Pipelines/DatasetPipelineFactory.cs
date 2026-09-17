@@ -182,9 +182,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             var productSpecification = "";
             var encodingSpecification = "";
 
-            // DSID is the first data record in a conformant S-100 cell; S-57
-            // carries a DSID too but without the PRSP/ENSP subfields, which is
-            // why the DSPM field below is what identifies it.
+            // DSID is the first data record in a conformant cell. S-57 carries a
+            // DSID too, but its PRSP is a numeric S-57 product specification code
+            // (not an S-100 identifier) and it has no ENSP, which is why the DSPM
+            // field below is what identifies it.
             var dsidDefinition = ddr.GetFieldDefinition("DSID");
             if (dsidDefinition is not null)
             {
