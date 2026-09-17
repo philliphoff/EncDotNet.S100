@@ -3208,6 +3208,115 @@ public class S57ToS101TranslatorTests
         Assert.Equal(2, s101.Features.Count(f => ClassOf(s101, f) == "SpanFixed"));
     }
 
+    // ── IENC c_brga → S-401 BridgeArchAssociation (#608) ──
+
+    private const ushort ObjlInlandBridge = 17011;
+    private const ushort ObjlBridgeArch = 18003;
+
+    // Three adjacent inland arch pieces (bridge, CATBRG 13) with clearances,
+    // feature ids 10–12, on edges 10–12 of a straight line.
+    private static (EncDotNet.S57.S57VectorRecord[] Vectors, EncDotNet.S57.S57FeatureRecord[] Pieces) ArchPieces(
+        params string?[] clearances)
+    {
+        var vectors = new List<EncDotNet.S57.S57VectorRecord> { Node(1, 0, 0) };
+        var pieces = new List<EncDotNet.S57.S57FeatureRecord>();
+        for (int i = 0; i < clearances.Length; i++)
+        {
+            vectors.Add(Node((uint)(i + 2), 0, (i + 1) * 10));
+            vectors.Add(Edge((uint)(10 + i), (uint)(i + 1), (uint)(i + 2)));
+            var attrs = new List<EncDotNet.S57.S57AttributeValue> { Attr(AttlCatbrg, "13") };
+            if (clearances[i] is { } clearance)
+                attrs.Add(Attr(AttlVerclr, clearance));
+            pieces.Add(Feat((uint)(i + 1), 2, ObjlInlandBridge, featureIdentificationNumber: (uint)(10 + i),
+                attributes: attrs, spatialPointers: new[] { Sp(RcnmEdge, (uint)(10 + i), 1, 0, 0) }));
+        }
+        return (vectors.ToArray(), pieces.ToArray());
+    }
+
+    private static void AssertArchComponents(
+        S101Document doc, S101FeatureRecord head, params S101FeatureRecord[] components)
+    {
+        var arch = head.FeatureAssociations
+            .Where(fa => doc.FeatureAssociationCatalogue[fa.NumericCode] == "BridgeArchAssociation")
+            .ToList();
+        Assert.All(arch, fa => Assert.Equal("theComponent", doc.RoleCatalogue[fa.RoleCode]));
+        Assert.Equal(components.Select(c => c.RecordId), arch.Select(fa => fa.RecordId));
+    }
+
+    [Fact]
+    public void Translate_S401Target_BridgeArch_LinksItsFixedSpans()
+    {
+        var (vectors, pieces) = ArchPieces("7.1", "8.4", "7.2");
+        var arch = Feat(9, 255, ObjlBridgeArch, featureIdentificationNumber: 99,
+            attributes: new[] { Attr(AttlObjnam, "Arch") },
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 12) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(vectors, pieces.Append(arch)), diag);
+
+        var spans = s401.Features.Where(f => ClassOf(s401, f) == "SpanFixed").ToList();
+        Assert.Equal(3, spans.Count);
+        Assert.Equal(3, s401.Features.Count(f => ClassOf(s401, f) == "Bridge"));
+        Assert.Equal(6, s401.Features.Count);
+        AssertArchComponents(s401, spans[0], spans[1], spans[2]);
+        Assert.Empty(spans[1].FeatureAssociations);
+        Assert.Empty(spans[2].FeatureAssociations);
+        Assert.False(diag.RuleDroppedObjectClasses.ContainsKey(ObjlBridgeArch));
+        Assert.False(diag.UnmappedObjectClasses.ContainsKey(ObjlBridgeArch));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlObjnam]); // the arch's name has no home on a span
+    }
+
+    [Fact]
+    public void Translate_S401Target_BridgeArchInsideBridgeCAggr_LinksSpansOfTheAggregatedBridge()
+    {
+        // The arch pieces belong to the bridge's C_AGGR; the c_brga is kept
+        // out of it (IENC Encoding Guide G.1.2).
+        var (vectors, pieces) = ArchPieces("7.1", "8.4");
+        var aggr = Feat(8, 255, 400, featureIdentificationNumber: 98,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var arch = Feat(9, 255, ObjlBridgeArch, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(vectors, pieces.Append(arch).Append(aggr)));
+
+        var spans = s401.Features.Where(f => ClassOf(s401, f) == "SpanFixed").ToList();
+        Assert.Equal(2, spans.Count);
+        AssertBridgeComponents(s401, SingleOfClass(s401, "Bridge"), spans[0], spans[1]);
+        AssertArchComponents(s401, spans[0], spans[1]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_BridgeArchWithOneSpan_IsDropped()
+    {
+        // Only the first piece carries a clearance, so only it becomes a span.
+        var (vectors, pieces) = ArchPieces("7.1", null);
+        var arch = Feat(9, 255, ObjlBridgeArch, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(vectors, pieces.Append(arch)), diag);
+
+        Assert.DoesNotContain("BridgeArchAssociation", s401.FeatureAssociationCatalogue.Values);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[ObjlBridgeArch]);
+    }
+
+    [Fact]
+    public void Translate_S101Target_BridgeArch_IsUnmapped()
+    {
+        var (vectors, pieces) = ArchPieces("7.1", "8.4");
+        var arch = Feat(9, 255, ObjlBridgeArch, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(BuildDocument(vectors, pieces.Append(arch)), diag);
+
+        Assert.Equal(1, diag.UnmappedObjectClasses[ObjlBridgeArch]);
+        Assert.DoesNotContain("BridgeArchAssociation", s101.FeatureAssociationCatalogue.Values);
+    }
+
     [Fact]
     public void Translate_CAggrWithNonBridgeMember_IsNotABridgeAggregation()
     {

@@ -86,7 +86,7 @@ internal static class InlandRules
         yield return F(17070, "excnst", "ExceptionalNavigationStructure"); // Exceptional navigation structure
         yield return F(18001, "lg_sdm", "MaximumPermittedShipDimensions"); // Maximum permitted ship dimensions
         yield return F(18002, "lg_vsp", "MaximumPermittedVesselSpeed"); // Maximum permitted vessel speed
-        // c_brga: A collection object; S-401 expresses bridge-arch aggregation as a feature association, not converted yet.
+        // c_brga: a collection object with no S-401 feature class; the translator converts it to BridgeArchAssociation between its members' spans.
         yield return F(18003, "c_brga", null); // Bridge Arch Aggregation
         yield return F(18004, "sensor", "Sensor"); // Sensor
         // NEWOBJ: NEWOBJ has no fixed meaning; S-401 has no equivalent.

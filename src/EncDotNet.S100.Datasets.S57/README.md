@@ -80,16 +80,19 @@ Key types:
   attributes of a bunker station (`catvol`, `catfrq`, `amoamp`, `catplg`,
   `shrnum`, `allcon`) target the sub-attributes of S-401's
   `powerCharacteristics`; the translator assembles one instance per listed
-  voltage and frequency on `BunkerStation` and drops them elsewhere. Six codes
-  have no S-401 home yet and are reported as rule-dropped: `c_brga`,
-  `NEWOBJ`, the three `NEWOBJ` definition attributes (`CLSDEF`, `CLSNAM`,
-  `SYMINS`), and `lc_csi` (a complex attribute).
+  voltage and frequency on `BunkerStation` and drops them elsewhere. The
+  bridge-arch collection `c_brga` emits no feature: the `SpanFixed` of its
+  first member bridge links the other members' fixed spans with S-401's
+  `BridgeArchAssociation`, and a `c_brga` with fewer than two fixed spans is
+  reported as rule-dropped. Five codes have no S-401 home yet and are
+  reported as rule-dropped: `NEWOBJ`, its three definition attributes
+  (`CLSDEF`, `CLSNAM`, `SYMINS`), and `lc_csi` (a complex attribute).
   Inland bridges convert exactly as maritime `BRIDGE` does: `CATBRG`
   categories on the `Bridge`, a `SpanFixed`/`SpanOpening` carrying the
   clearances, and point bridges as `Landmark` (the S-401 catalogue defines all
-  of these). Rules are resolved by ATTL
-  (`ResolveAttribute(ushort, …)`), so an inland code and its upper-case twin
-  never shadow each other.
+  of these); the fixed spans of one bridge arch are linked as above. Rules
+  are resolved by ATTL (`ResolveAttribute(ushort, …)`), so an inland code and
+  its upper-case twin never shadow each other.
 - **S-401 anchorage rules** (internal `S401AnchorageRules`, applied last in
   the S-401 mapping) — these replace the `ACHARE`/`achare` and
   `CATACH`/`catach` rules for S-401 only, so the S-101 default is unchanged.
