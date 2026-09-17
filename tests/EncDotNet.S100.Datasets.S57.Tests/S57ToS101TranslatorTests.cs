@@ -688,11 +688,13 @@ public class S57ToS101TranslatorTests
     {
         // USACE inland bridges (17011) carry the standard CATBRG (9); an
         // inland bridge reuses the BRIDGE rule, so its categories convert too.
-        var n1 = Node(1, 1000, 2000);
-        var bridge = Feat(recordId: 1, primitive: 1, objectClass: 17011,
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 100, 100);
+        var e1 = Edge(10, 1, 2);
+        var bridge = Feat(recordId: 1, primitive: 2, objectClass: 17011,
             attributes: new[] { Attr(9, "3") }, // swing bridge
-            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
-        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { bridge });
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1, n2, e1 }, features: new[] { bridge });
 
         var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
 
@@ -2206,21 +2208,528 @@ public class S57ToS101TranslatorTests
         Assert.Equal("6.25", GetSubAttribute(s101, fixedClr, "horizontalClearanceValue"));
     }
 
-    [Fact]
-    public void Translate_BridgeWithHorclr_LeavesHorclrUnmapped()
+    // ── BRIDGE → Bridge + SpanFixed / SpanOpening (S-65 Annex B §4.8.10) ──
+
+    // S-57 attribute codes used by the bridge tests.
+    private const int AttlCatbrg = 9;
+    private const int AttlConvis = 83;
+    private const int AttlHoracc = 97;
+    private const int AttlHorclr = 98;
+    private const int AttlObjnam = 116;
+    private const int AttlScamin = 133;
+    private const int AttlVeracc = 180;
+    private const int AttlVerclr = 181;
+    private const int AttlVerccl = 182;
+    private const int AttlVercop = 183;
+    private const int AttlVerdat = 185;
+
+    // Complex attributes a span may carry; used to delimit instances.
+    private static readonly string[] SpanComplexes =
+    [
+        "fixedDateRange", "horizontalClearanceFixed", "verticalClearanceFixed",
+        "verticalClearanceClosed", "verticalClearanceOpen",
+    ];
+
+    private static IReadOnlyList<S101Attribute> SpanComplex(
+        S101Document doc, S101FeatureRecord feat, string complexCode)
+        => ComplexInstanceStrict(doc, feat.Attributes, complexCode, 1, SpanComplexes).ToList();
+
+    // Top-level value of a simple attribute (first occurrence), or null.
+    private static string? TopLevelValue(S101Document doc, S101FeatureRecord feat, string code)
+        => GetSubAttribute(doc, feat.Attributes, code);
+
+    private static IEnumerable<string> AttributeNames(S101Document doc, S101FeatureRecord feat)
+        => feat.Attributes.Select(a => doc.AttributeTypeCatalogue[a.NumericCode]);
+
+    private static S101FeatureRecord SingleOfClass(S101Document doc, string s101Class)
+        => Assert.Single(doc.Features, f => ClassOf(doc, f) == s101Class);
+
+    private static void AssertBridgeComponents(
+        S101Document doc, S101FeatureRecord bridge, params S101FeatureRecord[] components)
     {
-        // BRIDGE (OBJL 11) → Bridge, which binds neither horizontalClearance
-        // complex (S-101 carries bridge clearance on the decomposed spans).
-        // HORCLR therefore has no conformant home and is left unmapped — no
-        // clearance complex is emitted and no attribute carries the value.
+        Assert.Equal(components.Length, bridge.FeatureAssociations.Count);
+        foreach (var fa in bridge.FeatureAssociations)
+        {
+            Assert.Equal("BridgeAggregation", doc.FeatureAssociationCatalogue[fa.NumericCode]);
+            Assert.Equal("theComponent", doc.RoleCatalogue[fa.RoleCode]);
+        }
+        Assert.Equal(
+            components.Select(c => c.RecordId).OrderBy(i => i),
+            bridge.FeatureAssociations.Select(a => a.RecordId).OrderBy(i => i));
+    }
+
+    [Fact]
+    public void Translate_FixedBridgeWithClearance_EmitsBridgeAndSpanFixed()
+    {
+        var diag = new S57TranslationDiagnostics();
         var s101 = new S57ToS101Translator().Translate(
-            PointFeatureWithS57Attributes(11, Attr(98, "12.5")));
+            LineFeatureWithS57Attributes(11,
+                Attr(AttlCatbrg, "1"),
+                Attr(AttlVerclr, "12.4"),
+                Attr(AttlVeracc, "0.5"),
+                Attr(AttlHorclr, "30"),
+                Attr(AttlHoracc, "2"),
+                Attr(AttlVerdat, "24"),
+                Attr(AttlScamin, "22000"),
+                Attr(AttlObjnam, "Test Bridge")),
+            diag);
+
+        Assert.Equal(2, s101.Features.Count);
+        var bridge = SingleOfClass(s101, "Bridge");
+        var span = SingleOfClass(s101, "SpanFixed");
+
+        // Both features share the S-57 geometry and identity; the Bridge is the
+        // collection end of the BridgeAggregation.
+        Assert.Equal(bridge.SpatialAssociations, span.SpatialAssociations);
+        Assert.Equal(bridge.FeatureIdentificationNumber, span.FeatureIdentificationNumber);
+        AssertBridgeComponents(s101, bridge, span);
+        Assert.Empty(span.FeatureAssociations);
+
+        // Clearances, accuracies and vertical datum live on the span only.
+        var vertical = SpanComplex(s101, span, "verticalClearanceFixed");
+        Assert.Equal("12.4", GetSubAttribute(s101, vertical, "verticalClearanceValue"));
+        Assert.Equal("0.5", GetSubAttribute(s101, vertical, "uncertaintyFixed"));
+        Assert.NotNull(GetSubAttribute(s101, vertical, "verticalUncertainty"));
+        var horizontal = SpanComplex(s101, span, "horizontalClearanceFixed");
+        Assert.Equal("30", GetSubAttribute(s101, horizontal, "horizontalClearanceValue"));
+        Assert.Equal("2", GetSubAttribute(s101, horizontal, "horizontalDistanceUncertainty"));
+        Assert.Equal("24", TopLevelValue(s101, span, "verticalDatum"));
+        Assert.Equal("22000", TopLevelValue(s101, span, "scaleMinimum"));
+        Assert.DoesNotContain("featureName", AttributeNames(s101, span));
+
+        var bridgeAttrs = AttributeNames(s101, bridge).ToList();
+        Assert.Contains("featureName", bridgeAttrs);
+        Assert.Contains("scaleMinimum", bridgeAttrs);
+        foreach (var spanOnly in new[]
+        {
+            "verticalClearanceValue", "verticalClearanceFixed", "verticalClearanceClosed",
+            "verticalClearanceOpen", "horizontalClearanceFixed", "horizontalClearanceValue",
+            "verticalDatum", "uncertaintyFixed", "horizontalDistanceUncertainty",
+        })
+        {
+            Assert.DoesNotContain(spanOnly, bridgeAttrs);
+        }
+
+        Assert.Equal(1, diag.FeaturesEmitted);
+        Assert.Equal(1, diag.BridgeSpansEmitted);
+        Assert.Empty(diag.RuleDroppedAttributes);
+        Assert.DoesNotContain(diag.UnmappedAttributes.Keys, k => k.AttributeCode is AttlHorclr or AttlHoracc or AttlVeracc);
+    }
+
+    [Theory]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("4")]
+    [InlineData("5")]
+    [InlineData("7")]
+    [InlineData("2,6")]
+    [InlineData("10,4")]
+    public void Translate_OpeningBridge_EmitsSpanOpening(string catbrg)
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11, Attr(AttlCatbrg, catbrg), Attr(AttlVerccl, "5.5")));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var span = SingleOfClass(s101, "SpanOpening");
+        AssertBridgeComponents(s101, bridge, span);
+
+        var closed = SpanComplex(s101, span, "verticalClearanceClosed");
+        Assert.Equal("5.5", GetSubAttribute(s101, closed, "verticalClearanceValue"));
+
+        // No VERCOP: the open clearance is unlimited and carries no value.
+        var open = SpanComplex(s101, span, "verticalClearanceOpen");
+        Assert.Equal("true", GetSubAttribute(s101, open, "verticalClearanceUnlimited"));
+        Assert.Null(GetSubAttribute(s101, open, "verticalClearanceValue"));
+        Assert.Empty(SpanComplex(s101, span, "verticalClearanceFixed"));
+    }
+
+    [Theory]
+    [InlineData("6")]
+    [InlineData("1")]
+    [InlineData("8,9")]
+    public void Translate_NonOpeningBridgeCategory_EmitsSpanFixed(string catbrg)
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11, Attr(AttlCatbrg, catbrg), Attr(AttlVerclr, "9")));
+
+        var span = SingleOfClass(s101, "SpanFixed");
+        Assert.Equal("9", GetSubAttribute(s101, SpanComplex(s101, span, "verticalClearanceFixed"), "verticalClearanceValue"));
+        Assert.DoesNotContain(s101.Features, f => ClassOf(s101, f) == "SpanOpening");
+    }
+
+    [Fact]
+    public void Translate_OpeningBridgeWithVercop_OpenClearanceIsLimited()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            AreaFeatureWithS57Attributes(11,
+                Attr(AttlCatbrg, "3"),
+                Attr(AttlVerccl, "4"),
+                Attr(AttlVercop, "40"),
+                Attr(AttlVeracc, "0.1")));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var span = SingleOfClass(s101, "SpanOpening");
+        Assert.Equal((byte)130, bridge.SpatialAssociations.Single().RecordName);
+        Assert.Equal(bridge.SpatialAssociations, span.SpatialAssociations);
+
+        var open = SpanComplex(s101, span, "verticalClearanceOpen");
+        Assert.Equal("false", GetSubAttribute(s101, open, "verticalClearanceUnlimited"));
+        Assert.Equal("40", GetSubAttribute(s101, open, "verticalClearanceValue"));
+        Assert.Equal("0.1", GetSubAttribute(s101, open, "uncertaintyFixed"));
+        var closed = SpanComplex(s101, span, "verticalClearanceClosed");
+        Assert.Equal("0.1", GetSubAttribute(s101, closed, "uncertaintyFixed"));
+    }
+
+    [Fact]
+    public void Translate_OpeningBridgeWithEmptyVercop_OpenClearanceIsLimitedWithoutValue()
+    {
+        // VERCOP populated with an empty (null) value → unlimited = false.
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11,
+                Attr(AttlCatbrg, "2"), Attr(AttlVerccl, "4"), Attr(AttlVercop, "")));
+
+        var span = SingleOfClass(s101, "SpanOpening");
+        var open = SpanComplex(s101, span, "verticalClearanceOpen");
+        Assert.Equal("false", GetSubAttribute(s101, open, "verticalClearanceUnlimited"));
+        Assert.Null(GetSubAttribute(s101, open, "verticalClearanceValue"));
+    }
+
+    [Fact]
+    public void Translate_FixedBridgeWithEmptyVerclr_EmitsSpanWithUnknownClearance()
+    {
+        // An S-57 empty (unknown) VERCLR still asserts a clearance: the span is
+        // emitted with its mandatory value populated as empty (null), and
+        // VERACC — which has no known value to qualify — is dropped.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11,
+                Attr(AttlCatbrg, "1"), Attr(AttlVerclr, ""), Attr(AttlVeracc, "0.5"), Attr(AttlHorclr, "")),
+            diag);
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var span = SingleOfClass(s101, "SpanFixed");
+        AssertBridgeComponents(s101, bridge, span);
+
+        var vertical = SpanComplex(s101, span, "verticalClearanceFixed");
+        Assert.Equal(string.Empty, GetSubAttribute(s101, vertical, "verticalClearanceValue"));
+        Assert.Null(GetSubAttribute(s101, vertical, "verticalUncertainty"));
+        Assert.Empty(SpanComplex(s101, span, "horizontalClearanceFixed"));
+
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVeracc]);
+        Assert.False(diag.RuleDroppedAttributes.ContainsKey(AttlVerclr));
+        Assert.False(diag.RuleDroppedAttributes.ContainsKey(AttlHorclr));
+    }
+
+    [Fact]
+    public void Translate_BridgeWithOnlyEmptyClearances_AndNoMandatoryOne_RecordsNothingDropped()
+    {
+        // An opening bridge with an empty VERCLR (but no VERCCL) has no span;
+        // the empty value carries no data, so no drop is recorded.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11, Attr(AttlCatbrg, "2"), Attr(AttlVerclr, "")), diag);
+
+        Assert.Equal("Bridge", ClassOf(s101, Assert.Single(s101.Features)));
+        Assert.Empty(diag.RuleDroppedAttributes);
+    }
+
+    [Fact]
+    public void Translate_BridgeWithoutClearance_EmitsBridgeOnly()
+    {
+        // No clearance → treated as not crossing navigable water.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11, Attr(AttlCatbrg, "1")), diag);
+
+        var bridge = Assert.Single(s101.Features);
+        Assert.Equal("Bridge", ClassOf(s101, bridge));
+        Assert.Empty(bridge.FeatureAssociations);
+        Assert.Empty(s101.FeatureAssociationCatalogue);
+        Assert.Equal(0, diag.BridgeSpansEmitted);
+    }
+
+    [Fact]
+    public void Translate_BridgeWithHorclrOnly_EmitsNoSpan_AndRecordsHorclrDropped()
+    {
+        // HORCLR alone cannot form a SpanFixed (verticalClearanceFixed is
+        // mandatory) and Bridge binds no horizontal clearance, so the value is
+        // recorded as rule-dropped rather than emitted anywhere.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11, Attr(AttlHorclr, "12.5")), diag);
 
         var feat = Assert.Single(s101.Features);
-        Assert.Equal("Bridge", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
-        Assert.Empty(ComplexInstance(s101, feat.Attributes, "horizontalClearanceOpen", 1).ToList());
-        Assert.Empty(ComplexInstance(s101, feat.Attributes, "horizontalClearanceFixed", 1).ToList());
+        Assert.Equal("Bridge", ClassOf(s101, feat));
         Assert.Empty(feat.Attributes);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlHorclr]);
+        Assert.DoesNotContain(diag.UnmappedAttributes.Keys, k => k.AttributeCode == AttlHorclr);
+    }
+
+    [Fact]
+    public void Translate_OpeningBridgeWithOnlyVerclr_EmitsNoSpan()
+    {
+        // An opening span needs VERCCL; VERCLR has no home on SpanOpening or Bridge.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11, Attr(AttlCatbrg, "4"), Attr(AttlVerclr, "7")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Bridge", ClassOf(s101, feat));
+        Assert.DoesNotContain("verticalClearanceValue", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVerclr]);
+    }
+
+    [Fact]
+    public void Translate_PointBridge_BecomesLandmark()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(11,
+                Attr(AttlCatbrg, "2"), Attr(AttlVerccl, "4"), Attr(AttlVerclr, "5"), Attr(AttlVerdat, "24")),
+            diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Landmark", ClassOf(s101, feat));
+        Assert.Empty(feat.FeatureAssociations);
+        Assert.Equal("26", TopLevelValue(s101, feat, "categoryOfLandmark"));
+        Assert.Equal("2", TopLevelValue(s101, feat, "visualProminence"));
+        Assert.Equal(
+            new[] { "categoryOfLandmark", "visualProminence" },
+            AttributeNames(s101, feat));
+        Assert.Equal(0, diag.BridgeSpansEmitted);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlCatbrg]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlVerclr]);
+    }
+
+    [Fact]
+    public void Translate_PointBridgeWithConvis_KeepsVisualProminence()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(11, Attr(AttlConvis, "1")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Landmark", ClassOf(s101, feat));
+        Assert.Equal("26", TopLevelValue(s101, feat, "categoryOfLandmark"));
+        Assert.Equal("1", Assert.Single(feat.Attributes, a =>
+            s101.AttributeTypeCatalogue[a.NumericCode] == "visualProminence").Value);
+    }
+
+    // Three nodes on a line, two edges joining them (1→2, 2→3), and a node for
+    // a pylon. Each BRIDGE member spans one edge.
+    private static (EncDotNet.S57.S57VectorRecord[] Vectors, EncDotNet.S57.S57FeatureRecord FixedSpan,
+        EncDotNet.S57.S57FeatureRecord OpeningSpan, EncDotNet.S57.S57FeatureRecord Pylon) TwoSpanBridgeParts(
+        bool reverseSecondEdgeOrder = false)
+    {
+        var vectors = new[]
+        {
+            Node(1, 0, 0), Node(2, 0, 100), Node(3, 0, 200), Node(4, 5, 100, RcnmIsolatedNode),
+            Edge(10, 1, 2), Edge(11, 2, 3),
+        };
+        var fixedSpan = Feat(1, 2, 11, featureIdentificationNumber: 10,
+            attributes: new[] { Attr(AttlCatbrg, "1"), Attr(AttlVerclr, "20"), Attr(AttlScamin, "45000") },
+            spatialPointers: new[] { Sp(RcnmEdge, reverseSecondEdgeOrder ? 11u : 10u, 1, 0, 0) });
+        var openingSpan = Feat(2, 2, 11, featureIdentificationNumber: 11,
+            attributes: new[] { Attr(AttlCatbrg, "2,3"), Attr(AttlVerccl, "6"), Attr(AttlScamin, "45000") },
+            spatialPointers: new[] { Sp(RcnmEdge, reverseSecondEdgeOrder ? 10u : 11u, 1, 0, 0) });
+        var pylon = Feat(3, 1, 98, featureIdentificationNumber: 12,
+            attributes: new[] { Attr(49, "2") }, // CATPYL
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
+        return (vectors, fixedSpan, openingSpan, pylon);
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_EmitsSingleBridgeWithSpanAndPylonComponents()
+    {
+        var (vectors, fixedSpan, openingSpan, pylon) = TwoSpanBridgeParts();
+        var aggr = Feat(4, 255, 400, featureIdentificationNumber: 99,
+            attributes: new[] { Attr(AttlObjnam, "Harbour Bridge") },
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 12) });
+        var diag = new S57TranslationDiagnostics();
+
+        // C_AGGR first in document order: members are resolved regardless.
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { aggr, fixedSpan, openingSpan, pylon }), diag);
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var spanFixed = SingleOfClass(s101, "SpanFixed");
+        var spanOpening = SingleOfClass(s101, "SpanOpening");
+        var pylonFeature = SingleOfClass(s101, "PylonBridgeSupport");
+        Assert.Equal(4, s101.Features.Count);
+
+        // The aggregated Bridge takes its identity from the C_AGGR and links
+        // every component.
+        Assert.Equal(99u, bridge.FeatureIdentificationNumber);
+        AssertBridgeComponents(s101, bridge, spanFixed, spanOpening, pylonFeature);
+        Assert.Equal(10u, spanFixed.FeatureIdentificationNumber);
+        Assert.Equal(11u, spanOpening.FeatureIdentificationNumber);
+
+        // Name comes from the C_AGGR; other Bridge attributes from the
+        // representative (opening) member.
+        var name = ComplexInstance(s101, bridge.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Harbour Bridge", GetSubAttribute(s101, name, "name"));
+        Assert.Equal("45000", TopLevelValue(s101, bridge, "scaleMinimum"));
+        Assert.DoesNotContain("verticalClearanceClosed", AttributeNames(s101, bridge));
+
+        // Geometry: the two member edges chained into one curve.
+        Assert.Equal(
+            new[] { (120, 1u, 1), (120, 2u, 1) },
+            bridge.SpatialAssociations.Select(a => ((int)a.RecordName, a.RecordId, (int)a.Orientation)));
+        Assert.Equal(1u, spanFixed.SpatialAssociations.Single().RecordId);
+
+        Assert.Equal(1, diag.BridgeAggregationsEmitted);
+        Assert.Equal(2, diag.BridgeSpansEmitted);
+        Assert.Equal(0, diag.RangeSystemsEmitted);
+        Assert.False(diag.UnmappedObjectClasses.ContainsKey(400));
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_OutOfOrderEdges_ChainIntoOneCurve()
+    {
+        // The first member references the far edge (2→3): the chain must still
+        // start at a free end and walk both edges.
+        var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts(reverseSecondEdgeOrder: true);
+        var aggr = Feat(4, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { fixedSpan, openingSpan, aggr }));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        Assert.Equal(2, bridge.SpatialAssociations.Count);
+        Assert.Equal(new[] { 1u, 2u }, bridge.SpatialAssociations.Select(a => a.RecordId).Order());
+        // The chained edges connect head-to-tail.
+        var first = bridge.SpatialAssociations[0];
+        var second = bridge.SpatialAssociations[1];
+        // The node a traversal leaves from (trailing = false) or arrives at (trailing = true).
+        uint EndOf(S101SpatialAssociation a, bool trailing)
+        {
+            var seg = s101.CurveSegments[a.RecordId];
+            var wantBegin = (a.Orientation == 1) != trailing;
+            return seg.PointAssociations.Single(p => p.Topology == (wantBegin ? 1 : 2)).RecordId;
+        }
+        Assert.Equal(EndOf(first, trailing: true), EndOf(second, trailing: false));
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_NameFromRepresentativeMember_WhenAggregateUnnamed()
+    {
+        var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts();
+        var namedFixed = Feat(1, 2, 11, featureIdentificationNumber: 10,
+            attributes: fixedSpan.Attributes.Append(Attr(AttlObjnam, "Old Bridge")),
+            spatialPointers: fixedSpan.SpatialPointers);
+        var aggr = Feat(4, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { namedFixed, openingSpan, aggr }));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var name = ComplexInstance(s101, bridge.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Old Bridge", GetSubAttribute(s101, name, "name"));
+        Assert.Equal(1, CountComplexInstances(s101, bridge.Attributes, "featureName"));
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_DisjointCurves_EmitsBridgeWithoutGeometry()
+    {
+        var vectors = new[]
+        {
+            Node(1, 0, 0), Node(2, 0, 100), Node(3, 50, 0), Node(4, 50, 100),
+            Edge(10, 1, 2), Edge(11, 3, 4),
+        };
+        var a = Feat(1, 2, 11, featureIdentificationNumber: 10,
+            attributes: new[] { Attr(AttlVerclr, "20") },
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
+        var b = Feat(2, 2, 11, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmEdge, 11, 1, 0, 0) });
+        var aggr = Feat(3, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s101 = new S57ToS101Translator().Translate(BuildDocument(vectors, new[] { a, b, aggr }));
+
+        // Only the member with a clearance yields a span; the unmergeable
+        // geometry leaves the Bridge geometry-less rather than joined.
+        var bridge = SingleOfClass(s101, "Bridge");
+        Assert.Empty(bridge.SpatialAssociations);
+        AssertBridgeComponents(s101, bridge, SingleOfClass(s101, "SpanFixed"));
+        Assert.Equal(2, s101.Features.Count);
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_AdjacentSurfaces_DissolveSharedEdge()
+    {
+        // Two triangles sharing edge 11 (2→3) form one quadrilateral outline.
+        var vectors = new[]
+        {
+            Node(1, 0, 0), Node(2, 0, 100), Node(3, 100, 100), Node(4, 100, 0),
+            Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1), Edge(13, 3, 4), Edge(14, 4, 1),
+        };
+        var left = Feat(1, 3, 11, featureIdentificationNumber: 10,
+            attributes: new[] { Attr(AttlVerclr, "20") },
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0), Sp(RcnmEdge, 12, 1, 1, 0) });
+        var right = Feat(2, 3, 11, featureIdentificationNumber: 11,
+            attributes: new[] { Attr(AttlVerclr, "15") },
+            spatialPointers: new[] { Sp(RcnmEdge, 12, 2, 1, 0), Sp(RcnmEdge, 13, 1, 1, 0), Sp(RcnmEdge, 14, 1, 1, 0) });
+        var aggr = Feat(3, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s101 = new S57ToS101Translator().Translate(BuildDocument(vectors, new[] { left, right, aggr }));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var surfaceId = Assert.Single(bridge.SpatialAssociations).RecordId;
+        var ring = Assert.Single(s101.Surfaces[surfaceId].RingAssociations);
+        var edges = s101.CompositeCurves[ring.RecordId].CurveComponents.Select(c => c.RecordId).Order();
+        // Edge 12 (S-101 curve 3) is shared and dissolved.
+        Assert.Equal(new[] { 1u, 2u, 4u, 5u }, edges);
+        Assert.Equal(2, s101.Features.Count(f => ClassOf(s101, f) == "SpanFixed"));
+    }
+
+    [Fact]
+    public void Translate_CAggrWithNonBridgeMember_IsNotABridgeAggregation()
+    {
+        var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts();
+        var land = Feat(5, 1, 71, featureIdentificationNumber: 13,
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
+        var aggr = Feat(4, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 13) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { fixedSpan, openingSpan, land, aggr }), diag);
+
+        // Each BRIDGE converts on its own, with its own span.
+        var bridges = s101.Features.Where(f => ClassOf(s101, f) == "Bridge").ToList();
+        Assert.Equal(2, bridges.Count);
+        Assert.All(bridges, b => Assert.Single(b.FeatureAssociations));
+        Assert.Equal(0, diag.BridgeAggregationsEmitted);
+        Assert.Equal(1, diag.UnmappedObjectClasses[400]);
+    }
+
+    [Fact]
+    public void Translate_InlandBridge_S401Target_EmitsSpanOpening()
+    {
+        // The IENC inland bridge (17011) reuses the BRIDGE rule, so it is
+        // decomposed the same way; S-401 defines the span classes too.
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            LineFeatureWithS57Attributes(17011, Attr(AttlCatbrg, "5"), Attr(AttlVerccl, "3.2")));
+
+        var bridge = SingleOfClass(s401, "Bridge");
+        var span = SingleOfClass(s401, "SpanOpening");
+        AssertBridgeComponents(s401, bridge, span);
+        Assert.Equal("3.2", GetSubAttribute(s401, SpanComplex(s401, span, "verticalClearanceClosed"), "verticalClearanceValue"));
+        Assert.DoesNotContain("verticalClearanceClosed", AttributeNames(s401, bridge));
+    }
+
+    [Fact]
+    public void Translate_InlandPointBridge_S401Target_BecomesLandmark()
+    {
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17011, Attr(AttlCatbrg, "1")));
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("Landmark", ClassOf(s401, feat));
+        Assert.Equal("26", TopLevelValue(s401, feat, "categoryOfLandmark"));
+        Assert.Equal("2", TopLevelValue(s401, feat, "visualProminence"));
     }
 
     // ── CATBRG → S-101 bridge category attributes (S-65 Annex B § 4.8.10) ──
@@ -2228,7 +2737,7 @@ public class S57ToS101TranslatorTests
     private static List<(string Code, int Index, string Value)> BridgeAttributes(string catbrg, S57TranslationDiagnostics? diag = null)
     {
         var s101 = new S57ToS101Translator().Translate(
-            PointFeatureWithS57Attributes(11, Attr(9, catbrg)), diag);
+            LineFeatureWithS57Attributes(11, Attr(9, catbrg)), diag);
         var feat = Assert.Single(s101.Features);
         Assert.Equal("Bridge", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
         return feat.Attributes
@@ -2666,9 +3175,10 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_DatstaDatend_BecomeFixedDateRangeComplex()
     {
-        // BRIDGE (OBJL 11) → Bridge, which binds fixedDateRange.
+        // Curve BRIDGE (OBJL 11) → Bridge, which binds fixedDateRange (with no
+        // clearance attributes the bridge has no span).
         var s101 = new S57ToS101Translator().Translate(
-            PointFeatureWithS57Attributes(11, Attr(86, "20200101"), Attr(85, "20201231")));
+            LineFeatureWithS57Attributes(11, Attr(86, "20200101"), Attr(85, "20201231")));
 
         var feat = Assert.Single(s101.Features);
         var instance = ComplexInstance(s101, feat.Attributes, "fixedDateRange", 1).ToList();
@@ -2693,7 +3203,7 @@ public class S57ToS101TranslatorTests
         // fixedDateRange allows dateStart [0..1] / dateEnd [0..1]; a lone DATEND
         // still yields an instance carrying only dateEnd.
         var s101 = new S57ToS101Translator().Translate(
-            PointFeatureWithS57Attributes(11, Attr(85, "20201231")));
+            LineFeatureWithS57Attributes(11, Attr(85, "20201231")));
 
         var feat = Assert.Single(s101.Features);
         var instance = ComplexInstance(s101, feat.Attributes, "fixedDateRange", 1).ToList();

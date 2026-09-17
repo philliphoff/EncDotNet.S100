@@ -43,6 +43,13 @@ internal static class DefaultRules
         // the whole CATBRG list (true when any value denotes an opening
         // bridge), so the per-value openingBridge entries here only record
         // which way values 1 and 2 point.
+        //
+        // Point is not a permitted Bridge primitive, so a point BRIDGE
+        // converts to Landmark (the translator supplies categoryOfLandmark =
+        // 26 (bridge)); the bridge-only attributes Landmark does not bind are
+        // dropped there. The span decomposition of curve/surface bridges
+        // (SpanFixed / SpanOpening + BridgeAggregation) is performed by
+        // S57ToS101Translator.
         yield return new S57FeatureRule
         {
             Objl = 11,
@@ -76,6 +83,19 @@ internal static class DefaultRules
                     },
                 },
             },
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Landmark",
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATBRG"] = new S57AttributeOverride { Drop = true },
+                    ["VERCLR"] = new S57AttributeOverride { Drop = true },
+                    ["VERCCL"] = new S57AttributeOverride { Drop = true },
+                    ["VERCOP"] = new S57AttributeOverride { Drop = true },
+                    ["VERDAT"] = new S57AttributeOverride { Drop = true },
+                },
+            }],
         };
         yield return F(13, "BUAARE", "BuiltUpArea");
         yield return F(14, "BOYCAR", "CardinalBuoy");
