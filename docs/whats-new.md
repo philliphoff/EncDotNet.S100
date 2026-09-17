@@ -31,6 +31,9 @@ Current highlights:
   inland object classes and attributes of the IENC Feature Catalogue 2.4 are
   translated to S-401, so inland bridges, distance marks, notice marks, and
   waterway gauges now appear.
+- `s100 s57 convert` writes an inland ENC cell as an **S-401** dataset, so its
+  inland features are no longer dropped. `--target s101|s401` overrides the
+  choice, and the summary and `--report` JSON name the product written.
 
 ### July 2026
 

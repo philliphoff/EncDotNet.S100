@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Compile Include="..\_shared\MapsuiDependencyClosure.cs" Link="TestSupport\MapsuiDependencyClosure.cs" />
+    <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
   </ItemGroup>
 
   <ItemGroup>

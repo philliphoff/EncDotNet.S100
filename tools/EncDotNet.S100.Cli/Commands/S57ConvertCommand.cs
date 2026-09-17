@@ -9,9 +9,9 @@ namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
 /// <c>s100 s57 convert -o &lt;output&gt; &lt;source&gt;</c> — converts an S-57 base
-/// cell to an S-101 dataset by translating it with
-/// <see cref="S57ToS101Translator"/> and encoding the result with
-/// <see cref="S101DocumentWriter"/> (ISO/IEC 8211; S-100 Part 10a).
+/// cell to an S-101 dataset (or, for an inland ENC, an S-401 dataset) by
+/// translating it with <see cref="S57ToS101Translator"/> and encoding the result
+/// with <see cref="S101DocumentWriter"/> (ISO/IEC 8211; S-100 Part 10a).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,6 +25,11 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <see cref="S57Dataset.Open(Stream, IReadOnlyList{Stream})"/> before
 /// translation, so a converted cell reflects its up-to-date state (S-57 Part 3
 /// dataset updating). Pass <c>--no-updates</c> to convert the bare base cell.
+/// </para>
+/// <para>
+/// The product written follows <see cref="S57Dataset.TranslationTarget"/> of the
+/// update-folded cell: S-401 for an inland ENC (DSID <c>PRSP</c> = 10), S-101
+/// otherwise (issue #608). <c>--target s101|s401</c> overrides that choice.
 /// </para>
 /// </remarks>
 internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
@@ -45,20 +50,27 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
                     $"[grey]Applied {updates.Count} sibling update(s) ({string.Join(", ", updates.Select(Path.GetFileName))}).[/]");
             }
 
-            var translator = new S57ToS101Translator();
+            // Chosen from the update-folded document: an update could in principle
+            // change the DSID product specification.
+            var detected = dataset.TranslationTarget;
+            S57ConvertCommandSettings.TryParseTarget(settings.Target, out var forced);
+            var target = forced ?? detected;
+            WarnOnTargetOverride(target, detected);
+
+            var translator = S57ToS101Translator.ForTarget(target);
             var diagnostics = new S57TranslationDiagnostics();
             var document = translator.Translate(dataset, diagnostics);
 
             S101DocumentWriter.WriteToFile(settings.OutputPath, document);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Converted[/] {settings.SourcePath} [green]→[/] {settings.OutputPath} ({document.Features.Count} features).");
+                $"[green]Converted[/] {settings.SourcePath} [green]→[/] {settings.OutputPath} as {target.Spec} {target.Edition} ({document.Features.Count} features).");
 
             PrintDiagnosticsSummary(diagnostics);
 
             if (!string.IsNullOrWhiteSpace(settings.ReportPath))
             {
-                WriteReport(settings.ReportPath, settings.SourcePath, settings.OutputPath, updates, diagnostics);
+                WriteReport(settings.ReportPath, settings.SourcePath, settings.OutputPath, updates, target, detected, diagnostics);
                 AnsiConsole.MarkupLineInterpolated($"[grey]Diagnostics report written to[/] {settings.ReportPath}.");
             }
 
@@ -99,6 +111,23 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             baseStream.Dispose();
             foreach (var stream in updateStreams)
                 stream.Dispose();
+        }
+    }
+
+    private static void WarnOnTargetOverride(S57TranslationTarget target, S57TranslationTarget detected)
+    {
+        if (target == detected)
+            return;
+
+        if (target == S57TranslationTarget.S401)
+        {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Warning:[/] the cell does not declare the inland ENC product specification (DSID PRSP = 10); writing {target.Spec} as requested by --target. Maritime content without an S-401 equivalent is dropped.");
+        }
+        else
+        {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]The cell is an inland ENC (DSID PRSP = 10); writing {target.Spec} as requested by --target. Inland object classes and attributes without an S-101 equivalent are dropped.[/]");
         }
     }
 
@@ -159,12 +188,17 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
         string sourcePath,
         string outputPath,
         IReadOnlyList<string> updates,
+        S57TranslationTarget target,
+        S57TranslationTarget detected,
         S57TranslationDiagnostics diagnostics)
     {
         var report = new
         {
             source = sourcePath,
             output = outputPath,
+            product = target.Spec,
+            productEdition = target.Edition,
+            detectedProduct = detected.Spec,
             updatesApplied = updates.Select(Path.GetFileName).ToArray(),
             featureRecordsRead = diagnostics.FeatureRecordsRead,
             featuresEmitted = diagnostics.FeaturesEmitted,
