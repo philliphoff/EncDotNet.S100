@@ -710,6 +710,36 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_InlandBridgeArch_S401Target_IsAnArchWithAFixedSpan()
+    {
+        // IEHG "S-57 ENC to S-401 Conversion Guidance" Ed 1.3.0 draft 2,
+        // clauses 3.7 and 3.144: CATBRG 13 (bridge arch) becomes
+        // bridgeConstruction 1 (arch) and the span is a SpanFixed.
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 100, 100);
+        var e1 = Edge(10, 1, 2);
+        var bridge = Feat(recordId: 1, primitive: 2, objectClass: 17011,
+            attributes: new[] { Attr(9, "13"), Attr(AttlVerclr, "7.1") },
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1, n2, e1 }, features: new[] { bridge });
+        var diag = new S57TranslationDiagnostics();
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        var feature = SingleOfClass(inland, "Bridge");
+        var attributes = feature.Attributes.ToDictionary(
+            a => inland.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+        Assert.Equal("1", attributes["bridgeConstruction"]);
+        Assert.Equal("false", attributes["openingBridge"]);
+        Assert.DoesNotContain("categoryOfOpeningBridge", attributes.Keys);
+
+        var span = SingleOfClass(inland, "SpanFixed");
+        AssertBridgeComponents(inland, feature, span);
+        Assert.DoesNotContain(inland.Features, f => ClassOf(inland, f) == "SpanOpening");
+        Assert.Empty(diag.DroppedEnumValues);
+    }
+
+    [Fact]
     public void Translate_S401Target_DropsInlandAttributeWithoutS401Equivalent()
     {
         // CLSNAM (18028) names a NEWOBJ class; S-401 has no equivalent.
@@ -2871,6 +2901,10 @@ public class S57ToS101TranslatorTests
     [InlineData("6")]
     [InlineData("1")]
     [InlineData("8,9")]
+    // A bridge arch (13, an IENC extension) is a fixed span — IEHG
+    // "S-57 ENC to S-401 Conversion Guidance" Ed 1.3.0 draft 2, clause 3.144.
+    [InlineData("13")]
+    [InlineData("13,1")]
     public void Translate_NonOpeningBridgeCategory_EmitsSpanFixed(string catbrg)
     {
         var s101 = new S57ToS101Translator().Translate(
@@ -3805,10 +3839,36 @@ public class S57ToS101TranslatorTests
     public void Translate_BridgeCatbrgUnknownValue_IsDroppedWithoutOpeningBridge()
     {
         var diag = new S57TranslationDiagnostics();
-        var attrs = BridgeAttributes("13", diag);
+        var attrs = BridgeAttributes("99", diag);
 
         Assert.Empty(attrs);
-        Assert.Equal(1, diag.DroppedEnumValues[new S57EnumValueDrop("categoryOfOpeningBridge", "13")]);
+        Assert.Equal(1, diag.DroppedEnumValues[new S57EnumValueDrop("categoryOfOpeningBridge", "99")]);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgArch_SetsBridgeConstructionArch()
+    {
+        // IEHG "S-57 ENC to S-401 Conversion Guidance" Ed 1.3.0 draft 2,
+        // clause 3.7: CATBRG 13 (bridge arch) becomes bridgeConstruction 1
+        // (arch). An arch is not an opening bridge.
+        var diag = new S57TranslationDiagnostics();
+        var attrs = BridgeAttributes("13", diag);
+
+        Assert.Equal(
+            [("bridgeConstruction", 1, "1"), ("openingBridge", 1, "false")],
+            attrs);
+        Assert.Empty(diag.DroppedEnumValues);
+    }
+
+    [Fact]
+    public void Translate_BridgeCatbrgArchList_KeepsBothTargets()
+    {
+        // CATBRG is a list attribute, so "13,1" must still convert both values.
+        var attrs = BridgeAttributes("13,1");
+
+        Assert.Equal(
+            [("bridgeConstruction", 1, "1"), ("openingBridge", 1, "false")],
+            attrs);
     }
 
     [Fact]

@@ -335,6 +335,30 @@ public class S57InlandMappingTests
         Assert.Equal("categoryOfOpeningBridge", S401.ResolveAttributeCode(9));
     }
 
+    [Theory]
+    [InlineData(11, "BRIDGE")]
+    [InlineData(17011, "bridge")]
+    public void S401Mapping_CatbrgBridgeArch_BecomesBridgeConstructionArch(ushort objl, string acronym)
+    {
+        // IEHG "S-57 ENC to S-401 Conversion Guidance" Ed 1.3.0 draft 2,
+        // clauses 3.7 (Bridge) and 3.144 (Span Fixed): CATBRG 13 (bridge arch,
+        // an IENC extension) becomes bridgeConstruction 1 (arch).
+        var rule = S401.FeatureRules[objl];
+        Assert.Equal(acronym, rule.S57Acronym);
+
+        var resolved = S401.ResolveFeature(objl, new Dictionary<string, string> { ["CATBRG"] = "13" });
+        Assert.NotNull(resolved);
+        Assert.Equal("Bridge", resolved!.S101Code);
+
+        var attr = S401.ResolveAttribute(9, "13", resolved);
+        Assert.NotNull(attr);
+        Assert.Equal("bridgeConstruction", attr!.S101Code);
+        Assert.Equal("1", attr.Value);
+
+        // The S-401 catalogue allows the value, so it survives the enum gate.
+        Assert.True(S101AllowedEnumValues.ForSpec("S-401").IsAllowed("bridgeConstruction", "1"));
+    }
+
     [Fact]
     public void RestrictToAttributes_ClearsUndefinedTargetsOnly()
     {

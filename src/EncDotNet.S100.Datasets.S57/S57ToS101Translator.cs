@@ -532,7 +532,9 @@ public sealed class S57ToS101Translator
 
     // CATBRG values classed as opening bridges in S-101 (opening bridge,
     // swing, lifting, bascule, draw). Pontoon (6) is opening only when
-    // combined with 2 (S-65 Annex B §4.8.10).
+    // combined with 2 (S-65 Annex B §4.8.10). The IENC bridge arch (13) is
+    // not among them: it yields a SpanFixed (IEHG conversion guidance
+    // clause 3.144).
     private static readonly HashSet<string> OpeningBridgeCategories = new(StringComparer.Ordinal)
     {
         "2", "3", "4", "5", "7",
