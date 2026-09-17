@@ -26,7 +26,7 @@ public class S57S101MappingTests
         Assert.Equal("valueOfSounding", m.ResolveAttributeCode(179));
         Assert.Equal("valueOfDepthContour", m.ResolveAttributeCode(174));
         Assert.Equal("expositionOfSounding", m.ResolveAttributeCode(93));
-        Assert.Equal("verticalClearanceValue", m.ResolveAttributeCode(181));
+        Assert.Equal("verticalClearanceFixed", m.ResolveAttributeCode(181));
         // OBJNAM (116) intentionally has no flat mapping — featureName is a complex attribute.
         Assert.Null(m.ResolveAttributeCode(116));
     }

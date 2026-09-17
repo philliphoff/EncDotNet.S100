@@ -504,7 +504,9 @@ internal static class DefaultRules
         yield return A(149, "STATUS", "status");
         yield return A(174, "VALDCO", "valueOfDepthContour");
         yield return A(179, "VALSOU", "valueOfSounding");
-        yield return A(181, "VERCLR", "verticalClearanceValue");
+        // The vertical clearances target their S-101 complex; the translator
+        // builds it (value in verticalClearanceValue) where the feature binds it.
+        yield return A(181, "VERCLR", "verticalClearanceFixed");
         yield return A(182, "VERCCL", "verticalClearanceClosed");
         yield return A(183, "VERCOP", "verticalClearanceOpen");
         yield return A(184, "VERCSA", "verticalClearanceSafe");
