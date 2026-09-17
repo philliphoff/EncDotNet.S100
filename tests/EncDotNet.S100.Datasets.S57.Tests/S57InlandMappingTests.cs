@@ -140,6 +140,76 @@ public class S57InlandMappingTests
         }
     }
 
+    private static IReadOnlyDictionary<string, string> Attributes(string acronym, string value)
+        => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [acronym] = value };
+
+    [Theory]
+    [InlineData(17001, 17000, "catach")]
+    [InlineData(4, 8, "CATACH")]
+    public void S401Mapping_AnchorageAreaWithSmallCraftMooring_RedirectsToMooringArea(int objl, int attl, string acronym)
+    {
+        var feature = S401.ResolveFeature((ushort)objl, Attributes(acronym, "8"))!;
+
+        Assert.Equal("MooringArea", feature.S101Code);
+        var attribute = S401.ResolveAttribute((ushort)attl, "8", feature)!;
+        Assert.Equal("categoryOfMooringArea", attribute.S101Code);
+        Assert.Equal("1", attribute.Value);
+
+        // Only a lone 8 reaches MooringArea; any other anchorage code is dropped
+        // rather than misread as a categoryOfMooringArea code.
+        Assert.Null(S401.ResolveAttribute((ushort)attl, "3", feature));
+        Assert.Null(S401.ResolveAttribute((ushort)attl, "10", feature));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("7")]
+    [InlineData("10")]
+    [InlineData("7,8")]
+    public void S401Mapping_AnchorageAreaWithOtherCategory_StaysAnchorageArea(string catach)
+    {
+        Assert.Equal("AnchorageArea", S401.ResolveFeature(17001, Attributes("catach", catach))!.S101Code);
+        Assert.Equal("AnchorageArea", S401.ResolveFeature(4, Attributes("CATACH", catach))!.S101Code);
+        Assert.Equal("AnchorageArea", S401.ResolveFeature(17001, Attributes("OBJNAM", "x"))!.S101Code);
+    }
+
+    [Theory]
+    [InlineData(17000)]
+    [InlineData(8)]
+    public void S401Mapping_CategoryOfAnchorage_Remaps10To16(int attl)
+    {
+        var anchorage = S401.ResolveFeature(17001, Attributes("OBJNAM", "x"))!;
+
+        var remapped = S401.ResolveAttribute((ushort)attl, "10", anchorage)!;
+        Assert.Equal("categoryOfAnchorage", remapped.S101Code);
+        Assert.Equal("16", remapped.Value);
+        Assert.Equal("9", S401.ResolveAttribute((ushort)attl, "9", anchorage)!.Value);
+        Assert.Equal("8", S401.ResolveAttribute((ushort)attl, "8", anchorage)!.Value);
+    }
+
+    [Fact]
+    public void S101Mapping_AnchorageRules_AreUnchanged()
+    {
+        // The S-401 anchorage rules must not leak into the S-101 default.
+        var s101 = S57S101Mapping.Default;
+        Assert.Empty(s101.FeatureRules[4].Redirects);
+        Assert.Empty(s101.AttributeRules[8].DefaultValueRemap);
+
+        var feature = s101.ResolveFeature(4, Attributes("CATACH", "8"))!;
+        Assert.Equal("AnchorageArea", feature.S101Code);
+        Assert.Equal("8", s101.ResolveAttribute(8, "8", feature)!.Value);
+        Assert.Equal("10", s101.ResolveAttribute(8, "10", feature)!.Value);
+    }
+
+    [Fact]
+    public void S401Mapping_AnchorageRules_ShareOneRuleAcrossTwins()
+    {
+        Assert.Same(S401.FeatureRules[4].Redirects, S401.FeatureRules[17001].Redirects);
+        Assert.Same(S401.AttributeRules[8].DefaultValueRemap, S401.AttributeRules[17000].DefaultValueRemap);
+    }
+
     [Fact]
     public void S401Mapping_OnlyTargetsWhatTheS401CatalogueDefines()
     {

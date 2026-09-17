@@ -725,6 +725,91 @@ public class S57ToS101TranslatorTests
         Assert.Equal(1, diag.RuleDroppedAttributes[17103]);
     }
 
+    // ── S-401 anchorage rules (IEHG conversion guidance 3.3, 3.4, 3.85) ──
+
+    // Every value of a simple attribute, in emission order, keyed by S-101 name.
+    private static Dictionary<string, List<string>> AttributeValues(S101Document doc, S101FeatureRecord feat)
+        => feat.Attributes
+            .GroupBy(a => doc.AttributeTypeCatalogue[a.NumericCode])
+            .ToDictionary(g => g.Key, g => g.Select(a => a.Value).ToList());
+
+    [Theory]
+    [InlineData(17001, 17000)] // inland achare / catach
+    [InlineData(4, 8)]         // maritime-coded ACHARE / CATACH in an inland cell
+    public void Translate_AnchorageAreaSmallCraftMooring_S401Target_BecomesMooringArea(int objl, int attl)
+    {
+        var doc = AreaFeatureWithS57Attributes((ushort)objl, Attr(attl, "8"), Attr(116, "Visitor moorings"));
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("MooringArea", ClassOf(inland, feature));
+        var values = AttributeValues(inland, feature);
+        Assert.Equal(["1"], values["categoryOfMooringArea"]);
+        Assert.False(values.ContainsKey("categoryOfAnchorage"));
+    }
+
+    [Fact]
+    public void Translate_AnchorageAreaSmallCraftMooring_S101Target_StaysAnchorageArea()
+    {
+        var doc = AreaFeatureWithS57Attributes(4, Attr(8, "8"));
+
+        var maritime = new S57ToS101Translator().Translate(doc);
+
+        var feature = Assert.Single(maritime.Features);
+        Assert.Equal("AnchorageArea", ClassOf(maritime, feature));
+        // S-101 categoryOfAnchorage has no value 8, so the value itself is dropped.
+        Assert.DoesNotContain("categoryOfMooringArea", AttributeNames(maritime, feature));
+    }
+
+    [Theory]
+    [InlineData(17001, 17000)]
+    [InlineData(4, 8)]
+    public void Translate_AnchorageAreaPushingNavigation_S401Target_Remaps10To16(int objl, int attl)
+    {
+        var doc = AreaFeatureWithS57Attributes((ushort)objl, Attr(attl, "10"));
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("AnchorageArea", ClassOf(inland, feature));
+        Assert.Equal(["16"], AttributeValues(inland, feature)["categoryOfAnchorage"]);
+    }
+
+    [Theory]
+    // Unrestricted, deep-water and tanker anchorages stay anchorages, despite
+    // the "catach=1, 2, 3" in the title of guidance clause 3.85.
+    [InlineData("1", new[] { "1" })]
+    [InlineData("2", new[] { "2" })]
+    [InlineData("3", new[] { "3" })]
+    // A list redirects only when it is a lone 8; otherwise every code is kept
+    // on the anchorage, since S-401 categoryOfAnchorage binds 8 too.
+    [InlineData("7,8", new[] { "7", "8" })]
+    [InlineData("8,10", new[] { "8", "16" })]
+    public void Translate_InlandAnchorageArea_S401Target_StaysAnchorageArea(string catach, string[] expected)
+    {
+        var doc = AreaFeatureWithS57Attributes(17001, Attr(17000, catach));
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("AnchorageArea", ClassOf(inland, feature));
+        Assert.Equal(expected, AttributeValues(inland, feature)["categoryOfAnchorage"]);
+    }
+
+    [Fact]
+    public void Translate_InlandAnchorBerthPushingNavigation_S401Target_Remaps10To16()
+    {
+        // Clause 3.4 applies the same catach 10 → 16 rule to anchor berths.
+        var doc = PointFeatureWithS57Attributes(17000, Attr(17000, "10"));
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("AnchorBerth", ClassOf(inland, feature));
+        Assert.Equal(["16"], AttributeValues(inland, feature)["categoryOfAnchorage"]);
+    }
+
     [Fact]
     public void S101FeatureAttributeBindings_DefinesFeatureType_FollowsCatalogue()
     {

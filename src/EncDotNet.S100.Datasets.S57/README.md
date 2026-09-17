@@ -71,6 +71,20 @@ Key types:
   of these). Rules are resolved by ATTL
   (`ResolveAttribute(ushort, …)`), so an inland code and its upper-case twin
   never shadow each other.
+- **S-401 anchorage rules** (internal `S401AnchorageRules`, applied last in
+  the S-401 mapping) — these replace the `ACHARE`/`achare` and
+  `CATACH`/`catach` rules for S-401 only, so the S-101 default is unchanged.
+  - Anchorage and anchor-berth `CATACH` 10 (IENC "anchorage for
+    pushing-navigation vessels") becomes `categoryOfAnchorage` 16 (conversion
+    guidance clauses 3.3 and 3.4).
+  - An anchorage area whose `CATACH` is exactly 8 (small craft mooring area)
+    becomes `MooringArea`, with `categoryOfMooringArea` 1 (clause 3.85).
+  - Clause 3.85's title reads "catach=1, 2, 3". Those are the S-401
+    `categoryOfMooringArea` codes, not S-57 values: `CATACH` 1–3 are
+    unrestricted, deep-water and tanker anchorages. So `CATACH` 1–3 stay on
+    `AnchorageArea`.
+  - A list such as `7,8` also stays on `AnchorageArea` and keeps every code,
+    because S-401 `categoryOfAnchorage` binds 8 too.
 - **`S57TranslationTarget`** — the S-100 product a translation targets: the
   bundled Feature Catalogue its output is checked against and the product
   specification / edition the translated document declares. `S101` is the

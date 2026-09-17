@@ -105,7 +105,11 @@ public sealed class S57S101Mapping
     /// <see cref="RestrictToFeatureTypes"/> and <see cref="RestrictToAttributes"/>).
     /// For S-401 the inland ENC object classes and attributes (IEHG IENC
     /// Feature Catalogue 2.4) are added before restricting, so an inland cell's
-    /// 17000-range codes translate too. Built once per spec.
+    /// 17000-range codes translate too. The anchorage rules are also replaced
+    /// for S-401: an anchorage area whose <c>CATACH</c> is 8 (small craft mooring
+    /// area) becomes <c>MooringArea</c>, and <c>CATACH</c> 10 becomes
+    /// <c>categoryOfAnchorage</c> 16 (IEHG S-57 ENC to S-401 Conversion Guidance
+    /// clauses 3.3, 3.4 and 3.85). Built once per spec.
     /// </summary>
     /// <param name="targetSpec">The target product, e.g. <c>"S-401"</c>.</param>
     /// <returns>The shared mapping for that product.</returns>
@@ -134,6 +138,13 @@ public sealed class S57S101Mapping
         foreach (var rule in InlandRules.FeatureRules(standard))
             builder.AddFeatureRule(rule);
         foreach (var rule in InlandRules.AttributeRules(standard))
+            builder.AddAttributeRule(rule);
+
+        // S-401-only anchorage rules replace both the standard rules and their
+        // inland twins (Mooring Area redirect, catach 10 → 16).
+        foreach (var rule in S401AnchorageRules.FeatureRules(standard))
+            builder.AddFeatureRule(rule);
+        foreach (var rule in S401AnchorageRules.AttributeRules(standard))
             builder.AddAttributeRule(rule);
         return builder.Build();
     }
