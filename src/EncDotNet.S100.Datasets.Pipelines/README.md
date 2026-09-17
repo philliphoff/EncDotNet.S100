@@ -109,7 +109,9 @@ be shared by the MCP tools (`EncDotNet.S100.Mcp.Tools`) and the CLI
 `LoadedDatasetProjector` is used by both the Avalonia viewer's
 `ViewerDatasetCatalog` and the headless `FileDatasetCatalog`, so a pick
 run from the CLI produces byte-identical catalog entries to one run in
-the viewer. The MCP `identify_features` / `sample_coverage` /
+the viewer. (One exception: the viewer projects legacy S-57 cells from its
+resident `S57DatasetProcessor`, so its entry also reflects any exchange-set
+updates the processor folded in.) The MCP `identify_features` / `sample_coverage` /
 `describe_feature` tools are thin wrappers that map `ToolResult<T>` onto
 the MCP protocol.
 
@@ -174,6 +176,15 @@ therefore key off the processor's `PortrayalSpec`; the string mapping is only
 a pre-load default (the viewer's `DatasetEntry.PortrayalSpec` starts from it
 and is corrected once the processor loads). Callers labelling or validating
 use `Spec`.
+
+Catalog entries follow the same rule: a `LoadedDataset` for an S-57 cell
+reports `Spec` `S-57` whether `LoadedDatasetProjector` projects it from the
+resident `S57DatasetProcessor` or from the cell's bytes, even though its
+payload is an `S101DatasetData`. The stream path reads the bytes with the
+S-57 reader and translates them into the product the cell declares (S-101, or
+S-401 for an inland ENC), the same way the processor does. It never opens
+S-57 bytes with `S101Dataset.Open`. Having no portrayal catalogues, the stream
+path does not apply the processor's fall-back to S-101 when S-401 is missing.
 
 ### S-101 sequential updates (S-100 Part 10a)
 

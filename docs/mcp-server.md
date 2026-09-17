@@ -109,7 +109,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 
 | Tool | Purpose |
 |---|---|
-| `list_datasets` | Summarises every dataset currently loaded in the viewer. |
+| `list_datasets` | Summarises every dataset currently loaded in the viewer. Each entry's `spec` is the dataset's product identity: a legacy S-57 cell reports `S-57` (with its real cell bounds) even though it is translated to, and queried through, the S-101 model, so the vector query tools (`identify_features`, `query_features`, `count_features`, `search_features`, …) work on S-57 cells too. |
 | `list_specs` | Lists S-100 product specifications the host can read. |
 | `list_time_steps` | Lists time steps for a time-varying dataset (S-104, S-111, S-421). |
 | `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. For the *features* under a point (not just which datasets cover it), use `identify_features`. |

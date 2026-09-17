@@ -15,13 +15,20 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The viewer's loader keeps spec-specific <c>IDatasetProcessor</c>s
-/// privately. Rather than widen that contract, this adapter re-opens
-/// each loaded dataset via the per-spec <c>Open(string)</c> helpers
-/// so the catalog snapshot is fully self-contained — read-only and
-/// independent of the loader's rendering state. Re-opening doubles
-/// memory for in-process datasets, which is acceptable for an
-/// off-by-default tool surface.
+/// Most specs are re-opened from their bytes through
+/// <see cref="LoadedDatasetProjector"/>'s stream overload so the catalog
+/// snapshot is self-contained — read-only and independent of the loader's
+/// rendering state. Re-opening doubles memory for in-process datasets,
+/// which is acceptable for an off-by-default tool surface.
+/// </para>
+/// <para>
+/// Legacy S-57 cells are the exception: they are projected from the loader's
+/// resident <see cref="S57DatasetProcessor"/> (via
+/// <see cref="IDatasetLoaderService.AcquireProcessors"/>), which already holds
+/// the cell translated to the S-101 model with any exchange-set updates
+/// folded in. That keeps the catalog identity <c>S-57</c>, the real cell
+/// bounds, and the same features the map draws. When no processor is
+/// available the stream overload translates the base cell itself.
 /// </para>
 /// <para>
 /// Entries are cached by <see cref="DatasetEntry"/> identity so each
@@ -30,9 +37,9 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </para>
 /// <para>
 /// Exchange-set entries (where <see cref="DatasetEntry.Source"/> is
-/// non-null) and specs without a path-based <c>Open</c> helper are
-/// silently skipped — the MCP surface only ever sees datasets it can
-/// fully model.
+/// non-null) are read through their asset source. Specs the projector
+/// cannot model are silently skipped — the MCP surface only ever sees
+/// datasets it can fully model.
 /// </para>
 /// </remarks>
 internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
@@ -131,23 +138,36 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         });
     }
 
-    private static LoadedDataset? TryProject(DatasetEntry entry)
+    private LoadedDataset? TryProject(DatasetEntry entry)
     {
         var id = new DatasetId(entry.DisplayName);
+        var externalTextResolver = BuildExternalTextResolver(entry);
 
-        // DatasetPipelineFactory.DetectProductSpec returns the literal
-        // string "S-57" for ENC .000 files that pass the S-57 DSPM
-        // discriminator (see DatasetPipelineFactory.cs:94) and "S-101"
-        // for everything else with that extension. The MCP surface
-        // treats both as S-101 — LoadedDatasetProjector maps them to a
-        // single canonical spec name so the tool surface stays
-        // predictable.
-        var spec = entry.ProductSpec;
+        // A legacy S-57 cell (DatasetPipelineFactory detects it by its DSPM
+        // field) is a different ISO 8211 profile from S-101 and must be
+        // translated, not opened with the S-101 reader. Prefer the resident
+        // processor's translated model: it is authoritative about identity
+        // ("S-57") and carries any exchange-set updates the raw base-cell
+        // bytes lack.
+        if (entry.ProductSpec == "S-57"
+            && TryProjectFromProcessor(entry, id, externalTextResolver) is { } fromProcessor)
+        {
+            return fromProcessor;
+        }
+
         using var stream = OpenEntryStream(entry);
-        return LoadedDatasetProjector.Project(id, spec, stream, BuildExternalTextResolver(entry), CrsTransforms);
+        return LoadedDatasetProjector.Project(id, entry.ProductSpec, stream, externalTextResolver, CrsTransforms);
     }
 
-    /// <summary>
+    private LoadedDataset? TryProjectFromProcessor(
+        DatasetEntry entry, DatasetId id, Func<string, string?>? externalTextResolver)
+    {
+        using var processors = _loader.AcquireProcessors();
+        return processors.TryGetValue(entry, out var processor)
+            ? LoadedDatasetProjector.Project(id, processor, externalTextResolver, CrsTransforms)
+            : null;
+    }
+
     /// <summary>
     /// Opens the dataset bytes for <paramref name="entry"/> — either from
     /// disk (plain entry) or from its <see cref="DatasetEntry.Source"/>
@@ -167,7 +187,6 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         }
         return File.OpenRead(entry.FilePath);
     }
-
 
     /// <summary>
     /// Builds a file-name → text resolver for an S-101 cell's
