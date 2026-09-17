@@ -3357,6 +3357,53 @@ public class S57ToS101TranslatorTests
         Assert.Equal(1, diag.UnmappedAttributes[new S57AttributeDrop(75, (ushort)AttlVeracc)]);
     }
 
+    // ── ORIENT → orientation (S-65 Annex B § 3.3.1, 3.4, 10.1.1; IEHG 3.28, 3.32) ──
+
+    private const int AttlOrient = 117;
+
+    [Theory]
+    [InlineData(85, "NavigationLine")]          // NAVLNE
+    [InlineData(36, "CurrentNonGravitational")] // CURENT
+    [InlineData(160, "TidalStreamFloodEbb")]    // TS_FEB
+    public void Translate_OrientOnOrientationComplexClass_AssemblesOrientation(ushort objl, string s101Class)
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(objl, Attr(AttlOrient, "123.5")));
+
+        var feat = SingleOfClass(s101, s101Class);
+        var orientation = ComplexInstanceStrict(s101, feat.Attributes, "orientation", 1, "orientation").ToList();
+        Assert.Equal(["orientation", "orientationValue"],
+            orientation.Select(a => s101.AttributeTypeCatalogue[a.NumericCode]));
+        Assert.Equal("123.5", orientation[1].Value);
+        Assert.Equal(1, AttributeNames(s101, feat).Count(n => n == "orientationValue"));
+    }
+
+    [Fact]
+    public void Translate_OrientOnRecommendedTrack_StaysFlat()
+    {
+        // RecommendedTrack binds orientationValue directly, so ORIENT stays a
+        // top-level simple attribute there.
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(109, Attr(AttlOrient, "45")));
+
+        var feat = SingleOfClass(s101, "RecommendedTrack");
+        Assert.DoesNotContain("orientation", AttributeNames(s101, feat));
+        Assert.Equal("45", TopLevelValue(s101, feat, "orientationValue"));
+    }
+
+    [Fact]
+    public void Translate_OrientOnInlandDaymark_S401Target_AssemblesOrientation()
+    {
+        // IEHG S-57 ENC to S-401 Conversion Guidance clause 3.32: ORIENT →
+        // orientation.orientationValue on Daymark (S-101 Daymark binds neither).
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17035, Attr(AttlOrient, "270")));
+
+        var feat = SingleOfClass(s401, "Daymark");
+        var orientation = ComplexInstanceStrict(s401, feat.Attributes, "orientation", 1, "orientation").ToList();
+        Assert.Equal("270", GetSubAttribute(s401, orientation, "orientationValue"));
+    }
+
     // ── CATBRG → S-101 bridge category attributes (S-65 Annex B § 4.8.10) ──
 
     private static List<(string Code, int Index, string Value)> BridgeAttributes(string catbrg, S57TranslationDiagnostics? diag = null)
