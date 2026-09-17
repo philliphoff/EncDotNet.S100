@@ -44,6 +44,16 @@ internal static class DefaultRules
         // bridge), so the per-value openingBridge entries here only record
         // which way values 1 and 2 point.
         //
+        // CATBRG 13 (bridge arch) is an IENC extension of the attribute (IENC
+        // Feature Catalogue Ed. 2.4, data dictionary IENC, accepted
+        // 2012-08-03), so S-65 Annex B does not rule on it. The IEHG "S-57 ENC
+        // to S-401 Conversion Guidance" (Ed 1.3.0 draft 2) does, in its Bridge
+        // and Span Fixed clauses (3.7 and 3.144): value 13 becomes
+        // bridgeConstruction 1. Its rule is applied here rather than only for
+        // S-401 because bridgeConstruction 1 is "Arch" in both the S-101 and
+        // the S-401 Feature Catalogue, so the mapping is equally correct for a
+        // maritime cell that encodes the value.
+        //
         // Point is not a permitted Bridge primitive, so a point BRIDGE
         // converts to Landmark (the translator supplies categoryOfLandmark =
         // 26 (bridge)); the bridge-only attributes Landmark does not bind are
@@ -69,6 +79,7 @@ internal static class DefaultRules
                         ["10"] = "bridgeConstruction",
                         ["11"] = "bridgeFunction",
                         ["12"] = "bridgeConstruction",
+                        ["13"] = "bridgeConstruction",
                     },
                     ValueRemap = new Dictionary<string, string?>
                     {
@@ -80,6 +91,7 @@ internal static class DefaultRules
                         ["10"] = "2",    // viaduct → Viaduct
                         ["11"] = "4",    // aqueduct → Aqueduct
                         ["12"] = "4",    // suspension bridge → Suspension Bridge
+                        ["13"] = "1",    // bridge arch (IENC) → Arch
                     },
                 },
             },
@@ -463,7 +475,8 @@ internal static class DefaultRules
         // Format: A(ATTL, S57 acronym, S-101 attribute name).
         // CATBRG: S-101 has no categoryOfBridge. Values 3, 4, 5 and 7 map
         // code-for-code onto categoryOfOpeningBridge; the BRIDGE feature rule
-        // redirects the other values (S-65 Annex B § 4.8.10).
+        // redirects the other values (S-65 Annex B § 4.8.10, and for the IENC
+        // value 13 the IEHG conversion guidance clauses 3.7 and 3.144).
         yield return A(9, "CATBRG", "categoryOfOpeningBridge");
         yield return A(13, "CATCAM", "categoryOfCardinalMark");
         yield return A(14, "CATCHP", "categoryOfCheckpoint");

@@ -765,6 +765,7 @@ public class S57S101MappingTests
     [InlineData("10", "bridgeConstruction", "2")]         // viaduct
     [InlineData("11", "bridgeFunction", "4")]             // aqueduct
     [InlineData("12", "bridgeConstruction", "4")]         // suspension bridge
+    [InlineData("13", "bridgeConstruction", "1")]         // bridge arch (IENC) → arch
     public void Bridge_CatbrgValue_MapsToS101BridgeAttribute(string s57Value, string expectedCode, string expectedValue)
     {
         var m = S57S101Mapping.Default;
