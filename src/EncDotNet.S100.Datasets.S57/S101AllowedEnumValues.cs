@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Specifications;
@@ -35,7 +36,8 @@ public sealed class S101AllowedEnumValues
 {
     private readonly FrozenDictionary<string, FrozenSet<string>> _byAttributeCode;
 
-    private static readonly Lazy<S101AllowedEnumValues> LazyDefault = new(LoadDefault);
+    private static readonly ConcurrentDictionary<string, Lazy<S101AllowedEnumValues>> BySpec =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private S101AllowedEnumValues(FrozenDictionary<string, FrozenSet<string>> byAttributeCode)
     {
@@ -46,7 +48,22 @@ public sealed class S101AllowedEnumValues
     /// Lazily-loaded singleton built from the S-101 Feature Catalogue
     /// embedded in <see cref="Specification"/>.
     /// </summary>
-    public static S101AllowedEnumValues Default => LazyDefault.Value;
+    public static S101AllowedEnumValues Default => ForSpec("S-101");
+
+    /// <summary>
+    /// The allowable-value lookup built from the bundled Feature Catalogue of
+    /// <paramref name="catalogueSpec"/> (e.g. <c>"S-101"</c> or <c>"S-401"</c>), loaded
+    /// on first use and shared thereafter. Lets the S-57 translation check its
+    /// output against whichever S-100 product it targets.
+    /// </summary>
+    /// <param name="catalogueSpec">The product whose bundled Feature Catalogue to use.</param>
+    /// <returns>The shared lookup for that catalogue.</returns>
+    /// <exception cref="InvalidOperationException">No Feature Catalogue is bundled for <paramref name="catalogueSpec"/>.</exception>
+    public static S101AllowedEnumValues ForSpec(string catalogueSpec)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(catalogueSpec);
+        return BySpec.GetOrAdd(catalogueSpec, static spec => new(() => Load(spec))).Value;
+    }
 
     /// <summary>
     /// Builds an instance from a parsed S-101 <see cref="FeatureCatalogue"/>.
@@ -101,11 +118,11 @@ public sealed class S101AllowedEnumValues
         => !string.IsNullOrEmpty(s101AttributeCode)
         && _byAttributeCode.ContainsKey(s101AttributeCode);
 
-    private static S101AllowedEnumValues LoadDefault()
+    private static S101AllowedEnumValues Load(string catalogueSpec)
     {
-        using var stream = Specification.TryOpenFeatureCatalogue("S-101")
+        using var stream = Specification.TryOpenFeatureCatalogue(catalogueSpec)
             ?? throw new InvalidOperationException(
-                "Bundled S-101 Feature Catalogue not found in EncDotNet.S100.Specifications.");
+                $"Bundled {catalogueSpec} Feature Catalogue not found in EncDotNet.S100.Specifications.");
         var fc = FeatureCatalogueReader.Read(stream);
         return FromFeatureCatalogue(fc);
     }

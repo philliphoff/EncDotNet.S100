@@ -35,9 +35,18 @@ Key types:
   producers such as USACE), plus a `TryParse` for the raw subfield value.
 - **`S57S101Mapping`** — embedded code-mapping table sourced from IHO's S-57 →
   S-101 conversion guidance.
-- **`S101AllowedEnumValues`** — lazy-loaded helper that consults the bundled
-  S-101 Feature Catalogue to drop emitted enumerated attribute values that
-  aren't permitted by the destination FC binding.
+- **`S57TranslationTarget`** — the S-100 product a translation targets: the
+  bundled Feature Catalogue its output is checked against and the product
+  specification / edition the translated document declares. `S101` is the
+  default. S-101 and S-401 share the S-101 document model, so
+  `S57ToS101Translator.ForTarget(target, mapping)` builds a translator for
+  either; inland ENCs will target S-401 once an inland mapping table exists
+  (issue #608).
+- **`S101AllowedEnumValues`** — lazy-loaded helper that consults a bundled
+  Feature Catalogue to drop emitted enumerated attribute values that aren't
+  permitted by the destination FC binding. `Default` reads the S-101 FC;
+  `ForSpec(spec)` reads another bundled FC (e.g. S-401), loaded once per spec.
+  `S101FeatureAttributeBindings` follows the same `Default` / `ForSpec` shape.
 
 ## Translation behaviour
 
