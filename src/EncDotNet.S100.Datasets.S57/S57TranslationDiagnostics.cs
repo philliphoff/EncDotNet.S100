@@ -199,9 +199,11 @@ public sealed class S57TranslationDiagnostics
     public IReadOnlyDictionary<S57AttributeDrop, int> UnmappedAttributes => _unmappedAttributes;
 
     /// <summary>
-    /// S-57 attributes (ATTL → occurrence count) that had a rule but resolved to
-    /// nothing — the rule (or a feature-level override) maps the value to
-    /// <c>null</c>, i.e. an intentional value-level drop.
+    /// S-57 attributes (ATTL → occurrence count) that had a rule but were not
+    /// emitted. Either the rule (or a feature-level override) maps the value to
+    /// <c>null</c>, an intentional value-level drop, or the rule's target is not
+    /// bound by the resolved feature class in the target Feature Catalogue
+    /// (e.g. <c>WATLEV</c> on a <c>Pile</c>).
     /// </summary>
     public IReadOnlyDictionary<ushort, int> RuleDroppedAttributes => _ruleDroppedAttributes;
 

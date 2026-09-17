@@ -352,34 +352,12 @@ public sealed class S57ToS101Translator
     private const string S101AttrHorizontalClearanceFixed = "horizontalClearanceFixed";
     private const string S101AttrHorizontalClearanceValue = "horizontalClearanceValue";
 
-    // ── Class-bound simple attributes ───────────────────────────────────
-    // Simple attributes that only mean something on the feature classes that
-    // bind them, so they are dropped (and recorded as rule-dropped) elsewhere
-    // rather than emitted unbound. Only the S-401 (inland) mapping targets
-    // them: `distanceUnitOfMeasurement` (from IENC hunits) qualifies
-    // `waterwayDistance`, and S-401 binds it exactly where it binds that;
-    // the time-schedule attributes bind only on `TimeScheduleInGeneral`; the
-    // usable lock / dock dimensions (IENC horcll / horclw) bind on the dock
-    // and lock classes only.
-    //
     // S-401 LockBasin binds `horizontalClearanceLength` but not
     // `horizontalClearanceWidth`; the IEHG S-57 ENC to S-401 Conversion
     // Guidance (clause 3.78) carries its width (horclw) in the
     // `horizontalClearanceFixed` complex instead. There horclw feeds the same
     // complex HORCLR does, and HORCLR takes precedence when both are present.
-    private const string S101AttrHorizontalClearanceLength = "horizontalClearanceLength";
     private const string S101AttrHorizontalClearanceWidth = "horizontalClearanceWidth";
-    private static readonly HashSet<string> ClassBoundSimpleAttributes = new(StringComparer.Ordinal)
-    {
-        "distanceUnitOfMeasurement",
-        "categoryOfTimeAndBehaviour",
-        "timeScheduleReference",
-        "averagePassingTimeReference",
-        "typeOfShip",
-        "useOfShip",
-        S101AttrHorizontalClearanceLength,
-        S101AttrHorizontalClearanceWidth,
-    };
 
     // ── IENC tisdge → S-401 TimeScheduleInGeneral ───────────────────────
     // An IENC time schedule (`tisdge`, IENC Encoding Guide 2.4.1 T.1.1) has no
@@ -1613,6 +1591,15 @@ public sealed class S57ToS101Translator
             if (datsta is not null || datend is not null)
                 AppendDateRangeInstance(builder, S101AttrFixedDateRange, datsta, datend);
 
+            // S-401 SpanFixed binds no horizontal clearance (IEHG S-57 ENC to
+            // S-401 Conversion Guidance clause 3.144), so HORCLR/HORACC are
+            // dropped there.
+            if (horclr is not null && !_featureBindings.Binds(spanClass, S101AttrHorizontalClearanceFixed))
+            {
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrHorclr);
+                horclr = null;
+            }
+
             if (horclr is not null)
             {
                 AppendHorizontalClearanceInstance(builder, S101AttrHorizontalClearanceFixed, horclr);
@@ -2542,9 +2529,7 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
-                if (resolved is null
-                    || (ClassBoundSimpleAttributes.Contains(resolved.S101Code)
-                        && !_featureBindings.Binds(feature.S101Code, resolved.S101Code)))
+                if (resolved is null)
                 {
                     _diagnostics?.RecordRuleDroppedAttribute(attl);
                     continue;
@@ -2572,6 +2557,19 @@ public sealed class S57ToS101Translator
                 if (bindsOrientationComplex && resolved.S101Code == S101AttrOrientationValue)
                 {
                     orientValue ??= resolved.Value;
+                    continue;
+                }
+
+                // Only a simple attribute the resolved class binds is passed
+                // through. The conversion guidance leaves the rest unconverted
+                // ("not relevant for <feature> in S-101", e.g. WATLEV/NATCON on
+                // Pile, CONRAD/CONVIS/HEIGHT on Mooring Buoy, CATTSS on the traffic
+                // separation scheme parts), so they are rule-dropped rather
+                // than emitted unbound. This also stops a complex being emitted
+                // as a valued flat attribute.
+                if (!_featureBindings.Binds(feature.S101Code, resolved.S101Code))
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(attl);
                     continue;
                 }
 
