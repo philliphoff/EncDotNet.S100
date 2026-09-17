@@ -558,6 +558,16 @@ public sealed class S57ToS101Translator
     private const string S101AttrWaveLengthValue = "waveLengthValue";
     private const string S101AttrRadarBand = "radarBand";
 
+    // ── ORIENT → orientation ────────────────────────────────────────────
+    // ORIENT resolves to `orientationValue`, which some classes bind directly
+    // (e.g. RecommendedTrack, RadarLine). NavigationLine, CurrentNonGravitational,
+    // TidalStreamFloodEbb, Crane (and S-401 Daymark) bind it only inside the
+    // `orientation` complex, so there ORIENT is assembled into that complex
+    // (S-65 Annex B clauses 3.3.1, 3.4, 10.1.1; IEHG S-57 ENC to S-401 Conversion
+    // Guidance 3.27, 3.28, 3.32).
+    private const string S101AttrOrientation = "orientation";
+    private const string S101AttrOrientationValue = "orientationValue";
+
     // S-57 CURVEL (Current velocity, ATTL 84) maps to the S-101 `speed`
     // complex attribute, which the bundled FC binds on CurrentNonGravitational
     // (CURENT) and TidalStreamFloodEbb (TS_FEB). The complex carries a
@@ -2287,6 +2297,11 @@ public sealed class S57ToS101Translator
             bool bindsVerticalClearance = VerticalClearanceComplexes.Any(
                 c => _featureBindings.Binds(feature.S101Code, c));
             var verticalClearances = new List<(string Complex, string Value)>();
+            // orientation source — ORIENT, on the classes that bind orientationValue
+            // only inside the `orientation` complex.
+            bool bindsOrientationComplex = _featureBindings.Binds(feature.S101Code, S101AttrOrientation)
+                && !_featureBindings.Binds(feature.S101Code, S101AttrOrientationValue);
+            string? orientValue = null;
             string? veraccValue = null;
             foreach (var a in attrs)
             {
@@ -2504,6 +2519,14 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                // Where orientationValue binds only inside `orientation`, the
+                // value feeds that complex (assembled below).
+                if (bindsOrientationComplex && resolved.S101Code == S101AttrOrientationValue)
+                {
+                    orientValue ??= resolved.Value;
+                    continue;
+                }
+
                 // S-57 list-type attributes (e.g. COLOUR, NATSUR, CATLIT)
                 // carry multiple enumerate codes as a comma-separated string
                 // (e.g. "3,3"). The destination S-101 enumerate attribute
@@ -2692,6 +2715,15 @@ public sealed class S57ToS101Translator
                     ? S101AttrHorizontalClearanceOpen
                     : S101AttrHorizontalClearanceFixed;
                 AppendHorizontalClearanceInstance(builder, complexName, horclrValue);
+            }
+
+            // Append the `orientation` complex instance. Its mandatory
+            // orientationValue carries ORIENT verbatim; an empty (unknown) value
+            // stays empty. The optional orientationUncertainty has no S-57 source.
+            if (orientValue is not null)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrOrientation), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrOrientationValue), 1, orientValue));
             }
 
             // Append the vertical clearance complex instances. A present S-57
