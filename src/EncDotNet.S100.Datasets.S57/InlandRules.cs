@@ -180,8 +180,9 @@ internal static class InlandRules
         yield return A(18008, "lg_rel", "relatedIssue"); // Related issue
         yield return A(18010, "lg_des", "descriptionOfLegalConditions"); // Description of legal conditions
         yield return A(18011, "lg_pbr", "publicationReference"); // Publication reference
-        // lc_csi: No S-401 alias; ship-category ranges belong to the maximum-permitted-dimensions complex, not converted yet.
-        yield return A(18012, "lc_csi", null); // Category of ship (including)
+        // lc_csi: the S-401 catalogue omits the alias every sibling of this attribute carries, so the
+        // target comes from conversion guidance clause 3.82 instead; the domain matches lc_cse's.
+        yield return A(18012, "lc_csi", "categoryOfShipIncluding"); // Category of ship (including)
         yield return A(18013, "lc_cse", "categoryOfShipExcluding"); // Category of ship (excluding)
         yield return A(18014, "lc_asi", "assembliesOfShipIncluding"); // Assemblies of ship (including)
         yield return A(18015, "lc_ase", "assembliesOfShipExcluding"); // Assemblies of ship (excluding)

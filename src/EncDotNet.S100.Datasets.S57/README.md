@@ -84,16 +84,20 @@ Key types:
   bridge-arch collection `c_brga` emits no feature: the `SpanFixed` of its
   first member bridge links the other members' fixed spans with S-401's
   `BridgeArchAssociation`, and a `c_brga` with fewer than two fixed spans is
-  reported as rule-dropped. Five codes have no S-401 home yet and are
-  reported as rule-dropped: `NEWOBJ`, its three definition attributes
-  (`CLSDEF`, `CLSNAM`, `SYMINS`), and `lc_csi` (a complex attribute).
+  reported as rule-dropped. Four codes have no S-401 home and are reported as
+  rule-dropped: `NEWOBJ` and its three definition attributes
+  (`CLSDEF`, `CLSNAM`, `SYMINS`). The ship-category, assembly and cargo
+  ranges of a maximum permitted ship dimensions area (`lc_csi`/`lc_cse`,
+  `lc_asi`/`lc_ase`, `lc_cci`/`lc_cce`) all convert; `lc_csi` is the one
+  whose S-401 target carries no `alias`, so its rule comes from conversion
+  guidance clause 3.82 rather than from the catalogue.
   Inland bridges convert exactly as maritime `BRIDGE` does: `CATBRG`
   categories on the `Bridge`, a `SpanFixed`/`SpanOpening` carrying the
   clearances, and point bridges as `Landmark` (the S-401 catalogue defines all
   of these); the fixed spans of one bridge arch are linked as above, and the
   IENC-only `CATBRG` value 13 (bridge arch) becomes `bridgeConstruction` 1
-  (arch), which keeps the arch a fixed span. Rules
-  are resolved by ATTL (`ResolveAttribute(ushort, …)`), so an inland code and
+  (arch), which keeps the arch a fixed span. Rules are resolved by ATTL
+  (`ResolveAttribute(ushort, …)`), so an inland code and
   its upper-case twin never shadow each other.
 - **S-401 anchorage rules** (internal `S401AnchorageRules`, applied last in
   the S-401 mapping) — these replace the `ACHARE`/`achare` and

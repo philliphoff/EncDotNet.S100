@@ -114,6 +114,46 @@ public class S57InlandMappingTests
     }
 
     [Theory]
+    // Conversion guidance clause 3.82 (Maximum Permitted Ship Dimensions): the
+    // including/excluding pairs convert attribute for attribute. `lc_csi` is
+    // the only one of the six whose target carries no `alias` in the S-401
+    // catalogue, so its rule comes from the clause rather than the alias.
+    [InlineData(18012, "lc_csi", "categoryOfShipIncluding")]
+    [InlineData(18013, "lc_cse", "categoryOfShipExcluding")]
+    [InlineData(18014, "lc_asi", "assembliesOfShipIncluding")]
+    [InlineData(18015, "lc_ase", "assembliesOfShipExcluding")]
+    [InlineData(18016, "lc_cci", "categoryOfCargoIncluding")]
+    [InlineData(18017, "lc_cce", "categoryOfCargoExcluding")]
+    public void S401Mapping_MapsShipDimensionRangeAttributes(int attl, string acronym, string target)
+    {
+        var rule = S401.AttributeRules[(ushort)attl];
+
+        Assert.Equal(acronym, rule.S57Acronym);
+        Assert.Equal(target, rule.DefaultS101Code);
+
+        // #631's flat-attribute gate needs the resolved class to bind the target.
+        Assert.True(S101FeatureAttributeBindings.ForSpec("S-401")
+            .Binds("MaximumPermittedShipDimensions", target));
+    }
+
+    [Fact]
+    public void S401Mapping_CategoryOfShipIncludingAndExcluding_ShareOneDomain()
+    {
+        // IENC Feature Catalogue 2.4: lc_csi and lc_cse both allow
+        // 1, 2, 3 and 5–32, which is exactly what S-401 lists for either
+        // target, so no value needs remapping or dropping.
+        var allowed = S101AllowedEnumValues.ForSpec("S-401");
+        string[] domain = ["1", "2", "3", .. Enumerable.Range(5, 28).Select(v => v.ToString())];
+
+        Assert.All(domain, v => Assert.True(allowed.IsAllowed("categoryOfShipIncluding", v), v));
+        Assert.All(domain, v => Assert.True(allowed.IsAllowed("categoryOfShipExcluding", v), v));
+
+        // 4 is not in either domain, and neither is anything past 32.
+        Assert.False(allowed.IsAllowed("categoryOfShipIncluding", "4"));
+        Assert.False(allowed.IsAllowed("categoryOfShipIncluding", "33"));
+    }
+
+    [Theory]
     [InlineData("1", "1")]
     [InlineData("2", null)] // feet: no S-401 equivalent
     [InlineData("3", "3")]

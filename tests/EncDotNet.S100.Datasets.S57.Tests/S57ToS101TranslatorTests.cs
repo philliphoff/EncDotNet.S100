@@ -740,6 +740,38 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_S401Target_ShipDimensionsCarryCategoryOfShipIncluding()
+    {
+        // lg_sdm (18001) → MaximumPermittedShipDimensions. Conversion guidance
+        // clause 3.82 pairs lc_csi (18012) with categoryOfShipIncluding and
+        // lc_cse (18013) with categoryOfShipExcluding. Both are S-57 list
+        // attributes and both bind [0..*], so every listed value survives.
+        // lg_sdm is rare in USACE data, hence the synthetic fixture.
+        var doc = AreaFeatureWithS57Attributes(18001,
+            Attr(18012, "7,9"),     // lc_csi: inland waterway vessel, motor vessel
+            Attr(18013, "8"),       // lc_cse: sea going ship
+            Attr(18004, "135.5"));  // lg_lgs: maximal permitted length
+        var diag = new S57TranslationDiagnostics();
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("MaximumPermittedShipDimensions", ClassOf(inland, feature));
+
+        var attributes = feature.Attributes
+            .Select(a => (Code: inland.AttributeTypeCatalogue[a.NumericCode], a.Index, a.Value))
+            .ToList();
+        Assert.Equal(
+            [("categoryOfShipIncluding", 1, "7"), ("categoryOfShipIncluding", 2, "9")],
+            attributes.Where(a => a.Code == "categoryOfShipIncluding"));
+        Assert.Contains(("categoryOfShipExcluding", (ushort)1, "8"), attributes);
+        Assert.Contains(("maximalPermittedLength", (ushort)1, "135.5"), attributes);
+
+        Assert.False(diag.RuleDroppedAttributes.ContainsKey(18012));
+        Assert.Empty(diag.DroppedEnumValues);
+    }
+
+    [Fact]
     public void Translate_S401Target_DropsInlandAttributeWithoutS401Equivalent()
     {
         // CLSNAM (18028) names a NEWOBJ class; S-401 has no equivalent.
