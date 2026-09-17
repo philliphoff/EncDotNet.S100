@@ -48,8 +48,9 @@ public sealed record SubLayerStackItem(
     string? ExtensionId = null)
 {
     /// <summary>
-    /// The source cell's coarsest intended display-scale denominator — a proxy
-    /// for its navigational-purpose (usage) band, used to break ties between
+    /// The source cell's ranking scale denominator — its compilation scale where
+    /// the product declares one, otherwise its coarsest intended display-scale
+    /// denominator; a proxy for its navigational-purpose (usage) band, used to break ties between
     /// overlapping cells of different scales within the same
     /// <see cref="Plane"/> and <see cref="WithinPlanePriority"/>. A
     /// <em>smaller</em> denominator means a larger-scale (finer) cell, which

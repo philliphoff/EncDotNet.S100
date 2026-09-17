@@ -274,25 +274,26 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                    $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
 
         // Out-of-scale-band declutter. S-57 has no DataCoverage /
-        // minimumDisplayScale (S-101 FC §3.1.1); the equivalent cell scale
-        // band is the compilation scale denominator carried in the S-57 DSPM
-        // field (CSCL, S-57 Appendix B.1 §7.3.1.1).
+        // minimumDisplayScale (S-101 FC §3.1.1). The whole-cell zoom-out
+        // window is the larger of the compilation scale (CSCL, S-57 Appendix
+        // B.1 §7.3.1.1) and the cell's largest feature SCAMIN — see
+        // S57Dataset.ResolveCellMinimumDisplayScale. CSCL alone is the
+        // *largest* intended viewing scale (S-52 §3.1.7; S-65 Annex B §2.1.6
+        // maps it to the S-101 optimum display scale), so it stays the cell's
+        // ranking scale against overlapping cells (CellCompilationScale)
+        // rather than its zoom-out cutoff.
         //
-        // S-57 feeds this into the ungated whole-cell window
+        // S-57 feeds the window into the ungated whole-cell window
         // (CellMinimumDisplayScale) only — NOT the per-feature line-work cap
         // (OutOfBandMinDisplayScale / ApplyOutOfBandCap). The two mechanisms
-        // trigger at the same denominator, but they differ in placeholder:
-        // the whole-cell window (viewer MapsuiDatasetRenderer.ApplyCellScale
-        // Window) hides the cell AND draws its extent border when zoomed out,
-        // whereas the per-feature cap silently blanks every feature with no
-        // placeholder. Unlike S-101 — whose per-feature cap is driven by an
-        // optional, frequently-absent DataCoverage.minimumDisplayScale band —
-        // S-57's CSCL is always present, so applying it as a per-feature cap
-        // would blank the whole cell at any whole-cell-fit view (no border),
-        // which is both redundant with the whole-cell window and defeats a
-        // full-extent render. The mariner's IgnoreScaleMinimum override is
+        // would trigger at the same denominator, but they differ in
+        // placeholder: the whole-cell window (viewer MapsuiDatasetRenderer.
+        // ApplyCellScaleWindow) hides the cell AND draws its extent border when
+        // zoomed out, whereas the per-feature cap silently blanks every feature
+        // with no placeholder. The mariner's IgnoreScaleMinimum override is
         // therefore applied by the viewer against the ungated whole-cell value.
-        var cellMinimumDisplayScale = ResolveCellMinimumDisplayScale();
+        var cellMinimumDisplayScale = Metadata.DisplayScale?.Minimum;
+        var cellCompilationScale = S57Dataset.ResolveCompilationScale(_rawS57Document);
 
         return new VectorPortrayalResult
         {
@@ -328,23 +329,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             OutOfBandMinDisplayScale = null,
             CellMinimumDisplayScale = cellMinimumDisplayScale,
+            CellCompilationScale = cellCompilationScale,
             CoverageAreas = coverageAreas,
         };
-    }
-
-    /// <summary>
-    /// Resolves this S-57 cell's coarsest intended display-scale denominator
-    /// from the compilation scale (CSCL) in the DSPM field (S-57 Appendix B.1
-    /// §7.3.1.1). This is the S-57 analogue of the S-101 <c>DataCoverage</c> /
-    /// <c>minimumDisplayScale</c> band (S-101 FC §3.1.1): the smallest scale
-    /// (largest denominator) at which the cell should remain drawn. Returns
-    /// <see langword="null"/> when the cell declares no usable compilation
-    /// scale, leaving the cell visible at every zoom (previous behaviour).
-    /// </summary>
-    private int? ResolveCellMinimumDisplayScale()
-    {
-        var compilationScale = _rawS57Document.DataSetParameters?.CompilationScale ?? 0;
-        return compilationScale > 0 ? compilationScale : (int?)null;
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef)

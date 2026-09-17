@@ -230,7 +230,7 @@ public sealed class MapsuiDatasetRenderer
                     result.SourceDatasetId,
                     sub.SourceFeatureType)
                 {
-                    SourceScaleDenominator = result.CellMinimumDisplayScale,
+                    SourceScaleDenominator = result.CellCompilationScale ?? result.CellMinimumDisplayScale,
                 }));
 
             union = Union(union, layer.Extent);
@@ -256,6 +256,7 @@ public sealed class MapsuiDatasetRenderer
             LayerNames = result.LayerNames,
             StackEntries = stackEntries,
             CellMinimumDisplayScale = result.CellMinimumDisplayScale,
+            CellCompilationScale = result.CellCompilationScale,
             CoverageGeometry = ToMercatorCoverage(result.CoverageAreas),
         };
     }

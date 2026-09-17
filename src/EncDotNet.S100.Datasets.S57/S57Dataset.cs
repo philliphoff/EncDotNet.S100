@@ -1,3 +1,4 @@
+using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
 
@@ -12,6 +13,9 @@ namespace EncDotNet.S100.Datasets.S57;
 /// </summary>
 public sealed class S57Dataset
 {
+    /// <summary>S-57 Appendix A attribute code (ATTL) of <c>SCAMIN</c>.</summary>
+    private const int ScaminAttributeCode = 133;
+
     private S57Dataset(EncDotNet.S57.S57Document document)
     {
         Document = document;
@@ -94,7 +98,7 @@ public sealed class S57Dataset
     /// <summary>
     /// Produces the lightweight <see cref="DatasetMetadata"/> for this already
     /// parsed dataset: the canonical <c>S-57</c> specification, the geographic
-    /// extent, and the compilation-scale display window (issue #460).
+    /// extent, and the whole-cell display window (issue #460).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -103,13 +107,15 @@ public sealed class S57Dataset
     /// from the raw spatial records' coordinates (2-D vertices and sounding
     /// nodes), divided by the coordinate multiplication factor (COMF) from the
     /// <c>DSPM</c> field to yield WGS-84 decimal degrees. This mirrors the
-    /// extent the full render ultimately fits, but skips feature/attribute
-    /// materialisation.
+    /// extent the full render ultimately fits, but skips S-101 feature/attribute
+    /// materialisation (the display window reads only the raw <c>SCAMIN</c>
+    /// attribute values).
     /// </para>
     /// <para>
-    /// The display-scale window carries only a coarsest bound, sourced from the
-    /// compilation scale (CSCL, S-57 Appendix B.1 §7.3.1.1) — the same value the
-    /// full processor applies as the whole-cell minimum display scale. The
+    /// The display-scale window carries only a coarsest bound, from
+    /// <see cref="ResolveCellMinimumDisplayScale"/> (the larger of the
+    /// compilation scale and the largest feature <c>SCAMIN</c>) — the same value
+    /// the full processor applies as the whole-cell minimum display scale. The
     /// canonical spec name is <c>S-57</c> with a <c>default</c> edition, matching
     /// <c>S57DatasetProcessor.Spec</c>.
     /// </para>
@@ -189,16 +195,85 @@ public sealed class S57Dataset
     }
 
     /// <summary>
-    /// Resolves the display-scale window from the compilation scale (CSCL) in
-    /// the <c>DSPM</c> field. Only the coarsest bound is modelled — S-57 has no
-    /// finest-scale analogue — matching the whole-cell minimum display scale the
-    /// full processor applies. Returns <see langword="null"/> when the cell
-    /// declares no usable compilation scale.
+    /// Resolves the display-scale window: only the coarsest bound is modelled
+    /// (S-57 has no finest-scale analogue), taken from
+    /// <see cref="ResolveCellMinimumDisplayScale"/> — the same whole-cell
+    /// minimum display scale the full processor applies. Returns
+    /// <see langword="null"/> when the cell declares no usable scale.
     /// </summary>
     private static DisplayScaleRange? ResolveDisplayScale(EncDotNet.S57.S57Document document)
     {
+        var minimum = ResolveCellMinimumDisplayScale(document);
+        return minimum is int value ? new DisplayScaleRange(value, null) : null;
+    }
+
+    /// <summary>
+    /// Resolves an S-57 cell's whole-cell zoom-out window: the coarsest
+    /// (largest-denominator) scale at which any of its content is intended to
+    /// be displayed. This is the larger of the compilation scale (CSCL, DSPM
+    /// field, S-57 Appendix B.1 §7.3.1.1) and the largest feature
+    /// <c>SCAMIN</c> (S-57 Appendix A attribute 133) in the cell.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// S-57 carries no minimum display scale. The compilation scale is the
+    /// <em>largest</em> intended viewing scale — S-52 §3.1.7 uses it only for
+    /// the overscale indication — and S-65 Annex B §2.1.6 maps it to the S-101
+    /// optimum display scale while leaving <c>minimumDisplayScale</c> null.
+    /// Capping the cell at CSCL therefore hid content the producer encoded to
+    /// remain visible further out: NOAA <c>SCAMIN</c> values run to 3–5× CSCL,
+    /// and USACE inland cells (CSCL 1:5,000) to 1:300,000. The largest
+    /// <c>SCAMIN</c> is the producer's own coarsest visibility statement, so
+    /// beyond it no feature would draw anyway; features without
+    /// <c>SCAMIN</c> (area fills, coverage) stay visible up to it.
+    /// </para>
+    /// <para>
+    /// The compilation scale remains the cell's ranking scale against
+    /// overlapping cells; see <see cref="ResolveCompilationScale"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="document">The parsed (and, where applicable, update-folded) S-57 document.</param>
+    /// <returns>
+    /// The window denominator, or <see langword="null"/> when the cell declares
+    /// neither a positive compilation scale nor any positive <c>SCAMIN</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    public static int? ResolveCellMinimumDisplayScale(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var result = ResolveCompilationScale(document) ?? 0;
+        foreach (var feature in document.FeatureRecords)
+        {
+            foreach (var attribute in feature.Attributes)
+            {
+                if (attribute.AttributeCode == ScaminAttributeCode
+                    && int.TryParse(attribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scamin)
+                    && scamin > result)
+                {
+                    result = scamin;
+                }
+            }
+        }
+
+        return result > 0 ? result : null;
+    }
+
+    /// <summary>
+    /// Resolves an S-57 cell's compilation scale (CSCL, DSPM field, S-57
+    /// Appendix B.1 §7.3.1.1) — the analogue of the S-101 optimum display
+    /// scale (S-65 Annex B §2.1.6) used to rank overlapping cells (a smaller
+    /// denominator is the finer cell).
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    /// <returns>The positive compilation scale denominator, or <see langword="null"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    public static int? ResolveCompilationScale(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
         var compilationScale = document.DataSetParameters?.CompilationScale ?? 0;
-        return compilationScale > 0 ? new DisplayScaleRange(compilationScale, null) : null;
+        return compilationScale > 0 ? compilationScale : null;
     }
 
     /// <summary>Opens an S-57 base cell from a file path.</summary>

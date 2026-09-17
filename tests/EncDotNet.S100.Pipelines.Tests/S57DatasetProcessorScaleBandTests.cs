@@ -12,8 +12,10 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// the fix <see cref="S57DatasetProcessor"/> emitted no
 /// <c>CellMinimumDisplayScale</c>, so the standalone-loaded cell never
 /// disappeared when zoomed out beyond its compilation scale — unlike an
-/// exchange-set cell driven by <c>CATALOG.XML</c>. The fix derives the
-/// whole-cell zoom-out window from the S-57 DSPM compilation scale (CSCL).
+/// exchange-set cell driven by <c>CATALOG.XML</c>. The whole-cell zoom-out
+/// window is the larger of the S-57 DSPM compilation scale (CSCL) and the
+/// cell's largest feature <c>SCAMIN</c>; CSCL alone is reported separately as
+/// the cell's ranking scale against overlapping cells.
 ///
 /// S-57 deliberately does <b>not</b> apply the per-feature out-of-band cap
 /// (<c>OutOfBandMinDisplayScale</c> / <c>ApplyOutOfBandCap</c>): CSCL is always
@@ -37,7 +39,7 @@ public class S57DatasetProcessorScaleBandTests
     }
 
     [SkippableFact]
-    public async Task BuildVectorPortrayal_DerivesWholeCellWindow_FromCompilationScale()
+    public async Task BuildVectorPortrayal_DerivesWholeCellWindow_FromCompilationScaleAndScamin()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
         Skip.IfNot(File.Exists(fixturePath),
@@ -47,13 +49,12 @@ public class S57DatasetProcessorScaleBandTests
 
         var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext());
 
-        // The ungated whole-cell window carries the compilation scale so the
-        // viewer can hide the whole cell (extent border included) when zoomed
-        // out, matching an exchange-set-loaded cell (a real ENC cell always
-        // declares CSCL > 0).
-        Assert.NotNull(result.CellMinimumDisplayScale);
-        Assert.True(result.CellMinimumDisplayScale > 0,
-            $"Expected a positive whole-cell denominator, got {result.CellMinimumDisplayScale}.");
+        // The ungated whole-cell window lets the viewer hide the whole cell
+        // (extent border included) when zoomed out, matching an
+        // exchange-set-loaded cell. US5MA1BO declares CSCL 1:20,000 and its largest feature SCAMIN is
+        // 59,999, so the window extends to the SCAMIN while CSCL ranks the cell.
+        Assert.Equal(59_999, result.CellMinimumDisplayScale);
+        Assert.Equal(20_000, result.CellCompilationScale);
 
         // The per-feature out-of-band cap is deliberately NOT applied for S-57
         // (it would blank the whole cell with no placeholder — the whole-cell

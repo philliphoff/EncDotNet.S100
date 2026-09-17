@@ -1486,6 +1486,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 Layers = layers,
                 Coverage = drawing ? entry.CoverageGeometry : null,
                 ScaleDenominator = drawing
+                    ? RankingScale(entry)
+                    : null,
+                CutoffScaleDenominator = drawing
                     ? EffectiveMinimumDisplayScale(entry)
                     : null,
             });
@@ -1994,6 +1997,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private static int? EffectiveMinimumDisplayScale(Entry entry) =>
         entry.CatalogueMinimumDisplayScale ?? entry.CellMinimumDisplayScale;
 
+    // Overlap ranking prefers the cell's compilation scale (S-57 CSCL) over its
+    // zoom-out window, which for S-57 extends to the largest SCAMIN.
+    private static int? RankingScale(Entry entry) =>
+        entry.CellCompilationScale ?? EffectiveMinimumDisplayScale(entry);
+
     private void OnAuthorityChanged()
     {
         lock (_sync)
@@ -2175,6 +2183,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         public int? CellMinimumDisplayScale { get; set; }
 
+        public int? CellCompilationScale { get; set; }
+
         public int? MaximumDisplayScale { get; set; }
 
         public double? ContentMaxVisibleResolution { get; set; }
@@ -2190,6 +2200,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             Info = result.Info;
             CoverageGeometry = result.CoverageGeometry;
             CellMinimumDisplayScale = result.CellMinimumDisplayScale;
+            CellCompilationScale = result.CellCompilationScale;
         }
 
         public void ClearRendering()
@@ -2201,6 +2212,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             Info = null;
             CoverageGeometry = null;
             CellMinimumDisplayScale = null;
+            CellCompilationScale = null;
             ContentMaxVisibleResolution = null;
         }
 
@@ -2213,6 +2225,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             Info,
             CoverageGeometry,
             CellMinimumDisplayScale,
+            CellCompilationScale,
             ContentMaxVisibleResolution,
             RenderedTime);
 
@@ -2226,6 +2239,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             Info = state.Info;
             CoverageGeometry = state.CoverageGeometry;
             CellMinimumDisplayScale = state.CellMinimumDisplayScale;
+            CellCompilationScale = state.CellCompilationScale;
             ContentMaxVisibleResolution = state.ContentMaxVisibleResolution;
             RenderedTime = state.RenderedTime;
         }
@@ -2240,6 +2254,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         string? Info,
         NetTopologySuite.Geometries.Geometry? CoverageGeometry,
         int? CellMinimumDisplayScale,
+        int? CellCompilationScale,
         double? ContentMaxVisibleResolution,
         DateTime? RenderedTime);
 

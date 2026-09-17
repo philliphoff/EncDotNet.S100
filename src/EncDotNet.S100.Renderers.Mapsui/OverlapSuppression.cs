@@ -6,10 +6,10 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// One loaded chart cell's contribution to cross-cell scale-band overlap
 /// suppression (issue #438 Phase 2): its base-chart layers, its EPSG:3857 data
-/// coverage footprint, and the scale-band denominator used both to decide which
-/// cells are "finer" (smaller denominator = larger scale) and to derive each
-/// finer cell's zoom-out cutoff (the resolution past which it stops drawing, so
-/// it must stop suppressing — computed per finer cell in
+/// coverage footprint, the scale-band denominator used to decide which cells are
+/// "finer" (smaller denominator = larger scale), and the denominator from which
+/// each finer cell's zoom-out cutoff is derived (the resolution past which it
+/// stops drawing, so it must stop suppressing — computed per finer cell in
 /// <see cref="OverlapSuppression.CollectFinerCoverages"/>).
 /// </summary>
 public sealed class OverlapSuppressionCell
@@ -26,13 +26,14 @@ public sealed class OverlapSuppressionCell
     public Geometry? Coverage { get; init; }
 
     /// <summary>
-    /// The cell's scale-band denominator (S-101 <c>DataCoverage.minimumDisplay
-    /// Scale</c>, FC §3.1.1; S-57 DSPM compilation scale). A cell with a
+    /// The cell's ranking scale denominator (S-101 <c>DataCoverage.minimum
+    /// DisplayScale</c>, FC §3.1.1; S-57 DSPM compilation scale). A cell with a
     /// strictly smaller denominator is "finer" and suppresses coarser overlaps.
     /// <see langword="null"/> when unknown (excluded from suppression).
     /// </summary>
     /// <remarks>
-    /// This is the same denominator the renderer clamps the cell's layers to
+    /// Unless <see cref="CutoffScaleDenominator"/> is set, this is also the
+    /// denominator the renderer clamps the cell's layers to
     /// (<c>MapsuiDatasetRenderer.ApplyCellScaleWindow</c> / the per-feature
     /// out-of-scale-band cap), so converting it to a resolution yields exactly
     /// the zoom-out point at which the cell stops drawing its content. The
@@ -41,6 +42,16 @@ public sealed class OverlapSuppressionCell
     /// separately-recorded window that can be absent for standalone-loaded cells.
     /// </remarks>
     public int? ScaleDenominator { get; init; }
+
+    /// <summary>
+    /// The whole-cell zoom-out window denominator the cell's layers are clamped
+    /// to, when it differs from <see cref="ScaleDenominator"/> — e.g. an S-57
+    /// cell ranked by its compilation scale but drawn out to its largest
+    /// <c>SCAMIN</c>. A finer cell keeps suppressing coarser overlaps until the
+    /// viewport zooms out past this denominator. <see langword="null"/> falls
+    /// back to <see cref="ScaleDenominator"/>.
+    /// </summary>
+    public int? CutoffScaleDenominator { get; init; }
 }
 
 /// <summary>
@@ -92,7 +103,8 @@ public static class OverlapSuppression
     /// every other cell with a strictly smaller scale denominator whose coverage
     /// envelope-and-geometry intersects this cell's coverage, paired with that
     /// finer cell's content zoom-out cutoff (the resolution past which the finer
-    /// cell stops drawing, derived from its own scale denominator). Returns
+    /// cell stops drawing, derived from its cutoff denominator — see
+    /// <see cref="OverlapSuppressionCell.CutoffScaleDenominator"/>). Returns
     /// <see langword="null"/> when the cell has no coverage/scale or no finer cell
     /// overlaps it.
     /// </summary>
@@ -121,7 +133,8 @@ public static class OverlapSuppression
             if (!coverage.Intersects(otherCoverage))
                 continue;
 
-            (finer ??= []).Add(new FinerCoverage(otherCoverage, ContentCutoffResolution(otherDenom, otherCoverage)));
+            var cutoffDenom = other.CutoffScaleDenominator ?? otherDenom;
+            (finer ??= []).Add(new FinerCoverage(otherCoverage, ContentCutoffResolution(cutoffDenom, otherCoverage)));
         }
 
         return finer;

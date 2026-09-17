@@ -53,7 +53,7 @@ public sealed class MapsuiDatasetResult
     /// The rendered dataset's coarsest intended display-scale denominator when
     /// derived from the dataset's own content rather than an exchange-set
     /// <c>CATALOG.XML</c> (S-101 in-file <c>DataCoverage.minimumDisplayScale</c>,
-    /// FC §3.1.1; S-57 DSPM compilation scale, Appendix B.1 §7.3.1.1). The
+    /// FC §3.1.1; S-57 compilation scale or largest feature <c>SCAMIN</c>). The
     /// map session uses this as the whole-cell zoom-out window
     /// (<c>ApplyCellScaleWindow</c>) when no catalogue value is available, so a
     /// standalone-loaded cell hides — with its extent border — when zoomed out
@@ -61,6 +61,15 @@ public sealed class MapsuiDatasetResult
     /// product carries no cell-wide scale.
     /// </summary>
     public int? CellMinimumDisplayScale { get; init; }
+
+    /// <summary>
+    /// The rendered cell's compilation (optimum) scale denominator, used to rank
+    /// it against overlapping cells for overlap suppression (S-57 DSPM
+    /// compilation scale, Appendix B.1 §7.3.1.1). Null ranks the cell by
+    /// <see cref="CellMinimumDisplayScale"/> (or the catalogue window) instead.
+    /// Mirrors <c>VectorPortrayalResult.CellCompilationScale</c>.
+    /// </summary>
+    public int? CellCompilationScale { get; init; }
 
     /// <summary>
     /// The rendered cell's declared data-coverage footprint in EPSG:3857

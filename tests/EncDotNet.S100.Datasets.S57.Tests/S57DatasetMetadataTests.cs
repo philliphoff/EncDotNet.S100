@@ -42,7 +42,8 @@ public class S57DatasetMetadataTests
     private static EncDotNet.S57.S57Document Document(
         IEnumerable<EncDotNet.S57.S57VectorRecord>? vectorRecords = null,
         int compilationScale = 50_000,
-        uint comf = Comf)
+        uint comf = Comf,
+        params string[] scaminValues)
         => new()
         {
             DataSetIdentification = new EncDotNet.S57.S57DataSetIdentification
@@ -59,7 +60,13 @@ public class S57DatasetMetadataTests
                 SoundingMultiplicationFactor = 10,
             },
             VectorRecords = (vectorRecords ?? Array.Empty<EncDotNet.S57.S57VectorRecord>()).ToArray(),
-            FeatureRecords = Array.Empty<EncDotNet.S57.S57FeatureRecord>(),
+            FeatureRecords = scaminValues
+                .Select((value, index) => new EncDotNet.S57.S57FeatureRecord
+                {
+                    RecordName = Name(100, (uint)index + 1),
+                    Attributes = [new EncDotNet.S57.S57AttributeValue(133, value)],
+                })
+                .ToArray(),
         };
 
     [Fact]
@@ -140,6 +147,42 @@ public class S57DatasetMetadataTests
         var metadata = S57Dataset.ReadMetadata(Document(compilationScale: 0));
 
         Assert.Null(metadata.DisplayScale);
+    }
+
+    [Fact]
+    public void ReadMetadata_display_scale_extends_to_largest_scamin()
+    {
+        // USACE inland cells: CSCL 1:5,000 but SCAMIN up to 1:300,000.
+        var metadata = S57Dataset.ReadMetadata(
+            Document(compilationScale: 5_000, scaminValues: ["30000", "300000", "120000"]));
+
+        Assert.Equal(300_000, metadata.DisplayScale!.Value.Minimum);
+        Assert.Null(metadata.DisplayScale.Value.Maximum);
+    }
+
+    [Fact]
+    public void ResolveCellMinimumDisplayScale_keeps_compilation_scale_when_scamin_is_finer()
+    {
+        var document = Document(compilationScale: 45_000, scaminValues: ["22000", "", "not-a-number", "-5"]);
+
+        Assert.Equal(45_000, S57Dataset.ResolveCellMinimumDisplayScale(document));
+    }
+
+    [Fact]
+    public void ResolveCellMinimumDisplayScale_uses_scamin_when_compilation_scale_absent()
+    {
+        var document = Document(compilationScale: 0, scaminValues: ["59999"]);
+
+        Assert.Equal(59_999, S57Dataset.ResolveCellMinimumDisplayScale(document));
+        Assert.Null(S57Dataset.ResolveCompilationScale(document));
+    }
+
+    [Fact]
+    public void ResolveCompilationScale_returns_cscl_independent_of_scamin()
+    {
+        var document = Document(compilationScale: 5_000, scaminValues: ["300000"]);
+
+        Assert.Equal(5_000, S57Dataset.ResolveCompilationScale(document));
     }
 
     [Fact]
