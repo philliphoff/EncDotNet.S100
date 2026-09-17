@@ -316,6 +316,20 @@ public sealed class S57ToS101Translator
     private const string S101AttrValueOfNominalRange = "valueOfNominalRange";
     private const string S101AttrLightVisibility = "lightVisibility";
 
+    // S-57 directional lights (CATLIT contains 1 directional function or 16
+    // moiré effect) redirect to LightSectored too (see DefaultRules). The
+    // lightSector carries the direction in `directionalCharacter`
+    // (moireEffect [0..1], orientation [1..1] → orientationValue [1..1]), so it
+    // is emitted only when the light has an ORIENT value; moireEffect is set
+    // true for CATLIT 16. A directional light without SECTR1/SECTR2 gets no
+    // sectorLimit (S-65 Annex B 12.8.6.1; the IEHG S-401 guidance matches).
+    private const ushort S57AttrCatlit = 37;   // CATLIT — category of light (list)
+    private const ushort S57AttrOrient = 117;  // ORIENT — orientation
+    private const string S57CatlitDirectionalFunction = "1";
+    private const string S57CatlitMoireEffect = "16";
+    private const string S101AttrDirectionalCharacter = "directionalCharacter";
+    private const string S101AttrMoireEffect = "moireEffect";
+
     // S-57 TOPMAR (Topmark/daymark, OBJL 144) is a standalone object in S-57 but
     // in S-101 the topmark is modelled as the `topmark` complex attribute (alias
     // TOPMAR) carried by the parent buoy/beacon/light-float feature, reached via
@@ -2010,7 +2024,8 @@ public sealed class S57ToS101Translator
                         RecordDivertedSectorAttributesDropped(
                             si.ColourList, si.LightVisibilityList, si.ValueOfNominalRange,
                             si.SectorBearingOne, si.SectorBearingTwo,
-                            si.SignalGroup, si.SignalPeriod, si.SignalSequence);
+                            si.SignalGroup, si.SignalPeriod, si.SignalSequence,
+                            si.DirectionalOrientation);
                         continue;
                     }
                     list.Add(si);
@@ -2112,6 +2127,7 @@ public sealed class S57ToS101Translator
         {
             string? litchr = null, colour = null, litvis = null, valnmr = null;
             string? sectr1 = null, sectr2 = null, siggrp = null, sigper = null, sigseq = null;
+            string? catlit = null, orient = null;
             foreach (var a in feat.Attributes)
             {
                 if (string.IsNullOrEmpty(a.Value)) continue;
@@ -2126,10 +2142,29 @@ public sealed class S57ToS101Translator
                     case S57AttrSiggrp: siggrp = a.Value; break;
                     case S57AttrSigper: sigper = a.Value; break;
                     case S57AttrSigseq: sigseq = a.Value; break;
+                    case S57AttrCatlit: catlit = a.Value; break;
+                    case S57AttrOrient: orient = a.Value; break;
                 }
             }
             if (litchr is null) return null;
-            return new SectorInput(litchr, siggrp, sigper, sigseq, colour, litvis, valnmr, sectr1, sectr2);
+            var (directional, moire) = ParseDirectionalCatlit(catlit);
+            return new SectorInput(
+                litchr, siggrp, sigper, sigseq, colour, litvis, valnmr, sectr1, sectr2,
+                directional ? orient : null, moire);
+        }
+
+        // Reads the directional flags from an S-57 CATLIT list: 1 (directional
+        // function) or 16 (moiré effect) makes the light directional; 16 also
+        // sets moireEffect.
+        private static (bool Directional, bool Moire) ParseDirectionalCatlit(string? catlit)
+        {
+            bool directional = false, moire = false;
+            foreach (var item in SplitEnumList(catlit))
+            {
+                if (item == S57CatlitDirectionalFunction) directional = true;
+                else if (item == S57CatlitMoireEffect) directional = moire = true;
+            }
+            return (directional, moire);
         }
 
 
@@ -2269,6 +2304,8 @@ public sealed class S57ToS101Translator
             string? sectrSiggrp = null;
             string? sectrSigper = null;
             string? sectrSigseq = null;
+            string? sectrOrient = null;
+            string? sectrCatlit = null;
             // horizontalClearance source — HORCLR. The destination complex
             // depends on the resolved feature's FC binding: Gate binds
             // `horizontalClearanceOpen`; spans, tunnels, shoreline
@@ -2352,6 +2389,8 @@ public sealed class S57ToS101Translator
                     case S57AttrValnmr: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrValnmr = a.Value; break;
                     case S57AttrSectr1: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSectr1 = a.Value; break;
                     case S57AttrSectr2: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrSectr2 = a.Value; break;
+                    case S57AttrCatlit: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrCatlit = a.Value; break;
+                    case S57AttrOrient: if (bindsSectorChar && !string.IsNullOrEmpty(a.Value)) sectrOrient = a.Value; break;
                     case S57AttrDatsta: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datstaValue = a.Value; break;
                     case S57AttrDatend: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datendValue = a.Value; break;
                     case S57AttrPersta: if (bindsPeriodicDate && !string.IsNullOrEmpty(a.Value)) perstaValue = a.Value; break;
@@ -2377,6 +2416,11 @@ public sealed class S57ToS101Translator
                         break;
                 }
             }
+
+            // A directional light's ORIENT feeds lightSector/directionalCharacter;
+            // on any other light it stays unbound and is rule-dropped below.
+            var (sectrDirectional, sectrMoire) = ParseDirectionalCatlit(sectrCatlit);
+            string? sectrDirectionalOrientation = sectrDirectional ? sectrOrient : null;
 
             var builder = new List<S101Attribute>();
             foreach (var a in attrs)
@@ -2445,6 +2489,8 @@ public sealed class S57ToS101Translator
                 if (bindsSectorChar && a.AttributeCode is S57AttrLitchr or S57AttrColour
                         or S57AttrLitvis or S57AttrValnmr or S57AttrSectr1 or S57AttrSectr2
                         or S57AttrSiggrp or S57AttrSigper or S57AttrSigseq)
+                    continue;
+                if (sectrDirectionalOrientation is not null && a.AttributeCode is S57AttrOrient)
                     continue;
 
                 // On features binding a horizontalClearance complex (Gate →
@@ -2869,7 +2915,8 @@ public sealed class S57ToS101Translator
             {
                 AppendSectorCharacteristicsInstance(
                     builder, sectrLitchr, sectrSiggrp, sectrSigper, sectrSigseq,
-                    sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2);
+                    sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2,
+                    sectrDirectionalOrientation, sectrMoire);
             }
             else if (bindsSectorChar)
             {
@@ -2883,7 +2930,7 @@ public sealed class S57ToS101Translator
                     _diagnostics?.RecordDroppedEnumValue(S101AttrLightCharacteristic, sectrLitchr);
                 RecordDivertedSectorAttributesDropped(
                     sectrColour, sectrLitvis, sectrValnmr, sectrSectr1, sectrSectr2,
-                    sectrSiggrp, sectrSigper, sectrSigseq);
+                    sectrSiggrp, sectrSigper, sectrSigseq, sectrDirectionalOrientation);
             }
 
             // Sector-light merge: co-located sector lights absorbed into this
@@ -2898,7 +2945,8 @@ public sealed class S57ToS101Translator
                     AppendSectorCharacteristicsInstance(
                         builder, s.LightCharacteristic, s.SignalGroup, s.SignalPeriod, s.SignalSequence,
                         s.ColourList, s.LightVisibilityList, s.ValueOfNominalRange,
-                        s.SectorBearingOne, s.SectorBearingTwo);
+                        s.SectorBearingOne, s.SectorBearingTwo,
+                        s.DirectionalOrientation, s.MoireEffect);
                 }
             }
 
@@ -3605,7 +3653,9 @@ public sealed class S57ToS101Translator
             string? LightVisibilityList,
             string? ValueOfNominalRange,
             string? SectorBearingOne,
-            string? SectorBearingTwo);
+            string? SectorBearingTwo,
+            string? DirectionalOrientation,
+            bool MoireEffect);
 
         // If no valid colour remains, the whole instance is rolled back because
         // lightSector/colour are mandatory in the S-101 Feature Catalogue.
@@ -3619,7 +3669,9 @@ public sealed class S57ToS101Translator
             string? lightVisibilityList,
             string? valueOfNominalRange,
             string? sectorBearingOne,
-            string? sectorBearingTwo)
+            string? sectorBearingTwo,
+            string? directionalOrientation,
+            bool moireEffect)
         {
             int instanceStart = builder.Count;
 
@@ -3653,6 +3705,8 @@ public sealed class S57ToS101Translator
             {
                 builder.RemoveRange(instanceStart, builder.Count - instanceStart);
                 _diagnostics?.RecordRuleDroppedAttribute(S57AttrColour);
+                if (directionalOrientation is not null)
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrOrient);
                 return;
             }
 
@@ -3691,6 +3745,18 @@ public sealed class S57ToS101Translator
                 _diagnostics?.RecordRuleDroppedAttribute(S57AttrSectr2);
             }
 
+            // directionalCharacter → moireEffect, orientation → orientationValue
+            // (ORIENT). The directionalCharacter scope ends at the next
+            // lightSector-level or sectorCharacteristics-level attribute.
+            if (directionalOrientation is not null)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrDirectionalCharacter), 1, string.Empty));
+                if (moireEffect)
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrMoireEffect), 1, "true"));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrOrientation), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrOrientationValue), 1, directionalOrientation));
+            }
+
             // Nested `signalSequence` sub-complexes at the sectorCharacteristics
             // level (after the lightSector subtree, so the lightSector scope
             // terminates at the first signalSequence marker).
@@ -3706,7 +3772,7 @@ public sealed class S57ToS101Translator
         private void RecordDivertedSectorAttributesDropped(
             string? colour, string? litvis, string? valnmr,
             string? sectr1, string? sectr2,
-            string? siggrp, string? sigper, string? sigseq)
+            string? siggrp, string? sigper, string? sigseq, string? orient)
         {
             if (_diagnostics is null)
                 return;
@@ -3718,6 +3784,7 @@ public sealed class S57ToS101Translator
             if (siggrp is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSiggrp);
             if (sigper is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSigper);
             if (sigseq is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrSigseq);
+            if (orient is not null) _diagnostics.RecordRuleDroppedAttribute(S57AttrOrient);
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)

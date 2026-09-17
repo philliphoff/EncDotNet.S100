@@ -3410,6 +3410,134 @@ public class S57ToS101TranslatorTests
         Assert.Equal(1, diag.RuleDroppedAttributes[AttlOrient]);
     }
 
+    // ── Directional lights (CATLIT 1/16) → LightSectored/directionalCharacter ──
+
+    [Fact]
+    public void Translate_DirectionalLight_RedirectsToLightSectored_WithDirectionalCharacter()
+    {
+        // S-65 Annex B 12.8.6.1: CATLIT 1 (directional function) sends LIGHTS to
+        // LightSectored, and ORIENT becomes
+        // lightSector.directionalCharacter.orientation.orientationValue. With no
+        // SECTR1/SECTR2 there is no sectorLimit.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(AttlCatlit, "1,4"),
+            Attr(107, "1"),        // LITCHR → lightCharacteristic (Fixed)
+            Attr(75, "1"),         // COLOUR → colour (White)
+            Attr(178, "7"),        // VALNMR → valueOfNominalRange
+            Attr(AttlOrient, "343")),
+            diag);
+
+        var feat = SingleOfClass(s101, "LightSectored");
+        var names = AttributeNames(s101, feat);
+        Assert.DoesNotContain("sectorLimit", names);
+        Assert.DoesNotContain("moireEffect", names);
+        Assert.Equal("4", GetSubAttribute(s101, feat.Attributes, "categoryOfLight"));
+
+        var directional = ComplexInstance(s101, feat.Attributes, "directionalCharacter", 1).ToList();
+        Assert.NotEmpty(directional);
+        var orientation = ComplexInstance(s101, directional, "orientation", 1).ToList();
+        Assert.Equal("343", GetSubAttribute(s101, orientation, "orientationValue"));
+
+        var lightSector = ComplexInstance(s101, feat.Attributes, "lightSector", 1).ToList();
+        Assert.Equal("1", GetSubAttribute(s101, lightSector, "colour"));
+        Assert.Equal("7", GetSubAttribute(s101, lightSector, "valueOfNominalRange"));
+
+        Assert.False(diag.RuleDroppedAttributes.ContainsKey(AttlOrient));
+    }
+
+    [Fact]
+    public void Translate_MoireEffectLight_SetsMoireEffect()
+    {
+        // CATLIT 16 (moiré effect) is directional too and sets moireEffect.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(AttlCatlit, "16"), Attr(107, "1"), Attr(75, "1"), Attr(AttlOrient, "90")));
+
+        var feat = SingleOfClass(s101, "LightSectored");
+        var directional = ComplexInstance(s101, feat.Attributes, "directionalCharacter", 1).ToList();
+        Assert.Equal("true", GetSubAttribute(s101, directional, "moireEffect"));
+        Assert.Equal("90", GetSubAttribute(s101, directional, "orientationValue"));
+    }
+
+    [Fact]
+    public void Translate_DirectionalLightWithSector_KeepsSectorLimitAndDirectionalCharacter()
+    {
+        // A directional light encoded with a sector arc keeps its sectorLimit
+        // (lightSector binds both [0..1]); the portrayal draws the sector.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(AttlCatlit, "1"), Attr(107, "2"), Attr(75, "3"),
+            Attr(136, "169.6"), Attr(137, "175.6"), Attr(AttlOrient, "172.6")));
+
+        var feat = SingleOfClass(s101, "LightSectored");
+        var two = ComplexInstance(s101, feat.Attributes, "sectorLimitTwo", 1).ToList();
+        Assert.Equal("175.6", GetSubAttribute(s101, two, "sectorBearing"));
+        var directional = ComplexInstance(s101, feat.Attributes, "directionalCharacter", 1).ToList();
+        Assert.Equal("172.6", GetSubAttribute(s101, directional, "orientationValue"));
+    }
+
+    [Fact]
+    public void Translate_DirectionalLightWithoutOrient_OmitsDirectionalCharacter()
+    {
+        // orientation is mandatory in directionalCharacter, so a directional
+        // light without ORIENT (or with an empty one) is a LightSectored with a
+        // bare lightSector.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(AttlCatlit, "16"), Attr(107, "1"), Attr(75, "1"), Attr(AttlOrient, "")),
+            diag);
+
+        var feat = SingleOfClass(s101, "LightSectored");
+        var names = AttributeNames(s101, feat);
+        Assert.Contains("lightSector", names);
+        Assert.DoesNotContain("directionalCharacter", names);
+        Assert.DoesNotContain("orientationValue", names);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlOrient]);
+    }
+
+    [Fact]
+    public void Translate_NonDirectionalSectorLightOrient_IsRuleDropped()
+    {
+        // ORIENT on a sector light that is not directional has no S-101 home.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(AttlCatlit, "4"), Attr(107, "2"), Attr(75, "3"),
+            Attr(136, "10"), Attr(137, "90"), Attr(AttlOrient, "50")),
+            diag);
+
+        var feat = SingleOfClass(s101, "LightSectored");
+        Assert.DoesNotContain("directionalCharacter", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlOrient]);
+    }
+
+    [Fact]
+    public void Translate_CoLocatedDirectionalSectorLights_AbsorbedMemberKeepsOrientation()
+    {
+        // The merge carries an absorbed directional member's ORIENT into its own
+        // sectorCharacteristics instance.
+        var s101 = new S57ToS101Translator().Translate(CoLocatedSectorLights(1,
+            new[] { Attr(AttlCatlit, "1"), Attr(107, "1"), Attr(75, "3"), Attr(136, "230"), Attr(137, "235") },
+            new[] { Attr(AttlCatlit, "1"), Attr(107, "1"), Attr(75, "1"), Attr(136, "235"), Attr(137, "241"), Attr(AttlOrient, "238") }));
+
+        var feat = SingleOfClass(s101, "LightSectored");
+        var first = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 1).ToList();
+        Assert.DoesNotContain(first, a => s101.AttributeTypeCatalogue[a.NumericCode] == "directionalCharacter");
+        var second = ComplexInstance(s101, feat.Attributes, "sectorCharacteristics", 2).ToList();
+        Assert.Equal("238", GetSubAttribute(s101, second, "orientationValue"));
+    }
+
+    [Fact]
+    public void Translate_DirectionalLight_S401Target_EmitsDirectionalCharacter()
+    {
+        // The IEHG S-57 ENC to S-401 guidance uses the same directionalCharacter
+        // structure on S-401 LightSectored.
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(LightWithS57Attributes(
+            Attr(AttlCatlit, "1"), Attr(107, "1"), Attr(75, "1"), Attr(AttlOrient, "12.5")));
+
+        var feat = SingleOfClass(s401, "LightSectored");
+        var directional = ComplexInstance(s401, feat.Attributes, "directionalCharacter", 1).ToList();
+        Assert.Equal("12.5", GetSubAttribute(s401, directional, "orientationValue"));
+    }
+
     [Fact]
     public void Translate_InlandFixedSpan_S401Target_DropsHorizontalClearance()
     {
@@ -3435,6 +3563,7 @@ public class S57ToS101TranslatorTests
     // ── ORIENT → orientation (S-65 Annex B § 3.3.1, 3.4, 10.1.1; IEHG 3.28, 3.32) ──
 
     private const int AttlOrient = 117;
+    private const int AttlCatlit = 37;
 
     [Theory]
     [InlineData(85, "NavigationLine")]          // NAVLNE

@@ -116,6 +116,16 @@ public sealed record S57FeatureRedirect
     public bool ConditionPresent { get; init; }
 
     /// <summary>
+    /// When <c>true</c>, <see cref="ConditionAttribute"/> is read as an S-57
+    /// list (comma-separated) and the redirect fires when any list item is in
+    /// <see cref="ConditionValues"/>, rather than requiring the whole value to
+    /// match. Used for list-valued discriminators such as <c>CATLIT</c>, where a
+    /// light is directional when the list contains 1 (e.g. <c>"1,4"</c>).
+    /// Ignored when <see cref="ConditionPresent"/> is <c>true</c>.
+    /// </summary>
+    public bool ConditionMatchesListItem { get; init; }
+
+    /// <summary>
     /// Geometric primitives that satisfy the condition. When non-empty, the
     /// redirect only fires for a feature whose primitive is in this set (in
     /// addition to any attribute condition). Empty means "any primitive".

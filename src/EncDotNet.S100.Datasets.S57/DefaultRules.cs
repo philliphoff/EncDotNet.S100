@@ -186,13 +186,22 @@ internal static class DefaultRules
         // LightSectored, whose mandatory sectorCharacteristics complex the
         // translator assembles from LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/
         // SIGGRP/SIGPER/SIGSEQ (S-101 FC: LightSectored / sectorCharacteristics
-        // [1..*]).
+        // [1..*]). A directional light (CATLIT contains 1 directional function
+        // or 16 moiré effect) maps to LightSectored too, with ORIENT carried in
+        // lightSector/directionalCharacter (S-65 Annex B 12.8.6.1).
         yield return new S57FeatureRule
         {
             Objl = 75,
             S57Acronym = "LIGHTS",
             DefaultS101Code = "LightAllAround",
             Redirects = [
+                new S57FeatureRedirect
+                {
+                    ConditionAttribute = "CATLIT",
+                    ConditionValues = ["1", "16"],
+                    ConditionMatchesListItem = true,
+                    TargetS101Code = "LightSectored",
+                },
                 new S57FeatureRedirect
                 {
                     ConditionAttribute = "SECTR1",
