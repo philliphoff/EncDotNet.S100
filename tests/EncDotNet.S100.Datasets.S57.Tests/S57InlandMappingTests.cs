@@ -102,7 +102,6 @@ public class S57InlandMappingTests
     }
 
     [Theory]
-    [InlineData(17103, "hunits")] // units fold into the measured value (conversion guidance §2.1.4)
     [InlineData(17074, "horcll")] // lock basin dimensions need a complex attribute
     [InlineData(17075, "horclw")]
     public void S401Mapping_DefersInlandAttributesThatNeedComplexAssembly(int attl, string acronym)
@@ -111,6 +110,24 @@ public class S57InlandMappingTests
 
         Assert.Equal(acronym, rule.S57Acronym);
         Assert.Null(rule.DefaultS101Code);
+    }
+
+    [Theory]
+    [InlineData("1", "1")]
+    [InlineData("2", null)] // feet: no S-401 equivalent
+    [InlineData("3", "3")]
+    [InlineData("4", "7")]
+    [InlineData("5", "4")]
+    [InlineData("6", "5")]
+    public void S401Mapping_Hunits_RemapsToDistanceUnitOfMeasurement(string hunits, string? expected)
+    {
+        var feature = new ResolvedFeature("DistanceMark", new Dictionary<string, S57AttributeOverride>());
+
+        var resolved = S401.ResolveAttribute(17103, hunits, feature);
+
+        Assert.Equal(expected, resolved?.Value);
+        if (resolved is not null)
+            Assert.Equal("distanceUnitOfMeasurement", resolved.S101Code);
     }
 
     [Fact]

@@ -707,14 +707,10 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_S401Target_DropsDeferredInlandAttribute()
+    public void Translate_S401Target_DropsInlandAttributeWithoutS401Equivalent()
     {
-        // hunits (17103) is not converted yet and is reported as rule-dropped.
-        var n1 = Node(1, 1000, 2000);
-        var dismar = Feat(recordId: 1, primitive: 1, objectClass: 17004,
-            attributes: new[] { Attr(17103, "5"), Attr(17064, "11") },
-            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
-        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { dismar });
+        // CLSNAM (18028) names a NEWOBJ class; S-401 has no equivalent.
+        var doc = PointFeatureWithS57Attributes(17004, Attr(18028, "x"), Attr(17064, "11"));
         var diag = new S57TranslationDiagnostics();
 
         var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
@@ -722,6 +718,59 @@ public class S57ToS101TranslatorTests
         var feature = Assert.Single(inland.Features);
         Assert.Equal("DistanceMark", ClassOf(inland, feature));
         Assert.Equal("waterwayDistance", inland.AttributeTypeCatalogue[Assert.Single(feature.Attributes).NumericCode]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[18028]);
+    }
+
+    [Theory]
+    // hunits → distanceUnitOfMeasurement, conversion guidance §2.1.4 (table 2.3).
+    [InlineData("1", "1")] // metres
+    [InlineData("3", "3")] // kilometres
+    [InlineData("4", "7")] // hectometres
+    [InlineData("5", "4")] // statute miles
+    [InlineData("6", "5")] // nautical miles
+    public void Translate_S401Target_HunitsBecomesDistanceUnitOfMeasurement(string hunits, string expected)
+    {
+        var doc = PointFeatureWithS57Attributes(17004, Attr(17103, hunits), Attr(17064, "11"));
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("DistanceMark", ClassOf(inland, feature));
+        var attributes = feature.Attributes.ToDictionary(
+            a => inland.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+        Assert.Equal(expected, attributes["distanceUnitOfMeasurement"]);
+        Assert.Equal("11", attributes["waterwayDistance"]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_HunitsFeet_IsDropped()
+    {
+        // S-401 has no feet; its code 2 means yards, so the value must not pass through.
+        var doc = LineFeatureWithS57Attributes(17012, Attr(17101, "3"), Attr(17103, "2"), Attr(17064, "11"));
+        var diag = new S57TranslationDiagnostics();
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("CableOverhead", ClassOf(inland, feature));
+        Assert.DoesNotContain(feature.Attributes,
+            a => inland.AttributeTypeCatalogue[a.NumericCode] == "distanceUnitOfMeasurement");
+        Assert.Equal(1, diag.RuleDroppedAttributes[17103]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_HunitsOnClassNotBindingTheUnit_IsDropped()
+    {
+        // S-401 NoticeMark does not bind distanceUnitOfMeasurement, so hunits has no conformant home there.
+        Assert.False(S101FeatureAttributeBindings.ForSpec("S-401").Binds("NoticeMark", "distanceUnitOfMeasurement"));
+        var doc = PointFeatureWithS57Attributes(17050, Attr(17052, "8"), Attr(17103, "5"));
+        var diag = new S57TranslationDiagnostics();
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("NoticeMark", ClassOf(inland, feature));
+        Assert.Equal("categoryOfNoticeMark", inland.AttributeTypeCatalogue[Assert.Single(feature.Attributes).NumericCode]);
         Assert.Equal(1, diag.RuleDroppedAttributes[17103]);
     }
 
