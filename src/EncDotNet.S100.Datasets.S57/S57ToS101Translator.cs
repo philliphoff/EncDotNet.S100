@@ -352,6 +352,17 @@ public sealed class S57ToS101Translator
     private const string S101AttrHorizontalClearanceFixed = "horizontalClearanceFixed";
     private const string S101AttrHorizontalClearanceValue = "horizontalClearanceValue";
 
+    // ── Class-bound simple attributes ───────────────────────────────────
+    // Simple attributes that only mean something on the feature classes that
+    // bind them, so they are dropped (and recorded as rule-dropped) elsewhere
+    // rather than emitted unbound. Only the S-401 (inland) mapping targets
+    // them: `distanceUnitOfMeasurement` (from IENC hunits) qualifies
+    // `waterwayDistance`, and S-401 binds it exactly where it binds that.
+    private static readonly HashSet<string> ClassBoundSimpleAttributes = new(StringComparer.Ordinal)
+    {
+        "distanceUnitOfMeasurement",
+    };
+
     // ── S-57 BRIDGE → S-101 Bridge + SpanFixed / SpanOpening ────────────
     // S-65 Annex B (S-57 ENC to S-101 Conversion Guidance, Ed 1.2.0) clause
     // 4.8.10; S-101 DCEG 6.6–6.8 and 25.4. A BRIDGE over navigable water
@@ -2199,7 +2210,9 @@ public sealed class S57ToS101Translator
                 }
 
                 var resolved = _mapping.ResolveAttribute(attl, a.Value, feature);
-                if (resolved is null)
+                if (resolved is null
+                    || (ClassBoundSimpleAttributes.Contains(resolved.S101Code)
+                        && !_featureBindings.Binds(feature.S101Code, resolved.S101Code)))
                 {
                     _diagnostics?.RecordRuleDroppedAttribute(attl);
                     continue;

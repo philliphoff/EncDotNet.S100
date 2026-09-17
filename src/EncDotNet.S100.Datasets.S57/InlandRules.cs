@@ -165,8 +165,8 @@ internal static class InlandRules
         yield return A(17100, "catexs", "categoryOfExceptionalStructure"); // Category of exceptional structure
         yield return TwinA(standard, 17101, "catcbl", 11); // Category of cable (twin of CATCBL)
         yield return TwinA(standard, 17102, "cathlk", 31); // Category of hulk (twin of CATHLK)
-        // hunits: Units are folded into the measured value in S-401 (conversion guidance §2.1.4), not converted yet.
-        yield return A(17103, "hunits", null); // Height/length units
+        // hunits: the unit of wtwdis (IENC Encoding Guide 2.4.1); conversion guidance §2.1.4 (table 2.3).
+        yield return A(17103, "hunits", "distanceUnitOfMeasurement") with { DefaultValueRemap = HunitsRemap }; // Height/length units
         yield return TwinA(standard, 17104, "watlev", 187); // Water level effect (twin of WATLEV)
         yield return A(17105, "bnkwtw", "bankOfTheWaterway"); // Bank of the waterway
         yield return TwinA(standard, 17106, "catrsc", 55); // Category of rescue station (twin of CATRSC)
@@ -211,6 +211,17 @@ internal static class InlandRules
         // shptyp: S-401 binds typeOfShip on information types, not on features; not converted yet.
         yield return A(33066, "shptyp", null); // Type of Ship
     }
+
+    // hunits → distanceUnitOfMeasurement (conversion guidance §2.1.4, table 2.3):
+    // metres and kilometres keep their code; hectometres, statute miles and
+    // nautical miles are renumbered; feet has no S-401 equivalent.
+    private static readonly IReadOnlyDictionary<string, string?> HunitsRemap = new Dictionary<string, string?>
+    {
+        ["2"] = null, // feet
+        ["4"] = "7", // hectometres
+        ["5"] = "4", // statute miles
+        ["6"] = "5", // nautical miles
+    };
 
     private static S57FeatureRule F(ushort objl, string acronym, string? s401)
         => new() { Objl = objl, S57Acronym = acronym, DefaultS101Code = s401 };

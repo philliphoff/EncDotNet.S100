@@ -60,11 +60,14 @@ Key types:
   lower case (`bridge` = 17011 for `BRIDGE` = 11) and reuse the standard rule,
   as the IEHG *S-57 ENC to S-401 Conversion Guidance* prescribes; the rest map
   to the S-401 class or attribute that aliases the IENC acronym (`notmrk` →
-  `NoticeMark`, `wtwdis` → `waterwayDistance`). Twenty-one codes have no S-401
-  home yet and are reported as rule-dropped: `tisdge`, `c_brga`, `NEWOBJ`;
-  `hunits` (units are folded into values), the lock-basin dimensions
-  `horcll`/`horclw` and shore-power details (complex attributes), and
-  schedule and ship-type attributes that S-401 binds on information types.
+  `NoticeMark`, `wtwdis` → `waterwayDistance`). `hunits`, the unit of
+  `wtwdis`, becomes `distanceUnitOfMeasurement` with the guidance's value
+  remap (hectometres 4 → 7, statute miles 5 → 4, nautical miles 6 → 5; feet
+  has no S-401 code and is dropped), and only on the classes that bind it.
+  Twenty codes have no S-401 home yet and are reported as rule-dropped:
+  `tisdge`, `c_brga`, `NEWOBJ`; the lock-basin dimensions `horcll`/`horclw`
+  and shore-power details (complex attributes), and schedule and ship-type
+  attributes that S-401 binds on information types.
   Inland bridges convert exactly as maritime `BRIDGE` does: `CATBRG`
   categories on the `Bridge`, a `SpanFixed`/`SpanOpening` carrying the
   clearances, and point bridges as `Landmark` (the S-401 catalogue defines all
