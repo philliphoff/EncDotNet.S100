@@ -32,7 +32,51 @@ internal static class DefaultRules
         yield return F(8, "BCNSAW", "SafeWaterBeacon");
         yield return F(9, "BCNSPP", "SpecialPurposeGeneralBeacon");
         yield return F(10, "BERTHS", "Berth");
-        yield return F(11, "BRIDGE", "Bridge");
+        // BRIDGE — S-65 Annex B (S-57 ENC to S-101 Conversion Guidance,
+        // Ed 1.2.0) § 4.8.10: the S-57 list attribute CATBRG is remodelled in
+        // S-101 into the enumerations bridgeConstruction, bridgeFunction and
+        // categoryOfOpeningBridge plus the Boolean openingBridge, all bound on
+        // Bridge only. The CATBRG attribute rule targets
+        // categoryOfOpeningBridge (swing 3, lifting 4, bascule 5 and draw 7
+        // keep their S-57 codes); this override redirects the remaining
+        // values. The translator derives the single openingBridge value from
+        // the whole CATBRG list (true when any value denotes an opening
+        // bridge), so the per-value openingBridge entries here only record
+        // which way values 1 and 2 point.
+        yield return new S57FeatureRule
+        {
+            Objl = 11,
+            S57Acronym = "BRIDGE",
+            DefaultS101Code = "Bridge",
+            AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CATBRG"] = new S57AttributeOverride
+                {
+                    S101CodeByValue = new Dictionary<string, string>
+                    {
+                        ["1"] = "openingBridge",
+                        ["2"] = "openingBridge",
+                        ["6"] = "bridgeConstruction",
+                        ["8"] = "bridgeConstruction",
+                        ["9"] = "bridgeFunction",
+                        ["10"] = "bridgeConstruction",
+                        ["11"] = "bridgeFunction",
+                        ["12"] = "bridgeConstruction",
+                    },
+                    ValueRemap = new Dictionary<string, string?>
+                    {
+                        ["1"] = "false", // fixed bridge → openingBridge = False
+                        ["2"] = "true",  // opening bridge → openingBridge = True
+                        ["6"] = "3",     // pontoon bridge → Pontoon Bridge
+                        ["8"] = "5",     // transporter bridge → Transporter Bridge
+                        ["9"] = "3",     // footbridge → Pedestrian
+                        ["10"] = "2",    // viaduct → Viaduct
+                        ["11"] = "4",    // aqueduct → Aqueduct
+                        ["12"] = "4",    // suspension bridge → Suspension Bridge
+                    },
+                },
+            },
+        };
         yield return F(13, "BUAARE", "BuiltUpArea");
         yield return F(14, "BOYCAR", "CardinalBuoy");
         yield return F(15, "BOYINB", "InstallationBuoy");
@@ -359,7 +403,10 @@ internal static class DefaultRules
     public static IEnumerable<S57AttributeRule> AttributeRules()
     {
         // Format: A(ATTL, S57 acronym, S-101 attribute name).
-        yield return A(9, "CATBRG", "categoryOfBridge");
+        // CATBRG: S-101 has no categoryOfBridge. Values 3, 4, 5 and 7 map
+        // code-for-code onto categoryOfOpeningBridge; the BRIDGE feature rule
+        // redirects the other values (S-65 Annex B § 4.8.10).
+        yield return A(9, "CATBRG", "categoryOfOpeningBridge");
         yield return A(13, "CATCAM", "categoryOfCardinalMark");
         yield return A(14, "CATCHP", "categoryOfCheckpoint");
         yield return A(15, "CATCOA", "categoryOfCoastline");
