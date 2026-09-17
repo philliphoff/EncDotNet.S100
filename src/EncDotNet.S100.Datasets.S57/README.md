@@ -73,9 +73,12 @@ Key types:
   encodes one schedule per ship type or period. A schedule no emitted feature
   can carry (e.g. one on a `Bridge`, which only takes `ServiceHours`) is
   reported as rule-dropped, and the schedule attributes are dropped on
-  features. Fourteen codes have no S-401 home yet and are reported as
-  rule-dropped: `c_brga`, `NEWOBJ`; the lock-basin dimensions
-  `horcll`/`horclw`, shore-power details and `lc_csi` (complex attributes).
+  features. The usable lock and dock dimensions `horcll`/`horclw` become
+  `horizontalClearanceLength`/`horizontalClearanceWidth` where the class binds
+  them; on `LockBasin`, which binds no width, `horclw` fills
+  `horizontalClearanceFixed` unless `HORCLR` already does. Twelve codes have
+  no S-401 home yet and are reported as rule-dropped: `c_brga`, `NEWOBJ`;
+  shore-power details and `lc_csi` (complex attributes).
   Inland bridges convert exactly as maritime `BRIDGE` does: `CATBRG`
   categories on the `Bridge`, a `SpanFixed`/`SpanOpening` carrying the
   clearances, and point bridges as `Landmark` (the S-401 catalogue defines all

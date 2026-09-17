@@ -102,14 +102,15 @@ public class S57InlandMappingTests
     }
 
     [Theory]
-    [InlineData(17074, "horcll")] // lock basin dimensions need a complex attribute
-    [InlineData(17075, "horclw")]
-    public void S401Mapping_DefersInlandAttributesThatNeedComplexAssembly(int attl, string acronym)
+    // Conversion guidance clauses 3.50, 3.78 and 3.79.
+    [InlineData(17074, "horcll", "horizontalClearanceLength")]
+    [InlineData(17075, "horclw", "horizontalClearanceWidth")]
+    public void S401Mapping_MapsUsableLockDimensions(int attl, string acronym, string target)
     {
         var rule = S401.AttributeRules[(ushort)attl];
 
         Assert.Equal(acronym, rule.S57Acronym);
-        Assert.Null(rule.DefaultS101Code);
+        Assert.Equal(target, rule.DefaultS101Code);
     }
 
     [Theory]

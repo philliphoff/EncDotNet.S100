@@ -2523,6 +2523,74 @@ public class S57ToS101TranslatorTests
         Assert.Equal(1, diag.UnmappedObjectClasses[ObjlCAsso]);
     }
 
+    // ── IENC horcll / horclw → S-401 lock and dock dimensions (#608) ──
+
+    private const int AttlHorcll = 17074;
+    private const int AttlHorclw = 17075;
+
+    private static string? SimpleValue(S101Document doc, S101FeatureRecord feat, string code)
+        => feat.Attributes.Where(a => doc.AttributeTypeCatalogue[a.NumericCode] == code)
+            .Select(a => a.Value).SingleOrDefault();
+
+    [Fact]
+    public void Translate_S401Target_LockBasin_HorcllIsLength_HorclwIsHorizontalClearanceFixed()
+    {
+        // Conversion guidance clause 3.78: S-401 LockBasin binds
+        // horizontalClearanceLength but carries the width in horizontalClearanceFixed.
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            AreaFeatureWithS57Attributes(17016, Attr(AttlHorcll, "182.88"), Attr(AttlHorclw, "33.53")));
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("LockBasin", ClassOf(s401, feat));
+        Assert.Equal("182.88", SimpleValue(s401, feat, "horizontalClearanceLength"));
+        Assert.Null(SimpleValue(s401, feat, "horizontalClearanceWidth"));
+        var fixedClr = ComplexInstance(s401, feat.Attributes, "horizontalClearanceFixed", 1).ToList();
+        Assert.Equal("33.53", GetSubAttribute(s401, fixedClr, "horizontalClearanceValue"));
+    }
+
+    [Fact]
+    public void Translate_S401Target_LockBasin_HorclrTakesPrecedenceOverHorclw()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            AreaFeatureWithS57Attributes(79, Attr(AttlHorclw, "33.53"), Attr(AttlHorclr, "30")), diag);
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("LockBasin", ClassOf(s401, feat));
+        var fixedClr = ComplexInstance(s401, feat.Attributes, "horizontalClearanceFixed", 1).ToList();
+        Assert.Equal("30", GetSubAttribute(s401, fixedClr, "horizontalClearanceValue"));
+        Assert.Empty(ComplexInstance(s401, feat.Attributes, "horizontalClearanceFixed", 2).ToList());
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlHorclw]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_LockBasinPart_CarriesLengthAndWidth()
+    {
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            AreaFeatureWithS57Attributes(17058, Attr(AttlHorcll, "109.73"), Attr(AttlHorclw, "17.07")));
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("LockBasinPart", ClassOf(s401, feat));
+        Assert.Equal("109.73", SimpleValue(s401, feat, "horizontalClearanceLength"));
+        Assert.Equal("17.07", SimpleValue(s401, feat, "horizontalClearanceWidth"));
+        Assert.Empty(ComplexInstance(s401, feat.Attributes, "horizontalClearanceFixed", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_S401Target_HorcllOnClassNotBindingIt_IsDropped()
+    {
+        // S-401 NoticeMark binds neither dimension nor a clearance complex.
+        var diag = new S57TranslationDiagnostics();
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17050, Attr(17052, "8"), Attr(AttlHorcll, "10"), Attr(AttlHorclw, "5")), diag);
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("NoticeMark", ClassOf(s401, feat));
+        Assert.Equal("categoryOfNoticeMark", s401.AttributeTypeCatalogue[Assert.Single(feat.Attributes).NumericCode]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlHorcll]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlHorclw]);
+    }
+
     // ── BRIDGE → Bridge + SpanFixed / SpanOpening (S-65 Annex B §4.8.10) ──
 
     // S-57 attribute codes used by the bridge tests.

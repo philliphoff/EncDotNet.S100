@@ -358,7 +358,17 @@ public sealed class S57ToS101Translator
     // rather than emitted unbound. Only the S-401 (inland) mapping targets
     // them: `distanceUnitOfMeasurement` (from IENC hunits) qualifies
     // `waterwayDistance`, and S-401 binds it exactly where it binds that;
-    // the time-schedule attributes bind only on `TimeScheduleInGeneral`.
+    // the time-schedule attributes bind only on `TimeScheduleInGeneral`; the
+    // usable lock / dock dimensions (IENC horcll / horclw) bind on the dock
+    // and lock classes only.
+    //
+    // S-401 LockBasin binds `horizontalClearanceLength` but not
+    // `horizontalClearanceWidth`; the IEHG S-57 ENC to S-401 Conversion
+    // Guidance (clause 3.78) carries its width (horclw) in the
+    // `horizontalClearanceFixed` complex instead. There horclw feeds the same
+    // complex HORCLR does, and HORCLR takes precedence when both are present.
+    private const string S101AttrHorizontalClearanceLength = "horizontalClearanceLength";
+    private const string S101AttrHorizontalClearanceWidth = "horizontalClearanceWidth";
     private static readonly HashSet<string> ClassBoundSimpleAttributes = new(StringComparer.Ordinal)
     {
         "distanceUnitOfMeasurement",
@@ -367,6 +377,8 @@ public sealed class S57ToS101Translator
         "averagePassingTimeReference",
         "typeOfShip",
         "useOfShip",
+        S101AttrHorizontalClearanceLength,
+        S101AttrHorizontalClearanceWidth,
     };
 
     // ── IENC tisdge → S-401 TimeScheduleInGeneral ───────────────────────
@@ -2424,6 +2436,15 @@ public sealed class S57ToS101Translator
                 }
 
                 var resolved = _mapping.ResolveAttribute(attl, a.Value, feature);
+                if (resolved?.S101Code == S101AttrHorizontalClearanceWidth
+                    && bindsHorClearanceFixed && !bindsHorClearanceOpen
+                    && horclrValue is null && !string.IsNullOrEmpty(resolved.Value)
+                    && !_featureBindings.Binds(feature.S101Code, S101AttrHorizontalClearanceWidth))
+                {
+                    horclrValue = resolved.Value;
+                    continue;
+                }
+
                 if (resolved is null
                     || (ClassBoundSimpleAttributes.Contains(resolved.S101Code)
                         && !_featureBindings.Binds(feature.S101Code, resolved.S101Code)))
