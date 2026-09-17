@@ -151,6 +151,48 @@ public class S57S101MappingTests
         Assert.Null(m.ResolveFeature(999, attrs));
     }
 
+    [Theory]
+    [InlineData("1", "LightSectored")]
+    [InlineData("4,1", "LightSectored")]
+    [InlineData("16", "LightSectored")]
+    [InlineData("4", "LightAllAround")]
+    [InlineData("11", "LightAllAround")]
+    public void Default_Lights_CatlitListItemSelectsLightSectored(string catlit, string expected)
+    {
+        // CATLIT is a list: any item 1 (directional) or 16 (moiré) redirects.
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATLIT"] = catlit,
+        };
+
+        Assert.Equal(expected, S57S101Mapping.Default.ResolveFeature(75, attrs)!.S101Code);
+    }
+
+    [Fact]
+    public void ResolveFeature_ValueRedirect_WithoutListItemMatch_RequiresWholeValue()
+    {
+        var rule = new S57FeatureRule
+        {
+            Objl = 999,
+            S57Acronym = "CTRPNT",
+            DefaultS101Code = "Default",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATCTR",
+                ConditionValues = ["1"],
+                TargetS101Code = "Landmark",
+            }],
+        };
+        var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
+
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATCTR"] = "1,2",
+        };
+
+        Assert.Equal("Default", m.ResolveFeature(999, attrs)!.S101Code);
+    }
+
     [Fact]
     public void Build_RedirectWithoutPresenceOrValues_Throws()
     {

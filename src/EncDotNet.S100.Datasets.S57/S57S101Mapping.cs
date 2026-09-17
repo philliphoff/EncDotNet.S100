@@ -284,7 +284,10 @@ public sealed class S57S101Mapping
                 || (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
                     && (redirect.ConditionPresent
                         ? !string.IsNullOrEmpty(v)
-                        : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)));
+                        : redirect.ConditionMatchesListItem
+                            ? v.Split(',', StringSplitOptions.TrimEntries)
+                                .Any(item => redirect.ConditionValues.Contains(item, StringComparer.Ordinal))
+                            : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)));
 
             if (attributeMatches)
             {
