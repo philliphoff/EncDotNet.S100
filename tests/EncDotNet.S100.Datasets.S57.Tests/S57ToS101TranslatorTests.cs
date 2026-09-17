@@ -733,6 +733,53 @@ public class S57ToS101TranslatorTests
             .GroupBy(a => doc.AttributeTypeCatalogue[a.NumericCode])
             .ToDictionary(g => g.Key, g => g.Select(a => a.Value).ToList());
 
+    // ── M_NSYS with ORIENT → LocalDirectionOfBuoyage (S-65 Annex B § 12.2) ──
+
+    [Fact]
+    public void Translate_NavigationalSystemOfMarksWithOrient_BecomesLocalDirectionOfBuoyage()
+    {
+        var doc = AreaFeatureWithS57Attributes(306, Attr(109, "1"), Attr(117, "135"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feature = Assert.Single(s101.Features);
+        Assert.Equal("LocalDirectionOfBuoyage", ClassOf(s101, feature));
+        var values = AttributeValues(s101, feature);
+        Assert.Equal(["1"], values["marksNavigationalSystemOf"]);
+        Assert.Equal(["135"], values["orientationValue"]);
+    }
+
+    [Fact]
+    public void Translate_NavigationalSystemOfMarksWithEmptyOrient_StaysAndDropsOrient()
+    {
+        // NOAA US6OH09M encodes an empty (unknown) ORIENT on its M_NSYS.
+        var doc = AreaFeatureWithS57Attributes(306, Attr(109, "2"), Attr(117, ""));
+        var diagnostics = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diagnostics);
+
+        var feature = Assert.Single(s101.Features);
+        Assert.Equal("NavigationalSystemOfMarks", ClassOf(s101, feature));
+        Assert.Equal(["marksNavigationalSystemOf"], AttributeNames(s101, feature));
+        Assert.Equal(1, diagnostics.RuleDroppedAttributes[117]);
+    }
+
+    [Theory]
+    [InlineData(17018)] // inland m_nsys
+    [InlineData(306)]   // maritime-coded M_NSYS in an inland cell
+    public void Translate_NavigationalSystemOfMarksWithOrient_S401Target_BecomesLocalDirectionOfBuoyage(int objl)
+    {
+        var doc = AreaFeatureWithS57Attributes((ushort)objl, Attr(17009, "11"), Attr(117, "90"));
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Equal("LocalDirectionOfBuoyage", ClassOf(inland, feature));
+        var values = AttributeValues(inland, feature);
+        Assert.Equal(["11"], values["marksNavigationalSystemOf"]);
+        Assert.Equal(["90"], values["orientationValue"]);
+    }
+
     [Theory]
     [InlineData(17001, 17000)] // inland achare / catach
     [InlineData(4, 8)]         // maritime-coded ACHARE / CATACH in an inland cell

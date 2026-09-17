@@ -413,7 +413,36 @@ internal static class DefaultRules
         yield return F(301, "M_ACCY", "QualityOfNonBathymetricData");
         yield return F(302, "M_COVR", "DataCoverage");
         yield return F(305, "M_NPUB", "InformationArea");
-        yield return F(306, "M_NSYS", "NavigationalSystemOfMarks");
+        // M_NSYS — S-65 Annex B § 12.2: an M_NSYS with a value in ORIENT is
+        // converted to LocalDirectionOfBuoyage, which binds both
+        // marksNavigationalSystemOf (MARSYS) and orientationValue (ORIENT)
+        // directly, so the default attribute rules apply there unchanged. The
+        // IEHG S-57 ENC to S-401 Conversion Guidance (3.77 / 3.88) splits the
+        // inland twin m_nsys the same way. NavigationalSystemOfMarks binds no
+        // orientation at all, so ORIENT is dropped on the default path (where
+        // it can only be an empty, i.e. unknown, value) and restored on the
+        // redirect.
+        yield return new S57FeatureRule
+        {
+            Objl = 306,
+            S57Acronym = "M_NSYS",
+            DefaultS101Code = "NavigationalSystemOfMarks",
+            AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ORIENT"] = new S57AttributeOverride { Drop = true },
+            },
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionAttribute = "ORIENT",
+                ConditionPresent = true,
+                TargetS101Code = "LocalDirectionOfBuoyage",
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    // An empty override keeps the default ORIENT → orientationValue rule.
+                    ["ORIENT"] = new S57AttributeOverride(),
+                },
+            }],
+        };
         yield return F(308, "M_QUAL", "QualityOfBathymetricData");
         yield return F(309, "M_SDAT", "SoundingDatum");
         yield return F(310, "M_SREL", "QualityOfSurvey");
