@@ -66,6 +66,45 @@ public class OverlapSuppressionTests
     }
 
     [Fact]
+    public void CollectFinerCoverages_CutoffDenominator_OverridesRankForCutoff()
+    {
+        // An S-57 cell ranks by its compilation scale (10000) but draws out to
+        // its largest SCAMIN (40000): it keeps suppressing until that window.
+        var coarse = Cell(Square(0, 0, 10), 90000);
+        var finerCell = new OverlapSuppressionCell
+        {
+            Layers = [new MemoryLayer()],
+            Coverage = Square(0, 0, 5),
+            ScaleDenominator = 10000,
+            CutoffScaleDenominator = 40000,
+        };
+
+        var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerCell]);
+
+        var contribution = Assert.Single(finer!);
+        Assert.Equal(40000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.CutoffResolution, 6);
+    }
+
+    [Fact]
+    public void CollectFinerCoverages_RanksByScaleDenominator_NotCutoff()
+    {
+        // The coarse cell's cutoff (5000) is smaller than the finer cell's rank,
+        // but ranking uses ScaleDenominator only, so the coarse cell is not
+        // treated as finer.
+        var coarse = new OverlapSuppressionCell
+        {
+            Layers = [new MemoryLayer()],
+            Coverage = Square(0, 0, 10),
+            ScaleDenominator = 90000,
+            CutoffScaleDenominator = 5000,
+        };
+        var finerCell = Cell(Square(0, 0, 5), 10000);
+
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(finerCell, [coarse, finerCell]));
+        Assert.Single(OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerCell])!);
+    }
+
+    [Fact]
     public void CollectFinerCoverages_MultipleFinerOverlaps_IncludesAll()
     {
         var coarse = Cell(Square(0, 0, 10), 90000);

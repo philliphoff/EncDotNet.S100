@@ -109,11 +109,23 @@ public sealed class VectorPortrayalResult
     /// the viewer can apply its own <c>IgnoreScaleMinimum</c> gate and clamp
     /// the <em>whole</em> cell (area fills included). S-101 populates it from
     /// the coarsest in-file <c>DataCoverage.minimumDisplayScale</c> (FC §3.1.1);
-    /// S-57 populates it from the DSPM compilation scale (CSCL, S-57
-    /// Appendix B.1 §7.3.1.1). Null when the dataset carries no usable cell-wide
-    /// scale (e.g. no <c>DataCoverage</c> band or no CSCL present).
+    /// S-57 populates it from the larger of the DSPM compilation scale (CSCL,
+    /// S-57 Appendix B.1 §7.3.1.1) and the cell's largest feature
+    /// <c>SCAMIN</c>. Null when the dataset carries no usable cell-wide scale
+    /// (e.g. no <c>DataCoverage</c> band or no CSCL present).
     /// </summary>
     public int? CellMinimumDisplayScale { get; init; }
+
+    /// <summary>
+    /// The cell's compilation (optimum) scale denominator, used to rank it
+    /// against overlapping cells — a smaller denominator is the finer cell,
+    /// which suppresses coarser overlaps and paints above them. S-57
+    /// populates it from the DSPM compilation scale (CSCL, S-57 Appendix B.1
+    /// §7.3.1.1; the S-101 optimum display scale per S-65 Annex B §2.1.6).
+    /// When <see langword="null"/>, consumers rank by
+    /// <see cref="CellMinimumDisplayScale"/> instead (the S-101 behaviour).
+    /// </summary>
+    public int? CellCompilationScale { get; init; }
 
     /// <summary>
     /// The cell's declared data-coverage polygons in EPSG:4326 (lat/lon),

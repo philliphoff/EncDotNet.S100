@@ -26,9 +26,17 @@ Key types:
   to disambiguate `.000` files that could otherwise be S-101. Also exposes a
   cheap `ReadMetadata` "peek" path (issue #460) that folds the WGS-84 extent
   from the raw spatial coordinates (via the DSPM coordinate multiplication
-  factor) and the compilation-scale (CSCL) display window **without** the
+  factor) and the whole-cell display window **without** the
   S-57 → S-101 translation or any portrayal — so a host can frame a viewport
   over a loose folder of S-57 cells before deciding to load each in full.
+  The window comes from `ResolveCellMinimumDisplayScale(document)`: the
+  larger of the compilation scale (CSCL) and the cell's largest feature
+  `SCAMIN`. CSCL is the *largest* intended viewing scale (S-52 §3.1.7; S-65
+  Annex B §2.1.6 maps it to the S-101 optimum display scale), so on its own it
+  would hide content producers encode to stay visible further out — e.g.
+  USACE inland cells compiled at 1:5,000 with `SCAMIN` up to 1:300,000.
+  `ResolveCompilationScale(document)` returns CSCL alone, which ranks the cell
+  against overlapping cells.
 - **`S57ToS101Translator`** — translates an `S57Document` (package type) into
   an `S101Document` by remapping object/attribute codes, exploding multi-point
   soundings, synthesising the `information` complex attribute from textual

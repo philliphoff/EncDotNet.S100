@@ -241,7 +241,7 @@ public sealed class HeadlessCompositor
                     vector.SourceDatasetId,
                     sub.SourceFeatureType)
                 {
-                    SourceScaleDenominator = vector.CellMinimumDisplayScale,
+                    SourceScaleDenominator = vector.CellCompilationScale ?? vector.CellMinimumDisplayScale,
                 });
             }
             return (items, vector.Spec.Name, vector.SourceDatasetId);

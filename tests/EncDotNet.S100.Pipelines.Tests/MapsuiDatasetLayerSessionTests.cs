@@ -754,6 +754,58 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public async Task OverlapRanksByCompilationScaleWhenWindowsTie()
+    {
+        // NOAA band-1 and band-2 S-57 cells both carry SCAMIN 19,999,999, so
+        // their whole-cell windows tie; the compilation scale (CSCL) must still
+        // rank the band-2 cell as finer, for both suppression and paint order.
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var coarseId = new MapDatasetId("band1");
+        var fineId = new MapDatasetId("band2");
+        var coverage = new CoverageArea
+        {
+            ExteriorRing =
+            [
+                new GeoPosition(0, 0),
+                new GeoPosition(0, 2),
+                new GeoPosition(2, 2),
+                new GeoPosition(2, 0),
+                new GeoPosition(0, 0),
+            ],
+        };
+        Assert.True(owner.TryRegister(
+            coarseId,
+            new StubProcessor(coarseId.Value)
+            {
+                CellMinimumDisplayScale = 19_999_999,
+                CellCompilationScale = 3_500_000,
+                CoverageAreas = [coverage],
+            }));
+        Assert.True(owner.TryRegister(
+            fineId,
+            new StubProcessor(fineId.Value)
+            {
+                CellMinimumDisplayScale = 19_999_999,
+                CellCompilationScale = 700_000,
+                CoverageAreas = [coverage],
+            }));
+        session.SetDataset(Dataset(coarseId));
+        session.SetDataset(Dataset(fineId));
+        await session.RenderAsync(coarseId, MapPresentationState.Default);
+        await session.RenderAsync(fineId, MapPresentationState.Default);
+
+        var coarse = session.GetDataset(coarseId)!;
+        var fine = session.GetDataset(fineId)!;
+        Assert.NotNull(CoverageClip.Get(Assert.Single(coarse.Layers)));
+        Assert.Null(CoverageClip.Get(Assert.Single(fine.Layers)));
+        Assert.Equal(19_999_999, coarse.MinimumDisplayScale);
+        Assert.Equal(3_500_000, Assert.Single(coarse.StackEntries!).SourceScaleDenominator);
+        Assert.Equal(700_000, Assert.Single(fine.StackEntries!).SourceScaleDenominator);
+    }
+
+    [Fact]
     public void TimeRegistrationAggregatesSamplesAndS111CoverageTolerance()
     {
         using var map = new Map();

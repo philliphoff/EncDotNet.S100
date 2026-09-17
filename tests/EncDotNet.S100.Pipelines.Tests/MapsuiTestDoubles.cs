@@ -48,6 +48,8 @@ internal sealed class StubProcessor :
 
     public int? CellMinimumDisplayScale { get; set; }
 
+    public int? CellCompilationScale { get; set; }
+
     public IReadOnlyList<CoverageArea> CoverageAreas { get; set; } = [];
 
     /// <summary>
@@ -170,6 +172,7 @@ internal sealed class StubProcessor :
                     [1] = new(FeatureType, null),
                 },
             CellMinimumDisplayScale = CellMinimumDisplayScale,
+            CellCompilationScale = CellCompilationScale,
             CoverageAreas = CoverageAreas,
             GeographicExtent = GeographicExtent,
         };
