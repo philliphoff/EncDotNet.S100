@@ -64,10 +64,18 @@ Key types:
   `wtwdis`, becomes `distanceUnitOfMeasurement` with the guidance's value
   remap (hectometres 4 → 7, statute miles 5 → 4, nautical miles 6 → 5; feet
   has no S-401 code and is dropped), and only on the classes that bind it.
-  Twenty codes have no S-401 home yet and are reported as rule-dropped:
-  `tisdge`, `c_brga`, `NEWOBJ`; the lock-basin dimensions `horcll`/`horclw`
-  and shore-power details (complex attributes), and schedule and ship-type
-  attributes that S-401 binds on information types.
+  A time schedule (`tisdge`) becomes an S-401 `TimeScheduleInGeneral`
+  information record carrying `cattab`, `schref`, `shptyp`, `useshp`,
+  `aptref`, `dirimp` and `SORDAT`. Every feature linked to it, through a
+  `C_ASSO` or a feature pointer, references it with `AdditionalInformation`
+  if its class can; that `C_ASSO` emits nothing itself. Every link is emitted,
+  even beyond S-401's one `AdditionalInformation` per feature, because IENC
+  encodes one schedule per ship type or period. A schedule no emitted feature
+  can carry (e.g. one on a `Bridge`, which only takes `ServiceHours`) is
+  reported as rule-dropped, and the schedule attributes are dropped on
+  features. Fourteen codes have no S-401 home yet and are reported as
+  rule-dropped: `c_brga`, `NEWOBJ`; the lock-basin dimensions
+  `horcll`/`horclw`, shore-power details and `lc_csi` (complex attributes).
   Inland bridges convert exactly as maritime `BRIDGE` does: `CATBRG`
   categories on the `Bridge`, a `SpanFixed`/`SpanOpening` carrying the
   clearances, and point bridges as `Landmark` (the S-401 catalogue defines all
@@ -103,6 +111,10 @@ Key types:
   `ForSpec(spec)` reads another bundled FC (e.g. S-401), loaded once per spec.
   `S101FeatureAttributeBindings` follows the same `Default` / `ForSpec` shape
   and also answers `DefinesFeatureType(code)` and `DefinesAttribute(code)`.
+  Its `Binds` / `IsSingleValued` cover information types too, and
+  `BindsInformationType(feature, association, informationType)` tells whether
+  a feature class may reference an information type (e.g. S-401 `LockBasin` →
+  `AdditionalInformation` → `TimeScheduleInGeneral`).
 
 ## Translation behaviour
 
@@ -149,7 +161,7 @@ Key types:
 - **`INFORM`/`TXTDSC`/`NINFOM`/`NTXTDS` are emitted as a `NauticalInformation` information type** bound to the feature by an `AdditionalInformation` / `theInformation` information association (the "fuller path" in the conversion guidance), rather than as an inline `information` complex on the feature. A feature with any of the four textual attributes yields one `NauticalInformation` record (English `information` instance and/or a national-language instance); the `NauticalInformationTypesEmitted` diagnostic counts the records emitted. Portrayal is unchanged — the S-101 portrayal reads the associated `NauticalInformation` (`ProcessNauticalInformation`), so text/pictorial notes render identically to the former inline encoding.
 - **Area rings are reassembled by node contiguity.** An S-57 area's boundary edges (`FSPT`) are chained into rings by shared begin/end node identity — reversing individual edges as needed — rather than by relying on the `FSPT` listing order. Because S-57 lists every interior edge consecutively (with `USAG = interior`) regardless of which hole it belongs to, grouping by `USAG` alone would merge all of an area's holes into a single boundary; flattening that merged ring to coordinates then jumps between holes and renders as long "spike" artifacts through a curve. Chaining reconstructs one closed ring per hole, so each interior boundary becomes its own S-101 interior ring.
 - **Bridge spans depend on the clearance attributes.** S-57 can't say whether a bridge crosses navigable water, so a `BRIDGE` gets a `SpanFixed`/`SpanOpening` only when it carries the clearance attribute that span class makes mandatory (`VERCLR` or `VERCCL`). A navigable bridge encoded without it converts to a `Bridge` alone and its other clearances are dropped. An opening bridge encoded with `VERCLR` instead of `VERCCL` is handled the same way. The span type follows the same `CATBRG` test as `Bridge`'s `openingBridge` (see the `CATBRG` row), so a `SpanOpening` is only ever attached to an opening `Bridge`. When several separately encoded `BRIDGE` spans aren't grouped by a `C_AGGR`, each still converts to its own `Bridge` + span pair.
-- **Range-system and bridge aggregations are synthesised; other collections are not.** A qualifying `C_AGGR` (all members are permitted `RangeSystemAggregation` components and at least one is a navigational track) is emitted as a geometry-less `RangeSystem` collection feature with one `RangeSystemAggregation` / `theComponent` feature association per member; the `RangeSystemsEmitted` diagnostic counts them. Across the 7,184-cell NOAA base corpus this synthesises 2,083 `RangeSystem` features (931 cells) with 6,690 component associations and **zero** dangling or component-less collections. `C_AGGR` groupings that are neither range systems nor bridge collections (see the `BRIDGE` rows in the table above), and all `C_ASSO` associations (whose corpus majority is `LandArea`-partition groupings), have no S-101 named-association equivalent and stay unmapped.
+- **Range-system and bridge aggregations are synthesised; other collections are not.** A qualifying `C_AGGR` (all members are permitted `RangeSystemAggregation` components and at least one is a navigational track) is emitted as a geometry-less `RangeSystem` collection feature with one `RangeSystemAggregation` / `theComponent` feature association per member; the `RangeSystemsEmitted` diagnostic counts them. Across the 7,184-cell NOAA base corpus this synthesises 2,083 `RangeSystem` features (931 cells) with 6,690 component associations and **zero** dangling or component-less collections. `C_AGGR` groupings that are neither range systems nor bridge collections (see the `BRIDGE` rows in the table above), and all `C_ASSO` associations (whose corpus majority is `LandArea`-partition groupings), have no S-101 named-association equivalent and stay unmapped. (For S-401, a `C_ASSO` that links an inland time schedule is consumed by the time-schedule conversion.)
 
 ## Translation diagnostics
 
@@ -179,7 +191,9 @@ sounding point accounting. Portrayal-affecting synthesis is also counted:
 master), `NauticalInformationTypesEmitted` (`NauticalInformation`
 records created for `INFORM`/`TXTDSC`/`NINFOM`/`NTXTDS`), and
 `RangeSystemsEmitted` (geometry-less `RangeSystem` collection features
-synthesised from range-system `C_AGGR` aggregations).
+synthesised from range-system `C_AGGR` aggregations), and
+`TimeSchedulesEmitted` (S-401 `TimeScheduleInGeneral` records created for
+inland `tisdge` time schedules).
 
 ## Validation
 

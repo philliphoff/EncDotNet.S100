@@ -357,11 +357,38 @@ public sealed class S57ToS101Translator
     // bind them, so they are dropped (and recorded as rule-dropped) elsewhere
     // rather than emitted unbound. Only the S-401 (inland) mapping targets
     // them: `distanceUnitOfMeasurement` (from IENC hunits) qualifies
-    // `waterwayDistance`, and S-401 binds it exactly where it binds that.
+    // `waterwayDistance`, and S-401 binds it exactly where it binds that;
+    // the time-schedule attributes bind only on `TimeScheduleInGeneral`.
     private static readonly HashSet<string> ClassBoundSimpleAttributes = new(StringComparer.Ordinal)
     {
         "distanceUnitOfMeasurement",
+        "categoryOfTimeAndBehaviour",
+        "timeScheduleReference",
+        "averagePassingTimeReference",
+        "typeOfShip",
+        "useOfShip",
     };
+
+    // ── IENC tisdge → S-401 TimeScheduleInGeneral ───────────────────────
+    // An IENC time schedule (`tisdge`, IENC Encoding Guide 2.4.1 T.1.1) has no
+    // geometry and is "always associated with respective geo object", through
+    // a C_ASSO collection or a direct feature pointer. S-401 models it as the
+    // `TimeScheduleInGeneral` information type, which a feature reaches
+    // through `AdditionalInformation` (the conversion guidance has no tisdge
+    // clause). Each tisdge becomes one such record, emitted with the first
+    // linked feature whose class binds it, and every linked feature of such a
+    // class gets an association to it. S-401 caps `AdditionalInformation` at
+    // one per feature, but IENC encodes one tisdge per ship type or period
+    // (and INFORM already uses the association), so every link is emitted
+    // even where that exceeds the cap. A link to a class that cannot carry a
+    // time schedule (e.g. Bridge, which only takes ServiceHours) is skipped; a
+    // tisdge with no emitted link is recorded as a rule-dropped object. A
+    // C_ASSO that links a tisdge is consumed by this; any other C_ASSO is
+    // unaffected. A tisdge is recognised by its rule's acronym, so only a
+    // mapping that registers it (the S-401 one) takes this path.
+    private const string TimeScheduleAcronym = "tisdge";
+    private const ushort CAssoObjl = 401;       // C_ASSO (S-57 Appendix A)
+    private const string S101InfoTypeTimeSchedule = "TimeScheduleInGeneral";
 
     // ── S-57 BRIDGE → S-101 Bridge + SpanFixed / SpanOpening ────────────
     // S-65 Annex B (S-57 ENC to S-101 Conversion Guidance, Ed 1.2.0) clause
@@ -894,6 +921,10 @@ public sealed class S57ToS101Translator
             // See BuildBridgeAggregations / EmitBridgeAggregations.
             var bridgePlan = BuildBridgeAggregations(featureRecords);
 
+            // tisdge time schedules and the features they apply to. See
+            // BuildTimeSchedulePlan / TimeScheduleAssociations.
+            var schedulePlan = BuildTimeSchedulePlan(featureRecords);
+
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
                 var feat = featureRecords[fi];
@@ -919,6 +950,11 @@ public sealed class S57ToS101Translator
                     if (_diagnostics is not null) _diagnostics.TopmarksAbsorbed++;
                     continue;
                 }
+
+                // A time schedule is emitted with the first feature it applies
+                // to; a C_ASSO that only links schedules emits nothing itself.
+                if (schedulePlan.Schedules.Contains(fi) || schedulePlan.LinkingAssociations.Contains(fi))
+                    continue;
 
                 if (objl == CAggrObjl)
                 {
@@ -997,6 +1033,8 @@ public sealed class S57ToS101Translator
                 topmarkByMaster.TryGetValue(fi, out var topmarkSource);
                 var attributes = TranslateAttributes(
                     feat.Attributes, resolved, objl, out var infoAssociations, extraSectors, topmarkSource);
+                if (schedulePlan.SchedulesByFeature.TryGetValue(fi, out var schedules))
+                    infoAssociations = [.. infoAssociations, .. TimeScheduleAssociations(resolved.S101Code, schedules, schedulePlan)];
 
                 // A Bridge over navigable water is decomposed into a span that
                 // shares its geometry (S-65 Annex B §4.8.10).
@@ -1032,6 +1070,7 @@ public sealed class S57ToS101Translator
             }
 
             EmitBridgeAggregations(bridgePlan);
+            RecordUnlinkedTimeSchedules(schedulePlan);
             EmitRangeSystems(pendingAggregations);
         }
 
@@ -1209,6 +1248,181 @@ public sealed class S57ToS101Translator
                 => f.Attributes.Any(a => a.AttributeCode is S57AttrObjnam or S57AttrNobjnm
                     && !string.IsNullOrEmpty(a.Value));
         }
+
+        // ── Time schedules (IENC tisdge) ────────────────────────────────
+
+        private sealed record TimeSchedulePlan(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> FeatureRecords,
+            HashSet<int> Schedules,
+            HashSet<int> LinkingAssociations,
+            Dictionary<int, List<int>> SchedulesByFeature)
+        {
+            // Information record id per emitted schedule, by feature index.
+            public Dictionary<int, uint> RecordIds { get; } = [];
+        }
+
+        // Finds the tisdge records and, per feature (by index), the schedules
+        // it is linked to: through a C_ASSO that collects both, or through a
+        // feature pointer in either direction. Collections are never linked
+        // themselves.
+        private TimeSchedulePlan BuildTimeSchedulePlan(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var schedules = new HashSet<int>();
+            var linking = new HashSet<int>();
+            var byFeature = new Dictionary<int, List<int>>();
+            for (int i = 0; i < featureRecords.Count; i++)
+            {
+                if (IsTimeScheduleObjl((ushort)(int)featureRecords[i].ObjectCode))
+                    schedules.Add(i);
+            }
+
+            var plan = new TimeSchedulePlan(featureRecords, schedules, linking, byFeature);
+            if (schedules.Count == 0)
+                return plan;
+
+            var indexByLnam = new Dictionary<(int, long, int), int>();
+            for (int i = 0; i < featureRecords.Count; i++)
+                indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
+
+            for (int i = 0; i < featureRecords.Count; i++)
+            {
+                var members = new List<int>();
+                foreach (var fp in featureRecords[i].FeaturePointers)
+                {
+                    if (indexByLnam.TryGetValue(Lnam(fp.Name), out var mi) && mi != i)
+                        members.Add(mi);
+                }
+
+                if ((ushort)(int)featureRecords[i].ObjectCode == CAssoObjl)
+                {
+                    var linkedSchedules = members.Where(schedules.Contains).ToList();
+                    if (linkedSchedules.Count == 0)
+                        continue;
+
+                    linking.Add(i);
+                    foreach (var member in members)
+                    {
+                        foreach (var schedule in linkedSchedules)
+                            Link(member, schedule);
+                    }
+                }
+                else if (schedules.Contains(i))
+                {
+                    foreach (var member in members)
+                        Link(member, i);
+                }
+                else
+                {
+                    foreach (var member in members.Where(schedules.Contains))
+                        Link(i, member);
+                }
+            }
+
+            foreach (var list in byFeature.Values)
+                list.Sort();
+            return plan;
+
+            void Link(int feature, int schedule)
+            {
+                if (schedules.Contains(feature) || IsCollectionObjl((ushort)(int)featureRecords[feature].ObjectCode))
+                    return;
+                if (!byFeature.TryGetValue(feature, out var list))
+                    byFeature[feature] = list = [];
+                if (!list.Contains(schedule))
+                    list.Add(schedule);
+            }
+        }
+
+        // The AdditionalInformation associations from a feature of class
+        // featureCode to the schedules linked to it, emitting each schedule's
+        // information record on first use. Schedules the class cannot carry
+        // are skipped.
+        private IEnumerable<S101InformationAssociation> TimeScheduleAssociations(
+            string featureCode,
+            List<int> schedules,
+            TimeSchedulePlan plan)
+        {
+            if (!_featureBindings.BindsInformationType(featureCode, S101AssocAdditionalInformation, S101InfoTypeTimeSchedule))
+                return [];
+
+            var associations = new List<S101InformationAssociation>(schedules.Count);
+            foreach (var schedule in schedules)
+            {
+                if (!plan.RecordIds.TryGetValue(schedule, out var recordId))
+                    plan.RecordIds[schedule] = recordId = EmitTimeSchedule(plan.FeatureRecords[schedule]);
+                associations.Add(new S101InformationAssociation(
+                    GetOrAssignInformationAssociationCode(S101AssocAdditionalInformation),
+                    recordId,
+                    GetOrAssignRoleCode(S101RoleTheInformation)));
+            }
+            return associations;
+        }
+
+        // Emits the TimeScheduleInGeneral record for a tisdge. Its attributes
+        // translate as a feature's would, keeping only those the information
+        // type binds (all simple); the rest are recorded as rule-dropped.
+        private uint EmitTimeSchedule(EncDotNet.S57.S57FeatureRecord schedule)
+        {
+            var objl = (ushort)(int)schedule.ObjectCode;
+            var owner = new ResolvedFeature(
+                S101InfoTypeTimeSchedule, new Dictionary<string, S57AttributeOverride>());
+            var source = new List<EncDotNet.S57.S57AttributeValue>(schedule.Attributes.Count);
+            foreach (var a in schedule.Attributes)
+            {
+                // Textual attributes would become a NauticalInformation record,
+                // which an information type cannot reference; other mapped
+                // attributes need a binding on the information type.
+                var target = a.AttributeCode is >= 0 and <= ushort.MaxValue
+                    ? _mapping.ResolveAttribute((ushort)a.AttributeCode, a.Value, owner)?.S101Code
+                    : null;
+                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds
+                    || (target is not null && !_featureBindings.Binds(S101InfoTypeTimeSchedule, target)))
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute((ushort)a.AttributeCode);
+                }
+                else
+                {
+                    source.Add(a);
+                }
+            }
+
+            // Every attribute left is simple and bound, except any the
+            // translator derives itself (such as reportedDate); keep only
+            // what the information type binds.
+            var attributes = TranslateAttributes(source, owner, objl, out _)
+                .Where(a => _featureBindings.Binds(S101InfoTypeTimeSchedule, AttributeTypeCatalogue[a.NumericCode]))
+                .ToList();
+
+            var recordId = _nextInformationId++;
+            InformationTypes[recordId] = new S101InformationRecord
+            {
+                RecordId = recordId,
+                InformationTypeCode = GetOrAssignInformationTypeCode(S101InfoTypeTimeSchedule),
+                Attributes = attributes,
+            };
+            if (_diagnostics is not null) _diagnostics.TimeSchedulesEmitted++;
+            return recordId;
+        }
+
+        // Records every tisdge that no emitted feature could carry.
+        private void RecordUnlinkedTimeSchedules(TimeSchedulePlan plan)
+        {
+            foreach (var schedule in plan.Schedules)
+            {
+                if (!plan.RecordIds.ContainsKey(schedule))
+                    _diagnostics?.RecordRuleDroppedObjectClass((ushort)(int)plan.FeatureRecords[schedule].ObjectCode);
+            }
+        }
+
+        // True for an object class whose rule registers the IENC tisdge
+        // (only the S-401 mapping does).
+        private bool IsTimeScheduleObjl(ushort objl)
+            => _mapping.FeatureRules.TryGetValue(objl, out var rule)
+                && string.Equals(rule.S57Acronym, TimeScheduleAcronym, StringComparison.Ordinal);
+
+        private static bool IsCollectionObjl(ushort objl)
+            => objl is CAggrObjl or CAssoObjl;
 
         // True for S-57 BRIDGE and for any object class whose rule is a twin of
         // it (the IENC inland `bridge`, 17011, re-registers BRIDGE in lower case

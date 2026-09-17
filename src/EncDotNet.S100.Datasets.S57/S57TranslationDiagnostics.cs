@@ -125,6 +125,13 @@ public sealed class S57TranslationDiagnostics
     public int RangeSystemsEmitted { get; internal set; }
 
     /// <summary>
+    /// Number of S-401 <c>TimeScheduleInGeneral</c> information records
+    /// emitted, one per IENC time schedule (<c>tisdge</c>) that at least one
+    /// translated feature carries through <c>AdditionalInformation</c>.
+    /// </summary>
+    public int TimeSchedulesEmitted { get; internal set; }
+
+    /// <summary>
     /// Number of <c>SpanFixed</c> / <c>SpanOpening</c> component features
     /// synthesised from S-57 <c>BRIDGE</c> objects (S-65 Annex B §4.8.10). A
     /// BRIDGE carrying the clearance its span class requires (<c>VERCLR</c> for

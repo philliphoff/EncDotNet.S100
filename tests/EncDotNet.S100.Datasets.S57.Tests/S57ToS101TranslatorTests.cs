@@ -2342,6 +2342,187 @@ public class S57ToS101TranslatorTests
         Assert.Equal("6.25", GetSubAttribute(s101, fixedClr, "horizontalClearanceValue"));
     }
 
+    // ── IENC tisdge → S-401 TimeScheduleInGeneral (#608) ──
+
+    private const ushort ObjlBerth = 17010;
+    private const ushort ObjlTimeSchedule = 17068;
+    private const ushort ObjlCAsso = 401;
+    private const int AttlCattab = 17092;
+    private const int AttlSchref = 17093;
+    private const int AttlUseshp = 17094;
+    private const int AttlAptref = 17099;
+    private const int AttlDirimp = 17056;
+    private const int AttlShptyp = 33066;
+    private const int AttlSordat = 147;
+
+    private static EncDotNet.S57.S57FeatureRecord PointAt(
+        uint recordId, ushort objectClass, uint featureId,
+        IEnumerable<EncDotNet.S57.S57AttributeValue>? attributes = null,
+        IEnumerable<EncDotNet.S57.S57FeaturePointer>? featurePointers = null)
+        => Feat(recordId, 1, objectClass, featureIdentificationNumber: featureId,
+            attributes: attributes, featurePointers: featurePointers,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+
+    private static EncDotNet.S57.S57FeatureRecord Schedule(
+        uint recordId, uint featureId, string shipType,
+        IEnumerable<EncDotNet.S57.S57FeaturePointer>? featurePointers = null,
+        params EncDotNet.S57.S57AttributeValue[] extra)
+        => Feat(recordId, 255, ObjlTimeSchedule, featureIdentificationNumber: featureId,
+            attributes: new[] { Attr(AttlCattab, "1"), Attr(AttlSchref, $"schedule-{shipType}.xml"), Attr(AttlShptyp, shipType), Attr(AttlUseshp, "2") }.Concat(extra),
+            featurePointers: featurePointers);
+
+    private static List<(string Code, string Value)> InfoAttributes(S101Document doc, S101InformationRecord record)
+        => record.Attributes.Select(a => (doc.AttributeTypeCatalogue[a.NumericCode], a.Value)).ToList();
+
+    private static List<S101InformationRecord> LinkedInformation(S101Document doc, S101FeatureRecord feature)
+    {
+        Assert.All(feature.InformationAssociations, ia =>
+        {
+            Assert.Equal("AdditionalInformation", doc.InformationAssociationCatalogue[ia.NumericCode]);
+            Assert.Equal("theInformation", doc.RoleCatalogue[ia.RoleCode]);
+        });
+        return feature.InformationAssociations.Select(ia => doc.InformationTypes[ia.RecordId]).ToList();
+    }
+
+    [Fact]
+    public void Translate_S401Target_TimeScheduleInCAsso_BecomesTimeScheduleInGeneral()
+    {
+        var berth = PointAt(1, ObjlBerth, 10, attributes: new[] { Attr(AttlObjnam, "Quay") });
+        var schedule = Schedule(2, 20, "1", extra: new[]
+        {
+            Attr(AttlAptref, "passing.xml"), Attr(AttlDirimp, "1,2"), Attr(AttlSordat, "20240101"),
+        });
+        var association = Feat(3, 255, ObjlCAsso, featureIdentificationNumber: 30,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 20) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(new[] { Node(1, 0, 0) }, new[] { berth, schedule, association }), diag);
+
+        var feature = Assert.Single(s401.Features);
+        Assert.Equal("Berth", ClassOf(s401, feature));
+        var record = Assert.Single(LinkedInformation(s401, feature));
+        Assert.Equal("TimeScheduleInGeneral", s401.InformationTypeCatalogue[record.InformationTypeCode]);
+        Assert.Equal(
+            [
+                ("categoryOfTimeAndBehaviour", "1"), ("timeScheduleReference", "schedule-1.xml"),
+                ("typeOfShip", "1"), ("useOfShip", "2"), ("averagePassingTimeReference", "passing.xml"),
+                ("directionOfImpact", "1"), ("directionOfImpact", "2"), ("reportedDate", "20240101"),
+            ],
+            InfoAttributes(s401, record));
+        Assert.Single(s401.InformationTypes);
+        Assert.Equal(1, diag.TimeSchedulesEmitted);
+        Assert.Empty(diag.UnmappedObjectClasses);
+        Assert.Empty(diag.RuleDroppedObjectClasses);
+    }
+
+    [Fact]
+    public void Translate_S401Target_EveryLinkedScheduleIsAssociated()
+    {
+        // Two schedules (one per ship type) linked by pointers in both
+        // directions, plus INFORM: three AdditionalInformation associations,
+        // beyond S-401's [0..1], so that no schedule is lost.
+        var berth = PointAt(1, ObjlBerth, 10,
+            attributes: new[] { Attr(102, "Call ahead") },
+            featurePointers: new[] { Ffpt(540, 20) });
+        var cargo = Schedule(2, 20, "1");
+        var leisure = Schedule(3, 21, "4", featurePointers: new[] { Ffpt(540, 10) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(new[] { Node(1, 0, 0) }, new[] { berth, cargo, leisure }), diag);
+
+        var linked = LinkedInformation(s401, Assert.Single(s401.Features));
+        Assert.Equal(
+            ["NauticalInformation", "TimeScheduleInGeneral", "TimeScheduleInGeneral"],
+            linked.Select(r => s401.InformationTypeCatalogue[r.InformationTypeCode]));
+        Assert.Equal(["1", "4"], linked.Skip(1).Select(r => InfoAttributes(s401, r).Single(a => a.Code == "typeOfShip").Value));
+        Assert.Equal(2, diag.TimeSchedulesEmitted);
+    }
+
+    [Fact]
+    public void Translate_S401Target_ScheduleSharedByTwoFeatures_IsEmittedOnce()
+    {
+        var first = PointAt(1, ObjlBerth, 10);
+        var second = PointAt(2, ObjlBerth, 11);
+        var schedule = Schedule(3, 20, "1", featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(new[] { Node(1, 0, 0) }, new[] { first, second, schedule }));
+
+        var record = Assert.Single(s401.InformationTypes).Key;
+        Assert.Equal(2, s401.Features.Count);
+        Assert.All(s401.Features, f => Assert.Equal(record, Assert.Single(f.InformationAssociations).RecordId));
+    }
+
+    [Fact]
+    public void Translate_S401Target_ScheduleOnClassWithoutTimeSchedules_IsDropped()
+    {
+        // S-401 Bridge takes ServiceHours, not TimeScheduleInGeneral.
+        Assert.False(S101FeatureAttributeBindings.ForSpec("S-401")
+            .BindsInformationType("Bridge", "AdditionalInformation", "TimeScheduleInGeneral"));
+        var vectors = new EncDotNet.S57.S57VectorRecord[] { Node(1, 0, 0), Node(2, 100, 100), Edge(10, 1, 2) };
+        var bridge = Feat(1, 2, 17011, featureIdentificationNumber: 10,
+            attributes: new[] { Attr(AttlCatbrg, "3") },
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
+        var schedule = Schedule(2, 20, "1", featurePointers: new[] { Ffpt(540, 10) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(vectors, new[] { bridge, schedule }), diag);
+
+        Assert.Empty(Assert.Single(s401.Features).InformationAssociations);
+        Assert.Empty(s401.InformationTypes);
+        Assert.Equal(0, diag.TimeSchedulesEmitted);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[ObjlTimeSchedule]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_ScheduleAttributesOnAFeature_AreDropped()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(ObjlBerth, Attr(AttlObjnam, "Quay"), Attr(AttlCattab, "1"), Attr(AttlShptyp, "2")), diag);
+
+        var feature = Assert.Single(s401.Features);
+        Assert.DoesNotContain(feature.Attributes, a => s401.AttributeTypeCatalogue[a.NumericCode] is "categoryOfTimeAndBehaviour" or "typeOfShip");
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlCattab]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlShptyp]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_ScheduleText_IsDroppedWithoutNauticalInformation()
+    {
+        var berth = PointAt(1, ObjlBerth, 10);
+        var schedule = Schedule(2, 20, "1", new[] { Ffpt(540, 10) }, Attr(102, "Closed on holidays"));
+        var diag = new S57TranslationDiagnostics();
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            BuildDocument(new[] { Node(1, 0, 0) }, new[] { berth, schedule }), diag);
+
+        var record = Assert.Single(s401.InformationTypes).Value;
+        Assert.Equal("TimeScheduleInGeneral", s401.InformationTypeCatalogue[record.InformationTypeCode]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[102]);
+        Assert.Equal(0, diag.NauticalInformationTypesEmitted);
+    }
+
+    [Fact]
+    public void Translate_S101Target_TimeSchedule_IsUnmapped()
+    {
+        var berth = PointAt(1, 10, 10);
+        var schedule = Schedule(2, 20, "1");
+        var association = Feat(3, 255, ObjlCAsso, featureIdentificationNumber: 30,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 20) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(new[] { Node(1, 0, 0) }, new[] { berth, schedule, association }), diag);
+
+        Assert.Empty(s101.InformationTypes);
+        Assert.Equal(1, diag.UnmappedObjectClasses[ObjlTimeSchedule]);
+        Assert.Equal(1, diag.UnmappedObjectClasses[ObjlCAsso]);
+    }
+
     // ── BRIDGE → Bridge + SpanFixed / SpanOpening (S-65 Annex B §4.8.10) ──
 
     // S-57 attribute codes used by the bridge tests.
