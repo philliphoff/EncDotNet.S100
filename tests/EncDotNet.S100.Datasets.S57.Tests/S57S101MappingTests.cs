@@ -759,8 +759,9 @@ public class S57S101MappingTests
     {
         var s401 = S57S101Mapping.ForSpec("S-401");
 
-        Assert.Equal(S57S101Mapping.Default.FeatureRules.Keys.Order(), s401.FeatureRules.Keys.Order());
-        Assert.Equal(S57S101Mapping.Default.AttributeRules.Keys.Order(), s401.AttributeRules.Keys.Order());
+        // Every standard code is kept (the S-401 table adds the inland codes on top).
+        Assert.Subset(s401.FeatureRules.Keys.ToHashSet(), S57S101Mapping.Default.FeatureRules.Keys.ToHashSet());
+        Assert.Subset(s401.AttributeRules.Keys.ToHashSet(), S57S101Mapping.Default.AttributeRules.Keys.ToHashSet());
 
         // RAPIDS → Rapids (S-101 only) loses its target; COALNE → Coastline keeps it.
         Assert.Equal("Rapids", S57S101Mapping.Default.ResolveFeatureCode(107));

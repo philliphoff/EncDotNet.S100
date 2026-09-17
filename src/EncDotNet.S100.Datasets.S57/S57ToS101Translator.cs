@@ -1555,13 +1555,13 @@ public sealed class S57ToS101Translator
                 }
 
                 var attl = (ushort)a.AttributeCode;
-                if (!_mapping.AttributeRules.TryGetValue(attl, out var attrRule))
+                if (!_mapping.AttributeRules.ContainsKey(attl))
                 {
                     _diagnostics?.RecordUnmappedAttribute(ownerObjl, attl);
                     continue;
                 }
 
-                var resolved = _mapping.ResolveAttribute(attrRule.S57Acronym, a.Value, feature);
+                var resolved = _mapping.ResolveAttribute(attl, a.Value, feature);
                 if (resolved is null)
                 {
                     _diagnostics?.RecordRuleDroppedAttribute(attl);
@@ -1596,7 +1596,7 @@ public sealed class S57ToS101Translator
                         if (code.Length == 0)
                             continue;
 
-                        var sub = _mapping.ResolveAttribute(attrRule.S57Acronym, code, feature);
+                        var sub = _mapping.ResolveAttribute(attl, code, feature);
                         if (sub is null)
                         {
                             _diagnostics?.RecordRuleDroppedAttribute(attl);
@@ -2248,7 +2248,7 @@ public sealed class S57ToS101Translator
             ResolvedFeature feature,
             string catbrg)
         {
-            if (!_mapping.AttributeRules.TryGetValue(S57AttrCatbrg, out var rule))
+            if (!_mapping.AttributeRules.ContainsKey(S57AttrCatbrg))
             {
                 _diagnostics?.RecordUnmappedAttribute(ownerObjl, S57AttrCatbrg);
                 return;
@@ -2258,7 +2258,7 @@ public sealed class S57ToS101Translator
             var occurrences = new List<(string Code, List<string> Values)>();
             foreach (var token in catbrg.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                var resolved = _mapping.ResolveAttribute(rule.S57Acronym, token, feature);
+                var resolved = _mapping.ResolveAttribute(S57AttrCatbrg, token, feature);
                 if (resolved is null)
                 {
                     _diagnostics?.RecordRuleDroppedAttribute(S57AttrCatbrg);

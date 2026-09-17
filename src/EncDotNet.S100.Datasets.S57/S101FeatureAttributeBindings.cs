@@ -35,6 +35,7 @@ public sealed class S101FeatureAttributeBindings
     private readonly FrozenDictionary<string, FrozenSet<string>> _featureCodesByAttribute;
     private readonly FrozenSet<(string Feature, string Attribute)> _singleValuedBindings;
     private readonly FrozenSet<string> _featureTypeCodes;
+    private readonly FrozenSet<string> _attributeCodes;
 
     private static readonly ConcurrentDictionary<string, Lazy<S101FeatureAttributeBindings>> BySpec =
         new(StringComparer.OrdinalIgnoreCase);
@@ -42,11 +43,13 @@ public sealed class S101FeatureAttributeBindings
     private S101FeatureAttributeBindings(
         FrozenDictionary<string, FrozenSet<string>> featureCodesByAttribute,
         FrozenSet<(string Feature, string Attribute)> singleValuedBindings,
-        FrozenSet<string> featureTypeCodes)
+        FrozenSet<string> featureTypeCodes,
+        FrozenSet<string> attributeCodes)
     {
         _featureCodesByAttribute = featureCodesByAttribute;
         _singleValuedBindings = singleValuedBindings;
         _featureTypeCodes = featureTypeCodes;
+        _attributeCodes = attributeCodes;
     }
 
     /// <summary>
@@ -111,8 +114,16 @@ public sealed class S101FeatureAttributeBindings
             kvp => kvp.Value.ToFrozenSet(StringComparer.Ordinal),
             StringComparer.OrdinalIgnoreCase);
 
+        var attributeCodes = catalogue.SimpleAttributes.Select(a => a.Code)
+            .Concat(catalogue.ComplexAttributes.Select(a => a.Code))
+            .Where(code => !string.IsNullOrEmpty(code))
+            .ToFrozenSet(StringComparer.Ordinal);
+
         return new S101FeatureAttributeBindings(
-            frozen, singleValued.ToFrozenSet(), featureTypeCodes.ToFrozenSet(StringComparer.Ordinal));
+            frozen,
+            singleValued.ToFrozenSet(),
+            featureTypeCodes.ToFrozenSet(StringComparer.Ordinal),
+            attributeCodes);
     }
 
     /// <summary>
@@ -124,6 +135,15 @@ public sealed class S101FeatureAttributeBindings
     /// <param name="featureCode">The feature class code, e.g. <c>"RangeSystem"</c>.</param>
     public bool DefinesFeatureType(string? featureCode)
         => !string.IsNullOrEmpty(featureCode) && _featureTypeCodes.Contains(featureCode);
+
+    /// <summary>
+    /// Returns <c>true</c> if the Feature Catalogue defines a simple or complex
+    /// attribute named <paramref name="attributeCode"/> (case-sensitive). S-401,
+    /// for instance, does not define S-101's <c>categoryOfBridge</c>.
+    /// </summary>
+    /// <param name="attributeCode">The attribute code, e.g. <c>"categoryOfBridge"</c>.</param>
+    public bool DefinesAttribute(string? attributeCode)
+        => !string.IsNullOrEmpty(attributeCode) && _attributeCodes.Contains(attributeCode);
 
     /// <summary>
     /// Returns <c>true</c> if the S-101 feature class named

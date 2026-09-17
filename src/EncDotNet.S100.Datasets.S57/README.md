@@ -43,8 +43,24 @@ Key types:
   `RestrictToFeatureTypes`) to the feature classes the bundled S-401
   catalogue defines. The restriction clears 15 deep-sea and natural-feature
   targets (e.g. `RAPIDS` → `Rapids`, `LITFLT` → `LightFloat`), which S-401
-  translation then reports as rule-dropped. Inland object classes are not
-  mapped yet.
+  translation then reports as rule-dropped. It also drops attribute targets
+  the S-401 catalogue does not define (`RestrictToAttributes`; e.g. `CATICE`).
+  `CATBRG` survives: its bridge category targets exist in both catalogues.
+- **Inland ENC rules** (internal `InlandRules`, part of the S-401 mapping) —
+  the 53 object classes and 91 attributes of the IEHG Inland ENC Feature
+  Catalogue 2.4 (codes 17000 and up). Most re-register a standard acronym in
+  lower case (`bridge` = 17011 for `BRIDGE` = 11) and reuse the standard rule,
+  as the IEHG *S-57 ENC to S-401 Conversion Guidance* prescribes; the rest map
+  to the S-401 class or attribute that aliases the IENC acronym (`notmrk` →
+  `NoticeMark`, `wtwdis` → `waterwayDistance`). Twenty-one codes have no S-401
+  home yet and are reported as rule-dropped: `tisdge`, `c_brga`, `NEWOBJ`;
+  `hunits` (units are folded into values), the lock-basin dimensions
+  `horcll`/`horclw` and shore-power details (complex attributes), and
+  schedule and ship-type attributes that S-401 binds on information types.
+  Bridges translate to a single `Bridge` with its `CATBRG` categories (no
+  span split yet), as maritime `BRIDGE` does. Rules are resolved by ATTL
+  (`ResolveAttribute(ushort, …)`), so an inland code and its upper-case twin
+  never shadow each other.
 - **`S57TranslationTarget`** — the S-100 product a translation targets: the
   bundled Feature Catalogue its output is checked against and the product
   specification / edition the translated document declares. `S101` is the
@@ -59,7 +75,7 @@ Key types:
   permitted by the destination FC binding. `Default` reads the S-101 FC;
   `ForSpec(spec)` reads another bundled FC (e.g. S-401), loaded once per spec.
   `S101FeatureAttributeBindings` follows the same `Default` / `ForSpec` shape
-  and also answers `DefinesFeatureType(code)`.
+  and also answers `DefinesFeatureType(code)` and `DefinesAttribute(code)`.
 
 ## Translation behaviour
 

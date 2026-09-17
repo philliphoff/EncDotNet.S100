@@ -100,9 +100,12 @@ public sealed class S57S101Mapping
     /// The bundled mapping into the Feature Catalogue of
     /// <paramref name="targetSpec"/>. For <c>"S-101"</c> this is
     /// <see cref="Default"/>. For another product sharing the S-101 document
-    /// model, such as S-401, it is <see cref="Default"/> restricted to the
-    /// feature classes that product's bundled catalogue defines (see
-    /// <see cref="RestrictToFeatureTypes"/>). Built once per spec.
+    /// model it is <see cref="Default"/> restricted to the feature classes and
+    /// attributes that product's bundled catalogue defines (see
+    /// <see cref="RestrictToFeatureTypes"/> and <see cref="RestrictToAttributes"/>).
+    /// For S-401 the inland ENC object classes and attributes (IEHG IENC
+    /// Feature Catalogue 2.4) are added before restricting, so an inland cell's
+    /// 17000-range codes translate too. Built once per spec.
     /// </summary>
     /// <param name="targetSpec">The target product, e.g. <c>"S-401"</c>.</param>
     /// <returns>The shared mapping for that product.</returns>
@@ -116,8 +119,47 @@ public sealed class S57S101Mapping
         return BySpec.GetOrAdd(targetSpec, static spec => new(() =>
         {
             var catalogue = S101FeatureAttributeBindings.ForSpec(spec);
-            return Default.RestrictToFeatureTypes(catalogue.DefinesFeatureType);
+            var baseline = string.Equals(spec, S57TranslationTarget.S401.Spec, StringComparison.OrdinalIgnoreCase)
+                ? WithInlandRules(Default)
+                : Default;
+            return baseline
+                .RestrictToFeatureTypes(catalogue.DefinesFeatureType)
+                .RestrictToAttributes(catalogue.DefinesAttribute);
         })).Value;
+    }
+
+    private static S57S101Mapping WithInlandRules(S57S101Mapping standard)
+    {
+        var builder = new Builder().WithDefaults();
+        foreach (var rule in InlandRules.FeatureRules(standard))
+            builder.AddFeatureRule(rule);
+        foreach (var rule in InlandRules.AttributeRules(standard))
+            builder.AddAttributeRule(rule);
+        return builder.Build();
+    }
+
+    /// <summary>
+    /// Returns a copy of this mapping whose attribute rules only target
+    /// attributes for which <paramref name="isDefined"/> holds; a rule whose
+    /// default attribute is not defined keeps its ATTL but loses the target, so
+    /// the attribute is reported as rule-dropped. Feature rules, including their
+    /// attribute overrides, are carried over unchanged.
+    /// </summary>
+    /// <param name="isDefined">Whether the target Feature Catalogue defines an attribute code.</param>
+    /// <returns>The restricted mapping.</returns>
+    public S57S101Mapping RestrictToAttributes(Func<string, bool> isDefined)
+    {
+        ArgumentNullException.ThrowIfNull(isDefined);
+
+        var attributes = new Dictionary<ushort, S57AttributeRule>(AttributeRules.Count);
+        foreach (var (attl, rule) in AttributeRules)
+        {
+            attributes[attl] = rule.DefaultS101Code is { } code && !isDefined(code)
+                ? rule with { DefaultS101Code = null }
+                : rule;
+        }
+
+        return new S57S101Mapping(new Dictionary<ushort, S57FeatureRule>(FeatureRules), attributes);
     }
 
     /// <summary>
@@ -260,7 +302,31 @@ public sealed class S57S101Mapping
         ArgumentNullException.ThrowIfNull(feature);
 
         if (!_attlByAcronym.TryGetValue(s57Acronym, out var attl)) return null;
+        return ResolveAttribute(attl, value, feature);
+    }
+
+    /// <summary>
+    /// Resolves an S-57 attribute identified by its numeric code, in the
+    /// context of a previously resolved feature, to the S-101 attribute name
+    /// and value to emit. Prefer this overload when the ATTL is known: an
+    /// inland ENC attribute re-registers a standard acronym in lower case under
+    /// a different code (e.g. <c>catslc</c> = 17012 for <c>CATSLC</c>), so an
+    /// acronym alone may not identify the rule.
+    /// </summary>
+    /// <param name="attl">S-57 numeric attribute code (ATTL).</param>
+    /// <param name="value">Raw S-57 attribute value as a string.</param>
+    /// <param name="feature">The resolved feature whose effective overrides apply.</param>
+    /// <returns>
+    /// A <see cref="ResolvedAttribute"/>, or <c>null</c> if the attribute is
+    /// not mapped or a value remap drops it.
+    /// </returns>
+    public ResolvedAttribute? ResolveAttribute(ushort attl, string value, ResolvedFeature feature)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(feature);
+
         if (!AttributeRules.TryGetValue(attl, out var rule)) return null;
+        var s57Acronym = rule.S57Acronym;
 
         string? s101Code = rule.DefaultS101Code;
         var valueRemap = rule.DefaultValueRemap;
