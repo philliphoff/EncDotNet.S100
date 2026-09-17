@@ -468,6 +468,22 @@ public sealed class S57ToS101Translator
     // BRIDGE objects emit only their spans. See BuildBridgeAggregations.
     private const ushort BridgeObjl = 11;          // BRIDGE (S-57 object class)
     private const string BridgeAcronym = "BRIDGE";
+
+    // ── IENC c_brga → S-401 BridgeArchAssociation ───────────────────────
+    // An inland bridge arch is encoded as several bridge objects (CATBRG 13)
+    // aggregated by a `c_brga` collection object (IENC Encoding Guide 2.4.1,
+    // G.1.2), which is never part of the bridge's C_AGGR. S-401 links the
+    // SpanFixed features of one arch with `BridgeArchAssociation` (its only
+    // binding: SpanFixed to SpanFixed). The c_brga emits no feature of its own:
+    // the SpanFixed of its first member carries the association to the
+    // SpanFixed of each other member in the `theComponent` role, the
+    // head-owned convention BridgeAggregation uses. The c_brga's own
+    // attributes (a name or picture) have no home on a span and are recorded
+    // as rule-dropped. A c_brga is recognised by its rule's acronym, so only a
+    // mapping that registers it (the S-401 one) takes this path; one that
+    // yields fewer than two fixed spans is recorded as a rule-dropped object.
+    private const string BridgeArchAcronym = "c_brga";
+    private const string S101AssocBridgeArchAssociation = "BridgeArchAssociation";
     private const ushort S57AttrHoracc = 97;       // HORACC — horizontal accuracy
     private const ushort S57AttrVeracc = 180;      // VERACC — vertical accuracy
     private const ushort S57AttrVerclr = 181;      // VERCLR — vertical clearance
@@ -987,6 +1003,17 @@ public sealed class S57ToS101Translator
             // BuildTimeSchedulePlan / TimeScheduleAssociations.
             var schedulePlan = BuildTimeSchedulePlan(featureRecords);
 
+            // c_brga bridge-arch groups are identified up front as well; the
+            // position in Features of each member's SpanFixed is recorded as it
+            // is emitted. See BuildBridgeArchGroups / EmitBridgeArchAssociations.
+            var archGroups = BuildBridgeArchGroups(featureRecords);
+            var archSpanPositions = new Dictionary<int, int>();
+            void RecordArchSpanPosition(int featureIndex, string spanClass)
+            {
+                if (spanClass == S101ClassSpanFixed && archGroups.Members.Contains(featureIndex))
+                    archSpanPositions[featureIndex] = Features.Count - 1;
+            }
+
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
                 var feat = featureRecords[fi];
@@ -1027,6 +1054,9 @@ public sealed class S57ToS101Translator
                         pendingAggregations.Add(feat);
                     continue;
                 }
+
+                if (archGroups.ByCollection.ContainsKey(fi))
+                    continue;
 
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
                 var resolved = _mapping.ResolveFeature(objl, acronymView, MapPrimitive(feat.Primitive));
@@ -1076,6 +1106,7 @@ public sealed class S57ToS101Translator
                         continue;
                     }
                     memberGroup.ComponentRecordIds.Add(EmitBridgeSpan(feat, memberSpan.Value, memberSpatials));
+                    RecordArchSpanPosition(fi, memberSpan.Value.SpanClass);
                     continue;
                 }
 
@@ -1127,12 +1158,16 @@ public sealed class S57ToS101Translator
                     InformationAssociations = infoAssociations,
                 });
 
-                if (spanRecord is not null)
+                if (spanRecord is not null && span is { } emittedSpan)
+                {
                     Features.Add(spanRecord);
+                    RecordArchSpanPosition(fi, emittedSpan.SpanClass);
+                }
             }
 
             EmitBridgeAggregations(bridgePlan);
             RecordUnlinkedTimeSchedules(schedulePlan);
+            EmitBridgeArchAssociations(archGroups, archSpanPositions);
             EmitRangeSystems(pendingAggregations);
         }
 
@@ -1485,6 +1520,104 @@ public sealed class S57ToS101Translator
 
         private static bool IsCollectionObjl(ushort objl)
             => objl is CAggrObjl or CAssoObjl;
+
+        private sealed record BridgeArchGroups(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> FeatureRecords,
+            Dictionary<int, List<int>> ByCollection,
+            HashSet<int> Members);
+
+        // Finds the c_brga collections and their bridge members (by feature
+        // index, in pointer order). A bridge belongs to at most one arch (first
+        // c_brga in document order wins), as S-401 binds a SpanFixed as
+        // `theCollection` of at most one BridgeArchAssociation.
+        private BridgeArchGroups BuildBridgeArchGroups(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var byCollection = new Dictionary<int, List<int>>();
+            var members = new HashSet<int>();
+            Dictionary<(int, long, int), int>? indexByLnam = null;
+            for (int ci = 0; ci < featureRecords.Count; ci++)
+            {
+                var collection = featureRecords[ci];
+                if (!IsBridgeArchObjl((ushort)(int)collection.ObjectCode))
+                    continue;
+
+                if (indexByLnam is null)
+                {
+                    indexByLnam = new Dictionary<(int, long, int), int>();
+                    for (int i = 0; i < featureRecords.Count; i++)
+                        indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
+                }
+
+                var group = new List<int>();
+                foreach (var fp in collection.FeaturePointers)
+                {
+                    if (indexByLnam.TryGetValue(Lnam(fp.Name), out var mi)
+                        && IsBridgeObjl((ushort)(int)featureRecords[mi].ObjectCode)
+                        && members.Add(mi))
+                    {
+                        group.Add(mi);
+                    }
+                }
+                byCollection[ci] = group;
+            }
+
+            return new BridgeArchGroups(featureRecords, byCollection, members);
+        }
+
+        // Links the fixed spans of each bridge arch (see BuildBridgeArchGroups):
+        // the first member's SpanFixed record is replaced by a copy carrying a
+        // BridgeArchAssociation to every other member's SpanFixed.
+        private void EmitBridgeArchAssociations(
+            BridgeArchGroups groups,
+            Dictionary<int, int> spanPositions)
+        {
+            foreach (var (collectionIndex, members) in groups.ByCollection)
+            {
+                var collection = groups.FeatureRecords[collectionIndex];
+                var positions = members
+                    .Where(spanPositions.ContainsKey)
+                    .Select(mi => spanPositions[mi])
+                    .ToList();
+                if (positions.Count < 2)
+                {
+                    _diagnostics?.RecordRuleDroppedObjectClass((ushort)(int)collection.ObjectCode);
+                    continue;
+                }
+
+                foreach (var a in collection.Attributes)
+                    _diagnostics?.RecordRuleDroppedAttribute((ushort)a.AttributeCode);
+
+                var assocCode = GetOrAssignFeatureAssociationCode(S101AssocBridgeArchAssociation);
+                var componentRole = GetOrAssignRoleCode(S101RoleTheComponent);
+                var head = Features[positions[0]];
+                Features[positions[0]] = new S101FeatureRecord
+                {
+                    RecordId = head.RecordId,
+                    FeatureTypeCode = head.FeatureTypeCode,
+                    ProducingAgency = head.ProducingAgency,
+                    FeatureIdentificationNumber = head.FeatureIdentificationNumber,
+                    FeatureIdentificationSubdivision = head.FeatureIdentificationSubdivision,
+                    Attributes = head.Attributes,
+                    SpatialAssociations = head.SpatialAssociations,
+                    FeatureAssociations =
+                    [
+                        .. head.FeatureAssociations,
+                        .. positions.Skip(1).Select(p => new S101FeatureAssociation(
+                            assocCode, Features[p].RecordId, componentRole)),
+                    ],
+                    InformationAssociations = head.InformationAssociations,
+                    RecordVersion = head.RecordVersion,
+                    UpdateInstruction = head.UpdateInstruction,
+                };
+            }
+        }
+
+        // True for an object class whose rule registers the IENC c_brga
+        // collection (only the S-401 mapping does).
+        private bool IsBridgeArchObjl(ushort objl)
+            => _mapping.FeatureRules.TryGetValue(objl, out var rule)
+                && string.Equals(rule.S57Acronym, BridgeArchAcronym, StringComparison.Ordinal);
 
         // True for S-57 BRIDGE and for any object class whose rule is a twin of
         // it (the IENC inland `bridge`, 17011, re-registers BRIDGE in lower case
