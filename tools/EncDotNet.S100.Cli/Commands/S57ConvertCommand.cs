@@ -122,6 +122,10 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             table.AddRow("NauticalInformation records", diagnostics.NauticalInformationTypesEmitted.ToString());
         if (diagnostics.RangeSystemsEmitted > 0)
             table.AddRow("RangeSystem collections", diagnostics.RangeSystemsEmitted.ToString());
+        if (diagnostics.BridgeSpansEmitted > 0)
+            table.AddRow("Bridge spans", diagnostics.BridgeSpansEmitted.ToString());
+        if (diagnostics.BridgeAggregationsEmitted > 0)
+            table.AddRow("Aggregated bridges", diagnostics.BridgeAggregationsEmitted.ToString());
 
         table.AddRow(
             "[yellow]Unmapped object classes[/]",
@@ -172,6 +176,8 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             topmarksAbsorbed = diagnostics.TopmarksAbsorbed,
             nauticalInformationTypesEmitted = diagnostics.NauticalInformationTypesEmitted,
             rangeSystemsEmitted = diagnostics.RangeSystemsEmitted,
+            bridgeSpansEmitted = diagnostics.BridgeSpansEmitted,
+            bridgeAggregationsEmitted = diagnostics.BridgeAggregationsEmitted,
             unmappedObjectClasses = diagnostics.UnmappedObjectClasses
                 .OrderByDescending(p => p.Value)
                 .ToDictionary(p => p.Key.ToString(), p => p.Value),

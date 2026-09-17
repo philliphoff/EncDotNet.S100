@@ -344,13 +344,108 @@ public sealed class S57ToS101Translator
     // `horizontalDistanceUncertainty` (real, [0..1]); S-57 carries no
     // per-clearance uncertainty source, so only the value is populated. The
     // correct complex is chosen per resolved feature by its FC binding; a
-    // feature that binds neither (for example Bridge, which S-101 decomposes
-    // into spans that carry the clearance) has no conformant home for HORCLR,
-    // which then falls through and is recorded unmapped.
+    // feature that binds neither has no conformant home for HORCLR, which then
+    // falls through and is recorded unmapped. (On Bridge — which binds neither
+    // — HORCLR is instead carried by the decomposed span; see below.)
     private const ushort S57AttrHorclr = 98;   // HORCLR — horizontal clearance
     private const string S101AttrHorizontalClearanceOpen = "horizontalClearanceOpen";
     private const string S101AttrHorizontalClearanceFixed = "horizontalClearanceFixed";
     private const string S101AttrHorizontalClearanceValue = "horizontalClearanceValue";
+
+    // ── S-57 BRIDGE → S-101 Bridge + SpanFixed / SpanOpening ────────────
+    // S-65 Annex B (S-57 ENC to S-101 Conversion Guidance, Ed 1.2.0) clause
+    // 4.8.10; S-101 DCEG 6.6–6.8 and 25.4. A BRIDGE over navigable water
+    // becomes a `Bridge` plus a `SpanFixed` (non-opening) or `SpanOpening`
+    // (CATBRG contains 2, 3, 4, 5 or 7) component sharing its geometry, the
+    // two linked by a `BridgeAggregation` association carried by the Bridge in
+    // the span's `theComponent` role (the same head-owned convention as
+    // RangeSystemAggregation). The clearance attributes bind only on the spans
+    // (the bundled FC's Bridge binds none of them), so they are diverted there:
+    //   VERCLR → SpanFixed.verticalClearanceFixed.verticalClearanceValue
+    //   VERCCL → SpanOpening.verticalClearanceClosed.verticalClearanceValue
+    //   VERCOP → SpanOpening.verticalClearanceOpen.verticalClearanceValue
+    //            (absent → verticalClearanceUnlimited = true; present, even
+    //            with an empty value → verticalClearanceUnlimited = false)
+    //   HORCLR → span horizontalClearanceFixed.horizontalClearanceValue
+    //   HORACC → span horizontalClearanceFixed.horizontalDistanceUncertainty (§2.2.4.2)
+    //   VERACC → span vertical clearance verticalUncertainty.uncertaintyFixed (§2.2.4.3)
+    //   VERDAT → span verticalDatum (§2.1.2)
+    // SCAMIN and DATSTA/DATEND are copied onto the span as well so that it is
+    // shown / date-filtered together with its Bridge.
+    //
+    // "Over navigable water" is not decidable from a single S-57 object, so
+    // the translator uses the attribute the span class makes mandatory: a
+    // non-opening bridge yields a SpanFixed only when it carries VERCLR
+    // (verticalClearanceFixed [1..1]); an opening bridge yields a SpanOpening
+    // only when it carries VERCCL (verticalClearanceClosed [1..1]). The
+    // attribute's presence is what counts: an S-57 empty (unknown) value
+    // still yields the span, with the mandatory verticalClearanceValue
+    // populated as empty (null), the S-65 Annex B convention for mandatory
+    // attributes without a source value. A bridge without that clearance is
+    // treated as not crossing navigable water and converts to a Bridge alone;
+    // any clearance values it does carry have no conformant home and are
+    // recorded as rule-dropped.
+    //
+    // A BRIDGE of point primitive converts to `Landmark` (Bridge permits no
+    // point geometry) via the DefaultRules redirect; the translator supplies
+    // the mandatory categoryOfLandmark = 26 (bridge) and, when CONVIS is
+    // absent, visualProminence = 2 (not visually conspicuous) — the defaults
+    // S-65 Annex B gives for the analogous point DAMCON → Landmark conversion
+    // (clauses 4.8.5 / 4.8.15).
+    //
+    // A C_AGGR whose members are BRIDGE (curve/surface) objects plus any
+    // PYLONS / PONTON objects becomes a single Bridge whose BridgeAggregation
+    // links every emitted span, PylonBridgeSupport and Pontoon; the member
+    // BRIDGE objects emit only their spans. See BuildBridgeAggregations.
+    private const ushort BridgeObjl = 11;          // BRIDGE (S-57 object class)
+    private const string BridgeAcronym = "BRIDGE";
+    private const ushort S57AttrHoracc = 97;       // HORACC — horizontal accuracy
+    private const ushort S57AttrVeracc = 180;      // VERACC — vertical accuracy
+    private const ushort S57AttrVerclr = 181;      // VERCLR — vertical clearance
+    private const ushort S57AttrVerccl = 182;      // VERCCL — vertical clearance, closed
+    private const ushort S57AttrVercop = 183;      // VERCOP — vertical clearance, open
+    private const ushort S57AttrVerdat = 185;      // VERDAT — vertical datum
+    private const ushort S57AttrScamin = 133;      // SCAMIN — scale minimum
+    private const string S101ClassBridge = "Bridge";
+    private const string S101ClassSpanFixed = "SpanFixed";
+    private const string S101ClassSpanOpening = "SpanOpening";
+    private const string S101ClassLandmark = "Landmark";
+    private const string S101AssocBridgeAggregation = "BridgeAggregation";
+    private const string S101AttrVerticalClearanceFixed = "verticalClearanceFixed";
+    private const string S101AttrVerticalClearanceClosed = "verticalClearanceClosed";
+    private const string S101AttrVerticalClearanceOpen = "verticalClearanceOpen";
+    private const string S101AttrVerticalClearanceValue = "verticalClearanceValue";
+    private const string S101AttrVerticalClearanceUnlimited = "verticalClearanceUnlimited";
+    private const string S101AttrHorizontalDistanceUncertainty = "horizontalDistanceUncertainty";
+    private const string S101AttrVerticalDatum = "verticalDatum";
+    private const string S101AttrScaleMinimum = "scaleMinimum";
+    private const string S101AttrCategoryOfLandmark = "categoryOfLandmark";
+    private const string S101AttrVisualProminence = "visualProminence";
+    private const string CategoryOfLandmarkBridge = "26";
+    private const string VisualProminenceNotConspicuous = "2";
+
+    // CATBRG values classed as opening bridges in S-101 (opening bridge,
+    // swing, lifting, bascule, draw). Pontoon (6) is opening only when
+    // combined with 2 (S-65 Annex B §4.8.10).
+    private static readonly HashSet<string> OpeningBridgeCategories = new(StringComparer.Ordinal)
+    {
+        "2", "3", "4", "5", "7",
+    };
+
+    // Non-bridge S-57-sourced classes the FC permits as `theComponent` of a
+    // Bridge's `BridgeAggregation` (SpanFixed / SpanOpening are synthesised).
+    private static readonly HashSet<string> BridgeAggregationMemberClasses = new(StringComparer.Ordinal)
+    {
+        "PylonBridgeSupport", "Pontoon",
+    };
+
+    // S-57 attributes a Bridge never carries itself: they are consumed by the
+    // span (or recorded as dropped when no span is emitted).
+    private static readonly HashSet<int> BridgeSpanAttributes =
+    [
+        S57AttrHorclr, S57AttrHoracc, S57AttrVeracc,
+        S57AttrVerclr, S57AttrVerccl, S57AttrVercop, S57AttrVerdat,
+    ];
 
     // S-57 SORDAT (Source date, ATTL 147) maps to the S-101 `reportedDate`
     // simple attribute (value type S100_TruncatedDate), which the bundled FC
@@ -782,6 +877,12 @@ public sealed class S57ToS101Translator
             // once every feature has been translated. See EmitRangeSystems.
             var pendingAggregations = new List<EncDotNet.S57.S57FeatureRecord>();
 
+            // C_AGGR bridge collections (BRIDGE + PYLONS/PONTON members) are
+            // identified up front: their member BRIDGE objects emit only their
+            // spans, and a single aggregated Bridge is emitted after the loop.
+            // See BuildBridgeAggregations / EmitBridgeAggregations.
+            var bridgePlan = BuildBridgeAggregations(featureRecords);
+
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
                 var feat = featureRecords[fi];
@@ -810,8 +911,11 @@ public sealed class S57ToS101Translator
 
                 if (objl == CAggrObjl)
                 {
-                    // Defer to the RangeSystem second pass (members resolved by LNAM).
-                    pendingAggregations.Add(feat);
+                    // Defer to the RangeSystem second pass (members resolved by
+                    // LNAM), unless it is a bridge collection, which is emitted
+                    // as an aggregated Bridge instead.
+                    if (!bridgePlan.GroupByAggregation.ContainsKey(fi))
+                        pendingAggregations.Add(feat);
                     continue;
                 }
 
@@ -847,6 +951,25 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                bool isBridge = IsBridgeObjl(objl) && resolved.S101Code == S101ClassBridge;
+
+                // A BRIDGE that is a member of a bridge C_AGGR contributes only
+                // its span here; its Bridge-level attributes and geometry are
+                // folded into the aggregated Bridge by EmitBridgeAggregations.
+                if (isBridge && bridgePlan.GroupByBridgeMember.TryGetValue(fi, out var memberGroup))
+                {
+                    var memberSpan = BuildBridgeSpan(feat);
+                    if (memberSpan is null) continue;
+                    var memberSpatials = TranslateSpatialPointers(feat);
+                    if (memberSpatials.Count == 0)
+                    {
+                        _diagnostics?.RecordFeatureWithoutGeometry(memberSpan.Value.SpanClass);
+                        continue;
+                    }
+                    memberGroup.ComponentRecordIds.Add(EmitBridgeSpan(feat, memberSpan.Value, memberSpatials));
+                    continue;
+                }
+
                 var spatials = TranslateSpatialPointers(feat);
                 if (spatials.Count == 0)
                 {
@@ -864,10 +987,22 @@ public sealed class S57ToS101Translator
                 var attributes = TranslateAttributes(
                     feat.Attributes, resolved, objl, out var infoAssociations, extraSectors, topmarkSource);
 
+                // A Bridge over navigable water is decomposed into a span that
+                // shares its geometry (S-65 Annex B §4.8.10).
+                var span = isBridge ? BuildBridgeSpan(feat) : null;
+
                 if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
                 var recordId = _nextFeatureId++;
-                _recordIdByLnam[((int)feat.RecordName.AgencyCode,
-                    (long)feat.RecordName.FeatureId, (int)feat.RecordName.FeatureSubdivision)] = recordId;
+                _recordIdByLnam[Lnam(feat.RecordName)] = recordId;
+
+                IReadOnlyList<S101FeatureAssociation> featureAssociations = [];
+                S101FeatureRecord? spanRecord = null;
+                if (span is not null)
+                {
+                    spanRecord = CreateBridgeSpanRecord(feat, span.Value, spatials);
+                    featureAssociations = [BridgeComponentAssociation(spanRecord.RecordId)];
+                }
+
                 Features.Add(new S101FeatureRecord
                 {
                     RecordId = recordId,
@@ -877,12 +1012,503 @@ public sealed class S57ToS101Translator
                     FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
                     Attributes = attributes,
                     SpatialAssociations = spatials,
-                    FeatureAssociations = [],
+                    FeatureAssociations = featureAssociations,
+                    InformationAssociations = infoAssociations,
+                });
+
+                if (spanRecord is not null)
+                    Features.Add(spanRecord);
+            }
+
+            EmitBridgeAggregations(bridgePlan);
+            EmitRangeSystems(pendingAggregations);
+        }
+
+        // ── Bridges (S-65 Annex B §4.8.10) ──────────────────────────────
+
+        // Attribute payload of a span synthesised from an S-57 BRIDGE.
+        private readonly record struct BridgeSpan(string SpanClass, IReadOnlyList<S101Attribute> Attributes);
+
+        // A C_AGGR that collects the components of one bridge: its BRIDGE
+        // members (by feature index) and its PYLONS / PONTON members, plus the
+        // record ids of the span features emitted for the BRIDGE members.
+        private sealed class BridgeAggregationGroup(
+            EncDotNet.S57.S57FeatureRecord aggregation,
+            IReadOnlyList<int> bridgeMemberIndices,
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> otherMembers)
+        {
+            public EncDotNet.S57.S57FeatureRecord Aggregation { get; } = aggregation;
+            public IReadOnlyList<int> BridgeMemberIndices { get; } = bridgeMemberIndices;
+            public IReadOnlyList<EncDotNet.S57.S57FeatureRecord> OtherMembers { get; } = otherMembers;
+            public List<uint> ComponentRecordIds { get; } = [];
+        }
+
+        private sealed record BridgeAggregationPlan(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> FeatureRecords,
+            Dictionary<int, BridgeAggregationGroup> GroupByAggregation,
+            Dictionary<int, BridgeAggregationGroup> GroupByBridgeMember);
+
+        // Identifies S-57 C_AGGR collections that aggregate the components of a
+        // single bridge (S-65 Annex B §4.8.10: the spans of a bridge over
+        // navigable water are encoded as separate BRIDGE objects and, with any
+        // bridge pylons or pontoons, aggregated by C_AGGR so that the converter
+        // can create one Bridge feature). A C_AGGR qualifies when every member
+        // resolves (by LNAM) to either a BRIDGE that maps to Bridge (i.e. is not
+        // a point) or a PYLONS / PONTON that maps to a permitted
+        // BridgeAggregation component, with at least one BRIDGE member. A BRIDGE
+        // is claimed by at most one collection (first in document order wins).
+        private BridgeAggregationPlan BuildBridgeAggregations(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var byAggregation = new Dictionary<int, BridgeAggregationGroup>();
+            var byMember = new Dictionary<int, BridgeAggregationGroup>();
+
+            Dictionary<(int, long, int), int>? indexByLnam = null;
+            for (int ai = 0; ai < featureRecords.Count; ai++)
+            {
+                var aggr = featureRecords[ai];
+                if ((int)aggr.ObjectCode != CAggrObjl || aggr.FeaturePointers.Count == 0)
+                    continue;
+
+                if (indexByLnam is null)
+                {
+                    indexByLnam = new Dictionary<(int, long, int), int>();
+                    for (int i = 0; i < featureRecords.Count; i++)
+                        indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
+                }
+
+                var bridges = new List<int>();
+                var others = new List<EncDotNet.S57.S57FeatureRecord>();
+                var seen = new HashSet<int>();
+                bool qualifies = true;
+                foreach (var fp in aggr.FeaturePointers)
+                {
+                    if (!indexByLnam.TryGetValue(Lnam(fp.Name), out var mi))
+                    {
+                        qualifies = false;
+                        break;
+                    }
+                    if (!seen.Add(mi)) continue;
+
+                    var member = featureRecords[mi];
+                    var memberObjl = (ushort)(int)member.ObjectCode;
+                    var resolved = _mapping.ResolveFeature(
+                        memberObjl,
+                        _mapping.BuildAcronymView(member.Attributes),
+                        MapPrimitive(member.Primitive));
+                    if (IsBridgeObjl(memberObjl)
+                        && resolved?.S101Code == S101ClassBridge
+                        && !byMember.ContainsKey(mi))
+                    {
+                        bridges.Add(mi);
+                    }
+                    else if (!IsBridgeObjl(memberObjl)
+                        && resolved is not null
+                        && BridgeAggregationMemberClasses.Contains(resolved.S101Code))
+                    {
+                        others.Add(member);
+                    }
+                    else
+                    {
+                        qualifies = false;
+                        break;
+                    }
+                }
+
+                if (!qualifies || bridges.Count == 0) continue;
+
+                var group = new BridgeAggregationGroup(aggr, bridges, others);
+                byAggregation[ai] = group;
+                foreach (var mi in bridges)
+                    byMember[mi] = group;
+            }
+
+            return new BridgeAggregationPlan(featureRecords, byAggregation, byMember);
+        }
+
+        // Emits one Bridge per qualifying bridge C_AGGR. Its Bridge-level
+        // attributes come from a representative member BRIDGE — the first
+        // opening one (S-101 requires the Bridge to be an opening bridge when
+        // any span opens), else the first named one, else the first — with any
+        // attribute carried by the C_AGGR itself taking precedence (S-65 Annex B
+        // §4.8.10 places the bridge name on the C_AGGR); when neither carries a
+        // name the first named member supplies it. The geometry is the
+        // dissolved union of the member BRIDGE geometries when that forms a
+        // single curve or surface, and no geometry otherwise (Bridge permits
+        // noGeometry). The Bridge links every emitted span and every emitted
+        // PylonBridgeSupport / Pontoon member as `theComponent`.
+        private void EmitBridgeAggregations(BridgeAggregationPlan plan)
+        {
+            foreach (var group in plan.GroupByAggregation.Values)
+            {
+                var members = group.BridgeMemberIndices.Select(i => plan.FeatureRecords[i]).ToList();
+                var representative =
+                    members.FirstOrDefault(IsOpeningBridge)
+                    ?? members.FirstOrDefault(HasObjectName)
+                    ?? members[0];
+
+                var aggrCodes = group.Aggregation.Attributes.Select(a => a.AttributeCode).ToHashSet();
+                var merged = representative.Attributes
+                    .Where(a => !aggrCodes.Contains(a.AttributeCode))
+                    .ToList();
+                if (!HasObjectName(group.Aggregation) && !HasObjectName(representative))
+                {
+                    var named = members.FirstOrDefault(HasObjectName);
+                    if (named is not null)
+                        merged.AddRange(named.Attributes.Where(a => a.AttributeCode is S57AttrObjnam or S57AttrNobjnm));
+                }
+                merged.AddRange(group.Aggregation.Attributes);
+
+                var bridgeObjl = (ushort)(int)representative.ObjectCode;
+                var resolved = _mapping.ResolveFeature(
+                    bridgeObjl,
+                    _mapping.BuildAcronymView(merged),
+                    MapPrimitive(representative.Primitive));
+                if (resolved is null) continue;
+
+                var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
+                var attributes = TranslateAttributes(merged, resolved, bridgeObjl, out var infoAssociations);
+                var spatials = MergeBridgeGeometry(members);
+
+                var componentIds = new List<uint>(group.ComponentRecordIds);
+                foreach (var other in group.OtherMembers)
+                {
+                    if (_recordIdByLnam.TryGetValue(Lnam(other.RecordName), out var otherId))
+                        componentIds.Add(otherId);
+                }
+
+                var recordId = _nextFeatureId++;
+                _recordIdByLnam[Lnam(group.Aggregation.RecordName)] = recordId;
+                if (_diagnostics is not null) _diagnostics.BridgeAggregationsEmitted++;
+                Features.Add(new S101FeatureRecord
+                {
+                    RecordId = recordId,
+                    FeatureTypeCode = typeCode,
+                    ProducingAgency = (ushort)group.Aggregation.RecordName.AgencyCode,
+                    FeatureIdentificationNumber = (uint)group.Aggregation.RecordName.FeatureId,
+                    FeatureIdentificationSubdivision = (ushort)group.Aggregation.RecordName.FeatureSubdivision,
+                    Attributes = attributes,
+                    SpatialAssociations = spatials,
+                    FeatureAssociations = componentIds.Select(BridgeComponentAssociation).ToList(),
                     InformationAssociations = infoAssociations,
                 });
             }
 
-            EmitRangeSystems(pendingAggregations);
+            static bool HasObjectName(EncDotNet.S57.S57FeatureRecord f)
+                => f.Attributes.Any(a => a.AttributeCode is S57AttrObjnam or S57AttrNobjnm
+                    && !string.IsNullOrEmpty(a.Value));
+        }
+
+        // True for S-57 BRIDGE and for any object class whose rule is a twin of
+        // it (the IENC inland `bridge`, 17011, re-registers BRIDGE in lower case
+        // and reuses its rule).
+        private bool IsBridgeObjl(ushort objl)
+            => objl == BridgeObjl
+                || (_mapping.FeatureRules.TryGetValue(objl, out var rule)
+                    && string.Equals(rule.S57Acronym, BridgeAcronym, StringComparison.OrdinalIgnoreCase));
+
+        // True when the S-57 BRIDGE's CATBRG list contains an S-101 opening
+        // bridge category (2, 3, 4, 5 or 7).
+        private static bool IsOpeningBridge(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            foreach (var a in feat.Attributes)
+            {
+                if (a.AttributeCode != S57AttrCatbrg) continue;
+                foreach (var code in SplitEnumList(a.Value))
+                {
+                    if (OpeningBridgeCategories.Contains(code)) return true;
+                }
+            }
+            return false;
+        }
+
+        private S101FeatureAssociation BridgeComponentAssociation(uint componentRecordId)
+            => new(
+                GetOrAssignFeatureAssociationCode(S101AssocBridgeAggregation),
+                componentRecordId,
+                GetOrAssignRoleCode(S101RoleTheComponent));
+
+        // Emits a span feature record for an S-57 BRIDGE and returns its id.
+        private uint EmitBridgeSpan(
+            EncDotNet.S57.S57FeatureRecord feat,
+            BridgeSpan span,
+            IReadOnlyList<S101SpatialAssociation> spatials)
+        {
+            var record = CreateBridgeSpanRecord(feat, span, spatials);
+            Features.Add(record);
+            return record.RecordId;
+        }
+
+        // Allocates a span feature record that shares the BRIDGE's geometry and
+        // S-57 feature identity. The caller adds it to Features.
+        private S101FeatureRecord CreateBridgeSpanRecord(
+            EncDotNet.S57.S57FeatureRecord feat,
+            BridgeSpan span,
+            IReadOnlyList<S101SpatialAssociation> spatials)
+        {
+            if (_diagnostics is not null) _diagnostics.BridgeSpansEmitted++;
+            return new S101FeatureRecord
+            {
+                RecordId = _nextFeatureId++,
+                FeatureTypeCode = GetOrAssignFeatureTypeCode(span.SpanClass),
+                ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
+                Attributes = span.Attributes,
+                SpatialAssociations = spatials,
+                FeatureAssociations = [],
+                InformationAssociations = [],
+            };
+        }
+
+        // Builds the SpanFixed / SpanOpening attributes for an S-57 BRIDGE, or
+        // returns null when the bridge lacks the clearance its span class makes
+        // mandatory (VERCLR for SpanFixed, VERCCL for SpanOpening) — taken as
+        // "not over navigable water" — in which case any clearance-related
+        // attributes present are recorded as rule-dropped (Bridge binds none of
+        // them). Sub-attributes follow the FC binding order: fixedDateRange,
+        // horizontalClearanceFixed, vertical clearance complex(es),
+        // verticalDatum, scaleMinimum.
+        private BridgeSpan? BuildBridgeSpan(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            string? verclr = null, verccl = null, vercop = null, horclr = null;
+            string? horacc = null, veracc = null, verdat = null, scamin = null;
+            string? datsta = null, datend = null;
+            bool verclrPresent = false, vercclPresent = false, vercopPresent = false;
+            foreach (var a in feat.Attributes)
+            {
+                var value = string.IsNullOrEmpty(a.Value) ? null : a.Value;
+                switch (a.AttributeCode)
+                {
+                    case S57AttrVerclr: verclr = value; verclrPresent = true; break;
+                    case S57AttrVerccl: verccl = value; vercclPresent = true; break;
+                    case S57AttrVercop: vercop = value; vercopPresent = true; break;
+                    case S57AttrHorclr: horclr = value; break;
+                    case S57AttrHoracc: horacc = value; break;
+                    case S57AttrVeracc: veracc = value; break;
+                    case S57AttrVerdat: verdat = value; break;
+                    case S57AttrScamin: scamin = value; break;
+                    case S57AttrDatsta: datsta = value; break;
+                    case S57AttrDatend: datend = value; break;
+                }
+            }
+
+            bool opening = IsOpeningBridge(feat);
+            if (!(opening ? vercclPresent : verclrPresent))
+            {
+                if (_diagnostics is not null)
+                {
+                    foreach (var a in feat.Attributes)
+                    {
+                        if (BridgeSpanAttributes.Contains(a.AttributeCode) && !string.IsNullOrEmpty(a.Value))
+                            _diagnostics.RecordRuleDroppedAttribute((ushort)a.AttributeCode);
+                    }
+                }
+                return null;
+            }
+
+            var spanClass = opening ? S101ClassSpanOpening : S101ClassSpanFixed;
+            var builder = new List<S101Attribute>();
+
+            // VERACC qualifies a known vertical clearance value only.
+            bool hasVerticalValue = opening ? verccl is not null || vercop is not null : verclr is not null;
+            if (veracc is not null && !hasVerticalValue)
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrVeracc);
+
+            if (datsta is not null || datend is not null)
+                AppendDateRangeInstance(builder, S101AttrFixedDateRange, datsta, datend);
+
+            if (horclr is not null)
+            {
+                AppendHorizontalClearanceInstance(builder, S101AttrHorizontalClearanceFixed, horclr);
+                if (horacc is not null)
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrHorizontalDistanceUncertainty), 1, horacc));
+            }
+            else if (horacc is not null)
+            {
+                // No horizontal clearance value for the accuracy to qualify.
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrHoracc);
+            }
+
+            if (opening)
+            {
+                if (verclr is not null)
+                {
+                    // VERCLR has no home on an opening span (it binds the
+                    // closed/open clearances only).
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrVerclr);
+                }
+
+                AppendVerticalClearanceInstance(
+                    builder, S101AttrVerticalClearanceClosed, unlimited: null, verccl ?? string.Empty, veracc);
+                // Absent VERCOP → unlimited open clearance; VERCOP populated
+                // (even with an empty value) → limited (S-65 Annex B §4.8.10).
+                AppendVerticalClearanceInstance(
+                    builder, S101AttrVerticalClearanceOpen, unlimited: !vercopPresent, vercop,
+                    vercop is not null ? veracc : null);
+            }
+            else
+            {
+                if (verccl is not null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrVerccl);
+                if (vercop is not null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrVercop);
+                AppendVerticalClearanceInstance(
+                    builder, S101AttrVerticalClearanceFixed, unlimited: null, verclr ?? string.Empty, veracc);
+            }
+
+            if (verdat is not null)
+            {
+                if (_allowedEnumValues is null || _allowedEnumValues.IsAllowed(S101AttrVerticalDatum, verdat))
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalDatum), 1, verdat));
+                else
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrVerticalDatum, verdat);
+            }
+
+            if (scamin is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrScaleMinimum), 1, scamin));
+
+            return new BridgeSpan(spanClass, builder);
+        }
+
+        // Emits a verticalClearanceFixed / verticalClearanceClosed /
+        // verticalClearanceOpen complex instance: marker, then (open only) the
+        // mandatory verticalClearanceUnlimited boolean, the clearance value
+        // (null → omitted; empty → unknown) and, for a known value, an optional
+        // nested verticalUncertainty { uncertaintyFixed } carrying VERACC — in
+        // FC sub-attribute binding order.
+        private void AppendVerticalClearanceInstance(
+            List<S101Attribute> builder,
+            string complexName,
+            bool? unlimited,
+            string? value,
+            string? uncertainty)
+        {
+            builder.Add(new S101Attribute(GetOrAssignAttributeCode(complexName), 1, string.Empty));
+            if (unlimited is not null)
+            {
+                builder.Add(new S101Attribute(
+                    GetOrAssignAttributeCode(S101AttrVerticalClearanceUnlimited), 1, unlimited.Value ? "true" : "false"));
+            }
+            if (value is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalClearanceValue), 1, value));
+            if (!string.IsNullOrEmpty(value) && uncertainty is not null)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalUncertainty), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, uncertainty));
+            }
+        }
+
+        // Supplies the mandatory Landmark attributes for a point BRIDGE
+        // redirected to Landmark: categoryOfLandmark = 26 (bridge) and, when
+        // CONVIS did not provide one, visualProminence = 2 (not visually
+        // conspicuous).
+        private void AppendPointBridgeLandmarkAttributes(List<S101Attribute> builder)
+        {
+            var visualCode = GetOrAssignAttributeCode(S101AttrVisualProminence);
+            if (!builder.Any(a => a.NumericCode == visualCode))
+                builder.Insert(0, new S101Attribute(visualCode, 1, VisualProminenceNotConspicuous));
+
+            var categoryCode = GetOrAssignAttributeCode(S101AttrCategoryOfLandmark);
+            if (!builder.Any(a => a.NumericCode == categoryCode))
+                builder.Insert(0, new S101Attribute(categoryCode, 1, CategoryOfLandmarkBridge));
+        }
+
+        // Dissolves the geometries of the BRIDGE members of a bridge C_AGGR into
+        // one Bridge geometry. A single member keeps its own geometry. Several
+        // curve members are chained by shared nodes into one curve; several
+        // surface members have their shared boundary edges removed and the
+        // remaining edges chained into rings. When the members mix primitives,
+        // or the result is not a single curve / single exterior ring, the
+        // Bridge is emitted without geometry (S-101 Bridge permits noGeometry)
+        // rather than as a flattened multi-part shape the renderers would join.
+        private IReadOnlyList<S101SpatialAssociation> MergeBridgeGeometry(
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> members)
+        {
+            if (members.Count == 1)
+                return TranslateSpatialPointers(members[0]);
+
+            var primitive = (int)members[0].Primitive;
+            if (members.Any(m => (int)m.Primitive != primitive))
+                return [];
+
+            var exterior = new List<S101CurveUsage>();
+            var interior = new List<S101CurveUsage>();
+            var seenCurves = new HashSet<uint>();
+            foreach (var m in members)
+            {
+                foreach (var ptr in m.SpatialPointers)
+                {
+                    if (ptr.Name.RecordNameCode != S57RecordNameCodes.Edge) continue;
+                    if (!_edgeIdMap.TryGetValue(ptr.Name.RecordId, out var cid)) continue;
+                    var ornt = (int)ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
+                    var usage = new S101CurveUsage(S101RcnmCurveSegment, cid, ornt);
+                    bool isInterior = primitive == 3 && (int)ptr.Usage == UsageInterior;
+                    // Curves: keep each edge once. Surfaces: keep every
+                    // exterior occurrence so shared boundaries can be removed.
+                    if (primitive == 2 && !seenCurves.Add(cid)) continue;
+                    (isInterior ? interior : exterior).Add(usage);
+                }
+            }
+
+            if (primitive == 2)
+            {
+                var chains = ChainEdgesIntoRings(OrientChainSeed(exterior));
+                if (chains.Count != 1) return [];
+                return chains[0]
+                    .Select(u => new S101SpatialAssociation(S101RcnmCurveSegment, u.RecordId, u.Orientation))
+                    .ToList();
+            }
+
+            if (primitive == 3)
+            {
+                // An edge bounding two adjacent members is interior to the
+                // union: drop every occurrence of it.
+                var counts = exterior.GroupBy(u => u.RecordId).ToDictionary(g => g.Key, g => g.Count());
+                var outline = exterior.Where(u => counts[u.RecordId] == 1).ToList();
+                var outlineRings = ChainEdgesIntoRings(outline);
+                if (outlineRings.Count != 1) return [];
+                return BuildSurface(outlineRings, ChainEdgesIntoRings(interior));
+            }
+
+            return [];
+        }
+
+        // Reorders an open set of curve edges so that the chain seed starts at
+        // a free end (a node touched by only one edge), oriented away from it,
+        // letting ChainEdgesIntoRings (which only extends forward) walk the
+        // whole path. A closed set is returned unchanged.
+        private List<S101CurveUsage> OrientChainSeed(List<S101CurveUsage> edges)
+        {
+            var degree = new Dictionary<uint, int>();
+            var nodes = new List<(uint? Begin, uint? End)>(edges.Count);
+            foreach (var e in edges)
+            {
+                var n = (EdgeNode(e.RecordId, TopologyBegin), EdgeNode(e.RecordId, TopologyEnd));
+                nodes.Add(n);
+                if (n.Item1 is uint b) degree[b] = degree.GetValueOrDefault(b) + 1;
+                if (n.Item2 is uint en) degree[en] = degree.GetValueOrDefault(en) + 1;
+            }
+
+            for (int i = 0; i < edges.Count; i++)
+            {
+                var (begin, end) = nodes[i];
+                byte? orientation =
+                    begin is uint b && degree[b] == 1 ? OrientationForward
+                    : end is uint en && degree[en] == 1 ? OrientationReverse
+                    : null;
+                if (orientation is null) continue;
+
+                var reordered = new List<S101CurveUsage>(edges.Count)
+                {
+                    new(S101RcnmCurveSegment, edges[i].RecordId, orientation.Value),
+                };
+                for (int j = 0; j < edges.Count; j++)
+                {
+                    if (j != i) reordered.Add(edges[j]);
+                }
+                return reordered;
+            }
+
+            return edges;
         }
 
         private static (int agency, long fid, int sub) Lnam(EncDotNet.S57.S57RecordName n)
@@ -1292,7 +1918,9 @@ public sealed class S57ToS101Translator
             EncDotNet.S57.S57FeatureRecord? topmarkSource = null)
         {
             informationAssociations = [];
-            if (attrs.Count == 0 && topmarkSource is null) return [];
+            if (attrs.Count == 0 && topmarkSource is null
+                && !(IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassLandmark))
+                return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
             // can emit them as one or more S-101 `information` complex-attribute
@@ -1392,6 +2020,9 @@ public sealed class S57ToS101Translator
             // that binds `openingBridge` (Bridge).
             bool bindsOpeningBridge = _featureBindings.Binds(feature.S101Code, S101AttrOpeningBridge);
             string? catbrgValue = null;
+            // Bridge clearance / accuracy / vertical-datum attributes belong to
+            // the decomposed span (BuildBridgeSpan), never to the Bridge itself.
+            bool isBridge = IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassBridge;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -1447,6 +2078,12 @@ public sealed class S57ToS101Translator
                 // Textual-info attributes are handled as complex attribute
                 // groups below — skip the per-attribute pass-through.
                 if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
+                    continue;
+
+                // On Bridge, the span-level attributes are carried by the
+                // SpanFixed / SpanOpening component (or recorded as dropped by
+                // BuildBridgeSpan when no span is emitted).
+                if (isBridge && BridgeSpanAttributes.Contains(a.AttributeCode))
                     continue;
 
                 // On feature classes that bind `featureName`, OBJNAM/NOBJNM
@@ -1863,6 +2500,11 @@ public sealed class S57ToS101Translator
                         s.SectorBearingOne, s.SectorBearingTwo);
                 }
             }
+
+            // A point BRIDGE redirected to Landmark needs the Landmark's
+            // mandatory category and visual prominence (S-65 Annex B §4.8.10).
+            if (IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassLandmark)
+                AppendPointBridgeLandmarkAttributes(builder);
 
             return builder;
         }
@@ -2690,9 +3332,19 @@ public sealed class S57ToS101Translator
 
             if (exteriorEdges.Count == 0) return [];
 
+            return BuildSurface(ChainEdgesIntoRings(exteriorEdges), ChainEdgesIntoRings(interiorEdges));
+        }
+
+        // Allocates the composite-curve records for already-chained exterior and
+        // interior rings plus the surface record that references them, and
+        // returns the surface spatial association.
+        private IReadOnlyList<S101SpatialAssociation> BuildSurface(
+            List<List<S101CurveUsage>> exteriorRings,
+            List<List<S101CurveUsage>> interiorRings)
+        {
             var rings = new List<S101RingAssociation>();
 
-            foreach (var ringEdges in ChainEdgesIntoRings(exteriorEdges))
+            foreach (var ringEdges in exteriorRings)
             {
                 var extId = _nextCompositeId++;
                 CompositeCurves[extId] = new S101CompositeCurveRecord
@@ -2704,7 +3356,7 @@ public sealed class S57ToS101Translator
                     S101RcnmCompositeCurve, extId, OrientationForward, UsageExterior));
             }
 
-            foreach (var ringEdges in ChainEdgesIntoRings(interiorEdges))
+            foreach (var ringEdges in interiorRings)
             {
                 var intId = _nextCompositeId++;
                 CompositeCurves[intId] = new S101CompositeCurveRecord

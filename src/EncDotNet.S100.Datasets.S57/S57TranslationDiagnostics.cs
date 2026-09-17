@@ -125,6 +125,28 @@ public sealed class S57TranslationDiagnostics
     public int RangeSystemsEmitted { get; internal set; }
 
     /// <summary>
+    /// Number of <c>SpanFixed</c> / <c>SpanOpening</c> component features
+    /// synthesised from S-57 <c>BRIDGE</c> objects (S-65 Annex B §4.8.10). A
+    /// BRIDGE carrying the clearance its span class requires (<c>VERCLR</c> for
+    /// a fixed span, <c>VERCCL</c> for an opening one) yields one span that
+    /// shares its geometry and carries the clearance attributes, linked from
+    /// the <c>Bridge</c> by a <c>BridgeAggregation</c> association. Spans are
+    /// counted here, not in <see cref="FeaturesEmitted"/>.
+    /// </summary>
+    public int BridgeSpansEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of aggregated <c>Bridge</c> features emitted for S-57
+    /// <c>C_AGGR</c> collections of <c>BRIDGE</c> objects (plus any
+    /// <c>PYLONS</c> / <c>PONTON</c>) (S-65 Annex B §4.8.10). Each replaces the
+    /// per-member Bridge features — its member BRIDGE objects emit only their
+    /// spans — and links every emitted span, pylon and pontoon as a
+    /// <c>BridgeAggregation</c> component. Counted here, not in
+    /// <see cref="FeaturesEmitted"/>.
+    /// </summary>
+    public int BridgeAggregationsEmitted { get; internal set; }
+
+    /// <summary>
     /// Number of S-101 <c>Sounding</c> features emitted (a SOUNDG feature with at
     /// least one depth triple yields exactly one).
     /// </summary>
