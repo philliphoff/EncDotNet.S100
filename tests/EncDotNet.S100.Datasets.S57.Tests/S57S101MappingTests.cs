@@ -454,6 +454,61 @@ public class S57S101MappingTests
         Assert.Equal("Landmark", m.ResolveFeatureCode(74));
     }
 
+    // ── S-65 Annex B § 12.2 — M_NSYS with ORIENT → LocalDirectionOfBuoyage ──
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-401")]
+    public void Mnsys_WithOrient_RedirectsToLocalDirectionOfBuoyage(string spec)
+    {
+        var m = S57S101Mapping.ForSpec(spec);
+        var attrs = m.BuildAcronymView(new[]
+        {
+            new EncDotNet.S57.S57AttributeValue { AttributeCode = 109, Value = "1" },    // MARSYS
+            new EncDotNet.S57.S57AttributeValue { AttributeCode = 117, Value = "45.5" }, // ORIENT
+        });
+
+        var resolved = m.ResolveFeature(306, attrs)!; // M_NSYS
+        Assert.Equal("LocalDirectionOfBuoyage", resolved.S101Code);
+
+        var marsys = m.ResolveAttribute(109, "1", resolved)!;
+        Assert.Equal("marksNavigationalSystemOf", marsys.S101Code);
+        Assert.Equal("1", marsys.Value);
+        var orient = m.ResolveAttribute(117, "45.5", resolved)!;
+        Assert.Equal("orientationValue", orient.S101Code);
+        Assert.Equal("45.5", orient.Value);
+
+        // LocalDirectionOfBuoyage binds both attributes directly.
+        var bindings = S101FeatureAttributeBindings.ForSpec(spec);
+        Assert.True(bindings.Binds(resolved.S101Code, marsys.S101Code));
+        Assert.True(bindings.Binds(resolved.S101Code, orient.S101Code));
+    }
+
+    [Theory]
+    [InlineData("S-101", false)]
+    [InlineData("S-101", true)]
+    [InlineData("S-401", false)]
+    [InlineData("S-401", true)]
+    public void Mnsys_WithoutOrientValue_StaysNavigationalSystemOfMarks_AndDropsOrient(string spec, bool emptyOrient)
+    {
+        // An empty ORIENT (S-57 "unknown") is no value, so it does not redirect;
+        // NavigationalSystemOfMarks binds no orientation, so ORIENT is dropped.
+        var m = S57S101Mapping.ForSpec(spec);
+        var values = new List<EncDotNet.S57.S57AttributeValue>
+        {
+            new() { AttributeCode = 109, Value = "2" }, // MARSYS
+        };
+        if (emptyOrient)
+            values.Add(new() { AttributeCode = 117, Value = "" });
+
+        var resolved = m.ResolveFeature(306, m.BuildAcronymView(values))!;
+
+        Assert.Equal("NavigationalSystemOfMarks", resolved.S101Code);
+        Assert.Equal("marksNavigationalSystemOf", m.ResolveAttribute(109, "2", resolved)!.S101Code);
+        Assert.Null(m.ResolveAttribute(117, "", resolved));
+        Assert.False(S101FeatureAttributeBindings.ForSpec(spec).Binds(resolved.S101Code, "orientationValue"));
+    }
+
     // ── IHO Conversion Guidance § 4.5.1 — COALNE/CATCOA → natureOfSurface ──
 
     [Theory]

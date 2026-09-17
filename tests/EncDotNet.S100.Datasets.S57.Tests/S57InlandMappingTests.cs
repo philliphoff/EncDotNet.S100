@@ -160,6 +160,21 @@ public class S57InlandMappingTests
     private static IReadOnlyDictionary<string, string> Attributes(string acronym, string value)
         => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [acronym] = value };
 
+    [Fact]
+    public void S401Mapping_InlandNavigationalSystemOfMarksWithOrient_RedirectsToLocalDirectionOfBuoyage()
+    {
+        // IEHG conversion guidance 3.77: m_nsys (the inland twin of M_NSYS)
+        // with an ORIENT value becomes LocalDirectionOfBuoyage.
+        var feature = S401.ResolveFeature(17018, Attributes("ORIENT", "270"))!;
+
+        Assert.Equal("LocalDirectionOfBuoyage", feature.S101Code);
+        Assert.Equal("orientationValue", S401.ResolveAttribute(117, "270", feature)!.S101Code);
+        Assert.Equal("marksNavigationalSystemOf", S401.ResolveAttribute(17009, "11", feature)!.S101Code);
+
+        var plain = S401.ResolveFeature(17018, Attributes("marsys", "11"))!;
+        Assert.Equal("NavigationalSystemOfMarks", plain.S101Code);
+    }
+
     [Theory]
     [InlineData(17001, 17000, "catach")]
     [InlineData(4, 8, "CATACH")]
