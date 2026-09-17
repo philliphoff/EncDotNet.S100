@@ -659,7 +659,10 @@ public class S57ToS101TranslatorTests
         var attributes = feature.Attributes.ToDictionary(
             a => inland.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
         Assert.Equal("8", attributes["categoryOfNoticeMark"]);
-        Assert.Equal("13.5", attributes["waterwayDistance"]);
+
+        // S-401 NoticeMark does not bind waterwayDistance (nor does the IEHG
+        // conversion guidance list wtwdis for notmrk, clause 3.90).
+        Assert.DoesNotContain("waterwayDistance", attributes.Keys);
     }
 
     [Fact]
@@ -3355,6 +3358,78 @@ public class S57ToS101TranslatorTests
         Assert.DoesNotContain(AttributeNames(s101, feat), n => n.StartsWith("verticalClearance", StringComparison.Ordinal));
         Assert.Equal(1, diag.RuleDroppedAttributes[AttlVerclr]);
         Assert.Equal(1, diag.UnmappedAttributes[new S57AttributeDrop(75, (ushort)AttlVeracc)]);
+    }
+
+    // ── Flat attributes the resolved class does not bind are rule-dropped ──
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-401")]
+    public void Translate_MorfacPile_DropsUnboundWatlevAndNatcon(string spec)
+    {
+        // MORFAC CATMOR 5 → Pile. S-65 Annex B 4.6.7.1: WATLEV and NATCON are
+        // not converted for Pile; neither FC binds them there. CONDTN is bound
+        // and passes through.
+        var target = spec == "S-401" ? S57TranslationTarget.S401 : S57TranslationTarget.S101;
+        var diag = new S57TranslationDiagnostics();
+        var doc = S57ToS101Translator.ForTarget(target).Translate(PointFeatureWithS57Attributes(84,
+            Attr(40, "5"), Attr(187, "3"), Attr(112, "1"), Attr(81, "2")), diag);
+
+        var feat = SingleOfClass(doc, "Pile");
+        var names = AttributeNames(doc, feat).ToList();
+        Assert.DoesNotContain("waterLevelEffect", names);
+        Assert.DoesNotContain("natureOfConstruction", names);
+        Assert.Equal("2", TopLevelValue(doc, feat, "condition"));
+        Assert.Equal(1, diag.RuleDroppedAttributes[187]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[112]);
+    }
+
+    [Fact]
+    public void Translate_SeabedAreaColour_IsRuleDropped()
+    {
+        // S-65 Annex B 2.4: colour is prohibited on Seabed Area.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(121, Attr(113, "4"), Attr(75, "1,3")), diag);
+
+        var feat = SingleOfClass(s101, "SeabedArea");
+        Assert.DoesNotContain("colour", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[75]);
+    }
+
+    [Fact]
+    public void Translate_LightAllAroundOrient_IsRuleDropped()
+    {
+        // LightAllAround binds neither orientationValue nor orientation.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(75, Attr(75, "1"), Attr(AttlOrient, "90")), diag);
+
+        var feat = SingleOfClass(s101, "LightAllAround");
+        Assert.DoesNotContain(AttributeNames(s101, feat), n => n.StartsWith("orientation", StringComparison.Ordinal));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlOrient]);
+    }
+
+    [Fact]
+    public void Translate_InlandFixedSpan_S401Target_DropsHorizontalClearance()
+    {
+        // S-401 SpanFixed binds no horizontal clearance (IEHG clause 3.144), so
+        // HORCLR/HORACC are dropped there; S-101 SpanFixed keeps them.
+        var diag = new S57TranslationDiagnostics();
+        var source = LineFeatureWithS57Attributes(17011,
+            Attr(AttlCatbrg, "1"), Attr(AttlVerclr, "9"), Attr(AttlHorclr, "30"), Attr(AttlHoracc, "1"));
+
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(source, diag);
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(11,
+                Attr(AttlCatbrg, "1"), Attr(AttlVerclr, "9"), Attr(AttlHorclr, "30"), Attr(AttlHoracc, "1")));
+
+        var span = SingleOfClass(s401, "SpanFixed");
+        Assert.DoesNotContain("horizontalClearanceFixed", AttributeNames(s401, span));
+        Assert.DoesNotContain("horizontalDistanceUncertainty", AttributeNames(s401, span));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlHorclr]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlHoracc]);
+        Assert.Contains("horizontalClearanceFixed", AttributeNames(s101, SingleOfClass(s101, "SpanFixed")));
     }
 
     // ── ORIENT → orientation (S-65 Annex B § 3.3.1, 3.4, 10.1.1; IEHG 3.28, 3.32) ──
