@@ -21,7 +21,12 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// Renders an S-57 ENC base cell by translating it in-memory to an
 /// <see cref="S101Document"/> and reusing the S-101 portrayal pipeline.
-/// Symbology is S-101 (not S-52); coverage is breadth-first.
+/// A maritime ENC is translated into, and portrayed with, S-101; an inland ENC
+/// (DSID <c>PRSP</c> = <see cref="S57ProductSpecification.InlandElectronicNavigationalChart"/>)
+/// is translated into S-401 and portrayed with the S-401 catalogues (issue
+/// #608), provided the host has an S-401 portrayal catalogue (otherwise it
+/// falls back to S-101). Either way the product identity stays S-57. Symbology is S-100
+/// (not S-52); coverage is breadth-first.
 /// </summary>
 public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
 {
@@ -35,6 +40,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
+
+    /// <summary>
+    /// The S-100 product this cell is translated into, chosen from its declared
+    /// S-57 product specification. Its <see cref="S57TranslationTarget.Spec"/>
+    /// names the Feature and Portrayal Catalogues this processor uses.
+    /// </summary>
+    private readonly S57TranslationTarget _target;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -50,6 +62,14 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         new() { Category = EcdisDisplayCategory.All };
 
     public SpecRef Spec => new("S-57", default);
+
+    /// <summary>
+    /// The specification whose catalogues portray this cell: S-101 for a
+    /// maritime ENC, S-401 for an inland ENC. Unlike the default
+    /// <see cref="SpecConventions"/> mapping this depends on the cell, not just
+    /// on its S-57 identity.
+    /// </summary>
+    public SpecRef PortrayalSpec => new(_target.Spec, default);
 
     /// <summary>
     /// The lightweight <see cref="DatasetMetadata"/> for this cell — canonical
@@ -133,7 +153,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         ArgumentNullException.ThrowIfNull(s57);
         _fileName = fileName;
         _luaEngine = luaEngine;
-        _provider = catalogueManager.GetProvider("S-101");
+        _target = SelectTarget(s57, catalogueManager);
+        _provider = catalogueManager.GetProvider(_target.Spec);
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
         _featureCatalogueManager = featureCatalogueManager;
 
@@ -142,12 +163,26 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // fields that do not survive translation — see
         // docs/design/non-gml-validation.md §9.3.
         _rawS57Document = s57.Document;
-        var translator = new S57ToS101Translator();
+        var translator = S57ToS101Translator.ForTarget(_target);
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);
 
-        // S-57 datasets render through the S-101 portrayal catalogue.
-        Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
+        // S-57 datasets render through the target product's portrayal catalogue.
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, PortrayalSpec, _catalogue.CatalogueRef, "portrayal");
+    }
+
+    /// <summary>
+    /// The product to translate <paramref name="s57"/> into: the one its
+    /// declared S-57 product specification calls for, unless the host has no
+    /// portrayal catalogue for that product, in which case the cell is
+    /// translated into S-101 as before — so a host that registers only the
+    /// S-101 catalogue still loads inland cells.
+    /// </summary>
+    private static S57TranslationTarget SelectTarget(
+        S57Dataset s57, PortrayalCatalogueManager catalogueManager)
+    {
+        var target = s57.TranslationTarget;
+        return catalogueManager.HasCatalogue(target.Spec) ? target : S57TranslationTarget.S101;
     }
 
     private static S57Dataset OpenFromFile(string path)
@@ -206,11 +241,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     {
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
-        var fc = _featureCatalogueManager.GetCatalogue("S-101")
-            ?? throw new InvalidOperationException(
-                "S-101 feature catalogue is required to render S-57 datasets but none was provided.");
+        var fc = RequireFeatureCatalogue();
 
-        Console.WriteLine("[S57] Translated to S-101 in-memory; running Part 9 portrayal pipeline...");
+        Console.WriteLine($"[S57] Translated to {_target.Spec} in-memory; running Part 9 portrayal pipeline...");
 
         var s101Cat = _catalogue;
         var paletteType = context?.Palette ?? PaletteType.Day;
@@ -219,8 +252,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
         // Activate the ECDIS display-mode / category and write the hidden
         // viewing-group overrides before portrayal. The catalogue's Spec.Name
-        // is "S-101" (the S-57 portrayal spec), so ApplyTo keys the S-101
-        // category mapping and default-hidden VGs correctly.
+        // is this cell's portrayal spec (S-101 or S-401), so ApplyTo keys that
+        // product's category mapping and default-hidden VGs correctly.
         (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
         var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
@@ -237,7 +270,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         var geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
         var coverageAreas = CoverageAreaResolver.Resolve(sourceFeatures);
 
-        var info = $"{_translatedDataset.DatasetName} (S-57 → S-101) — " +
+        var info = $"{_translatedDataset.DatasetName} (S-57 → {_target.Spec}) — " +
                    $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
 
         // Out-of-scale-band declutter. S-57 has no DataCoverage /
@@ -349,11 +382,16 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         return FeatureHitTester.HitTest(_featureIndex.Values, latitude, longitude, radiusMeters);
     }
 
+    private FeatureCatalogue RequireFeatureCatalogue()
+        => _featureCatalogueManager.GetCatalogue(_target.Spec)
+            ?? throw new InvalidOperationException(
+                $"{_target.Spec} feature catalogue is required to render this S-57 dataset but none was provided.");
+
     private void EnsureDecoder()
     {
         if (!_decoderLoaded)
         {
-            _decoder = _featureCatalogueManager.GetDecoder("S-101");
+            _decoder = _featureCatalogueManager.GetDecoder(_target.Spec);
             _decoderLoaded = true;
         }
     }
@@ -422,6 +460,10 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// (<c>docs/design/non-gml-validation.md</c> §9.3, Q-s57-rebadge).
     /// </description></item>
     /// </list>
+    /// The second pass runs only for a maritime cell translated into S-101.
+    /// An inland cell is translated into S-401, which has no rule pack (the
+    /// S-101 pack asserts S-101 normative clauses), so its report carries the
+    /// pre-translation findings alone.
     /// The result is cached on the processor and returned verbatim
     /// on subsequent calls.
     /// </summary>
@@ -429,11 +471,18 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     {
         if (!_validationCached)
         {
-            EnsureDecoder();
             var pre = S57PreTranslationRules.Default.Run(_rawS57Document);
-            var view = S101DatasetView.From(_translatedDataset.Document, _decoder);
-            var post = S101DatasetRules.Default.Run(view);
-            _validationReport = ConcatReports.Concat(pre, post, rebadgePrefix: "S101-as-S57/");
+            if (ReferenceEquals(_target, S57TranslationTarget.S101))
+            {
+                EnsureDecoder();
+                var view = S101DatasetView.From(_translatedDataset.Document, _decoder);
+                var post = S101DatasetRules.Default.Run(view);
+                _validationReport = ConcatReports.Concat(pre, post, rebadgePrefix: "S101-as-S57/");
+            }
+            else
+            {
+                _validationReport = pre;
+            }
             _validationCached = true;
         }
         return _validationReport;
@@ -475,16 +524,14 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         try
         {
             var mariner = context?.Mariner ?? MarinerSettings.Default;
-            var fc = _featureCatalogueManager.GetCatalogue("S-101")
-                ?? throw new InvalidOperationException(
-                    "S-101 feature catalogue is required to render S-57 datasets but none was provided.");
+            var fc = RequireFeatureCatalogue();
 
             var s101Cat = _catalogue;
             await s101Cat.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
             var palette = s101Cat.ActivePalette;
 
             // Honor the ECDIS display state (category + hidden VGs) before
-            // portrayal, keyed on the S-101 portrayal spec — see the core path.
+            // portrayal, keyed on this cell's portrayal spec — see the core path.
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
             var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);

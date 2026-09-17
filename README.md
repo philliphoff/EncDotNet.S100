@@ -102,7 +102,9 @@ record. Edition 1.3.0 of the S-401 Portrayal Catalogue is still a draft
 and no validation rule pack ships yet.
 
 S-57 cells are translated to the in-memory S-101 model and rendered
-through the S-101 portrayal pipeline; validation runs as two passes
+through the S-101 portrayal pipeline — or, for an inland ENC (a cell
+declaring `DSID`/`PRSP` = 10), through the same pipeline with the S-401
+catalogues; validation runs as two passes
 with S-101 findings rebadged `S101-as-S57/*` so the user can tell
 which layer of the pipeline a finding came from. This is a
 best-effort path for viewing legacy chart collections; it is **not**

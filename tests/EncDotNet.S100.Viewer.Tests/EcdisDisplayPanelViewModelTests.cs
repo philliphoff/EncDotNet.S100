@@ -192,4 +192,40 @@ public class EcdisDisplayPanelViewModelTests
         var spec = Assert.Single(vm.Specs);
         Assert.Equal("S-101", spec.SpecCode);
     }
+
+    [Fact]
+    public void RebuildSpecs_InlandS57Entry_SwitchesToS401ControlGroupOnceLoaded()
+    {
+        // An inland S-57 cell is only known to portray as S-401 once its
+        // processor has read the cell; the panel must follow that (issue #608).
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        catalogues.SetSource("S-401", Specification.CreatePortrayalCatalogueSource("S-401"));
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        var entry = datasets.Add("U37IL005.000", "S-57");
+        Assert.Equal("S-101", Assert.Single(vm.Specs).SpecCode);
+
+        entry.SetPortrayalSpec("S-401");
+
+        Assert.Equal("S-401", Assert.Single(vm.Specs).SpecCode);
+    }
+
+    [Fact]
+    public void RebuildSpecs_MaritimeAndInlandS57_ExposeBothControlGroups()
+    {
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        catalogues.SetSource("S-401", Specification.CreatePortrayalCatalogueSource("S-401"));
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        datasets.Add("US5MA1BO.000", "S-57").SetPortrayalSpec("S-101");
+        datasets.Add("U37IL005.000", "S-57").SetPortrayalSpec("S-401");
+
+        Assert.Equal(["S-101", "S-401"], vm.Specs.Select(s => s.SpecCode));
+    }
 }

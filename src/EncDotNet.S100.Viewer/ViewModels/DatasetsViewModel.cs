@@ -34,6 +34,31 @@ internal sealed class DatasetEntry : ViewModelBase
     public string ProductSpec { get; }
 
     /// <summary>
+    /// The specification whose catalogues portray this dataset. Until the
+    /// dataset loads this is the conventional mapping of
+    /// <see cref="ProductSpec"/> (<see cref="SpecConventions.PortrayalSpecName"/>);
+    /// once loaded it is the processor's own
+    /// <see cref="IDatasetProcessor.PortrayalSpec"/>, which for an S-57 cell
+    /// depends on the cell (S-101 for a maritime ENC, S-401 for an inland one).
+    /// </summary>
+    public string PortrayalSpec => _portrayalSpec ?? SpecConventions.PortrayalSpecName(ProductSpec);
+
+    private string? _portrayalSpec;
+
+    /// <summary>
+    /// Records the loaded processor's portrayal spec, raising
+    /// <see cref="PortrayalSpec"/> change notification when it differs.
+    /// </summary>
+    internal void SetPortrayalSpec(string portrayalSpec)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(portrayalSpec);
+        var changed = !string.Equals(PortrayalSpec, portrayalSpec, StringComparison.OrdinalIgnoreCase);
+        _portrayalSpec = portrayalSpec;
+        if (changed)
+            OnPropertyChanged(nameof(PortrayalSpec));
+    }
+
+    /// <summary>
     /// Optional asset source backing this dataset. When non-null, the
     /// loader reads the dataset bytes from <see cref="Source"/> at
     /// <see cref="RelativePath"/> instead of opening
@@ -955,6 +980,37 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// </summary>
     public event Action<string>? UnrecognizedFileEncountered;
 
+    /// <summary>
+    /// Raised when a listed entry's <see cref="DatasetEntry.PortrayalSpec"/>
+    /// changes — typically when an S-57 cell loads and turns out to be an inland
+    /// ENC portrayed with S-401 — so views keyed on the loaded portrayal specs
+    /// can rebuild.
+    /// </summary>
+    public event EventHandler? EntryPortrayalSpecChanged;
+
+    private readonly HashSet<DatasetEntry> _portrayalSpecSubscriptions = new();
+
+    private void ReconcilePortrayalSpecSubscriptions()
+    {
+        var current = new HashSet<DatasetEntry>(Entries);
+        foreach (var gone in _portrayalSpecSubscriptions.Where(e => !current.Contains(e)).ToList())
+        {
+            gone.PropertyChanged -= OnEntryPropertyChanged;
+            _portrayalSpecSubscriptions.Remove(gone);
+        }
+        foreach (var added in current)
+        {
+            if (_portrayalSpecSubscriptions.Add(added))
+                added.PropertyChanged += OnEntryPropertyChanged;
+        }
+    }
+
+    private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DatasetEntry.PortrayalSpec))
+            EntryPortrayalSpecChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public DatasetsViewModel(IDatasetLoaderService loader)
     {
         ArgumentNullException.ThrowIfNull(loader);
@@ -981,6 +1037,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         Entries.CollectionChanged += (_, e) =>
         {
             OnPropertyChanged(nameof(IsEmpty));
+            ReconcilePortrayalSpecSubscriptions();
 
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Move)
                 _loader.SetEntryOrder(Entries.ToArray());

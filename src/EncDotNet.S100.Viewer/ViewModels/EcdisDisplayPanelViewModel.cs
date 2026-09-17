@@ -57,6 +57,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
         _state.Changed += OnStateChanged;
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
+        _datasets.EntryPortrayalSpecChanged += OnEntryPortrayalSpecChanged;
 
         RebuildSpecs();
     }
@@ -164,6 +165,11 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
             spec.Refresh();
     }
 
+    private void OnEntryPortrayalSpecChanged(object? sender, EventArgs e)
+    {
+        RebuildSpecs();
+    }
+
     private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RebuildSpecs();
@@ -172,10 +178,11 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     private void RebuildSpecs()
     {
         // Determine which portrayal specs are currently loaded. An S-57 entry
-        // is portrayed as S-101 (SpecConventions), so it shares the single
-        // S-101 control group — map before de-duplicating.
+        // is portrayed as S-101 (maritime) or S-401 (inland), so it shares that
+        // product's control group — key on the entry's portrayal spec before
+        // de-duplicating.
         var loadedSpecs = _datasets.Entries
-            .Select(e => SpecConventions.PortrayalSpecName(e.ProductSpec))
+            .Select(e => e.PortrayalSpec)
             .Where(s => !CoverageSpecs.Contains(s))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
@@ -212,5 +219,6 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     {
         _state.Changed -= OnStateChanged;
         _datasets.Entries.CollectionChanged -= OnEntriesChanged;
+        _datasets.EntryPortrayalSpecChanged -= OnEntryPortrayalSpecChanged;
     }
 }
