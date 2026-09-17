@@ -131,10 +131,10 @@ internal static class InlandRules
         yield return A(17069, "catcom", "categoryOfCommunication"); // Category of communication
         yield return A(17070, "cathbr", "categoryOfHarbourArea"); // Category of harbour area
         yield return A(17071, "catrfd", "categoryOfRefuseDump"); // Category of refuse dump
-        // horcll: No S-401 alias; lock basin length is carried in a complex attribute, not converted yet.
-        yield return A(17074, "horcll", null); // Horizontal clearance length
-        // horclw: S-401 LockBasin does not bind horizontalClearanceWidth directly; lock basin dimensions are carried in a complex attribute, not converted yet.
-        yield return A(17075, "horclw", null); // Horizontal clearance width
+        // horcll: no S-401 alias; conversion guidance clauses 3.50, 3.78 and 3.79 map it to horizontalClearanceLength.
+        yield return A(17074, "horcll", "horizontalClearanceLength"); // Horizontal clearance length
+        // horclw: on LockBasin, which does not bind horizontalClearanceWidth, the translator folds it into horizontalClearanceFixed (clause 3.78).
+        yield return A(17075, "horclw", "horizontalClearanceWidth"); // Horizontal clearance width
         yield return A(17076, "trshgd", "transshippingGoods"); // Transshipping goods
         yield return A(17077, "unlocd", "uNLocationCode"); // UN location code
         yield return A(17078, "catgag", "categoryOfWaterwayGauge"); // Category of waterway gauge
