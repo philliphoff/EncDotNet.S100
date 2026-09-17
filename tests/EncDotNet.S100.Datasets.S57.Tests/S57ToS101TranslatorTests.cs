@@ -2638,6 +2638,97 @@ public class S57ToS101TranslatorTests
         Assert.Equal(1, diag.RuleDroppedAttributes[AttlHorclw]);
     }
 
+    // ── IENC shore power → S-401 powerCharacteristics (#608) ──
+
+    private const int AttlBunves = 17065;
+    private const int AttlCatbun = 17067;
+    private const int AttlCatfrq = 18030;
+    private const int AttlCatvol = 18031;
+    private const int AttlAmoamp = 18032;
+    private const int AttlAllcon = 18033;
+    private const int AttlCatplg = 18034;
+    private const int AttlShrnum = 18035;
+
+    private static readonly string[] PowerSubAttributes =
+    [
+        "categoryOfVoltage", "categoryOfFrequency", "amountOfAmperage",
+        "categoryOfPlug", "numberOfShoreConnectors", "allowedConsumption",
+    ];
+
+    [Fact]
+    public void Translate_S401Target_BunkerStation_AssemblesPowerCharacteristics()
+    {
+        // Conversion guidance clause 3.10. catvol lists two voltages, so two
+        // instances are emitted, each with the station-wide values.
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17054,
+                Attr(AttlBunves, "2"), Attr(AttlCatbun, "4"),
+                Attr(AttlCatvol, "1,2"), Attr(AttlCatfrq, "1"), Attr(AttlAmoamp, "300"),
+                Attr(AttlAllcon, "1000"), Attr(AttlCatplg, "CEE"), Attr(AttlShrnum, "4")));
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("BunkerStation", ClassOf(s401, feat));
+        Assert.DoesNotContain(feat.Attributes.TakeWhile(
+                a => s401.AttributeTypeCatalogue[a.NumericCode] != "powerCharacteristics"),
+            a => PowerSubAttributes.Contains(s401.AttributeTypeCatalogue[a.NumericCode]));
+
+        var first = ComplexInstance(s401, feat.Attributes, "powerCharacteristics", 1).ToList();
+        var second = ComplexInstance(s401, feat.Attributes, "powerCharacteristics", 2).ToList();
+        Assert.Empty(ComplexInstance(s401, feat.Attributes, "powerCharacteristics", 3));
+        Assert.Equal("1", GetSubAttribute(s401, first, "categoryOfVoltage"));
+        Assert.Equal("2", GetSubAttribute(s401, second, "categoryOfVoltage"));
+        foreach (var instance in new[] { first, second })
+        {
+            Assert.Equal("1", GetSubAttribute(s401, instance, "categoryOfFrequency"));
+            Assert.Equal("300", GetSubAttribute(s401, instance, "amountOfAmperage"));
+            Assert.Equal("CEE", GetSubAttribute(s401, instance, "categoryOfPlug"));
+            Assert.Equal("4", GetSubAttribute(s401, instance, "numberOfShoreConnectors"));
+            Assert.Equal("1000", GetSubAttribute(s401, instance, "allowedConsumption"));
+        }
+    }
+
+    [Fact]
+    public void Translate_S401Target_BunkerStation_DropsDisallowedVoltage()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17054,
+                Attr(AttlBunves, "2"), Attr(AttlCatvol, "9"), Attr(AttlCatfrq, "1,2")), diag);
+
+        var feat = Assert.Single(s401.Features);
+        var first = ComplexInstance(s401, feat.Attributes, "powerCharacteristics", 1).ToList();
+        var second = ComplexInstance(s401, feat.Attributes, "powerCharacteristics", 2).ToList();
+        Assert.Null(GetSubAttribute(s401, first, "categoryOfVoltage"));
+        Assert.Equal("1", GetSubAttribute(s401, first, "categoryOfFrequency"));
+        Assert.Equal("2", GetSubAttribute(s401, second, "categoryOfFrequency"));
+        Assert.Equal(1, diag.DroppedEnumValues[new S57EnumValueDrop("categoryOfVoltage", "9")]);
+    }
+
+    [Fact]
+    public void Translate_S401Target_BunkerStationWithoutShorePower_HasNoPowerCharacteristics()
+    {
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17054, Attr(AttlBunves, "1"), Attr(AttlCatbun, "1"), Attr(AttlCatvol, "")));
+
+        var feat = Assert.Single(s401.Features);
+        Assert.DoesNotContain(feat.Attributes,
+            a => s401.AttributeTypeCatalogue[a.NumericCode] == "powerCharacteristics");
+    }
+
+    [Fact]
+    public void Translate_S401Target_ShorePowerOnClassNotBindingIt_IsDropped()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
+            PointFeatureWithS57Attributes(17050, Attr(17052, "8"), Attr(AttlCatvol, "1"), Attr(AttlShrnum, "2")), diag);
+
+        var feat = Assert.Single(s401.Features);
+        Assert.Equal("NoticeMark", ClassOf(s401, feat));
+        Assert.Equal("categoryOfNoticeMark", s401.AttributeTypeCatalogue[Assert.Single(feat.Attributes).NumericCode]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlCatvol]);
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlShrnum]);
+    }
+
     // ── BRIDGE → Bridge + SpanFixed / SpanOpening (S-65 Annex B §4.8.10) ──
 
     // S-57 attribute codes used by the bridge tests.

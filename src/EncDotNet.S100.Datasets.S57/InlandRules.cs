@@ -196,18 +196,13 @@ internal static class InlandRules
         yield return A(18028, "CLSNAM", null); // Object class name
         // SYMINS: NEWOBJ symbol instruction; no S-401 equivalent.
         yield return A(18029, "SYMINS", null); // Symbol instruction
-        // catfrq: categoryOfFrequency is a sub-attribute of an S-401 complex attribute (shore power); not assembled yet.
-        yield return A(18030, "catfrq", null); // Category of frequency
-        // catvol: categoryOfVoltage is a sub-attribute of an S-401 complex attribute (shore power); not assembled yet.
-        yield return A(18031, "catvol", null); // Category of voltage
-        // amoamp: No S-401 alias.
-        yield return A(18032, "amoamp", null); // Amount of amperage
-        // allcon: allowedConsumption is a sub-attribute of an S-401 complex attribute (shore power); not assembled yet.
-        yield return A(18033, "allcon", null); // Allowed consumption
-        // catplg: categoryOfPlug is a sub-attribute of an S-401 complex attribute (shore power); not assembled yet.
-        yield return A(18034, "catplg", null); // Category of plug
-        // shrnum: numberOfShoreConnectors is a sub-attribute of an S-401 complex attribute (shore power); not assembled yet.
-        yield return A(18035, "shrnum", null); // Number of shore connectors
+        // Shore power (catfrq … shrnum): sub-attributes of the S-401 powerCharacteristics complex, which the translator assembles (clause 3.10).
+        yield return A(18030, "catfrq", "categoryOfFrequency"); // Category of frequency
+        yield return A(18031, "catvol", "categoryOfVoltage"); // Category of voltage
+        yield return A(18032, "amoamp", "amountOfAmperage"); // Amount of amperage
+        yield return A(18033, "allcon", "allowedConsumption"); // Allowed consumption
+        yield return A(18034, "catplg", "categoryOfPlug"); // Category of plug
+        yield return A(18035, "shrnum", "numberOfShoreConnectors"); // Number of shore connectors
         // shptyp: bound on the S-401 TimeScheduleInGeneral information type, which the translator emits for tisdge.
         yield return A(33066, "shptyp", "typeOfShip"); // Type of Ship
     }

@@ -131,6 +131,24 @@ public class S57InlandMappingTests
             Assert.Equal("distanceUnitOfMeasurement", resolved.S101Code);
     }
 
+    [Theory]
+    // Conversion guidance clause 3.10: powerCharacteristics sub-attributes.
+    [InlineData(18030, "catfrq", "categoryOfFrequency")]
+    [InlineData(18031, "catvol", "categoryOfVoltage")]
+    [InlineData(18032, "amoamp", "amountOfAmperage")]
+    [InlineData(18033, "allcon", "allowedConsumption")]
+    [InlineData(18034, "catplg", "categoryOfPlug")]
+    [InlineData(18035, "shrnum", "numberOfShoreConnectors")]
+    public void S401Mapping_MapsShorePowerToPowerCharacteristicsSubAttributes(int attl, string acronym, string target)
+    {
+        var rule = S401.AttributeRules[(ushort)attl];
+
+        Assert.Equal(acronym, rule.S57Acronym);
+        Assert.Equal(target, rule.DefaultS101Code);
+        var powerCharacteristics = S401Catalogue.Value.ComplexAttributes.Single(c => c.Code == "powerCharacteristics");
+        Assert.Contains(powerCharacteristics.SubAttributeBindings, b => b.AttributeRef == target);
+    }
+
     [Fact]
     public void S401Mapping_InlandTwins_ReuseTheirStandardRule()
     {
@@ -264,14 +282,22 @@ public class S57InlandMappingTests
     [Fact]
     public void S401Mapping_InlandAttributeTargets_AreBoundByAFeatureOrInformationType()
     {
-        // A target must be bound directly by a feature type, or by the
-        // information type the translator emits for a time schedule; the
-        // translator gates the latter off features.
+        // A target must be bound by a feature type, directly or inside a
+        // complex attribute a feature type binds (which the translator
+        // assembles, e.g. powerCharacteristics), or by the information type
+        // the translator emits for a time schedule; the translator gates the
+        // latter off features.
         var catalogue = S401Catalogue.Value;
-        var bound = catalogue.FeatureTypes
+        var direct = catalogue.FeatureTypes
             .SelectMany(ft => ft.AttributeBindings)
             .Concat(catalogue.InformationTypes.Single(it => it.Code == "TimeScheduleInGeneral").AttributeBindings)
             .Select(b => b.AttributeRef)
+            .ToHashSet(StringComparer.Ordinal);
+        var bound = catalogue.ComplexAttributes
+            .Where(c => direct.Contains(c.Code))
+            .SelectMany(c => c.SubAttributeBindings)
+            .Select(b => b.AttributeRef)
+            .Concat(direct)
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (var rule in S401.AttributeRules.Values.Where(r => r.Attl >= 17000))

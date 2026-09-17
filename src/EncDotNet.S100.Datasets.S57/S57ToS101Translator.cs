@@ -402,6 +402,33 @@ public sealed class S57ToS101Translator
     private const ushort CAssoObjl = 401;       // C_ASSO (S-57 Appendix A)
     private const string S101InfoTypeTimeSchedule = "TimeScheduleInGeneral";
 
+    // ── IENC shore power → S-401 powerCharacteristics ───────────────────
+    // The IENC power supply attributes of `bunsta` (catvol, catfrq, amoamp,
+    // catplg, shrnum, allcon) are sub-attributes of the S-401
+    // `powerCharacteristics` complex (IEHG S-57 ENC to S-401 Conversion
+    // Guidance, clause 3.10), which only BunkerStation binds. They carry no
+    // S-57 code here: the translator recognises them by the sub-attribute
+    // their mapping rule targets, so only a mapping that targets them (the
+    // S-401 one) takes this path. catvol and catfrq are IENC lists while
+    // each sub-attribute is single-valued, so one instance is emitted per
+    // voltage and frequency combination, each repeating the station-wide
+    // values. On a class that does not bind the complex the attributes are
+    // recorded as rule-dropped.
+    private const string S101AttrPowerCharacteristics = "powerCharacteristics";
+    private const string S101AttrCategoryOfVoltage = "categoryOfVoltage";
+    private const string S101AttrCategoryOfFrequency = "categoryOfFrequency";
+
+    // The sub-attributes in Feature Catalogue order.
+    private static readonly string[] PowerCharacteristicsSubAttributes =
+    [
+        S101AttrCategoryOfVoltage,
+        S101AttrCategoryOfFrequency,
+        "amountOfAmperage",
+        "categoryOfPlug",
+        "numberOfShoreConnectors",
+        "allowedConsumption",
+    ];
+
     // ── S-57 BRIDGE → S-101 Bridge + SpanFixed / SpanOpening ────────────
     // S-65 Annex B (S-57 ENC to S-101 Conversion Guidance, Ed 1.2.0) clause
     // 4.8.10; S-101 DCEG 6.6–6.8 and 25.4. A BRIDGE over navigable water
@@ -2278,6 +2305,10 @@ public sealed class S57ToS101Translator
             // that binds `openingBridge` (Bridge).
             bool bindsOpeningBridge = _featureBindings.Binds(feature.S101Code, S101AttrOpeningBridge);
             string? catbrgValue = null;
+            // powerCharacteristics sources — the shore-power attributes,
+            // assembled on the class that binds the complex (BunkerStation).
+            bool bindsPowerChar = _featureBindings.Binds(feature.S101Code, S101AttrPowerCharacteristics);
+            Dictionary<string, string>? powerCharValues = null;
             // Bridge clearance / accuracy / vertical-datum attributes belong to
             // the decomposed span (BuildBridgeSpan), never to the Bridge itself.
             bool isBridge = IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassBridge;
@@ -2335,6 +2366,13 @@ public sealed class S57ToS101Translator
                     case S57AttrMltylt: if (bindsMultiplicityOfFeatures && !string.IsNullOrEmpty(a.Value)) mltyltValue = a.Value; break;
                     case S57AttrCatbrg: if (bindsOpeningBridge && !string.IsNullOrEmpty(a.Value)) catbrgValue = a.Value; break;
                     case S57AttrVeracc: if (bindsVerticalClearance && !isBridge && !string.IsNullOrEmpty(a.Value)) veraccValue = a.Value; break;
+                    default:
+                        if (bindsPowerChar && !string.IsNullOrEmpty(a.Value)
+                            && PowerCharacteristicsTarget(a.AttributeCode) is { } powerSub)
+                        {
+                            (powerCharValues ??= new(StringComparer.Ordinal))[powerSub] = a.Value;
+                        }
+                        break;
                 }
             }
 
@@ -2439,6 +2477,16 @@ public sealed class S57ToS101Translator
                 // through.
                 if (bindsMultiplicityOfFeatures && a.AttributeCode is S57AttrMltylt)
                     continue;
+
+                // The shore-power attributes are assembled into the
+                // `powerCharacteristics` complex below; they are only
+                // sub-attributes, so elsewhere they have no conformant home.
+                if (PowerCharacteristicsTarget(a.AttributeCode) is not null)
+                {
+                    if (!bindsPowerChar)
+                        _diagnostics?.RecordRuleDroppedAttribute((ushort)a.AttributeCode);
+                    continue;
+                }
 
                 // On Bridge, CATBRG is split across the bridge category
                 // attributes below rather than passed through value by value.
@@ -2715,6 +2763,8 @@ public sealed class S57ToS101Translator
                 // No known clearance value for the accuracy to qualify.
                 _diagnostics?.RecordRuleDroppedAttribute(S57AttrVeracc);
             }
+            if (powerCharValues is not null)
+                AppendPowerCharacteristicsInstances(builder, powerCharValues);
 
             // Append the `valueOfLocalMagneticAnomaly` complex-attribute
             // instance. Its mandatory sub-attribute `magneticAnomalyValue` is a
@@ -3280,6 +3330,77 @@ public sealed class S57ToS101Translator
                 builder.Add(new S101Attribute(
                     GetOrAssignAttributeCode(S101AttrOpeningBridge), 1, opening ? "true" : "false"));
             }
+        }
+
+        // The powerCharacteristics sub-attribute an S-57 attribute's mapping
+        // rule targets, or null when it targets none.
+        private string? PowerCharacteristicsTarget(int attributeCode)
+        {
+            if (attributeCode is < 0 or > ushort.MaxValue
+                || !_mapping.AttributeRules.TryGetValue((ushort)attributeCode, out var rule)
+                || rule.DefaultS101Code is not { } code)
+            {
+                return null;
+            }
+
+            return Array.IndexOf(PowerCharacteristicsSubAttributes, code) >= 0 ? code : null;
+        }
+
+        // Emits one `powerCharacteristics` instance per combination of the
+        // listed voltages and frequencies (a single instance when neither is
+        // listed), each carrying the remaining single-valued sub-attributes.
+        // Voltage and frequency codes the catalogue does not allow are dropped
+        // and reported.
+        private void AppendPowerCharacteristicsInstances(
+            List<S101Attribute> builder,
+            Dictionary<string, string> values)
+        {
+            var voltages = AllowedEnumTokens(S101AttrCategoryOfVoltage, values.GetValueOrDefault(S101AttrCategoryOfVoltage));
+            var frequencies = AllowedEnumTokens(S101AttrCategoryOfFrequency, values.GetValueOrDefault(S101AttrCategoryOfFrequency));
+            if (voltages.Count == 0) voltages.Add(null);
+            if (frequencies.Count == 0) frequencies.Add(null);
+
+            var complexCode = GetOrAssignAttributeCode(S101AttrPowerCharacteristics);
+            foreach (var voltage in voltages)
+            {
+                foreach (var frequency in frequencies)
+                {
+                    var subs = new List<S101Attribute>();
+                    foreach (var sub in PowerCharacteristicsSubAttributes)
+                    {
+                        var value = sub switch
+                        {
+                            S101AttrCategoryOfVoltage => voltage,
+                            S101AttrCategoryOfFrequency => frequency,
+                            _ => values.GetValueOrDefault(sub),
+                        };
+                        if (value is not null)
+                            subs.Add(new S101Attribute(GetOrAssignAttributeCode(sub), 1, value));
+                    }
+
+                    if (subs.Count == 0)
+                        continue;
+
+                    // Marker entry — Index=1, value=empty — followed by sub-attributes.
+                    builder.Add(new S101Attribute(complexCode, 1, string.Empty));
+                    builder.AddRange(subs);
+                }
+            }
+        }
+
+        // The tokens of an S-57 list-valued enumerate that the target
+        // catalogue allows for attributeCode; the others are reported.
+        private List<string?> AllowedEnumTokens(string attributeCode, string? list)
+        {
+            var allowed = new List<string?>();
+            foreach (var code in SplitEnumList(list))
+            {
+                if (_allowedEnumValues is not null && !_allowedEnumValues.IsAllowed(attributeCode, code))
+                    _diagnostics?.RecordDroppedEnumValue(attributeCode, code);
+                else
+                    allowed.Add(code);
+            }
+            return allowed;
         }
 
         // Emits zero or more `surfaceCharacteristics` complex-attribute

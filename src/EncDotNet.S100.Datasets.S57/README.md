@@ -76,9 +76,14 @@ Key types:
   features. The usable lock and dock dimensions `horcll`/`horclw` become
   `horizontalClearanceLength`/`horizontalClearanceWidth` where the class binds
   them; on `LockBasin`, which binds no width, `horclw` fills
-  `horizontalClearanceFixed` unless `HORCLR` already does. Twelve codes have
-  no S-401 home yet and are reported as rule-dropped: `c_brga`, `NEWOBJ`;
-  shore-power details and `lc_csi` (complex attributes).
+  `horizontalClearanceFixed` unless `HORCLR` already does. The shore-power
+  attributes of a bunker station (`catvol`, `catfrq`, `amoamp`, `catplg`,
+  `shrnum`, `allcon`) target the sub-attributes of S-401's
+  `powerCharacteristics`; the translator assembles one instance per listed
+  voltage and frequency on `BunkerStation` and drops them elsewhere. Six codes
+  have no S-401 home yet and are reported as rule-dropped: `c_brga`,
+  `NEWOBJ`, the three `NEWOBJ` definition attributes (`CLSDEF`, `CLSNAM`,
+  `SYMINS`), and `lc_csi` (a complex attribute).
   Inland bridges convert exactly as maritime `BRIDGE` does: `CATBRG`
   categories on the `Bridge`, a `SpanFixed`/`SpanOpening` carrying the
   clearances, and point bridges as `Landmark` (the S-401 catalogue defines all
