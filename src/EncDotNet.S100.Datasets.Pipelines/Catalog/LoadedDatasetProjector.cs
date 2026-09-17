@@ -13,6 +13,7 @@ using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 
@@ -64,14 +65,23 @@ public static class LoadedDatasetProjector
     public static readonly BoundingBox WorldBounds = new(-90, -180, 90, 180);
 
     /// <summary>
+    /// The catalog identity of a legacy S-57 cell; matches
+    /// <see cref="S57DatasetProcessor.Spec"/> so both projection entry points
+    /// agree.
+    /// </summary>
+    private static readonly SpecRef S57Spec = new("S-57", default);
+
+    /// <summary>
     /// Projects <paramref name="stream"/> into a <see cref="LoadedDataset"/>.
     /// </summary>
     /// <param name="id">Stable identifier for the dataset within the catalog session.</param>
     /// <param name="spec">
     /// The detected product specification name (e.g. <c>"S-101"</c>,
-    /// <c>"S-102"</c>). The S-57 → S-101 mapping is applied by the caller;
-    /// pass <c>"S-101"</c> (or <c>"S-57"</c>, treated identically) for a
-    /// legacy cell.
+    /// <c>"S-102"</c>, <c>"S-57"</c>). A legacy <c>"S-57"</c> cell is read with
+    /// the S-57 reader and translated in-memory into the product it declares
+    /// (S-101, or S-401 for an inland ENC — the same translation
+    /// <see cref="S57DatasetProcessor"/> performs), and the entry keeps the
+    /// product identity <c>"S-57"</c>.
     /// </param>
     /// <param name="stream">The dataset bytes; the caller owns and disposes it.</param>
     /// <param name="externalTextResolver">
@@ -101,7 +111,17 @@ public static class LoadedDatasetProjector
         ArgumentNullException.ThrowIfNull(stream);
 
         var data = OpenData(spec, stream, externalTextResolver);
-        return data is null ? null : BuildFromData(id, data, transforms);
+        if (data is null)
+            return null;
+
+        var loaded = BuildFromData(id, data, transforms);
+
+        // A translated S-57 cell carries an S101DatasetData payload, so
+        // BuildFromData derives spec "S-101" from it; the catalog entry must keep
+        // the product identity "S-57" (product identity vs. portrayal spec; see
+        // the Datasets.Pipelines README). Mirrors the processor overload, which
+        // takes the identity from S57DatasetProcessor.Spec.
+        return spec == S57Spec.Name ? loaded with { Spec = S57Spec } : loaded;
     }
 
     /// <summary>
@@ -173,7 +193,11 @@ public static class LoadedDatasetProjector
             // S-401 inland ENC is read by the same Part 10a reader and carries
             // the same payload; BuildFromData keeps its declared identity via the
             // dataset's DSID product specification.
-            "S-101" or "S-57" or "S-401" => new S101DatasetData(S101Dataset.Open(stream), externalTextResolver),
+            "S-101" or "S-401" => new S101DatasetData(S101Dataset.Open(stream), externalTextResolver),
+            // Legacy S-57 is a different ISO 8211 profile: read it with the S-57
+            // reader and translate to the S-101 / S-401 model, exactly as
+            // S57DatasetProcessor does. Never open S-57 bytes with S101Dataset.
+            "S-57" => new S101DatasetData(OpenS57(stream), externalTextResolver),
             "S-102" => OpenS102(stream),
             "S-104" => OpenS104(stream),
             "S-111" => OpenS111(stream),
@@ -189,6 +213,17 @@ public static class LoadedDatasetProjector
             "S-421" => new S421DatasetData(S421Dataset.Open(stream)),
             _ => null,
         };
+
+    private static S101Dataset OpenS57(Stream stream)
+    {
+        // Translate into the product the cell declares (S-101 for a maritime
+        // ENC, S-401 for an inland ENC, issue #608), as S57DatasetProcessor
+        // does. The projector has no portrayal-catalogue context, so unlike the
+        // processor it does not fall back to S-101 when S-401 is unavailable.
+        var s57 = S57Dataset.Open(stream);
+        var translator = S57ToS101Translator.ForTarget(s57.TranslationTarget);
+        return S101Dataset.FromDocument(translator.Translate(s57));
+    }
 
     private static LoadedDatasetData OpenS102(Stream stream)
     {

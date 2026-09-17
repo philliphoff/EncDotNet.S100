@@ -1,9 +1,14 @@
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -23,8 +28,11 @@ public class ViewerDatasetCatalogTests
         System.IO.Path.Combine(DatasetsDir, spec, fileName);
 
     [SkippableFact]
-    public void S57_entry_is_projected_as_S101()
+    public void S57_entry_is_projected_with_S57_identity_and_real_bounds()
     {
+        // Regression: the catalog used to open S-57 bytes with the S-101 reader,
+        // reporting spec "S-101", world bounds, and no features. With no resident
+        // processor it now falls back to the projector's S-57 stream translation.
         var path = Path("S57", System.IO.Path.Combine("US5MA1BO", "US5MA1BO.000"));
         Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
 
@@ -35,8 +43,43 @@ public class ViewerDatasetCatalogTests
         loader.RaiseLoaded(entry);
 
         var loaded = Assert.Single(catalog.Datasets);
-        Assert.Equal("S-101", loaded.Spec.Name);
-        Assert.IsType<S101DatasetData>(loaded.Data);
+        Assert.Equal("S-57", loaded.Spec.Name);
+        var data = Assert.IsType<S101DatasetData>(loaded.Data);
+        Assert.True(data.Dataset.FeatureCount > 0, "Expected translated S-57 features.");
+        AssertBoundsAreNotWorld(loaded.Bounds);
+    }
+
+    [SkippableFact]
+    public void S57_entry_is_projected_from_the_resident_processor()
+    {
+        var path = Path("S57", System.IO.Path.Combine("US5MA1BO", "US5MA1BO.000"));
+        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+
+        var catalogueManager = new PortrayalCatalogueManager();
+        catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        var processor = new S57DatasetProcessor(
+            path,
+            catalogueManager,
+            new MoonSharpLuaEngine(),
+            new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
+        var entry = new DatasetEntry(path, "S-57");
+        var loader = new FakeDatasetLoaderService
+        {
+            Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+        };
+        using var catalog = new ViewerDatasetCatalog(loader);
+
+        loader.RaiseLoaded(entry);
+
+        var loaded = Assert.Single(catalog.Datasets);
+        Assert.Equal("S-57", loaded.Spec.Name);
+        AssertBoundsAreNotWorld(loaded.Bounds);
+
+        // The catalog shares the processor's translated (update-folded) model
+        // rather than re-reading and re-translating the cell.
+        var data = Assert.IsType<S101DatasetData>(loaded.Data);
+        var resident = Assert.IsType<S101DatasetData>(processor.CreateLoadedData());
+        Assert.Same(resident.Dataset, data.Dataset);
     }
 
     [SkippableFact]

@@ -1,6 +1,12 @@
 using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Specifications;
 using PureHDF;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -48,6 +54,131 @@ public sealed class CatalogProjectionTests
         Assert.Equal("S-102", projected!.Spec.Name);
         Assert.IsType<S102CoverageData>(projected.Data);
         Assert.NotEqual(LoadedDatasetProjector.WorldBounds, projected.Bounds);
+    }
+
+    [SkippableFact]
+    public void Project_s57_stream_translates_cell_and_keeps_s57_identity()
+    {
+        // Regression: the stream overload used to open S-57 bytes with the
+        // S-101 reader, yielding an empty dataset with world bounds and the
+        // payload-derived identity "S-101".
+        var path = S57FixturePath();
+        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+
+        using var stream = File.OpenRead(path);
+        var projected = LoadedDatasetProjector.Project(new DatasetId("s57-1"), "S-57", stream);
+
+        Assert.NotNull(projected);
+        Assert.Equal("S-57", projected!.Spec.Name);
+        var data = Assert.IsType<S101DatasetData>(projected.Data);
+        Assert.True(data.Dataset.FeatureCount > 0, "Expected translated S-57 features.");
+        Assert.NotEqual(LoadedDatasetProjector.WorldBounds, projected.Bounds);
+
+        // US5MA1BO is a Boston Harbor cell (~42.3N, 71W).
+        Assert.InRange(projected.Bounds.SouthLatitude, 41.0, 43.0);
+        Assert.InRange(projected.Bounds.WestLongitude, -72.0, -70.0);
+    }
+
+    [SkippableFact]
+    public void Project_s57_stream_matches_processor_projection()
+    {
+        var path = S57FixturePath();
+        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+
+        var catalogueManager = new PortrayalCatalogueManager();
+        catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        var processor = new S57DatasetProcessor(
+            path,
+            catalogueManager,
+            new MoonSharpLuaEngine(),
+            new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
+        var fromProcessor = LoadedDatasetProjector.Project(new DatasetId("cell"), processor);
+
+        using var stream = File.OpenRead(path);
+        var fromStream = LoadedDatasetProjector.Project(new DatasetId("cell"), "S-57", stream);
+
+        Assert.NotNull(fromProcessor);
+        Assert.NotNull(fromStream);
+        Assert.Equal(fromProcessor!.Spec, fromStream!.Spec);
+        Assert.Equal(fromProcessor.Bounds, fromStream.Bounds);
+        Assert.Equal(
+            ((S101DatasetData)fromProcessor.Data).Dataset.FeatureCount,
+            ((S101DatasetData)fromStream.Data).Dataset.FeatureCount);
+    }
+
+    [Theory]
+    [InlineData(S57ProductSpecification.ElectronicNavigationalChart)]
+    [InlineData(S57ProductSpecification.InlandElectronicNavigationalChart)]
+    public void Project_s57_stream_translates_into_declared_product_like_processor(byte productSpecification)
+    {
+        // An inland S-57 cell (DSID PRSP = 10) is translated into S-401 (issue
+        // #608); the stream projection must pick the same target as the
+        // processor, and both keep the catalog identity "S-57".
+        var dir = Directory.CreateTempSubdirectory("s57-catalog-").FullName;
+        try
+        {
+            var path = SyntheticS57Cell.Write(dir, "U37TEST.000", productSpecification);
+
+            var catalogueManager = new PortrayalCatalogueManager();
+            catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+            catalogueManager.SetSource("S-401", Specification.CreatePortrayalCatalogueSource("S-401"));
+            var processor = new S57DatasetProcessor(
+                path,
+                catalogueManager,
+                new MoonSharpLuaEngine(),
+                new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
+            var fromProcessor = LoadedDatasetProjector.Project(new DatasetId("cell"), processor);
+
+            LoadedDataset? fromStream;
+            using (var stream = File.OpenRead(path))
+                fromStream = LoadedDatasetProjector.Project(new DatasetId("cell"), "S-57", stream);
+
+            Assert.NotNull(fromProcessor);
+            Assert.NotNull(fromStream);
+            Assert.Equal("S-57", fromStream!.Spec.Name);
+            Assert.Equal(fromProcessor!.Spec, fromStream.Spec);
+            Assert.Equal(fromProcessor.Bounds, fromStream.Bounds);
+
+            var expected = ((S101DatasetData)fromProcessor.Data).Dataset;
+            var actual = ((S101DatasetData)fromStream.Data).Dataset;
+            Assert.Equal(
+                expected.Document.Identification.ProductSpecification,
+                actual.Document.Identification.ProductSpecification);
+            Assert.Equal(
+                expected.Document.FeatureTypeCatalogue.Values.Order(),
+                actual.Document.FeatureTypeCatalogue.Values.Order());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [SkippableFact]
+    public void FileDatasetCatalog_build_projects_s57_cell_with_s57_identity()
+    {
+        var path = S57FixturePath();
+        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+
+        var catalog = FileDatasetCatalog.Build(
+            [new FileDatasetInput(new DatasetId("US5MA1BO"), "S-57", path)]);
+
+        Assert.Empty(catalog.Warnings);
+        var loaded = Assert.Single(catalog.Datasets);
+        Assert.Equal("S-57", loaded.Spec.Name);
+        Assert.NotEqual(LoadedDatasetProjector.WorldBounds, loaded.Bounds);
+    }
+
+    private static string S57FixturePath()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "tests", "datasets", "S57", "US5MA1BO", "US5MA1BO.000");
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return Path.Combine("tests", "datasets", "S57", "US5MA1BO", "US5MA1BO.000");
     }
 
     [Fact]
