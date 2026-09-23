@@ -102,12 +102,13 @@ S-101 cell:
   proving the tiled overlay composites headlessly. Skipped in CI (real ENC data
   is never committed).
 
-Rendering uses `EcdisDisplayCategory.Standard` to match the live viewer's
-default display mode. (The legacy `S101RenderingTests` baselines use the
-harness's historical `DisplayCategory = null`, i.e. no display-mode filter,
-which draws supplementary `OtherInformation` content the live product hides at
-`Standard` — so those baselines are **not** comparable pixel-for-pixel with
-these goldens.)
+Rendering uses `EcdisDisplayCategory.Standard`, the live viewer's default
+display mode and, since #357, the harness default. (`S101RenderingTests` render
+the same cell with `DisplayCategory = null`, i.e. no display-mode filter, on
+purpose: they guard the supplementary `OtherInformation` content, including the
+pattern fills whose boundaries their Dusk/Night snapshots pin, which the live
+product hides at `Standard`. So those baselines are **not** comparable
+pixel-for-pixel with these goldens.)
 
 ### What the headless path does *not* cover
 
