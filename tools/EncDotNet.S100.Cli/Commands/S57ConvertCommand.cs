@@ -158,7 +158,7 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
         if (diagnostics.BridgeAggregationsEmitted > 0)
             table.AddRow("Aggregated bridges", diagnostics.BridgeAggregationsEmitted.ToString());
         if (diagnostics.BridgeEquipmentLinked > 0)
-            table.AddRow("Bridge lights linked", diagnostics.BridgeEquipmentLinked.ToString());
+            table.AddRow("Bridge equipment linked", diagnostics.BridgeEquipmentLinked.ToString());
         if (diagnostics.BridgeCollectionsUnjoined > 0)
             table.AddRow("Bridge collections not joined", diagnostics.BridgeCollectionsUnjoined.ToString());
 

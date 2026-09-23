@@ -154,18 +154,18 @@ public sealed class S57TranslationDiagnostics
     public int BridgeAggregationsEmitted { get; internal set; }
 
     /// <summary>
-    /// Number of lights linked to an aggregated <c>Bridge</c> as
-    /// <c>theEquipment</c> of a <c>StructureEquipment</c> association: the
-    /// lights an S-57 bridge <c>C_AGGR</c> collects, where the target Feature
-    /// Catalogue binds that light class on <c>Bridge</c>. A light listed by
-    /// two collections is linked (and counted) once.
+    /// Number of lights and signal stations (warning and traffic) linked to a <c>Bridge</c>
+    /// as <c>theEquipment</c> of a <c>StructureEquipment</c> association: the
+    /// ones an S-57 bridge <c>C_AGGR</c> collects, where the target Feature
+    /// Catalogue binds that class on <c>Bridge</c>. One listed by two
+    /// collections is linked (and counted) once.
     /// </summary>
     public int BridgeEquipmentLinked { get; internal set; }
 
     /// <summary>
     /// Number of S-57 bridge <c>C_AGGR</c> collections whose <c>BRIDGE</c>
     /// members mix curves and surfaces, which no one <c>Bridge</c> geometry can
-    /// hold. Their members convert one by one, each light linked to the nearest
+    /// hold. Their members convert one by one, each piece of equipment linked to the nearest
     /// member <c>Bridge</c>, and the collection itself is not converted.
     /// Members that merely do not join give a multi-part <c>Bridge</c>.
     /// </summary>
