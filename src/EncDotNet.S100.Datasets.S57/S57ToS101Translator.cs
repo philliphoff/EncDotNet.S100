@@ -1220,10 +1220,10 @@ public sealed class S57ToS101Translator
             public List<uint> ComponentRecordIds { get; } = [];
         }
 
-        // A bridge collection whose BRIDGE members do not join into one curve
-        // or one surface. Until a multi-part Bridge is supported (#643), its members
-        // convert one by one (each Bridge keeps its own geometry, so its name
-        // is still drawn) and each light is linked to the nearest member Bridge.
+        // A bridge collection whose BRIDGE members mix curves and surfaces, which
+        // no one Bridge geometry can hold. Its members convert one by one (each
+        // Bridge keeps its own geometry, so its name is still drawn) and each
+        // light is linked to the nearest member Bridge.
         private sealed record UnjoinedBridgeCollection(
             IReadOnlyList<int> BridgeMemberIndices,
             IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> EquipmentMembers);
@@ -1320,10 +1320,11 @@ public sealed class S57ToS101Translator
                 if (!qualifies || bridges.Count == 0) continue;
 
                 // The Bridge geometry is resolved here, so that a collection
-                // whose parts do not join is left to convert member by member
-                // rather than as a Bridge with no geometry, whose name the
-                // portrayal would not draw. MergeBridgeGeometry creates records
-                // only when it succeeds.
+                // whose members mix curves and surfaces is left to convert
+                // member by member rather than as a Bridge with no geometry,
+                // whose name the portrayal would not draw. Members that do not
+                // join give a multi-part geometry instead. MergeBridgeGeometry
+                // creates records only when it succeeds.
                 var spatials = MergeBridgeGeometry(bridges.Select(i => featureRecords[i]).ToList());
                 if (spatials.Count == 0)
                 {
@@ -1486,11 +1487,11 @@ public sealed class S57ToS101Translator
             return builder;
         }
 
-        // Links each light of a bridge collection whose parts do not join to
-        // the nearest of its member Bridges (by the S-57 geometry), which were
-        // emitted one by one. Bridge binds any number of lights in S-101 and
-        // S-401, so any member is a conformant structure; the nearest is the
-        // likeliest to be the span or pier the light marks.
+        // Links each light of a bridge collection whose members mix curves and
+        // surfaces to the nearest of its member Bridges (by the S-57
+        // geometry), which were emitted one by one. Bridge binds any number of
+        // lights in S-101 and S-401, so any member is a conformant structure;
+        // the nearest is the likeliest to be the span or pier the light marks.
         private void EmitUnjoinedBridgeEquipment(BridgeAggregationPlan plan)
         {
             var added = new Dictionary<uint, List<S101FeatureAssociation>>();
@@ -2106,12 +2107,14 @@ public sealed class S57ToS101Translator
 
         // Dissolves the geometries of the BRIDGE members of a bridge C_AGGR into
         // one Bridge geometry. A single member keeps its own geometry. Several
-        // curve members are chained by shared nodes into one curve; several
+        // curve members are chained by shared nodes into curves; several
         // surface members have their shared boundary edges removed and the
-        // remaining edges chained into rings. When the members mix primitives,
-        // or the result is not a single curve / single exterior ring, the
-        // Bridge is emitted without geometry (S-101 Bridge permits noGeometry)
-        // rather than as a flattened multi-part shape the renderers would join.
+        // remaining edges chained into rings. Members that do not join (twin or
+        // dual bridges, parts separated by gaps) give a multi-part geometry: one
+        // curve per chain, or one surface per exterior ring with the holes that
+        // lie inside it (S-100 Part 10a SPAS 0..*; drawn and queried part by
+        // part since #643). Only members that mix curves and surfaces yield no
+        // geometry, which leaves the collection to convert member by member.
         private IReadOnlyList<S101SpatialAssociation> MergeBridgeGeometry(
             IReadOnlyList<EncDotNet.S57.S57FeatureRecord> members)
         {
@@ -2143,9 +2146,11 @@ public sealed class S57ToS101Translator
 
             if (primitive == 2)
             {
-                var chains = ChainEdgesIntoRings(OrientChainSeed(exterior));
-                if (chains.Count != 1) return [];
-                return chains[0]
+                // One chain per connected run of edges, each walked from a free
+                // end; consecutive chains do not meet, so they read back as
+                // separate parts.
+                return ChainPaths(exterior)
+                    .SelectMany(chain => chain)
                     .Select(u => new S101SpatialAssociation(S101RcnmCurveSegment, u.RecordId, u.Orientation))
                     .ToList();
             }
@@ -2157,11 +2162,96 @@ public sealed class S57ToS101Translator
                 var counts = exterior.GroupBy(u => u.RecordId).ToDictionary(g => g.Key, g => g.Count());
                 var outline = exterior.Where(u => counts[u.RecordId] == 1).ToList();
                 var outlineRings = ChainEdgesIntoRings(outline);
-                if (outlineRings.Count != 1) return [];
-                return BuildSurface(outlineRings, ChainEdgesIntoRings(interior));
+                var holes = ChainEdgesIntoRings(interior);
+                if (outlineRings.Count <= 1)
+                    return outlineRings.Count == 0 ? [] : BuildSurface(outlineRings, holes);
+
+                // Several rings: an outline ring inside another is a hole of the
+                // union (members around a gap); every other ring is the exterior
+                // of its own surface, which takes the holes that lie inside it.
+                var positions = outlineRings.Select(RingPositions).ToList();
+                var exteriors = Enumerable.Range(0, outlineRings.Count)
+                    .Where(i => positions[i].Count == 0
+                        || !Enumerable.Range(0, outlineRings.Count)
+                            .Any(j => j != i && RingContains(positions[j], Probe(positions[i]))))
+                    .ToList();
+                var allHoles = holes
+                    .Concat(Enumerable.Range(0, outlineRings.Count).Except(exteriors).Select(i => outlineRings[i]))
+                    .ToList();
+
+                var spatials = new List<S101SpatialAssociation>();
+                foreach (var e in exteriors)
+                {
+                    var own = allHoles
+                        .Where(h => RingPositions(h) is { Count: > 0 } hp && RingContains(positions[e], Probe(hp)))
+                        .ToList();
+                    spatials.AddRange(BuildSurface([outlineRings[e]], own));
+                }
+                return spatials;
             }
 
             return [];
+        }
+
+        // Chains an open set of curve edges into one path per connected run,
+        // each seeded at a free end (see OrientChainSeed) so that it is walked
+        // whole rather than split where ChainEdgesIntoRings happened to start.
+        private List<List<S101CurveUsage>> ChainPaths(List<S101CurveUsage> edges)
+        {
+            var paths = new List<List<S101CurveUsage>>();
+            var remaining = edges;
+            while (remaining.Count > 0)
+            {
+                var path = ChainEdgesIntoRings(OrientChainSeed(remaining))[0];
+                paths.Add(path);
+                var usedIds = path.Select(u => u.RecordId).ToHashSet();
+                remaining = remaining.Where(u => !usedIds.Contains(u.RecordId)).ToList();
+            }
+            return paths;
+        }
+
+        // The (Y, X) positions of a chained ring of curve segments, following
+        // each segment's orientation.
+        private List<(int Y, int X)> RingPositions(List<S101CurveUsage> ring)
+        {
+            var positions = new List<(int Y, int X)>();
+            foreach (var usage in ring)
+            {
+                if (!CurveSegments.TryGetValue(usage.RecordId, out var segment)) continue;
+                var coords = new List<(int Y, int X)>();
+                foreach (var a in segment.PointAssociations.Where(a => a.Topology == TopologyBegin))
+                    if (Points.TryGetValue(a.RecordId, out var p)) coords.Add((p.Y, p.X));
+                coords.AddRange(segment.IntermediateCoordinates);
+                foreach (var a in segment.PointAssociations.Where(a => a.Topology == TopologyEnd))
+                    if (Points.TryGetValue(a.RecordId, out var p)) coords.Add((p.Y, p.X));
+                if (usage.Orientation == OrientationReverse) coords.Reverse();
+                positions.AddRange(coords);
+            }
+            return positions;
+        }
+
+        // A point on a ring to test its containment in another: the midpoint of
+        // its first segment, which lies on another ring's boundary only if the
+        // two share that edge (shared edges are already dissolved), unlike a
+        // vertex, which touching rings can share.
+        private static (double Y, double X) Probe(List<(int Y, int X)> ring)
+            => ring.Count == 1
+                ? (ring[0].Y, ring[0].X)
+                : ((ring[0].Y + ring[1].Y) / 2.0, (ring[0].X + ring[1].X) / 2.0);
+
+        // Even-odd point-in-ring test in the dataset's integer coordinates.
+        private static bool RingContains(List<(int Y, int X)> ring, (double Y, double X) point)
+        {
+            bool inside = false;
+            for (int i = 0, j = ring.Count - 1; i < ring.Count; j = i++)
+            {
+                var (yi, xi) = ring[i];
+                var (yj, xj) = ring[j];
+                if ((yi > point.Y) != (yj > point.Y)
+                    && point.X < (double)(xj - xi) * (point.Y - yi) / (yj - yi) + xi)
+                    inside = !inside;
+            }
+            return inside;
         }
 
         // Reorders an open set of curve edges so that the chain seed starts at

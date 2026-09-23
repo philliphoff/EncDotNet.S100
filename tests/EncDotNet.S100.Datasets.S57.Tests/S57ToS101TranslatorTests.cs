@@ -3237,11 +3237,10 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_BridgeCAggr_DisjointCurves_ConvertMemberByMember_LightsLinkToTheNearestBridge()
+    public void Translate_BridgeCAggr_DisjointCurves_EmitAMultiPartBridge()
     {
-        // Until a multi-part Bridge is supported, a collection whose parts do
-        // not join converts member by member: each Bridge keeps its geometry
-        // (so its name is drawn) and each light links to the nearest member.
+        // Twin bridges whose curves do not meet aggregate into one Bridge with
+        // one curve part per bridge (S-100 Part 10a SPAS 0..*; issue #643).
         var vectors = new[]
         {
             Node(1, 0, 0), Node(2, 0, 100), Node(3, 50, 0), Node(4, 50, 100),
@@ -3254,14 +3253,69 @@ public class S57ToS101TranslatorTests
         var b = Feat(2, 2, 11, featureIdentificationNumber: 11,
             attributes: new[] { Attr(AttlObjnam, "South Bridge") },
             spatialPointers: new[] { Sp(RcnmEdge, 11, 1, 0, 0) });
-        var nearA = Feat(3, 1, 75, featureIdentificationNumber: 20,
+        var lightA = Feat(3, 1, 75, featureIdentificationNumber: 20,
             attributes: new[] { Attr(107, "1"), Attr(75, "4") },
             spatialPointers: new[] { Sp(RcnmIsolatedNode, 5, 1, 0, 0) });
-        var nearB = Feat(4, 1, 75, featureIdentificationNumber: 21,
+        var lightB = Feat(4, 1, 75, featureIdentificationNumber: 21,
             attributes: new[] { Attr(107, "1"), Attr(75, "3") },
             spatialPointers: new[] { Sp(RcnmIsolatedNode, 6, 1, 0, 0) });
         var aggr = Feat(5, 255, 400, featureIdentificationNumber: 99,
             attributes: new[] { Attr(AttlObjnam, "Twin Bridges") },
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 20), Ffpt(540, 21) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { a, b, lightA, lightB, aggr }), diag);
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        Assert.Equal(99u, bridge.FeatureIdentificationNumber);
+        Assert.Equal(2, bridge.SpatialAssociations.Count);
+        Assert.All(bridge.SpatialAssociations, x => Assert.Equal(120, x.RecordName));
+
+        var equipment = bridge.FeatureAssociations
+            .Where(x => s101.FeatureAssociationCatalogue[x.NumericCode] == "StructureEquipment")
+            .Select(x => x.RecordId)
+            .Order();
+        Assert.Equal(
+            s101.Features.Where(f => ClassOf(s101, f) == "LightAllAround").Select(f => f.RecordId).Order(),
+            equipment);
+
+        // The members' names are kept as names not for chart display.
+        var name = ComplexInstance(s101, bridge.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Twin Bridges", GetSubAttribute(s101, name, "name"));
+        Assert.NotEmpty(ComplexInstance(s101, bridge.Attributes, "featureName", 3));
+
+        Assert.Equal(1, diag.BridgeAggregationsEmitted);
+        Assert.Equal(0, diag.BridgeCollectionsUnjoined);
+        Assert.Equal(2, diag.BridgeEquipmentLinked);
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_MixedCurveAndSurface_ConvertMemberByMember_LightsLinkToTheNearestBridge()
+    {
+        // A curve member and a surface member cannot form one Bridge geometry,
+        // so the members convert one by one (each keeps its geometry and name)
+        // and each light links to the nearest member Bridge.
+        var vectors = new[]
+        {
+            Node(1, 0, 0), Node(2, 0, 100),
+            Node(3, 50, 0), Node(4, 50, 100), Node(5, 60, 100), Node(6, 60, 0),
+            Node(7, 1, 50, RcnmIsolatedNode), Node(8, 49, 50, RcnmIsolatedNode),
+            Edge(10, 1, 2), Edge(11, 3, 4), Edge(12, 4, 5), Edge(13, 5, 6), Edge(14, 6, 3),
+        };
+        var a = Feat(1, 2, 11, featureIdentificationNumber: 10,
+            attributes: new[] { Attr(AttlVerclr, "20"), Attr(AttlObjnam, "North Bridge") },
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
+        var b = Feat(2, 3, 11, featureIdentificationNumber: 11,
+            attributes: new[] { Attr(AttlObjnam, "South Bridge") },
+            spatialPointers: new[] { Sp(RcnmEdge, 11, 1, 1, 0), Sp(RcnmEdge, 12, 1, 1, 0), Sp(RcnmEdge, 13, 1, 1, 0), Sp(RcnmEdge, 14, 1, 1, 0) });
+        var nearA = Feat(3, 1, 75, featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "1"), Attr(75, "4") },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 7, 1, 0, 0) });
+        var nearB = Feat(4, 1, 75, featureIdentificationNumber: 21,
+            attributes: new[] { Attr(107, "1"), Attr(75, "3") },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 8, 1, 0, 0) });
+        var aggr = Feat(5, 255, 400, featureIdentificationNumber: 99,
             featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 20), Ffpt(540, 21) });
         var diag = new S57TranslationDiagnostics();
 
@@ -3271,22 +3325,76 @@ public class S57ToS101TranslatorTests
         var bridges = s101.Features.Where(f => ClassOf(s101, f) == "Bridge").ToList();
         Assert.Equal(new[] { 10u, 11u }, bridges.Select(f => f.FeatureIdentificationNumber).Order());
         Assert.All(bridges, f => Assert.NotEmpty(f.SpatialAssociations));
-        var bridgeA = bridges.Single(f => f.FeatureIdentificationNumber == 10);
-        var bridgeB = bridges.Single(f => f.FeatureIdentificationNumber == 11);
 
         uint LightOf(uint fid) => s101.Features.Single(f => f.FeatureIdentificationNumber == fid).RecordId;
         IEnumerable<uint> Equipment(S101FeatureRecord f) => f.FeatureAssociations
             .Where(x => s101.FeatureAssociationCatalogue[x.NumericCode] == "StructureEquipment")
             .Select(x => x.RecordId);
-        Assert.Equal(new[] { LightOf(20) }, Equipment(bridgeA));
-        Assert.Equal(new[] { LightOf(21) }, Equipment(bridgeB));
+        Assert.Equal(new[] { LightOf(20) }, Equipment(bridges.Single(f => f.FeatureIdentificationNumber == 10)));
+        Assert.Equal(new[] { LightOf(21) }, Equipment(bridges.Single(f => f.FeatureIdentificationNumber == 11)));
 
-        // Bridge A keeps its span component alongside the light.
-        AssertBridgeComponentsIncluding(s101, bridgeA, SingleOfClass(s101, "SpanFixed"));
         Assert.Equal(0, diag.BridgeAggregationsEmitted);
         Assert.Equal(1, diag.BridgeCollectionsUnjoined);
         Assert.Equal(2, diag.BridgeEquipmentLinked);
         Assert.Equal(1, diag.UnmappedObjectClasses[400]);
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_DisjointSurfaces_EmitOneSurfacePerPart_EachWithItsOwnHoles()
+    {
+        // Square A (0..100) with a hole (40..60) and square B (200..300) apart.
+        var vectors = new[]
+        {
+            Node(1, 0, 0), Node(2, 40, 40), Node(3, 0, 200),
+            Edge(10, 1, 1, (0, 100), (100, 100), (100, 0)),
+            Edge(11, 2, 2, (40, 60), (60, 60), (60, 40)),
+            Edge(12, 3, 3, (0, 300), (100, 300), (100, 200)),
+        };
+        var a = Feat(1, 3, 11, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 11, 1, 2, 0) });
+        var b = Feat(2, 3, 11, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmEdge, 12, 1, 1, 0) });
+        var aggr = Feat(3, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s101 = new S57ToS101Translator().Translate(BuildDocument(vectors, new[] { a, b, aggr }));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var surfaces = bridge.SpatialAssociations.Select(x => s101.Surfaces[x.RecordId]).ToList();
+        Assert.Equal(2, surfaces.Count);
+        Assert.All(surfaces, sf => Assert.Single(sf.RingAssociations, r => r.Usage == 1));
+        Assert.Equal(new[] { 0, 1 }, surfaces.Select(sf => sf.RingAssociations.Count(r => r.Usage == 2)).Order());
+    }
+
+    [Fact]
+    public void Translate_BridgeCAggr_MembersAroundAGap_EmitOneSurfaceWithAHole()
+    {
+        // Two C-shaped members around a 1..3 square gap in a 0..4 square
+        // (scaled by 100): their union's outline has two rings, and the inner
+        // ring is a hole of the one surface, not a surface of its own.
+        var vectors = new[]
+        {
+            Node(1, 0, 200), Node(2, 100, 200), Node(3, 300, 200), Node(4, 400, 200),
+            Edge(10, 1, 2),                                   // shared (0,2)→(1,2)
+            Edge(11, 3, 4),                                   // shared (3,2)→(4,2)
+            Edge(12, 4, 1, (400, 0), (0, 0)),                 // left outer
+            Edge(13, 2, 3, (100, 100), (300, 100)),           // left inner
+            Edge(14, 1, 4, (0, 400), (400, 400)),             // right outer
+            Edge(15, 3, 2, (300, 300), (100, 300)),           // right inner
+        };
+        var left = Feat(1, 3, 11, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 13, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0), Sp(RcnmEdge, 12, 1, 1, 0) });
+        var right = Feat(2, 3, 11, featureIdentificationNumber: 11,
+            spatialPointers: new[] { Sp(RcnmEdge, 14, 1, 1, 0), Sp(RcnmEdge, 11, 2, 1, 0), Sp(RcnmEdge, 15, 1, 1, 0), Sp(RcnmEdge, 10, 2, 1, 0) });
+        var aggr = Feat(3, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11) });
+
+        var s101 = new S57ToS101Translator().Translate(BuildDocument(vectors, new[] { left, right, aggr }));
+
+        var bridge = SingleOfClass(s101, "Bridge");
+        var surface = s101.Surfaces[Assert.Single(bridge.SpatialAssociations).RecordId];
+        Assert.Single(surface.RingAssociations, r => r.Usage == 1);
+        Assert.Single(surface.RingAssociations, r => r.Usage == 2);
     }
 
     private static void AssertBridgeComponentsIncluding(

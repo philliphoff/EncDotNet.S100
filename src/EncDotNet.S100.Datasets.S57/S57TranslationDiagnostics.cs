@@ -164,10 +164,10 @@ public sealed class S57TranslationDiagnostics
 
     /// <summary>
     /// Number of S-57 bridge <c>C_AGGR</c> collections whose <c>BRIDGE</c>
-    /// members do not join into one curve or one surface. Until a multi-part
-    /// <c>Bridge</c> is supported, their members convert one by one, each light
-    /// linked to the nearest member <c>Bridge</c>, and the collection itself is
-    /// not converted.
+    /// members mix curves and surfaces, which no one <c>Bridge</c> geometry can
+    /// hold. Their members convert one by one, each light linked to the nearest
+    /// member <c>Bridge</c>, and the collection itself is not converted.
+    /// Members that merely do not join give a multi-part <c>Bridge</c>.
     /// </summary>
     public int BridgeCollectionsUnjoined { get; internal set; }
 
