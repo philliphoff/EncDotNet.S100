@@ -107,7 +107,7 @@ internal static class S100McpServerToolFactory
             "Returns dataset IDs, spec, bounds (decimal degrees, WGS-84), and UTC time range. " +
             "Read-only and side-effect free.";
 
-        var del = ([Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec.")] string? spec = null,
+        var del = ([Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional bounding-box south latitude (decimal degrees, WGS-84). Pass null to omit the bbox filter; if any one of south/west/north/east is supplied, all four must be.")] double? south = null,
                    [Description("Optional bounding-box west longitude (decimal degrees, WGS-84).")] double? west = null,
                    [Description("Optional bounding-box north latitude (decimal degrees, WGS-84).")] double? north = null,
@@ -171,7 +171,7 @@ internal static class S100McpServerToolFactory
             "Catalogue return feature_catalogue_not_available, whose details list the accepted " +
             "spec names. Read-only and side-effect free.";
 
-        var del = ([Description("Product specification whose bundled Feature Catalogue to inspect (e.g. \"S-101\" or \"S-124/1.5.0\"). Edition is ignored.")] string spec,
+        var del = ([Description("Product specification whose bundled Feature Catalogue to inspect (e.g. \"S-101\" or \"S-124/1.5.0\"). Edition is ignored. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
                    [Description("Optional feature-type code, name, or alias (case-insensitive). Null lists every feature type with attribute counts only; supplied returns full attribute detail.")] string? featureType = null,
                    [Description("When true (default), enumerated attributes carry their full listed values; set false to omit them.")] bool includeListedValues = true,
                    CancellationToken ct = default) =>
@@ -201,7 +201,7 @@ internal static class S100McpServerToolFactory
             "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step). " +
             "Times outside a dataset's range clamp to its first or last step. Read-only and side-effect free.";
 
-        var del = ([Description("Spec of the coverage to sample (S-102, S-104, or S-111; e.g. \"S-102/2.1.0\").")] string spec,
+        var del = ([Description("Spec of the coverage to sample (S-102, S-104, or S-111; e.g. \"S-102/2.1.0\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
                    [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
                    [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
                    [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. Nearest time step is selected; times outside the dataset range clamp to the first or last step.")] DateTimeOffset? time = null,
@@ -239,7 +239,7 @@ internal static class S100McpServerToolFactory
 
         var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90]. Ignored when 'query' is supplied.")] double latitude,
                    [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180]. Ignored when 'query' is supplied.")] double longitude,
-                   [Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    [Description("Optional spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}. When supplied, overrides latitude/longitude.")] string? query = null,
@@ -278,7 +278,7 @@ internal static class S100McpServerToolFactory
 
         var del = ([Description("Pick latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
                    [Description("Pick longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
-                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec.")] string? spec = null,
+                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
                    [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
                    CancellationToken ct = default) =>
@@ -316,7 +316,7 @@ internal static class S100McpServerToolFactory
 
         var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
                    [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
-                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec.")] string? spec = null,
+                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] string? datasetId = null,
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"LightAllAround\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null matches every feature type.")] string? featureType = null,
                    [Description("Optional maximum distance in metres; features farther than this are excluded. null imposes no limit.")] double? maxDistanceMeters = null,
@@ -360,7 +360,7 @@ internal static class S100McpServerToolFactory
             "(per-feature-type counts of the full match set). Pagination is server-side.";
 
         var del = ([Description("Spatial query envelope, supplied either as a JSON object (preferred) or a JSON string containing one. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] JsonElement query,
-                   [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
                    [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
                    [Description("Optional attribute-value predicates (logical AND). Either a code→value map for equality, e.g. {\"categoryOfLateralMark\":\"1\"}, or an array of explicit predicates, e.g. [{\"attribute\":\"valueOfDepth\",\"op\":\"ge\",\"value\":\"10\"},{\"attribute\":\"objectName\",\"op\":\"exists\"}]. Operators: exists, notExists, eq, ne, contains, startsWith, gt, ge, lt, le.")] string? attributes = null,
@@ -402,7 +402,7 @@ internal static class S100McpServerToolFactory
             "count and how many of those features have resolvable geometry. Read-only and " +
             "side-effect free.";
 
-        var del = ([Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
+        var del = ([Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional dataset identifier (typically from list_datasets); null counts across every matching dataset.")] string? datasetId = null,
                    [Description("Optional spatial query envelope, supplied as a JSON object (preferred) or a JSON string (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are counted; geometry-less features are excluded.")] JsonElement? query = null,
                    CancellationToken ct = default) =>
@@ -436,7 +436,7 @@ internal static class S100McpServerToolFactory
             "dataset, and/or a spatial envelope. Results are paginated and read-only.";
 
         var del = ([Description("The text to search for in feature names (OBJNAM / NOBJNM / objectName / featureName). Required.")] string text,
-                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] string? datasetId = null,
                    [Description("Optional spatial query envelope, supplied as a JSON object (preferred) or a JSON string (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are searched; geometry-less features are excluded.")] JsonElement? query = null,
                    [Description("When true the match is case-sensitive; default false.")] bool caseSensitive = false,
@@ -476,7 +476,7 @@ internal static class S100McpServerToolFactory
             "The polyline's corridor width is ignored (corridors apply to membership queries, not " +
             "point sampling).";
 
-        var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", or \"S-111/1.1.1\").")] string spec,
+        var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", or \"S-111/1.1.1\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
                    [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
                    [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
                    [Description("Optional temporal query JSON envelope applied to every vertex; same shape as sample_coverage. Takes precedence over 'time'.")] string? times = null,
@@ -539,6 +539,9 @@ internal static class S100McpServerToolFactory
             SerializerOptions = JsonOptions,
         });
     }
+
+    private static SpecRef? ParseSpec(JsonElement? spec)
+        => ParseSpec(SpecArgumentReader.ReadText(spec));
 
     private static SpecRef? ParseSpec(string? spec)
     {

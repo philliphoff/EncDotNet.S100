@@ -157,6 +157,13 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 > [Shared vs host-specific tool implementations](#shared-vs-host-specific-tool-implementations)
 > below for the exact split.
 
+Every `spec` argument accepts either a string (`"S-101"`, `"S-124/1.5.0"`;
+the edition is optional) or the `{"name":…,"edition":{"major":…,"minor":…,"clarification":…}}`
+object the tools return in their results, so a result's `spec` can be passed
+straight into the next call. `edition` is optional in the object form, and an
+all-zero edition means "any edition". Any other shape is rejected with an
+`invalid_argument` error that names `spec`.
+
 ### Read-only vs mutating tools
 
 Tools fall into two groups:
