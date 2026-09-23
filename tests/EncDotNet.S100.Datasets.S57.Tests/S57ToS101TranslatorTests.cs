@@ -978,6 +978,8 @@ public class S57ToS101TranslatorTests
     [InlineData("S-401", "LightFogDetector", false)] // S-401 defines no LightFogDetector
     [InlineData("S-101", "NoticeMark", false)]       // S-101 defines no NoticeMark
     [InlineData("S-401", "NoticeMark", true)]
+    [InlineData("S-101", "SignalStationWarning", true)]
+    [InlineData("S-401", "SignalStationWarning", true)]
     public void S101FeatureAttributeBindings_BindsFeatureAssociation_FollowsCatalogue(
         string spec, string equipment, bool expected)
     {
@@ -3702,6 +3704,35 @@ public class S57ToS101TranslatorTests
         Assert.Empty(SingleOfClass(doc, "ShorelineConstruction").FeatureAssociations);
         Assert.Equal(1, diag.BridgeAggregationsEmitted);
         Assert.Equal(2, diag.BridgeEquipmentLinked);
+    }
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-401")]
+    public void Translate_BridgeCAggrWithWarningSignalStation_LinksItToTheBridgeAsEquipment(string spec)
+    {
+        // A vertical clearance indicator (SISTAW, CATSIW 16) must be aggregated
+        // to its bridge by C_AGGR (IENC Encoding Guide 2.4.1, clause I.3.3); both
+        // FCs bind SignalStationWarning on Bridge as theEquipment.
+        var target = spec == "S-401" ? S57TranslationTarget.S401 : S57TranslationTarget.S101;
+        var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts();
+        var indicator = Feat(5, 1, 124, featureIdentificationNumber: 20, // SISTAW
+            attributes: new[] { Attr(62, "16") },                         // CATSIW
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
+        var aggr = Feat(6, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 20) });
+        var diag = new S57TranslationDiagnostics();
+
+        var doc = S57ToS101Translator.ForTarget(target).Translate(
+            BuildDocument(vectors, new[] { fixedSpan, openingSpan, indicator, aggr }), diag);
+
+        var bridge = SingleOfClass(doc, "Bridge");
+        var station = SingleOfClass(doc, "SignalStationWarning");
+        var link = Assert.Single(bridge.FeatureAssociations,
+            a => doc.FeatureAssociationCatalogue[a.NumericCode] == "StructureEquipment");
+        Assert.Equal(station.RecordId, link.RecordId);
+        Assert.Equal("theEquipment", doc.RoleCatalogue[link.RoleCode]);
+        Assert.Equal(1, diag.BridgeEquipmentLinked);
     }
 
     [Fact]
