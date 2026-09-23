@@ -62,10 +62,12 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
             var coords = new List<GeoPosition>();
             foreach (var curve in feature.Curves)
                 coords.AddRange(curve);
+            var parts = CurveParts.Join(feature.Curves);
             return new FeatureGeometry
             {
                 Type = GeometryType.Curve,
                 Coordinates = coords,
+                Parts = parts.Count > 1 ? parts : [],
             };
         }
 

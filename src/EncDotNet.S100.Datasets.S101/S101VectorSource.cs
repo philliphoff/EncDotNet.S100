@@ -134,6 +134,9 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
             var interiorRings = geomType == GeometryType.Surface
                 ? ResolveSurfaceInteriorRings(feat, doc)
                 : [];
+            IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+            if (geomType == GeometryType.Curve && feat.SpatialAssociations.Count > 1)
+                (coords, curves) = ResolveCurveParts(feat, doc);
 
             features.Add(new Feature
             {
@@ -142,6 +145,7 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
                 GeometryType = geomType,
                 Coordinates = coords,
                 InteriorRings = interiorRings,
+                Curves = curves,
                 Attributes = ExtractAttributes(feat, doc),
             });
         }
@@ -228,6 +232,34 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
         }
 
         return coords;
+    }
+
+    // Resolves a curve feature's curves, one per spatial association, and
+    // their concatenation (the Coordinates ResolveCurveGeometry would give).
+    // The curves are returned only when they do not all meet end to start,
+    // so FeatureGeometryProvider and the query tools treat the feature's
+    // parts apart rather than joining them (issue #643); for a connected
+    // curve they are empty and Coordinates is its only curve.
+    private static (IReadOnlyList<GeoPosition> Coordinates, IReadOnlyList<IReadOnlyList<GeoPosition>> Curves)
+        ResolveCurveParts(S101FeatureRecord feature, S101Document doc)
+    {
+        var all = new List<GeoPosition>();
+        var ranges = new List<(int Start, int Count)>(feature.SpatialAssociations.Count);
+        bool connected = true;
+        foreach (var spa in feature.SpatialAssociations)
+        {
+            var start = all.Count;
+            ResolveCurveCoords(spa.RecordName, spa.RecordId, spa.Orientation, doc, all);
+            if (all.Count == start) continue;
+
+            if (ranges.Count > 0 && all[start - 1] != all[start])
+                connected = false;
+            ranges.Add((start, all.Count - start));
+        }
+
+        if (connected)
+            return (all, []);
+        return (all, ranges.Select(r => (IReadOnlyList<GeoPosition>)all.GetRange(r.Start, r.Count)).ToList());
     }
 
     private static IReadOnlyList<GeoPosition> ResolveSurfaceGeometry(
