@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
