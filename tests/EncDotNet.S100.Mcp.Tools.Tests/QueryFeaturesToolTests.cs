@@ -347,4 +347,30 @@ public class QueryFeaturesToolTests
         Assert.True(precise.TryGetValue(out var value));
         Assert.Equal("area", Assert.Single(value.Features).FeatureId);
     }
+
+    [Fact]
+    public async Task Polyline_corridor_excludes_features_off_a_bending_route_without_precise()
+    {
+        // Regression for #555: the default (non-precise) path used the envelope
+        // of all vertices, so the corridor width had no effect on a bending route.
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("warn",
+            S124Synth.Dataset(
+                PointFeature("on-first-leg", 0.001, 0.5),
+                PointFeature("on-second-leg", 0.5, 1.001),
+                PointFeature("in-the-corner", 0.5, 0.5)),
+            bounds: LoadedDatasetFactory.Box(-1, -1, 2, 2)));
+        var tool = new QueryFeaturesTool(catalog);
+
+        var route = new GeoQuery.Polyline(new GeoPolyline(
+            [new GeoPoint(0, 0), new GeoPoint(0, 1), new GeoPoint(1, 1)],
+            CorridorWidthMeters: 500));
+
+        var result = await tool.InvokeAsync(new QueryFeaturesRequest(route));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(
+            ["on-first-leg", "on-second-leg"],
+            value.Features.Select(f => f.FeatureId).Order().ToArray());
+    }
 }

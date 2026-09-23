@@ -32,6 +32,42 @@ public class SpatialPredicatesTests
         Assert.True(SpatialPredicates.Intersects(bounds, query));
     }
 
+    // An L-shaped route: east along the equator, then north along 1°E.
+    private static GeoPolyline LRoute(double? corridorWidthMeters) => new(
+        [new GeoPoint(0, 0), new GeoPoint(0, 1), new GeoPoint(1, 1)],
+        corridorWidthMeters);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(1_000.0)]
+    public void Intersects_polyline_ignores_the_empty_corner_of_a_bending_route(double? corridor)
+    {
+        // Inside the route's overall envelope, but ~55 km from either leg.
+        var offTrack = new BoundingBox(0.5, 0.2, 0.6, 0.3);
+
+        Assert.False(SpatialPredicates.Intersects(offTrack, new GeoQuery.Polyline(LRoute(corridor))));
+    }
+
+    [Fact]
+    public void Intersects_polyline_matches_a_box_within_the_corridor_of_a_later_leg()
+    {
+        // ~1.1 km west of the northbound leg; a 2 km corridor reaches it.
+        var nearLeg = new BoundingBox(0.5, 0.989, 0.51, 0.99);
+
+        Assert.True(SpatialPredicates.Intersects(nearLeg, new GeoQuery.Polyline(LRoute(2_000.0))));
+        Assert.False(SpatialPredicates.Intersects(nearLeg, new GeoQuery.Polyline(LRoute(500.0))));
+    }
+
+    [Fact]
+    public void Intersects_polyline_result_depends_on_corridor_width()
+    {
+        // ~5.5 km north of the eastbound leg, clear of the northbound one.
+        var box = new BoundingBox(0.05, 0.4, 0.06, 0.5);
+
+        Assert.False(SpatialPredicates.Intersects(box, new GeoQuery.Polyline(LRoute(1_000.0))));
+        Assert.True(SpatialPredicates.Intersects(box, new GeoQuery.Polyline(LRoute(10_000.0))));
+    }
+
     [Fact]
     public void Contains_point_returns_true_on_boundary()
     {

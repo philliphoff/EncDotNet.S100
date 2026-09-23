@@ -62,11 +62,11 @@ public sealed record FindAtResult(
 /// <see cref="SampleCoverageTool"/>.
 /// </para>
 /// <para>
-/// For bbox, polygon, and polyline queries the tool projects the
-/// query to its coarse bounding box (polyline corridors are inflated
-/// by <c>CorridorWidthMeters</c> using an equirectangular
-/// approximation) and returns datasets whose bounds intersect that
-/// rectangle.
+/// For bbox and polygon queries the tool projects the query to its
+/// coarse bounding box and returns datasets whose bounds intersect that
+/// rectangle. Polyline queries match datasets whose bounds touch at
+/// least one segment's bounding box, inflated by
+/// <c>CorridorWidthMeters</c> using an equirectangular approximation.
 /// </para>
 /// <para>
 /// Bounds are treated as inclusive on every edge. Antimeridian-

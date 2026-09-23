@@ -13,17 +13,57 @@ public static class SpatialPredicates
     /// Returns <c>true</c> when <paramref name="box"/> intersects (or
     /// touches) <paramref name="query"/>'s coarse bounding box.
     /// </summary>
+    /// <remarks>
+    /// A <see cref="GeoQuery.Polyline"/> is tested segment by segment:
+    /// <paramref name="box"/> must touch the bounding box of at least one
+    /// segment, inflated by the corridor half-width. Testing against the
+    /// envelope of every vertex instead would match anything inside the
+    /// route's overall extent — kilometres off a bending track — whatever
+    /// the corridor width.
+    /// </remarks>
     public static bool Intersects(BoundingBox box, GeoQuery query)
     {
         ArgumentNullException.ThrowIfNull(box);
         ArgumentNullException.ThrowIfNull(query);
 
-        var q = query.GetBoundingBox();
-        return box.WestLongitude <= q.EastLongitude
-            && box.EastLongitude >= q.WestLongitude
-            && box.SouthLatitude <= q.NorthLatitude
-            && box.NorthLatitude >= q.SouthLatitude;
+        var envelope = query.GetBoundingBox();
+        if (!Intersects(box, envelope.SouthLatitude, envelope.WestLongitude, envelope.NorthLatitude, envelope.EastLongitude))
+        {
+            return false;
+        }
+
+        if (query is not GeoQuery.Polyline { Value: var polyline } || polyline.Vertices.Count < 3)
+        {
+            // A single segment's corridor box is the whole envelope.
+            return true;
+        }
+
+        var vertices = polyline.Vertices;
+        for (var i = 0; i < vertices.Count - 1; i++)
+        {
+            var (a, b) = (vertices[i], vertices[i + 1]);
+            var south = Math.Min(a.Latitude, b.Latitude);
+            var north = Math.Max(a.Latitude, b.Latitude);
+            var (latPad, lonPad) = GeoQuery.CorridorPadDegrees(south, north, polyline.CorridorWidthMeters);
+            if (Intersects(
+                    box,
+                    south - latPad,
+                    Math.Min(a.Longitude, b.Longitude) - lonPad,
+                    north + latPad,
+                    Math.Max(a.Longitude, b.Longitude) + lonPad))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    private static bool Intersects(BoundingBox box, double south, double west, double north, double east)
+        => box.WestLongitude <= east
+            && box.EastLongitude >= west
+            && box.SouthLatitude <= north
+            && box.NorthLatitude >= south;
 
     /// <summary>
     /// Returns <c>true</c> when <paramref name="box"/> contains every
