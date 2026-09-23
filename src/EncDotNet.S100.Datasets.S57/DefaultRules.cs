@@ -594,6 +594,7 @@ internal static class DefaultRules
         yield return A(92, "EXCLIT", "exhibitionConditionOfLight");
         yield return A(94, "FUNCTN", "function");
         yield return A(99, "HORLEN", "horizontalLength");
+        yield return A(100, "HORWID", "horizontalWidth");
         yield return A(106, "LIFCAP", "liftingCapacity");
         yield return A(108, "LITVIS", "lightVisibility");
         yield return A(109, "MARSYS", "marksNavigationalSystemOf");
