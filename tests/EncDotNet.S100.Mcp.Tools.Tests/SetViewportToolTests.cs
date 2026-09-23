@@ -174,14 +174,30 @@ public class SetViewportToolTests
         Assert.True(host.SetToBoundsCalled); // the bounds were applied before the echo failed
     }
 
+    [Theory]
+    [InlineData(45, 45)]
+    [InlineData(-90, 270)]
+    [InlineData(405, 45)]
+    [InlineData(-360, 0)]
+    public async Task Rotation_IsAppliedNormalised(double requested, double applied)
+    {
+        var host = new FakeViewport();
+
+        var result = AssertOk(await new SetViewportTool(Accessor(host)).InvokeAsync(new SetViewportRequest(
+            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: requested)));
+
+        Assert.Equal(applied, result.RotationDegrees);
+        Assert.Equal(applied, host.Current!.RotationDegrees);
+    }
+
     [Fact]
-    public async Task NonZeroRotation_IsRejected()
+    public async Task NonFiniteRotation_IsRejected()
     {
         var host = new FakeViewport();
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: 45))));
+                CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: double.NaN))));
         Assert.Equal("rotationDegrees", error.Parameter);
         Assert.Null(host.Current); // nothing applied
     }

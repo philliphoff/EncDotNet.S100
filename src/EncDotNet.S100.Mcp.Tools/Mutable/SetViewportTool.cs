@@ -27,7 +27,7 @@ public sealed record SetViewportRequest(
     [property: Description("Centre longitude in decimal degrees, WGS-84. Pair with centerLatitude and scaleDenominator; mutually exclusive with the bounding-box form.")] double? CenterLongitude = null,
     [property: Description("Centre latitude in decimal degrees, WGS-84. Pair with centerLongitude and scaleDenominator; mutually exclusive with the bounding-box form.")] double? CenterLatitude = null,
     [property: Description("Map scale denominator (e.g. 50000 for 1:50000); must be positive. Pair with centerLongitude/centerLatitude; mutually exclusive with the bounding-box form.")] double? ScaleDenominator = null,
-    [property: Description("Optional clockwise rotation in degrees; only 0 (north-up) is supported by the composite renderer, so any non-zero value is rejected. Applies to the centre+scale form.")] double? RotationDegrees = null,
+    [property: Description("Optional clockwise rotation in degrees (0 = north-up, 90 = north to the right); any finite value, normalised to [0, 360). The chart turns about the image centre and labels stay upright. Applies to the centre+scale form only.")] double? RotationDegrees = null,
     [property: Description("Bounding-box west edge (min longitude) in decimal degrees, WGS-84. Pair with the other three edges; mutually exclusive with the centre+scale form.")] double? MinLongitude = null,
     [property: Description("Bounding-box south edge (min latitude) in decimal degrees, WGS-84. Pair with the other three edges; mutually exclusive with the centre+scale form.")] double? MinLatitude = null,
     [property: Description("Bounding-box east edge (max longitude) in decimal degrees, WGS-84. Pair with the other three edges; mutually exclusive with the centre+scale form.")] double? MaxLongitude = null,
@@ -39,7 +39,7 @@ public sealed record SetViewportResult(
     [property: Description("Centre longitude of the applied viewport, decimal degrees WGS-84.")] double CenterLongitude,
     [property: Description("Centre latitude of the applied viewport, decimal degrees WGS-84.")] double CenterLatitude,
     [property: Description("Scale denominator of the applied viewport. For the bounds form this is resolved against a reference render surface and is re-fit to the actual size on each render.")] double ScaleDenominator,
-    [property: Description("Clockwise rotation in degrees of the applied viewport; always 0 today.")] double RotationDegrees,
+    [property: Description("Clockwise rotation in degrees of the applied viewport, normalised to [0, 360); 0 for the bounding-box form.")] double RotationDegrees,
     [property: Description("The viewport applied before this call as 'lon,lat,scale,rotation', or null when the host was auto-fitting the loaded datasets.")] string? Previous);
 
 /// <summary>
@@ -52,10 +52,10 @@ public sealed record SetViewportResult(
 /// </summary>
 /// <remarks>
 /// <para>
-/// The composite renderer has no rotation analog (the shared
-/// <c>Viewport</c> carries no rotation), so a non-zero
-/// <see cref="SetViewportRequest.RotationDegrees"/> is rejected rather than
-/// silently dropped. North-up (0) is the only supported value.
+/// <see cref="SetViewportRequest.RotationDegrees"/> rotates the centre + scale
+/// form clockwise about the image centre; it is normalised to [0, 360). The
+/// bounding-box form frames the box north-up, so a non-zero rotation there is
+/// rejected rather than silently dropped.
 /// </para>
 /// <para>
 /// Latitudes are validated against the composite renderer's practical Web
@@ -100,23 +100,13 @@ public sealed class SetViewportTool
         ArgumentNullException.ThrowIfNull(request);
         ct.ThrowIfCancellationRequested();
 
-        // Rotation is a modifier on the centre+scale form, not a form selector,
-        // and the composite renderer is north-up only. Validate it globally (so a
-        // harmless rotationDegrees: 0 does not read as "centre+scale present" and
-        // wrongly trip the mutual-exclusivity check against a bounding box), and
-        // reject any non-zero / non-finite value rather than silently dropping it.
-        if (request.RotationDegrees is { } rot)
+        // Rotation is a modifier on the centre+scale form, not a form selector.
+        // Validate it globally (so a harmless rotationDegrees: 0 does not read as
+        // "centre+scale present" and wrongly trip the mutual-exclusivity check
+        // against a bounding box).
+        if (request.RotationDegrees is { } rot && !double.IsFinite(rot))
         {
-            if (double.IsNaN(rot) || double.IsInfinity(rot))
-            {
-                return Err(new InvalidArgument("rotationDegrees", $"value {rot} is not a finite number"));
-            }
-            if (rot != 0.0)
-            {
-                return Err(new InvalidArgument(
-                    "rotationDegrees",
-                    $"value {rot} is not supported; the composite renderer is north-up only, so rotationDegrees must be 0"));
-            }
+            return Err(new InvalidArgument("rotationDegrees", $"value {rot} is not a finite number"));
         }
 
         var hasCenterAny = request.CenterLongitude.HasValue || request.CenterLatitude.HasValue
@@ -171,9 +161,8 @@ public sealed class SetViewportTool
                 "scaleDenominator", $"value {scale} must be a positive, finite number"));
         }
 
-        // Rotation was validated globally in InvokeAsync (north-up only), so it is
-        // 0 here; carry it through explicitly for clarity.
-        var rotation = request.RotationDegrees ?? 0.0;
+        // Finite (validated in InvokeAsync); normalise to [0, 360).
+        var rotation = NormaliseRotation(request.RotationDegrees ?? 0.0);
 
         var previous = controller.Current;
         controller.Set(new MapViewport(lon, lat, scale, rotation));
@@ -217,6 +206,13 @@ public sealed class SetViewportTool
                 $"minLongitude ({minLon}) must be less than maxLongitude ({maxLon}); antimeridian crossing is not supported"));
         }
 
+        if (NormaliseRotation(request.RotationDegrees ?? 0.0) != 0.0)
+        {
+            return Err(new InvalidArgument(
+                "rotationDegrees",
+                "the bounding-box form is framed north-up; rotate with the centre+scale form instead"));
+        }
+
         var previous = controller.Current;
         controller.SetToBounds(new BoundingBox(
             southLatitude: minLat,
@@ -243,6 +239,15 @@ public sealed class SetViewportTool
             ScaleDenominator: applied.ScaleDenominator,
             RotationDegrees: applied.RotationDegrees,
             Previous: Format(previous)));
+    }
+
+    private static double NormaliseRotation(double degrees)
+    {
+        var normalised = degrees % 360.0;
+        if (normalised < 0)
+            normalised += 360.0;
+        // -0 and a negative value that rounds up to 360 both mean north-up.
+        return normalised is 0.0 or 360.0 ? 0.0 : normalised;
     }
 
     private static InvalidArgument? Validate(double value, string name, double min, double max)

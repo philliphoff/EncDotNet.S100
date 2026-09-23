@@ -27,7 +27,8 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// <item><description>
 /// The viewport auto-fits the union extent until <c>set_viewport</c> pins an
 /// explicit geographic viewport (centre + scale, or a framed bounding box),
-/// which is re-fit to each render's pixel size. Rotation is north-up only.
+/// which is re-fit to each render's pixel size. A centre + scale viewport may
+/// be rotated; the chart then turns about the image centre, labels upright.
 /// </description></item>
 /// <item><description>
 /// <c>render_to_image</c>'s <c>pixelDensity</c> is not applied — the render
@@ -149,12 +150,11 @@ internal sealed class HeadlessS100Session
         // Guard the public capability seam: a programmatic caller (not going
         // through set_viewport, which validates first) must not be able to store a
         // viewport the renderer can't honour or that would feed NaN / out-of-range
-        // values into CompositeViewportBuilder. The headless render path is
-        // north-up only (ResolveViewport uses centre + scale, not rotation).
-        if (viewport.RotationDegrees != 0.0)
+        // values into CompositeViewportBuilder.
+        if (!double.IsFinite(viewport.RotationDegrees))
         {
             throw new ArgumentException(
-                "The headless composite renderer is north-up only; RotationDegrees must be 0.",
+                $"RotationDegrees must be a finite number; got {viewport.RotationDegrees}.",
                 nameof(viewport));
         }
         ValidateLongitude(viewport.CenterLongitude, nameof(viewport));
@@ -242,8 +242,9 @@ internal sealed class HeadlessS100Session
         {
             if (_viewport is { } v)
             {
-                return CompositeViewportBuilder.FromCenterScale(
+                var viewport = CompositeViewportBuilder.FromCenterScale(
                     v.CenterLongitude, v.CenterLatitude, v.ScaleDenominator, widthPx, heightPx);
+                return viewport with { RotationDegrees = v.RotationDegrees };
             }
             if (_bounds is { } b)
             {

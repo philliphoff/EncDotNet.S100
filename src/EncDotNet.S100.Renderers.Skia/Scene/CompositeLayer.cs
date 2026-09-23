@@ -30,6 +30,26 @@ public abstract class CompositeLayer
     /// <param name="canvas">The composite canvas.</param>
     /// <param name="viewport">The shared composite viewport (pixel space).</param>
     public abstract void Draw(SKCanvas canvas, Viewport viewport);
+
+    /// <summary>
+    /// Paints the part of this layer that turns with a rotated display — all of
+    /// it but upright text — against the north-up cover
+    /// <paramref name="viewport"/>; the compositor then rotates the result onto
+    /// the output (issue #578).
+    /// </summary>
+    internal virtual void DrawRotating(SKCanvas canvas, Viewport viewport) => Draw(canvas, viewport);
+
+    /// <summary>
+    /// Paints the text that stays upright on a rotated display: each label's
+    /// anchor is turned by <paramref name="rotationDegrees"/> about the centre
+    /// of the north-up cover <paramref name="viewport"/>, with its glyphs drawn
+    /// unrotated. Labels whose rotated anchor falls outside
+    /// <paramref name="cullBounds"/> (the output, in cover pixels, plus a
+    /// margin) are skipped. Layers without text paint nothing.
+    /// </summary>
+    internal virtual void DrawUprightText(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
+    {
+    }
 }
 
 /// <summary>
@@ -66,13 +86,28 @@ public sealed class VectorCompositeLayer : CompositeLayer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var renderer = new SkiaDisplayListRenderer
-        {
-            Background = _background,
-            HonorScaleVisibility = _honorScaleVisibility,
-        };
-        renderer.RenderOnto(canvas, _scene, viewport);
+        CreateRenderer().RenderOnto(canvas, _scene, viewport);
     }
+
+    internal override void DrawRotating(SKCanvas canvas, Viewport viewport)
+        => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions { DrawText = false });
+
+    internal override void DrawUprightText(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
+        => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+        {
+            PointCullBounds = cullBounds,
+            DrawAreasAndLines = false,
+            DrawPoints = false,
+            TextAnchorRotationDegrees = rotationDegrees,
+            ScreenCenterX = viewport.WidthPixels / 2f,
+            ScreenCenterY = viewport.HeightPixels / 2f,
+        });
+
+    private SkiaDisplayListRenderer CreateRenderer() => new()
+    {
+        Background = _background,
+        HonorScaleVisibility = _honorScaleVisibility,
+    };
 }
 
 /// <summary>

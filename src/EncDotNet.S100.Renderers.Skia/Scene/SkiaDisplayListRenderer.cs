@@ -343,14 +343,14 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 
                 switch (op)
                 {
-                    case AreaPaintOp area:
+                    case AreaPaintOp area when options.DrawAreasAndLines:
                         DrawArea(canvas, area, transform);
                         break;
-                    case PatternAreaPaintOp pattern:
+                    case PatternAreaPaintOp pattern when options.DrawAreasAndLines:
                         patternImages ??= new Dictionary<string, SKImage?>(StringComparer.Ordinal);
                         DrawPatternArea(canvas, pattern, transform, patternImages);
                         break;
-                    case LinePaintOp line:
+                    case LinePaintOp line when options.DrawAreasAndLines:
                         lineScratch ??= new LineDrawScratch();
                         DrawLine(canvas, line, transform, cullBounds, lineScratch);
                         break;

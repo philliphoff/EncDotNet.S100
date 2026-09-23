@@ -109,7 +109,9 @@ shapes:
 
 - **North-up only.** `WorldToScreen` applies no rotation. Rotated-viewport
   support (keeping labels upright, etc.) is a backend concern layered on top and
-  is not part of the IR.
+  is not part of the IR. `Viewport.RotationDegrees` carries the requested
+  rotation; the headless compositor honours it by drawing a north-up cover
+  (`RotatedViewport.NorthUpCover`) and rotating it, then placing text upright.
 - **Pattern-fill clipping (#192).** `PatternAreaPaintOp` carries a pre-rasterised
   PNG tile, but the IR does not carry the NetTopologySuite priority-clipping the
   Mapsui pattern phase performs. A backend that lowers patterns from the IR
