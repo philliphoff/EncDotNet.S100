@@ -154,7 +154,7 @@ public sealed class S57TranslationDiagnostics
     public int BridgeAggregationsEmitted { get; internal set; }
 
     /// <summary>
-    /// Number of lights and warning signal stations linked to a <c>Bridge</c>
+    /// Number of lights and signal stations (warning and traffic) linked to a <c>Bridge</c>
     /// as <c>theEquipment</c> of a <c>StructureEquipment</c> association: the
     /// ones an S-57 bridge <c>C_AGGR</c> collects, where the target Feature
     /// Catalogue binds that class on <c>Bridge</c>. One listed by two

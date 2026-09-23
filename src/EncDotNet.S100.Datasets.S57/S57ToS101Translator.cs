@@ -558,14 +558,16 @@ public sealed class S57ToS101Translator
     // master object (bridge light clause C). Collection membership is all that
     // ties a light to its bridge, so each is linked to the Bridge rather than to
     // a span or pier; S-401 also binds at most one light on a span or pier, but
-    // any number on a Bridge. Warning signal stations join them: a vertical
-    // clearance indicator (sistaw, catsiw 16) must be aggregated to its bridge
-    // by C_AGGR (clause I.3.3), and both catalogues bind SignalStationWarning
-    // on Bridge as theEquipment. Each link is still gated on the target FC.
+    // any number on a Bridge. Signal stations join them: a vertical clearance
+    // indicator (sistaw, catsiw 16) must be aggregated to its bridge by C_AGGR
+    // (clause I.3.3), as must a bridge-passage traffic signal station (sistat,
+    // catsit 8; clause R.2.1), and both catalogues bind SignalStationWarning
+    // and SignalStationTraffic on Bridge as theEquipment. Each link is still
+    // gated on the target FC.
     private static readonly HashSet<string> BridgeEquipmentClasses = new(StringComparer.Ordinal)
     {
         "LightAllAround", "LightSectored", "LightAirObstruction", "LightFogDetector",
-        "SignalStationWarning",
+        "SignalStationWarning", "SignalStationTraffic",
     };
 
     // S-57 attributes a Bridge never carries itself: they are consumed by the
