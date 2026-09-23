@@ -192,19 +192,22 @@ public sealed class VectorSceneBuilder
             if (!hasAugmentedLine && (geom is null || geom.Coordinates.Count == 0))
                 continue;
 
-            // A curve with several parts draws each part as its own line, so no
-            // segment is drawn across the gaps between them (issue #643).
-            if (instruction is LineInstruction { CoordinatesOverride: null } partedLine
-                && geom is { Parts.Count: > 1 })
+            // A curve or surface with several parts fills, outlines and draws
+            // each part on its own, so no segment is drawn across the gaps
+            // between them (issue #643).
+            if (geom is { Parts.Count: > 1 }
+                && instruction is AreaInstruction or LineInstruction { CoordinatesOverride: null })
             {
-                foreach (var part in geom.Parts)
-                {
-                    if (BuildLine(partedLine, part) is { } partOp)
-                        ops.Add(partOp);
-                }
+                foreach (var part in PartGeometries(geom))
+                    AddOp(instruction, part);
                 continue;
             }
 
+            AddOp(instruction, geom);
+        }
+
+        void AddOp(DrawingInstruction instruction, FeatureGeometry? geom)
+        {
             PaintOp? op = instruction switch
             {
                 // Pattern fills are lowered only when a resolver is supplied (the
@@ -674,10 +677,13 @@ public sealed class VectorSceneBuilder
 
     private TextPaintOp? BuildText(TextInstruction instruction, FeatureGeometry geometry)
     {
-        // Text placed along a curve with several parts goes on its longest
-        // part: the joined Coordinates would put it on a gap (issue #643).
-        var coords = geometry is { Type: GeometryType.Curve, Parts.Count: > 1 }
-            ? geometry.Parts.MaxBy(PolylineLength)!
+        // Text on a curve or surface with several parts goes on its longest
+        // curve or largest surface: the joined Coordinates would put it on a
+        // gap, or at a centroid outside every part (issue #643).
+        var coords = geometry.Parts.Count > 1
+            ? geometry.Type == GeometryType.Surface
+                ? geometry.Parts.MaxBy(RingArea)!
+                : geometry.Parts.MaxBy(PolylineLength)!
             : geometry.Coordinates;
         if (string.IsNullOrEmpty(instruction.Text))
             return null;
@@ -743,6 +749,34 @@ public sealed class VectorSceneBuilder
         for (int i = 0; i < coords.Count; i++)
             result[i] = WebMercator.FromLonLat(coords[i].Longitude, coords[i].Latitude);
         return result;
+    }
+
+    // The parts of a multi-part curve or surface, each as a geometry of its
+    // own (a surface part with its own holes).
+    private static IEnumerable<FeatureGeometry> PartGeometries(FeatureGeometry geometry)
+    {
+        for (int i = 0; i < geometry.Parts.Count; i++)
+        {
+            yield return new FeatureGeometry
+            {
+                Type = geometry.Type,
+                Coordinates = geometry.Parts[i],
+                InteriorRings = i < geometry.PartInteriorRings.Count ? geometry.PartInteriorRings[i] : [],
+            };
+        }
+    }
+
+    // Planar area of a ring in square degrees, scaled by the cosine of
+    // latitude; enough to rank a feature's parts.
+    private static double RingArea(IReadOnlyList<GeoPosition> ring)
+    {
+        double twice = 0;
+        for (int i = 0, j = ring.Count - 1; i < ring.Count; j = i++)
+        {
+            var k = Math.Cos(ring[i].Latitude * Math.PI / 180.0);
+            twice += (ring[j].Longitude * k) * ring[i].Latitude - (ring[i].Longitude * k) * ring[j].Latitude;
+        }
+        return Math.Abs(twice) / 2;
     }
 
     // Planar length in degrees, scaled by the cosine of latitude; enough to

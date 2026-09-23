@@ -253,20 +253,14 @@ public sealed class IdentifyFeaturesService
         // Area: exact point-in-polygon, honouring interior-ring holes.
         if (feature.ExteriorRing.Count > 0)
         {
-            if (!SpatialPredicates.ContainsPoint(ToRing(feature.ExteriorRing), point))
+            // Each surface with its own holes; see IS100Feature.Surfaces.
+            bool inside = feature.Surfaces.Any(surface =>
+                SpatialPredicates.ContainsPoint(ToRing(surface.ExteriorRing), point)
+                && !surface.InteriorRings.Any(hole =>
+                    hole.Count > 0 && SpatialPredicates.ContainsPoint(ToRing(hole), point)));
+            if (!inside)
             {
                 return false;
-            }
-
-            if (feature.InteriorRings.Count > 0)
-            {
-                foreach (var hole in feature.InteriorRings)
-                {
-                    if (hole.Count > 0 && SpatialPredicates.ContainsPoint(ToRing(hole), point))
-                    {
-                        return false;
-                    }
-                }
             }
 
             hit = new Hit

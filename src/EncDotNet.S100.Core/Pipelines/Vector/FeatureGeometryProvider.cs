@@ -49,11 +49,16 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
                 ? Array.Empty<IReadOnlyList<GeoPosition>>()
                 : feature.InteriorRings.Select(r => (IReadOnlyList<GeoPosition>)r.ToArray()).ToArray();
 
+            // Feature carries its surfaces directly; reading them through
+            // IS100Feature.Surfaces would allocate one per single-surface feature.
+            var surfaces = feature is Feature vectorFeature ? vectorFeature.SurfaceParts : feature.Surfaces;
             return new FeatureGeometry
             {
                 Type = GeometryType.Surface,
                 Coordinates = feature.ExteriorRing.ToArray(),
                 InteriorRings = holes,
+                Parts = surfaces.Count > 1 ? surfaces.Select(s => s.ExteriorRing).ToArray() : [],
+                PartInteriorRings = surfaces.Count > 1 ? surfaces.Select(s => s.InteriorRings).ToArray() : [],
             };
         }
 

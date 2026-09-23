@@ -59,6 +59,87 @@ internal static class S101Synth
     private const int CoordinateMultiplicationFactor = 10_000_000;
 
     /// <summary>
+    /// Builds an S-101 dataset with one area feature (RCID 1, type code 1 =
+    /// <paramref name="featureType"/>) referencing one surface per ring in
+    /// <paramref name="surfaces"/>, each ring a closed (lat, lon) list encoded
+    /// as a single curve segment. Several surfaces make a multi-part feature
+    /// (issue #643).
+    /// </summary>
+    public static S101Dataset DatasetWithMultiSurfaceFeature(
+        string featureType,
+        params (double Lat, double Lon)[][] surfaces)
+    {
+        var points = new Dictionary<uint, S101PointRecord>();
+        var curves = new Dictionary<uint, S101CurveSegmentRecord>();
+        var surfaceRecords = new Dictionary<uint, S101SurfaceRecord>();
+        var spatials = new List<S101SpatialAssociation>();
+        uint id = 1;
+        foreach (var ring in surfaces)
+        {
+            var pointId = id++;
+            var curveId = id++;
+            var surfaceId = id++;
+            points[pointId] = new S101PointRecord
+            {
+                RecordId = pointId,
+                Y = (int)Math.Round(ring[0].Lat * CoordinateMultiplicationFactor),
+                X = (int)Math.Round(ring[0].Lon * CoordinateMultiplicationFactor),
+            };
+            curves[curveId] = new S101CurveSegmentRecord
+            {
+                RecordId = curveId,
+                PointAssociations = [
+                    new S101PointAssociation(110, pointId, 1),
+                    new S101PointAssociation(110, pointId, 2)],
+                IntermediateCoordinates = ring.Skip(1).Take(ring.Length - 2)
+                    .Select(v => ((int)Math.Round(v.Lat * CoordinateMultiplicationFactor), (int)Math.Round(v.Lon * CoordinateMultiplicationFactor)))
+                    .ToList(),
+            };
+            surfaceRecords[surfaceId] = new S101SurfaceRecord
+            {
+                RecordId = surfaceId,
+                RingAssociations = [new S101RingAssociation(120, curveId, 1, 1)],
+            };
+            spatials.Add(new S101SpatialAssociation(130, surfaceId, 1));
+        }
+
+        var feature = new S101FeatureRecord
+        {
+            RecordId = 1,
+            FeatureTypeCode = 1,
+            Attributes = [],
+            SpatialAssociations = spatials,
+            FeatureAssociations = [],
+            InformationAssociations = [],
+        };
+
+        var document = new S101Document
+        {
+            Identification = new S101DatasetIdentification { DatasetName = "multi-surface" },
+            StructureInfo = new S101DatasetStructureInfo
+            {
+                CoordinateMultiplicationFactorX = CoordinateMultiplicationFactor,
+                CoordinateMultiplicationFactorY = CoordinateMultiplicationFactor,
+                CoordinateMultiplicationFactorZ = 10,
+            },
+            FeatureTypeCatalogue = new Dictionary<ushort, string> { [1] = featureType },
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = points,
+            MultiPoints = ReadOnlyDictionary<uint, S101MultiPointRecord>.Empty,
+            CurveSegments = curves,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = surfaceRecords,
+            Features = [feature],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+        };
+        return S101Dataset.FromDocument(document);
+    }
+
+    /// <summary>
     /// Builds an S-101 dataset whose features carry resolvable point
     /// geometry. Each entry supplies a feature RCID, a feature-type code,
     /// and a lat/lon; a matching <see cref="S101PointRecord"/> (RCID =

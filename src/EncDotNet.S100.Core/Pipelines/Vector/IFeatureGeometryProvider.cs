@@ -29,21 +29,28 @@ public sealed class FeatureGeometry
 
     /// <summary>
     /// Primary coordinate sequence in (latitude, longitude) order.
-    /// Points: a single coordinate. Curves: an ordered polyline; for a curve
-    /// with several <see cref="Parts"/>, all of them in order, so a consumer
-    /// that ignores <see cref="Parts"/> would join them.
-    /// Surfaces: the exterior ring (CCW recommended).
+    /// Points: a single coordinate. Curves: an ordered polyline.
+    /// Surfaces: the exterior ring (CCW recommended). For a curve or surface
+    /// with several <see cref="Parts"/>, all of them joined in order, so a
+    /// consumer that ignores <see cref="Parts"/> would join them.
     /// </summary>
     public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>
     /// The separate parts of a curve whose curves do not all meet end to start
-    /// (see <see cref="CurveParts"/>), each an ordered polyline. Draw each on
-    /// its own: joining them would draw a straight segment across each gap.
-    /// Empty when <see cref="Coordinates"/> is a single connected curve, and
-    /// for points and surfaces.
+    /// (see <see cref="CurveParts"/>), each an ordered polyline; or of a surface
+    /// with several surfaces, each part's exterior ring, with its holes in
+    /// <see cref="PartInteriorRings"/>. Draw each on its own: joining them would
+    /// draw a straight segment across each gap. Empty when
+    /// <see cref="Coordinates"/> is a single curve or surface, and for points.
     /// </summary>
     public IReadOnlyList<IReadOnlyList<GeoPosition>> Parts { get; init; } = [];
+
+    /// <summary>
+    /// For a surface with several <see cref="Parts"/>, the interior rings of
+    /// each part, in the same order. Empty otherwise.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<IReadOnlyList<GeoPosition>>> PartInteriorRings { get; init; } = [];
 
     /// <summary>
     /// Optional interior (hole) rings for surface geometries.

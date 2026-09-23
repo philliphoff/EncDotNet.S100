@@ -232,4 +232,28 @@ public class IdentifyFeaturesToolTests
 
         Assert.False(result.TryGetValue(out _));
     }
+
+    // Two squares: A at lon 0..1 and B at lon 3..4. B's ring starts at its
+    // north-west corner, so the joined ring closes from B's last vertex (0,3)
+    // straight to A's first (0,0): a phantom triangle that contains (0.3, 2).
+    internal static readonly (double Lat, double Lon)[] SquareA = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)];
+    internal static readonly (double Lat, double Lon)[] SquareB = [(1, 3), (1, 4), (0, 4), (0, 3), (1, 3)];
+
+    [Theory]
+    [InlineData(0.5, 0.5, true)]
+    [InlineData(0.5, 3.5, true)]
+    [InlineData(0.3, 2.0, false)] // between the parts, inside the joined ring's phantom triangle
+    public async Task A_feature_with_several_surfaces_is_picked_only_inside_one_of_them(double lat, double lon, bool expected)
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc",
+            S101Synth.DatasetWithMultiSurfaceFeature("DepthArea", SquareA, SquareB),
+            LoadedDatasetFactory.Box(-1, -1, 2, 5)));
+        var tool = new IdentifyFeaturesTool(catalog);
+
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(lat, lon));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(expected, value.Features.Any(f => f.FeatureType == "DepthArea"));
+    }
 }

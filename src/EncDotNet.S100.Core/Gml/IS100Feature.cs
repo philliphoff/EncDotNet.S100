@@ -38,6 +38,17 @@ public interface IS100Feature
     /// <summary>Surface interior ring coordinates (holes).</summary>
     IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; }
 
+    /// <summary>
+    /// The feature's surfaces, each with its own holes. A feature with several
+    /// surfaces lists each; <see cref="ExteriorRing"/> and
+    /// <see cref="InteriorRings"/> then hold them all joined, which is not a
+    /// valid polygon, so area tests should use this instead. By default a
+    /// single surface built from <see cref="ExteriorRing"/> and
+    /// <see cref="InteriorRings"/>, or none when there is no exterior ring.
+    /// </summary>
+    IReadOnlyList<SurfacePart> Surfaces =>
+        ExteriorRing.Count > 0 ? [new SurfacePart(ExteriorRing, InteriorRings)] : [];
+
     /// <summary>Simple attributes keyed by code.</summary>
     IReadOnlyDictionary<string, string> Attributes { get; }
 

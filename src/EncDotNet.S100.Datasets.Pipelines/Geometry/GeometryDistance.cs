@@ -111,36 +111,32 @@ public static class GeometryDistance
 
     private static FeatureDistance MeasureSurface(IS100Feature feature, GeoPoint point)
     {
-        var inside = ContainsPoint(feature.ExteriorRing, point);
-        if (inside && feature.InteriorRings.Count > 0)
+        // Each surface is tested with its own holes: a feature with several
+        // surfaces joins their rings in ExteriorRing, which is no valid polygon
+        // (issue #643).
+        var surfaces = feature.Surfaces;
+        foreach (var surface in surfaces)
         {
-            foreach (var hole in feature.InteriorRings)
+            if (ContainsPoint(surface.ExteriorRing, point)
+                && !surface.InteriorRings.Any(hole => ContainsPoint(hole, point)))
             {
-                if (ContainsPoint(hole, point))
-                {
-                    inside = false;
-                    break;
-                }
+                return new FeatureDistance(0.0, true, S100GeometryType.Surface, point.Latitude, point.Longitude);
             }
         }
 
-        if (inside)
-        {
-            return new FeatureDistance(0.0, true, S100GeometryType.Surface, point.Latitude, point.Longitude);
-        }
-
         // Outside (or inside a hole): distance to the nearest ring edge.
-        var (dist, lat, lon) = NearestOnRing(feature.ExteriorRing, point);
-        if (feature.InteriorRings.Count > 0)
+        var dist = double.PositiveInfinity;
+        double lat = 0, lon = 0;
+        foreach (var surface in surfaces)
         {
-            foreach (var hole in feature.InteriorRings)
+            foreach (var ring in surface.InteriorRings.Prepend(surface.ExteriorRing))
             {
-                var (hd, hlat, hlon) = NearestOnRing(hole, point);
-                if (hd < dist)
+                var (d, rlat, rlon) = NearestOnRing(ring, point);
+                if (d < dist)
                 {
-                    dist = hd;
-                    lat = hlat;
-                    lon = hlon;
+                    dist = d;
+                    lat = rlat;
+                    lon = rlon;
                 }
             }
         }
