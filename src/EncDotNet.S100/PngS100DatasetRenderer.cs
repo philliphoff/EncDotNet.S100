@@ -2,6 +2,7 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100;
@@ -288,7 +289,9 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         return FacadeRenderContextBuilder.Build(processor, rendererOptions) with
         {
             Mariner = mariner,
-            Viewport = options.Viewport,
+            // A rotated render shows more than its unrotated frame (its corners
+            // swing out), so portrayal culls to the north-up cover of it.
+            Viewport = options.Viewport is { } viewport ? RotatedViewport.NorthUpCover(viewport) : null,
         };
     }
 

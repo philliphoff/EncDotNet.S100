@@ -63,15 +63,25 @@ public sealed class HeadlessS100SessionViewportTests
     }
 
     [Fact]
-    public void Set_WithNonZeroRotation_Throws()
+    public void Set_WithRotation_IsKept()
     {
         using var catalog = new HeadlessMutableCatalog();
         using var session = new HeadlessS100Session(catalog);
         var controller = (IViewportController)session;
 
-        // The composite path is north-up only; a rotated viewport must be
-        // rejected so Current never reports something the renderer can't honour.
-        Assert.Throws<ArgumentException>(() => controller.Set(new MapViewport(-1.25, 50.5, 50000, 45)));
+        controller.Set(new MapViewport(-1.25, 50.5, 50000, 45));
+
+        Assert.Equal(45, controller.Current!.RotationDegrees);
+    }
+
+    [Fact]
+    public void Set_WithNonFiniteRotation_Throws()
+    {
+        using var catalog = new HeadlessMutableCatalog();
+        using var session = new HeadlessS100Session(catalog);
+        var controller = (IViewportController)session;
+
+        Assert.Throws<ArgumentException>(() => controller.Set(new MapViewport(-1.25, 50.5, 50000, double.NaN)));
         Assert.Null(controller.Current); // nothing stored
     }
 

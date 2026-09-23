@@ -219,12 +219,14 @@ adapts its own services onto the seams (see `Services/McpCapabilities/`).
 A few tools stay host-specific where the hosts genuinely diverge, rather
 than being forced onto a shape that would fit neither well:
 
-* `set_viewport` — the viewer drives a **live, rotatable** Mapsui map and
-  accepts a web-mercator **zoom** level; the CLI renders a **headless,
-  north-up** composite addressed by **scale denominator**. The two keep
-  separate implementations (the viewer's over `IMapViewportController`,
-  the CLI's over `IViewportController`) so the viewer retains arbitrary
-  rotation and zoom-level input.
+* `set_viewport` — the viewer drives a **live** Mapsui map and accepts a
+  web-mercator **zoom** level; the CLI renders a **headless** composite
+  addressed by **scale denominator**. Both honour a clockwise rotation (the
+  viewer's `rotation` on either frame form; the CLI's `rotationDegrees` on the
+  centre + scale form), turning the chart about the image centre while labels
+  stay upright. The two keep separate implementations (the viewer's over
+  `IMapViewportController`, the CLI's over `IViewportController`) so the
+  viewer retains zoom-level input.
 * `pick_features`, `capture_app_screenshot`,
   `set_own_ship`, panels, routes, and the render-observability tools —
   these need the live viewer UI and have no headless analogue.

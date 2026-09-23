@@ -43,6 +43,13 @@ public sealed class OverlayDrawOptions
     /// <summary>Screen-space Y of the rotation centre for <see cref="TextAnchorRotationDegrees"/>.</summary>
     public float ScreenCenterY { get; init; }
 
+    /// <summary>
+    /// Whether to draw area fills, pattern fills and lines this pass. Defaults
+    /// to <see langword="true"/>; a text-only pass (the upright labels of a
+    /// rotated headless composite) turns it off.
+    /// </summary>
+    public bool DrawAreasAndLines { get; init; } = true;
+
     /// <summary>Whether to draw point symbols this pass. Defaults to <see langword="true"/>.</summary>
     public bool DrawPoints { get; init; } = true;
 

@@ -54,7 +54,9 @@ public sealed class S100CompositeOptions
     /// computes the union extent of every layer and fits a
     /// <see cref="Width"/> × <see cref="Height"/> viewport to it. When supplied,
     /// the viewport's own pixel dimensions win over <see cref="Width"/> /
-    /// <see cref="Height"/>.
+    /// <see cref="Height"/>, and a non-zero
+    /// <see cref="Pipelines.Viewport.RotationDegrees"/> turns the chart about the
+    /// image centre with labels kept upright.
     /// </summary>
     public Viewport? Viewport { get; init; }
 
