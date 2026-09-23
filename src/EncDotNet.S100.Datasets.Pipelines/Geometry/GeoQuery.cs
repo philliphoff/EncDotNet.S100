@@ -15,8 +15,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Geometry;
 /// Every variant projects to a coarse <see cref="GeoBoundingBox"/>
 /// (via <see cref="GetBoundingBox"/>) for use against the
 /// <c>BoundingBox</c>-based filters elsewhere in the catalog. Finer
-/// containment / intersection (ray casting for polygons, per-vertex
-/// expansion for polylines) is delegated to the per-tool consumer.
+/// containment / intersection (ray casting for polygons, per-segment
+/// corridor boxes for polylines — see
+/// <see cref="SpatialPredicates.Intersects(BoundingBox, GeoQuery)"/>)
+/// is delegated to the consumer.
 /// </para>
 /// </remarks>
 public abstract record GeoQuery
@@ -88,9 +90,30 @@ public abstract record GeoQuery
 
     private static GeoBoundingBox InflateForCorridor(GeoBoundingBox box, double? halfWidthMeters)
     {
-        if (halfWidthMeters is not { } half || half <= 0)
+        var (latPad, lonPad) = CorridorPadDegrees(box.SouthLatitude, box.NorthLatitude, halfWidthMeters);
+        if (latPad == 0 && lonPad == 0)
         {
             return box;
+        }
+
+        return new GeoBoundingBox(
+            Math.Max(-90.0, box.SouthLatitude - latPad),
+            Math.Max(-180.0, box.WestLongitude - lonPad),
+            Math.Min(90.0, box.NorthLatitude + latPad),
+            Math.Min(180.0, box.EastLongitude + lonPad));
+    }
+
+    /// <summary>
+    /// Degrees of latitude and longitude that cover a corridor half-width
+    /// of <paramref name="halfWidthMeters"/> between the given latitudes;
+    /// zero when there is no corridor.
+    /// </summary>
+    internal static (double LatPad, double LonPad) CorridorPadDegrees(
+        double southLatitude, double northLatitude, double? halfWidthMeters)
+    {
+        if (halfWidthMeters is not { } half || half <= 0)
+        {
+            return (0, 0);
         }
 
         // Equirectangular approximation. 1° lat ≈ 111 320 m; longitude
@@ -98,16 +121,12 @@ public abstract record GeoQuery
         // inflated box never under-covers the corridor.
         const double metersPerDegreeLatitude = 111_320.0;
         var latPad = half / metersPerDegreeLatitude;
-        var refLat = Math.Max(Math.Abs(box.SouthLatitude), Math.Abs(box.NorthLatitude));
+        var refLat = Math.Max(Math.Abs(southLatitude), Math.Abs(northLatitude));
         var cosLat = Math.Cos(refLat * Math.PI / 180.0);
         var lonPad = cosLat > 1e-9
             ? half / (metersPerDegreeLatitude * cosLat)
             : 180.0;
 
-        return new GeoBoundingBox(
-            Math.Max(-90.0, box.SouthLatitude - latPad),
-            Math.Max(-180.0, box.WestLongitude - lonPad),
-            Math.Min(90.0, box.NorthLatitude + latPad),
-            Math.Min(180.0, box.EastLongitude + lonPad));
+        return (latPad, lonPad);
     }
 }

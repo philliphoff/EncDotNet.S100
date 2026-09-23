@@ -85,10 +85,13 @@ over the four shapes the surface needs:
 | `GeoQuery.Polyline` | `GeoPolyline(vertices, corridorWidthMeters?)` | "along this route / line"     |
 
 Every variant projects to a coarse `GeoBoundingBox` via
-`GetBoundingBox()`. Polylines with a non-null `CorridorWidthMeters`
-inflate the bbox by an equirectangular metres-to-degrees
-approximation; this is suitable for "near this route" coarse filtering
-and matches the precision of the underlying dataset bounding boxes.
+`GetBoundingBox()`. The bbox filters (`SpatialPredicates.Intersects`)
+test a polyline segment by segment: a bounding box matches when it
+touches at least one segment's box, inflated by `CorridorWidthMeters`
+(a half-width) with an equirectangular metres-to-degrees approximation.
+This is suitable for "near this route" coarse filtering and matches the
+precision of the underlying dataset bounding boxes; `precise: true` on
+`query_features` adds the exact point-to-segment distance test.
 
 All inputs are validated with `GeoQueryValidator.Validate(...)`, which
 returns:
