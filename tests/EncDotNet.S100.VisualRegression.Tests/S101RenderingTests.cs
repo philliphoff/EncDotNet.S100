@@ -3,6 +3,14 @@ using EncDotNet.S100.Pipelines;
 namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>Visual regression tests for S-101 ENC vector rendering.</summary>
+/// <remarks>
+/// These render with no display-mode filter (<c>DisplayCategory = null</c>, i.e.
+/// "All"), unlike the harness default of Standard (#357): they guard the full
+/// portrayal, including the supplementary pattern fills whose boundaries the
+/// Dusk/Night snapshots pin across palettes. The Standard rendering of the same
+/// cell, what the live viewer shows by default, is guarded by
+/// <see cref="RenderParityTests"/>.
+/// </remarks>
 public sealed class S101RenderingTests
 {
     private static string CommittedCellPath => Path.Combine(
@@ -19,6 +27,7 @@ public sealed class S101RenderingTests
         {
             Width = 800,
             Height = 600,
+            DisplayCategory = null,
         });
 
         return TestHelpers.VerifyBitmap(bitmap);
@@ -42,6 +51,7 @@ public sealed class S101RenderingTests
             Width = 800,
             Height = 600,
             Palette = PaletteType.Dusk,
+            DisplayCategory = null,
         });
 
         return TestHelpers.VerifyBitmap(bitmap);
@@ -58,6 +68,7 @@ public sealed class S101RenderingTests
             Width = 800,
             Height = 600,
             Palette = PaletteType.Night,
+            DisplayCategory = null,
         });
 
         return TestHelpers.VerifyBitmap(bitmap);
@@ -90,6 +101,7 @@ public sealed class S101RenderingTests
             Height = 800,
             Palette = palette,
             SymbolScale = symbolScale,
+            DisplayCategory = null,
         });
 
         return TestHelpers.VerifyBitmap(bitmap)

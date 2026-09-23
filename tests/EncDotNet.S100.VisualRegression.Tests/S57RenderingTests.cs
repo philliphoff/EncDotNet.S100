@@ -1,3 +1,5 @@
+using EncDotNet.S100.Datasets.Pipelines;
+
 namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>
@@ -9,8 +11,17 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S57RenderingTests
 {
+    // Standard, the live viewer's default display category (#357): soundings,
+    // names and the quality-of-data coverage are "Other" and drop out.
     [SkippableFact]
-    public Task EncCell_DayPalette()
+    public Task EncCell_DayPalette() => RenderCell(EcdisDisplayCategory.Standard);
+
+    // No display-mode filter ("All"), so the translated soundings, names and
+    // quality-of-data coverage stay guarded.
+    [SkippableFact]
+    public Task EncCell_DayPalette_AllDisplayCategories() => RenderCell(null);
+
+    private static Task RenderCell(EcdisDisplayCategory? displayCategory)
     {
         var path = Path.Combine(
             TestHelpers.DatasetsRoot,
@@ -22,6 +33,7 @@ public sealed class S57RenderingTests
         {
             Width = 800,
             Height = 600,
+            DisplayCategory = displayCategory,
         });
 
         // S-57 is translated in-memory to S-101 and rendered through the full

@@ -35,15 +35,13 @@ public sealed class HarnessOptions
 
     /// <summary>
     /// ECDIS display category to render with (S-100 Part 9 §11.7). Controls
-    /// which viewing groups are drawn. The viewer defaults to
-    /// <see cref="EcdisDisplayCategory.Standard"/>; matching it here keeps the
-    /// headless render faithful to the live product. When <see langword="null"/>
-    /// (the default, preserving legacy harness behaviour) no display-mode filter
-    /// is applied — equivalent to "All", which can draw supplementary area
-    /// features over the base plane. Parity tests that compare against the live
-    /// viewer should set this to <see cref="EcdisDisplayCategory.Standard"/>.
+    /// which viewing groups are drawn. Defaults to
+    /// <see cref="EcdisDisplayCategory.Standard"/>, the live viewer's default, so
+    /// the goldens show what a mariner sees (#357). Set <see langword="null"/>
+    /// for no display-mode filter (equivalent to "All"), which also draws the
+    /// supplementary content the product hides at Standard.
     /// </summary>
-    public EcdisDisplayCategory? DisplayCategory { get; init; }
+    public EcdisDisplayCategory? DisplayCategory { get; init; } = EcdisDisplayCategory.Standard;
 
     /// <summary>Text scale factor. Default: 1.0.</summary>
     public double TextScale { get; init; } = 1.0;
