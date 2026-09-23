@@ -163,6 +163,15 @@ public sealed class S57TranslationDiagnostics
     public int BridgeEquipmentLinked { get; internal set; }
 
     /// <summary>
+    /// Number of S-57 bridge <c>C_AGGR</c> collections whose <c>BRIDGE</c>
+    /// members do not join into one curve or one surface. Until a multi-part
+    /// <c>Bridge</c> is supported, their members convert one by one, each light
+    /// linked to the nearest member <c>Bridge</c>, and the collection itself is
+    /// not converted.
+    /// </summary>
+    public int BridgeCollectionsUnjoined { get; internal set; }
+
+    /// <summary>
     /// Number of S-101 <c>Sounding</c> features emitted (a SOUNDG feature with at
     /// least one depth triple yields exactly one).
     /// </summary>

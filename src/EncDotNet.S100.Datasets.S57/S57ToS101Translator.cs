@@ -144,6 +144,8 @@ public sealed class S57ToS101Translator
     // `language` is [1..1], `nameUsage` is [0..1] and has no S-57 source).
     private const string S101AttrFeatureName = "featureName";
     private const string S101AttrName = "name";
+    private const string S101AttrNameUsage = "nameUsage";
+    private const string NameUsageNoChartDisplay = "3"; // S-401 only; S-101 lists 1 and 2
 
     // ── S-57 light-characteristic attribute codes (S-57 Appendix A) ──
     // On light features these do NOT pass through as simple attributes;
@@ -1188,6 +1190,7 @@ public sealed class S57ToS101Translator
             }
 
             EmitBridgeAggregations(bridgePlan);
+            EmitUnjoinedBridgeEquipment(bridgePlan);
             RecordUnlinkedTimeSchedules(schedulePlan);
             EmitBridgeArchAssociations(archGroups, archSpanPositions);
             EmitRangeSystems(pendingAggregations);
@@ -1206,19 +1209,30 @@ public sealed class S57ToS101Translator
             EncDotNet.S57.S57FeatureRecord aggregation,
             IReadOnlyList<int> bridgeMemberIndices,
             IReadOnlyList<EncDotNet.S57.S57FeatureRecord> otherMembers,
-            IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> equipmentMembers)
+            IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> equipmentMembers,
+            IReadOnlyList<S101SpatialAssociation> spatials)
         {
             public EncDotNet.S57.S57FeatureRecord Aggregation { get; } = aggregation;
             public IReadOnlyList<int> BridgeMemberIndices { get; } = bridgeMemberIndices;
             public IReadOnlyList<EncDotNet.S57.S57FeatureRecord> OtherMembers { get; } = otherMembers;
             public IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> EquipmentMembers { get; } = equipmentMembers;
+            public IReadOnlyList<S101SpatialAssociation> Spatials { get; } = spatials;
             public List<uint> ComponentRecordIds { get; } = [];
         }
+
+        // A bridge collection whose BRIDGE members do not join into one curve
+        // or one surface. Until a multi-part Bridge is supported (#643), its members
+        // convert one by one (each Bridge keeps its own geometry, so its name
+        // is still drawn) and each light is linked to the nearest member Bridge.
+        private sealed record UnjoinedBridgeCollection(
+            IReadOnlyList<int> BridgeMemberIndices,
+            IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> EquipmentMembers);
 
         private sealed record BridgeAggregationPlan(
             IReadOnlyList<EncDotNet.S57.S57FeatureRecord> FeatureRecords,
             Dictionary<int, BridgeAggregationGroup> GroupByAggregation,
-            Dictionary<int, BridgeAggregationGroup> GroupByBridgeMember);
+            Dictionary<int, BridgeAggregationGroup> GroupByBridgeMember,
+            IReadOnlyList<UnjoinedBridgeCollection> Unjoined);
 
         // Identifies S-57 C_AGGR collections that aggregate the components of a
         // single bridge (S-65 Annex B §4.8.10: the spans of a bridge over
@@ -1239,6 +1253,7 @@ public sealed class S57ToS101Translator
         {
             var byAggregation = new Dictionary<int, BridgeAggregationGroup>();
             var byMember = new Dictionary<int, BridgeAggregationGroup>();
+            var unjoined = new List<UnjoinedBridgeCollection>();
 
             Dictionary<(int, long, int), int>? indexByLnam = null;
             for (int ai = 0; ai < featureRecords.Count; ai++)
@@ -1304,13 +1319,26 @@ public sealed class S57ToS101Translator
 
                 if (!qualifies || bridges.Count == 0) continue;
 
-                var group = new BridgeAggregationGroup(aggr, bridges, others, equipment);
+                // The Bridge geometry is resolved here, so that a collection
+                // whose parts do not join is left to convert member by member
+                // rather than as a Bridge with no geometry, whose name the
+                // portrayal would not draw. MergeBridgeGeometry creates records
+                // only when it succeeds.
+                var spatials = MergeBridgeGeometry(bridges.Select(i => featureRecords[i]).ToList());
+                if (spatials.Count == 0)
+                {
+                    unjoined.Add(new UnjoinedBridgeCollection(bridges, equipment));
+                    if (_diagnostics is not null) _diagnostics.BridgeCollectionsUnjoined++;
+                    continue;
+                }
+
+                var group = new BridgeAggregationGroup(aggr, bridges, others, equipment, spatials);
                 byAggregation[ai] = group;
                 foreach (var mi in bridges)
                     byMember[mi] = group;
             }
 
-            return new BridgeAggregationPlan(featureRecords, byAggregation, byMember);
+            return new BridgeAggregationPlan(featureRecords, byAggregation, byMember, unjoined);
         }
 
         // Emits one Bridge per qualifying bridge C_AGGR. Its Bridge-level
@@ -1356,8 +1384,11 @@ public sealed class S57ToS101Translator
                 if (resolved is null) continue;
 
                 var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
-                var attributes = TranslateAttributes(merged, resolved, bridgeObjl, out var infoAssociations);
-                var spatials = MergeBridgeGeometry(members);
+                var attributes = AppendMemberNames(
+                    TranslateAttributes(merged, resolved, bridgeObjl, out var infoAssociations),
+                    resolved.S101Code,
+                    merged,
+                    members);
 
                 var componentIds = new List<uint>(group.ComponentRecordIds);
                 foreach (var other in group.OtherMembers)
@@ -1369,18 +1400,8 @@ public sealed class S57ToS101Translator
                 var associations = componentIds.Select(BridgeComponentAssociation).ToList();
                 foreach (var (light, lightClass) in group.EquipmentMembers)
                 {
-                    // An absorbed sector-light member has no record of its own.
-                    if (!_recordIdByLnam.TryGetValue(Lnam(light.RecordName), out var lightId)) continue;
-                    if (!_featureBindings.BindsFeatureAssociation(
-                            resolved.S101Code, S101AssocStructureEquipment, S101RoleTheEquipment, lightClass))
-                        continue;
-                    if (!_linkedEquipment.Add(lightId)) continue;
-
-                    associations.Add(new S101FeatureAssociation(
-                        GetOrAssignFeatureAssociationCode(S101AssocStructureEquipment),
-                        lightId,
-                        GetOrAssignRoleCode(S101RoleTheEquipment)));
-                    if (_diagnostics is not null) _diagnostics.BridgeEquipmentLinked++;
+                    if (TryLinkEquipment(resolved.S101Code, light, lightClass) is { } link)
+                        associations.Add(link);
                 }
 
                 var recordId = _nextFeatureId++;
@@ -1394,7 +1415,7 @@ public sealed class S57ToS101Translator
                     FeatureIdentificationNumber = (uint)group.Aggregation.RecordName.FeatureId,
                     FeatureIdentificationSubdivision = (ushort)group.Aggregation.RecordName.FeatureSubdivision,
                     Attributes = attributes,
-                    SpatialAssociations = spatials,
+                    SpatialAssociations = group.Spatials,
                     FeatureAssociations = associations,
                     InformationAssociations = infoAssociations,
                 });
@@ -1403,6 +1424,189 @@ public sealed class S57ToS101Translator
             static bool HasObjectName(EncDotNet.S57.S57FeatureRecord f)
                 => f.Attributes.Any(a => a.AttributeCode is S57AttrObjnam or S57AttrNobjnm
                     && !string.IsNullOrEmpty(a.Value));
+        }
+
+        // Links a light (an emitted equipment member of a bridge collection) to
+        // the structure class that carries it, as `theEquipment` of a
+        // `StructureEquipment` association. Returns null when the light has no
+        // record of its own (an absorbed sector-light member), the target FC
+        // does not bind the pair, or the light is already linked: S-101 binds a
+        // light to at most one structure.
+        private S101FeatureAssociation? TryLinkEquipment(
+            string structureClass, EncDotNet.S57.S57FeatureRecord light, string lightClass)
+        {
+            if (!_recordIdByLnam.TryGetValue(Lnam(light.RecordName), out var lightId)) return null;
+            if (!_featureBindings.BindsFeatureAssociation(
+                    structureClass, S101AssocStructureEquipment, S101RoleTheEquipment, lightClass))
+                return null;
+            if (!_linkedEquipment.Add(lightId)) return null;
+
+            if (_diagnostics is not null) _diagnostics.BridgeEquipmentLinked++;
+            return new S101FeatureAssociation(
+                GetOrAssignFeatureAssociationCode(S101AssocStructureEquipment),
+                lightId,
+                GetOrAssignRoleCode(S101RoleTheEquipment));
+        }
+
+        // Keeps the names of an aggregated Bridge's members that differ from
+        // the name it carries (the C_AGGR's, per IENC Encoding Guide 2.4.1
+        // bridge clause I) as further `featureName` instances, so they are not
+        // lost; spans bind no `featureName` in S-101 or S-401. The extra names
+        // are not meant for chart display: S-401 marks them `nameUsage` 3 (No
+        // Chart Display). S-101 lists no such value, so they carry none and
+        // follow the carried name, which the portrayal selects first.
+        private IReadOnlyList<S101Attribute> AppendMemberNames(
+            IReadOnlyList<S101Attribute> attributes,
+            string bridgeClass,
+            IReadOnlyList<EncDotNet.S57.S57AttributeValue> bridgeSource,
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> members)
+        {
+            if (!_featureBindings.Binds(bridgeClass, S101AttrFeatureName)) return attributes;
+
+            // TranslateAttributes keeps the last OBJNAM of the merged source.
+            var carried = bridgeSource
+                .Where(a => a.AttributeCode == S57AttrObjnam && !string.IsNullOrEmpty(a.Value))
+                .Select(a => a.Value.Trim())
+                .LastOrDefault();
+            var extra = members
+                .SelectMany(m => m.Attributes)
+                .Where(a => a.AttributeCode == S57AttrObjnam && !string.IsNullOrWhiteSpace(a.Value))
+                .Select(a => a.Value.Trim())
+                .Where(n => !string.Equals(n, carried, StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (extra.Count == 0) return attributes;
+
+            string? nameUsage = _allowedEnumValues?.IsAllowed(S101AttrNameUsage, NameUsageNoChartDisplay) == true
+                ? NameUsageNoChartDisplay
+                : null;
+            var builder = attributes.ToList();
+            foreach (var name in extra)
+                AppendFeatureNameInstance(builder, name, LanguageEng, nameUsage);
+            return builder;
+        }
+
+        // Links each light of a bridge collection whose parts do not join to
+        // the nearest of its member Bridges (by the S-57 geometry), which were
+        // emitted one by one. Bridge binds any number of lights in S-101 and
+        // S-401, so any member is a conformant structure; the nearest is the
+        // likeliest to be the span or pier the light marks.
+        private void EmitUnjoinedBridgeEquipment(BridgeAggregationPlan plan)
+        {
+            var added = new Dictionary<uint, List<S101FeatureAssociation>>();
+            foreach (var collection in plan.Unjoined)
+            {
+                var bridges = new List<(uint RecordId, List<List<(double Lat, double Lon)>> Parts)>();
+                foreach (var mi in collection.BridgeMemberIndices)
+                {
+                    var member = plan.FeatureRecords[mi];
+                    if (_recordIdByLnam.TryGetValue(Lnam(member.RecordName), out var bridgeId))
+                        bridges.Add((bridgeId, S57Positions(member)));
+                }
+                if (bridges.Count == 0) continue;
+
+                foreach (var (light, lightClass) in collection.EquipmentMembers)
+                {
+                    var at = S57Positions(light).SelectMany(p => p).FirstOrDefault();
+                    var nearest = bridges.MinBy(b => DistanceMetres(at, b.Parts)).RecordId;
+                    if (TryLinkEquipment(S101ClassBridge, light, lightClass) is not { } link) continue;
+                    if (!added.TryGetValue(nearest, out var list))
+                        added[nearest] = list = [];
+                    list.Add(link);
+                }
+            }
+
+            if (added.Count == 0) return;
+            for (int i = 0; i < Features.Count; i++)
+            {
+                var f = Features[i];
+                if (!added.TryGetValue(f.RecordId, out var links)) continue;
+                Features[i] = new S101FeatureRecord
+                {
+                    RecordId = f.RecordId,
+                    FeatureTypeCode = f.FeatureTypeCode,
+                    ProducingAgency = f.ProducingAgency,
+                    FeatureIdentificationNumber = f.FeatureIdentificationNumber,
+                    FeatureIdentificationSubdivision = f.FeatureIdentificationSubdivision,
+                    Attributes = f.Attributes,
+                    SpatialAssociations = f.SpatialAssociations,
+                    FeatureAssociations = [.. f.FeatureAssociations, .. links],
+                    InformationAssociations = f.InformationAssociations,
+                    RecordVersion = f.RecordVersion,
+                    UpdateInstruction = f.UpdateInstruction,
+                };
+            }
+        }
+
+        // WGS-84 positions of an S-57 feature's geometry: one part per node, or
+        // per edge (its begin node, intermediate points and end node).
+        private List<List<(double Lat, double Lon)>> S57Positions(EncDotNet.S57.S57FeatureRecord feature)
+        {
+            double cmf = _s57.CoordinateMultiplicationFactor > 0 ? _s57.CoordinateMultiplicationFactor : 10_000_000;
+            (double, double)? Node(int rcid)
+            {
+                foreach (var rcnm in new[] { (int)S57RecordNameCodes.IsolatedNode, (int)S57RecordNameCodes.ConnectedNode })
+                {
+                    if (_vectorIndex.TryGetValue((rcnm, rcid), out var v) && v.Coordinates2D.Count > 0)
+                        return (v.Coordinates2D[0].Y / cmf, v.Coordinates2D[0].X / cmf);
+                }
+                return null;
+            }
+
+            var parts = new List<List<(double Lat, double Lon)>>();
+            foreach (var ptr in feature.SpatialPointers)
+            {
+                var rcnm = (int)ptr.Name.RecordNameCode;
+                var rcid = (int)ptr.Name.RecordId;
+                if (rcnm != (int)S57RecordNameCodes.Edge)
+                {
+                    if (Node(rcid) is { } n) parts.Add([n]);
+                    continue;
+                }
+                if (!_vectorIndex.TryGetValue((rcnm, rcid), out var edge)) continue;
+
+                (double, double)? begin = null, end = null;
+                foreach (var vp in edge.VectorPointers)
+                {
+                    if ((int)vp.Topology == TopologyBegin) begin = Node((int)vp.Name.RecordId);
+                    else if ((int)vp.Topology == TopologyEnd) end = Node((int)vp.Name.RecordId);
+                }
+                var part = new List<(double Lat, double Lon)>();
+                if (begin is { } b) part.Add(b);
+                foreach (var p in edge.Coordinates2D) part.Add((p.Y / cmf, p.X / cmf));
+                if (end is { } e) part.Add(e);
+                if (part.Count > 0) parts.Add(part);
+            }
+            return parts;
+        }
+
+        // Shortest distance in metres from a point to a feature's parts, by an
+        // equirectangular projection about the point (bridge-scale distances).
+        private static double DistanceMetres(
+            (double Lat, double Lon) point, List<List<(double Lat, double Lon)>> parts)
+        {
+            const double metresPerDegree = 111_320.0;
+            var k = Math.Cos(point.Lat * Math.PI / 180.0);
+            double best = double.MaxValue;
+            foreach (var part in parts)
+            {
+                if (part.Count == 1)
+                {
+                    var (y, x) = ((part[0].Lat - point.Lat) * metresPerDegree, (part[0].Lon - point.Lon) * metresPerDegree * k);
+                    best = Math.Min(best, Math.Sqrt(x * x + y * y));
+                    continue;
+                }
+                for (int i = 0; i + 1 < part.Count; i++)
+                {
+                    var (ay, ax) = ((part[i].Lat - point.Lat) * metresPerDegree, (part[i].Lon - point.Lon) * metresPerDegree * k);
+                    var (by, bx) = ((part[i + 1].Lat - point.Lat) * metresPerDegree, (part[i + 1].Lon - point.Lon) * metresPerDegree * k);
+                    double dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+                    double t = len == 0 ? 0 : Math.Clamp(-(ax * dx + ay * dy) / len, 0, 1);
+                    double cx = ax + t * dx, cy = ay + t * dy;
+                    best = Math.Min(best, Math.Sqrt(cx * cx + cy * cy));
+                }
+            }
+            return best;
         }
 
         // ── Time schedules (IENC tisdge) ────────────────────────────────
@@ -3214,7 +3418,8 @@ public sealed class S57ToS101Translator
         private void AppendFeatureNameInstance(
             List<S101Attribute> builder,
             string name,
-            string language)
+            string language,
+            string? nameUsage = null)
         {
             var featureNameCode = GetOrAssignAttributeCode(S101AttrFeatureName);
             // Marker entry — Index=1, value=empty — followed by sub-attributes.
@@ -3223,6 +3428,8 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(nameCode, 1, name));
             var langCode = GetOrAssignAttributeCode(S101AttrLanguage);
             builder.Add(new S101Attribute(langCode, 1, language));
+            if (nameUsage is not null)
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrNameUsage), 1, nameUsage));
         }
 
         // Emits a `rhythmOfLight` complex-attribute instance (marker +
