@@ -75,6 +75,8 @@
              Link="Fixtures\S111Dcf8FixtureBuilder.cs" />
     <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf1FixtureBuilder.cs"
              Link="Fixtures\S111Dcf1FixtureBuilder.cs" />
+    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf3FixtureBuilder.cs"
+             Link="Fixtures\S111Dcf3FixtureBuilder.cs" />
   </ItemGroup>
 
 </Project>
