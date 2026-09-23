@@ -37,6 +37,7 @@ public sealed class S101FeatureAttributeBindings
     private readonly FrozenSet<string> _featureTypeCodes;
     private readonly FrozenSet<string> _attributeCodes;
     private readonly FrozenSet<(string Feature, string Association, string InformationType)> _informationBindings;
+    private readonly FrozenSet<(string Feature, string Association, string Role, string OtherFeature)> _featureAssociationBindings;
 
     private static readonly ConcurrentDictionary<string, Lazy<S101FeatureAttributeBindings>> BySpec =
         new(StringComparer.OrdinalIgnoreCase);
@@ -46,13 +47,15 @@ public sealed class S101FeatureAttributeBindings
         FrozenSet<(string Feature, string Attribute)> singleValuedBindings,
         FrozenSet<string> featureTypeCodes,
         FrozenSet<string> attributeCodes,
-        FrozenSet<(string Feature, string Association, string InformationType)> informationBindings)
+        FrozenSet<(string Feature, string Association, string InformationType)> informationBindings,
+        FrozenSet<(string Feature, string Association, string Role, string OtherFeature)> featureAssociationBindings)
     {
         _featureCodesByAttribute = featureCodesByAttribute;
         _singleValuedBindings = singleValuedBindings;
         _featureTypeCodes = featureTypeCodes;
         _attributeCodes = attributeCodes;
         _informationBindings = informationBindings;
+        _featureAssociationBindings = featureAssociationBindings;
     }
 
     /// <summary>
@@ -87,6 +90,7 @@ public sealed class S101FeatureAttributeBindings
         var singleValued = new HashSet<(string Feature, string Attribute)>();
         var featureTypeCodes = new HashSet<string>(StringComparer.Ordinal);
         var informationBindings = new HashSet<(string Feature, string Association, string InformationType)>();
+        var featureAssociationBindings = new HashSet<(string Feature, string Association, string Role, string OtherFeature)>();
         foreach (var ft in catalogue.FeatureTypes)
         {
             if (string.IsNullOrEmpty(ft.Code))
@@ -99,6 +103,12 @@ public sealed class S101FeatureAttributeBindings
             {
                 foreach (var informationType in binding.InformationTypeRefs)
                     informationBindings.Add((ft.Code, binding.AssociationRef, informationType));
+            }
+
+            foreach (var binding in ft.FeatureBindings)
+            {
+                foreach (var other in binding.FeatureTypeRefs)
+                    featureAssociationBindings.Add((ft.Code, binding.AssociationRef, binding.RoleRef, other));
             }
         }
 
@@ -144,7 +154,8 @@ public sealed class S101FeatureAttributeBindings
             singleValued.ToFrozenSet(),
             featureTypeCodes.ToFrozenSet(StringComparer.Ordinal),
             attributeCodes,
-            informationBindings.ToFrozenSet());
+            informationBindings.ToFrozenSet(),
+            featureAssociationBindings.ToFrozenSet());
     }
 
     /// <summary>
@@ -213,6 +224,26 @@ public sealed class S101FeatureAttributeBindings
     public bool BindsInformationType(string? featureCode, string associationCode, string informationTypeCode)
         => !string.IsNullOrEmpty(featureCode)
             && _informationBindings.Contains((featureCode, associationCode, informationTypeCode));
+
+    /// <summary>
+    /// Returns <c>true</c> if the feature class named <paramref name="featureCode"/>
+    /// may be linked, through the feature association named
+    /// <paramref name="associationCode"/>, to an instance of
+    /// <paramref name="otherFeatureCode"/> playing the role named
+    /// <paramref name="roleCode"/>. Both the S-101 and the S-401 catalogue, for
+    /// instance, let a <c>Bridge</c> reach a <c>LightAllAround</c> as
+    /// <c>theEquipment</c> of a <c>StructureEquipment</c> association.
+    /// </summary>
+    /// <param name="featureCode">The feature class carrying the binding, e.g. <c>"Bridge"</c>.</param>
+    /// <param name="associationCode">The feature association code, e.g. <c>"StructureEquipment"</c>.</param>
+    /// <param name="roleCode">The role the other feature plays, e.g. <c>"theEquipment"</c>.</param>
+    /// <param name="otherFeatureCode">The other feature class, e.g. <c>"LightAllAround"</c>.</param>
+    /// <returns><c>true</c> when the feature class declares that feature binding.</returns>
+    public bool BindsFeatureAssociation(
+        string? featureCode, string associationCode, string roleCode, string? otherFeatureCode)
+        => !string.IsNullOrEmpty(featureCode)
+            && !string.IsNullOrEmpty(otherFeatureCode)
+            && _featureAssociationBindings.Contains((featureCode, associationCode, roleCode, otherFeatureCode));
 
     private static S101FeatureAttributeBindings Load(string catalogueSpec)
     {

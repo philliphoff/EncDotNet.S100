@@ -157,6 +157,10 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             table.AddRow("Bridge spans", diagnostics.BridgeSpansEmitted.ToString());
         if (diagnostics.BridgeAggregationsEmitted > 0)
             table.AddRow("Aggregated bridges", diagnostics.BridgeAggregationsEmitted.ToString());
+        if (diagnostics.BridgeEquipmentLinked > 0)
+            table.AddRow("Bridge lights linked", diagnostics.BridgeEquipmentLinked.ToString());
+        if (diagnostics.BridgeCollectionsUnjoined > 0)
+            table.AddRow("Bridge collections not joined", diagnostics.BridgeCollectionsUnjoined.ToString());
 
         table.AddRow(
             "[yellow]Unmapped object classes[/]",
@@ -215,6 +219,8 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             timeSchedulesEmitted = diagnostics.TimeSchedulesEmitted,
             bridgeSpansEmitted = diagnostics.BridgeSpansEmitted,
             bridgeAggregationsEmitted = diagnostics.BridgeAggregationsEmitted,
+            bridgeEquipmentLinked = diagnostics.BridgeEquipmentLinked,
+            bridgeCollectionsUnjoined = diagnostics.BridgeCollectionsUnjoined,
             unmappedObjectClasses = diagnostics.UnmappedObjectClasses
                 .OrderByDescending(p => p.Value)
                 .ToDictionary(p => p.Key.ToString(), p => p.Value),
