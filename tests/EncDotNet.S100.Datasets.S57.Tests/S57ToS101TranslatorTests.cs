@@ -3559,6 +3559,39 @@ public class S57ToS101TranslatorTests
         Assert.Equal(1, diag.RuleDroppedAttributes[112]);
     }
 
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-401")]
+    public void Translate_FloatingDock_CarriesHorizontalLengthAndWidth(string spec)
+    {
+        // Both FCs alias horizontalWidth to HORWID and bind it on FloatingDock,
+        // alongside its HORLEN sibling.
+        var target = spec == "S-401" ? S57TranslationTarget.S401 : S57TranslationTarget.S101;
+        Assert.True(S101FeatureAttributeBindings.ForSpec(spec).Binds("FloatingDock", "horizontalWidth"));
+        var diag = new S57TranslationDiagnostics();
+        var doc = S57ToS101Translator.ForTarget(target).Translate(
+            AreaFeatureWithS57Attributes(57, Attr(99, "120"), Attr(100, "35")), diag);
+
+        var feat = SingleOfClass(doc, "FloatingDock");
+        Assert.Equal("120", TopLevelValue(doc, feat, "horizontalLength"));
+        Assert.Equal("35", TopLevelValue(doc, feat, "horizontalWidth"));
+        Assert.False(diag.RuleDroppedAttributes.ContainsKey(100));
+    }
+
+    [Fact]
+    public void Translate_PileHorwid_IsRuleDropped()
+    {
+        // MORFAC CATMOR 5 → Pile, which does not bind horizontalWidth.
+        Assert.False(S101FeatureAttributeBindings.ForSpec("S-101").Binds("Pile", "horizontalWidth"));
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(84, Attr(40, "5"), Attr(100, "2")), diag);
+
+        var feat = SingleOfClass(s101, "Pile");
+        Assert.DoesNotContain("horizontalWidth", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[100]);
+    }
+
     [Fact]
     public void Translate_SeabedAreaColour_IsRuleDropped()
     {
