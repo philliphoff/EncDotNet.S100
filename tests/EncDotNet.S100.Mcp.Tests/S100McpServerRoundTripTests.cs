@@ -459,6 +459,72 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task DescribeFeatureType_round_trip_accepts_the_spec_object_results_return()
+    {
+        // Regression for #317: results carry spec as {"name","edition"}, and
+        // passing that object back used to fail argument binding with an
+        // opaque "An error occurred invoking" message.
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
+        {
+            ["spec"] = new Dictionary<string, object?>
+            {
+                ["name"] = "S-124",
+                ["edition"] = new Dictionary<string, object?> { ["major"] = 1, ["minor"] = 5, ["clarification"] = 0 },
+            },
+        });
+
+        Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
+        Assert.True(ParseSingleJson(result)["totalFeatureTypeCount"]!.GetValue<int>() > 0);
+    }
+
+    [Fact]
+    public async Task ListDatasets_round_trip_filters_by_a_spec_object_taken_from_a_result()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S102("synth-bathy-1"),
+            LoadedDatasetFactory.S124("synth-warn-1"));
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var all = ParseSingleJson(await client.CallToolAsync("list_datasets", new Dictionary<string, object?>()));
+        var warnSpec = all["datasets"]!.AsArray()
+            .Single(d => d!["id"]!.GetValue<string>() == "synth-warn-1")!["spec"]!.DeepClone();
+
+        var filtered = await client.CallToolAsync("list_datasets", new Dictionary<string, object?>
+        {
+            ["spec"] = warnSpec,
+        });
+
+        Assert.False(filtered.IsError ?? false, $"list_datasets returned an error: {DumpText(filtered)}");
+        var ids = ParseSingleJson(filtered)["datasets"]!.AsArray().Select(d => d!["id"]!.GetValue<string>());
+        Assert.Equal(["synth-warn-1"], ids);
+    }
+
+    [Fact]
+    public async Task SampleCoverage_round_trip_rejects_a_malformed_spec_as_invalid_argument()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        {
+            ["spec"] = 42,
+            ["latitude"] = 0.0,
+            ["longitude"] = 0.0,
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for a numeric spec.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
+        Assert.Contains("spec", payload["message"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task QueryFeatures_round_trip_returns_matching_features()
     {
         var feature = new S124Feature

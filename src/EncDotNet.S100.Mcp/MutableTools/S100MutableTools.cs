@@ -154,10 +154,10 @@ public static class S100MutableTools
     private static McpServerTool CreateSetDisplayMode(SetDisplayModeTool inner) =>
         McpServerTool.Create(
             ([Description("Display mode token: 'ice-concentration', 'ice-sod', or 'ice-navigational' (or the bare 'concentration'/'sod'/'navigational' aliases), or a raw S-411 mode id.")] string mode,
-             [Description("Product spec whose display mode is set; defaults to 'S-411'.")] string? spec = null,
+             [Description("Product spec whose display mode is set; defaults to 'S-411'. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
              CancellationToken ct = default) =>
                 DispatchAsync(
-                    () => inner.InvokeAsync(new SetDisplayModeRequest(mode, spec), ct),
+                    () => inner.InvokeAsync(new SetDisplayModeRequest(mode, SpecArgumentReader.ReadText(spec)), ct),
                     v => new JsonObject
                     {
                         ["spec"] = v.Spec,
@@ -252,10 +252,10 @@ public static class S100MutableTools
     private static McpServerTool CreateOpenDataset(OpenDatasetTool inner) =>
         McpServerTool.Create(
             ([Description("Local filesystem path to a dataset file or an exchange set (folder containing a catalogue, or a .zip of one).")] string path,
-             [Description("Optional explicit product-spec hint (e.g. \"S-102\") for single-file loads; ignored for exchange sets.")] string? spec = null,
+             [Description("Optional explicit product-spec hint (e.g. \"S-102\") for single-file loads; ignored for exchange sets. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
              CancellationToken ct = default) =>
                 DispatchAsync(
-                    () => inner.InvokeAsync(new OpenDatasetRequest(path, spec), ct),
+                    () => inner.InvokeAsync(new OpenDatasetRequest(path, SpecArgumentReader.ReadText(spec)), ct),
                     v =>
                     {
                         var datasets = new JsonArray();
@@ -457,6 +457,14 @@ public static class S100MutableTools
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (ArgumentException ex)
+        {
+            // Malformed caller input (e.g. a spec of the wrong shape) is the
+            // caller's to fix, so name the parameter rather than hide it
+            // behind internal_error.
+            return ToolErrorPayload.AsCallToolResult(
+                new InvalidArgument(ex.ParamName ?? string.Empty, ex.Message), JsonOptions);
         }
         catch (Exception ex)
         {

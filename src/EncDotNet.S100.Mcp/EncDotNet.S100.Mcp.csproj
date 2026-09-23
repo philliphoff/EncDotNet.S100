@@ -21,4 +21,8 @@
     <ProjectReference Include="..\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Mcp.Tests" />
+  </ItemGroup>
+
 </Project>
