@@ -145,13 +145,22 @@ public sealed class S57TranslationDiagnostics
     /// <summary>
     /// Number of aggregated <c>Bridge</c> features emitted for S-57
     /// <c>C_AGGR</c> collections of <c>BRIDGE</c> objects (plus any
-    /// <c>PYLONS</c> / <c>PONTON</c>) (S-65 Annex B §4.8.10). Each replaces the
+    /// <c>PYLONS</c> / <c>PONTON</c>, lights and other members) (S-65 Annex B §4.8.10). Each replaces the
     /// per-member Bridge features — its member BRIDGE objects emit only their
     /// spans — and links every emitted span, pylon and pontoon as a
     /// <c>BridgeAggregation</c> component. Counted here, not in
     /// <see cref="FeaturesEmitted"/>.
     /// </summary>
     public int BridgeAggregationsEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of lights linked to an aggregated <c>Bridge</c> as
+    /// <c>theEquipment</c> of a <c>StructureEquipment</c> association: the
+    /// lights an S-57 bridge <c>C_AGGR</c> collects, where the target Feature
+    /// Catalogue binds that light class on <c>Bridge</c>. A light listed by
+    /// two collections is linked (and counted) once.
+    /// </summary>
+    public int BridgeEquipmentLinked { get; internal set; }
 
     /// <summary>
     /// Number of S-101 <c>Sounding</c> features emitted (a SOUNDG feature with at

@@ -496,6 +496,8 @@ public sealed class S57ToS101Translator
     private const string S101ClassSpanOpening = "SpanOpening";
     private const string S101ClassLandmark = "Landmark";
     private const string S101AssocBridgeAggregation = "BridgeAggregation";
+    private const string S101AssocStructureEquipment = "StructureEquipment";
+    private const string S101RoleTheEquipment = "theEquipment";
     private const string S101AttrVerticalClearanceFixed = "verticalClearanceFixed";
     private const string S101AttrVerticalClearanceClosed = "verticalClearanceClosed";
     private const string S101AttrVerticalClearanceOpen = "verticalClearanceOpen";
@@ -545,6 +547,19 @@ public sealed class S57ToS101Translator
     private static readonly HashSet<string> BridgeAggregationMemberClasses = new(StringComparer.Ordinal)
     {
         "PylonBridgeSupport", "Pontoon",
+    };
+
+    // Classes of bridge-collection members linked to the aggregated Bridge as
+    // `theEquipment` of a `StructureEquipment` association. IENC collects a
+    // bridge's lights in its C_AGGR (IENC Encoding Guide 2.4.1, bridge clause H)
+    // and places them on the navigable span and the piers bounding it, with no
+    // master object (bridge light clause C). Collection membership is all that
+    // ties a light to its bridge, so each is linked to the Bridge rather than to
+    // a span or pier; S-401 also binds at most one light on a span or pier, but
+    // any number on a Bridge. Each link is still gated on the target FC.
+    private static readonly HashSet<string> BridgeEquipmentClasses = new(StringComparer.Ordinal)
+    {
+        "LightAllAround", "LightSectored", "LightAirObstruction", "LightFogDetector",
     };
 
     // S-57 attributes a Bridge never carries itself: they are consumed by the
@@ -861,6 +876,11 @@ public sealed class S57ToS101Translator
         // C_AGGR feature-to-feature pointers (which reference members by LNAM,
         // not RCNM/RCID) can be resolved to the S-101 features in a second pass.
         private readonly Dictionary<(int agency, long fid, int sub), uint> _recordIdByLnam = new();
+
+        // Record ids of features already linked as `theEquipment` of a
+        // structure. S-101 binds a light to at most one structure, so a light
+        // listed by two bridge collections is linked by the first only.
+        private readonly HashSet<uint> _linkedEquipment = new();
 
         public Dictionary<uint, S101PointRecord> Points { get; } = new();
         public Dictionary<uint, S101MultiPointRecord> MultiPoints { get; } = new();
@@ -1179,16 +1199,19 @@ public sealed class S57ToS101Translator
         private readonly record struct BridgeSpan(string SpanClass, IReadOnlyList<S101Attribute> Attributes);
 
         // A C_AGGR that collects the components of one bridge: its BRIDGE
-        // members (by feature index) and its PYLONS / PONTON members, plus the
-        // record ids of the span features emitted for the BRIDGE members.
+        // members (by feature index), its PYLONS / PONTON members, and its
+        // lights with the S-101 class each resolves to, plus the record ids of
+        // the span features emitted for the BRIDGE members.
         private sealed class BridgeAggregationGroup(
             EncDotNet.S57.S57FeatureRecord aggregation,
             IReadOnlyList<int> bridgeMemberIndices,
-            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> otherMembers)
+            IReadOnlyList<EncDotNet.S57.S57FeatureRecord> otherMembers,
+            IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> equipmentMembers)
         {
             public EncDotNet.S57.S57FeatureRecord Aggregation { get; } = aggregation;
             public IReadOnlyList<int> BridgeMemberIndices { get; } = bridgeMemberIndices;
             public IReadOnlyList<EncDotNet.S57.S57FeatureRecord> OtherMembers { get; } = otherMembers;
+            public IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, string S101Code)> EquipmentMembers { get; } = equipmentMembers;
             public List<uint> ComponentRecordIds { get; } = [];
         }
 
@@ -1201,11 +1224,16 @@ public sealed class S57ToS101Translator
         // single bridge (S-65 Annex B §4.8.10: the spans of a bridge over
         // navigable water are encoded as separate BRIDGE objects and, with any
         // bridge pylons or pontoons, aggregated by C_AGGR so that the converter
-        // can create one Bridge feature). A C_AGGR qualifies when every member
-        // resolves (by LNAM) to either a BRIDGE that maps to Bridge (i.e. is not
-        // a point) or a PYLONS / PONTON that maps to a permitted
-        // BridgeAggregation component, with at least one BRIDGE member. A BRIDGE
-        // is claimed by at most one collection (first in document order wins).
+        // can create one Bridge feature). A C_AGGR qualifies when it has at
+        // least one BRIDGE member that maps to Bridge (i.e. is not a point),
+        // every member resolves by LNAM, and every BRIDGE member can be claimed.
+        // A BRIDGE is claimed by at most one collection (first in document
+        // order wins), and no member is a navigational track. PYLONS / PONTON
+        // members that map to a permitted BridgeAggregation component become
+        // components, and lights become equipment. Any other member (IENC collects fenders, notice marks,
+        // signal stations, mooring facilities and more with a bridge, IENC
+        // Encoding Guide 2.4.1 bridge clause H) stays a standalone feature and
+        // does not disqualify the collection.
         private BridgeAggregationPlan BuildBridgeAggregations(
             IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
         {
@@ -1228,6 +1256,7 @@ public sealed class S57ToS101Translator
 
                 var bridges = new List<int>();
                 var others = new List<EncDotNet.S57.S57FeatureRecord>();
+                var equipment = new List<(EncDotNet.S57.S57FeatureRecord, string)>();
                 var seen = new HashSet<int>();
                 bool qualifies = true;
                 foreach (var fp in aggr.FeaturePointers)
@@ -1251,22 +1280,31 @@ public sealed class S57ToS101Translator
                     {
                         bridges.Add(mi);
                     }
-                    else if (!IsBridgeObjl(memberObjl)
-                        && resolved is not null
+                    else if (IsBridgeObjl(memberObjl)
+                        || (resolved is not null && RangeSystemTrackClasses.Contains(resolved.S101Code)))
+                    {
+                        // A point BRIDGE, or one an earlier collection claimed;
+                        // or a navigational track, which makes the collection a
+                        // range or track grouping that passes through the
+                        // bridge (e.g. NOAA US5WI3FK), left to EmitRangeSystems.
+                        qualifies = false;
+                        break;
+                    }
+                    else if (resolved is not null
                         && BridgeAggregationMemberClasses.Contains(resolved.S101Code))
                     {
                         others.Add(member);
                     }
-                    else
+                    else if (resolved is not null
+                        && BridgeEquipmentClasses.Contains(resolved.S101Code))
                     {
-                        qualifies = false;
-                        break;
+                        equipment.Add((member, resolved.S101Code));
                     }
                 }
 
                 if (!qualifies || bridges.Count == 0) continue;
 
-                var group = new BridgeAggregationGroup(aggr, bridges, others);
+                var group = new BridgeAggregationGroup(aggr, bridges, others, equipment);
                 byAggregation[ai] = group;
                 foreach (var mi in bridges)
                     byMember[mi] = group;
@@ -1285,7 +1323,9 @@ public sealed class S57ToS101Translator
         // dissolved union of the member BRIDGE geometries when that forms a
         // single curve or surface, and no geometry otherwise (Bridge permits
         // noGeometry). The Bridge links every emitted span and every emitted
-        // PylonBridgeSupport / Pontoon member as `theComponent`.
+        // PylonBridgeSupport / Pontoon member as `theComponent`, and every
+        // emitted light member the target FC lets it carry as `theEquipment`
+        // of a `StructureEquipment` association.
         private void EmitBridgeAggregations(BridgeAggregationPlan plan)
         {
             foreach (var group in plan.GroupByAggregation.Values)
@@ -1326,6 +1366,23 @@ public sealed class S57ToS101Translator
                         componentIds.Add(otherId);
                 }
 
+                var associations = componentIds.Select(BridgeComponentAssociation).ToList();
+                foreach (var (light, lightClass) in group.EquipmentMembers)
+                {
+                    // An absorbed sector-light member has no record of its own.
+                    if (!_recordIdByLnam.TryGetValue(Lnam(light.RecordName), out var lightId)) continue;
+                    if (!_featureBindings.BindsFeatureAssociation(
+                            resolved.S101Code, S101AssocStructureEquipment, S101RoleTheEquipment, lightClass))
+                        continue;
+                    if (!_linkedEquipment.Add(lightId)) continue;
+
+                    associations.Add(new S101FeatureAssociation(
+                        GetOrAssignFeatureAssociationCode(S101AssocStructureEquipment),
+                        lightId,
+                        GetOrAssignRoleCode(S101RoleTheEquipment)));
+                    if (_diagnostics is not null) _diagnostics.BridgeEquipmentLinked++;
+                }
+
                 var recordId = _nextFeatureId++;
                 _recordIdByLnam[Lnam(group.Aggregation.RecordName)] = recordId;
                 if (_diagnostics is not null) _diagnostics.BridgeAggregationsEmitted++;
@@ -1338,7 +1395,7 @@ public sealed class S57ToS101Translator
                     FeatureIdentificationSubdivision = (ushort)group.Aggregation.RecordName.FeatureSubdivision,
                     Attributes = attributes,
                     SpatialAssociations = spatials,
-                    FeatureAssociations = componentIds.Select(BridgeComponentAssociation).ToList(),
+                    FeatureAssociations = associations,
                     InformationAssociations = infoAssociations,
                 });
             }

@@ -971,6 +971,23 @@ public class S57ToS101TranslatorTests
         Assert.Equal(["16"], AttributeValues(inland, feature)["categoryOfAnchorage"]);
     }
 
+    [Theory]
+    [InlineData("S-101", "LightAllAround", true)]
+    [InlineData("S-401", "LightAllAround", true)]
+    [InlineData("S-101", "LightFogDetector", true)]
+    [InlineData("S-401", "LightFogDetector", false)] // S-401 defines no LightFogDetector
+    [InlineData("S-101", "NoticeMark", false)]       // S-101 defines no NoticeMark
+    [InlineData("S-401", "NoticeMark", true)]
+    public void S101FeatureAttributeBindings_BindsFeatureAssociation_FollowsCatalogue(
+        string spec, string equipment, bool expected)
+    {
+        var bindings = S101FeatureAttributeBindings.ForSpec(spec);
+
+        Assert.Equal(expected, bindings.BindsFeatureAssociation("Bridge", "StructureEquipment", "theEquipment", equipment));
+        Assert.False(bindings.BindsFeatureAssociation("Bridge", "StructureEquipment", "theStructure", equipment));
+        Assert.False(bindings.BindsFeatureAssociation(null, "StructureEquipment", "theEquipment", equipment));
+    }
+
     [Fact]
     public void S101FeatureAttributeBindings_DefinesFeatureType_FollowsCatalogue()
     {
@@ -3384,8 +3401,11 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_CAggrWithNonBridgeMember_IsNotABridgeAggregation()
+    public void Translate_BridgeCAggrWithOtherMember_StillAggregatesAndLeavesTheMemberStandalone()
     {
+        // IENC collects land, fenders, notice marks and more with a bridge
+        // (IENC Encoding Guide 2.4.1, bridge clause H). Such a member no longer
+        // disqualifies the collection; it converts on its own and is not linked.
         var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts();
         var land = Feat(5, 1, 71, featureIdentificationNumber: 13,
             spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
@@ -3396,12 +3416,142 @@ public class S57ToS101TranslatorTests
         var s101 = new S57ToS101Translator().Translate(
             BuildDocument(vectors, new[] { fixedSpan, openingSpan, land, aggr }), diag);
 
-        // Each BRIDGE converts on its own, with its own span.
+        var bridge = SingleOfClass(s101, "Bridge");
+        AssertBridgeComponents(s101, bridge, SingleOfClass(s101, "SpanFixed"), SingleOfClass(s101, "SpanOpening"));
+        var landArea = SingleOfClass(s101, "LandArea");
+        Assert.Empty(landArea.FeatureAssociations);
+        Assert.Equal(1, diag.BridgeAggregationsEmitted);
+        Assert.Equal(0, diag.BridgeEquipmentLinked);
+        Assert.False(diag.UnmappedObjectClasses.ContainsKey(400));
+    }
+
+    [Fact]
+    public void Translate_CAggrWithPointBridgeMember_IsNotABridgeAggregation()
+    {
+        // A point BRIDGE converts to a Landmark, so it cannot be a span of an
+        // aggregated Bridge; the collection keeps converting member by member.
+        var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts();
+        var pointBridge = Feat(5, 1, 11, featureIdentificationNumber: 13,
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
+        var aggr = Feat(4, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 13) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { fixedSpan, openingSpan, pointBridge, aggr }), diag);
+
         var bridges = s101.Features.Where(f => ClassOf(s101, f) == "Bridge").ToList();
         Assert.Equal(2, bridges.Count);
         Assert.All(bridges, b => Assert.Single(b.FeatureAssociations));
         Assert.Equal(0, diag.BridgeAggregationsEmitted);
         Assert.Equal(1, diag.UnmappedObjectClasses[400]);
+    }
+
+    [Fact]
+    public void Translate_CAggrWithBridgeAndNavigationLine_IsNotABridgeAggregation()
+    {
+        // A track grouping that passes through a bridge (NOAA US5WI3FK groups a
+        // BRIDGE with a NAVLNE and a RECTRC) is not a bridge collection.
+        var (vectors, fixedSpan, _, _) = TwoSpanBridgeParts();
+        var navigationLine = Feat(5, 2, 85, featureIdentificationNumber: 13, // NAVLNE
+            attributes: new[] { Attr(AttlOrient, "90") },
+            spatialPointers: new[] { Sp(RcnmEdge, 11, 1, 0, 0) });
+        var aggr = Feat(4, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 13) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { fixedSpan, navigationLine, aggr }), diag);
+
+        Assert.Equal(10u, SingleOfClass(s101, "Bridge").FeatureIdentificationNumber);
+        Assert.Equal(0, diag.BridgeAggregationsEmitted);
+    }
+
+    // The two-span bridge of TwoSpanBridgeParts with an all-around light on the
+    // pylon, a sectored light, and a fender (SLCONS) in its collection.
+    private static (EncDotNet.S57.S57VectorRecord[] Vectors, EncDotNet.S57.S57FeatureRecord[] Features)
+        LitBridgeCollection()
+    {
+        var (vectors, fixedSpan, openingSpan, pylon) = TwoSpanBridgeParts();
+        var allVectors = vectors
+            .Append(Node(5, 5, 60, RcnmIsolatedNode))
+            .Append(Node(6, -5, 60, RcnmIsolatedNode))
+            .ToArray();
+        var allAround = Feat(5, 1, 75, featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "1"), Attr(75, "3") }, // LITCHR fixed, COLOUR red
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
+        var sectored = Feat(6, 1, 75, featureIdentificationNumber: 21,
+            attributes: new[] { Attr(107, "1"), Attr(75, "4"), Attr(136, "90"), Attr(137, "270") },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 5, 1, 0, 0) });
+        var fender = Feat(7, 1, 122, featureIdentificationNumber: 22, // SLCONS
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 6, 1, 0, 0) });
+        var aggr = Feat(8, 255, 400, featureIdentificationNumber: 99,
+            attributes: new[] { Attr(AttlObjnam, "Harbour Bridge") },
+            featurePointers: new[]
+            {
+                Ffpt(540, 10), Ffpt(540, 11), Ffpt(540, 12), Ffpt(540, 20), Ffpt(540, 21), Ffpt(540, 22),
+            });
+        return (allVectors, new[] { fixedSpan, openingSpan, pylon, allAround, sectored, fender, aggr });
+    }
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-401")]
+    public void Translate_BridgeCAggrWithLights_LinksEachLightToTheBridgeAsEquipment(string spec)
+    {
+        // IENC places bridge lights on the navigable span and the piers bounding
+        // it, with no master object (IENC Encoding Guide 2.4.1, bridge light
+        // clause C); both FCs bind any number of lights on Bridge.
+        var target = spec == "S-401" ? S57TranslationTarget.S401 : S57TranslationTarget.S101;
+        var (vectors, features) = LitBridgeCollection();
+        var diag = new S57TranslationDiagnostics();
+
+        var doc = S57ToS101Translator.ForTarget(target).Translate(BuildDocument(vectors, features), diag);
+
+        var bridge = SingleOfClass(doc, "Bridge");
+        var allAround = SingleOfClass(doc, "LightAllAround");
+        var sectored = SingleOfClass(doc, "LightSectored");
+        var equipment = bridge.FeatureAssociations
+            .Where(a => doc.FeatureAssociationCatalogue[a.NumericCode] == "StructureEquipment")
+            .ToList();
+        Assert.All(equipment, a => Assert.Equal("theEquipment", doc.RoleCatalogue[a.RoleCode]));
+        Assert.Equal(
+            new[] { allAround.RecordId, sectored.RecordId }.Order(),
+            equipment.Select(a => a.RecordId).Order());
+
+        // Components are unchanged; the fender converts on its own.
+        Assert.Equal(3, bridge.FeatureAssociations.Count(
+            a => doc.FeatureAssociationCatalogue[a.NumericCode] == "BridgeAggregation"));
+        Assert.Empty(SingleOfClass(doc, "ShorelineConstruction").FeatureAssociations);
+        Assert.Equal(1, diag.BridgeAggregationsEmitted);
+        Assert.Equal(2, diag.BridgeEquipmentLinked);
+    }
+
+    [Fact]
+    public void Translate_LightInTwoBridgeCAggrs_IsLinkedToTheFirstBridgeOnly()
+    {
+        // S-101 binds a light to at most one structure (theStructure 0..1).
+        var (vectors, fixedSpan, openingSpan, _) = TwoSpanBridgeParts();
+        var light = Feat(5, 1, 75, featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "1"), Attr(75, "4") },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 4, 1, 0, 0) });
+        var first = Feat(6, 255, 400, featureIdentificationNumber: 98,
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 20) });
+        var second = Feat(7, 255, 400, featureIdentificationNumber: 99,
+            featurePointers: new[] { Ffpt(540, 11), Ffpt(540, 20) });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectors, new[] { fixedSpan, openingSpan, light, first, second }), diag);
+
+        var lightId = SingleOfClass(s101, "LightAllAround").RecordId;
+        var bridges = s101.Features.Where(f => ClassOf(s101, f) == "Bridge").ToList();
+        Assert.Equal(2, bridges.Count);
+        bool LinksLight(S101FeatureRecord b) => b.FeatureAssociations.Any(
+            a => s101.FeatureAssociationCatalogue[a.NumericCode] == "StructureEquipment" && a.RecordId == lightId);
+        Assert.True(LinksLight(bridges.Single(b => b.FeatureIdentificationNumber == 98)));
+        Assert.False(LinksLight(bridges.Single(b => b.FeatureIdentificationNumber == 99)));
+        Assert.Equal(1, diag.BridgeEquipmentLinked);
     }
 
     [Fact]
