@@ -73,6 +73,15 @@ public sealed class Feature : IS100Feature
     /// </summary>
     public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
+    /// <summary>
+    /// For a curve feature whose curves do not all meet end to start, each of
+    /// its curves in order; <see cref="CurveParts.Join"/> groups them into the
+    /// feature's connected parts. Empty when <see cref="Coordinates"/> is the
+    /// feature's only curve. <see cref="Coordinates"/> still holds all of them
+    /// in order.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
+
     /// <summary>Feature attribute values keyed by attribute code.</summary>
     public required IReadOnlyDictionary<string, object?> Attributes { get; init; }
 
@@ -92,9 +101,10 @@ public sealed class Feature : IS100Feature
         GeometryType == GeometryType.Point ? Coordinates : [];
 
     IReadOnlyList<IReadOnlyList<GeoPosition>> IS100Feature.Curves =>
-        GeometryType == GeometryType.Curve && Coordinates.Count > 0
-            ? [Coordinates]
-            : [];
+        GeometryType != GeometryType.Curve ? []
+        : Curves.Count > 0 ? Curves
+        : Coordinates.Count > 0 ? [Coordinates]
+        : [];
 
     IReadOnlyList<GeoPosition> IS100Feature.ExteriorRing =>
         GeometryType == GeometryType.Surface ? Coordinates : [];

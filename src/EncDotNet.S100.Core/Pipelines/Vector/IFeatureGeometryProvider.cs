@@ -29,10 +29,21 @@ public sealed class FeatureGeometry
 
     /// <summary>
     /// Primary coordinate sequence in (latitude, longitude) order.
-    /// Points: a single coordinate. Curves: an ordered polyline.
+    /// Points: a single coordinate. Curves: an ordered polyline; for a curve
+    /// with several <see cref="Parts"/>, all of them in order, so a consumer
+    /// that ignores <see cref="Parts"/> would join them.
     /// Surfaces: the exterior ring (CCW recommended).
     /// </summary>
     public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
+
+    /// <summary>
+    /// The separate parts of a curve whose curves do not all meet end to start
+    /// (see <see cref="CurveParts"/>), each an ordered polyline. Draw each on
+    /// its own: joining them would draw a straight segment across each gap.
+    /// Empty when <see cref="Coordinates"/> is a single connected curve, and
+    /// for points and surfaces.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Parts { get; init; } = [];
 
     /// <summary>
     /// Optional interior (hole) rings for surface geometries.

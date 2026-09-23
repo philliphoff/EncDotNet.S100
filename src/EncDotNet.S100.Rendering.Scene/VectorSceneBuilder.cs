@@ -192,6 +192,19 @@ public sealed class VectorSceneBuilder
             if (!hasAugmentedLine && (geom is null || geom.Coordinates.Count == 0))
                 continue;
 
+            // A curve with several parts draws each part as its own line, so no
+            // segment is drawn across the gaps between them (issue #643).
+            if (instruction is LineInstruction { CoordinatesOverride: null } partedLine
+                && geom is { Parts.Count: > 1 })
+            {
+                foreach (var part in geom.Parts)
+                {
+                    if (BuildLine(partedLine, part) is { } partOp)
+                        ops.Add(partOp);
+                }
+                continue;
+            }
+
             PaintOp? op = instruction switch
             {
                 // Pattern fills are lowered only when a resolver is supplied (the
@@ -560,8 +573,10 @@ public sealed class VectorSceneBuilder
     }
 
     private LinePaintOp? BuildLine(LineInstruction instruction, FeatureGeometry? geometry)
+        => BuildLine(instruction, instruction.CoordinatesOverride ?? geometry?.Coordinates);
+
+    private LinePaintOp? BuildLine(LineInstruction instruction, IReadOnlyList<GeoPosition>? coords)
     {
-        var coords = instruction.CoordinatesOverride ?? geometry?.Coordinates;
         if (coords is null || coords.Count < 2)
             return null;
 
@@ -659,7 +674,11 @@ public sealed class VectorSceneBuilder
 
     private TextPaintOp? BuildText(TextInstruction instruction, FeatureGeometry geometry)
     {
-        var coords = geometry.Coordinates;
+        // Text placed along a curve with several parts goes on its longest
+        // part: the joined Coordinates would put it on a gap (issue #643).
+        var coords = geometry is { Type: GeometryType.Curve, Parts.Count: > 1 }
+            ? geometry.Parts.MaxBy(PolylineLength)!
+            : geometry.Coordinates;
         if (string.IsNullOrEmpty(instruction.Text))
             return null;
 
@@ -724,6 +743,21 @@ public sealed class VectorSceneBuilder
         for (int i = 0; i < coords.Count; i++)
             result[i] = WebMercator.FromLonLat(coords[i].Longitude, coords[i].Latitude);
         return result;
+    }
+
+    // Planar length in degrees, scaled by the cosine of latitude; enough to
+    // rank a feature's parts.
+    private static double PolylineLength(IReadOnlyList<GeoPosition> coords)
+    {
+        double length = 0;
+        for (int i = 1; i < coords.Count; i++)
+        {
+            var k = Math.Cos(coords[i].Latitude * Math.PI / 180.0);
+            var dLat = coords[i].Latitude - coords[i - 1].Latitude;
+            var dLon = (coords[i].Longitude - coords[i - 1].Longitude) * k;
+            length += Math.Sqrt(dLat * dLat + dLon * dLon);
+        }
+        return length;
     }
 
     private static GeoPosition InterpolateAlongPolyline(
