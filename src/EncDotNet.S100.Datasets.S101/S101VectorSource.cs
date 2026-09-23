@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Spatial;
@@ -137,6 +138,9 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
             IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
             if (geomType == GeometryType.Curve && feat.SpatialAssociations.Count > 1)
                 (coords, curves) = ResolveCurveParts(feat, doc);
+            var surfaceParts = geomType == GeometryType.Surface && feat.SpatialAssociations.Count > 1
+                ? ResolveSurfaceParts(feat, doc)
+                : [];
 
             features.Add(new Feature
             {
@@ -146,6 +150,7 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
                 Coordinates = coords,
                 InteriorRings = interiorRings,
                 Curves = curves,
+                SurfaceParts = surfaceParts,
                 Attributes = ExtractAttributes(feat, doc),
             });
         }
@@ -260,6 +265,41 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
         if (connected)
             return (all, []);
         return (all, ranges.Select(r => (IReadOnlyList<GeoPosition>)all.GetRange(r.Start, r.Count)).ToList());
+    }
+
+    // Each surface of a feature that references several, with its own holes,
+    // so FeatureGeometryProvider and the query tools fill, outline and test
+    // them apart rather than as one joined ring (issue #643). Empty when the
+    // feature has a single surface.
+    private static IReadOnlyList<SurfacePart> ResolveSurfaceParts(S101FeatureRecord feature, S101Document doc)
+    {
+        var parts = new List<SurfacePart>();
+        foreach (var spa in feature.SpatialAssociations)
+        {
+            if (spa.RecordName != RcnmSurface) continue;
+            if (!doc.Surfaces.TryGetValue(spa.RecordId, out var surface)) continue;
+
+            var exterior = new List<GeoPosition>();
+            List<IReadOnlyList<GeoPosition>>? holes = null;
+            foreach (var ring in surface.RingAssociations)
+            {
+                if (ring.Usage == UsageExterior)
+                {
+                    ResolveCurveCoords(ring.RecordName, ring.RecordId, ring.Orientation, doc, exterior);
+                    continue;
+                }
+
+                var hole = new List<GeoPosition>();
+                ResolveCurveCoords(ring.RecordName, ring.RecordId, ring.Orientation, doc, hole);
+                if (hole.Count >= 3)
+                    (holes ??= []).Add(hole);
+            }
+
+            if (exterior.Count > 0)
+                parts.Add(new SurfacePart(exterior, holes ?? (IReadOnlyList<IReadOnlyList<GeoPosition>>)[]));
+        }
+
+        return parts.Count > 1 ? parts : [];
     }
 
     private static IReadOnlyList<GeoPosition> ResolveSurfaceGeometry(

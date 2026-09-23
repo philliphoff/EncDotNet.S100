@@ -82,6 +82,14 @@ public sealed class Feature : IS100Feature
     /// </summary>
     public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
 
+    /// <summary>
+    /// For a surface feature with several surfaces, each surface with its own
+    /// holes. Empty when <see cref="Coordinates"/> and
+    /// <see cref="InteriorRings"/> are the feature's only surface; for several
+    /// surfaces they still hold all the exterior rings joined and all the holes.
+    /// </summary>
+    public IReadOnlyList<SurfacePart> SurfaceParts { get; init; } = [];
+
     /// <summary>Feature attribute values keyed by attribute code.</summary>
     public required IReadOnlyDictionary<string, object?> Attributes { get; init; }
 
@@ -108,6 +116,12 @@ public sealed class Feature : IS100Feature
 
     IReadOnlyList<GeoPosition> IS100Feature.ExteriorRing =>
         GeometryType == GeometryType.Surface ? Coordinates : [];
+
+    IReadOnlyList<SurfacePart> IS100Feature.Surfaces =>
+        GeometryType != GeometryType.Surface ? []
+        : SurfaceParts.Count > 0 ? SurfaceParts
+        : Coordinates.Count > 0 ? [new SurfacePart(Coordinates, InteriorRings)]
+        : [];
 
     IReadOnlyList<IReadOnlyList<GeoPosition>> IS100Feature.InteriorRings =>
         GeometryType == GeometryType.Surface ? InteriorRings : [];

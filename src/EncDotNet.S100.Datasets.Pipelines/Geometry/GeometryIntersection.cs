@@ -41,7 +41,13 @@ public static class GeometryIntersection
 
         if (feature.ExteriorRing.Count > 0)
         {
-            return SurfaceIntersects(feature.ExteriorRing, feature.InteriorRings, query);
+            // Each surface with its own holes; see IS100Feature.Surfaces.
+            foreach (var surface in feature.Surfaces)
+            {
+                if (SurfaceIntersects(surface.ExteriorRing, surface.InteriorRings, query))
+                    return true;
+            }
+            return false;
         }
 
         if (feature.Curves.Count > 0)
