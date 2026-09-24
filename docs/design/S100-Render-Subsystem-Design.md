@@ -297,6 +297,8 @@ pure translated re-blit (`ComputeTranslate`), never a re-record.
 - **Pattern fidelity:** the Mapsui lowering deliberately omits patterns (it
   draws them post-IR), so B builds a *separate, pattern-complete* scene
   (`PatternResolver = GetPatternTilePng`) and renders fills from the IR.
+  (Since #604, with the "A" arm retired, the pick features are lowered from
+  that one scene, so pattern-only areas are pickable too.)
 - **Telemetry:** `SceneRasterizeDuration` (worker) + `SceneCompositeDuration`
   (UI blit) histograms.
 - **Wiring:** registered in `App` startup and the `TiledScene` subsystem;
