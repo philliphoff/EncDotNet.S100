@@ -1,3 +1,4 @@
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
@@ -89,6 +90,54 @@ public sealed class RotatedCompositeTests
     }
 
     [Fact]
+    public void Rotated_KeepsAScreenRelativeSymbolUpright_AtTheRotatedAnchor()
+    {
+        // A tall bar north of centre with no rotation (PortrayalCRS): at 90° it
+        // moves to the right of centre but stays tall (issue #652).
+        using var bitmap = Render(View(90), Layer(Bar(rotation: null, SymbolRotationCrs.Portrayal)));
+
+        var ink = InkBounds(bitmap);
+        Assert.True(ink.Height > 2 * ink.Width, $"expected an upright bar; ink was {ink}");
+        Assert.InRange(ink.MidX, 125, 135);
+        Assert.InRange(ink.MidY, 45, 55);
+    }
+
+    [Fact]
+    public void Rotated_KeepsAScreenRelativeSymbolsOwnAngle()
+    {
+        // PortrayalCRS 90: lying flat on screen, however the chart is turned.
+        using var bitmap = Render(View(90), Layer(Bar(rotation: 90, SymbolRotationCrs.Portrayal)));
+
+        var ink = InkBounds(bitmap);
+        Assert.True(ink.Width > 2 * ink.Height, $"expected a flat bar; ink was {ink}");
+    }
+
+    [Theory]
+    [InlineData(0.0, 90.0)]   // north-pointing, display turned 90°: lies flat
+    [InlineData(90.0, 90.0)]  // east-pointing, display turned 90°: points down, stands tall
+    public void Rotated_TurnsANorthRelativeSymbolWithTheChart(double rotation, double display)
+    {
+        using var bitmap = Render(View(display), Layer(Bar(rotation, SymbolRotationCrs.Geographic)));
+
+        var ink = InkBounds(bitmap);
+        if ((rotation + display) % 180 == 0)
+            Assert.True(ink.Height > 2 * ink.Width, $"expected a tall bar; ink was {ink}");
+        else
+            Assert.True(ink.Width > 2 * ink.Height, $"expected a flat bar; ink was {ink}");
+    }
+
+    [Theory]
+    [InlineData(SymbolRotationCrs.Portrayal)]
+    [InlineData(SymbolRotationCrs.Geographic)]
+    public void NorthUp_DrawsBothFramesAlike(SymbolRotationCrs crs)
+    {
+        using var bitmap = Render(View(0), Layer(Bar(rotation: 90, crs)));
+
+        var ink = InkBounds(bitmap);
+        Assert.True(ink.Width > 2 * ink.Height, $"expected a flat bar; ink was {ink}");
+    }
+
+    [Fact]
     public void Rotated_AHigherLayerCoversALowerLayersText()
     {
         var label = new TextPaintOp
@@ -111,6 +160,18 @@ public sealed class RotatedCompositeTests
         Assert.Equal(SKRectI.Empty, InkBounds(bitmap, SKColors.Black));
         Assert.Equal(SKColors.Blue, bitmap.GetPixel(100, 50));
     }
+
+    // A 6 × 30 px bar, pivoting on its centre, 0.3° north of the centre.
+    private static PointPaintOp Bar(double? rotation, SymbolRotationCrs crs) => new()
+    {
+        FeatureReference = "bar",
+        World = WebMercator.FromLonLat(0, 0.3),
+        Symbol = new ResolvedSymbol(
+            """<svg xmlns="http://www.w3.org/2000/svg" width="6" height="30"><rect width="6" height="30" fill="black"/></svg>""",
+            1.0, 0, 0),
+        Rotation = rotation,
+        RotationCrs = crs,
+    };
 
     private static SKBitmap Render(Viewport viewport, params CompositeLayer[] layers)
         => new HeadlessCompositeRenderer().Render(viewport, layers);

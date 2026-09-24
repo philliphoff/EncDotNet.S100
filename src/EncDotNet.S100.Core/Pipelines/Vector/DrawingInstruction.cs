@@ -95,8 +95,20 @@ public sealed class PointInstruction : DrawingInstruction
     /// <summary>Symbol scale factor (1.0 = nominal size).</summary>
     public double SymbolScale { get; init; } = 1.0;
 
-    /// <summary>Symbol rotation in degrees (clockwise from north). Null means upright.</summary>
+    /// <summary>
+    /// Symbol rotation in degrees, clockwise, measured in
+    /// <see cref="RotationCrs"/>. Null means upright.
+    /// </summary>
     public double? Rotation { get; init; }
+
+    /// <summary>
+    /// The frame <see cref="Rotation"/> is measured in (S-100 Part 9
+    /// <c>rotationCRS</c>): the screen (<see cref="SymbolRotationCrs.Portrayal"/>,
+    /// the default) or true north (<see cref="SymbolRotationCrs.Geographic"/>).
+    /// It only matters on a rotated display, where a Portrayal symbol stays
+    /// upright and a Geographic one turns with the chart.
+    /// </summary>
+    public SymbolRotationCrs RotationCrs { get; init; }
 
     /// <summary>
     /// Local horizontal offset of the symbol from the geometry anchor, in
@@ -335,4 +347,22 @@ public enum LinePlacementMode
 
     /// <summary>Offsets are absolute distances in millimetres along the curve.</summary>
     Absolute = 1,
+}
+
+/// <summary>
+/// The frame a symbol rotation is measured in (S-100 Part 9 <c>rotationCRS</c>).
+/// </summary>
+public enum SymbolRotationCrs
+{
+    /// <summary>
+    /// <c>PortrayalCRS</c> (the default): relative to the screen, so the symbol
+    /// keeps its angle, upright or not, however the display is rotated.
+    /// </summary>
+    Portrayal,
+
+    /// <summary>
+    /// <c>GeographicCRS</c>: clockwise from true north, so the symbol turns with
+    /// the chart on a rotated display (orientation arrows, light flares).
+    /// </summary>
+    Geographic,
 }

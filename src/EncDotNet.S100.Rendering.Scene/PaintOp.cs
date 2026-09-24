@@ -103,8 +103,20 @@ public sealed class PointPaintOp : PaintOp
     /// <summary>Fallback-dot scale factor (used only when <see cref="Symbol"/> is null).</summary>
     public double FallbackScale { get; init; }
 
-    /// <summary>Symbol rotation in degrees clockwise from north, or null for upright.</summary>
+    /// <summary>
+    /// Symbol rotation in degrees clockwise, measured in <see cref="RotationCrs"/>,
+    /// or null for upright.
+    /// </summary>
     public double? Rotation { get; init; }
+
+    /// <summary>
+    /// The frame <see cref="Rotation"/> is measured in. On a rotated display a
+    /// <see cref="SymbolRotationCrs.Portrayal"/> symbol keeps its on-screen
+    /// angle (upright when <see cref="Rotation"/> is null), while a
+    /// <see cref="SymbolRotationCrs.Geographic"/> one turns with the chart.
+    /// North-up, the two draw identically.
+    /// </summary>
+    public SymbolRotationCrs RotationCrs { get; init; }
 
     /// <summary>Local horizontal offset from the anchor, in display pixels.</summary>
     public double OffsetXpx { get; init; }

@@ -31,7 +31,7 @@ public static class DrawingInstructionSerializer
     /// Version stamp for the serialization frame. Bump on any change to the
     /// frame layout or the <see cref="DrawingInstruction"/> field set.
     /// </summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -105,6 +105,7 @@ public static class DrawingInstructionSerializer
                 WriteString(w, p.SymbolReference);
                 w.Write(p.SymbolScale);
                 WriteNullableDouble(w, p.Rotation);
+                w.Write((byte)p.RotationCrs);
                 w.Write(p.LocalOffsetX);
                 w.Write(p.LocalOffsetY);
                 WriteNullableDouble(w, p.LinePlacementPosition);
@@ -186,6 +187,7 @@ public static class DrawingInstructionSerializer
             SymbolReference = ReadString(r),
             SymbolScale = r.ReadDouble(),
             Rotation = ReadNullableDouble(r),
+            RotationCrs = (SymbolRotationCrs)r.ReadByte(),
             LocalOffsetX = r.ReadDouble(),
             LocalOffsetY = r.ReadDouble(),
             LinePlacementPosition = ReadNullableDouble(r),

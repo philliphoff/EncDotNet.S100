@@ -56,7 +56,7 @@ public static class DrawingInstructionParser
         var dashes = new List<(double Offset, double Length)>();
         double dashOnLengthMm = 0;
         double? rotation = null;
-        string? rotationCrs = null;
+        var rotationCrs = SymbolRotationCrs.Portrayal;
         double scaleFactor = 1.0;
         double localOffsetX = 0;
         double localOffsetY = 0;
@@ -142,7 +142,7 @@ public static class DrawingInstructionParser
                     var rotParts = value.Split(',');
                     if (rotParts.Length >= 2)
                     {
-                        rotationCrs = rotParts[0];
+                        rotationCrs = ParseRotationCrs(rotParts[0]);
                         if (double.TryParse(rotParts[1], CultureInfo.InvariantCulture, out var angle))
                             rotation = angle;
                     }
@@ -223,6 +223,7 @@ public static class DrawingInstructionParser
                         DrawingPriority = drawingPriority,
                         Plane = displayPlane,
                         Rotation = rotation,
+                        RotationCrs = rotationCrs,
                         SymbolScale = scaleFactor,
                         LocalOffsetX = localOffsetX,
                         LocalOffsetY = localOffsetY,
@@ -241,6 +242,7 @@ public static class DrawingInstructionParser
                     // for that point's glyphs, so resetting it here would strand
                     // every glyph but the first on the feature's primary geometry.
                     rotation = null;
+                    rotationCrs = SymbolRotationCrs.Portrayal;
                     scaleFactor = 1.0;
                     localOffsetX = 0;
                     localOffsetY = 0;
@@ -510,6 +512,16 @@ public static class DrawingInstructionParser
     /// <summary>
     /// Decodes DEF-encoded text: &amp;a → &amp;, &amp;s → ;, &amp;c → :, &amp;m → ,
     /// </summary>
+    /// <summary>
+    /// Maps an S-100 Part 9 <c>rotationCRS</c> value to its frame. Only
+    /// <c>GeographicCRS</c> turns with the chart; <c>PortrayalCRS</c>, the
+    /// default, and anything unrecognised are screen-relative.
+    /// </summary>
+    internal static SymbolRotationCrs ParseRotationCrs(string? value) =>
+        string.Equals(value?.Trim(), "GeographicCRS", StringComparison.OrdinalIgnoreCase)
+            ? SymbolRotationCrs.Geographic
+            : SymbolRotationCrs.Portrayal;
+
     private static string DefDecode(string encoded)
     {
         if (string.IsNullOrEmpty(encoded) || !encoded.Contains('&'))

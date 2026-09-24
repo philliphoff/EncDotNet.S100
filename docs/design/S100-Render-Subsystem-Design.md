@@ -1258,13 +1258,16 @@ Skia-measure-only pass run each frame over the Overlay scene **before** drawing:
 The old overlay rotated the whole canvas about screen-centre (F.11), which
 rotated glyphs too. `DrawOverlay` now splits the pass:
 
-- **Point pass** — unchanged: drawn under the rotated canvas (symbols rotate
-  with the chart, a deliberate scope guard).
+- **Point pass** — originally drawn under the rotated canvas, so every symbol
+  turned with the chart. Since #652 points are placed like text: the anchor is
+  rotated in code and the glyph keeps its screen angle, unless the symbol's
+  S-100 `rotationCRS` is `GeographicCRS` (orientation arrows, light flares),
+  which adds the display rotation. Points and text now share one pass.
 - **Text pass** — drawn on the **unrotated** canvas; each anchor is rotated in
   code about the screen centre (`RotateAbout`, matching `SKCanvas.RotateDegrees`
   sense) so the label stays pinned to its feature, while the glyph baseline stays
   **horizontal** (upright). `RenderOnto`/`DrawText` gained an optional screen-space
-  anchor rotation (`OverlayDrawOptions.TextAnchorRotationDegrees` + screen
+  anchor rotation (`OverlayDrawOptions.AnchorRotationDegrees` + screen
   centre) that moves the projected anchor but never the glyph orientation.
 
 Declutter footprints use the **post-rotation** anchors so collision is computed

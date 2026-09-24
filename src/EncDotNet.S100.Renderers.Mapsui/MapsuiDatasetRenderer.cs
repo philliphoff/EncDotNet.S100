@@ -377,6 +377,8 @@ public sealed class MapsuiDatasetRenderer
                         Image = new Image { Source = glyph.SvgSource, RasterizeSvg = true },
                         SymbolScale = glyph.SymbolScale,
                         SymbolRotation = glyph.Rotation,
+                        // A direction on the ground: turns with a rotated map.
+                        RotateWithMap = true,
                     });
                     break;
 
@@ -388,6 +390,8 @@ public sealed class MapsuiDatasetRenderer
                         Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
                         SymbolScale = glyph.SymbolScale,
                         SymbolRotation = glyph.Rotation,
+                        // A direction on the ground: turns with a rotated map.
+                        RotateWithMap = true,
                     });
                     break;
 
@@ -399,6 +403,8 @@ public sealed class MapsuiDatasetRenderer
                         Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
                         SymbolScale = glyph.SymbolScale,
                         SymbolRotation = glyph.Rotation,
+                        // A direction on the ground: turns with a rotated map.
+                        RotateWithMap = true,
                     });
                     break;
             }

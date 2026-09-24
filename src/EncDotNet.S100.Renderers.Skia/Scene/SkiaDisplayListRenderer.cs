@@ -283,10 +283,11 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, SKRect?)"/>, but
     /// driven by <paramref name="options"/> so the tiled subsystem's live label
     /// plane can: suppress decluttered text
-    /// (<see cref="OverlayDrawOptions.SuppressedText"/>), keep label glyphs
-    /// <b>upright</b> under a rotated viewport by rotating each text
-    /// <i>anchor</i> about the screen centre while drawing glyphs axis-aligned
-    /// (<see cref="OverlayDrawOptions.TextAnchorRotationDegrees"/>), and draw the
+    /// (<see cref="OverlayDrawOptions.SuppressedText"/>), keep labels and
+    /// screen-relative symbols <b>upright</b> under a rotated viewport by
+    /// rotating each point and text <i>anchor</i> about the screen centre while
+    /// drawing glyphs unrotated
+    /// (<see cref="OverlayDrawOptions.AnchorRotationDegrees"/>), and draw the
     /// point and text passes separately
     /// (<see cref="OverlayDrawOptions.DrawPoints"/> /
     /// <see cref="OverlayDrawOptions.DrawText"/>). The defaults reproduce the
@@ -313,7 +314,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             viewport.HeightPixels + PointCullMarginPx);
 
         var suppressed = options.SuppressedText;
-        double textRotationDeg = options.TextAnchorRotationDegrees;
+        double anchorRotationDeg = options.AnchorRotationDegrees;
         float centerX = options.ScreenCenterX;
         float centerY = options.ScreenCenterY;
 
@@ -356,14 +357,15 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                         break;
                     case PointPaintOp point when options.DrawPoints:
                         DrawPoint(canvas, point, transform, cullBounds,
-                            options.UseSymbolAtlas, options.DeviceScale);
+                            options.UseSymbolAtlas, options.DeviceScale,
+                            anchorRotationDeg, centerX, centerY);
                         break;
                     case TextPaintOp text when options.DrawText:
                         if (suppressed is not null && suppressed.Contains(text))
                             break;
                         textScratch ??= new TextDrawScratch();
                         DrawText(canvas, text, transform, cullBounds, textScratch,
-                            textRotationDeg, centerX, centerY);
+                            anchorRotationDeg, centerX, centerY);
                         break;
                 }
             }
@@ -530,9 +532,16 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     }
 
     private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds,
-        bool useAtlas = false, float deviceScale = 1f)
+        bool useAtlas, float deviceScale, double anchorRotationDeg, float centerX, float centerY)
     {
-        var (cx, cy) = t.Project(op.World);
+        // Under a rotated viewport the anchor turns about the screen centre with
+        // the chart, while the offset and the glyph stay in screen space: a
+        // screen-relative (PortrayalCRS) symbol keeps its angle, and only a
+        // north-relative (GeographicCRS) one turns by the display rotation
+        // (issue #652). North-up (deg == 0) is a no-op.
+        var (px, py) = t.Project(op.World);
+        var (cx, cy) = RotateAbout(px, py, centerX, centerY, anchorRotationDeg);
+        double? rotation = ScreenRotation(op, anchorRotationDeg);
         cx += (float)op.OffsetXpx;
         cy += (float)op.OffsetYpx;
 
@@ -577,7 +586,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                 // HiDPI matrix — identical pixels to replaying the picture, minus
                 // the per-frame vector replay. Per-op-rotated symbols (oriented
                 // lights/secondary symbols) keep the vector path for exact parity.
-                if (useAtlas && op.Rotation is null)
+                if (useAtlas && rotation is null)
                 {
                     var sprite = GetSymbolSprite(symbol.ProcessedSvg, scale, deviceScale, picture, bounds);
                     if (sprite is not null)
@@ -595,7 +604,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 
                 canvas.Save();
                 canvas.Translate(cx, cy);
-                if (op.Rotation is { } rot)
+                if (rotation is { } rot)
                     canvas.RotateDegrees((float)rot);
                 canvas.Scale(scale);
                 canvas.Translate(-pivotPicX, -pivotPicY);
@@ -614,6 +623,19 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             Color = op.FallbackColor.ToSkia(),
         };
         canvas.DrawCircle(cx, cy, radius, dot);
+    }
+
+    /// <summary>
+    /// The on-screen clockwise rotation of <paramref name="op"/>'s glyph on a
+    /// display rotated by <paramref name="displayRotationDeg"/>, or
+    /// <see langword="null"/> for upright. A screen-relative symbol keeps its
+    /// own rotation; a north-relative one adds the display rotation.
+    /// </summary>
+    internal static double? ScreenRotation(PointPaintOp op, double displayRotationDeg)
+    {
+        if (op.RotationCrs != SymbolRotationCrs.Geographic || displayRotationDeg == 0)
+            return op.Rotation;
+        return (op.Rotation ?? 0) + displayRotationDeg;
     }
 
     /// <summary>

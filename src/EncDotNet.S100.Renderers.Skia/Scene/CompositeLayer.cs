@@ -33,21 +33,23 @@ public abstract class CompositeLayer
 
     /// <summary>
     /// Paints the part of this layer that turns with a rotated display — all of
-    /// it but upright text — against the north-up cover
+    /// it but vector point symbols and text — against the north-up cover
     /// <paramref name="viewport"/>; the compositor then rotates the result onto
     /// the output (issue #578).
     /// </summary>
     internal virtual void DrawRotating(SKCanvas canvas, Viewport viewport) => Draw(canvas, viewport);
 
     /// <summary>
-    /// Paints the text that stays upright on a rotated display: each label's
-    /// anchor is turned by <paramref name="rotationDegrees"/> about the centre
-    /// of the north-up cover <paramref name="viewport"/>, with its glyphs drawn
-    /// unrotated. Labels whose rotated anchor falls outside
-    /// <paramref name="cullBounds"/> (the output, in cover pixels, plus a
-    /// margin) are skipped. Layers without text paint nothing.
+    /// Paints the point symbols and text placed in screen space on a rotated
+    /// display: each anchor is turned by <paramref name="rotationDegrees"/>
+    /// about the centre of the north-up cover <paramref name="viewport"/>, text
+    /// and screen-relative symbols are drawn unrotated, and north-relative
+    /// symbols turn by the display rotation (issue #652). Ops whose rotated
+    /// anchor falls outside <paramref name="cullBounds"/> (the output, in cover
+    /// pixels, plus a margin) are skipped. Layers without such ops paint
+    /// nothing.
     /// </summary>
-    internal virtual void DrawUprightText(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
+    internal virtual void DrawScreenPlaced(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
     {
     }
 }
@@ -90,15 +92,18 @@ public sealed class VectorCompositeLayer : CompositeLayer
     }
 
     internal override void DrawRotating(SKCanvas canvas, Viewport viewport)
-        => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions { DrawText = false });
+        => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+        {
+            DrawPoints = false,
+            DrawText = false,
+        });
 
-    internal override void DrawUprightText(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
+    internal override void DrawScreenPlaced(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
         => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
         {
             PointCullBounds = cullBounds,
             DrawAreasAndLines = false,
-            DrawPoints = false,
-            TextAnchorRotationDegrees = rotationDegrees,
+            AnchorRotationDegrees = rotationDegrees,
             ScreenCenterX = viewport.WidthPixels / 2f,
             ScreenCenterY = viewport.HeightPixels / 2f,
         });

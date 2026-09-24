@@ -85,7 +85,7 @@ public class LabelPlaneTextTests
             scene, viewport,
             new OverlayDrawOptions
             {
-                TextAnchorRotationDegrees = 90,
+                AnchorRotationDegrees = 90,
                 ScreenCenterX = px / 2f,
                 ScreenCenterY = px / 2f,
                 DrawPoints = false,

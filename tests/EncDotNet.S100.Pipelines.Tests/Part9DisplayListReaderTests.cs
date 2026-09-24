@@ -142,6 +142,30 @@ public class Part9DisplayListReaderTests
         Assert.Equal(0.5, text.LinePlacementPosition);
     }
 
+    [Theory]
+    [InlineData("""<symbol reference="ARROW01" rotation="90" rotationCRS="GeographicCRS"/>""", SymbolRotationCrs.Geographic)]
+    [InlineData("""<symbol reference="ARROW01" rotation="90" rotationCRS="PortrayalCRS"/>""", SymbolRotationCrs.Portrayal)]
+    [InlineData("""<symbol reference="ARROW01"><rotation>90</rotation></symbol>""", SymbolRotationCrs.Portrayal)]
+    public void ReadPoint_RotationAndItsCrs_AreCaptured(string symbol, SymbolRotationCrs crs)
+    {
+        var doc = XDocument.Parse(
+            $"""
+            <displayList>
+              <pointInstruction>
+                <featureReference>F1</featureReference>
+                <viewingGroup>31000</viewingGroup>
+                <displayPlane>OVERRADAR</displayPlane>
+                <drawingPriority>15</drawingPriority>
+                {symbol}
+              </pointInstruction>
+            </displayList>
+            """);
+
+        var point = Assert.IsType<PointInstruction>(Assert.Single(Part9DisplayListReader.Read(doc)));
+        Assert.Equal(90, point.Rotation);
+        Assert.Equal(crs, point.RotationCrs);
+    }
+
     [Fact]
     public void ReadArea_TransparencyOnColorAttribute_IsCaptured()
     {

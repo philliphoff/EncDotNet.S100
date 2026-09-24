@@ -2815,16 +2815,15 @@ public static class S100VectorTileRenderer
         const float margin = SkiaDisplayListRenderer.PointCullMarginPx;
 
         // The plain (unrotated) viewport cull rect, in real screen space. Both
-        // the declutter pass and the upright text pass work in this frame because
+        // the declutter pass and the overlay draw work in this frame because
         // they rotate anchors in code rather than rotating the canvas.
         var screenCull = new SKRect(
             -margin, -margin,
             (float)widthDip + margin, (float)heightDip + margin);
 
-        // The rotated point pass culls against the rotated viewport footprint,
-        // which is larger than the axis-aligned screen rect. Compute it up-front
-        // so it can also bound the viewport scoping below (the declutter and
-        // upright-text passes rotate anchors into the same footprint).
+        // The rotated viewport footprint, larger than the axis-aligned screen
+        // rect: its world preimage bounds the viewport scoping below, since the
+        // declutter and draw passes rotate anchors from it onto the screen.
         SKRect rotatedCull = default;
         if (rotate)
         {
@@ -2856,44 +2855,18 @@ public static class S100VectorTileRenderer
             scene, viewport, screenCull, OverlayRenderer.HonorScaleVisibility,
             rotationDeg, cx, cy);
 
-        if (!rotate)
-        {
-            OverlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
-            {
-                PointCullBounds = screenCull,
-                SuppressedText = suppressed,
-                DeviceScale = deviceScale,
-            });
-            return;
-        }
-
-        // Rotated viewport: draw symbols under the rotated canvas (anchors stay
-        // aligned with the rotated base), then draw labels upright by rotating
-        // the anchor in code while keeping glyphs axis-aligned.
-        canvas.Save();
-        canvas.RotateDegrees((float)rotationDeg, cx, cy);
-        try
-        {
-            OverlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
-            {
-                PointCullBounds = rotatedCull,
-                DrawText = false,
-                DeviceScale = deviceScale,
-            });
-        }
-        finally
-        {
-            canvas.Restore();
-        }
-
+        // One pass for symbols and labels, in op order as north-up. Under
+        // rotation each anchor is turned about the screen centre in code, so
+        // labels and screen-relative symbols stay upright and only north-relative
+        // (GeographicCRS) symbols turn with the chart (issue #652).
         OverlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
         {
             PointCullBounds = screenCull,
             SuppressedText = suppressed,
-            TextAnchorRotationDegrees = rotationDeg,
+            DeviceScale = deviceScale,
+            AnchorRotationDegrees = rotationDeg,
             ScreenCenterX = cx,
             ScreenCenterY = cy,
-            DrawPoints = false,
         });
     }
 

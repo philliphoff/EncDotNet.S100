@@ -121,6 +121,7 @@ internal static class VesselSymbology
                 Fill = new Brush { Color = palette.Stroke },
                 Outline = new Pen { Color = palette.Stroke, Width = 1.0 },
                 SymbolRotation = heading,
+                RotateWithMap = true,
             });
             yield return arrow;
         }
@@ -180,6 +181,7 @@ internal static class VesselSymbology
                 Image = new Image { Source = CcrpCrossImageSource(palette.Stroke), RasterizeSvg = true },
                 SymbolScale = 1.0,
                 SymbolRotation = headingDeg ?? 0.0,
+                RotateWithMap = true,
                 MaxVisible = rSwitch,
             });
             yield return cross;
