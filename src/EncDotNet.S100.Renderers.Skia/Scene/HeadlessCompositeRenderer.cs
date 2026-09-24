@@ -31,13 +31,13 @@ public sealed class HeadlessCompositeRenderer
     /// </summary>
     /// <remarks>
     /// Under a non-zero <see cref="Viewport.RotationDegrees"/> the chart turns
-    /// but its labels stay upright, as in the viewer: each layer paints its
-    /// areas, lines and symbols north-up into a
+    /// but its labels and screen-relative symbols stay upright, as in the
+    /// viewer: each layer paints its areas, lines and coverage north-up into a
     /// <see cref="RotatedViewport.NorthUpCover"/> surface, which is rotated onto
-    /// the output about its centre, and then paints its text unrotated at the
-    /// rotated anchors. Layers are still composited one at a time, bottom-most
-    /// first, so a layer's labels sit under the layers above it exactly as they
-    /// do north-up.
+    /// the output about its centre, and then paints its point symbols and text
+    /// at the rotated anchors, turning only north-relative symbols. Layers are
+    /// still composited one at a time, bottom-most first, so a layer's labels
+    /// and symbols sit under the layers above it exactly as they do north-up.
     /// </remarks>
     /// <param name="viewport">The shared composite viewport (explicit; no auto-fit).</param>
     /// <param name="layers">Ordered layers, bottom-most first.</param>
@@ -86,9 +86,10 @@ public sealed class HeadlessCompositeRenderer
         float offsetX = (viewport.WidthPixels - cover.WidthPixels) / 2f;
         float offsetY = (viewport.HeightPixels - cover.HeightPixels) / 2f;
 
-        // Labels are culled by where their rotated anchor lands on the output,
-        // which in cover pixels is the output rectangle moved by the offset.
-        var textCull = SKRect.Create(
+        // Symbols and labels are culled by where their rotated anchor lands on
+        // the output, which in cover pixels is the output rectangle moved by the
+        // offset.
+        var screenCull = SKRect.Create(
             -offsetX - SkiaDisplayListRenderer.PointCullMarginPx,
             -offsetY - SkiaDisplayListRenderer.PointCullMarginPx,
             viewport.WidthPixels + 2 * SkiaDisplayListRenderer.PointCullMarginPx,
@@ -114,7 +115,7 @@ public sealed class HeadlessCompositeRenderer
 
             canvas.Save();
             canvas.Translate(offsetX, offsetY);
-            layer.DrawUprightText(canvas, cover, rotation, textCull);
+            layer.DrawScreenPlaced(canvas, cover, rotation, screenCull);
             canvas.Restore();
         }
     }

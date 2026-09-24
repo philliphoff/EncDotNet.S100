@@ -91,7 +91,12 @@ public static class Part9DisplayListReader
         if (symbolRef is null) return null;
 
         var scaleFactor = ParseDouble(symbolEl.Element("scaleFactor")?.Value, 1.0);
-        var rotation = ParseNullableDouble(symbolEl.Element("rotation")?.Value);
+        // Part 9 writes rotation and rotationCRS as attributes of <symbol>;
+        // older stylesheets put rotation in a child element.
+        var rotation = ParseNullableDouble(
+            symbolEl.Attribute("rotation")?.Value ?? symbolEl.Element("rotation")?.Value);
+        var rotationCrs = DrawingInstructionParser.ParseRotationCrs(
+            symbolEl.Attribute("rotationCRS")?.Value ?? symbolEl.Element("rotationCRS")?.Value);
         var offsetX = ParseDouble(symbolEl.Element("offset")?.Element("x")?.Value);
         var offsetY = ParseDouble(symbolEl.Element("offset")?.Element("y")?.Value);
 
@@ -106,6 +111,7 @@ public static class Part9DisplayListReader
             SymbolReference = symbolRef,
             SymbolScale = scaleFactor,
             Rotation = rotation,
+            RotationCrs = rotationCrs,
             LocalOffsetX = offsetX,
             LocalOffsetY = offsetY,
         };

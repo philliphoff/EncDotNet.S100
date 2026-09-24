@@ -119,7 +119,24 @@ public class S101DrawingInstructionParserTests
         Assert.Equal(-2.0, pt.LocalOffsetY);
         Assert.Equal(1.5, pt.SymbolScale);
         Assert.Equal(45, pt.Rotation);
+        Assert.Equal(SymbolRotationCrs.Portrayal, pt.RotationCrs);
         Assert.Equal("BOYLAT11", pt.SymbolReference);
+    }
+
+    [Fact]
+    public void PointInstruction_KeepsTheRotationCrs_ForThatInstructionOnly()
+    {
+        // S-101 CurrentNonGravitational: an orientation arrow is north-relative;
+        // the symbol after it, with no Rotation of its own, is upright on screen.
+        const string s =
+            "Rotation:GeographicCRS,135;PointInstruction:CURENT01;PointInstruction:CURDEF01";
+
+        var points = DrawingInstructionParser.Parse("F1", s).OfType<PointInstruction>().ToList();
+
+        Assert.Equal(135, points[0].Rotation);
+        Assert.Equal(SymbolRotationCrs.Geographic, points[0].RotationCrs);
+        Assert.Null(points[1].Rotation);
+        Assert.Equal(SymbolRotationCrs.Portrayal, points[1].RotationCrs);
     }
 
     [Fact]

@@ -25,6 +25,7 @@ public class DrawingInstructionSerializerTests
         SymbolReference = "BOYLAT01",
         SymbolScale = 1.25,
         Rotation = 45.5,
+        RotationCrs = SymbolRotationCrs.Geographic,
         LocalOffsetX = 1.5,
         LocalOffsetY = -2.5,
         LinePlacementPosition = 0.5,
@@ -176,6 +177,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.SymbolReference, ap.SymbolReference);
                 Assert.Equal(e.SymbolScale, ap.SymbolScale);
                 Assert.Equal(e.Rotation, ap.Rotation);
+                Assert.Equal(e.RotationCrs, ap.RotationCrs);
                 Assert.Equal(e.LocalOffsetX, ap.LocalOffsetX);
                 Assert.Equal(e.LocalOffsetY, ap.LocalOffsetY);
                 Assert.Equal(e.LinePlacementPosition, ap.LinePlacementPosition);

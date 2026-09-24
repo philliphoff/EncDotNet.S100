@@ -185,6 +185,7 @@ public sealed class MapsuiCoverageArrowRenderer
                     // map-up; surfaceCurrentDirection is degrees true (0=N,
                     // 90=E), which is the same convention.
                     SymbolRotation = direction,
+                    RotateWithMap = true,
                     Opacity = (float)Opacity,
                 });
                 features.Add(feature);

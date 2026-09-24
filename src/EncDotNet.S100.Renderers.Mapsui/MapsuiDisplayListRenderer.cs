@@ -615,6 +615,7 @@ public sealed class MapsuiDisplayListRenderer
                 };
                 if (op.Rotation.HasValue)
                     hitStyle.SymbolRotation = op.Rotation.Value;
+                hitStyle.RotateWithMap = op.RotationCrs == SymbolRotationCrs.Geographic;
                 if (hasSymbolOffset)
                     hitStyle.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
                 if (hasPivotRelative)
@@ -629,6 +630,9 @@ public sealed class MapsuiDisplayListRenderer
             style.SymbolScale = svgScale;
             if (op.Rotation.HasValue)
                 style.SymbolRotation = op.Rotation.Value;
+            // A north-relative (GeographicCRS) symbol turns with a rotated map;
+            // a screen-relative one keeps its angle (issue #652).
+            style.RotateWithMap = op.RotationCrs == SymbolRotationCrs.Geographic;
             if (hasSymbolOffset)
                 style.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
             if (hasPivotRelative)
@@ -646,6 +650,9 @@ public sealed class MapsuiDisplayListRenderer
             };
             if (op.Rotation.HasValue)
                 style.SymbolRotation = op.Rotation.Value;
+            // A north-relative (GeographicCRS) symbol turns with a rotated map;
+            // a screen-relative one keeps its angle (issue #652).
+            style.RotateWithMap = op.RotationCrs == SymbolRotationCrs.Geographic;
             if (hasSymbolOffset)
                 style.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
             feature.Styles.Add(style);

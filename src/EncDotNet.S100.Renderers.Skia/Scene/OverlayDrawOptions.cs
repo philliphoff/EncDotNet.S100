@@ -1,3 +1,4 @@
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
@@ -14,10 +15,10 @@ public sealed class OverlayDrawOptions
     /// <summary>
     /// Pixel-space rectangle outside which point/text ops are skipped, or
     /// <see langword="null"/> to derive it from the viewport plus
-    /// <see cref="SkiaDisplayListRenderer.PointCullMarginPx"/>. A point pass that
-    /// rotates the canvas must pass the rotated viewport's bounding box; a text
-    /// pass that instead rotates anchors (keeping glyphs upright) culls against
-    /// the unrotated viewport.
+    /// <see cref="SkiaDisplayListRenderer.PointCullMarginPx"/>. The test is on
+    /// the anchor after <see cref="AnchorRotationDegrees"/> is applied, so a
+    /// pass that rotates anchors culls against the output as drawn; a pass that
+    /// instead rotates the canvas must pass the rotated viewport's bounding box.
     /// </summary>
     public SKRect? PointCullBounds { get; init; }
 
@@ -29,18 +30,20 @@ public sealed class OverlayDrawOptions
     public IReadOnlySet<TextPaintOp>? SuppressedText { get; init; }
 
     /// <summary>
-    /// Degrees to rotate each text <i>anchor</i> about
-    /// (<see cref="ScreenCenterX"/>, <see cref="ScreenCenterY"/>), matching how
-    /// the base/point passes rotate under a rotated viewport, while glyphs are
-    /// still drawn axis-aligned (upright). Zero (the default, and the north-up
-    /// v1 case) leaves anchors unrotated.
+    /// Clockwise display rotation, in degrees: each point and text
+    /// <i>anchor</i> is turned by it about
+    /// (<see cref="ScreenCenterX"/>, <see cref="ScreenCenterY"/>), matching the
+    /// rotated base plane, while labels and screen-relative symbols are drawn
+    /// unrotated (upright) and north-relative symbols
+    /// (<see cref="SymbolRotationCrs.Geographic"/>) turn by it too. Zero (the
+    /// default, north-up) leaves everything unrotated.
     /// </summary>
-    public double TextAnchorRotationDegrees { get; init; }
+    public double AnchorRotationDegrees { get; init; }
 
-    /// <summary>Screen-space X of the rotation centre for <see cref="TextAnchorRotationDegrees"/>.</summary>
+    /// <summary>Screen-space X of the rotation centre for <see cref="AnchorRotationDegrees"/>.</summary>
     public float ScreenCenterX { get; init; }
 
-    /// <summary>Screen-space Y of the rotation centre for <see cref="TextAnchorRotationDegrees"/>.</summary>
+    /// <summary>Screen-space Y of the rotation centre for <see cref="AnchorRotationDegrees"/>.</summary>
     public float ScreenCenterY { get; init; }
 
     /// <summary>

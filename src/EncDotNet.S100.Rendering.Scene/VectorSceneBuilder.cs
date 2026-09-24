@@ -670,6 +670,7 @@ public sealed class VectorSceneBuilder
             FallbackColor = ColorResolver.ResolveSymbolColor(instruction.SymbolReference, ResolveColor),
             FallbackScale = 0.15 * instruction.SymbolScale * SymbolScale,
             Rotation = instruction.Rotation,
+            RotationCrs = instruction.RotationCrs,
             OffsetXpx = symOffsetXpx,
             OffsetYpx = symOffsetYpx,
         };
