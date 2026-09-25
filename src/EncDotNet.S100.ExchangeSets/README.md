@@ -169,6 +169,7 @@ The **confidentiality** dimension of Part 15 — reading **encrypted** datasets 
 | `StandaloneDigitalSignatureReader` / `PermitSignatureVerifier` | Parses `PERMIT.SIGN`, validates its certificate chain and ECDSA P-384/SHA-384 signature, and exposes the permit only after authentication | §15-7.4.5, §15-8.11.2 |
 | `IDatasetKeyProvider` / `PermitKeyProvider` | Resolves a cell key from an authenticated permit and enforces catalogue edition, issue-date, and expiry applicability | §15-7.4.4 |
 | `DecryptingAssetSource` | `IAssetSource` decorator that decrypts (and optionally decompresses) keyed files transparently | §15-5, §15-6 |
+| `DatasetPermitException` / `DatasetDecryptionException` | Permit-policy refusal (with a `PermitEvaluationResult`), and a permitted dataset whose cell key can't decrypt it | §15-6, §15-7.4.4 |
 
 **Crypto details** (all pinned to the §15 worked examples in unit tests): AES-128, PKCS#7 padding, and the §15-6.2.4 *modified CBC* mode (a random block is prepended before encryption and discarded on decryption, so no IV is transmitted). Cell keys and hardware ids are exactly one AES block and are wrapped with single-block ECB. Compression (§15-5.2) is ZIP/DEFLATE, applied *before* encryption; `DecryptingAssetSource` unzips the single-entry archive when `decompress` is set.
 
@@ -194,6 +195,19 @@ var keys = new PermitKeyProvider(permits, hwId, catalogue);
 using IAssetSource source = new DecryptingAssetSource(fileSystemOrZipSource, keys, decompress: true);
 await using Stream plaintext = await source.OpenAsync("S-101/101GB40079ABCDEF.000");
 ```
+
+**Errors.** A dataset its permit doesn't authorize throws `DatasetPermitException`
+before any decryption; `Evaluation.Outcome` says why (for example
+`EditionMismatch` or `IssuedAfterExpiry`). A permit's `encryptedKey` is a bare
+AES block with no checksum, so a **wrong hardware id** isn't detected when the
+key is unwrapped. It shows up when that key fails to decrypt the dataset, and
+`DecryptingAssetSource` then throws `DatasetDecryptionException`. The exception
+names the dataset (`DatasetPath`) and points to the hardware id, the
+manufacturer key used to recover it, or a permit issued for a different Data
+Client. It derives from `CryptographicException`, and the original failure is its
+`InnerException`. Detection relies on the PKCS#7 padding check, so about one
+wrong key in 256 decrypts without an error and returns unreadable content
+instead.
 
 Legacy signatures over the **unencrypted** resource can verify an encrypted
 exchange set by passing a `DecryptingAssetSource` to

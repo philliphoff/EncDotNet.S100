@@ -27,7 +27,10 @@ public static class S100ExchangeSetProtectionExtensions
     /// unencrypted support files) are read unchanged. Decrypted datasets are also
     /// decompressed when the catalogue declares <c>compressionFlag</c> for any
     /// dataset (§15-5.2). Opening a protected dataset that its permit does not
-    /// authorize throws <see cref="DatasetPermitException"/>.
+    /// authorize throws <see cref="DatasetPermitException"/>. Reading a
+    /// protected dataset that its permit authorizes but whose unwrapped cell key
+    /// cannot decrypt it (most often a wrong hardware id) throws
+    /// <see cref="DatasetDecryptionException"/>.
     /// </para>
     /// <para>
     /// The returned exchange set reads through <paramref name="exchangeSet"/>'s

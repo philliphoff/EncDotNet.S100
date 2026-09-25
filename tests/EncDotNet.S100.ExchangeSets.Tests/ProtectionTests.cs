@@ -324,6 +324,91 @@ public class ProtectionTests
         Assert.Equal(payload, await ReadAll(decrypting, "101AA00000000002.000"));
     }
 
+    [Fact]
+    public async Task DecryptingAssetSource_WrongHardwareId_ThrowsDatasetDecryptionException()
+    {
+        byte[] cellKey = Hex("000102030405060708090A0B0C0D0E0F");
+        byte[] hardwareId = Hex(ExampleHardwareId);
+        byte[] wrongHardwareId = Hex("00112233445566778899AABBCCDDEEFF");
+        byte[] payload = Encoding.ASCII.GetBytes("This is the decrypted S-101 dataset content.");
+
+        // The permit wraps the cell key for one Data Client...
+        byte[] encryptedKey = S100Cipher.EncryptBlock(cellKey, hardwareId);
+        string permitXml = BuildPermitXml("101AA00000000003", Convert.ToHexString(encryptedKey));
+        var permitFile = await AuthenticatePermitAsync(permitXml);
+
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000003.000",
+            issueDate: "2026-01-01");
+
+        // ...but the dataset is opened with another client's hardware id.
+        var keyProvider = new PermitKeyProvider(
+            permitFile,
+            HardwareId.FromBytes(wrongHardwareId),
+            catalogue);
+        byte[] wrongCellKey = S100Cipher.DecryptBlock(encryptedKey, wrongHardwareId);
+
+        var inner = new InMemoryAssetSource();
+        inner.AddFile("S-101/101AA00000000003.000", EncryptRejectedBy(payload, cellKey, wrongCellKey));
+
+        using var decrypting = new DecryptingAssetSource(inner, keyProvider);
+
+        var exception = await Assert.ThrowsAsync<DatasetDecryptionException>(
+            () => decrypting.OpenAsync("S-101/101AA00000000003.000"));
+        Assert.Equal("S-101/101AA00000000003.000", exception.DatasetPath);
+        Assert.Contains("101AA00000000003.000", exception.Message);
+        Assert.Contains("hardware id", exception.Message);
+        Assert.IsAssignableFrom<CryptographicException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task DecryptingAssetSource_MalformedCiphertext_IsNotReportedAsKeyFailure()
+    {
+        byte[] cellKey = Hex("000102030405060708090A0B0C0D0E0F");
+        byte[] hardwareId = Hex(ExampleHardwareId);
+
+        byte[] encryptedKey = S100Cipher.EncryptBlock(cellKey, hardwareId);
+        string permitXml = BuildPermitXml("101AA00000000004", Convert.ToHexString(encryptedKey));
+        var permitFile = await AuthenticatePermitAsync(permitXml);
+
+        var catalogue = CreateProtectedCatalogue(
+            "101AA00000000004.000",
+            issueDate: "2026-01-01");
+        var keyProvider = new PermitKeyProvider(
+            permitFile,
+            HardwareId.FromBytes(hardwareId),
+            catalogue);
+
+        // Not a whole number of AES blocks: truncated, whatever the key.
+        var inner = new InMemoryAssetSource();
+        inner.AddFile("101AA00000000004.000", new byte[20]);
+
+        using var decrypting = new DecryptingAssetSource(inner, keyProvider);
+
+        var exception = await Assert.ThrowsAsync<CryptographicException>(
+            () => decrypting.OpenAsync("101AA00000000004.000"));
+        Assert.IsNotType<DatasetDecryptionException>(exception);
+    }
+
+    // Wrong-key detection relies on the PKCS#7 padding check, which a wrong key
+    // passes about once in 256 encryptions; re-encrypt until it is rejected so
+    // the test is deterministic.
+    private static byte[] EncryptRejectedBy(byte[] payload, byte[] cellKey, byte[] wrongCellKey)
+    {
+        while (true)
+        {
+            byte[] ciphertext = S100Cipher.EncryptDataset(payload, cellKey);
+            try
+            {
+                S100Cipher.DecryptDataset(ciphertext, wrongCellKey);
+            }
+            catch (CryptographicException)
+            {
+                return ciphertext;
+            }
+        }
+    }
+
     private static string BuildPermitXml(string fileName, string encryptedKeyHex) => $"""
         <?xml version="1.0" encoding="UTF-8"?>
         <Permit xmlns="http://www.iho.int/s100/se/5.1">
