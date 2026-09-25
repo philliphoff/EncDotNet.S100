@@ -270,8 +270,8 @@ snapshots a clone of the live map without mutating it): its tool logic
 lives in `EncDotNet.S100.Mcp.Tools` over the `IImageRenderer` capability
 seam and is assembled by `S100MutableTools` (in `EncDotNet.S100.Mcp`),
 with each host supplying the renderer. The desktop viewer backs it with a
-snapshot of a clone of the live Mapsui `Map` (through a
-`ViewerImageRenderer` adapter); the headless CLI backs it with its Skia
+snapshot of a clone of the live Mapsui `Map` (its `MapsuiMapHost` implements
+`IImageRenderer`); the headless CLI backs it with its Skia
 composite pipeline. Its inverse, `pick_features`, is viewer-only — it
 needs the live navigator to project a screen pixel back to a geographic
 point, and has no headless analogue.

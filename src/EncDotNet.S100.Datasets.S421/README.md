@@ -25,7 +25,7 @@ Key types include:
 - **`S421Dataset`** — root model containing parsed features, information types, and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
 - **`S421Feature`** — a feature with type code, optional geometry, simple attributes, complex attributes, and `xlink` references.
 - **`S421InformationType`** — a non-spatial information type instance (e.g. `RouteInfo`).
-- **`S421Reference`** — an `xlink:href` reference from one object to another.
+- **`GmlReference`** (namespace `EncDotNet.S100.Features`, in the `EncDotNet.S100.Core` package) — an `xlink:href` reference from one object to another.
 - **`S421ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
 - **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature (`None`, `Point`, `Curve`, `Surface`).
 - **`S421FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S421Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.

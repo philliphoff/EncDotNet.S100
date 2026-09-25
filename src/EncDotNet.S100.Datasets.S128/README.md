@@ -47,7 +47,6 @@ upstream sample (`DistributorInformation`, `ProducerInformation`,
 | `S128ProductCatalogue` (`DataModel/`) | Strongly-typed projection of the dataset as a catalogue of typed `S128CatalogueEntry` subclasses with resolved `Supersedes`/`SupersededBy` navigation. See [Strongly-typed data model](#strongly-typed-data-model). |
 | `S128CatalogueRules` (`Validation/`) | Default pilot rule pack for `S128ProductCatalogue` (rule IDs `S128-R-12.*` traced to S-128 § 12). See [Validation](#validation). |
 | `S128FeatureXmlSource` | Projects the dataset into the S-100 Part 9 FeatureXML neutral form consumed by the bundled XSLT |
-| `S128FeatureGeometryProvider` | `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer |
 | `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes) |
 
 ## Producer-bug compensations

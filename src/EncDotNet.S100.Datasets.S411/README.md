@@ -20,7 +20,7 @@ Key types:
 - **`S411ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
 - **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
 - **`S411FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S411Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
-- **`S411FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer.
+- **Feature geometry** reaches the renderers through the shared `FeatureGeometryProvider<TFeature>` (`IFeatureGeometryProvider`, from `EncDotNet.S100.Core`), which the dataset processor builds over the parsed features.
 - **`S411PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
 ## Typed data model
@@ -121,7 +121,7 @@ that is incompatible with this codebase's `Part9DisplayListReader` (it uses
 `<symbol><symbolReference>X</symbolReference></symbol>` instead of
 `<symbol reference="X"/>`, etc.). To preserve the catalogue intact while
 still rendering, this library ships an embedded adapter at
-`Adapter/main.xsl`. `S411PortrayalCatalogue.GetCompiledRule("mainRule")`
+`Adapter/main.xsl`. `S411PortrayalCatalogue.GetCompiledRuleAsync("mainRule")`
 substitutes the adapter for the catalogue's `mainRule` only; all other rule
 references (sub-templates, simple-symbol templates, etc.) are loaded from
 the unmodified PC. The adapter handles both GML shapes described above.
