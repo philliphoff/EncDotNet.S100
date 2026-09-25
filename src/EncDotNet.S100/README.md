@@ -97,7 +97,8 @@ foreach (var entry in exchangeSet.Datasets)
 
 For an encrypted (S-100 Part 15) exchange set, build an `IDatasetKeyProvider`
 from the set's `Catalogue` (typically a `PermitKeyProvider` over an authenticated
-permit) and read through `exchangeSet.WithDecryption(keys)`.
+permit) and read through `exchangeSet.WithDecryption(keys)`; see
+[Reading protected exchange sets](../../docs/protected-exchange-sets.md).
 
 See [Loading datasets](../../docs/loading-datasets.md) for the full guide:
 caching, S-101 updates, custom asset sources, and the lower-level processor API.

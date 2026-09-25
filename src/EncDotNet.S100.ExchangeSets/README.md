@@ -223,6 +223,12 @@ signatures coexist on one resource.
 Viewer/CLI workflows for supplying permits and keys remain separate from the
 library-level signature and decryption support.
 
+For a step-by-step walkthrough, including code that generates a test protected
+exchange set, see
+[Reading protected exchange sets](../../docs/protected-exchange-sets.md). The
+`EncDotNet.S100` facade's `S100ExchangeSet.WithDecryption` wraps
+`DecryptingAssetSource` for you.
+
 ### CLI
 
 The `s100 validate` command verifies an exchange set when given a `CATALOG.XML`, a directory containing one, or a `.zip` whose root holds one:

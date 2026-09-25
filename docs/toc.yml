@@ -6,6 +6,8 @@
   href: getting-started.md
 - name: Loading datasets
   href: loading-datasets.md
+- name: Reading protected exchange sets
+  href: protected-exchange-sets.md
 - name: Scenario guides
   items:
     - name: Render S-102 to PNG
