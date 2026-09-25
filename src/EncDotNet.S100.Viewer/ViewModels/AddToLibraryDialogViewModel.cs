@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Collections.Usace;
 using EncDotNet.S100.Viewer.Library;
@@ -45,8 +46,11 @@ internal sealed record FacetGroupViewModel(string Title, ObservableCollection<Fa
 internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 {
     private readonly LibraryService _library;
-    private readonly Func<CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
-    private readonly Func<CancellationToken, Task<UsaceIencProductCatalog>>? _loadUsaceCatalog;
+    private readonly Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
+    private readonly Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? _loadUsaceCatalog;
+    private readonly TimeProvider _time;
+    private KnownCatalogueSource? _known;
+    private DateOnly? _catalogueDate;
 
     private AddToLibraryKind _kind;
     private string? _path;
@@ -61,13 +65,15 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
     public AddToLibraryDialogViewModel(
         LibraryService library,
-        Func<CancellationToken, Task<NoaaEncProductCatalog>>? loadNoaaCatalog,
-        Func<CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null)
+        Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? loadNoaaCatalog,
+        Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
         _loadCatalog = loadNoaaCatalog;
         _loadUsaceCatalog = loadUsaceCatalog;
+        _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
         CancelCommand = new RelayCommand(() => Closed?.Invoke(this, false));
@@ -103,7 +109,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     };
 
     /// <summary>The dialog title.</summary>
-    public string Title => _kind switch
+    public string Title => _known?.Name ?? _kind switch
     {
         AddToLibraryKind.NoaaFeed => Strings.Library_AddNoaaTitle,
         AddToLibraryKind.UsaceFeed => Strings.Library_AddUsaceTitle,
@@ -113,10 +119,23 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>The path being added, or the feed URL.</summary>
     public string SourceDescription => _kind switch
     {
-        AddToLibraryKind.NoaaFeed => NoaaEncFeedSource.DefaultCatalogUri.AbsoluteUri,
-        AddToLibraryKind.UsaceFeed => UsaceIencFeedSource.RiversCatalogUri.AbsoluteUri,
+        AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed => CatalogUri.AbsoluteUri,
         _ => _path ?? string.Empty,
     };
+
+    /// <summary>The online catalogue being read: the known source's, else the feed's default.</summary>
+    public Uri CatalogUri => _known?.CatalogUri ?? (_kind == AddToLibraryKind.UsaceFeed
+        ? UsaceIencFeedSource.RiversCatalogUri
+        : NoaaEncFeedSource.DefaultCatalogUri);
+
+    /// <summary>"Catalogue dated 2026-09-17", once the catalogue is loaded and declares a date.</summary>
+    public string? CatalogueDateText => _catalogueDate is { } date
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_CatalogueDatedFormat, date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+        : null;
+
+    /// <summary>True when the loaded catalogue is more than a year old (it may no longer be maintained).</summary>
+    public bool IsCatalogueStale =>
+        _catalogueDate is { } date && DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime).DayNumber - date.DayNumber > 365;
 
     /// <summary>True to create a new collection; false to add to <see cref="SelectedCollection"/>.</summary>
     public bool CreateNew
@@ -221,9 +240,29 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <paramref name="targetCollectionId"/> when it names a collection.
     /// </summary>
     public void Initialize(AddToLibraryKind kind, string? path, Guid? targetCollectionId)
+        => Initialize(kind, path, targetCollectionId, known: null);
+
+    /// <summary>
+    /// Prepares the dialog for adding a scope of the known online catalogue
+    /// <paramref name="known"/> (issue #670).
+    /// </summary>
+    public void Initialize(KnownCatalogueSource known, Guid? targetCollectionId)
+    {
+        ArgumentNullException.ThrowIfNull(known);
+        var kind = known.Format switch
+        {
+            KnownCatalogueFormat.UsaceIenc => AddToLibraryKind.UsaceFeed,
+            _ => AddToLibraryKind.NoaaFeed,
+        };
+        Initialize(kind, null, targetCollectionId, known);
+    }
+
+    private void Initialize(AddToLibraryKind kind, string? path, Guid? targetCollectionId, KnownCatalogueSource? known)
     {
         _kind = kind;
         _path = path;
+        _known = known;
+        _catalogueDate = null;
         ExistingCollections = _library.Collections.Where(c => !c.IsSession).ToArray();
         _selectedCollection = targetCollectionId is { } id
             ? ExistingCollections.FirstOrDefault(c => c.Id == id)
@@ -251,7 +290,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         LoadError = null;
         try
         {
-            _catalog = await _loadCatalog(cancellationToken).ConfigureAwait(true);
+            _catalog = await _loadCatalog(CatalogUri, cancellationToken).ConfigureAwait(true);
+            SetCatalogueDate(_catalog.Header.ValidAt is { } valid ? DateOnly.FromDateTime(valid.UtcDateTime) : null);
             var facets = NoaaEncFacets.Compute(_catalog);
 
             Populate(States, facets.States.OrderBy(f => UsStateNames.SortKey(f.Value), StringComparer.CurrentCulture),
@@ -281,7 +321,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         LoadError = null;
         try
         {
-            _usaceCatalog = await _loadUsaceCatalog(cancellationToken).ConfigureAwait(true);
+            _usaceCatalog = await _loadUsaceCatalog(CatalogUri, cancellationToken).ConfigureAwait(true);
+            SetCatalogueDate(_usaceCatalog.CreatedOn);
             Populate(Rivers, EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer.Rivers(_usaceCatalog), f => f.Value);
             UpdateSelection();
         }
@@ -295,6 +336,13 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         }
     }
 
+    private void SetCatalogueDate(DateOnly? date)
+    {
+        _catalogueDate = date;
+        OnPropertyChanged(nameof(CatalogueDateText));
+        OnPropertyChanged(nameof(IsCatalogueStale));
+    }
+
     /// <summary>The USACE filter for the current river selection.</summary>
     public UsaceIencFilter CurrentUsaceFilter => new()
     {
@@ -302,7 +350,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     };
 
     /// <summary>The default collection name for an online feed, or <see langword="null"/> for local sources.</summary>
-    private string? FeedName => _kind switch
+    private string? FeedName => _known?.Name ?? _kind switch
     {
         AddToLibraryKind.NoaaFeed => Strings.Library_NoaaFeed,
         AddToLibraryKind.UsaceFeed => Strings.Library_UsaceFeed,
@@ -354,8 +402,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.ExchangeSet => new ExchangeSetSource(id, null, _path!),
             AddToLibraryKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
             AddToLibraryKind.UsaceFeed => new UsaceIencFeedSource(
-                id, DescribeUsaceFilter(CurrentUsaceFilter), UsaceIencFeedSource.RiversCatalogUri, CurrentUsaceFilter),
-            _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter), NoaaEncFeedSource.DefaultCatalogUri, CurrentFilter),
+                id, DescribeUsaceFilter(CurrentUsaceFilter), CatalogUri, CurrentUsaceFilter),
+            _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter), CatalogUri, CurrentFilter),
         };
     }
 
@@ -408,8 +456,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             LibraryItemViewModel.FormatBytes(bytes));
 
         // Follow the selection in the suggested name until the user edits it.
-        if (_createNew && (string.IsNullOrWhiteSpace(_newCollectionName) || _newCollectionName.StartsWith(Strings.Library_NoaaFeed, StringComparison.Ordinal)))
-            NewCollectionName = filter.IsUnscoped ? Strings.Library_NoaaFeed : $"{Strings.Library_NoaaFeed} — {DescribeFilter(filter)}";
+        FollowSelectionInName(filter.IsUnscoped, () => DescribeFilter(filter));
     }
 
     private void UpdateUsaceSelection()
@@ -425,8 +472,22 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             selected.Length,
             LibraryItemViewModel.FormatBytes(selected.Sum(c => c.ZipSize ?? 0)));
 
-        if (_createNew && (string.IsNullOrWhiteSpace(_newCollectionName) || _newCollectionName.StartsWith(Strings.Library_UsaceFeed, StringComparison.Ordinal)))
-            NewCollectionName = filter.IsUnscoped ? Strings.Library_UsaceFeed : $"{Strings.Library_UsaceFeed} — {DescribeUsaceFilter(filter)}";
+        FollowSelectionInName(filter.IsUnscoped, () => DescribeUsaceFilter(filter));
+    }
+
+    /// <summary>
+    /// Keeps the suggested collection name in step with the selection
+    /// ("NOAA ENC — Alaska") until the user types their own name.
+    /// </summary>
+    private void FollowSelectionInName(bool unscoped, Func<string> describe)
+    {
+        var baseName = FeedName;
+        if (baseName is null || !_createNew)
+            return;
+        if (!string.IsNullOrWhiteSpace(_newCollectionName) && !_newCollectionName.StartsWith(baseName, StringComparison.Ordinal))
+            return;
+
+        NewCollectionName = unscoped ? baseName : $"{baseName} — {describe()}";
     }
 
     private static string DescribeUsaceFilter(UsaceIencFilter filter)

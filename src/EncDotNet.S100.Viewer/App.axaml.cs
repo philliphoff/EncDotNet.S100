@@ -154,6 +154,8 @@ public partial class App : Application
             .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>();
+        _services.GetRequiredService<ShadUI.DialogManager>()
+            .Register<Views.CatalogueDirectoryDialogView, ViewModels.CatalogueDirectoryDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
         // wraps Mapsui's style registry. The renderer package owns the required
@@ -414,15 +416,24 @@ public partial class App : Application
             var usace = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer>();
             return new AddToLibraryDialogViewModel(
                 sp.GetRequiredService<Library.LibraryService>(),
-                ct => feeds.GetCatalogAsync(EncDotNet.S100.Collections.NoaaEncFeedSource.DefaultCatalogUri, cancellationToken: ct),
-                ct => usace.GetCatalogAsync(EncDotNet.S100.Collections.UsaceIencFeedSource.RiversCatalogUri, cancellationToken: ct));
+                (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
+                (uri, ct) => usace.GetCatalogAsync(uri, cancellationToken: ct));
         });
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
+        services.AddTransient(sp =>
+        {
+            var urls = sp.GetService<IUrlOpener>();
+            return new CatalogueDirectoryDialogViewModel(
+                EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All,
+                urls is null ? null : uri => urls.Open(uri.AbsoluteUri));
+        });
+        services.AddSingleton<Func<CatalogueDirectoryDialogViewModel>>(sp => sp.GetRequiredService<CatalogueDirectoryDialogViewModel>);
         services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(
             sp.GetRequiredService<Library.LibraryService>(),
             sp.GetRequiredService<IFileDialogService>(),
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
+            sp.GetRequiredService<Func<CatalogueDirectoryDialogViewModel>>(),
             sp.GetService<IViewerUiControllerAccessor>()));
 
         // Feature-catalogue parsing is shared across every dataset load

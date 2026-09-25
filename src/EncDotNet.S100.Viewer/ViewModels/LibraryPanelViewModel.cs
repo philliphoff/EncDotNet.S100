@@ -63,8 +63,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
         AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
-        AddNoaaFeedCommand = new AsyncRelayCommand(() => _importer.AddNoaaFeedAsync(TargetCollectionId));
-        AddUsaceFeedCommand = new AsyncRelayCommand(() => _importer.AddUsaceFeedAsync(TargetCollectionId));
+        AddOnlineCatalogueCommand = new AsyncRelayCommand(() => _importer.AddOnlineCatalogueAsync(TargetCollectionId));
         AddS128CatalogueCommand = new AsyncRelayCommand(() => _importer.AddS128CatalogueAsync(TargetCollectionId));
         RefreshCommand = new RelayCommand(Refresh);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
@@ -192,9 +191,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     public ICommand AddExchangeSetZipCommand { get; }
 
-    public ICommand AddNoaaFeedCommand { get; }
-
-    public ICommand AddUsaceFeedCommand { get; }
+    /// <summary>Opens the directory of known online catalogues (NOAA, USACE, …).</summary>
+    public ICommand AddOnlineCatalogueCommand { get; }
 
     public ICommand AddS128CatalogueCommand { get; }
 
@@ -532,11 +530,14 @@ internal interface ILibraryImporter
     /// <summary>Picks a zipped exchange set.</summary>
     Task AddExchangeSetZipAsync(Guid? targetCollectionId);
 
-    /// <summary>Chooses a scope of the NOAA ENC feed.</summary>
-    Task AddNoaaFeedAsync(Guid? targetCollectionId);
+    /// <summary>
+    /// Opens the directory of known online catalogues (issue #670), then the
+    /// chosen catalogue's scope picker.
+    /// </summary>
+    Task AddOnlineCatalogueAsync(Guid? targetCollectionId);
 
-    /// <summary>Chooses rivers of the USACE Inland ENC feed.</summary>
-    Task AddUsaceFeedAsync(Guid? targetCollectionId);
+    /// <summary>Opens the scope picker for a known online catalogue directly.</summary>
+    Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId);
 
     /// <summary>Picks an S-128 catalogue file.</summary>
     Task AddS128CatalogueAsync(Guid? targetCollectionId);
