@@ -25,6 +25,53 @@ organised around the spec's domain.
 | Client code that wants typed access to spec-defined entities (routes, warnings, AtoN, etc.). | Typed data model (`Sxxx{Root}.From(dataset, out diagnostics)`). |
 | Programmatic editing / serialising back to GML. | Not supported — typed models are read-only projections. |
 
+## Using a typed model
+
+Open the dataset, then call the typed root's `From` method. It returns the
+projection and a list of diagnostics:
+
+```csharp
+using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Datasets.S124.DataModel;
+
+var dataset = S124Dataset.Open("navwarn_mixed.gml");
+var warning = S124NavigationalWarning.From(dataset, out var diagnostics);
+
+Console.WriteLine($"{warning.Preamble?.GeneralArea}, {warning.Preamble?.Locality}: {warning.Parts.Count} part(s)");
+foreach (var diagnostic in diagnostics)
+    Console.WriteLine($"{diagnostic.Severity} {diagnostic.Code}: {diagnostic.Message}");
+```
+
+`From` throws only when the dataset is completely empty or lacks the root
+entity. Everything else it can't read (an unresolved reference, an attribute
+that doesn't parse, a feature without geometry) becomes a diagnostic, and the
+projection keeps going. Always check the diagnostics: a projection with warnings
+may be missing the entities they name. Each typed object keeps any source
+attributes it didn't consume in `ExtraAttributes`.
+
+[Reading product data](reading-product-data.md) shows typed models alongside
+the other ways to read each product.
+
+## Typed roots by product
+
+| Spec | Typed root | Notes |
+|---|---|---|
+| S-421 | `S421RoutePlan` | Original precedent; refactored in Pass 1 to consume the shared abstractions. |
+| S-124 | `S124NavigationalWarning` | Pass 1 second consumer. |
+| S-128 | `S128ProductCatalogue` | Pass 2 — catalogue of nautical products, with resolved `Supersedes` / `SupersededBy` navigation. |
+| S-125 | `S125AtonDataset` | Pass 2 — marine aids to navigation. |
+| S-201 | `S201AtonInventory` | Pass 2 — IALA AtoN information. |
+| S-122 | `S122MarineProtectedAreaDataset` | Pass 2 — catalogue of MPAs / restricted areas / VTS areas with typed information-type bindings. |
+| S-127 | `S127MarineServicesDataset` | Pass 2 — marine resources and services. |
+| S-129 | `S129UnderKeelClearancePlan` | A single under-keel-clearance management plan. |
+| S-131 | `S131HarbourInfrastructureDataset` | Marine harbour infrastructure. |
+| S-411 | `S411SeaIceInventory` | An inventory of sea-ice and lake-ice features. |
+
+Every GML-encoded product now has a typed root, each built with
+`Sxxx{Root}.From(dataset, out diagnostics)`. S-101 (ISO 8211) and the HDF5
+coverage products (S-102, S-104, S-111) have none; read them through their
+dataset types.
+
 ## Shared abstractions
 
 All in the `EncDotNet.S100.Core` package, namespace
@@ -78,23 +125,3 @@ When adding a typed model for a new product spec:
 8. Keep typed-model projection independent of the portrayal pipeline:
    portrayal must continue to run from the feature-bag dataset
    without invoking the typed model.
-
-## Current consumers
-
-| Spec | Typed root | Notes |
-|---|---|---|
-| S-421 | `S421RoutePlan` | Original precedent; refactored in Pass 1 to consume the shared abstractions. |
-| S-124 | `S124NavigationalWarning` | Pass 1 second consumer. |
-| S-128 | `S128ProductCatalogue` | Pass 2 — catalogue of nautical products, with resolved `Supersedes` / `SupersededBy` navigation. |
-| S-125 | `S125AtonDataset` | Pass 2 — marine aids to navigation. |
-| S-201 | `S201AtonInventory` | Pass 2 — IALA AtoN information. |
-| S-122 | `S122MarineProtectedAreaDataset` | Pass 2 — catalogue of MPAs / restricted areas / VTS areas with typed information-type bindings. |
-| S-127 | `S127MarineServicesDataset` | Pass 2 — marine resources and services. |
-| S-129 | `S129UnderKeelClearancePlan` | A single under-keel-clearance management plan. |
-| S-131 | `S131HarbourInfrastructureDataset` | Marine harbour infrastructure. |
-| S-411 | `S411SeaIceInventory` | An inventory of sea-ice and lake-ice features. |
-
-Every GML-encoded product now has a typed root, each built with
-`Sxxx{Root}.From(dataset, out diagnostics)`. S-101 (ISO 8211) and the HDF5
-coverage products (S-102, S-104, S-111) have none; read them through their
-dataset types.

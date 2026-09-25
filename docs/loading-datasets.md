@@ -252,7 +252,7 @@ It can also load a whole exchange set through `ExchangeSetLoader`.
 ## Next step
 
 - [Top APIs](top-apis.md) — the main entry point in each package.
-- [Typed data models](typed-data-models.md) — typed access to a dataset's
-  features.
+- [Reading product data](reading-product-data.md) — each product's own data
+  types: features, typed models, coverage grids and time series.
 - [Reading protected exchange sets](protected-exchange-sets.md) — S-100 Part 15
   permits, decryption and signature verification.
