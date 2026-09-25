@@ -161,6 +161,9 @@ public class S111Dcf8ProcessorTests
             var attrs = info.Attributes.ToDictionary(a => a.Code, a => a);
             Assert.Equal("S1", attrs["stationIdentification"].RawValue);
             Assert.Equal("0.6", attrs["surfaceCurrentSpeed"].RawValue);
+            // S-111 encodes surfaceCurrentSpeed in knots; the pick shows the
+            // encoded value, not a m/s → knots re-conversion.
+            Assert.Equal("0.6 kn", attrs["surfaceCurrentSpeed"].DisplayValue);
             Assert.Equal("50", attrs["surfaceCurrentDirection"].RawValue);
             Assert.Equal("3", attrs["sampleCount"].RawValue);
             Assert.Contains("timePoint", attrs.Keys);

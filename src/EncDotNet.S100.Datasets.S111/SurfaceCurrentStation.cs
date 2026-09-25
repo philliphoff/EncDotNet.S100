@@ -37,7 +37,7 @@ public sealed class SurfaceCurrentStation
 
     /// <summary>
     /// Explicit UTC timestamps for each sample, in the same order as
-    /// <see cref="SpeedsMetresPerSecond"/> and
+    /// <see cref="SpeedsKnots"/> and
     /// <see cref="DirectionsDegreesTrue"/>. DCF1 and DCF3 readers populate this
     /// from each <c>Group_NNN/timePoint</c> attribute (S-111 Edition 2.0.0
     /// §12.3.4); regular station encodings may leave it empty.
@@ -46,22 +46,25 @@ public sealed class SurfaceCurrentStation
 
     /// <summary>
     /// Number of samples in this station's time series — equal to the
-    /// length of <see cref="SpeedsMetresPerSecond"/> and
+    /// length of <see cref="SpeedsKnots"/> and
     /// <see cref="DirectionsDegreesTrue"/>.
     /// </summary>
     public required int NumberOfTimes { get; init; }
 
     /// <summary>
-    /// Surface-current speeds in metres per second, one per time step,
-    /// in ascending chronological order starting at <see cref="StartTime"/>.
-    /// (S-111 Edition 2.0.0 §10.2.5 — canonical unit is m/s.)
+    /// Surface-current speeds in knots, one per time step, in ascending
+    /// chronological order starting at <see cref="StartTime"/>. Values are
+    /// the encoded <c>surfaceCurrentSpeed</c> samples, whose unit is the knot
+    /// (S-111 Edition 2.0.0 feature attribute <c>surfaceCurrentSpeed</c>), the
+    /// same unit as <see cref="SurfaceCurrentValue.Speed"/> on the gridded
+    /// path. Fill samples keep the S-111 fill value <c>-9999</c>.
     /// </summary>
-    public required float[] SpeedsMetresPerSecond { get; init; }
+    public required float[] SpeedsKnots { get; init; }
 
     /// <summary>
     /// Surface-current directions in degrees from true north (clockwise,
     /// "going to" convention; S-111 Edition 2.0.0 §10.2), one per time
-    /// step in the same order as <see cref="SpeedsMetresPerSecond"/>.
+    /// step in the same order as <see cref="SpeedsKnots"/>.
     /// </summary>
     public required float[] DirectionsDegreesTrue { get; init; }
 

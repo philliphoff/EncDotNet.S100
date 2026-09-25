@@ -24,7 +24,7 @@ individual field's `[Description]`.
 | Distances | Metres. |
 | Depths | Metres, positive down (matches S-102's vertical-datum convention). |
 | Water levels | Metres, positive up (matches S-104's vertical-datum convention). |
-| Current speeds | Canonical unit is metres per second (S-111 §10.2.5). Knots are provided alongside as a convenience (`speedKnots = m/s × 1.94384`). |
+| Current speeds | S-111 encodes `surfaceCurrentSpeed` in knots for every data coding format. Samples report both `speedKnots` (as encoded) and `speedMetresPerSecond` (`kn × 0.514444`). |
 | Bearings | Degrees from true north, clockwise, range `0..360`. |
 | JSON property naming | lower camelCase across every tool (driven by `JsonSerializerDefaults.Web`). |
 | Discriminated unions | Variant carries a `$kind` discriminator string (e.g. `"depth"`, `"waterLevel"`, `"surfaceCurrent"`). |
@@ -35,21 +35,6 @@ Every public property on a tool request, tool result, or `ToolError`
 subtype carries a `[System.ComponentModel.Description]` attribute with
 a single sentence stating the unit / CRS / semantics. A reflection
 contract test (`AnnotationContractTests`) enforces this.
-
-### Known unit warts
-
-These are pre-existing inconsistencies in the underlying dataset
-libraries that the MCP layer does **not** currently normalise. Agents
-should consult the `units` field on a per-payload basis rather than
-assume canonical units for these cases.
-
-- **S-111 current speed.** S-111 grids encoded as data coding format 2
-  (regularly-gridded time-series) surface speeds with `units = "knots"`,
-  while data coding format 8 (time series at fixed stations) surface
-  speeds with `units = "metres/second"`. The two values come from
-  different paths in `EncDotNet.S100.Datasets.S111`. Consult the
-  strongly-typed `speedMetresPerSecond` field on `SurfaceCurrentSample` /
-  `SurfaceCurrentStationSample` when you need a single canonical unit.
 
 ## Enable it
 

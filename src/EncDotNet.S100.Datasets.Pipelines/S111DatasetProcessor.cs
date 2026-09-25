@@ -587,14 +587,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             if (my > mercMaxY) mercMaxY = my;
 
             int idx = station.NearestTimeIndex(selectedTime);
-            var speed = station.SpeedsMetresPerSecond[idx];
+            var speed = station.SpeedsKnots[idx];
             var direction = station.DirectionsDegreesTrue[idx];
 
             var attributes = new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["StationId"] = station.Identifier,
-                ["SpeedMetresPerSecond"] = speed,
-                ["SpeedKnots"] = speed * 1.9438444924406046,
+                ["SpeedKnots"] = speed,
                 ["DirectionDegreesTrue"] = direction,
                 ["SampleTime"] = station.TimeAt(idx),
                 ["Latitude"] = station.Latitude,
@@ -774,31 +773,32 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Graduated Beaufort-style palette across 0..2.0 m/s with a hot
-    /// overflow above 2.0 m/s.
+    /// Graduated Beaufort-style palette across 0..2.0 knots with a hot
+    /// overflow above 2.0 knots.
     /// </summary>
-    private static RgbaColor ColorByMagnitude(float speedMetresPerSecond)
+    private static RgbaColor ColorByMagnitude(float speedKnots)
     {
-        if (float.IsNaN(speedMetresPerSecond) || speedMetresPerSecond < 0.25f)
+        if (float.IsNaN(speedKnots) || speedKnots < 0.25f)
             return new RgbaColor(0xcf, 0xe2, 0xf3); // very pale blue
-        if (speedMetresPerSecond < 0.50f) return new RgbaColor(0x6f, 0xa8, 0xdc);
-        if (speedMetresPerSecond < 1.00f) return new RgbaColor(0x3d, 0x85, 0xc6);
-        if (speedMetresPerSecond < 1.50f) return new RgbaColor(0x1c, 0x45, 0x87);
-        if (speedMetresPerSecond < 2.00f) return new RgbaColor(0xa6, 0x4d, 0x79);
+        if (speedKnots < 0.50f) return new RgbaColor(0x6f, 0xa8, 0xdc);
+        if (speedKnots < 1.00f) return new RgbaColor(0x3d, 0x85, 0xc6);
+        if (speedKnots < 1.50f) return new RgbaColor(0x1c, 0x45, 0x87);
+        if (speedKnots < 2.00f) return new RgbaColor(0xa6, 0x4d, 0x79);
         return new RgbaColor(0xc1, 0x12, 0x1f);
     }
 
     /// <summary>
     /// Maps a current speed to a Mapsui <c>SymbolStyle.SymbolScale</c>
-    /// with a visible floor (~6 px) and ceiling (~24 px at 2 m/s).
+    /// with a visible floor (~6 px) and ceiling (~24 px at 2 knots, the
+    /// S-111 arrow-size threshold).
     /// </summary>
-    private static double SymbolScaleForSpeed(float speedMetresPerSecond)
+    private static double SymbolScaleForSpeed(float speedKnots)
     {
         const double minScale = 0.30; // ~6 px at default symbol size
         const double maxScale = 1.20; // ~24 px
         const double fastReference = 2.0;
-        if (float.IsNaN(speedMetresPerSecond) || speedMetresPerSecond <= 0) return minScale;
-        var t = Math.Clamp(speedMetresPerSecond / fastReference, 0.0, 1.0);
+        if (float.IsNaN(speedKnots) || speedKnots <= 0) return minScale;
+        var t = Math.Clamp(speedKnots / fastReference, 0.0, 1.0);
         return minScale + (maxScale - minScale) * t;
     }
 
@@ -829,10 +829,9 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     {
         var selectedTime = time ?? station.StartTime;
         int idx = station.NearestTimeIndex(selectedTime);
-        var speed = station.SpeedsMetresPerSecond[idx];
+        var speed = station.SpeedsKnots[idx];
         var direction = station.DirectionsDegreesTrue[idx];
         var sampleTime = station.TimeAt(idx);
-        var speedKnots = speed * 1.9438444924406046;
 
         return new FeatureInfo
         {
@@ -866,7 +865,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     Code = "surfaceCurrentSpeed",
                     Name = "Current Speed",
                     RawValue = speed.ToString("0.##########", CultureInfo.InvariantCulture),
-                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} m/s ({speedKnots.ToString("0.##", CultureInfo.InvariantCulture)} kn)",
+                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} kn",
                 },
                 new()
                 {
@@ -925,8 +924,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 {
                     Key = "surfaceCurrentSpeed",
                     DisplayName = "Surface Current Speed",
-                    Unit = "m/s",
-                    Values = station.SpeedsMetresPerSecond,
+                    Unit = "kn",
+                    Values = station.SpeedsKnots,
                     FillValue = -9999f,
                 },
                 new StationTimeSeriesChannel
@@ -1040,10 +1039,9 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         var selectedTime = time ?? best.StartTime;
         int idx = best.NearestTimeIndex(selectedTime);
-        var speed = best.SpeedsMetresPerSecond[idx];
+        var speed = best.SpeedsKnots[idx];
         var direction = best.DirectionsDegreesTrue[idx];
         var sampleTime = best.TimeAt(idx);
-        var speedKnots = speed * 1.9438444924406046;
 
         return new FeatureInfo
         {
@@ -1063,7 +1061,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     Code = "surfaceCurrentSpeed",
                     Name = "Current Speed",
                     RawValue = speed.ToString("0.##########", CultureInfo.InvariantCulture),
-                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} m/s ({speedKnots.ToString("0.##", CultureInfo.InvariantCulture)} kn)",
+                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} kn",
                 },
                 new()
                 {
@@ -1202,7 +1200,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         foreach (var station in dataset.Stations)
         {
-            if (station.NumberOfTimes != station.SpeedsMetresPerSecond.Length ||
+            if (station.NumberOfTimes != station.SpeedsKnots.Length ||
                 station.NumberOfTimes != station.DirectionsDegreesTrue.Length ||
                 (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))
             {
@@ -1227,7 +1225,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 });
             }
 
-            if (station.SpeedsMetresPerSecond.Any(speed =>
+            if (station.SpeedsKnots.Any(speed =>
                 speed != S111CoverageSource.FillValue && (!float.IsFinite(speed) || speed < 0)))
             {
                 findings.Add(new ValidationFinding

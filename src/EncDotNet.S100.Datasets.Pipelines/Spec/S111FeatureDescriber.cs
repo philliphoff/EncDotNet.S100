@@ -296,7 +296,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
 
     private static JsonElement SerializeStation(SurfaceCurrentStation station)
     {
-        var (minS, maxS) = ComputeRange(station.SpeedsMetresPerSecond);
+        var (minS, maxS) = ComputeRange(station.SpeedsKnots);
         var (minD, maxD) = ComputeRange(station.DirectionsDegreesTrue);
 
         var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -319,7 +319,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             {
                 ["min"] = minS,
                 ["max"] = maxS,
-                ["units"] = "metres/second",
+                ["units"] = "knots",
             },
             ["directionRange"] = minD is null ? null : new Dictionary<string, object?>(StringComparer.Ordinal)
             {

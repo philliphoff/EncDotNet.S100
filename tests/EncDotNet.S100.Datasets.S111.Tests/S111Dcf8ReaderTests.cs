@@ -76,7 +76,7 @@ public class S111Dcf8ReaderTests
             Assert.Equal(new DateTime(2024, 1, 1, 3, 0, 0, DateTimeKind.Utc), model.Stations[0].EndTime);
             Assert.Equal(TimeSpan.FromHours(1), model.Stations[0].TimeRecordInterval);
             Assert.Equal(4, model.Stations[0].NumberOfTimes);
-            Assert.Equal(0.5f, model.Stations[0].SpeedsMetresPerSecond[1]);
+            Assert.Equal(0.5f, model.Stations[0].SpeedsKnots[1]);
             Assert.Equal(50f, model.Stations[0].DirectionsDegreesTrue[1]);
 
             Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), model.MinTime);
@@ -131,7 +131,7 @@ public class S111Dcf8ReaderTests
             var model = ((S111DatasetData.StationSeries)S111DatasetReader.ReadAny(file)).Dataset;
 
             Assert.Single(model.Stations);
-            Assert.Equal(0.75f, model.Stations[0].SpeedsMetresPerSecond[0]);
+            Assert.Equal(0.75f, model.Stations[0].SpeedsKnots[0]);
             Assert.Equal(270f, model.Stations[0].DirectionsDegreesTrue[0]);
         }
         finally { File.Delete(path); }
@@ -168,7 +168,7 @@ public class S111Dcf8ReaderTests
             Assert.Equal("A", model.Stations[0].Identifier);
             Assert.Equal(50.75, model.Stations[0].Latitude, 3);
             Assert.Equal(-1.5, model.Stations[0].Longitude, 3);
-            Assert.Equal(1.1f, model.Stations[0].SpeedsMetresPerSecond[0]);
+            Assert.Equal(1.1f, model.Stations[0].SpeedsKnots[0]);
             Assert.Equal(30f, model.Stations[0].DirectionsDegreesTrue[0]);
             Assert.Equal("B", model.Stations[1].Identifier);
         }
@@ -232,7 +232,7 @@ public class S111Dcf8ReaderTests
             EndTime = new DateTime(2024, 1, 1, 3, 0, 0, DateTimeKind.Utc),
             TimeRecordInterval = TimeSpan.FromHours(1),
             NumberOfTimes = 4,
-            SpeedsMetresPerSecond = new[] { 0f, 1f, 2f, 3f },
+            SpeedsKnots = new[] { 0f, 1f, 2f, 3f },
             DirectionsDegreesTrue = new[] { 0f, 0f, 0f, 0f },
         };
 

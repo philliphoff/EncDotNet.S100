@@ -24,7 +24,7 @@ public class SampleCoverageToolS111StationSeriesTests
             EndTime = start.AddHours(speeds.Length - 1),
             TimeRecordInterval = TimeSpan.FromHours(1),
             NumberOfTimes = speeds.Length,
-            SpeedsMetresPerSecond = speeds,
+            SpeedsKnots = speeds,
             DirectionsDegreesTrue = directions,
         };
     }
@@ -67,8 +67,9 @@ public class SampleCoverageToolS111StationSeriesTests
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
         Assert.Equal("A", sample.StationId);
-        Assert.Equal(0.5, sample.SpeedMetresPerSecond, 5);
-        Assert.Equal(0.5 * 1.9438444924406046, sample.SpeedKnots, 5);
+        // S-111 encodes station speeds in knots; m/s is derived from them.
+        Assert.Equal(0.5, sample.SpeedKnots, 5);
+        Assert.Equal(0.5 * 1852.0 / 3600.0, sample.SpeedMetresPerSecond, 5);
         Assert.Equal(45.0, sample.DirectionDegreesTrue, 5);
         Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), sample.SampleTime);
         Assert.True(sample.StationDistanceMetres < 1.0);
@@ -88,7 +89,7 @@ public class SampleCoverageToolS111StationSeriesTests
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
-        Assert.Equal(0.5, sample.SpeedMetresPerSecond, 5);
+        Assert.Equal(0.5, sample.SpeedKnots, 5);
         Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), sample.SampleTime);
         Assert.Equal(requested, sample.RequestedTime);
     }
@@ -106,7 +107,7 @@ public class SampleCoverageToolS111StationSeriesTests
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
-        Assert.Equal(1.0, sample.SpeedMetresPerSecond, 5);
+        Assert.Equal(1.0, sample.SpeedKnots, 5);
         Assert.Equal(60.0, sample.DirectionDegreesTrue, 5);
         Assert.Equal(new DateTime(2024, 1, 1, 3, 0, 0, DateTimeKind.Utc), sample.SampleTime);
     }
@@ -126,7 +127,7 @@ public class SampleCoverageToolS111StationSeriesTests
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
         Assert.Equal("A", sample.StationId);
-        Assert.Equal(1.5, sample.SpeedMetresPerSecond, 5);
+        Assert.Equal(1.5, sample.SpeedKnots, 5);
         Assert.Equal(55.0, sample.DirectionDegreesTrue, 5);
         Assert.Equal(new DateTime(2024, 1, 1, 2, 0, 0, DateTimeKind.Utc), sample.SampleTime);
     }

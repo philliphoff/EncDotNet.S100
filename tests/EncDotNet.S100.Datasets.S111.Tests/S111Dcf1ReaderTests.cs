@@ -38,9 +38,9 @@ public class S111Dcf1ReaderTests
             Assert.Equal(TimeSpan.FromHours(1), first.TimeRecordInterval);
             Assert.Equal(3, first.SampleTimes.Count);
             Assert.Equal(new DateTime(2022, 1, 1, 6, 7, 0, DateTimeKind.Utc), first.TimeAt(1));
-            Assert.Equal([0.4f, 0.8f, 1.0f], first.SpeedsMetresPerSecond);
+            Assert.Equal([0.4f, 0.8f, 1.0f], first.SpeedsKnots);
             Assert.Equal([138f, 180f, 203f], first.DirectionsDegreesTrue);
-            Assert.Equal([0.3f, 0.8f, 1.2f], result.Dataset.Stations[1].SpeedsMetresPerSecond);
+            Assert.Equal([0.3f, 0.8f, 1.2f], result.Dataset.Stations[1].SpeedsKnots);
         }
         finally
         {
