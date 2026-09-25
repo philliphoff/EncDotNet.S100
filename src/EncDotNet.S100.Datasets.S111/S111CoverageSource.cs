@@ -45,7 +45,7 @@ public class S111CoverageSource : ICoverageSource
             return new CoverageMetadata
             {
                 Spec = new SpecRef("S-111", default),
-                Extent = new BoundingBox(
+                NativeExtent = new BoundingBox(
                     coverage.OriginLatitude,
                     coverage.OriginLongitude,
                     coverage.OriginLatitude + coverage.SpacingLatitudinal * coverage.NumPointsLatitudinal,

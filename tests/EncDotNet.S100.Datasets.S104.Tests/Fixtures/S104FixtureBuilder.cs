@@ -52,17 +52,18 @@ internal static class S104FixtureBuilder
         bool useF64GridAttrs,
         bool useUnsignedCounts,
         string timePoint = "20210401T000000Z",
-        int? verticalDatum = null)
+        int? verticalDatum = null,
+        ProjectedGrid? projected = null)
         where TRow : struct
     {
         var instance = new H5Group
         {
             Attributes = new()
             {
-                ["gridOriginLatitude"] = useF64GridAttrs ? 50.0 : (object)50.0f,
-                ["gridOriginLongitude"] = useF64GridAttrs ? -1.0 : (object)-1.0f,
-                ["gridSpacingLatitudinal"] = useF64GridAttrs ? 0.01 : (object)0.01f,
-                ["gridSpacingLongitudinal"] = useF64GridAttrs ? 0.01 : (object)0.01f,
+                ["gridOriginLatitude"] = projected?.OriginNorthing ?? (useF64GridAttrs ? 50.0 : (object)50.0f),
+                ["gridOriginLongitude"] = projected?.OriginEasting ?? (useF64GridAttrs ? -1.0 : (object)-1.0f),
+                ["gridSpacingLatitudinal"] = projected?.Spacing ?? (useF64GridAttrs ? 0.01 : (object)0.01f),
+                ["gridSpacingLongitudinal"] = projected?.Spacing ?? (useF64GridAttrs ? 0.01 : (object)0.01f),
                 ["numPointsLatitudinal"] = useUnsignedCounts ? (object)(uint)numLat : numLat,
                 ["numPointsLongitudinal"] = useUnsignedCounts ? (object)(uint)numLon : numLon,
             },
@@ -78,7 +79,7 @@ internal static class S104FixtureBuilder
 
         var rootAttributes = new Dictionary<string, object>
         {
-            ["horizontalCRS"] = 4326,
+            ["horizontalCRS"] = projected?.Epsg ?? 4326,
             ["geographicIdentifier"] = "Test",
             ["issueDate"] = "2021-04-01",
         };
@@ -107,4 +108,11 @@ internal static class S104FixtureBuilder
         file.Write(path, options);
         return path;
     }
+
+    /// <summary>
+    /// Projected (e.g. UTM) georeferencing for <c>WriteFile</c>: the grid
+    /// origin and spacing are native metres and the root CRS attribute is
+    /// <paramref name="Epsg"/>.
+    /// </summary>
+    public readonly record struct ProjectedGrid(int Epsg, double OriginNorthing, double OriginEasting, double Spacing);
 }

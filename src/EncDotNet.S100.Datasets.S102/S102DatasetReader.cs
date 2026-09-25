@@ -78,7 +78,7 @@ public static class S102DatasetReader
     /// The extent is the union of every <c>BathymetryCoverage.NN</c>
     /// instance's grid footprint, computed from the mandatory grid-georef
     /// attributes (S-100 Part 10c §10.2.1.2) exactly as
-    /// <c>S102CoverageSource.Metadata.Extent</c> derives it — so
+    /// <c>S102CoverageSource.Metadata.NativeExtent</c> derives it — so
     /// <see cref="DatasetMetadata.Extent"/> matches the full-load extent. The
     /// edge values are in the dataset's native CRS
     /// (<see cref="DatasetMetadata.HorizontalCrsEpsg"/>), which may be a
