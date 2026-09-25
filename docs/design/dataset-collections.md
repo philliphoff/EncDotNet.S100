@@ -248,7 +248,7 @@ public sealed record CollectionItem
     public int? MaximumDisplayScale { get; init; }
     public int? UsageBand { get; init; }                 // S-57 name digit / NOAA band
     public CollectionItemStatus Status { get; init; }    // Active, Cancelled, Unknown
-    public required GeoBounds Bounds { get; init; }      // EPSG:4326, always present
+    public GeoBounds? Bounds { get; init; }              // EPSG:4326; null = listed but not drawn
     public GeoCoverage? Coverage { get; init; }          // polygons; null = bounds only
     public required ItemLocation Location { get; init; }
     public IReadOnlyDictionary<string, string> Properties { get; init; } // producer, states, size text, ...
@@ -270,10 +270,13 @@ public sealed record GeoPolygon(IReadOnlyList<GeoPosition> Exterior, IReadOnlyLi
 
 Notes:
 
-- `Bounds` is always present, so hit-testing, culling and lazy-load
-  gating never depend on polygons. `Coverage` is optional because some
-  sources have bounding boxes only (CATALOG.031 without a deeper scan,
-  USACE).
+- `Bounds` is present for every catalogued item, so hit-testing,
+  culling and lazy-load gating never depend on polygons. It is `null`
+  only for a loose file whose extent cannot be read cheaply, for example
+  an unprobed file or a projected S-102 grid. Such an item is listed but
+  not drawn until it is loaded. (This was changed from "always present"
+  during slice 1.) `Coverage` is optional because some sources have
+  bounding boxes only (CATALOG.031 without a deeper scan, USACE).
 - Edition and update are **typed as integers**. S-128 carries them as
   text, and those values that don't parse go into `Properties`. This
   makes update comparison (§9) straightforward.
@@ -339,12 +342,17 @@ reused.
    same grouping the loose-cell-folder path already does
    (`ExchangeSetDetection.EnumerateLooseBaseCells`).
 
-The existing detection helpers move into (or are shared with) the
-Collections library so detection has one owner.
+Slice 1 implements the walk in `LocalSourceScanner` and leaves the
+viewer's `ExchangeSetDetection` untouched. Consolidating the two is part
+of slice 3 (§10 Q4).
 
 ### 5.2 Exchange sets
 
-- **S-100 `CATALOG.XML`**: `ExchangeCatalogueReader`. One item per
+- **S-100 `CATALOG.XML`**: `ExchangeCatalogueReader` with
+  `ExchangeCatalogueReadOptions.DiscoveryOnly`. That option skips digital
+  signatures and certificates. Their strict Part 15 validation otherwise
+  fails the whole catalogue, and about 120 IC-ENC sets in the local
+  corpus have malformed signature blocks. There is one item per
   `DatasetDiscoveryMetadata`. Edition and update come from the
   catalogue.
   - **New:** parse `DataCoverage.BoundingPolygon` GML
@@ -356,14 +364,15 @@ Collections library so detection has one owner.
     `S101ExchangeSetUpdatePlan`.
 - **S-57 `CATALOG.031`**: `S57ExchangeSetCatalog.ReadBaseCells`. It
   gives the cell name, relative path, updates and the CATD bounding box.
-  - **New:** a **DSID-only peek** of each base cell for `EDTN`, `UPDN`,
-    `ISDT`, `UADT` and the compilation scale. It should read the leading
-    ISO 8211 records only, never the whole cell.
-  - The peek result is cached in the existing
-    `IDatasetMetadataCache`, keyed by the file's mtime and size, so
-    re-indexing a 7k-cell corpus is cheap.
-  - If `EncDotNet.S57` has no header-only read, add one there. This is a
-    prerequisite.
+  - **New:** `S57DatasetHeader` (in `Datasets.S57`) reads `EDTN`,
+    `UPDN`, `ISDT`, `UADT` and the compilation scale for each base cell
+    and its latest update. It copies only the DDR, DSID and DSPM records
+    (a few KB, sized from each record's leader) and hands them to the
+    upstream parser, so no upstream `EncDotNet.S57` change was needed.
+  - The peek is not cached per cell. The source-level fingerprint
+    already skips re-indexing an unchanged source. Measured on 7.3k S-57
+    cells plus about 1k S-100 datasets: a full index takes 3.3 s, and an
+    unchanged refresh check takes about 1 s.
   - Coverage is the CATD **bounding box** at first. **M_COVR polygons**
     are an optional "deep index" later, because they require parsing the
     cell.
@@ -374,8 +383,8 @@ Collections library so detection has one owner.
 The library defines a probe:
 
 ```csharp
-public delegate DatasetProbeResult? DatasetProbe(string path, CancellationToken ct);
-public sealed record DatasetProbeResult(string ProductSpec, GeoBounds Bounds, int? MinimumDisplayScale, int? MaximumDisplayScale /*...*/);
+// Returns Core's DatasetMetadata (spec, extent, CRS, display scale, time); null = not a dataset.
+public delegate DatasetMetadata? DatasetProbe(string path, CancellationToken cancellationToken);
 ```
 
 The viewer supplies a probe backed by `DatasetPipelineFactory.DetectProductSpec`
@@ -604,7 +613,7 @@ the UI.
 
 | # | Slice | Contents | Depends on |
 |---|---|---|---|
-| 1 | **Collections core + local indexers** | New `EncDotNet.S100.Collections` project: model, JSON (de)serialization, `ICollectionSourceIndexer`, folder walk, S-100 `CATALOG.XML` indexer (with **GML polygon parsing**), S-57 `CATALOG.031` + **DSID peek** indexer, loose-file indexer (probe), S-128 file indexer. Tests over the committed samples. | DSID header-only read in `EncDotNet.S57`, if missing |
+| 1 | **Collections core + local indexers** | New `EncDotNet.S100.Collections` project: model, JSON (de)serialization, `ICollectionSourceIndexer`, folder walk, S-100 `CATALOG.XML` indexer (with **GML polygon parsing**), S-57 `CATALOG.031` + **DSID peek** indexer, loose-file indexer (probe), S-128 file indexer. Tests over the committed samples. | — (**done**: header read added in `Datasets.S57`) |
 | 2 | **NOAA ENC feed indexer** | Conditional-GET fetcher and raw cache (injectable `HttpMessageHandler`), streaming parser, filter, facets (state/district/region counts). Tests over a trimmed committed fixture. No network in tests. | 1 |
 | 3 | **Viewer: store, service, Library panel** | `collections.json` store, `CollectionService` (background indexing, availability), Library panel **replacing the Catalog panel** (S-128 session group + "Keep in library"), Add to Library commands and NOAA feed dialog, drag-drop prompt. | 1, 2 |
 | 4 | **Coverage overlay** | Polygon overlay, band/scale gating, availability styling, antimeridian handling, map ↔ panel selection sync, "Datasets in library here". | 3 |

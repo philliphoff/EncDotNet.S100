@@ -42,6 +42,13 @@ public sealed class S57ExchangeSetCell
     /// catalogue did not declare one for the base cell.
     /// </summary>
     public BoundingBox? BoundingBox { get; init; }
+
+    /// <summary>
+    /// The base cell's long file name (<c>CATD</c> <c>LFIL</c>), or
+    /// <see langword="null"/> when the catalogue leaves it empty. Producers
+    /// often use it for the cell's human-readable title.
+    /// </summary>
+    public string? LongFileName { get; init; }
 }
 
 /// <summary>
@@ -196,6 +203,9 @@ public static class S57ExchangeSetCatalog
                 RelativePath = Normalise(baseEntry.Entry.FileName),
                 UpdateRelativePaths = updates,
                 BoundingBox = ToBoundingBox(baseEntry.Entry),
+                LongFileName = string.IsNullOrWhiteSpace(baseEntry.Entry.LongFileName)
+                    ? null
+                    : baseEntry.Entry.LongFileName.Trim(),
             });
         }
 

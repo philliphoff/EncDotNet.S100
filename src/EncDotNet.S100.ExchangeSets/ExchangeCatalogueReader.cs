@@ -23,28 +23,47 @@ public static class ExchangeCatalogueReader
         "http://www.iho.int/s100/se/5.2",
     ];
 
-    public static ExchangeCatalogue Read(Stream stream)
+    public static ExchangeCatalogue Read(Stream stream) =>
+        Read(stream, ExchangeCatalogueReadOptions.Default);
+
+    public static ExchangeCatalogue Read(string path) =>
+        Read(path, ExchangeCatalogueReadOptions.Default);
+
+    /// <summary>
+    /// Reads an exchange catalogue from <paramref name="stream"/> with the
+    /// given <paramref name="options"/>.
+    /// </summary>
+    public static ExchangeCatalogue Read(Stream stream, ExchangeCatalogueReadOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
         var doc = XDocument.Load(stream);
-        return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
+        return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."), options);
     }
 
-    public static ExchangeCatalogue Read(string path)
+    /// <summary>
+    /// Reads the exchange catalogue at <paramref name="path"/> with the given
+    /// <paramref name="options"/>.
+    /// </summary>
+    public static ExchangeCatalogue Read(string path, ExchangeCatalogueReadOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
         activity?.SetTag("s100.exchangeset.path", path);
         var doc = XDocument.Load(path);
-        return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
+        return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."), options);
     }
 
-    private static ExchangeCatalogue ReadCatalogue(XElement root)
+    private static ExchangeCatalogue ReadCatalogue(XElement root, ExchangeCatalogueReadOptions options)
     {
+        var security = options.ReadSecurity;
         XNamespace xc = root.Name.Namespace;
         XNamespace lan = root.GetNamespaceOfPrefix("lan")
             ?? "http://standards.iso.org/iso/19115/-3/lan/2.0";
 
-        var identifierEl = root.Element(xc + "identifier")!;
+        // identifier is mandatory (S-100 Part 17) but some producers omit it
+        // (e.g. IC-ENC AU S-102); an absent one reads as empty.
+        var identifierEl = root.Element(xc + "identifier");
         var contactEl = root.Element(xc + "contact");
         var defaultLocaleEl = root.Element(xc + "defaultLocale");
 
@@ -52,8 +71,8 @@ public static class ExchangeCatalogueReader
         {
             Identifier = new ExchangeCatalogueIdentifier
             {
-                Identifier = (string)identifierEl.Element(xc + "identifier")!,
-                DateTime = (string)identifierEl.Element(xc + "dateTime")!,
+                Identifier = (string?)identifierEl?.Element(xc + "identifier") ?? string.Empty,
+                DateTime = (string?)identifierEl?.Element(xc + "dateTime") ?? string.Empty,
             },
             Contact = ReadContact(contactEl, xc),
             ProductSpecification = ReadProductSpecification(root.Element(xc + "productSpecification"), xc),
@@ -62,15 +81,15 @@ public static class ExchangeCatalogueReader
             Description = ReadCharacterString(root.Element(xc + "exchangeCatalogueDescription")),
             Comment = ReadCharacterString(root.Element(xc + "exchangeCatalogueComment")),
             DataServerIdentifier = (string?)root.Element(xc + "dataServerIdentifier"),
-            Certificates = ReadCertificateBlock(root.Element(xc + "certificates")),
+            Certificates = security ? ReadCertificateBlock(root.Element(xc + "certificates")) : null,
             DatasetDiscoveryMetadata = CollectDiscoveryRecords(
                     root, xc, "datasetDiscoveryMetadata", "_DatasetDiscoveryMetadata")
-                .Select(e => ReadDatasetDiscovery(e, xc, lan))
+                .Select(e => ReadDatasetDiscovery(e, xc, lan, security))
                 .ToList(),
-            SupportFileDiscoveryMetadata = ReadSupportFileDiscoveries(root, xc),
+            SupportFileDiscoveryMetadata = ReadSupportFileDiscoveries(root, xc, security),
             CatalogueDiscoveryMetadata = CollectDiscoveryRecords(
                     root, xc, "catalogueDiscoveryMetadata", "_CatalogueDiscoveryMetadata")
-                .Select(e => ReadCatalogueDiscovery(e, xc, lan))
+                .Select(e => ReadCatalogueDiscovery(e, xc, lan, security))
                 .ToList(),
         };
     }
@@ -143,10 +162,11 @@ public static class ExchangeCatalogueReader
         };
     }
 
-    private static DatasetDiscoveryMetadata ReadDatasetDiscovery(XElement element, XNamespace xc, XNamespace lan)
+    private static DatasetDiscoveryMetadata ReadDatasetDiscovery(
+        XElement element, XNamespace xc, XNamespace lan, bool security)
     {
         var defaultLocaleEl = element.Element(xc + "defaultLocale");
-        var digitalSignatures = ReadDigitalSignatures(element, xc);
+        var digitalSignatures = security ? ReadDigitalSignatures(element, xc) : [];
 
         return new DatasetDiscoveryMetadata
         {
@@ -192,7 +212,8 @@ public static class ExchangeCatalogueReader
     /// <c>supportFileDiscoveryMetadata</c> elements that carry the fields
     /// inline. S-100 Edition 5.2.1 Part 17.
     /// </summary>
-    private static List<SupportFileDiscoveryMetadata> ReadSupportFileDiscoveries(XElement root, XNamespace xc)
+    private static List<SupportFileDiscoveryMetadata> ReadSupportFileDiscoveries(
+        XElement root, XNamespace xc, bool security)
     {
         var result = new List<SupportFileDiscoveryMetadata>();
 
@@ -205,21 +226,22 @@ public static class ExchangeCatalogueReader
 
             if (typed.Count > 0)
             {
-                result.AddRange(typed.Select(e => ReadSupportFileDiscovery(e, xc)));
+                result.AddRange(typed.Select(e => ReadSupportFileDiscovery(e, xc, security)));
                 continue;
             }
 
             // Inline (repeated-sibling) form: the container itself is the record.
             if (container.Element(xc + "fileName") is not null)
-                result.Add(ReadSupportFileDiscovery(container, xc));
+                result.Add(ReadSupportFileDiscovery(container, xc, security));
         }
 
         return result;
     }
 
-    private static SupportFileDiscoveryMetadata ReadSupportFileDiscovery(XElement element, XNamespace xc)
+    private static SupportFileDiscoveryMetadata ReadSupportFileDiscovery(
+        XElement element, XNamespace xc, bool security)
     {
-        var digitalSignatures = ReadDigitalSignatures(element, xc);
+        var digitalSignatures = security ? ReadDigitalSignatures(element, xc) : [];
 
         return new SupportFileDiscoveryMetadata
         {
@@ -251,10 +273,11 @@ public static class ExchangeCatalogueReader
         };
     }
 
-    private static CatalogueDiscoveryMetadata ReadCatalogueDiscovery(XElement element, XNamespace xc, XNamespace lan)
+    private static CatalogueDiscoveryMetadata ReadCatalogueDiscovery(
+        XElement element, XNamespace xc, XNamespace lan, bool security)
     {
         var defaultLocaleEl = element.Element(xc + "defaultLocale");
-        var digitalSignatures = ReadDigitalSignatures(element, xc);
+        var digitalSignatures = security ? ReadDigitalSignatures(element, xc) : [];
 
         return new CatalogueDiscoveryMetadata
         {

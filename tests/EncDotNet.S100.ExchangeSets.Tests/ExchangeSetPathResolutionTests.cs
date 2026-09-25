@@ -21,6 +21,7 @@ public class ExchangeSetPathResolutionTests
     [InlineData("file:/S-101/DATASET_FILES/101AU005BTB01.000", "S-101/DATASET_FILES/101AU005BTB01.000")]
     [InlineData("\\S102\\PBC_UTM11N_MLLW_LALB\\102USA16LGBAC200408.H5", "S102/PBC_UTM11N_MLLW_LALB/102USA16LGBAC200408.H5")]
     [InlineData("/leading/slash/file.000", "leading/slash/file.000")]
+    [InlineData("file:../Southeast/Charleston/104US004SC1BO_20251217T12Z.h5", "../Southeast/Charleston/104US004SC1BO_20251217T12Z.h5")]
     public void NormalizeFileName_NormalizesPrefixSeparatorsAndLeadingSlash(string input, string expected)
     {
         Assert.Equal(expected, ExchangeSet.NormalizeFileName(input));

@@ -32,6 +32,29 @@ public class ExchangeCatalogueReaderTests
     }
 
     [Fact]
+    public void Read_ToleratesMissingCatalogueIdentifier()
+    {
+        // S-100 Part 17 makes identifier mandatory, but some producers
+        // (e.g. IC-ENC AU S-102) omit it; the datasets must still be readable.
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.2">
+              <S100XC:datasetDiscoveryMetadata>
+                <S100XC:S100_DatasetDiscoveryMetadata>
+                  <S100XC:fileName>file:/S-102/DATASET_FILES/102AU006BTB01.H5</S100XC:fileName>
+                </S100XC:S100_DatasetDiscoveryMetadata>
+              </S100XC:datasetDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+
+        var catalogue = ExchangeCatalogueReader.Read(stream);
+
+        Assert.Equal(string.Empty, catalogue.Identifier.Identifier);
+        Assert.Equal(string.Empty, catalogue.Identifier.DateTime);
+        Assert.Equal("S-102/DATASET_FILES/102AU006BTB01.H5", Assert.Single(catalogue.DatasetDiscoveryMetadata).RelativePath);
+    }
+
+    [Fact]
     public void Identifier_HasExpectedValues()
     {
         var catalogue = ReadTestCatalogue();

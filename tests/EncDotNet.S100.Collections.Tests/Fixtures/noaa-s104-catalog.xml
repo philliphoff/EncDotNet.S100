@@ -1,0 +1,269 @@
+<?xml version="1.0" ?>
+<S100XC:S100_ExchangeCatalogue xmlns:S100SE="http://www.iho.int/s100/se/5.2" xmlns:S100XC="http://www.iho.int/s100/xc/5.2" xmlns:cit="http://standards.iso.org/iso/19115/-3/cit/2.0" xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0" xmlns:gex="http://standards.iso.org/iso/19115/-3/gex/1.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:lan="http://standards.iso.org/iso/19115/-3/lan/1.0" xmlns:mco="http://standards.iso.org/iso/19115/-3/mco/1.0" xmlns:mmi="http://standards.iso.org/iso/19115/-3/mmi/1.0" xmlns:mri="http://standards.iso.org/iso/19115/-3/mri/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.iho.int/s100/xc/5.2 https://schemas.s100dev.net/schemas/S100/5.2.0/S100Catalog/20240415/S100_ExchangeCatalogue.xsd">
+  <S100XC:identifier>
+    <S100XC:identifier>US_104_00</S100XC:identifier>
+    <S100XC:dateTime>2025-12-20T13:30:01Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>NOAA Office of Coast Survey</gco:CharacterString>
+    </S100XC:organization>
+    <S100XC:phone>
+      <cit:number>
+        <gco:CharacterString>18889906622</gco:CharacterString>
+      </cit:number>
+      <cit:numberType>
+        <cit:CI_TelephoneTypeCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_TelephoneTypeCode" codeListValue="voice">voice</cit:CI_TelephoneTypeCode>
+      </cit:numberType>
+    </S100XC:phone>
+    <S100XC:address>
+      <cit:deliveryPoint>
+        <gco:CharacterString>1315 East West Highway</gco:CharacterString>
+      </cit:deliveryPoint>
+      <cit:city>
+        <gco:CharacterString>Silver Spring</gco:CharacterString>
+      </cit:city>
+      <cit:administrativeArea>
+        <gco:CharacterString>Maryland</gco:CharacterString>
+      </cit:administrativeArea>
+      <cit:postalCode>
+        <gco:CharacterString>20910</gco:CharacterString>
+      </cit:postalCode>
+      <cit:country>
+        <gco:CharacterString>United States</gco:CharacterString>
+      </cit:country>
+      <cit:electronicMailAddress>
+        <gco:CharacterString>https://nauticalcharts.noaa.gov/customer-service/assist/index.html</gco:CharacterString>
+      </cit:electronicMailAddress>
+    </S100XC:address>
+  </S100XC:contact>
+  <S100XC:productSpecification>
+    <S100XC:name>Water Level Information for Surface Navigation</S100XC:name>
+    <S100XC:version>2.0.0</S100XC:version>
+    <S100XC:date>2024-12-27</S100XC:date>
+    <S100XC:productIdentifier>S-104</S100XC:productIdentifier>
+    <S100XC:number>209</S100XC:number>
+    <S100XC:compliancyCategory>category4</S100XC:compliancyCategory>
+  </S100XC:productSpecification>
+  <S100XC:defaultLocale>
+    <lan:PT_Locale>
+      <lan:language>
+        <lan:LanguageCode codeList="https://schemas.s100dev.net/schemas/S100/5.2.0/resources/Codelists/cat/codelists.xml#S100_MD_LanguageCode" codeListValue="eng">English</lan:LanguageCode>
+      </lan:language>
+      <lan:characterEncoding>
+        <lan:MD_CharacterSetCode codeList="https://schemas.s100dev.net/schemas/S100/5.2.0/resources/Codelists/cat/codelists.xml#S100_MD_CharacterSetCode" codeListValue="UTF-8">UTF-8</lan:MD_CharacterSetCode>
+      </lan:characterEncoding>
+    </lan:PT_Locale>
+  </S100XC:defaultLocale>
+  <S100XC:exchangeCatalogueDescription>
+    <gco:CharacterString>S-104 exchange catalog for test and evaluation</gco:CharacterString>
+  </S100XC:exchangeCatalogueDescription>
+  <S100XC:exchangeCatalogueComment>
+    <gco:CharacterString>For test and evaluation exchange certificates and signatures are not valid</gco:CharacterString>
+  </S100XC:exchangeCatalogueComment>
+  <S100XC:certificates>
+    <S100SE:schemeAdministrator id="root"/>
+    <S100SE:certificate id="US00" issuer="root">ZGVmYXVsdA==</S100SE:certificate>
+  </S100XC:certificates>
+  <S100XC:dataServerIdentifier>IHO</S100XC:dataServerIdentifier>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../Southeast/Charleston/104US004SC1BO_20251217T12Z.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>Charleston Approaches</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:9fada4522970b3b051996ba925f45dc26f7ce726823bb7d317be3a3b0129b085</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:copyright>true</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>false</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2025-12-20</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2025-12-20</S100XC:issueDate>
+      <S100XC:issueTime>03:17:54Z</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-80.0999984741211</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-79.80000305175781</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>32.400001525878906</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>32.70000076293945</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:temporalExtent>
+        <S100XC:timeInstantBegin>2025-12-17T13:00:00Z</S100XC:timeInstantBegin>
+        <S100XC:timeInstantEnd>2025-12-25T00:00:00Z</S100XC:timeInstantEnd>
+      </S100XC:temporalExtent>
+      <S100XC:productSpecification>
+        <S100XC:name>Water Level Information for Surface Navigation</S100XC:name>
+        <S100XC:version>2.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-104</S100XC:productIdentifier>
+        <S100XC:number>209</S100XC:number>
+        <S100XC:compliancyCategory>category4</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_104US004SC1BO_20251217T12Z" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 32.400001525878906 -80.0999984741211 32.400001525878906 -79.80000305175781 32.70000076293945 -79.80000305175781 32.70000076293945 -80.0999984741211 32.400001525878906 -80.0999984741211 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-104 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2025-12-20</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>transit</S100XC:navigationPurpose>
+      <S100XC:resourceMaintenance>
+        <mmi:MD_MaintenanceInformation>
+          <mmi:userDefinedMaintenanceFrequency>
+            <gco:TM_PeriodDuration>PT6H</gco:TM_PeriodDuration>
+          </mmi:userDefinedMaintenanceFrequency>
+        </mmi:MD_MaintenanceInformation>
+      </S100XC:resourceMaintenance>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../Southeast/Charleston/104US004SC1BP_20251217T12Z.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>Charleston Approaches</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:d6b3fdbff2563f7a9f505c912d37d23ddf53afcc110003e163811dc5a39705ad</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:copyright>true</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>false</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2025-12-20</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2025-12-20</S100XC:issueDate>
+      <S100XC:issueTime>03:17:56Z</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-79.80000305175781</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-79.5</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>32.400001525878906</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>32.70000076293945</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:temporalExtent>
+        <S100XC:timeInstantBegin>2025-12-17T13:00:00Z</S100XC:timeInstantBegin>
+        <S100XC:timeInstantEnd>2025-12-25T00:00:00Z</S100XC:timeInstantEnd>
+      </S100XC:temporalExtent>
+      <S100XC:productSpecification>
+        <S100XC:name>Water Level Information for Surface Navigation</S100XC:name>
+        <S100XC:version>2.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-104</S100XC:productIdentifier>
+        <S100XC:number>209</S100XC:number>
+        <S100XC:compliancyCategory>category4</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_104US004SC1BP_20251217T12Z" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 32.400001525878906 -79.80000305175781 32.400001525878906 -79.5 32.70000076293945 -79.5 32.70000076293945 -79.80000305175781 32.400001525878906 -79.80000305175781 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-104 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2025-12-20</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>transit</S100XC:navigationPurpose>
+      <S100XC:resourceMaintenance>
+        <mmi:MD_MaintenanceInformation>
+          <mmi:userDefinedMaintenanceFrequency>
+            <gco:TM_PeriodDuration>PT6H</gco:TM_PeriodDuration>
+          </mmi:userDefinedMaintenanceFrequency>
+        </mmi:MD_MaintenanceInformation>
+      </S100XC:resourceMaintenance>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+  <S100XC:supportFileDiscoveryMetadata> </S100XC:supportFileDiscoveryMetadata>
+  <S100XC:catalogueDiscoveryMetadata> </S100XC:catalogueDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>
