@@ -56,3 +56,9 @@ nunit-*.xml
 # Mac OS Files
 .DS_Store
 perf-runs/
+
+# DocFX output (docfx.json): the generated site and API metadata.
+# api/index.md is hand-written and stays tracked.
+/_site/
+/api/*
+!/api/index.md

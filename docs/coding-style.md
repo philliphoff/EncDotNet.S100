@@ -12,7 +12,7 @@ code is migrated toward it opportunistically.
 > [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 > **Enforcement.** The mechanically-checkable rules below are encoded in the
-> repository [`.editorconfig`](../.editorconfig) and can be checked/applied with
+> repository [`.editorconfig`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.editorconfig) and can be checked/applied with
 > `dotnet format`. CI's *Format check* job uses one targeted invocation to
 > verify **whitespace/formatting**, **using directives** (IDE0005: System-first
 > ordering, placement outside the file-scoped namespace, and removal of

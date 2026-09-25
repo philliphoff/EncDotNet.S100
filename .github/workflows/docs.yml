@@ -3,21 +3,19 @@ name: Docs
 on:
   push:
     branches: [ main ]
+  pull_request:
 
 permissions:
-  pages: write
-  id-token: write
+  contents: read
 
 concurrency:
-  group: pages
+  # Pull requests get their own group so they never cancel a Pages deploy.
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.event.pull_request.number) || 'pages' }}
   cancel-in-progress: true
 
 jobs:
-  docs:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v5
@@ -27,17 +25,34 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Pinned so a new DocFX release can't introduce warnings that fail the
+      # build below; bump deliberately.
       - name: Install DocFX
-        run: dotnet tool install -g docfx
+        run: dotnet tool install -g docfx --version 2.78.6
 
+      # Any warning (e.g. a broken link or bookmark) fails the build, on pull
+      # requests as well as on main.
       - name: Build docs
-        run: docfx docfx.json
+        run: docfx docfx.json --warningsAsErrors
 
       - name: Upload Pages artifact
+        if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
+  deploy:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

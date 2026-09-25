@@ -3,7 +3,7 @@
 Scripted performance scenario runner for EncDotNet.S100 pipelines and
 renderers. Produces reproducible, comparable telemetry files that can be
 summarised and diffed by the companion
-[PerfReport](../EncDotNet.S100.PerfReport/) tool.
+[PerfReport](../EncDotNet.S100.PerfReport/README.md) tool.
 
 ## Quick start
 
@@ -273,7 +273,7 @@ done
 
 > **Noise floor caveat:** A single laptop run is informational, not
 > authoritative. Timing values vary with background load, thermal
-> throttling, and system state. See [CI gating](#ci-gating) for
+> throttling, and system state. See [CI gating](#ci-gating-interleaved--medianmad) for
 > automated regression detection on every PR.
 
 ### Corpus
@@ -282,7 +282,7 @@ All default scenarios use synthetic fixtures under `tests/datasets/`.
 For larger real-world datasets, run
 `tools/EncDotNet.S100.PerfRunner/scripts/fetch-corpus.sh` and set
 `ENC_DOTNET_PERF_CORPUS` to the cache directory. See
-[`tests/perf/corpus/INDEX.md`](../../tests/perf/corpus/INDEX.md) for
+[`tests/perf/corpus/INDEX.md`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/perf/corpus/INDEX.md) for
 the full corpus inventory.
 
 ## CI gating (interleaved + median/MAD)

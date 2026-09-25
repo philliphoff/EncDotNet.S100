@@ -5,9 +5,6 @@ cross-platform implementation of the IHO S-100 Universal Hydrographic Data
 Model for .NET. This guide covers everything you need to build, test, and
 submit changes.
 
-By participating you agree to abide by our
-[Code of Conduct](CODE_OF_CONDUCT.md).
-
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/) or later.
@@ -112,7 +109,7 @@ code. In brief:
 For API-shape conventions (collection return types, `class` vs `record`,
 quantity types) see [API design conventions](docs/design/api-conventions.md).
 
-The formatting rules are encoded in [`.editorconfig`](.editorconfig) and
+The formatting rules are encoded in [`.editorconfig`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.editorconfig) and
 enforced in CI (the **Format check** job). Before pushing, apply and verify
 formatting locally:
 
@@ -140,13 +137,21 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
   when adding types, removing APIs, or changing behaviour.
 - Conceptual guides live under `docs/` in DocFX Markdown. Add or update pages
   there for user-facing features.
+- Every public type and member in a packable library needs an XML doc comment;
+  the build fails on a missing one (CS1591).
+- The docs site (`docfx.json`) publishes `docs/`, the per-project READMEs
+  (listed in `src/toc.yml`) and the generated API reference. The Docs workflow
+  builds it on every pull request with `docfx docfx.json --warningsAsErrors`,
+  so a broken link or `#anchor` fails the check. Link to repository files that
+  aren't pages (source files, `LICENSE`, folders) with an absolute GitHub URL.
+  When adding a library, add its README to `src/toc.yml`.
 - When editing the viewer (`src/EncDotNet.S100.Viewer/**`), follow the
   localization and UI rules in `.github/instructions/viewer.instructions.md`
   (every user-facing string lives in `Resources/Strings.resx`).
 
 ## Release signing
 
-The `publish` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+The `publish` job in [`.github/workflows/ci.yml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/ci.yml)
 code-signs the desktop viewer and the standalone `s100` CLI for macOS and
 Windows. Both are **gated to non-PR runs** (pushes to `main` and `v*` tags) and
 are skipped automatically when the required secrets are absent, so forks and
@@ -207,7 +212,7 @@ rather than instantly.
 3. Ensure `dotnet build` and `dotnet test --configuration Release` pass
    locally.
 4. Open a pull request against `main`. The
-   [pull request template](.github/pull_request_template.md) includes a
+   [pull request template](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/pull_request_template.md) includes a
    checklist for spec alignment, tests, documentation, dependencies, and
    breaking changes — please fill it out.
 5. CI must pass before review. Keep PRs small and well-scoped where possible.
@@ -215,7 +220,7 @@ rather than instantly.
 ## Reporting bugs & requesting features
 
 Use the issue templates under
-[`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/). For questions and
+[`.github/ISSUE_TEMPLATE/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/.github/ISSUE_TEMPLATE). For questions and
 general discussion, see [SUPPORT.md](SUPPORT.md). To report a security
 vulnerability, follow [SECURITY.md](SECURITY.md) — please do **not** open a
 public issue for security problems.
@@ -223,4 +228,4 @@ public issue for security problems.
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[MIT License](LICENSE) that covers this project.
+[MIT License](https://github.com/philliphoff/EncDotNet.S100/blob/main/LICENSE) that covers this project.
