@@ -929,4 +929,13 @@ internal static class Strings
     public static string Toast_LibraryDeferredTitle => Get(nameof(Toast_LibraryDeferredTitle));
     public static string Toast_LibraryDeferredFormat => Get(nameof(Toast_LibraryDeferredFormat));
     public static string Toast_LibraryDeferredSkippedFormat => Get(nameof(Toast_LibraryDeferredSkippedFormat));
+    public static string Library_Availability_Outdated => Get(nameof(Library_Availability_Outdated));
+    public static string Library_DownloadListedFormat => Get(nameof(Library_DownloadListedFormat));
+    public static string Tooltip_DownloadListed => Get(nameof(Tooltip_DownloadListed));
+    public static string Tooltip_DownloadDataset => Get(nameof(Tooltip_DownloadDataset));
+    public static string Toast_LibraryDownloadingTitle => Get(nameof(Toast_LibraryDownloadingTitle));
+    public static string Toast_LibraryDownloadingFormat => Get(nameof(Toast_LibraryDownloadingFormat));
+    public static string Toast_LibraryDownloadedTitle => Get(nameof(Toast_LibraryDownloadedTitle));
+    public static string Toast_LibraryDownloadCancelledTitle => Get(nameof(Toast_LibraryDownloadCancelledTitle));
+    public static string Toast_LibraryDownloadedFormat => Get(nameof(Toast_LibraryDownloadedFormat));
 }

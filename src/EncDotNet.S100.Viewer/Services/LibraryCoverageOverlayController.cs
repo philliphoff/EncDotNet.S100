@@ -262,6 +262,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         LibraryAvailability.Local => new OutlineStyle(new MapsuiColor(0x3d, 0x8a, 0x5a), 1.6, null, 0),
         LibraryAvailability.Online => new OutlineStyle(new MapsuiColor(0x3f, 0x6f, 0xb5), 1.6, [6f, 4f], 0),
         LibraryAvailability.Missing => new OutlineStyle(new MapsuiColor(0xc0, 0x50, 0x4d), 1.6, [4f, 3f], 0),
+        LibraryAvailability.Outdated => new OutlineStyle(new MapsuiColor(0xc0, 0x7a, 0x2c), 1.6, [6f, 3f], 0),
         LibraryAvailability.Deferred => new OutlineStyle(new MapsuiColor(0x8a, 0x6f, 0xb8), 1.6, [6f, 3f], 0.06f),
         _ => new OutlineStyle(new MapsuiColor(0x80, 0x86, 0x90), 1.4, [1.5f, 3f], 0),
     };

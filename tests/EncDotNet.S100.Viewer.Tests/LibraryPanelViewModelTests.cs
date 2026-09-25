@@ -12,6 +12,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     private readonly LibraryService _library;
     private readonly RecordingImporter _importer = new();
     private readonly FakeLoader _loader = new();
+    private readonly FakeDownloader _downloader = new();
 
     public LibraryPanelViewModelTests()
     {
@@ -25,7 +26,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, action => action());
+    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, _downloader, action => action());
 
     private async Task<DatasetCollection> AddS57CollectionAsync(string name = "Charts")
     {
@@ -226,6 +227,71 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         Assert.Equal(LibraryAvailability.Loaded, vm.Items[0].Availability);
         Assert.Equal("LOADED", vm.Items[0].AvailabilityText);
+    }
+
+    [Fact]
+    public void Online_items_can_be_downloaded_then_are_loaded()
+    {
+        var item = LibraryDownloadServiceTests.Cell();
+        var source = new LibrarySource(new NoaaEncFeedSource(Guid.NewGuid(), null, NoaaEncFeedSource.DefaultCatalogUri, NoaaEncFilter.All),
+            new SourceIndex(Guid.NewGuid(), DateTimeOffset.UnixEpoch, "fp", [item], []), LibrarySourceState.Ready);
+        var vmItem = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader);
+
+        Assert.Equal(LibraryAvailability.Online, vmItem.Availability);
+        Assert.True(vmItem.CanDownload);
+        Assert.False(vmItem.CanLoad);
+
+        _downloader.Downloaded = true;
+        vmItem.RefreshAvailability();
+
+        Assert.IsType<LocalItemLocation>(vmItem.EffectiveItem.Location);
+        Assert.False(vmItem.CanDownload);
+    }
+
+    [Fact]
+    public async Task Download_command_downloads_and_then_loads_the_selected_item()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        vm.SelectedItem = vm.Items[0];
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        vm.SelectedItem.RefreshAvailability();
+
+        Assert.True(vm.DownloadCommand.CanExecute(null));
+        vm.DownloadCommand.Execute(null);
+
+        Assert.Equal(1, _downloader.Downloads);
+        Assert.Equal((false, 1), (_loader.Calls.Single().Defer, _loader.Calls.Single().Count));
+    }
+
+    private sealed class FakeDownloader : ILibraryDownloader
+    {
+        public bool Downloaded { get; set; }
+
+        public bool Outdated { get; set; }
+
+        public bool CanDownloadAll { get; set; }
+
+        public int Downloads { get; private set; }
+
+        public event EventHandler? Changed;
+
+        public CollectionItem Localize(CollectionItem item) =>
+            Downloaded && item.Location is RemoteItemLocation
+                ? item with { Location = new LocalItemLocation("/tmp/x", "x.000", []) }
+                : item;
+
+        public bool IsOutdated(CollectionItem item) => Outdated;
+
+        public bool CanDownload(CollectionItem item) => CanDownloadAll || item.Location is RemoteItemLocation;
+
+        public Task<LibraryDownloadResult> DownloadAsync(IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
+        {
+            Downloads += items.Count;
+            Changed?.Invoke(this, EventArgs.Empty);
+            return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
+        }
     }
 
     private sealed class FakeLoader : ILibraryLoader

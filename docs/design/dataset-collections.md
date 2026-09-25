@@ -667,6 +667,27 @@ This is the same mechanism as large S-57 sets, generalized:
 
 ### 7.3 Download (NOAA)
 
+> **Slice 6 as built:**
+> - **Downloader:** `EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader`
+>   fetches the cell zip to a `.partial` file, extracts it into a
+>   staging folder, and swaps that in for any previous copy only once it
+>   is complete.
+> - **Layout discovery:** it finds `CATALOG.031` and `<CELL>.000` plus
+>   its updates rather than assuming the layout.
+> - **Record:** it writes `.source.json` with the edition, update and
+>   layout relative to the cell folder.
+> - **In the viewer:** `LibraryDownloadService` downloads at most three
+>   at a time, with a cancellable progress notification, and localizes
+>   downloaded feed items: the item keeps its identity but gets a local
+>   location.
+> - **Update detection:** basic detection landed early. A copy older
+>   than the feed shows **UPDATE**, and downloading again replaces it.
+>   "Update all" is simply "Download N" on a list that includes outdated
+>   cells.
+> - **Live check:** real NOAA cells (with and without updates, including
+>   a western-Pacific cell) downloaded and re-indexed with matching
+>   edition and update.
+
 - Download `zipfile_location` to
   `<data>/downloads/noaa-enc/<CELL>.zip.partial`, streaming with
   progress and cancellation. Then **extract into a temporary directory

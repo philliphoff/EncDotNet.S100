@@ -219,6 +219,19 @@ design in `docs/design/dataset-collections.md`.
   - **Badges:** opened datasets show **LOADED** or **ON PAN**.
   - **What can't load:** online, missing and catalogue-only items are
     skipped.
+- **Download** (NOAA ENC feed): the download button beside an online
+  dataset downloads it and then loads it. **Download N (size)** fetches
+  every listed online cell, for example a whole state, at most three at
+  a time, with progress and **Cancel** in a notification.
+  - **Where cells go:** into the viewer's managed `downloads/noaa-enc/`
+    folder. This is not a cache, so "clear caches" keeps it.
+  - **After downloading:** a downloaded cell is **LOCAL** and loads like
+    any other.
+  - **Newer editions:** when the feed lists a newer edition or update
+    than you downloaded, the cell shows **UPDATE**. Downloading again
+    replaces the copy.
+  - **Interrupted downloads:** a failed or interrupted download never
+    replaces a good copy.
 - **S-128 datasets** you load appear in a temporary **Session**
   collection (this replaces the former Catalog panel). **Keep in
   library** (pin) makes one permanent.

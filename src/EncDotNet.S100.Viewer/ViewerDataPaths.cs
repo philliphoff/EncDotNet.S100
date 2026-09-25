@@ -147,6 +147,16 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "caches", "CollectionFeedCache")
             : Path.Combine(DefaultLocalDataDirectory, "CollectionFeedCache");
 
+    /// <summary>
+    /// Directory the viewer downloads online datasets into (e.g. NOAA ENC
+    /// cells under <c>noaa-enc/</c>). Not a cache: "clear caches" leaves it,
+    /// because downloaded charts are user data. Issue #655.
+    /// </summary>
+    public string DownloadsDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "downloads")
+            : Path.Combine(DefaultLocalDataDirectory, "Downloads");
+
     public string? TileDiskCacheDirectory =>
         _baseDirectory is { } b ? Path.Combine(b, "caches", "tiles") : null;
 

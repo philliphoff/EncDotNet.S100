@@ -159,6 +159,15 @@
                                   Content="{x:Static loc:Strings.Library_ShowCancelled}" FontSize="11" />
                     </Grid>
                     <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
+                            IsVisible="{Binding HasDownloadable}"
+                            Command="{Binding DownloadListedCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ic:FluentIcon Icon="ArrowDownload" FontSize="14" />
+                            <TextBlock Text="{Binding DownloadListedText}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
                             Command="{Binding LoadAsYouPanCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -221,10 +230,17 @@
                         <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                             <TextBlock Grid.Column="0" Text="{Binding SelectedItem.Name}"
                                        FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Classes="Icon" Command="{Binding LoadCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}">
-                                <ic:FluentIcon Icon="Open" FontSize="16" />
-                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Classes="Icon" Command="{Binding DownloadCommand}"
+                                        IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadDataset}">
+                                    <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
+                                </Button>
+                                <Button Classes="Icon" Command="{Binding LoadCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}">
+                                    <ic:FluentIcon Icon="Open" FontSize="16" />
+                                </Button>
+                            </StackPanel>
                             <Button Grid.Column="2" Classes="Icon" Command="{Binding ZoomToCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}">
                                 <ic:FluentIcon Icon="ZoomFit" FontSize="16" />

@@ -22,6 +22,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly LibraryService _library;
     private readonly ILibraryImporter _importer;
     private readonly ILibraryLoader _loader;
+    private readonly ILibraryDownloader _downloader;
+    private bool _availabilityRefreshPosted;
     private readonly Action<Action> _dispatch;
 
     private LibraryNodeViewModel? _selectedNode;
@@ -35,14 +37,21 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _showCoverage = true;
     private GeoPosition? _location;
 
-    public LibraryPanelViewModel(LibraryService library, ILibraryImporter importer, ILibraryLoader loader)
-        : this(library, importer, loader, PostToUiThread)
+    public LibraryPanelViewModel(
+        LibraryService library, ILibraryImporter importer, ILibraryLoader loader, ILibraryDownloader downloader)
+        : this(library, importer, loader, downloader, PostToUiThread)
     {
     }
 
     internal LibraryPanelViewModel(
-        LibraryService library, ILibraryImporter importer, ILibraryLoader loader, Action<Action> dispatch)
+        LibraryService library,
+        ILibraryImporter importer,
+        ILibraryLoader loader,
+        ILibraryDownloader downloader,
+        Action<Action> dispatch)
     {
+        ArgumentNullException.ThrowIfNull(downloader);
+        _downloader = downloader;
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(importer);
         ArgumentNullException.ThrowIfNull(loader);
@@ -63,7 +72,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ClearLocationCommand = new RelayCommand(() => SetLocation(null));
         LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
+        DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
+        DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         _loader.Changed += OnLoaderChanged;
+        _downloader.Changed += OnLoaderChanged;
 
         _library.Changed += OnLibraryChanged;
         Sync();
@@ -115,6 +127,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(HasSelectedItem));
                 ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -203,6 +216,32 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Registers every listed local dataset to load as it comes into view.</summary>
     public ICommand LoadAsYouPanCommand { get; }
 
+    /// <summary>Downloads the selected online dataset, then loads it.</summary>
+    public ICommand DownloadCommand { get; }
+
+    /// <summary>Downloads every listed online (or outdated) dataset.</summary>
+    public ICommand DownloadListedCommand { get; }
+
+    /// <summary>How many listed datasets can be downloaded.</summary>
+    public int DownloadableCount => _items.Count(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+
+    /// <summary>True when some listed dataset can be downloaded.</summary>
+    public bool HasDownloadable => DownloadableCount > 0;
+
+    /// <summary>"Download 1,193 (203 MB)" for the bulk download button.</summary>
+    public string DownloadListedText
+    {
+        get
+        {
+            var downloadable = _items
+                .Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)))
+                .ToArray();
+            var bytes = downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0);
+            return string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadListedFormat,
+                downloadable.Length, LibraryItemViewModel.FormatBytes(bytes));
+        }
+    }
+
     /// <summary>
     /// Handles a tap on the map: lists every library dataset whose coverage
     /// contains <paramref name="position"/> and selects the most detailed one.
@@ -230,22 +269,59 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     {
         _library.Changed -= OnLibraryChanged;
         _loader.Changed -= OnLoaderChanged;
+        _downloader.Changed -= OnLoaderChanged;
     }
 
-    private void OnLoaderChanged(object? sender, EventArgs e) => _dispatch(() =>
+    private void OnLoaderChanged(object? sender, EventArgs e)
     {
-        foreach (var item in _items)
-            item.RefreshAvailability();
-        ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
-        // The coverage overlay styles by availability; let it redraw.
-        OnPropertyChanged(nameof(Items));
-    });
+        // Coalesce bursts (e.g. one notification per downloaded cell).
+        lock (Nodes)
+        {
+            if (_availabilityRefreshPosted)
+                return;
+            _availabilityRefreshPosted = true;
+        }
+
+        _dispatch(() =>
+        {
+            lock (Nodes)
+                _availabilityRefreshPosted = false;
+            foreach (var item in _items)
+                item.RefreshAvailability();
+            ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(DownloadListedText));
+            OnPropertyChanged(nameof(HasDownloadable));
+            // The coverage overlay styles by availability; let it redraw.
+            OnPropertyChanged(nameof(Items));
+        });
+    }
 
     private Task LoadSelectedAsync() =>
-        _selectedItem is { } item ? _loader.LoadAsync([item.Item], defer: false) : Task.CompletedTask;
+        _selectedItem is { } item ? _loader.LoadAsync([item.EffectiveItem], defer: false) : Task.CompletedTask;
 
     private Task LoadListedAsYouPanAsync() =>
-        _loader.LoadAsync(_items.Select(i => i.Item).ToArray(), defer: true);
+        _loader.LoadAsync(_items.Select(i => i.EffectiveItem).ToArray(), defer: true);
+
+    private async Task DownloadSelectedAsync()
+    {
+        if (_selectedItem is not { } item)
+            return;
+
+        var result = await _downloader.DownloadAsync([item.Item]).ConfigureAwait(true);
+        if (result.Downloaded > 0)
+        {
+            item.RefreshAvailability();
+            await _loader.LoadAsync([item.EffectiveItem], defer: false).ConfigureAwait(true);
+        }
+    }
+
+    private Task DownloadListedAsync() =>
+        _downloader.DownloadAsync(_items
+            .Where(i => i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item))
+            .Select(i => i.Item)
+            .ToArray());
 
     /// <summary>
     /// The persisted collection new sources are added to by default: the
@@ -339,13 +415,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(p => CoverageGeometry.Contains(p.Item, position))
             .OrderByDescending(p => p.Item.UsageBand ?? 0)
             .ThenBy(p => CoverageGeometry.Area(p.Item))
-            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf))
+            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader))
             .ToList();
 
     private IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
         node is null
             ? []
-            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf)).ToArray();
+            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader)).ToArray();
 
     private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
         a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
@@ -398,6 +474,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .ToArray();
         OnPropertyChanged(nameof(ItemsSummary));
         ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
+        ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(DownloadListedText));
+        OnPropertyChanged(nameof(HasDownloadable));
 
         if (_selectedItem is not null && !_items.Contains(_selectedItem))
             SelectedItem = null;

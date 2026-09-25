@@ -14,19 +14,30 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class LibraryItemViewModel : ViewModelBase
 {
     private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
+    private readonly ILibraryDownloader? _downloader;
     private LibraryAvailability? _availability;
+    private CollectionItem? _effective;
 
     public LibraryItemViewModel(
         CollectionItem item,
         LibrarySource source,
-        Func<CollectionItem, LibraryLoadState>? loadState = null)
+        Func<CollectionItem, LibraryLoadState>? loadState = null,
+        ILibraryDownloader? downloader = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
         Item = item;
         Source = source;
         _loadState = loadState;
+        _downloader = downloader;
     }
+
+    /// <summary>
+    /// The item as it can be opened now: an online item that has been
+    /// downloaded, with its downloaded (local) location; otherwise
+    /// <see cref="Item"/>.
+    /// </summary>
+    public CollectionItem EffectiveItem => _effective ??= _downloader?.Localize(Item) ?? Item;
 
     /// <summary>The indexed item.</summary>
     public CollectionItem Item { get; }
@@ -64,15 +75,21 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     }
 
     /// <summary>Where the data can be had now (resolved on first access).</summary>
-    public LibraryAvailability Availability => _availability ??= (_loadState?.Invoke(Item)) switch
+    public LibraryAvailability Availability => _availability ??= (_loadState?.Invoke(EffectiveItem)) switch
     {
         LibraryLoadState.Loaded => LibraryAvailability.Loaded,
         LibraryLoadState.Deferred => LibraryAvailability.Deferred,
-        _ => LibraryAvailabilityResolver.Resolve(Item),
+        _ when _downloader?.IsOutdated(Item) == true => LibraryAvailability.Outdated,
+        _ => LibraryAvailabilityResolver.Resolve(EffectiveItem),
     };
 
     /// <summary>True when the item can be opened from disk (local, not already loaded).</summary>
-    public bool CanLoad => Availability is LibraryAvailability.Local or LibraryAvailability.Deferred;
+    public bool CanLoad => Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated;
+
+    /// <summary>True when the item can be downloaded (online, or a newer edition is available).</summary>
+    public bool CanDownload =>
+        _downloader?.CanDownload(Item) == true
+        && Availability is LibraryAvailability.Online or LibraryAvailability.Outdated;
 
     /// <summary>Re-resolves <see cref="Availability"/> after the item was opened or closed.</summary>
     public void RefreshAvailability()
@@ -80,10 +97,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         if (_availability is null)
             return;  // never shown; resolved lazily on first display
         _availability = null;
+        _effective = null;
         OnPropertyChanged(nameof(Availability));
         OnPropertyChanged(nameof(AvailabilityText));
         OnPropertyChanged(nameof(AvailabilityBrush));
         OnPropertyChanged(nameof(CanLoad));
+        OnPropertyChanged(nameof(CanDownload));
+        OnPropertyChanged(nameof(Details));
     }
 
     /// <summary>The availability badge text.</summary>
@@ -94,6 +114,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Missing => Strings.Library_Availability_Missing,
         LibraryAvailability.Deferred => Strings.Library_Availability_Deferred,
         LibraryAvailability.Loaded => Strings.Library_Availability_Loaded,
+        LibraryAvailability.Outdated => Strings.Library_Availability_Outdated,
         _ => Strings.Library_Availability_Listed,
     };
 
@@ -105,6 +126,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Missing => Color.Parse("#c0504d"),
         LibraryAvailability.Deferred => Color.Parse("#8a6fb8"),
         LibraryAvailability.Loaded => Color.Parse("#2e6b45"),
+        LibraryAvailability.Outdated => Color.Parse("#c07a2c"),
         _ => Color.Parse("#8a8f98"),
     });
 
@@ -147,6 +169,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 Add(Strings.Library_Field_NorthEast, LatLonFormatter.Format(b.North, b.East));
                 Add(Strings.Library_Field_SouthWest, LatLonFormatter.Format(b.South, b.West));
             }
+
+            if (Item.Location is RemoteItemLocation && EffectiveItem.Location is LocalItemLocation downloaded)
+                Add(Strings.Library_Field_Location, LibraryAvailabilityResolver.ResolvePath(downloaded));
 
             switch (Item.Location)
             {

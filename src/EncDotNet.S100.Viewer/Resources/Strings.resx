@@ -2659,4 +2659,31 @@
   <data name="Toast_LibraryDeferredSkippedFormat" xml:space="preserve">
     <value>{0:N0} datasets will load as they come into view; {1:N0} could not be opened (online, missing or catalogue-only).</value>
   </data>
+  <data name="Library_Availability_Outdated" xml:space="preserve">
+    <value>UPDATE</value>
+  </data>
+  <data name="Library_DownloadListedFormat" xml:space="preserve">
+    <value>Download {0:N0} ({1})</value>
+  </data>
+  <data name="Tooltip_DownloadListed" xml:space="preserve">
+    <value>Download the listed online datasets to this computer</value>
+  </data>
+  <data name="Tooltip_DownloadDataset" xml:space="preserve">
+    <value>Download this dataset and load it</value>
+  </data>
+  <data name="Toast_LibraryDownloadingTitle" xml:space="preserve">
+    <value>Downloading charts</value>
+  </data>
+  <data name="Toast_LibraryDownloadingFormat" xml:space="preserve">
+    <value>{0:N0} of {1:N0} cells · {2}</value>
+  </data>
+  <data name="Toast_LibraryDownloadedTitle" xml:space="preserve">
+    <value>Charts downloaded</value>
+  </data>
+  <data name="Toast_LibraryDownloadCancelledTitle" xml:space="preserve">
+    <value>Download cancelled</value>
+  </data>
+  <data name="Toast_LibraryDownloadedFormat" xml:space="preserve">
+    <value>{0:N0} downloaded, {1:N0} failed.</value>
+  </data>
 </root>

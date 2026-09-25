@@ -386,6 +386,12 @@ public partial class App : Application
                 feeds: sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>());
         });
         services.AddSingleton<Library.LibraryService>();
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) },
+            Path.Combine(sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory, "noaa-enc")));
+        services.AddSingleton<Library.ILibraryDownloader>(sp => new Library.LibraryDownloadService(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader>(),
+            sp.GetService<Services.Notifications.INotificationService>()));
         services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
             sp.GetRequiredService<IExchangeSetService>(),
             sp.GetRequiredService<DatasetsViewModel>(),

@@ -22,6 +22,9 @@ internal enum LibraryAvailability
 
     /// <summary>Loaded on the map.</summary>
     Loaded,
+
+    /// <summary>Downloaded, but the feed now lists a newer edition or update.</summary>
+    Outdated,
 }
 
 /// <summary>Computes a <see cref="LibraryAvailability"/> from an item's location.</summary>
