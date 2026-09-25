@@ -5,6 +5,12 @@ using EncDotNet.S100.Features.Diagnostics;
 
 namespace EncDotNet.S100.Features;
 
+/// <summary>
+/// Parses S-100 Part 5 Feature Catalogue XML into a <see cref="FeatureCatalogue"/>. The
+/// <c>S100FC</c>, <c>S100Base</c> and <c>S100CI</c> namespace URIs are taken from the root
+/// element's declarations, so versioned namespaces (e.g. <c>http://www.iho.int/S100FC/5.2</c>)
+/// are accepted. Each parse emits an <c>s100.featurecatalogue.parse</c> tracing activity.
+/// </summary>
 public static class FeatureCatalogueReader
 {
     // Namespace URIs — resolved from the root element at parse time to handle
@@ -17,6 +23,16 @@ public static class FeatureCatalogueReader
     private static XNamespace S100CI => _s100ci ?? "http://www.iho.int/S100CI";
     private static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
+    /// <summary>Reads a Feature Catalogue from an XML stream.</summary>
+    /// <param name="stream">Stream positioned at the start of the catalogue XML. It is read to the end but not disposed.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="FormatException">A multiplicity's <c>S100Base:lower</c> is not an integer.</exception>
+    /// <remarks>
+    /// The document is not validated against the S-100 FC schema. Pass catalogues that conform
+    /// to it: a schema-invalid catalogue may leave required properties <see langword="null"/>
+    /// or fail with an exception other than those listed here.
+    /// </remarks>
     public static FeatureCatalogue Read(Stream stream)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.featurecatalogue.parse");
@@ -24,6 +40,17 @@ public static class FeatureCatalogueReader
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
+    /// <summary>Reads a Feature Catalogue from an XML file.</summary>
+    /// <param name="path">Path (or URI) of the catalogue XML file.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="FormatException">A multiplicity's <c>S100Base:lower</c> is not an integer.</exception>
+    /// <remarks>
+    /// The document is not validated against the S-100 FC schema. Pass catalogues that conform
+    /// to it: a schema-invalid catalogue may leave required properties <see langword="null"/>
+    /// or fail with an exception other than those listed here.
+    /// </remarks>
+    /// <exception cref="IOException">The file cannot be opened or read (e.g. <see cref="FileNotFoundException"/>).</exception>
     public static FeatureCatalogue Read(string path)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.featurecatalogue.parse");

@@ -33,6 +33,9 @@ public sealed class FeatureCatalogueDecoder
     /// </summary>
     private readonly Dictionary<string, string> _listedValueDefinitions;
 
+    /// <summary>Builds the code lookup tables for <paramref name="catalogue"/>.</summary>
+    /// <param name="catalogue">The parsed catalogue to index.</param>
+    /// <exception cref="System.ArgumentNullException"><paramref name="catalogue"/> is <see langword="null"/>.</exception>
     public FeatureCatalogueDecoder(FeatureCatalogue catalogue)
     {
         if (catalogue is null) throw new System.ArgumentNullException(nameof(catalogue));
