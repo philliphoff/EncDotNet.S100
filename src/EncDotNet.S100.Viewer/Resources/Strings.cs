@@ -955,4 +955,10 @@ internal static class Strings
     public static string Button_Next => Get(nameof(Button_Next));
     public static string Library_CatalogueDatedFormat => Get(nameof(Library_CatalogueDatedFormat));
     public static string Library_CatalogueStale => Get(nameof(Library_CatalogueStale));
+    public static string Library_CommunityCharts => Get(nameof(Library_CommunityCharts));
+    public static string Library_CommunitySearchWatermark => Get(nameof(Library_CommunitySearchWatermark));
+    public static string Library_CommunitySelectionAllFormat => Get(nameof(Library_CommunitySelectionAllFormat));
+    public static string Library_CommunitySelectionFormat => Get(nameof(Library_CommunitySelectionFormat));
+    public static string Library_CommunityAll => Get(nameof(Library_CommunityAll));
+    public static string Library_PublishedFormat => Get(nameof(Library_PublishedFormat));
 }

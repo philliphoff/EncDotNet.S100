@@ -311,18 +311,43 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             return;
 
         var result = await _downloader.DownloadAsync([item.Item]).ConfigureAwait(true);
-        if (result.Downloaded > 0)
-        {
-            item.RefreshAvailability();
-            await _loader.LoadAsync([item.EffectiveItem], defer: false).ConfigureAwait(true);
-        }
+        if (result.Downloaded == 0)
+            return;
+
+        // A package's cells (and their coverage) appear once its source re-indexes.
+        if (ReindexPackageSources([item]))
+            return;
+
+        item.RefreshAvailability();
+        await _loader.LoadAsync([item.EffectiveItem], defer: false).ConfigureAwait(true);
     }
 
-    private Task DownloadListedAsync() =>
-        _downloader.DownloadAsync(_items
+    private async Task DownloadListedAsync()
+    {
+        var items = _items
             .Where(i => i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item))
-            .Select(i => i.Item)
-            .ToArray());
+            .ToArray();
+        var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
+        if (result.Downloaded > 0)
+            ReindexPackageSources(items);
+    }
+
+    /// <summary>
+    /// Re-indexes the sources of any package items among <paramref name="items"/>
+    /// (community lists list a downloaded package's cells, not the package).
+    /// Returns true when there were any.
+    /// </summary>
+    private bool ReindexPackageSources(IEnumerable<LibraryItemViewModel> items)
+    {
+        var sources = items
+            .Where(i => i.Item.Location is RemoteItemLocation { Package: not null })
+            .Select(i => i.Source.Id)
+            .Distinct()
+            .ToArray();
+        foreach (var source in sources)
+            _library.Refresh(sourceId: source);
+        return sources.Length > 0;
+    }
 
     /// <summary>
     /// The persisted collection new sources are added to by default: the

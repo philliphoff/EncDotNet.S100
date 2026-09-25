@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.ChartCatalogs;
+using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Collections.Usace;
@@ -29,6 +31,9 @@ internal enum AddToLibraryKind
 
     /// <summary>A scope of the USACE Inland ENC product catalogue feed (issue #670).</summary>
     UsaceFeed,
+
+    /// <summary>Some or all entries of a community chart list (<c>chartcatalogs</c> format; issue #670).</summary>
+    CommunityFeed,
 }
 
 /// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
@@ -40,7 +45,8 @@ internal sealed record FacetGroupViewModel(string Title, ObservableCollection<Fa
 /// View model for the "Add to Library" dialog: confirms which collection a
 /// new source goes into (a new one, named, or an existing one) and, for an
 /// online feed, which part to include: NOAA ENC by state, Coast Guard district
-/// or region; USACE Inland ENC by river. Nothing is loaded or downloaded
+/// or region; USACE Inland ENC by river; a community chart list by entry
+/// (searchable, as lists run to over a thousand). Nothing is loaded or downloaded
 /// except the feed's catalogue itself.
 /// </summary>
 internal sealed class AddToLibraryDialogViewModel : ViewModelBase
@@ -48,7 +54,11 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     private readonly LibraryService _library;
     private readonly Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
     private readonly Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? _loadUsaceCatalog;
+    private readonly Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? _loadCommunityCatalog;
     private readonly TimeProvider _time;
+    private readonly List<FacetOptionViewModel> _allCharts = [];
+    private ChartCatalogsProductCatalog? _communityCatalog;
+    private string _chartSearchText = string.Empty;
     private KnownCatalogueSource? _known;
     private DateOnly? _catalogueDate;
 
@@ -67,12 +77,14 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         LibraryService library,
         Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? loadNoaaCatalog,
         Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? loadCommunityCatalog = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
         _loadCatalog = loadNoaaCatalog;
         _loadUsaceCatalog = loadUsaceCatalog;
+        _loadCommunityCatalog = loadCommunityCatalog;
         _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
@@ -92,8 +104,11 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>True when adding a NOAA feed scope.</summary>
     public bool IsNoaaFeed => _kind == AddToLibraryKind.NoaaFeed;
 
-    /// <summary>True when adding a scope of an online feed (NOAA or USACE).</summary>
-    public bool IsOnlineFeed => _kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed;
+    /// <summary>True when adding a scope of an online feed (NOAA, USACE or a community list).</summary>
+    public bool IsOnlineFeed => _kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed;
+
+    /// <summary>True when the feed's values can be filtered by text (community lists).</summary>
+    public bool IsSearchable => _kind == AddToLibraryKind.CommunityFeed;
 
     /// <summary>The facet tabs for the current feed.</summary>
     public IReadOnlyList<FacetGroupViewModel> FacetGroups => _kind switch
@@ -105,6 +120,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             new(Strings.Library_NoaaRegions, Regions),
         ],
         AddToLibraryKind.UsaceFeed => [new(Strings.Library_UsaceRivers, Rivers)],
+        AddToLibraryKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts)],
         _ => [],
     };
 
@@ -119,7 +135,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>The path being added, or the feed URL.</summary>
     public string SourceDescription => _kind switch
     {
-        AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed => CatalogUri.AbsoluteUri,
+        AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed => CatalogUri.AbsoluteUri,
         _ => _path ?? string.Empty,
     };
 
@@ -220,6 +236,20 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>Rivers present in the USACE catalogue.</summary>
     public ObservableCollection<FacetOptionViewModel> Rivers { get; } = [];
 
+    /// <summary>The community list's entries matching <see cref="ChartSearchText"/>.</summary>
+    public ObservableCollection<FacetOptionViewModel> Charts { get; } = [];
+
+    /// <summary>Filters <see cref="Charts"/> by label or number; selections outside the filter are kept.</summary>
+    public string ChartSearchText
+    {
+        get => _chartSearchText;
+        set
+        {
+            if (SetProperty(ref _chartSearchText, value ?? string.Empty))
+                ShowMatchingCharts();
+        }
+    }
+
     /// <summary>"N cells · X MB" for the current NOAA selection.</summary>
     public string SelectionSummary
     {
@@ -252,6 +282,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         var kind = known.Format switch
         {
             KnownCatalogueFormat.UsaceIenc => AddToLibraryKind.UsaceFeed,
+            KnownCatalogueFormat.ChartCatalogs => AddToLibraryKind.CommunityFeed,
             _ => AddToLibraryKind.NoaaFeed,
         };
         Initialize(kind, null, targetCollectionId, known);
@@ -280,6 +311,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.UsaceFeed)
         {
             await LoadUsaceCatalogAsync(cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.CommunityFeed)
+        {
+            await LoadCommunityCatalogAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 
@@ -336,6 +373,60 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         }
     }
 
+    private async Task LoadCommunityCatalogAsync(CancellationToken cancellationToken)
+    {
+        if (_loadCommunityCatalog is null)
+            return;
+
+        IsLoading = true;
+        LoadError = null;
+        try
+        {
+            _communityCatalog = await _loadCommunityCatalog(CatalogUri, cancellationToken).ConfigureAwait(true);
+            SetCatalogueDate(_communityCatalog.ValidAt is { } valid ? DateOnly.FromDateTime(valid.UtcDateTime) : null);
+
+            foreach (var option in _allCharts)
+                option.PropertyChanged -= OnFacetChanged;
+            _allCharts.Clear();
+            foreach (var chart in ChartCatalogsFeedIndexer.Selected(_communityCatalog, ChartCatalogsFilter.All))
+            {
+                var detail = chart.PublishedAt is { } published
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Library_PublishedFormat,
+                        published.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+                    : string.Empty;
+                var option = new FacetOptionViewModel(chart.Number, chart.Title ?? chart.Number, detail);
+                option.PropertyChanged += OnFacetChanged;
+                _allCharts.Add(option);
+            }
+
+            ShowMatchingCharts();
+            UpdateSelection();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or System.Xml.XmlException or TaskCanceledException)
+        {
+            LoadError = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void ShowMatchingCharts()
+    {
+        var text = _chartSearchText.Trim();
+        Charts.Clear();
+        foreach (var option in _allCharts)
+        {
+            if (text.Length == 0
+                || option.Label.Contains(text, StringComparison.CurrentCultureIgnoreCase)
+                || option.Value.Contains(text, StringComparison.OrdinalIgnoreCase))
+            {
+                Charts.Add(option);
+            }
+        }
+    }
+
     private void SetCatalogueDate(DateOnly? date)
     {
         _catalogueDate = date;
@@ -347,6 +438,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     public UsaceIencFilter CurrentUsaceFilter => new()
     {
         Rivers = Rivers.Where(o => o.IsSelected).Select(o => o.Value).ToArray(),
+    };
+
+    /// <summary>The community-list filter for the current entry selection.</summary>
+    public ChartCatalogsFilter CurrentCommunityFilter => new()
+    {
+        Charts = _allCharts.Where(o => o.IsSelected).Select(o => o.Value).ToArray(),
     };
 
     /// <summary>The default collection name for an online feed, or <see langword="null"/> for local sources.</summary>
@@ -373,6 +470,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         {
             AddToLibraryKind.NoaaFeed => _catalog is not null && !_isLoading,
             AddToLibraryKind.UsaceFeed => _usaceCatalog is not null && !_isLoading,
+            AddToLibraryKind.CommunityFeed => _communityCatalog is not null && !_isLoading,
             _ => !string.IsNullOrEmpty(_path),
         };
 
@@ -403,6 +501,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
             AddToLibraryKind.UsaceFeed => new UsaceIencFeedSource(
                 id, DescribeUsaceFilter(CurrentUsaceFilter), CatalogUri, CurrentUsaceFilter),
+            AddToLibraryKind.CommunityFeed => new ChartCatalogsFeedSource(
+                id, DescribeCommunitySelection(), CatalogUri, CurrentCommunityFilter),
             _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter), CatalogUri, CurrentFilter),
         };
     }
@@ -432,7 +532,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
     private void ClearFacetSelection()
     {
-        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers))
+        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts))
             option.IsSelected = false;
     }
 
@@ -441,6 +541,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.UsaceFeed)
         {
             UpdateUsaceSelection();
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.CommunityFeed)
+        {
+            UpdateCommunitySelection();
             return;
         }
 
@@ -490,6 +596,30 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         NewCollectionName = unscoped ? baseName : $"{baseName} — {describe()}";
     }
 
+    private void UpdateCommunitySelection()
+    {
+        if (_communityCatalog is null)
+            return;
+
+        var selected = _allCharts.Count(o => o.IsSelected);
+        SelectionSummary = selected == 0
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Library_CommunitySelectionAllFormat, _allCharts.Count)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Library_CommunitySelectionFormat, selected);
+
+        FollowSelectionInName(selected == 0, DescribeCommunitySelection);
+    }
+
+    private string DescribeCommunitySelection()
+    {
+        var labels = _allCharts.Where(o => o.IsSelected).Select(o => o.Label).ToArray();
+        return labels.Length switch
+        {
+            0 => Strings.Library_CommunityAll,
+            <= 3 => string.Join(", ", labels),
+            _ => string.Format(CultureInfo.CurrentCulture, Strings.Library_AndMoreFormat, string.Join(", ", labels.Take(2)), labels.Length - 2),
+        };
+    }
+
     private static string DescribeUsaceFilter(UsaceIencFilter filter)
     {
         if (filter.IsUnscoped)
@@ -525,17 +655,22 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     }
 }
 
-/// <summary>One selectable facet value (a NOAA state, district or region, or a USACE river).</summary>
+/// <summary>One selectable facet value (a NOAA state, district or region, a USACE river, or a community list entry).</summary>
 internal sealed class FacetOptionViewModel : ViewModelBase
 {
     private bool _isSelected;
 
     public FacetOptionViewModel(CatalogFacetValue value, string label)
+        : this(value.Value, label, string.Format(CultureInfo.CurrentCulture, Strings.Library_FacetDetailFormat,
+            value.CellCount, LibraryItemViewModel.FormatBytes(value.TotalBytes)))
     {
-        Value = value.Value;
+    }
+
+    public FacetOptionViewModel(string value, string label, string detail)
+    {
+        Value = value;
         Label = label;
-        Detail = string.Format(CultureInfo.CurrentCulture, Strings.Library_FacetDetailFormat,
-            value.CellCount, LibraryItemViewModel.FormatBytes(value.TotalBytes));
+        Detail = detail;
     }
 
     /// <summary>The facet value (state code, district/region number, or river name).</summary>
@@ -544,7 +679,7 @@ internal sealed class FacetOptionViewModel : ViewModelBase
     /// <summary>The display label.</summary>
     public string Label { get; }
 
-    /// <summary>"N cells · X MB".</summary>
+    /// <summary>"N cells · X MB", or other detail (a community entry's publication date).</summary>
     public string Detail { get; }
 
     /// <summary>Whether the value is included.</summary>

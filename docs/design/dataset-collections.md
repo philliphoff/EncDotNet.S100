@@ -106,7 +106,8 @@ Lessons to carry forward:
 | **S-100 exchange catalogue** (Part 17, 5.x) | Local `CATALOG.XML`. Also online: NOAA S-102/S-104/S-111 on AWS Open Data (`noaa-s102-pds` etc.), served gzip-compressed with relative `fileName`s. | GML `boundingPolygon` (EPSG:4326, lat-lon axis order) plus `boundingBox` | `fileName`, edition, update, issue date/time, `productSpecification`, `producingAgency`, display scales, `approximateGridResolution`, `temporalExtent` |
 | **S-128** Catalogue of Nautical Products | Ed 2.0.0 adopted July 2025 (IHO CL 31/2025). Trial instances from UKHO and PRIMAR. **Already parsed** by `EncDotNet.S100.Datasets.S128`. | `CoverageRing` | product number, edition, update, issue/update date, spec name/version, status |
 | USACE inland ENC (variant of the NOAA format) | `ienccloud.us/ienc/products/catalog/IENCU37ProductsCatalog.xml` | bbox only | name, river, river miles, edition, S-57/SHP/KML file links |
-| OpenCPN `chart_sources.xml` | A catalogue of ≈97 catalogues | — | A directory of feeds, not datasets |
+| OpenCPN `chart_sources.xml` | A catalogue of ≈97 catalogues | — | A directory of feeds, not datasets. GPL source data: not bundled or fetched (issue #670); the viewer keeps its own curated list |
+| Community `chartcatalogs` lists (`RncProductCatalogChartCatalogs`, a subset of NOAA's RNC catalogue) | `raw.githubusercontent.com/chartcatalogs/catalogs/master/<NAME>_Catalog.xml`, CC0 | none | `number`, `title`, `zipfile_location`, `zipfile_datetime_iso8601`, `target_filename`. An entry is a **download** (one cell, several, or a whole exchange set; sometimes a bare `.000`) |
 | SECOM (IEC 63173-2) | REST: `GetSummary` / `Get`. No verified public unauthenticated server. | WKT query filter | `dataProductType`, `containerType`, `info_*` |
 
 ---
@@ -704,6 +705,41 @@ This is the same mechanism as large S-57 sets, generalized:
   `LocalItemLocation` root is `<CELL>/ENC_ROOT` and the base is
   discovered the way loose-cell folders are.
 
+### 7.4 Community lists and packages (#670)
+
+> **As built:**
+> - **Reader and source:** `ChartCatalogsProductCatalogReader` reads
+>   `RncProductCatalogChartCatalogs` lists. A `ChartCatalogsFeedSource`
+>   (JSON kind `chartCatalogsFeed`) is scoped by a `ChartCatalogsFilter`
+>   over entry numbers. Repeated entries are listed once.
+> - **Packages:** an entry is a download that may hold many cells, so
+>   its `RemoteItemLocation` carries a `DownloadFolder`
+>   (`community/<list stem>`) and a `Package` (the entry number, made
+>   file-system safe).
+> - **Downloading a package:** `EncCellDownloader` saves the whole
+>   package under `<folder>/<package>/` and records every `.000` it
+>   holds, each with its own exchange-set root and updates, in
+>   `.source.json`. A download that is not a zip is kept only when its
+>   URL names a `.000`.
+> - **Indexing (slice 4, bounds after download):** an entry that has not
+>   been downloaded is one online item without bounds. Once downloaded,
+>   `ChartCatalogsFeedIndexer` indexes the package folder with the local
+>   indexer and lists its cells. They carry their own bounds, editions
+>   and titles, and keep the package's remote location with
+>   `packageTitle`.
+> - **Fingerprint:** it includes each selected package's record time, so
+>   a download re-indexes the source. The Library panel also queues that
+>   re-index as soon as a package download finishes.
+> - **UPDATE:** packages have no edition, so a copy is outdated when the
+>   list's `zipfile_datetime` is later than the recorded publication
+>   date.
+> - **Excluded lists:** CZ (empty), DE (HTTP 403) and the South China Sea
+>   list (update-only zips with no base cells).
+> - **Live check:** RO Base1 expanded to 10 cells with bounds. Other
+>   checks passed on a Rhône bare `.000`, a EuRIS single-cell zip, and a
+>   Brazilian exchange set. The 1,385-entry EuRIS list indexes in
+>   ≈0.3 s.
+
 ---
 
 ## 8. Implementation slices
@@ -738,8 +774,10 @@ antimeridian and a large item count.
   - NOAA S-102/S-104/S-111 on AWS. These are remote S-100
     `CATALOG.XML`s: gzip, relative `fileName`s, and per-model-run
     overwrites for S-111.
-  - USACE IENC catalogues (bbox only).
-  - Importing OpenCPN's `chart_sources.xml` as a *feed directory*.
+  - USACE IENC catalogues (bbox only). **Done** (#670 slice 1).
+  - A curated directory of known catalogues. **Done** (#670 slice 2),
+    as our own `known-sources.json`, not OpenCPN's GPL `chart_sources.xml`.
+  - Community `chartcatalogs` lists. **Done** (#670 slices 3–4, §7.4).
 - **S-128 as the interchange format**: export a collection as an S-128
   catalogue, and import one as a collection.
 - **SECOM** `GetSummary`/`Get` client as a source kind, once a reachable

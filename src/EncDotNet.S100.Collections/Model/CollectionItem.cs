@@ -145,7 +145,22 @@ public sealed record LocalItemLocation(
 /// <param name="Uri">The download location.</param>
 /// <param name="SizeBytes">The download size, if known.</param>
 /// <param name="LastModified">When the download was last published, if known.</param>
-public sealed record RemoteItemLocation(Uri Uri, long? SizeBytes = null, DateTimeOffset? LastModified = null)
+/// <param name="DownloadFolder">
+/// The managed folder downloads go to, relative to the host's downloads
+/// root (e.g. <c>community/ro-ienc</c>), or <see langword="null"/> to let the
+/// host choose by provider.
+/// </param>
+/// <param name="Package">
+/// For a download that holds several datasets (a package), the name it is
+/// saved under; the item is then the dataset named <see cref="CollectionItem.Name"/>
+/// within it. <see langword="null"/> when the download is the item's own cell.
+/// </param>
+public sealed record RemoteItemLocation(
+    Uri Uri,
+    long? SizeBytes = null,
+    DateTimeOffset? LastModified = null,
+    string? DownloadFolder = null,
+    string? Package = null)
     : ItemLocation;
 
 /// <summary>

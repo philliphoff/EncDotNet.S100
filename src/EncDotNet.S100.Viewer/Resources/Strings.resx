@@ -2737,4 +2737,22 @@
   <data name="Library_CatalogueStale" xml:space="preserve">
     <value>— over a year old; it may no longer be maintained.</value>
   </data>
+  <data name="Library_CommunityCharts" xml:space="preserve">
+    <value>Downloads</value>
+  </data>
+  <data name="Library_CommunitySearchWatermark" xml:space="preserve">
+    <value>Filter downloads</value>
+  </data>
+  <data name="Library_CommunitySelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} downloads · sizes unknown</value>
+  </data>
+  <data name="Library_CommunitySelectionFormat" xml:space="preserve">
+    <value>{0:N0} downloads · sizes unknown</value>
+  </data>
+  <data name="Library_CommunityAll" xml:space="preserve">
+    <value>All downloads</value>
+  </data>
+  <data name="Library_PublishedFormat" xml:space="preserve">
+    <value>Published {0}</value>
+  </data>
 </root>

@@ -46,7 +46,7 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     /// <summary>How many cells download at once.</summary>
     internal const int MaxConcurrentDownloads = 3;
 
-    private readonly Func<Uri, EncCellDownloader?> _downloaderFor;
+    private readonly Func<RemoteItemLocation, EncCellDownloader?> _downloaderFor;
     private readonly INotificationService? _notifications;
     private readonly ConcurrentDictionary<string, DownloadedCell?> _known = new(StringComparer.OrdinalIgnoreCase);
 
@@ -59,10 +59,12 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
 
     /// <summary>
     /// Creates a service that picks a downloader (and so a managed folder)
-    /// per download location, e.g. one per provider; <see langword="null"/>
+    /// per download location, e.g. one per provider or per
+    /// <see cref="RemoteItemLocation.DownloadFolder"/>; <see langword="null"/>
     /// means the location is not downloadable.
     /// </summary>
-    public LibraryDownloadService(Func<Uri, EncCellDownloader?> downloaderFor, INotificationService? notifications = null)
+    public LibraryDownloadService(
+        Func<RemoteItemLocation, EncCellDownloader?> downloaderFor, INotificationService? notifications = null)
     {
         ArgumentNullException.ThrowIfNull(downloaderFor);
         _downloaderFor = downloaderFor;
@@ -74,9 +76,14 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     public CollectionItem Localize(CollectionItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.Location is RemoteItemLocation && Downloaded(item) is { } cell
-            ? item with { Location = cell.Location }
-            : item;
+        if (item.Location is not RemoteItemLocation remote || Downloaded(item) is not { } cell)
+            return item;
+
+        // A package's cells each resolve to their own copy; a package entry
+        // not yet re-indexed into its cells stays online.
+        if (remote.Package is null)
+            return item with { Location = cell.Location };
+        return cell.Datasets.TryGetValue(item.Name, out var location) ? item with { Location = location } : item;
     }
 
     public bool IsOutdated(CollectionItem item) =>
@@ -85,14 +92,15 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     public bool CanDownload(CollectionItem item) =>
         item.Location is RemoteItemLocation remote
         && item.Status != CollectionItemStatus.Cancelled
-        && _downloaderFor(remote.Uri) is not null;
+        && _downloaderFor(remote) is not null;
 
     public async Task<LibraryDownloadResult> DownloadAsync(
         IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        var toDownload = items.Where(CanDownload).DistinctBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        // A package downloads once however many of its cells are asked for.
+        var toDownload = items.Where(CanDownload).DistinctBy(DownloadName, StringComparer.OrdinalIgnoreCase).ToArray();
         if (toDownload.Length == 0)
             return new LibraryDownloadResult(0, 0, false);
 
@@ -116,9 +124,9 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
             await gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
             try
             {
-                var downloader = _downloaderFor(((RemoteItemLocation)item.Location).Uri)!;
+                var downloader = _downloaderFor((RemoteItemLocation)item.Location)!;
                 var cell = await downloader.DownloadAsync(item, cancellationToken: cancellation.Token).ConfigureAwait(false);
-                _known[Key(downloader, item.Name)] = cell;
+                _known[Key(downloader, DownloadName(item))] = cell;
                 Interlocked.Increment(ref done);
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
@@ -163,10 +171,15 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
 
     private DownloadedCell? Downloaded(CollectionItem item)
     {
-        if (item.Location is not RemoteItemLocation remote || _downloaderFor(remote.Uri) is not { } downloader)
+        if (item.Location is not RemoteItemLocation remote || _downloaderFor(remote) is not { } downloader)
             return null;
-        return _known.GetOrAdd(Key(downloader, item.Name), _ => downloader.TryGetDownloaded(item.Name));
+        var name = DownloadName(item);
+        return _known.GetOrAdd(Key(downloader, name), _ => downloader.TryGetDownloaded(name));
     }
+
+    /// <summary>What a download is saved as: its package, or the cell itself.</summary>
+    private static string DownloadName(CollectionItem item) =>
+        (item.Location as RemoteItemLocation)?.Package ?? item.Name;
 
     private static string Key(EncCellDownloader downloader, string cellName) => downloader.Root + "|" + cellName;
 

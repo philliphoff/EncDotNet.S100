@@ -35,6 +35,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(S128CatalogueSource), "s128Catalogue")]
 [JsonDerivedType(typeof(NoaaEncFeedSource), "noaaEncFeed")]
 [JsonDerivedType(typeof(UsaceIencFeedSource), "usaceIencFeed")]
+[JsonDerivedType(typeof(ChartCatalogsFeedSource), "chartCatalogsFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -105,3 +106,17 @@ public sealed record UsaceIencFeedSource(Guid Id, string? DisplayName, Uri Catal
     /// <summary>USACE's catalogue of the inland buoy overlay cell.</summary>
     public static Uri BuoysCatalogUri { get; } = new("https://ienccloud.us/ienc/products/catalog/IENCBuoyProductsCatalog.xml");
 }
+
+/// <summary>
+/// A community chart list in the <c>chartcatalogs</c> format (for example
+/// "Romania IENC Charts"), optionally scoped to some of its entries. Entries
+/// are downloads that may hold several cells; until an entry is downloaded
+/// it is one online item without bounds, afterwards its cells are listed
+/// with their bounds.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="CatalogUri">The list's URL.</param>
+/// <param name="Filter">Which entries to include.</param>
+public sealed record ChartCatalogsFeedSource(Guid Id, string? DisplayName, Uri CatalogUri, ChartCatalogsFilter Filter)
+    : CollectionSource(Id, DisplayName);

@@ -45,6 +45,8 @@
                     <TextBlock Text="{x:Static loc:Strings.Library_CatalogueStale}" FontSize="11" Foreground="#c07a2c"
                                IsVisible="{Binding IsCatalogueStale}" VerticalAlignment="Center" />
                 </StackPanel>
+                <TextBox Text="{Binding ChartSearchText}" IsVisible="{Binding IsSearchable}"
+                         PlaceholderText="{x:Static loc:Strings.Library_CommunitySearchWatermark}" />
                 <TabControl IsVisible="{Binding !IsLoading}" Height="260" ItemsSource="{Binding FacetGroups}">
                     <TabControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:FacetGroupViewModel">

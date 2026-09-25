@@ -193,6 +193,43 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Community_list_entries_are_searchable_and_build_a_scoped_source()
+    {
+        var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("chartcatalogs-ro-ienc")!;
+        var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "chartcatalogs-list.xml");
+        var vm = new AddToLibraryDialogViewModel(_library, null, loadCommunityCatalog: (_, _) =>
+            Task.FromResult(EncDotNet.S100.Collections.ChartCatalogs.ChartCatalogsProductCatalogReader.Read(fixture)));
+
+        vm.Initialize(known, targetCollectionId: null);
+        Assert.Equal(AddToLibraryKind.CommunityFeed, vm.Kind);
+        Assert.True(vm.IsSearchable);
+        Assert.Equal("Downloads", Assert.Single(vm.FacetGroups).Title);
+
+        await vm.LoadCatalogAsync();
+
+        // The repeated entry is listed once.
+        Assert.Equal(["Base1", "Base2", "XX5RIV01"], vm.Charts.Select(c => c.Value));
+        Assert.Equal("Published 2024-06-12", vm.Charts[0].Detail);
+        Assert.StartsWith("All 3 downloads", vm.SelectionSummary);
+        Assert.Contains("2026-09-20", vm.CatalogueDateText);
+
+        vm.ChartSearchText = "1750";
+        var match = Assert.Single(vm.Charts);
+        match.IsSelected = true;
+        vm.ChartSearchText = string.Empty;
+
+        Assert.Equal(3, vm.Charts.Count);
+        Assert.StartsWith("1 downloads", vm.SelectionSummary);
+        Assert.Equal($"{known.Name} — River 1750 - 790 (Base2)", vm.NewCollectionName);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<ChartCatalogsFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(["Base2"], source.Filter.Charts);
+        Assert.Equal(known.CatalogUri, source.CatalogUri);
+    }
+
+    [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
         var vm = new AddToLibraryDialogViewModel(_library, (_, _) => throw new HttpRequestException("offline"));
