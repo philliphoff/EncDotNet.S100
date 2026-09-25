@@ -50,6 +50,10 @@ then guide you into deeper API and architecture detail.
 
 - [Start here](start-here.md) — audience-based entry page.
 - [Getting started](getting-started.md) — first rendered output via Viewer, library, or CLI.
+- [Loading datasets](loading-datasets.md) — files, folders, ZIPs, exchange sets and S-101 updates.
+- [Reading protected exchange sets](protected-exchange-sets.md) — S-100 Part 15 permits, decryption and signatures.
+- [Reading product data](reading-product-data.md) — each product's features, typed models, grids and time series.
+- [Custom catalogues and validation](catalogues-and-validation.md) — your own catalogues, and validation rules.
 - [Scenario guides](scenarios/render-s102-to-png.md) — task-focused workflows.
 - [Top APIs](top-apis.md) — curated API entry points per package.
 - [Command-line rendering](cli.md) — full `s100` command and option guide.
