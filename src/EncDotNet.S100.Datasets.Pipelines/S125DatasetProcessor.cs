@@ -24,6 +24,7 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
 
     /// <inheritdoc />
     protected override string ProductDescription => "Marine Aids to Navigation";
+    /// <inheritdoc />
     protected override IReadOnlyList<S125Feature> Features => _dataset.Features;
 
     /// <inheritdoc />
@@ -80,9 +81,11 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
         SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
+    /// <inheritdoc />
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S125FeatureXmlSource(_dataset);
 
+    /// <inheritdoc />
     protected override IReadOnlyList<FeatureReference> BuildFeatureReferences(S125Feature feature)
     {
         var references = new List<FeatureReference>();
@@ -99,6 +102,7 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
         return references;
     }
 
+    /// <inheritdoc />
     protected override string BuildInfoSuffix() =>
         $"Information types: {_dataset.InformationTypes.Count}";
 

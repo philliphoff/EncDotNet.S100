@@ -112,9 +112,24 @@ public readonly record struct SpecVersion : IComparable<SpecVersion>
         return Clarification.CompareTo(other.Clarification);
     }
 
+    /// <summary>Returns <c>true</c> when <paramref name="left"/> precedes <paramref name="right"/> (see <see cref="CompareTo"/>).</summary>
+    /// <param name="left">The first version.</param>
+    /// <param name="right">The second version.</param>
     public static bool operator <(SpecVersion left, SpecVersion right) => left.CompareTo(right) < 0;
+
+    /// <summary>Returns <c>true</c> when <paramref name="left"/> follows <paramref name="right"/> (see <see cref="CompareTo"/>).</summary>
+    /// <param name="left">The first version.</param>
+    /// <param name="right">The second version.</param>
     public static bool operator >(SpecVersion left, SpecVersion right) => left.CompareTo(right) > 0;
+
+    /// <summary>Returns <c>true</c> when <paramref name="left"/> precedes or equals <paramref name="right"/> (see <see cref="CompareTo"/>).</summary>
+    /// <param name="left">The first version.</param>
+    /// <param name="right">The second version.</param>
     public static bool operator <=(SpecVersion left, SpecVersion right) => left.CompareTo(right) <= 0;
+
+    /// <summary>Returns <c>true</c> when <paramref name="left"/> follows or equals <paramref name="right"/> (see <see cref="CompareTo"/>).</summary>
+    /// <param name="left">The first version.</param>
+    /// <param name="right">The second version.</param>
     public static bool operator >=(SpecVersion left, SpecVersion right) => left.CompareTo(right) >= 0;
 
     /// <summary>Returns the canonical <c>"M.m.c"</c> representation.</summary>

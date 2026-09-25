@@ -16,6 +16,9 @@ public readonly struct SurfaceCurrentValue
     [FieldOffset(4)]
     public readonly float Direction;
 
+    /// <summary>Creates a surface current value.</summary>
+    /// <param name="speed">Speed of the current in knots.</param>
+    /// <param name="direction">Direction of the current in degrees from true north, clockwise.</param>
     public SurfaceCurrentValue(float speed, float direction)
     {
         Speed = speed;

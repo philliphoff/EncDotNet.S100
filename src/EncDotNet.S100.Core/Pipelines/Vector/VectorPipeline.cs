@@ -31,11 +31,49 @@ public class VectorPipeline
 {
     private readonly IVectorRuleExecutor? _luaExecutor;
 
+    /// <summary>Creates a vector pipeline.</summary>
+    /// <param name="luaExecutor">
+    /// Optional Lua rule executor (S-100 Part 9A) whose instructions are
+    /// appended after the built-in XSLT executor's. When
+    /// <see langword="null"/> only XSLT rules run.
+    /// </param>
     public VectorPipeline(IVectorRuleExecutor? luaExecutor = null)
     {
         _luaExecutor = luaExecutor;
     }
 
+    /// <summary>
+    /// Runs the portrayal rules for <paramref name="source"/> and returns the
+    /// filtered, priority-sorted display list.
+    /// </summary>
+    /// <param name="source">Supplies the dataset's FeatureXML to the XSLT rules.</param>
+    /// <param name="catalogue">
+    /// The portrayal catalogue supplying the rules, and whose
+    /// <see cref="IVectorPortrayalCatalogue.ViewingGroups"/> and
+    /// <see cref="IVectorPortrayalCatalogue.DisplayPlanes"/> controllers
+    /// filter the output.
+    /// </param>
+    /// <param name="viewport">
+    /// Optional display area; when supplied its
+    /// <see cref="Viewport.ScaleDenominator"/> is passed to the XSLT rules as
+    /// the <c>displayScale</c> parameter.
+    /// </param>
+    /// <param name="mariner">
+    /// Mariner display preferences passed to the rule executors; when
+    /// <see langword="null"/> a default <see cref="MarinerSettings"/> is used.
+    /// </param>
+    /// <param name="cancellationToken">Signals that the render has been cancelled.</param>
+    /// <returns>
+    /// A layer whose <see cref="IVectorLayer.Instructions"/> are the merged
+    /// XSLT and Lua instructions, filtered by viewing group and display plane
+    /// and sorted by display plane, drawing priority and instruction type.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="source"/> or <paramref name="catalogue"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was cancelled.
+    /// </exception>
     public async Task<IVectorLayer> ProcessAsync(
         IFeatureXmlSource source,
         IVectorPortrayalCatalogue catalogue,
@@ -206,7 +244,10 @@ public interface IVectorLayer : IPortrayalLayer
 /// </remarks>
 public enum DisplayPlane
 {
+    /// <summary>Drawn beneath the radar image.</summary>
     UnderRadar = 0,
+
+    /// <summary>Drawn above the radar image.</summary>
     OverRadar = 1,
 }
 

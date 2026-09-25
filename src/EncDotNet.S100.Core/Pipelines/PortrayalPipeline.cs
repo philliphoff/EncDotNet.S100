@@ -20,6 +20,12 @@ public sealed class PortrayalPipeline
     private readonly VectorPipeline _vectorPipeline;
     private readonly CoveragePipeline _coveragePipeline;
 
+    /// <summary>Creates the façade and its inner vector and coverage pipelines.</summary>
+    /// <param name="luaExecutor">
+    /// Optional Lua rule executor passed to the inner
+    /// <see cref="VectorPipeline"/>; when <see langword="null"/> vector
+    /// portrayal runs XSLT rules only.
+    /// </param>
     public PortrayalPipeline(IVectorRuleExecutor? luaExecutor = null)
     {
         _vectorPipeline = new VectorPipeline(luaExecutor);

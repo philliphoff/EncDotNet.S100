@@ -4,35 +4,92 @@ using EncDotNet.S100.Collections;
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
-/// Supporting types referenced by the vector portrayal catalogue.
+/// A named portrayal script (source text) from a vector portrayal catalogue.
 /// </summary>
-
 public sealed class Script
 {
+    /// <summary>The script's name as referenced by the catalogue.</summary>
     public required string Name { get; init; }
+
+    /// <summary>The script source text.</summary>
     public required string Source { get; init; }
 }
 
+/// <summary>
+/// An S-100 Part 9 point symbol, as loaded from the portrayal catalogue's
+/// <c>Symbols</c> folder.
+/// </summary>
 public sealed class SvgSymbol
 {
+    /// <summary>The symbol identifier as referenced by drawing instructions (e.g. <c>"BOYLAT13"</c>).</summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// The raw SVG document text. Colour classes in it are resolved against
+    /// the active palette at render time.
+    /// </summary>
     public required string SvgContent { get; init; }
+
+    /// <summary>
+    /// X coordinate of the symbol's pivot (anchor) point, in the SVG's user
+    /// units. Defaults to <c>0</c>; the bundled catalogues do not set it.
+    /// </summary>
     public double PivotX { get; init; }
+
+    /// <summary>
+    /// Y coordinate of the symbol's pivot (anchor) point, in the SVG's user
+    /// units. Defaults to <c>0</c>; the bundled catalogues do not set it.
+    /// </summary>
     public double PivotY { get; init; }
 }
 
+/// <summary>
+/// An S-100 Part 9 line style (pen and optional dash pattern), as loaded from
+/// the portrayal catalogue's line-style files and referenced by name from
+/// line drawing instructions.
+/// </summary>
 public sealed class LineStyle
 {
+    /// <summary>The line style identifier as referenced by drawing instructions.</summary>
     public required string Name { get; init; }
+
+    /// <summary>Pen width, in millimetres.</summary>
     public required float Width { get; init; }
+
+    /// <summary>
+    /// Pen colour: normally an S-100 colour token resolved against the
+    /// active palette at render time; <c>"#000000"</c> when the file
+    /// declares none.
+    /// </summary>
     public required string Color { get; init; }
+
+    /// <summary>
+    /// Dash definition as a flat list of (start offset, length) pairs, in
+    /// millimetres, or <see langword="null"/> for a solid line.
+    /// </summary>
     public float[]? DashPattern { get; init; }
 }
 
+/// <summary>
+/// An S-100 Part 9 area fill: a solid colour and/or a symbol pattern tiled
+/// along two lattice vectors. Referenced by name from area drawing
+/// instructions.
+/// </summary>
 public sealed class AreaFill
 {
+    /// <summary>The area fill identifier as referenced by drawing instructions.</summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// Solid fill colour declared by the file, or <see langword="null"/> when
+    /// the fill is pattern-only.
+    /// </summary>
     public string? Color { get; init; }
+
+    /// <summary>
+    /// Name of the <see cref="SvgSymbol"/> tiled across the area, or
+    /// <see langword="null"/> when the fill has no pattern.
+    /// </summary>
     public string? PatternSymbol { get; init; }
     /// <summary>Tiling vector 1 (x component, in mm).</summary>
     public double V1X { get; init; }

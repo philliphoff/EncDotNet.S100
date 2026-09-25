@@ -21,12 +21,26 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
     private readonly S127Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
+    /// <inheritdoc />
     protected override string ProductDescription => "Marine Resources and Services";
+    /// <inheritdoc />
     protected override IReadOnlyList<S127Feature> Features => _dataset.Features;
 
     /// <inheritdoc />
     public override LoadedDatasetData CreateLoadedData() => new S127DatasetData(_dataset);
 
+    /// <summary>
+    /// Initializes a new <see cref="S127DatasetProcessor"/> by reading and parsing the
+    /// dataset file at <paramref name="path"/>. The file is read in full and
+    /// closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-127 GML dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-127 portrayal catalogue.</param>
+    /// <param name="authorityProvider">Resolves the default S-98 display plane for the dataset's content.</param>
+    /// <param name="featureCatalogueManager">
+    /// Optional source of the S-127 feature catalogue, used to decode attribute
+    /// values in feature info; <see langword="null"/> leaves them undecoded.
+    /// </param>
     public S127DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -77,6 +91,7 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
         SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
+    /// <inheritdoc />
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new GmlFeatureXmlSource<S127Feature>(_dataset.Features);
 

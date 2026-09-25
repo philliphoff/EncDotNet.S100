@@ -9,6 +9,9 @@ public sealed class GridGeoreferencer
 {
     private readonly GridMetadata _metadata;
 
+    /// <summary>Creates a georeferencer for a grid.</summary>
+    /// <param name="metadata">The grid geometry (origin and spacing in the native CRS).</param>
+    /// <param name="crs">Identifier of the grid's native CRS (e.g. <c>"EPSG:4326"</c>, <c>"EPSG:32608"</c>).</param>
     public GridGeoreferencer(GridMetadata metadata, string crs)
     {
         _metadata = metadata;

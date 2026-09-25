@@ -144,6 +144,24 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;
 
+    /// <summary>
+    /// Initializes a new <see cref="S111DatasetProcessor"/> from the HDF5
+    /// dataset file at <paramref name="path"/>. For a regular-grid (dcf2)
+    /// dataset the file stays open and per-time-step values are decoded
+    /// lazily; station-series datasets are read in full and the file closed.
+    /// </summary>
+    /// <param name="path">Path to the S-111 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-111 portrayal catalogue.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-111 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-111 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S111DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -157,6 +175,19 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// the HDF5 dataset <paramref name="relativePath"/> from
     /// <paramref name="source"/>. Used by exchange-set bulk loading.
     /// </summary>
+    /// <param name="source">The asset source (e.g. an exchange set) holding the dataset.</param>
+    /// <param name="relativePath">Source-relative path of the S-111 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-111 portrayal catalogue.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-111 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-111 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S111DatasetProcessor(
         IAssetSource source,
         string relativePath,

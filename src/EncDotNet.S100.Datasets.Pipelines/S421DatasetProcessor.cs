@@ -11,18 +11,44 @@ using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
+/// <summary>
+/// <see cref="IDatasetProcessor"/> for IHO S-421 Route Plan GML datasets.
+/// Drives the standard S-100 Part 9 XSLT vector portrayal pipeline inherited
+/// from <see cref="GmlDatasetProcessorBase{TFeature}"/> and exposes route
+/// xlink references as navigable links in pick reports.
+/// </summary>
+/// <remarks>
+/// Normally created through the <see cref="S100Products.S421"/> registration
+/// (used by <see cref="DatasetPipelineFactory"/>) rather than constructed
+/// directly.
+/// </remarks>
 public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
 {
     private readonly S421Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
+    /// <inheritdoc />
     protected override string ProductDescription => "Route Plan";
+    /// <inheritdoc />
     protected override IReadOnlyList<S421Feature> Features => _dataset.Features;
 
     /// <inheritdoc />
     public override LoadedDatasetData CreateLoadedData() => new S421DatasetData(_dataset);
+    /// <inheritdoc />
     protected override double MinExtentPadding => 0.05;
 
+    /// <summary>
+    /// Initializes a new <see cref="S421DatasetProcessor"/> by reading and parsing the
+    /// dataset file at <paramref name="path"/>. The file is read in full and
+    /// closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-421 GML dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-421 portrayal catalogue.</param>
+    /// <param name="authorityProvider">Resolves the default S-98 display plane for the dataset's content.</param>
+    /// <param name="featureCatalogueManager">
+    /// Optional source of the S-421 feature catalogue, used to decode attribute
+    /// values in feature info; <see langword="null"/> leaves them undecoded.
+    /// </param>
     public S421DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -73,9 +99,11 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
         SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
+    /// <inheritdoc />
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S421FeatureXmlSource(_dataset);
 
+    /// <inheritdoc />
     protected override IReadOnlyList<FeatureReference> BuildFeatureReferences(S421Feature feature)
     {
         var references = new List<FeatureReference>();
@@ -93,6 +121,7 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
         return references;
     }
 
+    /// <inheritdoc />
     protected override string BuildInfoSuffix() =>
         $"Information types: {_dataset.InformationTypes.Count}";
 

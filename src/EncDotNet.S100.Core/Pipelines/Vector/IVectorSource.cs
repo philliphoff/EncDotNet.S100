@@ -29,8 +29,16 @@ public sealed class VectorMetadata
 {
     /// <summary>The product specification (name + edition) this dataset declares conformance to.</summary>
     public required SpecRef Spec { get; init; }
+    /// <summary>Bounding rectangle of the dataset's coordinates, in decimal degrees (WGS-84).</summary>
     public required BoundingBox Extent { get; init; }
+
+    /// <summary>Identifier of the dataset's horizontal CRS (e.g. <c>"EPSG:4326"</c>).</summary>
     public required string HorizontalCRS { get; init; }
+
+    /// <summary>
+    /// Denominator of the dataset's compilation scale (e.g. <c>22000</c> for
+    /// 1:22 000), or <c>0</c> when the source does not report one.
+    /// </summary>
     public required int CompilationScaleDenominator { get; init; }
 }
 
@@ -148,11 +156,25 @@ public sealed class Feature : IS100Feature
     IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => [];
 }
 
+/// <summary>
+/// The geometric primitive of a vector <see cref="Feature"/> (S-100 Part 7
+/// spatial types), which determines how its <see cref="Feature.Coordinates"/>
+/// are interpreted.
+/// </summary>
 public enum GeometryType
 {
+    /// <summary>A point (e.g. a buoy or beacon); <see cref="Feature.Coordinates"/> holds its position.</summary>
     Point,
+
+    /// <summary>A curve (line string), e.g. a depth contour or coastline; <see cref="Feature.Coordinates"/> holds its vertices in order.</summary>
     Curve,
+
+    /// <summary>A surface (area): <see cref="Feature.Coordinates"/> is the exterior ring and <see cref="Feature.InteriorRings"/> the holes.</summary>
     Surface,
+
+    /// <summary>A coverage (gridded) geometry; not portrayed through the vector path.</summary>
     Coverage,
+
+    /// <summary>No geometry (e.g. a meta or information feature without spatial extent).</summary>
     None
 }
