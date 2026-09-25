@@ -68,6 +68,37 @@ byte[] png = await renderer.RenderAsync(dataset, new S100RendererOptions
 });
 ```
 
+## Open from a folder, ZIP, or exchange set
+
+`S100Dataset.OpenAsync` opens a dataset inside any `IAssetSource` (a
+`FileSystemAssetSource` folder, a `ZipAssetSource` archive, or a decorator over
+either), detecting its product specification from the content just as `Open` does
+for a loose file:
+
+```csharp
+using EncDotNet.S100.Core;
+
+using var zip = ZipAssetSource.Create("S101.zip");
+using var dataset = await S100Dataset.OpenAsync(zip, "S-101/DATASET_FILES/101AA00DS0019.000");
+```
+
+`S100ExchangeSet` opens an S-100 exchange set from a folder, its `CATALOG.XML`,
+or a `.zip`, and lists its datasets. An S-101 base cell and the sequential updates
+the set ships for it are one entry, opened with the updates applied:
+
+```csharp
+await using var exchangeSet = await S100ExchangeSet.OpenAsync("S101.zip");
+foreach (var entry in exchangeSet.Datasets)
+{
+    using var dataset = await entry.OpenAsync();
+    byte[] png = await renderer.RenderAsync(dataset);
+}
+```
+
+For an encrypted (S-100 Part 15) exchange set, build an `IDatasetKeyProvider`
+from the set's `Catalogue` (typically a `PermitKeyProvider` over an authenticated
+permit) and read through `exchangeSet.WithDecryption(keys)`.
+
 ## Read features
 
 Feature access lives on the **feature catalogue**, because decoding a feature's
@@ -156,6 +187,12 @@ directly.
 ## Reuse and disposal
 
 - `S100Dataset` and `PngS100DatasetRenderer` are `IDisposable`; dispose them.
+- Datasets are parsed lazily, on first use, so they read from their source after
+  `Open`/`OpenAsync` returns. `S100Dataset.OpenAsync(source, …)` and
+  `S100ExchangeSet.OpenAsync(source, …)` borrow the `IAssetSource` you pass: keep
+  it alive until the datasets are disposed, then dispose it yourself.
+  `S100ExchangeSet.OpenAsync(path)` owns the source it creates; dispose datasets
+  opened from an exchange set before the exchange set.
 - A `PngS100DatasetRenderer` instance may render many datasets sequentially; it
   caches the bundled pipeline host so repeated renders reuse warmed catalogue
   parse caches. Concurrent use of one instance is not supported.

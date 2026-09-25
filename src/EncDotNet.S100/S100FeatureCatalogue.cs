@@ -89,7 +89,7 @@ public sealed class S100FeatureCatalogue : IDisposable
             return read(dataset.Processor);
 
         _host ??= S100PipelineHost.Create(dataset.SpecName, featureOverride: this);
-        var processor = _host.CreateProcessor(dataset.Path);
+        var processor = dataset.CreateProcessor(_host);
         try
         {
             return read(processor);

@@ -21,6 +21,9 @@ If you only pick three APIs to start, use:
 - `PngS100DatasetRenderer` — one-call image rendering
 - `S100FeatureCatalogue` — read decoded feature metadata
 - `S100Layer` / `S100CompositeOptions` — multi-layer composition
+- `S100Dataset.OpenAsync(source, relativePath)` / `S100ExchangeSet` — open
+  datasets from a folder, a ZIP or an exchange set, with S-101 updates applied
+  and optional Part 15 decryption (`WithDecryption`)
 
 ## EncDotNet.S100.Core
 
