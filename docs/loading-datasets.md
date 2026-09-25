@@ -254,5 +254,5 @@ It can also load a whole exchange set through `ExchangeSetLoader`.
 - [Top APIs](top-apis.md) — the main entry point in each package.
 - [Typed data models](typed-data-models.md) — typed access to a dataset's
   features.
-- [`EncDotNet.S100.ExchangeSets` README](../src/EncDotNet.S100.ExchangeSets/README.md)
-  — exchange-set signature verification and Part 15 decryption.
+- [Reading protected exchange sets](protected-exchange-sets.md) — S-100 Part 15
+  permits, decryption and signature verification.
