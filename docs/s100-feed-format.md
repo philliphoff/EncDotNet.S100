@@ -106,6 +106,23 @@ The reader extracts the zip into a folder of its own and opens the dataset at
 `layout.relativePath`, with the catalogue and updates beside it. That is the
 same layout it would have on the publishing machine.
 
+## Serving a feed
+
+`s100 feed serve <path>` serves `feed.json` and the item zips over HTTP:
+
+```
+s100 feed serve charts/ --host 0.0.0.0
+```
+
+- **Scope:** by default the server listens on localhost only. On another
+  address it adds a random access token as the first path segment
+  (`http://<host>:8100/<token>/feed.json`). Item URLs are relative, so they
+  carry the token too.
+- **Caching:** the feed's `ETag` is derived from its fingerprint, so an
+  unchanged folder answers conditional requests with `304 Not Modified`.
+
+See the [CLI reference](../tools/EncDotNet.S100.Cli/README.md) for the options.
+
 ## Building feeds in code
 
 ```csharp

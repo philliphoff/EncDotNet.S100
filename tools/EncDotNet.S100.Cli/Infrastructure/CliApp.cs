@@ -73,6 +73,17 @@ internal static class CliApp
                     .WithExample("s57", "convert", "--target", "s101", "-o", "my-s101-dataset.000", "my-inland-s57-dataset.000");
             });
 
+            config.AddBranch("feed", feed =>
+            {
+                feed.SetDescription("Publish datasets to other machines as an S-100 feed.");
+
+                feed.AddCommand<FeedServeCommand>("serve")
+                    .WithDescription("Serve a folder, exchange set or dataset as an S-100 feed over HTTP; add the printed URL in another machine's viewer (Library → Online Catalogue → Add URL).")
+                    .WithExample("feed", "serve", "charts/")
+                    .WithExample("feed", "serve", "exchange-set.zip", "--port", "9000")
+                    .WithExample("feed", "serve", "charts/", "--host", "0.0.0.0");
+            });
+
             config.AddBranch("mcp", mcp =>
             {
                 mcp.SetDescription("Model Context Protocol (MCP) server operations.");
