@@ -2,23 +2,13 @@
 
 Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection.
 
-> **Update (#600): the legacy "A" base-plane renderers are removed.** The
-> `VectorScene` IR is now the **sole** base-plane path, rasterised by
-> `S100VectorSceneRenderer` / `S100VectorTileRenderer`. The retired Mapsui
-> feature/style path took with it the `RenderSubsystemKind` switch, the
-> `S100_RENDER_SUBSYSTEM` env knob, and two large caches — the
-> translation-invariant path cache (`CachedVectorStyleRenderer`) and the raster
-> vector snapshot (`S100VectorSnapshotRenderer`). The **"Translation-invariant
-> vector path cache"**, **"Raster vector snapshot"**, and
-> **"Resolution-aware geometry simplification"** sections below are retained as
-> **historical record** and no longer describe live code. (The orphaned line-LOD
-> pyramid producer they reference was retired under #601.)
->
-> **Do not follow their instructions:** the types and knobs those sections
-> mention — `CachedVectorStyleRenderer`, `S100VectorSnapshotRenderer`,
-> `LineLodPyramid`, `RenderingOptimizations.PrecomputedLineLodEnabled`, and the
-> `S100_VECTOR_LINE_LOD` / `S100_VECTOR_SIMPLIFY_PX` / `S100_VECTOR_PATH_CACHE`
-> env vars — **no longer exist** after #600 / #601.
+> **Note (#600 / #601):** the `VectorScene` IR is the only base-plane path,
+> rasterised by `S100VectorSceneRenderer` / `S100VectorTileRenderer` (see
+> [Base-plane scene rendering](#base-plane-scene-rendering)). The retired
+> Mapsui feature/style path, its caches (`CachedVectorStyleRenderer`,
+> `S100VectorSnapshotRenderer`), resolution-aware line simplification and the
+> line-LOD pyramid were removed, along with their documentation; see git history
+> before #600 for them.
 
 ## Overview
 
@@ -589,10 +579,6 @@ in production builds.
 | `s100.map.paint.interval` | ms | — | Time between paints (idle gaps > 500 ms dropped) |
 | `s100.map.paint.style.calls` | count | `style`, `layer`, `points`, `featureClass` | Style-renderer `Draw` calls per paint |
 | `s100.map.paint.style.duration` | ms | `style`, `layer`, `points`, `featureClass` | Cumulative `Draw` duration per paint |
-| `s100.layer.get_features.duration` | ms | `layer` | Layer-level filter cost per `GetFeatures` call |
-| `s100.layer.get_features.visible` / `total` | count | `layer` | Visible / total feature counts per call |
-| `s100.layer.get_features.fps` | gauge | `layer` | Effective `GetFeatures` rate per layer |
-| `s100.pattern_fill.draw.duration` | ms | — | `AnchoredPatternFillRenderer` per-call cost |
 
 The `points` tag is bucketed (`n/a`, `0`, `1-9`, `10-99`, `100-999`,
 `1k-10k`, `10k-100k`, `100k+`) to keep histogram cardinality bounded
@@ -617,157 +603,10 @@ with per-vertex cost ~1 µs. See
 [`docs/design/mapsui-performance.md`](../../docs/design/mapsui-performance.md)
 for the full investigation and optimization plan.
 
-## Resolution-aware geometry simplification
+## Pattern-fill clip generalization
 
-The cached vector-style renderer (`CachedVectorStyleRenderer`, the
-registered `VectorStyle` renderer) reduces the vertex count Skia
-tessellates per frame by generalizing geometry **at `SKPath`-build time**,
-keyed by the build resolution. Because the simplified path is cached per
-`(feature, position, resolution)` and reused across every pan — and the
-vector-snapshot record + off-thread prebuild draw through this same
-renderer — the cost is paid once per `(feature, zoom)` and inherited by
-all downstream consumers. Dropped detail is by construction sub-pixel *on
-screen* at that zoom, so the result is visually indistinguishable at every
-zoom level. On real S-101 datasets dense **line** geometry (contours,
-coverage boundaries) typically simplifies by 5–10× at common pan zooms
-with no visible regression at the default 0.6-pixel tolerance. Simplification
-applies to **line** geometry only; polygon areas are always rendered
-vertex-exact (see [Polygons](#polygons)).
-
-### Lines
-
-`LineString`/`MultiLineString` are simplified inline while building the
-path: consecutive vertices that project to within the pixel tolerance of
-the last emitted vertex are dropped (a radial-distance filter in the
-anchored pixel frame). This collapses the dense sub-pixel vertex runs of
-S-101 bathymetry contours so the Skia stroker rasterises far fewer
-segments.
-
-### Polygons
-
-`Polygon`/`MultiPolygon` (land areas, depth areas, sea areas — the
-highest-vertex S-101 features) are **fast-pathed and cached vertex-exact**:
-each part's projected `SKPath` is built once per `(feature, position,
-resolution)`, reused across pans under an affine draw matrix, and bounded
-by the cache's coordinate budget. They are **not** geometrically
-simplified.
-
-Topology-preserving polygon simplification (NTS `TopologyPreservingSimplifier`
-+ `IsValid`/`Buffer(0)` validation) was implemented and **measured, then
-removed**: a live viewer A/B showed it provides **no paint benefit** on the
-GPU path and is reproducibly *worse* under multi-dataset pressure. The
-translation-invariant path cache already neutralizes vertex count on warm
-paints (cache-served, ~0 ms), so dropping vertices cannot make warm paints
-cheaper, while cold builds pay the simplifier cost; under cache pressure
-that cost is re-paid on every rebuild, and GPU (Metal) fill is area-bound,
-not vertex-bound. See `docs/design/mapsui-performance.md` for the data.
-
-### Gating
-
-A **Simplify dense geometry** setting
-(`RenderingOptimizations.GeometrySimplificationEnabled`, default on) with a
-pixel tolerance (`SimplificationTolerancePx`, default 0.6, seeded from
-`S100_VECTOR_SIMPLIFY_PX`) governs **line** simplification — the proven,
-default-on win — and is the only simplification knob. Polygons are always
-vertex-exact and have no simplification toggle.
-
-Simplification requires the path cache (`S100_VECTOR_PATH_CACHE`); changing
-the effective tolerance clears the cache so rebuilt paths reflect the new
-tolerance.
-
-### Cache (coordinate-budget eviction)
-
-The path cache evicts least-recently-used entries until under **both** an
-entry cap (default 8192) and a coordinate budget (`MaxCachedCoordinates`,
-default 5 M coords ≈ 80 MB). Bounding by coordinate count — not entry
-count — keeps memory predictable now that dense polygon paths (tens of
-thousands of vertices) share the cache with tiny features. Evicted
-`SKPath`s are deliberately **not** disposed (a drawing thread may still
-hold a reference outside the lock); they are reclaimed by GC finalization.
-
-### Telemetry
-
-| Instrument | Unit | Purpose |
-|---|---|---|
-| `s100.simplify.cache.hit.count` | count | Built path served from cache |
-| `s100.simplify.cache.miss.count` | count | Path (re)built |
-| `s100.simplify.cache.coords.tracked` | count | Live coords across all cached paths (drives budget eviction) |
-
-### Known limits
-
-- The miss path runs synchronously on the render (or prebuild) thread.
-  After a zoom change the first paint at the new resolution may stall
-  briefly while visible paths are rebuilt; subsequent frames at
-  that zoom hit the cache, and sustained pan is served by the vector
-  snapshot.
-- Lines use a radial-distance filter rather than true Douglas-Peucker;
-  the difference is visually negligible at sub-pixel tolerance. Unifying
-  lines onto NTS DP is documented as a possible future micro-opt in
-  `docs/design/mapsui-performance.md`.
-
-### Precomputed line LOD (opt-in)
-
-> **Removed (#601).** This whole feature — the pyramid, its caches, and the
-> `PrecomputedLineLodEnabled` / `S100_VECTOR_LINE_LOD` knob below — was retired
-> with the A arm's fast-line path. The text is kept only as the measurement
-> record; the identifiers it names no longer exist.
-
-An **opt-in** precomputed line-LOD pyramid replaces the inline radial-distance
-filter with a small pyramid of Douglas-Peucker levels
-(`LineLodTolerances.HalfOctaveDefault = [256, 64, 16]` metres) built once
-per feature on first paint and cached in-process. At paint time the
-renderer picks the level whose tolerance is ≤ half a screen pixel at the
-current ground resolution — coarser zooms pick coarser levels — so pans
-inside a zoom band re-key against the same LOD bucket, absorbing float
-noise from the caller's resolution and eliminating the cold rebuild after
-a band change.
-
-Enable it by setting `RenderingOptimizations.PrecomputedLineLodEnabled`
-= `true` (or the `S100_VECTOR_LINE_LOD` env var). It is **off by default**;
-when off, lines fall back to the inline radial-distance filter and the
-raw-resolution cache key described above (no behaviour change vs.
-earlier releases).
-
-Measured on the dense S-101 trial cell `101GB00GB302045` (2.35 MB,
-11 589 drawing instructions, viewer + Skia + Metal):
-
-| metric (rolling window, palette-flip stress) | Off | On   | Delta   |
-|---|---|---|---|
-| vector paint **max** (spike)                 | 139 ms | 15 ms | **-89%** |
-| whole-frame max                              | 394 ms | 68 ms | **-83%** |
-| vector paint **mean**                        | ~2 ms  | ~1 ms | -50%   |
-| vector paint **P95**                         | 7.6 ms | 3.7 ms | -51%   |
-
-Screenshot A/B at each scale band (bbox / z13 / z14 / z15 / z16) is
-**pixel-identical** to the flag-off output — the LOD tolerances are
-sub-pixel per band by design.
-
-Under multi-cell stress (six overlapping UKHO trial cells, palette
-flips + cross-cell z14/z15 pans) the LOD path improves warm vecMean
-(0.87 → 0.63 ms) and vecP95 (3.3 → 1.9 ms) but adds a +13 ms tax to the
-first-paint vecMax while pyramids are built for every visible line
-feature. That tax is the reason the flag ships default-off: on the
-dense single-cell workload LOD dominates; under a shallow-detail
-multi-cell workload the pyramid-build cost is paid once and *not
-amortized* across the very cheap paints that dominate that regime.
-A future S-101 reader hook that pre-builds pyramids at dataset open
-would move the tax off the first paint.
-
-Telemetry (in addition to the existing `s100.simplify.cache.*`
-counters):
-
-| Instrument | Unit | Purpose |
-|---|---|---|
-| `s100.geometry.lod.build.duration` | ms | Time to build a pyramid on cache miss |
-| `s100.geometry.vertices.in` | count | Input vertices per pyramid build |
-| `s100.geometry.vertices.out` | count | Output vertices per LOD level (tagged `s100.lod.bucket`) |
-| `s100.geometry.lod.cache.hit.count` | count | LOD-level path served from `SKPath` cache |
-| `s100.geometry.lod.cache.miss.count` | count | LOD-level path (re)built (tagged `s100.lod.bucket`) |
-
-### Pattern-fill clip generalization
-
-Independently of the resolution-aware line simplification above,
-`MapsuiDisplayListRenderer` generalizes the polygon geometry used when
+When it builds the scene, `MapsuiDisplayListRenderer` generalizes the polygon
+geometry used when
 clipping tiled **pattern** fills against each other (display priority)
 and against non-patterned solid fills such as land. S-101
 quality/coverage areas (e.g. `M_QUAL`) can follow the coastline with
@@ -780,7 +619,8 @@ cell).
 
 Before the overlay, each merged pattern geometry and the land exclusion
 mask are passed through NTS `TopologyPreservingSimplifier` at a fixed
-1 m (EPSG:3857) tolerance (`PatternClipSimplifyToleranceMetres`).
+1 m (EPSG:3857) tolerance (`PatternPriorityClipper.SimplifyToleranceMetres`,
+in `EncDotNet.S100.Rendering.Scene`).
 Topology-preserving simplification keeps the inputs valid for overlay;
 the result is buffer(0)-repaired if it still validates as invalid, and
 falls back to the original geometry on any failure. Because the clipped
@@ -844,7 +684,8 @@ Two implementations ship behind this contract:
   key must be **fully qualified** by the caller — the S-101 processor
   composes `{datasetScope}|{portrayalKey}`, where `datasetScope` encodes the
   dataset content hash, clip parameters
-  (`PatternClipSimplifyToleranceMetres`, `MinPointsToSimplifyForClip`), CRS,
+  (`PatternPriorityClipper.SimplifyToleranceMetres`,
+  `PatternPriorityClipper.MinPointsToSimplify`), CRS,
   and the `DiskPatternClipCache.FormatVersion` stamp, so persisted geometry
   auto-invalidates when content, parameters, or the serialization format
   change.
@@ -864,200 +705,13 @@ var renderer = new MapsuiDisplayListRenderer
 };
 ```
 
-## Translation-invariant vector path cache
-
-`CachedVectorStyleRenderer` is a drop-in replacement for Mapsui's
-`VectorStyleRenderer` (registered for `VectorStyle` by the viewer before
-instrumentation wraps the renderer dictionary). It targets the dominant
-pan/zoom cost on dense S-101 approach cells, where thousands of
-`LineString` features (bathymetry contours) are re-projected and
-re-stroked from scratch on **every** frame because Mapsui's own path
-cache is keyed on the full viewport `extent`, which changes on every pan.
-
-It addresses this in two ways:
-
-1. **Translation-invariant path cache.** Polygons (solid fill / solid
-   outline) and lines (solid `Line` pen, no casing `Outline`) have their
-   projected `SKPath` built in an *anchor-relative pixel frame at the
-   current resolution* and cached under `(featureId, position,
-   resolutionBits)`. A pan changes only the viewport centre, so the
-   cached path is re-used and the frame pays just a canvas translate plus
-   the fill/stroke. A zoom changes the resolution (and the key), forcing
-   a crisp rebuild — far rarer than pans. The transform reproduces
-   Mapsui's `screen = (world − Center)/Res + Size/2` exactly, so output
-   is pixel-identical outside simplification.
-
-2. **Resolution-aware line simplification.** When building a line path,
-   consecutive vertices that project to within `simplifyTolerancePx`
-   (default `0.6`) of the last emitted vertex are dropped, with endpoints
-   always preserved. Because this happens in the anchored pixel frame at
-   the build resolution and the result is cached, the cost is paid once
-   per (feature, zoom) and re-used across all pans. Dropped vertices are
-   by construction sub-pixel *on screen* at that zoom, so the result is
-   visually indistinguishable at every zoom level while removing the bulk
-   of the Skia stroker's per-segment work — the real bottleneck on dense
-   contours.
-
-On the AU IC-ENC `444147` overview pure-pan (≈3,448 line features) this
-cut the per-frame vector cost from ~479 ms (un-cached Mapsui) to ~71 ms
-and the wall-clock frame from ~660–750 ms to ~200–225 ms — roughly a 3×
-frame-time improvement — with a measured pixel diff of ≈1.5 % (anti-alias
-fringes only) versus the un-simplified render.
-
-Anything outside this scope — points, patterned/hatched fills,
-dashed/casing-outlined lines, rotated viewports, and non-polygon/line
-geometry — is delegated unchanged to the wrapped Mapsui renderer.
-
-### Tuning
-
-The four headline optimizations — the path cache, line simplification, the raster
-snapshot, and the off-thread snapshot prebuild — are surfaced as user-facing knobs
-in the viewer under **Settings → Map → Rendering optimizations**, backed by
-[`RenderingOptimizations`](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Mapsui/RenderingOptimizations.cs). All four default **on** (the
-"best" set). The environment variables below seed those defaults and, when set
-*explicitly*, pin the value so the perf A/B harness stays faithful — an explicit
-env var always wins over the persisted viewer setting. The remaining variables
-(margins, refresh fraction, diagnostics) are advanced and env-only.
-
-The **render subsystem switch** (A/B), the TiledScene **scene mode**
-(tiled vs single surface), and the **tiled optimization knobs** (gutter,
-in-memory / disk / GPU budgets, prediction, disk cache) are likewise bound in
-the viewer under **Settings → Render subsystem** (issue #331),
-backed by the same [`RenderingOptimizations`](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Mapsui/RenderingOptimizations.cs) store.
-The env vars below seed and (when set explicitly) pin those too, disabling the
-matching UI control. Some knobs are read each frame and apply live (subsystem,
-scene mode, prediction, GPU residency); others are captured at init and apply on
-the next dataset reload or restart (gutter, in-memory/disk/GPU budgets, disk
-cache) — the Settings panel notes this.
-
-| Environment variable | Default | Effect |
-|---|---|---|
-| `S100_VECTOR_PATH_CACHE` | on | `0`/`false` disables the renderer entirely (pure Mapsui), for A/B comparison. Also bound by *Settings → Map → Cache projected vector paths*. |
-| `S100_VECTOR_SIMPLIFY_PX` | `0.6` | Line simplification tolerance in screen pixels; `0` disables simplification (vertex-exact paths). The on/off state is bound by *Settings → Map → Simplify dense line geometry*. |
-| `S100_VECTOR_PICTURE_SNAPSHOT` | on | `0`/`false` disables the raster vector-layer snapshot fast path (see below); falls back to per-feature drawing every frame. Also bound by *Settings → Map → Raster snapshot on pan*. |
-| `S100_VECTOR_SNAPSHOT_MARGIN` | `256` | Pixels of off-screen margin recorded around the viewport, so a pan can travel this far before the snapshot is re-recorded. |
-| `S100_VECTOR_SNAPSHOT_PREBUILD` | on | `0`/`false` disables the off-thread pre-build (see below) and falls back to the single-image snapshot (synchronous re-record on zoom and on a pan past the margin). Also bound by *Settings → Map → Off-thread snapshot prebuild*. |
-| `S100_VECTOR_SNAPSHOT_PAN_MARGIN` | `512` | Pixels of margin used for off-thread *pan* re-records (the sustained-pan look-ahead). Larger than `…_MARGIN` so one recentred-ahead background record covers roughly a full viewport of travel. Only used when the pre-build is on. |
-| `S100_VECTOR_SNAPSHOT_PAN_REFRESH` | `0.5` | Fraction (0–1) of the active snapshot's margin at which the off-thread pan re-record is triggered (while the image still fully covers the view). Smaller = earlier/more frequent; larger = more deferred. Only used when the pre-build is on. |
-| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / live-on-scale-band / prebuild-publish / pan-refresh decisions to stderr. |
-
-### Raster vector snapshot
-
-`S100VectorSnapshotRenderer` is a Mapsui *custom layer renderer* that
-rasterizes a settled S-101 vector layer into a single device-resolution
-`SKImage` once per (resolution, feature-set) and, on subsequent pans at the
-same resolution, blits it under a translation instead of re-iterating and
-re-stroking every feature. Because a raster blit is O(pixels) rather than
-O(features), pure pans become independent of feature count — on the AU
-IC-ENC harbour cell `101AU005PDB01` (~1,600 area/line features) pure-pan
-frame time drops from ~90 ms to ~2 ms, and the vector-heavy cell `444147`
-from ~270 ms to ~2 ms, with a pixel-faithful result (sub-pixel edge
-anti-aliasing only).
-
-The trade-off is the *record* frame: the first frame at each new resolution
-(or after a pan past the recorded margin) re-rasterizes the whole layer at
-device scale, costing more than a single live frame (~650 ms on PDB01). The
-off-thread pre-build below hides that cost for both zoom and sustained pan.
-
-**Image-source readiness at record time.** Mapsui resolves an `ImageStyle`'s
-image (the SVG point symbols for buoys, beacons, lights) from its
-`RenderService.ImageSourceCache`, which is normally populated by an
-*asynchronous* fetch loop. The live per-frame path tolerates a cache miss
-because it simply redraws the next frame once the fetch lands, but the
-snapshot's one-shot record does not: a record taken before the fetch
-completes would bake a symbol-less raster that the (still "valid") snapshot
-never re-records, so the symbols would vanish until the next zoom. The
-recorder therefore registers the layer's image sources **synchronously**
-before drawing (`EnsureImageSourcesRegistered`), mirroring Mapsui's own
-offscreen rasteriser (`RasterizingTileSource`, which awaits
-`ImageSourceCache.FetchAllImageDataAsync` before `RenderToBitmapStream`). The
-`svg-content://` / `base64-content://` sources used here resolve in-process,
-so this adds no I/O wait.
-
-**Off-thread pre-build (`S100_VECTOR_SNAPSHOT_PREBUILD`, default on).** When
-enabled, the renderer keeps a small per-resolution LRU of recorded images
-instead of a single image, and hides the record-frame stall in four ways:
-
-1. **Speculative pre-build after settle** — once a frame replays cleanly, the
-   predicted next zoom bucket(s) (inferred from the last two observed
-   resolutions) are rasterized on a background thread, so a subsequent zoom
-   lands on a ready, crisp image.
-2. **Scaled-stale blit** — on a zoom whose image is not yet built, the nearest
-   existing image is blitted *scaled* (one linear resample, slightly blurry)
-   for a frame or two while the exact-resolution image is built off-thread.
-   This also smooths continuous / pinch zoom. **A scaled-stale blit is only
-   used when no scale-visibility boundary (`MinVisible`/`MaxVisible`, e.g. the
-   S-101 out-of-band cap derived from `DataCoverage.minimumDisplayScale`) lies
-   between the recorded image's resolution and the current one.** When a zoom
-   crosses such a boundary the two resolutions have *different* visible feature
-   sets — a buoy shown at one zoom is capped-hidden at the other — so reusing
-   the wrong-resolution raster would briefly drop (or wrongly show) those
-   features. In that case the layer is drawn **live** for that single frame
-   (feature-correct, like the rotated-viewport fallback) while the
-   exact-resolution image records off-thread. This eliminated an intermittent
-   bug where point/text features (buoys, beacons, labels) flickered or vanished
-   when zooming across the cell's display-scale cutoff.
-3. **Sustained-pan look-ahead** — the original snapshot only buys
-   `…_MARGIN` (256 px) of pan before a re-record, and that re-record used to
-   run *synchronously* on the render thread (~250–650 ms), so a sustained drag
-   went jittery once it passed ~1/3 of the viewport. Now, once a pan crosses
-   `…_PAN_REFRESH` of the active image's margin (while it still fully covers
-   the view), the renderer records a **recentred-ahead** image at the *same*
-   resolution with the larger `…_PAN_MARGIN` (512 px) on a background thread,
-   blitting the existing (translated) image until it publishes, then swapping
-   in the crisp one. Leading the record into the direction of travel means one
-   background record covers roughly a full viewport of continued pan, so a
-   sustained drag stays smooth with no render-thread stall. A fast flick that
-   briefly outruns the look-ahead blits the nearest same-resolution image
-   translated (a transient uncovered leading strip over the basemap) rather
-   than freezing.
-4. **Async record + repaint** — every off-thread record uses a dedicated
-   `RenderService` (CPU-backed raster, safe to blit on the render thread) and,
-   on publish, requests a single repaint via the layer's
-   `InstrumentedMemoryLayer.RequestRepaint`, which invokes the per-session redraw
-   sink the session stamped on `InstrumentedMemoryLayer.RequestRedraw` (it
-   invalidates the attached map — see the `AddS100` section) so the crisp image
-   replaces the stale/translated blit.
-
-Pan re-records are at the *same* resolution (scale 1), so once a pan settles
-the displayed image is an exact, in-margin, scale-1 blit — pixel-identical to a
-live render. Disable with `S100_VECTOR_SNAPSHOT_PREBUILD=0` for A/B against the
-single-image snapshot (one image, synchronous re-record on zoom and pan).
-Rotated viewports fall back to live per-feature drawing.
-
-**Measured sustained-pan A/B (PDB01, `101AU005PDB01`).** The viewer was
-driven over its embedded MCP server (`set_viewport` pan sweep +
-`await_render_idle` + `get_render_stats`) with `S100_VECTOR_SNAPSHOT_DIAG=1`,
-panning 28 steps (~3–4 viewport widths) at five zoom levels in a 1400×1000
-window (retina scale 2, warm portrayal-instruction cache so absolute records
-sit well below the cold 250–650 ms — the periodic hitch pattern is the
-point). Per-paint frame duration (ms), pre-build off vs default-on:
-
-| zoom | res m/px | OFF — pan-time records | OFF p95 / max | ON — pan-time records | ON p95 / max |
-|---|---|---|---|---|---|
-| 11.14 | 69.4 | 8 synchronous RECORD | 35.8 / 36.5 | 0 (off-thread PAN-PUBLISH) | 9.1 / 9.6 |
-| 12 | 38.2 | 8 synchronous RECORD | 104.4 / 105.6 | 0 (off-thread PAN-PUBLISH) | 10.5 / 11.9 |
-| 13 | 19.1 | 8 synchronous RECORD | 8.1 / 10.7 | 0 (off-thread PAN-PUBLISH) | 11.6 / 12.0 |
-| 14 | 9.55 | 8 synchronous RECORD | 12.0 / 264.4 | 0 (off-thread) | 9.7 / 11.5 |
-| 15 | 4.78 | 8 synchronous RECORD | 219.5 / 225.8 | 0 (off-thread PAN-PUBLISH) | 11.1 / 12.4 |
-
-Pre-build off fires a synchronous render-thread record on every margin
-crossing (8 per sweep at every zoom) with worst-case frames of 105–264 ms at
-the zoom levels users actually navigate. Default-on fires zero pan-time
-records (only off-thread refresh/publish, plus one cold first-ever record)
-and holds p95 ≤ 11.6 ms / max ≤ 12.4 ms across the whole zoom range and the
-whole sweep, with settled output staying pixel-identical.
-
-The tolerance is also a constructor parameter
-(`new CachedVectorStyleRenderer(inner, capacity, simplifyTolerancePx)`),
-and `CachedPathCount` exposes the number of distinct cached paths for
-testing the build-once-per-(feature, zoom) behaviour.
+## Base-plane scene rendering
 
 ### Async scene rasteriser (`S100VectorSceneRenderer`, render-subsystem "B")
 
 `S100VectorSceneRenderer` is the **TiledScene** render subsystem's first arm
 (see `docs/design/S100-Render-Subsystem-Design.md`, Appendix B). Like the
-snapshot renderer it is a Mapsui *custom layer renderer*, but instead of
+retired raster snapshot it is a Mapsui *custom layer renderer*, but instead of
 recording the live Mapsui features it rasterises the backend-agnostic
 `VectorScene` IR directly with `SkiaDisplayListRenderer` on a **worker
 thread**, then swap-and-blits the finished `SKImage` on the UI thread. The
@@ -1066,9 +720,11 @@ whole viewport plus an over-render margin (`S100_VECTOR_SCENE_MARGIN`, default
 translated re-blit (`ComputeTranslate`), so no rasterisation work touches the
 UI/render thread during a gesture.
 
-Activate it by selecting the subsystem (`S100_RENDER_SUBSYSTEM=tiledscene`, the
-`TiledScene` value of `RenderingOptimizations.RenderSubsystem`, or
-**Settings → Render subsystem → Subsystem** in the viewer).
+Since #600 the scene path is the only base-plane path. This single-surface arm
+is selected with `S100_VECTOR_SCENE_MODE=single`,
+`RenderingOptimizations.SceneMode = VectorSceneMode.Single`, or **Settings →
+Base-plane rendering → Scene mode → Single surface** in the viewer; the tiled
+base plane below is the default.
 `MapsuiDisplayListRenderer` then tags the vector layer with
 `S100VectorSceneRenderer.RendererName` and binds the scene (`BindScene`), built
 with the `PatternResolver` set so fills render from the IR. The layer's Mapsui

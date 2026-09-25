@@ -158,7 +158,7 @@ through the cached fast path. Line simplification lives in
 `(feature, zoom)` and inherited by the vector-snapshot record/prebuild.
 Lines are gated behind the viewer's **Simplify dense geometry** setting
 (default **on**, the only simplification knob in the UI). See the renderer
-[README → Resolution-aware geometry simplification](../../src/EncDotNet.S100.Renderers.Mapsui/README.md#resolution-aware-geometry-simplification)
+[README → Resolution-aware geometry simplification](https://github.com/philliphoff/EncDotNet.S100/blob/1a92af0dc39545e971b4cbdfd93870f7919d056b/src/EncDotNet.S100.Renderers.Mapsui/README.md#resolution-aware-geometry-simplification) (removed from the live README after #600; this link is pinned to the last version that had it)
 for the implementation, gating, telemetry, and known limits.
 
 **Lines.** `LineString` / `MultiLineString` are simplified inline with a

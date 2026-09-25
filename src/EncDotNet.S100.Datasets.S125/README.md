@@ -23,7 +23,7 @@ Key types:
 - **`S125ComplexAttribute`** — a complex attribute group with sub-attribute values. Implements `IS100ComplexAttribute`.
 - **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
 - **`S125FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S125Dataset` into the synthesized `Dataset/Features/*` shape that S-125 XSLT rules match against.
-- **`S125FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer.
+- **Feature geometry** reaches the renderers through the shared `FeatureGeometryProvider<TFeature>` (`IFeatureGeometryProvider`, from `EncDotNet.S100.Core`), which the dataset processor builds over the parsed features.
 - **`S125PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
 ## Strongly-typed data model

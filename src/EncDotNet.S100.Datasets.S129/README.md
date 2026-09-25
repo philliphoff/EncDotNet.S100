@@ -80,6 +80,6 @@ projection (mirroring the pattern introduced for S-421 in PR #100):
   measurements, and control-point geometry presence.
 - Tier-3 cross-dataset rules — e.g. comparing a control point's UKC
   margin against a sibling S-102 bathymetric grid — are intentionally
-  deferred to the MCP `validate_all` surface and the `S129Fusion`
-  library.
+  deferred to the MCP `validate_all` surface and the
+  `EncDotNet.S100.Datasets.S129.Fusion` library.
 

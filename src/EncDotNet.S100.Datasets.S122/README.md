@@ -19,8 +19,8 @@ Key types include:
 - **`S122Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S122InformationType`** — a non-geographic information type instance (e.g. `Authority`, `Regulations`, `SpatialQuality`).
 - **`S122ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S122GeometryType`** has been replaced by the shared `S100GeometryType` enum from `EncDotNet.S100.Core`.
-- **`S122FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S122Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
+- **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
+- **FeatureXML projection** — there is no S-122-specific source type: the S-122 dataset processor in `EncDotNet.S100.Datasets.Pipelines` projects an `S122Dataset` into S-100 Part 9 FeatureXML for the XSLT portrayal rules with the shared `GmlFeatureXmlSource<TFeature>` from `EncDotNet.S100.Core`.
 - **`S122PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
 ## Notes
