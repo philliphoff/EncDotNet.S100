@@ -89,7 +89,7 @@ internal static class S111Synth
                 EndTime = end,
                 TimeRecordInterval = interval,
                 NumberOfTimes = samplesPerStation,
-                SpeedsMetresPerSecond = speeds,
+                SpeedsKnots = speeds,
                 DirectionsDegreesTrue = dirs,
             });
             min = min is null || start < min ? start : min;

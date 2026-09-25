@@ -130,10 +130,11 @@ public sealed record WaterLevelSample(
 /// S-111 surface current sample at the nearest grid cell and time step.
 /// </summary>
 /// <param name="SpeedMetresPerSecond">
-/// Speed in metres per second — the canonical S-111 unit (S-111 §10.2.5).
+/// Speed in metres per second, converted from the encoded knots as
+/// <c>kn × 0.514444</c>.
 /// </param>
 /// <param name="SpeedKnots">
-/// Speed in knots, computed as <c>m/s × 1.94384</c> for convenience.
+/// Speed in knots — the unit S-111 encodes <c>surfaceCurrentSpeed</c> in.
 /// </param>
 /// <param name="DirectionDegreesTrue">Direction in degrees from true north, clockwise (0..360).</param>
 /// <param name="SampleTime">The actual time step (UTC) selected for this sample.</param>
@@ -143,8 +144,8 @@ public sealed record WaterLevelSample(
 /// <param name="CellCentreLatitude">Latitude of the resolved cell centre.</param>
 /// <param name="CellCentreLongitude">Longitude of the resolved cell centre.</param>
 public sealed record SurfaceCurrentSample(
-    [property: Description("Current speed in metres per second — canonical S-111 unit (§10.2.5).")] double SpeedMetresPerSecond,
-    [property: Description("Current speed in knots (m/s × 1.94384), provided as a convenience.")] double SpeedKnots,
+    [property: Description("Current speed in metres per second, converted from the S-111 encoded knots (kn × 0.514444).")] double SpeedMetresPerSecond,
+    [property: Description("Current speed in knots, as encoded by S-111 surfaceCurrentSpeed.")] double SpeedKnots,
     [property: Description("Direction the current is flowing toward, in degrees from true north, clockwise, 0..360.")] double DirectionDegreesTrue,
     [property: Description("UTC instant of the time step actually selected for this sample.")] DateTime SampleTime,
     [property: Description("UTC instant the caller asked for, or null if unspecified.")] DateTimeOffset? RequestedTime,
@@ -161,8 +162,8 @@ public sealed record SurfaceCurrentSample(
 /// </summary>
 /// <param name="StationId">Reporting station identifier (S-111 <c>stationIdentification</c>).</param>
 /// <param name="StationDistanceMetres">Great-circle distance from requested point to the station, metres.</param>
-/// <param name="SpeedMetresPerSecond">Speed in metres per second — canonical S-111 unit (§10.2.5).</param>
-/// <param name="SpeedKnots">Speed in knots, computed as <c>m/s × 1.94384</c> for convenience.</param>
+/// <param name="SpeedMetresPerSecond">Speed in metres per second, converted from the encoded knots as <c>kn × 0.514444</c>.</param>
+/// <param name="SpeedKnots">Speed in knots — the unit S-111 encodes <c>surfaceCurrentSpeed</c> in.</param>
 /// <param name="DirectionDegreesTrue">Direction in degrees from true north, clockwise (0..360).</param>
 /// <param name="SampleTime">Actual time step (UTC) selected for this sample.</param>
 /// <param name="RequestedTime">The time the caller asked for, or <c>null</c> if unspecified.</param>
@@ -171,8 +172,8 @@ public sealed record SurfaceCurrentSample(
 public sealed record SurfaceCurrentStationSample(
     [property: Description("Reporting station identifier (S-111 stationIdentification).")] string StationId,
     [property: Description("Great-circle distance from requested point to the station, in metres.")] double StationDistanceMetres,
-    [property: Description("Current speed in metres per second — canonical S-111 unit (§10.2.5).")] double SpeedMetresPerSecond,
-    [property: Description("Current speed in knots (m/s × 1.94384), provided as a convenience.")] double SpeedKnots,
+    [property: Description("Current speed in metres per second, converted from the S-111 encoded knots (kn × 0.514444).")] double SpeedMetresPerSecond,
+    [property: Description("Current speed in knots, as encoded by S-111 surfaceCurrentSpeed.")] double SpeedKnots,
     [property: Description("Direction the current is flowing toward, in degrees from true north, clockwise, 0..360.")] double DirectionDegreesTrue,
     [property: Description("UTC instant of the time step actually selected for this sample.")] DateTime SampleTime,
     [property: Description("UTC instant the caller asked for, or null if unspecified.")] DateTimeOffset? RequestedTime,
@@ -196,9 +197,9 @@ public sealed class SampleCoverageService
     /// <summary>Tool name used in <see cref="SpecNotSupportedForTool"/> errors.</summary>
     public const string Name = "sample_coverage";
 
-    // S-111 conversion factor m/s → knots (1 m/s ≈ 1.94384 kn). The exact
-    // SI definition is 1 knot = 1852 m / 3600 s, i.e. 1/0.514444 m/s.
-    private const double MetresPerSecondToKnots = 1.9438444924406046;
+    // S-111 encodes surfaceCurrentSpeed in knots; the MCP contract also
+    // reports m/s. 1 knot = 1852 m / 3600 s ≈ 0.514444 m/s.
+    private const double KnotsToMetresPerSecond = 1852.0 / 3600.0;
 
     private readonly IDatasetCatalog _catalog;
     private readonly ICrsTransformFactory _transforms;
@@ -617,8 +618,8 @@ public sealed class SampleCoverageService
                 request.Latitude,
                 request.Longitude,
                 new SurfaceCurrentSample(
+                    value.Speed * KnotsToMetresPerSecond,
                     value.Speed,
-                    value.Speed * MetresPerSecondToKnots,
                     value.Direction,
                     DateTime.SpecifyKind(step.TimePoint, DateTimeKind.Utc),
                     request.Time,
@@ -683,7 +684,7 @@ public sealed class SampleCoverageService
             sampleTime = bestStation.TimeAt(idx);
         }
 
-        var speed = bestStation.SpeedsMetresPerSecond[idx];
+        var speed = bestStation.SpeedsKnots[idx];
         return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
             bestDataset.Id,
             request.Latitude,
@@ -691,8 +692,8 @@ public sealed class SampleCoverageService
             new SurfaceCurrentStationSample(
                 bestStation.Identifier,
                 bestDistance,
+                speed * KnotsToMetresPerSecond,
                 speed,
-                speed * MetresPerSecondToKnots,
                 bestStation.DirectionsDegreesTrue[idx],
                 DateTime.SpecifyKind(sampleTime, DateTimeKind.Utc),
                 request.Time,
@@ -893,8 +894,8 @@ public sealed class SampleCoverageService
                 else
                 {
                     sampled = new SurfaceCurrentSample(
+                        value.Speed * KnotsToMetresPerSecond,
                         value.Speed,
-                        value.Speed * MetresPerSecondToKnots,
                         value.Direction,
                         DateTime.SpecifyKind(step.TimePoint, DateTimeKind.Utc),
                         requestedInstant,

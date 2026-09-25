@@ -658,8 +658,8 @@
   <data name="Pick_Chart_Axis_HeightMetres" xml:space="preserve">
     <value>Height (m)</value>
   </data>
-  <data name="Pick_Chart_Axis_SpeedMetresPerSecond" xml:space="preserve">
-    <value>Speed (m/s)</value>
+  <data name="Pick_Chart_Axis_SpeedKnots" xml:space="preserve">
+    <value>Speed (kn)</value>
   </data>
   <data name="Pick_Chart_Axis_DirectionDegrees" xml:space="preserve">
     <value>Direction (°)</value>
@@ -2234,7 +2234,7 @@
     <value>Course (°T)</value>
   </data>
   <data name="Helm_OrderedSpeed" xml:space="preserve">
-    <value>Speed (m/s)</value>
+    <value>Speed (kn)</value>
   </data>
   <data name="Helm_TurnRate" xml:space="preserve">
     <value>Rate of turn (°/s)</value>

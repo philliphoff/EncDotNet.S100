@@ -12,7 +12,7 @@ This library reads S-111 datasets from HDF5 files and provides gridded and posit
 - **`S111CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S111PortrayalCatalogue`** — coverage portrayal catalogue for current arrow rendering (see *Portrayal* below).
 - **`S111SpeedBandReader`** — parses the 9 surface-current speed bands and the three scale constants from the bundled `Rules/select_arrow.xsl`.
-- **`SurfaceCurrentCoverage`**, **`SurfaceCurrentValue`** — surface current data models.
+- **`SurfaceCurrentCoverage`**, **`SurfaceCurrentValue`**, **`SurfaceCurrentStation`** — surface current data models. Speeds are in knots on every path (`SurfaceCurrentValue.Speed` for gridded data, `SurfaceCurrentStation.SpeedsKnots` for station series), matching the S-111 unit of `surfaceCurrentSpeed`; nothing is converted on read.
 
 ## Portrayal
 

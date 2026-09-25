@@ -370,9 +370,9 @@ public class SampleCoverageToolTests
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentSample>(value.Value);
-        Assert.Equal(1.0, sample.SpeedMetresPerSecond, 5);
-        // 1.0 m/s × 1.94384… ≈ 1.94384 kn.
-        Assert.Equal(1.94384, sample.SpeedKnots, 3);
+        // S-111 encodes speeds in knots: 1.0 kn ≈ 0.514444 m/s.
+        Assert.Equal(1.0, sample.SpeedKnots, 5);
+        Assert.Equal(0.514444, sample.SpeedMetresPerSecond, 5);
         Assert.Equal(45.0, sample.DirectionDegreesTrue, 5);
     }
 

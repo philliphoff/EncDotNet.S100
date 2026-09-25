@@ -61,7 +61,7 @@ public class StationTimeSeriesViewModelTests
                 {
                     Key = "surfaceCurrentSpeed",
                     DisplayName = "Surface Current Speed",
-                    Unit = "m/s",
+                    Unit = "kn",
                     Values = speeds,
                     FillValue = -9999f,
                 },

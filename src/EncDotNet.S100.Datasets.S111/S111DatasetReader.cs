@@ -707,7 +707,7 @@ public static class S111DatasetReader
                 TimeRecordInterval = interval,
                 SampleTimes = sampleTimes,
                 NumberOfTimes = numberOfTimes,
-                SpeedsMetresPerSecond = nodeSpeeds,
+                SpeedsKnots = nodeSpeeds,
                 DirectionsDegreesTrue = nodeDirections,
             });
         }
@@ -1008,7 +1008,7 @@ public static class S111DatasetReader
                 EndTime = endTime,
                 TimeRecordInterval = interval,
                 NumberOfTimes = numberOfTimes,
-                SpeedsMetresPerSecond = speeds,
+                SpeedsKnots = speeds,
                 DirectionsDegreesTrue = directions,
             });
 

@@ -110,6 +110,7 @@ public class StationTimeSeriesSnapshotTests
             Assert.Equal(2, snap.Channels.Count);
             var byKey = snap.Channels.ToDictionary(c => c.Key);
             Assert.Equal(new[] { 0.3f, 0.6f, 0.9f }, byKey["surfaceCurrentSpeed"].Values.ToArray());
+            Assert.Equal("kn", byKey["surfaceCurrentSpeed"].Unit);
             Assert.Equal(new[] { 45f, 50f, 60f }, byKey["surfaceCurrentDirection"].Values.ToArray());
         }
         finally { File.Delete(path); }

@@ -89,21 +89,21 @@ public class S111Dcf3ReaderTests
             Assert.Equal(new DateTime(2024, 1, 1, 3, 0, 0, DateTimeKind.Utc), node0.EndTime);
             Assert.Equal(TimeSpan.FromHours(1), node0.TimeRecordInterval);
             Assert.Equal(4, node0.NumberOfTimes);
-            Assert.Equal(0.3f, node0.SpeedsMetresPerSecond[0]);
+            Assert.Equal(0.3f, node0.SpeedsKnots[0]);
             Assert.Equal(45f, node0.DirectionsDegreesTrue[0]);
-            Assert.Equal(0.5f, node0.SpeedsMetresPerSecond[1]);
+            Assert.Equal(0.5f, node0.SpeedsKnots[1]);
             Assert.Equal(50f, node0.DirectionsDegreesTrue[1]);
 
             // Node 1.
             var node1 = model.Stations[1];
             Assert.Equal("SurfaceCurrent.01:Node_002", node1.Identifier);
-            Assert.Equal(1.0f, node1.SpeedsMetresPerSecond[0]);
+            Assert.Equal(1.0f, node1.SpeedsKnots[0]);
             Assert.Equal(90f, node1.DirectionsDegreesTrue[0]);
 
             // Node 2 — last time step.
             var node2 = model.Stations[2];
             Assert.Equal("SurfaceCurrent.01:Node_003", node2.Identifier);
-            Assert.Equal(0.4f, node2.SpeedsMetresPerSecond[3]);
+            Assert.Equal(0.4f, node2.SpeedsKnots[3]);
             Assert.Equal(195f, node2.DirectionsDegreesTrue[3]);
 
             Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), model.MinTime);

@@ -66,7 +66,7 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
                 GeometryFill = null,
                 XToolTipLabelFormatter = p => FormatTooltipDateTime(
                     new System.DateTime((long)p.Coordinate.SecondaryValue, System.DateTimeKind.Utc)),
-                YToolTipLabelFormatter = p => p.Coordinate.PrimaryValue.ToString("0.##", CultureInfo.InvariantCulture) + " m/s",
+                YToolTipLabelFormatter = p => p.Coordinate.PrimaryValue.ToString("0.##", CultureInfo.InvariantCulture) + " kn",
             },
         };
 
@@ -89,7 +89,7 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
 
         SpeedAxis = new Axis
         {
-            Name = Strings.Pick_Chart_Axis_SpeedMetresPerSecond,
+            Name = Strings.Pick_Chart_Axis_SpeedKnots,
             LabelsPaint = _speedAxisLabelsPaint,
             NamePaint = _speedAxisNamePaint,
             SeparatorsPaint = _speedAxisSeparatorsPaint,
@@ -131,7 +131,7 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
     /// <summary>Bottom chart series: surface-current direction.</summary>
     public ISeries[] DirectionSeries { get; }
 
-    /// <summary>Y axis for the speed chart (m/s).</summary>
+    /// <summary>Y axis for the speed chart (knots).</summary>
     public Axis SpeedAxis { get; }
 
     /// <summary>Y axis for the direction chart (degrees, clamped 0–360).</summary>

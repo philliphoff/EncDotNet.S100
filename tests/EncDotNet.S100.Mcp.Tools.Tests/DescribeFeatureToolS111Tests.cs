@@ -91,6 +91,7 @@ public class DescribeFeatureToolS111Tests
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("SurfaceCurrentStation", value.FeatureTypeName);
         Assert.Equal("CUR_001", value.Attributes.GetProperty("stationId").GetString());
+        Assert.Equal("knots", value.Attributes.GetProperty("speedRange").GetProperty("units").GetString());
     }
 
     [Fact]
