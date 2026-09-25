@@ -34,6 +34,8 @@ code is migrated toward it opportunistically.
 2. **The compiler is the first reviewer.** The build sets
    `TreatWarningsAsErrors=true` (see `Directory.Build.props`); a warning is a
    failure. Do not suppress warnings to make the build pass — fix the cause.
+   Avalonia's XAML compiler ignores that setting, so its warning-level
+   `AVLN*` diagnostics are promoted to errors in `.editorconfig` instead.
 3. **Nullability is part of the type.** Nullable reference types are enabled
    solution-wide. Model presence/absence honestly instead of defeating the
    analyzer.

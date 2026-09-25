@@ -34,6 +34,22 @@ end_of_line = crlf
 trim_trailing_whitespace = false
 
 ##########################################
+# Avalonia XAML files
+##########################################
+# The Avalonia XAML compiler reads these severities (note the
+# `avalonia_xaml_diagnostic` prefix, not `dotnet_diagnostic`) but does not
+# honour TreatWarningsAsErrors, so promote its warning-level diagnostics
+# here to keep the build warning-free. IDs mirror the ones Avalonia's own
+# .editorconfig sets to `warning`.
+[*.axaml]
+avalonia_xaml_diagnostic.AVLN2203.severity = error
+avalonia_xaml_diagnostic.AVLN2204.severity = error
+avalonia_xaml_diagnostic.AVLN2205.severity = error
+avalonia_xaml_diagnostic.AVLN2207.severity = error
+avalonia_xaml_diagnostic.AVLN2208.severity = error
+avalonia_xaml_diagnostic.AVLN5001.severity = error
+
+##########################################
 # C# files
 ##########################################
 [*.cs]
