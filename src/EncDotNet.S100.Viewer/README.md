@@ -173,9 +173,17 @@ design in `docs/design/dataset-collections.md`.
   - a folder, scanned recursively for S-100 `CATALOG.XML` and S-57
     `CATALOG.031` exchange sets, zipped exchange sets, and loose datasets
   - an exchange-set ZIP
-  - the **NOAA ENC feed** (`ENCProdCat.xml`), scoped by state, Coast
-    Guard district or region. The dialog shows the cell count and
-    download size of the selection.
+  - an **online catalogue**, chosen under **Online Catalogue…** from a
+    curated list of known catalogues (NOAA ENC; USACE Inland ENC rivers
+    and buoy overlay)
+    - **The directory:** each catalogue shows its provider and region,
+      and chips for what it provides: coverage outlines, bounding boxes
+      or none; editions; sizes.
+    - **Next step:** you pick what to include (NOAA by state, Coast Guard
+      district or region; USACE by river), with the selection's cell
+      count and download size.
+    - **Catalogue age:** the catalogue's own date is shown, and flagged
+      when it is over a year old.
   - an **S-128** Catalogue of Nautical Products
 
   Local sources are referenced **in place**. Files are never copied,
@@ -222,9 +230,9 @@ design in `docs/design/dataset-collections.md`.
   - **Badges:** opened datasets show **LOADED** or **ON PAN**.
   - **What can't load:** online, missing and catalogue-only items are
     skipped.
-- **USACE Inland ENC feed**: **Add to Library → USACE Inland ENC Feed…**
-  lists USACE's river cells grouped by river, with cell counts and sizes,
-  and adds the chosen rivers as a collection.
+- **USACE Inland ENC**: the rivers catalogue lists USACE's river cells
+  grouped by river, with cell counts and sizes, and adds the chosen rivers
+  as a collection.
   - **On the map:** cells show as their bounding boxes, because USACE
     publishes no coverage polygons.
   - **Titles:** each cell is described by its reach and river miles, e.g.

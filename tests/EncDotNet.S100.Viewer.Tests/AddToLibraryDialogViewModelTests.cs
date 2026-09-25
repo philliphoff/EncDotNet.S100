@@ -22,7 +22,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private static Task<NoaaEncProductCatalog> LoadFixtureCatalog(CancellationToken _) =>
+    private static Task<NoaaEncProductCatalog> LoadFixtureCatalog(Uri _, CancellationToken __) =>
         Task.FromResult(NoaaEncProductCatalogReader.Read(LibraryTestContext.RepoFile(
             "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")));
 
@@ -111,7 +111,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-u37.xml");
         var vm = new AddToLibraryDialogViewModel(
-            _library, null, _ => Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)));
+            _library, null, (_, _) => Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)));
         vm.Initialize(AddToLibraryKind.UsaceFeed, null, null);
 
         Assert.True(vm.IsOnlineFeed);
@@ -147,9 +147,55 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Known_source_sets_the_catalogue_title_and_default_name()
+    {
+        var buoys = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("usace-ienc-buoys")!;
+        Uri? requested = null;
+        var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-buoy.xml");
+        var vm = new AddToLibraryDialogViewModel(_library, null, (uri, _) =>
+        {
+            requested = uri;
+            return Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture));
+        });
+
+        vm.Initialize(buoys, targetCollectionId: null);
+        await vm.LoadCatalogAsync();
+
+        Assert.Equal(UsaceIencFeedSource.BuoysCatalogUri, requested);
+        Assert.Equal(buoys.Name, vm.Title);
+        Assert.Equal(buoys.Name, vm.NewCollectionName);
+        Assert.Equal(UsaceIencFeedSource.BuoysCatalogUri.AbsoluteUri, vm.SourceDescription);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<UsaceIencFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(UsaceIencFeedSource.BuoysCatalogUri, source.CatalogUri);
+    }
+
+    [Theory]
+    [InlineData("2026-10-01", false)]
+    [InlineData("2027-12-31", true)]
+    public async Task Catalogue_date_is_shown_and_flagged_when_over_a_year_old(string today, bool stale)
+    {
+        // The U37 fixture is dated 2026-09-17.
+        var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-u37.xml");
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(
+            DateTimeOffset.Parse(today + "T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        var vm = new AddToLibraryDialogViewModel(
+            _library, null, (_, _) => Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)), clock);
+        vm.Initialize(AddToLibraryKind.UsaceFeed, null, null);
+
+        Assert.Null(vm.CatalogueDateText);
+        await vm.LoadCatalogAsync();
+
+        Assert.Contains("2026-09-17", vm.CatalogueDateText);
+        Assert.Equal(stale, vm.IsCatalogueStale);
+    }
+
+    [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, _ => throw new HttpRequestException("offline"));
+        var vm = new AddToLibraryDialogViewModel(_library, (_, _) => throw new HttpRequestException("offline"));
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
 
         await vm.LoadCatalogAsync();

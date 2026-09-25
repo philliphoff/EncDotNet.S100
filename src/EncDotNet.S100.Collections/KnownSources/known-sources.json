@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "noaa-enc",
+      "name": "NOAA ENC — all U.S. waters",
+      "provider": "NOAA Office of Coast Survey",
+      "region": ["North America", "United States"],
+      "format": "noaaEnc",
+      "catalogUri": "https://charts.noaa.gov/ENCs/ENCProdCat.xml",
+      "homepage": "https://nauticalcharts.noaa.gov/charts/noaa-enc.html",
+      "coverage": "polygons",
+      "editions": true,
+      "sizes": true,
+      "note": "Choose states, Coast Guard districts or regions next."
+    },
+    {
+      "id": "usace-ienc-rivers",
+      "name": "USACE Inland ENC — rivers",
+      "provider": "U.S. Army Corps of Engineers",
+      "region": ["North America", "United States"],
+      "format": "usaceIenc",
+      "catalogUri": "https://ienccloud.us/ienc/products/catalog/IENCU37ProductsCatalog.xml",
+      "homepage": "https://ienccloud.us/",
+      "coverage": "boundingBoxes",
+      "editions": true,
+      "sizes": true,
+      "note": "Inland waterway cells; choose rivers next."
+    },
+    {
+      "id": "usace-ienc-buoys",
+      "name": "USACE Inland ENC — buoy overlay",
+      "provider": "U.S. Army Corps of Engineers",
+      "region": ["North America", "United States"],
+      "format": "usaceIenc",
+      "catalogUri": "https://ienccloud.us/ienc/products/catalog/IENCBuoyProductsCatalog.xml",
+      "homepage": "https://ienccloud.us/",
+      "coverage": "boundingBoxes",
+      "editions": true,
+      "sizes": true,
+      "note": "A single overlay cell of inland buoy positions, updated frequently."
+    }
+  ]
+}

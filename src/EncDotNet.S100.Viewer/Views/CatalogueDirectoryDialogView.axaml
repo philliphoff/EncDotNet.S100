@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.CatalogueDirectoryDialogView"
+             x:DataType="vm:CatalogueDirectoryDialogViewModel"
+             MinWidth="480">
+
+    <UserControl.Styles>
+        <!-- Quality chips: a neutral pill, dimmed when it states a limitation. -->
+        <Style Selector="Border.chip">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="7,1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Border.chip.limited">
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+        <Style Selector="Border.chip TextBlock">
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="20,12,20,16">
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,24,12">
+            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryTitle}" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryDescription}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding Entries}"
+                 SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                 MaxHeight="360"
+                 Classes="accentList"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
+                    <StackPanel Spacing="3" Margin="0,2" Background="Transparent">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1" Classes="Icon" Padding="2"
+                                    IsVisible="{Binding HasHomepage}"
+                                    Command="{Binding OpenHomepageCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CatalogueHomepage}">
+                                <ic:FluentIcon Icon="Open" FontSize="14" />
+                            </Button>
+                        </Grid>
+                        <TextBlock Text="{Binding ProviderAndRegion}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Border Classes="chip" Classes.limited="{Binding IsCoverageLimited}">
+                                <TextBlock Text="{Binding CoverageChip}" />
+                            </Border>
+                            <Border Classes="chip" Classes.limited="{Binding IsEditionsLimited}">
+                                <TextBlock Text="{Binding EditionsChip}" />
+                            </Border>
+                            <Border Classes="chip" Classes.limited="{Binding IsSizesLimited}">
+                                <TextBlock Text="{Binding SizesChip}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="11" Opacity="0.8" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}" />
+            <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Next}" Command="{Binding NextCommand}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

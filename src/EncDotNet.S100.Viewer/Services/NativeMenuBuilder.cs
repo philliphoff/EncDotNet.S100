@@ -212,8 +212,7 @@ internal sealed class NativeMenuBuilder
                 {
                     Add(Strings.Menu_AddLibraryFolder, () => importer.AddFolderAsync(null)),
                     Add(Strings.Menu_AddLibraryExchangeSetZip, () => importer.AddExchangeSetZipAsync(null)),
-                    Add(Strings.Menu_AddLibraryNoaaFeed, () => importer.AddNoaaFeedAsync(null)),
-                    Add(Strings.Menu_AddLibraryUsaceFeed, () => importer.AddUsaceFeedAsync(null)),
+                    Add(Strings.Menu_AddLibraryOnlineCatalogue, () => importer.AddOnlineCatalogueAsync(null)),
                     Add(Strings.Menu_AddLibraryS128, () => importer.AddS128CatalogueAsync(null)),
                 },
             });

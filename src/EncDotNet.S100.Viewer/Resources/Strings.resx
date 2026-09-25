@@ -2425,9 +2425,6 @@
   <data name="Menu_AddLibraryExchangeSetZip" xml:space="preserve">
     <value>Exchange Set ZIP…</value>
   </data>
-  <data name="Menu_AddLibraryNoaaFeed" xml:space="preserve">
-    <value>NOAA ENC Feed…</value>
-  </data>
   <data name="Menu_AddLibraryS128" xml:space="preserve">
     <value>S-128 Catalogue…</value>
   </data>
@@ -2698,7 +2695,46 @@
   <data name="Library_UsaceAll" xml:space="preserve">
     <value>All rivers</value>
   </data>
-  <data name="Menu_AddLibraryUsaceFeed" xml:space="preserve">
-    <value>USACE Inland ENC Feed…</value>
+  <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
+    <value>Online Catalogue…</value>
+  </data>
+  <data name="Library_DirectoryTitle" xml:space="preserve">
+    <value>Add Online Catalogue</value>
+  </data>
+  <data name="Library_DirectoryDescription" xml:space="preserve">
+    <value>Choose a chart catalogue. Only its index is fetched; you pick which cells to include next, and nothing is downloaded until you ask.</value>
+  </data>
+  <data name="Library_Chip_CoveragePolygons" xml:space="preserve">
+    <value>Coverage outlines</value>
+  </data>
+  <data name="Library_Chip_CoverageBoxes" xml:space="preserve">
+    <value>Bounding boxes</value>
+  </data>
+  <data name="Library_Chip_CoverageNone" xml:space="preserve">
+    <value>No coverage until downloaded</value>
+  </data>
+  <data name="Library_Chip_Editions" xml:space="preserve">
+    <value>Editions</value>
+  </data>
+  <data name="Library_Chip_NoEditions" xml:space="preserve">
+    <value>No editions</value>
+  </data>
+  <data name="Library_Chip_Sizes" xml:space="preserve">
+    <value>Sizes</value>
+  </data>
+  <data name="Library_Chip_NoSizes" xml:space="preserve">
+    <value>No sizes</value>
+  </data>
+  <data name="Tooltip_CatalogueHomepage" xml:space="preserve">
+    <value>Open the provider's page (terms and notices)</value>
+  </data>
+  <data name="Button_Next" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Library_CatalogueDatedFormat" xml:space="preserve">
+    <value>Catalogue dated {0}</value>
+  </data>
+  <data name="Library_CatalogueStale" xml:space="preserve">
+    <value>— over a year old; it may no longer be maintained.</value>
   </data>
 </root>

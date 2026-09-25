@@ -33,10 +33,7 @@
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}">
                 <MenuItem.Icon><ic:FluentIcon Icon="FolderZip" FontSize="16" /></MenuItem.Icon>
             </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryNoaaFeed}" Command="{Binding AddNoaaFeedCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Globe" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryUsaceFeed}" Command="{Binding AddUsaceFeedCommand}">
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}">
                 <MenuItem.Icon><ic:FluentIcon Icon="Globe" FontSize="16" /></MenuItem.Icon>
             </MenuItem>
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}">

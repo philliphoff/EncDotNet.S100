@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Viewer.ViewModels;
 using ShadUI;
 
@@ -21,6 +22,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     private readonly IFileDialogService _fileDialogs;
     private readonly DialogManager _dialogManager;
     private readonly Func<AddToLibraryDialogViewModel> _dialogFactory;
+    private readonly Func<CatalogueDirectoryDialogViewModel> _directoryFactory;
     private readonly IViewerUiControllerAccessor? _ui;
 
     public LibraryImportCoordinator(
@@ -28,16 +30,19 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         IFileDialogService fileDialogs,
         DialogManager dialogManager,
         Func<AddToLibraryDialogViewModel> dialogFactory,
+        Func<CatalogueDirectoryDialogViewModel> directoryFactory,
         IViewerUiControllerAccessor? ui = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(fileDialogs);
         ArgumentNullException.ThrowIfNull(dialogManager);
         ArgumentNullException.ThrowIfNull(dialogFactory);
+        ArgumentNullException.ThrowIfNull(directoryFactory);
         _library = library;
         _fileDialogs = fileDialogs;
         _dialogManager = dialogManager;
         _dialogFactory = dialogFactory;
+        _directoryFactory = directoryFactory;
         _ui = ui;
     }
 
@@ -59,15 +64,28 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
             ShowDialog(AddToLibraryKind.S128Catalogue, path, targetCollectionId);
     }
 
-    public async Task AddNoaaFeedAsync(Guid? targetCollectionId)
+    public Task AddOnlineCatalogueAsync(Guid? targetCollectionId)
     {
-        var dialog = ShowDialog(AddToLibraryKind.NoaaFeed, null, targetCollectionId);
-        await dialog.LoadCatalogAsync();
+        var directory = _directoryFactory();
+        directory.Chosen += (_, source) =>
+        {
+            _dialogManager.Close(directory);
+            _ = AddKnownCatalogueAsync(source, targetCollectionId);
+        };
+        directory.Cancelled += (_, _) => _dialogManager.Close(directory);
+
+        _dialogManager.CreateDialog(directory)
+            .Dismissible()
+            .WithMaxWidth(560)
+            .Show();
+        return Task.CompletedTask;
     }
 
-    public async Task AddUsaceFeedAsync(Guid? targetCollectionId)
+    public async Task AddKnownCatalogueAsync(KnownCatalogueSource source, Guid? targetCollectionId)
     {
-        var dialog = ShowDialog(AddToLibraryKind.UsaceFeed, null, targetCollectionId);
+        ArgumentNullException.ThrowIfNull(source);
+
+        var dialog = CreateDialog(d => d.Initialize(source, targetCollectionId), online: true);
         await dialog.LoadCatalogAsync();
     }
 
@@ -110,10 +128,13 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)
         || path.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-    private AddToLibraryDialogViewModel ShowDialog(AddToLibraryKind kind, string? path, Guid? targetCollectionId)
+    private AddToLibraryDialogViewModel ShowDialog(AddToLibraryKind kind, string? path, Guid? targetCollectionId) =>
+        CreateDialog(d => d.Initialize(kind, path, targetCollectionId), online: false);
+
+    private AddToLibraryDialogViewModel CreateDialog(Action<AddToLibraryDialogViewModel> initialize, bool online)
     {
         var dialog = _dialogFactory();
-        dialog.Initialize(kind, path, targetCollectionId);
+        initialize(dialog);
         dialog.Closed += (_, confirmed) =>
         {
             _dialogManager.Close(dialog);
@@ -123,7 +144,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
 
         _dialogManager.CreateDialog(dialog)
             .Dismissible()
-            .WithMaxWidth(kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed ? 640 : 520)
+            .WithMaxWidth(online ? 640 : 520)
             .Show();
         return dialog;
     }

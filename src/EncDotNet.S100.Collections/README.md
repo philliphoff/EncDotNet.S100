@@ -35,8 +35,26 @@ Key types:
   - The zip is first written to a `.partial` file, then extracted to a staging folder.
   - The new copy replaces any old one only once it is complete.
   - It finds the cell's layout itself, so NOAA, USACE and bare-`.000` zips all work.
+- **`KnownCatalogueSources`** — the curated list of known online chart catalogues. See the next section.
 - **`CollectionJson`** — JSON persistence:
   - collection definitions are written as indented JSON
   - source indexes are written as compact, gzip-compressed JSON
 
 See `docs/design/dataset-collections.md` for the design.
+
+## Known catalogue sources
+
+`KnownSources/known-sources.json` is embedded in the library and exposed as `KnownCatalogueSources.All`. It lists the online chart catalogues the viewer offers under **Add Online Catalogue**. The list is maintained here, under this repository's MIT licence.
+
+To add a catalogue:
+
+- **Point at the provider's own catalogue URL.** Don't copy entries or data from other projects' source lists, and never from GPL-licensed ones such as OpenCPN's.
+- **Check the licence** of any third-party list you reference. For example, the community `chartcatalogs/catalogs` lists are CC0.
+- **Use a supported `format`** (`noaaEnc` or `usaceIenc`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
+- **Describe what the catalogue provides honestly:**
+  - `coverage`: `polygons`, `boundingBoxes` or `none`
+  - `editions`: whether it lists editions and updates
+  - `sizes`: whether it lists download sizes
+
+  These drive the quality chips users see.
+

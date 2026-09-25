@@ -6,6 +6,9 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="KnownSources\known-sources.json" LogicalName="EncDotNet.S100.Collections.KnownSources.known-sources.json" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.Collections.Tests" />
   </ItemGroup>
   <ItemGroup>

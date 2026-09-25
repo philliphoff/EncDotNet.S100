@@ -851,7 +851,6 @@ internal static class Strings
     public static string Menu_AddToLibrary => Get(nameof(Menu_AddToLibrary));
     public static string Menu_AddLibraryFolder => Get(nameof(Menu_AddLibraryFolder));
     public static string Menu_AddLibraryExchangeSetZip => Get(nameof(Menu_AddLibraryExchangeSetZip));
-    public static string Menu_AddLibraryNoaaFeed => Get(nameof(Menu_AddLibraryNoaaFeed));
     public static string Menu_AddLibraryS128 => Get(nameof(Menu_AddLibraryS128));
     public static string Tooltip_AddToLibrary => Get(nameof(Tooltip_AddToLibrary));
     public static string Tooltip_KeepInLibrary => Get(nameof(Tooltip_KeepInLibrary));
@@ -942,5 +941,18 @@ internal static class Strings
     public static string Library_AddUsaceTitle => Get(nameof(Library_AddUsaceTitle));
     public static string Library_UsaceFeed => Get(nameof(Library_UsaceFeed));
     public static string Library_UsaceAll => Get(nameof(Library_UsaceAll));
-    public static string Menu_AddLibraryUsaceFeed => Get(nameof(Menu_AddLibraryUsaceFeed));
+    public static string Menu_AddLibraryOnlineCatalogue => Get(nameof(Menu_AddLibraryOnlineCatalogue));
+    public static string Library_DirectoryTitle => Get(nameof(Library_DirectoryTitle));
+    public static string Library_DirectoryDescription => Get(nameof(Library_DirectoryDescription));
+    public static string Library_Chip_CoveragePolygons => Get(nameof(Library_Chip_CoveragePolygons));
+    public static string Library_Chip_CoverageBoxes => Get(nameof(Library_Chip_CoverageBoxes));
+    public static string Library_Chip_CoverageNone => Get(nameof(Library_Chip_CoverageNone));
+    public static string Library_Chip_Editions => Get(nameof(Library_Chip_Editions));
+    public static string Library_Chip_NoEditions => Get(nameof(Library_Chip_NoEditions));
+    public static string Library_Chip_Sizes => Get(nameof(Library_Chip_Sizes));
+    public static string Library_Chip_NoSizes => Get(nameof(Library_Chip_NoSizes));
+    public static string Tooltip_CatalogueHomepage => Get(nameof(Tooltip_CatalogueHomepage));
+    public static string Button_Next => Get(nameof(Button_Next));
+    public static string Library_CatalogueDatedFormat => Get(nameof(Library_CatalogueDatedFormat));
+    public static string Library_CatalogueStale => Get(nameof(Library_CatalogueStale));
 }

@@ -124,9 +124,9 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var collection = await AddS57CollectionAsync();
         using var vm = CreateViewModel();
 
-        vm.AddNoaaFeedCommand.Execute(null);
+        vm.AddOnlineCatalogueCommand.Execute(null);
 
-        Assert.Equal(("noaa", (Guid?)collection.Id), _importer.Calls.Single());
+        Assert.Equal(("online", (Guid?)collection.Id), _importer.Calls.Single());
     }
 
     [Fact]
@@ -321,9 +321,10 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         public Task AddExchangeSetZipAsync(Guid? targetCollectionId) => Record("zip", targetCollectionId);
 
-        public Task AddNoaaFeedAsync(Guid? targetCollectionId) => Record("noaa", targetCollectionId);
+        public Task AddOnlineCatalogueAsync(Guid? targetCollectionId) => Record("online", targetCollectionId);
 
-        public Task AddUsaceFeedAsync(Guid? targetCollectionId) => Record("usace", targetCollectionId);
+        public Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId) =>
+            Record("known:" + source.Id, targetCollectionId);
 
         public Task AddS128CatalogueAsync(Guid? targetCollectionId) => Record("s128", targetCollectionId);
 
