@@ -33,10 +33,6 @@ internal static class LocalSourceScanner
     /// </summary>
     internal const string FingerprintVersion = "local-v1";
 
-    internal static readonly string[] S100CatalogueNames = ["CATALOG.XML", "CATALOGUE.XML"];
-
-    internal const string S57CatalogueName = "CATALOG.031";
-
     private static readonly string[] LooseExtensions = [".000", ".h5", ".gml"];
 
     private static readonly EnumerationOptions TopLevel = new()
@@ -78,12 +74,12 @@ internal static class LocalSourceScanner
         var root = Path.GetDirectoryName(fullPath)!;
         var fileName = Path.GetFileName(fullPath);
 
-        if (IsS100CatalogueName(fileName))
+        if (ExchangeSetLayout.IsS100CatalogueName(fileName))
         {
             units.Add(new S100FolderUnit(root, fileName));
             StampTree(root, root, stamps);
         }
-        else if (string.Equals(fileName, S57CatalogueName, StringComparison.OrdinalIgnoreCase))
+        else if (ExchangeSetLayout.IsS57CatalogueName(fileName))
         {
             units.Add(new S57FolderUnit(root));
             StampTree(root, root, stamps);
@@ -134,9 +130,8 @@ internal static class LocalSourceScanner
                 continue;
             }
 
-            var s100Catalogue = PickS100Catalogue(files.Select(Path.GetFileName)!);
-            var hasS57Catalogue = files.Any(f =>
-                string.Equals(Path.GetFileName(f), S57CatalogueName, StringComparison.OrdinalIgnoreCase));
+            var s100Catalogue = ExchangeSetLayout.PickS100Catalogue(files.Select(f => Path.GetFileName(f)));
+            var hasS57Catalogue = files.Any(f => ExchangeSetLayout.IsS57CatalogueName(Path.GetFileName(f)));
 
             if (s100Catalogue is not null || hasS57Catalogue)
             {
@@ -217,23 +212,6 @@ internal static class LocalSourceScanner
             ? n
             : -1;
     }
-
-    internal static string? PickS100Catalogue(IEnumerable<string> fileNames)
-    {
-        string? fallback = null;
-        foreach (var name in fileNames)
-        {
-            if (string.Equals(name, S100CatalogueNames[0], StringComparison.OrdinalIgnoreCase))
-                return name;
-            if (fallback is null && IsS100CatalogueName(name))
-                fallback = name;
-        }
-
-        return fallback;
-    }
-
-    internal static bool IsS100CatalogueName(string fileName) =>
-        Array.Exists(S100CatalogueNames, n => string.Equals(n, fileName, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsZip(string path) =>
         string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase);

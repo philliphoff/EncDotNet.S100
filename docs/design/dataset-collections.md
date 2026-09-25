@@ -523,6 +523,26 @@ Pipelines into the library.
 
 ### 6.3 Library panel (replaces the Catalog panel)
 
+> **Slice 3 as built:**
+> - The service is `LibraryService`, not `CollectionService`. It keeps
+>   immutable snapshots, a single background indexing queue, and a
+>   per-source gzipped index cache.
+> - The tree shows collections and their sources. The dataset list is a
+>   virtualised `ListBox` with text and "show cancelled" filters, and
+>   availability is resolved lazily per row.
+> - The Catalog panel's view model, view and `Viewer/Catalogs` types are
+>   deleted. `MainViewModel` no longer takes a catalogue panel.
+> - The splitter keeps the persisted `CatalogInnerSplit` setting name so
+>   users' layouts carry over.
+> - Drag-drop: a folder that is not openable goes to the Add to Library
+>   dialog. An opened exchange set gets an "Add to Library" notification
+>   action unless the library already covers it.
+> - Viewer exchange-set detection now shares
+>   `EncDotNet.S100.Collections.ExchangeSetLayout` with indexing. This
+>   answers §10 Q4: the shared rules live in Collections.
+> - Loaded/Deferred availability arrives with the load actions in
+>   slice 5.
+
 - The **"Library" activity tab** takes over the Catalog tab's slot.
   `CatalogPanelViewModel`, `CatalogEntryViewModel`, `CatalogPanelView`,
   `DatasetCatalogAggregator` and `S128DatasetCatalogSource` are

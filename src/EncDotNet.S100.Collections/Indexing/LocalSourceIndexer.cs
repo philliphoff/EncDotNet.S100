@@ -170,8 +170,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
 
         var catalogues = entries.Keys
             .Select(name => (Name: name, Prefix: DirectoryPrefix(name), FileName: LeafName(name)))
-            .Where(c => LocalSourceScanner.IsS100CatalogueName(c.FileName)
-                || string.Equals(c.FileName, LocalSourceScanner.S57CatalogueName, StringComparison.OrdinalIgnoreCase))
+            .Where(c => ExchangeSetLayout.IsS100CatalogueName(c.FileName) || ExchangeSetLayout.IsS57CatalogueName(c.FileName))
             .GroupBy(c => c.Prefix, StringComparer.OrdinalIgnoreCase)
             .OrderBy(g => g.Key, StringComparer.Ordinal);
 
@@ -185,7 +184,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
             Stream? Open(string relative) =>
                 entries.TryGetValue(prefix + relative.Replace('\\', '/').TrimStart('/'), out var e) ? e.Open() : null;
 
-            var s100 = LocalSourceScanner.PickS100Catalogue(set.Select(c => c.FileName));
+            var s100 = ExchangeSetLayout.PickS100Catalogue(set.Select(c => c.FileName));
             if (s100 is not null)
             {
                 found = true;
@@ -197,8 +196,7 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
                 items.AddRange(ExchangeSetItemReader.ReadS100(catalogue, context, diagnostics));
             }
 
-            var s57 = set.FirstOrDefault(c =>
-                string.Equals(c.FileName, LocalSourceScanner.S57CatalogueName, StringComparison.OrdinalIgnoreCase));
+            var s57 = set.FirstOrDefault(c => ExchangeSetLayout.IsS57CatalogueName(c.FileName));
             if (s57.Name is not null)
             {
                 found = true;

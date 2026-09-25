@@ -108,8 +108,9 @@ The viewer accepts:
   folder up front (subsequent opens reuse the cached extents with no
   re-parse); S-57 cells, which have no cheap extent reader, are skipped
   from that union and framed when they load.
-  A dropped folder that yields no renderable cells raises a
-  notification instead of being silently ignored.
+  A dropped folder that is not itself an exchange set or cell folder
+  (for example a tree of many exchange sets) opens the **Add to
+  Library** dialog instead; see [The Library panel](#the-library-panel).
 - **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
   S-111), `.gml` (any of the GML-encoded products), `.000` S-101
   ENC cell, or `.000` S-57 ENC cell onto the window. A dropped `.000`
@@ -152,6 +153,51 @@ entirely; regenerating the catalogue (which changes its mtime/size)
 transparently invalidates the entry. The cache is a pure descriptor
 store: cell bytes are always read fresh on demand, so it never serves
 stale chart content (`Services/Caching/DiskS57CatalogCache`).
+
+## The Library panel
+
+The **Library** tab keeps *collections* of exchange sets and datasets,
+for example "all ENCs for Alaska" or a folder of trial data. Adding a
+collection **indexes** what it contains without loading anything:
+product, name and title, edition and update, issue date, usage band and
+coverage. The index is cached, so the library is ready immediately at
+the next start-up. It is then quietly refreshed in the background, and
+an unchanged source costs only a quick check. Issue #655;
+design in `docs/design/dataset-collections.md`.
+
+- **Add to Library**: use the **+** button, **File → Add to Library**,
+  or drop a folder. A source can be:
+  - a folder, scanned recursively for S-100 `CATALOG.XML` and S-57
+    `CATALOG.031` exchange sets, zipped exchange sets, and loose datasets
+  - an exchange-set ZIP
+  - the **NOAA ENC feed** (`ENCProdCat.xml`), scoped by state, Coast
+    Guard district or region. The dialog shows the cell count and
+    download size of the selection.
+  - an **S-128** Catalogue of Nautical Products
+
+  Local sources are referenced **in place**. Files are never copied,
+  and removing a collection never deletes data.
+- **Browse**: the tree lists collections and their sources, with item
+  counts. The list below shows the selected node's datasets and can be
+  filtered by name, title, product or state; cancelled cells are hidden
+  unless **Show cancelled** is ticked. Each row carries an availability
+  badge:
+
+  | Badge | Meaning |
+  |---|---|
+  | **LOCAL** | on disk |
+  | **ONLINE** | downloadable |
+  | **LISTED** | catalogue-only |
+  | **MISSING** | the file has moved |
+
+  The details pane shows the full metadata.
+- **S-128 datasets** you load appear in a temporary **Session**
+  collection (this replaces the former Catalog panel). **Keep in
+  library** (pin) makes one permanent.
+
+Collections are stored in `collections.json`, next to `settings.json`,
+or under `--data-dir`. Indexes and downloaded catalogues are
+disposable caches (`CollectionIndexCache`, `CollectionFeedCache`).
 
 ## The Datasets panel
 

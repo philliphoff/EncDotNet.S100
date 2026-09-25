@@ -105,6 +105,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ais\EncDotNet.S100.DynamicSources.Ais.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo\EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Collections\EncDotNet.S100.Collections.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />

@@ -75,7 +75,6 @@ internal static class Strings
     public static string Tooltip_ValidationBadge => Get(nameof(Tooltip_ValidationBadge));
     public static string Tooltip_FindingZoomTo => Get(nameof(Tooltip_FindingZoomTo));
     public static string Tooltip_FindingNoSpatialLocation => Get(nameof(Tooltip_FindingNoSpatialLocation));
-    public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
     public static string Pane_Search => Get(nameof(Pane_Search));
     public static string Pane_LayerStack => Get(nameof(Pane_LayerStack));
@@ -117,7 +116,6 @@ internal static class Strings
     public static string Tooltip_FeatureCatalogues => Get(nameof(Tooltip_FeatureCatalogues));
     public static string Tooltip_PortrayalCatalogues => Get(nameof(Tooltip_PortrayalCatalogues));
     public static string Tooltip_Datasets => Get(nameof(Tooltip_Datasets));
-    public static string Tooltip_Catalog => Get(nameof(Tooltip_Catalog));
     public static string Tooltip_LayerStack => Get(nameof(Tooltip_LayerStack));
     public static string Tooltip_PickMode => Get(nameof(Tooltip_PickMode));
     public static string Tooltip_ZoomIn => Get(nameof(Tooltip_ZoomIn));
@@ -273,20 +271,6 @@ internal static class Strings
     // Catalogue list
     public static string Catalogue_BuiltInLabel => Get(nameof(Catalogue_BuiltInLabel));
 
-    // Catalog (S-128) panel
-    public static string Catalog_EmptyTitle => Get(nameof(Catalog_EmptyTitle));
-    public static string Catalog_EmptyDescription => Get(nameof(Catalog_EmptyDescription));
-    public static string Catalog_SelectEntryPlaceholder => Get(nameof(Catalog_SelectEntryPlaceholder));
-    public static string Catalog_NotForNavigation => Get(nameof(Catalog_NotForNavigation));
-    public static string Catalog_Field_Spec => Get(nameof(Catalog_Field_Spec));
-    public static string Catalog_Field_Edition => Get(nameof(Catalog_Field_Edition));
-    public static string Catalog_Field_Update => Get(nameof(Catalog_Field_Update));
-    public static string Catalog_Field_Issued => Get(nameof(Catalog_Field_Issued));
-    public static string Catalog_Field_Updated => Get(nameof(Catalog_Field_Updated));
-    public static string Catalog_Field_Coverage => Get(nameof(Catalog_Field_Coverage));
-    public static string Catalog_Field_NorthEast => Get(nameof(Catalog_Field_NorthEast));
-    public static string Catalog_Field_SouthWest => Get(nameof(Catalog_Field_SouthWest));
-    public static string Catalog_SourceProperties => Get(nameof(Catalog_SourceProperties));
 
     // Pick (Object Information) panel
     public static string Pick_PanelTitle => Get(nameof(Pick_PanelTitle));
@@ -490,7 +474,6 @@ internal static class Strings
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
     public static string Status_S57ExchangeSetNoCells => Get(nameof(Status_S57ExchangeSetNoCells));
     public static string Status_LooseCellFolderNoCells => Get(nameof(Status_LooseCellFolderNoCells));
-    public static string Status_FolderNoDatasets => Get(nameof(Status_FolderNoDatasets));
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
     public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));
@@ -856,4 +839,82 @@ internal static class Strings
     public static string Tooltip_Helm_Steady => Get(nameof(Tooltip_Helm_Steady));
     public static string Tooltip_Helm_Port => Get(nameof(Tooltip_Helm_Port));
     public static string Tooltip_Helm_Starboard => Get(nameof(Tooltip_Helm_Starboard));
+
+    // Library panel (issue #655)
+    public static string Pane_Library => Get(nameof(Pane_Library));
+    public static string Tooltip_Library => Get(nameof(Tooltip_Library));
+    public static string Button_AddToLibrary => Get(nameof(Button_AddToLibrary));
+    public static string Button_Cancel => Get(nameof(Button_Cancel));
+    public static string FilePicker_LibraryFolderTitle => Get(nameof(FilePicker_LibraryFolderTitle));
+    public static string FilePicker_S128CatalogueTitle => Get(nameof(FilePicker_S128CatalogueTitle));
+    public static string FilePicker_S128CatalogueType => Get(nameof(FilePicker_S128CatalogueType));
+    public static string Menu_AddToLibrary => Get(nameof(Menu_AddToLibrary));
+    public static string Menu_AddLibraryFolder => Get(nameof(Menu_AddLibraryFolder));
+    public static string Menu_AddLibraryExchangeSetZip => Get(nameof(Menu_AddLibraryExchangeSetZip));
+    public static string Menu_AddLibraryNoaaFeed => Get(nameof(Menu_AddLibraryNoaaFeed));
+    public static string Menu_AddLibraryS128 => Get(nameof(Menu_AddLibraryS128));
+    public static string Tooltip_AddToLibrary => Get(nameof(Tooltip_AddToLibrary));
+    public static string Tooltip_KeepInLibrary => Get(nameof(Tooltip_KeepInLibrary));
+    public static string Tooltip_RefreshLibrary => Get(nameof(Tooltip_RefreshLibrary));
+    public static string Tooltip_RemoveFromLibrary => Get(nameof(Tooltip_RemoveFromLibrary));
+    public static string Toast_AddedToLibraryPrompt => Get(nameof(Toast_AddedToLibraryPrompt));
+    public static string Toast_AddToLibraryAction => Get(nameof(Toast_AddToLibraryAction));
+    public static string Library_AddTitle => Get(nameof(Library_AddTitle));
+    public static string Library_AddNoaaTitle => Get(nameof(Library_AddNoaaTitle));
+    public static string Library_AddNote => Get(nameof(Library_AddNote));
+    public static string Library_AddTo => Get(nameof(Library_AddTo));
+    public static string Library_AndMoreFormat => Get(nameof(Library_AndMoreFormat));
+    public static string Library_Availability_Listed => Get(nameof(Library_Availability_Listed));
+    public static string Library_Availability_Local => Get(nameof(Library_Availability_Local));
+    public static string Library_Availability_Missing => Get(nameof(Library_Availability_Missing));
+    public static string Library_Availability_Online => Get(nameof(Library_Availability_Online));
+    public static string Library_BandFormat => Get(nameof(Library_BandFormat));
+    public static string Library_CollectionNameWatermark => Get(nameof(Library_CollectionNameWatermark));
+    public static string Library_DistrictFormat => Get(nameof(Library_DistrictFormat));
+    public static string Library_EditionFormat => Get(nameof(Library_EditionFormat));
+    public static string Library_EditionUpdateFormat => Get(nameof(Library_EditionUpdateFormat));
+    public static string Library_EmptyTitle => Get(nameof(Library_EmptyTitle));
+    public static string Library_EmptyDescription => Get(nameof(Library_EmptyDescription));
+    public static string Library_ExistingCollection => Get(nameof(Library_ExistingCollection));
+    public static string Library_FacetDetailFormat => Get(nameof(Library_FacetDetailFormat));
+    public static string Library_Field_Band => Get(nameof(Library_Field_Band));
+    public static string Library_Field_CompilationScale => Get(nameof(Library_Field_CompilationScale));
+    public static string Library_Field_DisplayScales => Get(nameof(Library_Field_DisplayScales));
+    public static string Library_Field_Download => Get(nameof(Library_Field_Download));
+    public static string Library_Field_Edition => Get(nameof(Library_Field_Edition));
+    public static string Library_Field_Issued => Get(nameof(Library_Field_Issued));
+    public static string Library_Field_Location => Get(nameof(Library_Field_Location));
+    public static string Library_Field_NorthEast => Get(nameof(Library_Field_NorthEast));
+    public static string Library_Field_Size => Get(nameof(Library_Field_Size));
+    public static string Library_Field_SouthWest => Get(nameof(Library_Field_SouthWest));
+    public static string Library_Field_Spec => Get(nameof(Library_Field_Spec));
+    public static string Library_Field_Status => Get(nameof(Library_Field_Status));
+    public static string Library_Field_Title => Get(nameof(Library_Field_Title));
+    public static string Library_Field_Update => Get(nameof(Library_Field_Update));
+    public static string Library_Field_UpdateApplied => Get(nameof(Library_Field_UpdateApplied));
+    public static string Library_Field_Updates => Get(nameof(Library_Field_Updates));
+    public static string Library_FilterWatermark => Get(nameof(Library_FilterWatermark));
+    public static string Library_FilteredItemCountFormat => Get(nameof(Library_FilteredItemCountFormat));
+    public static string Library_IndexedAtFormat => Get(nameof(Library_IndexedAtFormat));
+    public static string Library_ItemCountFormat => Get(nameof(Library_ItemCountFormat));
+    public static string Library_NewCollection => Get(nameof(Library_NewCollection));
+    public static string Library_NoaaAll => Get(nameof(Library_NoaaAll));
+    public static string Library_NoaaChooseScope => Get(nameof(Library_NoaaChooseScope));
+    public static string Library_NoaaClearSelection => Get(nameof(Library_NoaaClearSelection));
+    public static string Library_NoaaDistricts => Get(nameof(Library_NoaaDistricts));
+    public static string Library_NoaaFeed => Get(nameof(Library_NoaaFeed));
+    public static string Library_NoaaLoading => Get(nameof(Library_NoaaLoading));
+    public static string Library_NoaaRegions => Get(nameof(Library_NoaaRegions));
+    public static string Library_NoaaSelectionAllFormat => Get(nameof(Library_NoaaSelectionAllFormat));
+    public static string Library_NoaaSelectionFormat => Get(nameof(Library_NoaaSelectionFormat));
+    public static string Library_NoaaStates => Get(nameof(Library_NoaaStates));
+    public static string Library_NotForNavigation => Get(nameof(Library_NotForNavigation));
+    public static string Library_ProblemsFormat => Get(nameof(Library_ProblemsFormat));
+    public static string Library_RegionFormat => Get(nameof(Library_RegionFormat));
+    public static string Library_SelectItemPlaceholder => Get(nameof(Library_SelectItemPlaceholder));
+    public static string Library_SessionCollectionName => Get(nameof(Library_SessionCollectionName));
+    public static string Library_ShowCancelled => Get(nameof(Library_ShowCancelled));
+    public static string Library_Status_Failed => Get(nameof(Library_Status_Failed));
+    public static string Library_Status_Indexing => Get(nameof(Library_Status_Indexing));
+    public static string Library_Status_Pending => Get(nameof(Library_Status_Pending));
 }

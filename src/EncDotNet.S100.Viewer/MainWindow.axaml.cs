@@ -6,7 +6,6 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
@@ -29,7 +28,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly IExchangeSetService _exchangeSetService;
     private readonly IUpdateNotificationCoordinator? _updateNotificationCoordinator;
     private readonly MainViewModel _viewModel;
-    private readonly DatasetCatalogAggregator _catalogAggregator;
+    private readonly ILibraryImporter _libraryImporter;
     private readonly CancellationTokenSource _windowLifetimeCancellation = new();
     private readonly MapsuiMapHost _mapHost;
     private ValidationOverlayService? _validationOverlay;
@@ -60,7 +59,8 @@ public partial class MainWindow : ShadUI.Window
             options,
             ResolveOrFallback<MainViewModel>(static () => throw new InvalidOperationException(
                 "MainViewModel cannot be resolved without the application service provider.")),
-            ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
+            ResolveOrFallback<ILibraryImporter>(static () => throw new InvalidOperationException(
+                "ILibraryImporter cannot be resolved without the application service provider.")),
             ResolveOrFallback<IRecentFilesService>(static () => throw new InvalidOperationException(
                 "IRecentFilesService cannot be resolved without the application service provider.")),
             ResolveOrFallback<IDatasetLoaderService>(static () => throw new InvalidOperationException(
@@ -89,7 +89,7 @@ public partial class MainWindow : ShadUI.Window
     internal MainWindow(
         ViewerCommandSettings? options,
         MainViewModel viewModel,
-        DatasetCatalogAggregator catalogAggregator,
+        ILibraryImporter libraryImporter,
         IRecentFilesService recentFiles,
         IDatasetLoaderService loader,
         IPickService pickService,
@@ -98,7 +98,7 @@ public partial class MainWindow : ShadUI.Window
         IUpdateNotificationCoordinator? updateNotificationCoordinator)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
-        ArgumentNullException.ThrowIfNull(catalogAggregator);
+        ArgumentNullException.ThrowIfNull(libraryImporter);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
@@ -113,7 +113,7 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<Services.Notifications.INotificationService>().Active;
 
         _viewModel = viewModel;
-        _catalogAggregator = catalogAggregator;
+        _libraryImporter = libraryImporter;
         _recentFiles = recentFiles;
         _loader = loader;
         _pickService = pickService;
@@ -224,7 +224,8 @@ public partial class MainWindow : ShadUI.Window
             window: this,
             openDatasetAsync: OpenDatasetAsync,
             openExchangeSetAsync: OpenExchangeSetAsync,
-            openExchangeSetZipAsync: OpenExchangeSetZipAsync);
+            openExchangeSetZipAsync: OpenExchangeSetZipAsync,
+            libraryImporter: _libraryImporter);
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -1362,10 +1363,12 @@ public partial class MainWindow : ShadUI.Window
                 continue;
 
             // Folder drop: treat as an exchange set when CATALOG.XML
-            // (S-100) or CATALOG.031 (S-57) is at the root. Otherwise, a
+            // (S-100) or CATALOG.031 (S-57) is at the root, or a
             // catalogue-less folder of loose ENC cells (a base ….000 plus
-            // its updates) is scanned and loaded; anything else raises a
-            // notification rather than being silently ignored.
+            // its updates), and open it — offering to add it to the library.
+            // Any other folder (e.g. a tree of many exchange sets) is too
+            // broad to open; offer to add it to the library instead
+            // (issue #655).
             if (Directory.Exists(path))
             {
                 if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
@@ -1373,14 +1376,11 @@ public partial class MainWindow : ShadUI.Window
                     || ExchangeSetDetection.LooksLikeLooseCellFolder(path))
                 {
                     await RunExchangeSetAsync(path);
+                    OfferAddToLibrary(path);
                 }
                 else
                 {
-                    App.Services.GetRequiredService<INotificationService>()
-                        .Create(Strings.Toast_Warning)
-                        .WithSeverity(NotificationSeverity.Warning)
-                        .WithContent(string.Format(Strings.Status_FolderNoDatasets, path))
-                        .Show();
+                    await _libraryImporter.AddPathAsync(path, targetCollectionId: null);
                 }
                 continue;
             }
@@ -1396,16 +1396,39 @@ public partial class MainWindow : ShadUI.Window
                 ExchangeSetDetection.LooksLikeExchangeSetZip(path))
             {
                 await RunExchangeSetAsync(path);
+                OfferAddToLibrary(path);
                 continue;
             }
 
             if (ExchangeSetDetection.IsS57CataloguePath(path))
             {
                 await RunExchangeSetAsync(path);
+                OfferAddToLibrary(Path.GetDirectoryName(path)!);
                 continue;
             }
 
             await _viewModel.Datasets.LoadFromPathAsync(path);
         }
+    }
+
+    /// <summary>
+    /// After opening a dropped exchange set, offers (via a notification
+    /// action) to add it to the library so it can be found again without
+    /// opening it — unless the library already covers it.
+    /// </summary>
+    private void OfferAddToLibrary(string path)
+    {
+        if (_libraryImporter.IsInLibrary(path))
+            return;
+
+        App.Services.GetRequiredService<INotificationService>()
+            .Create(Strings.Toast_AddToLibraryAction)
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(Strings.Toast_AddedToLibraryPrompt)
+            .WithAction(Strings.Toast_AddToLibraryAction,
+                () => _ = _libraryImporter.AddPathAsync(path, targetCollectionId: null),
+                isPrimary: true)
+            .AutoDismiss(TimeSpan.FromSeconds(12))
+            .Show();
     }
 }

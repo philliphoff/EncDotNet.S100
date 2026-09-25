@@ -117,6 +117,36 @@ internal sealed class ViewerDataPaths
     /// subdirectory). Re-rooting it under the base directory keeps an
     /// isolated instance fully self-contained.
     /// </summary>
+    /// <summary>
+    /// Absolute path of the persisted <c>collections.json</c> file holding
+    /// the user's dataset collections (references to local folders, exchange
+    /// sets and online feeds — never the data itself). Placed like
+    /// <see cref="RoutesFilePath"/>. Issue #655.
+    /// </summary>
+    public string CollectionsFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "collections.json")
+            : Path.Combine(DefaultSettingsDirectory, "collections.json");
+
+    /// <summary>
+    /// Directory caching each collection source's index
+    /// (<c>&lt;sourceId&gt;.index.json.gz</c>). Derived data: deleting it only
+    /// forces the sources to be re-indexed.
+    /// </summary>
+    public string CollectionIndexCacheDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "caches", "CollectionIndexCache")
+            : Path.Combine(DefaultLocalDataDirectory, "CollectionIndexCache");
+
+    /// <summary>
+    /// Directory caching downloaded online catalogues (for example NOAA's
+    /// <c>ENCProdCat.xml</c>), revalidated with conditional requests.
+    /// </summary>
+    public string CollectionFeedCacheDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "caches", "CollectionFeedCache")
+            : Path.Combine(DefaultLocalDataDirectory, "CollectionFeedCache");
+
     public string? TileDiskCacheDirectory =>
         _baseDirectory is { } b ? Path.Combine(b, "caches", "tiles") : null;
 
@@ -132,12 +162,14 @@ internal sealed class ViewerDataPaths
     {
         get
         {
-            var dirs = new List<string>(5)
+            var dirs = new List<string>(7)
             {
                 PatternClipCacheDirectory,
                 PortrayalInstructionCacheDirectory,
                 DatasetMetadataCacheDirectory,
                 S57CatalogCacheDirectory,
+                CollectionIndexCacheDirectory,
+                CollectionFeedCacheDirectory,
             };
             if (TileDiskCacheDirectory is { } tiles)
             {

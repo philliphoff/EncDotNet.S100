@@ -38,4 +38,13 @@ internal interface IFileDialogService
     /// exchange set (a <c>CATALOG.XML</c> at the root of the archive).
     /// </summary>
     Task<string?> OpenExchangeSetZipAsync(TopLevel? topLevel);
+
+    /// <summary>
+    /// Opens a folder picker for adding a folder of exchange sets and
+    /// datasets to the library (issue #655).
+    /// </summary>
+    Task<string?> OpenLibraryFolderAsync(TopLevel? topLevel);
+
+    /// <summary>Opens a file picker for an S-128 Catalogue of Nautical Products dataset.</summary>
+    Task<string?> OpenS128CatalogueAsync(TopLevel? topLevel);
 }

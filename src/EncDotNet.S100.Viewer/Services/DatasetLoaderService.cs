@@ -7,7 +7,6 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
@@ -29,7 +28,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly FeatureCatalogueOverrides _fcOverrides;
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly IRecentFilesService _recentFiles;
-    private readonly S128DatasetCatalogSource _s128CatalogSource;
+    private readonly Library.LibraryService _library;
     private readonly GlobalTimeService _globalTime;
     private readonly INotificationService _notifications;
     private readonly DatasetProcessorOwner _processorOwner;
@@ -67,7 +66,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         FeatureCatalogueOverrides fcOverrides,
         DatasetPipelineFactory pipelineFactory,
         IRecentFilesService recentFiles,
-        S128DatasetCatalogSource s128CatalogSource,
+        Library.LibraryService library,
         MapPresentationState presentation,
         GlobalTimeService globalTime,
         INotificationService notifications,
@@ -81,7 +80,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(fcOverrides);
         ArgumentNullException.ThrowIfNull(pipelineFactory);
         ArgumentNullException.ThrowIfNull(recentFiles);
-        ArgumentNullException.ThrowIfNull(s128CatalogSource);
+        ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(notifications);
@@ -94,7 +93,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _fcOverrides = fcOverrides;
         _pipelineFactory = pipelineFactory;
         _recentFiles = recentFiles;
-        _s128CatalogSource = s128CatalogSource;
+        _library = library;
         _presentation = presentation;
         _globalTime = globalTime;
         _notifications = notifications;
@@ -685,10 +684,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             SurfaceUpdateReport(entry, updateReport);
         }
 
-        // Surface S-128 catalogues into the Dataset Catalog panel.
+        // Surface S-128 catalogues in the Library panel's session collection.
         if (processor is S128DatasetProcessor s128)
         {
-            _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
+            _library.AddSessionCatalogue(entry.DisplayName, entry.FilePath, s128.Dataset);
         }
     }
 
@@ -960,7 +959,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _mapSession?.RemoveDataset(entry.Id);
         _processorEntries.Remove(entry.Id);
         _sessionEntries.Remove(entry.Id);
-        _s128CatalogSource.RemoveDataset(entry.DisplayName);
+        _library.RemoveSessionCatalogue(entry.DisplayName);
         entry.IsLoaded = false;
         DatasetRemoved?.Invoke(entry);
     }
@@ -1211,7 +1210,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         entry.SubLayers.Clear();
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        _s128CatalogSource.RemoveDataset(entry.DisplayName);
+        _library.RemoveSessionCatalogue(entry.DisplayName);
         entry.IsLoaded = false;
         entry.Info = null;
         entry.SetValidationReport(null);

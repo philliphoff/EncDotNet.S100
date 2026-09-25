@@ -1,7 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
@@ -12,13 +11,6 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 public class MainViewModelPickModeTests
 {
-    private sealed class EmptyCatalogSource : IDatasetCatalogSource
-    {
-        public string Id => "test";
-        public string DisplayName => "Test";
-        public IReadOnlyList<DatasetCatalogEntry> Entries => Array.Empty<DatasetCatalogEntry>();
-        public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
-    }
 
     private sealed class StubThemeService : IThemeService
     {
@@ -61,14 +53,12 @@ public class MainViewModelPickModeTests
         // mode commands never do.
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
-        var catalogSource = new EmptyCatalogSource();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            catalogPanel: new CatalogPanelViewModel(catalogSource),
             layerStack: new LayerStackViewModel(new StubDatasetLoaderService()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),

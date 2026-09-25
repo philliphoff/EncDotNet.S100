@@ -3,7 +3,6 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -31,13 +30,6 @@ public class PickServiceTests
         return new PickService(loader, viewModel.PickReport, notifications);
     }
 
-    private sealed class EmptyCatalogSource : IDatasetCatalogSource
-    {
-        public string Id => "test";
-        public string DisplayName => "Test";
-        public IReadOnlyList<DatasetCatalogEntry> Entries => Array.Empty<DatasetCatalogEntry>();
-        public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
-    }
 
     private sealed class StubThemeService : IThemeService
     {
@@ -80,7 +72,6 @@ public class PickServiceTests
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             layerStack: new LayerStackViewModel(new StubLoader()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),

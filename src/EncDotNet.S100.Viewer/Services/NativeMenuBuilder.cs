@@ -21,6 +21,7 @@ internal sealed class NativeMenuBuilder
     private Func<Task>? _openDatasetAsync;
     private Func<Task>? _openExchangeSetAsync;
     private Func<Task>? _openExchangeSetZipAsync;
+    private ViewModels.ILibraryImporter? _libraryImporter;
 
     public NativeMenuBuilder(MainViewModel viewModel, IRecentFilesService recentFiles)
     {
@@ -40,11 +41,16 @@ internal sealed class NativeMenuBuilder
     /// <param name="openDatasetAsync">Invoked when the user selects File › Open Dataset…</param>
     /// <param name="openExchangeSetAsync">Invoked when the user selects File › Open Exchange Set…</param>
     /// <param name="openExchangeSetZipAsync">Invoked when the user selects File › Open Exchange Set (ZIP)…</param>
+    /// <param name="libraryImporter">
+    /// Backs the File › Add to Library submenu (issue #655); the submenu is
+    /// omitted when <see langword="null"/>.
+    /// </param>
     public void Attach(
         Window window,
         Func<Task> openDatasetAsync,
         Func<Task> openExchangeSetAsync,
-        Func<Task> openExchangeSetZipAsync)
+        Func<Task> openExchangeSetZipAsync,
+        ViewModels.ILibraryImporter? libraryImporter = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(openDatasetAsync);
@@ -54,6 +60,7 @@ internal sealed class NativeMenuBuilder
         _openDatasetAsync = openDatasetAsync;
         _openExchangeSetAsync = openExchangeSetAsync;
         _openExchangeSetZipAsync = openExchangeSetZipAsync;
+        _libraryImporter = libraryImporter;
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
@@ -180,17 +187,38 @@ internal sealed class NativeMenuBuilder
         var openExchangeSetZipItem = new NativeMenuItem(Strings.Menu_OpenExchangeSetZip);
         openExchangeSetZipItem.Click += (_, _) => _ = _openExchangeSetZipAsync!.Invoke();
 
-        return new NativeMenuItem(Strings.Menu_File)
+        var menu = new NativeMenu
         {
-            Menu = new NativeMenu
-            {
-                openItem,
-                _openRecentMenuItem,
-                new NativeMenuItemSeparator(),
-                openExchangeSetItem,
-                openExchangeSetZipItem,
-            },
+            openItem,
+            _openRecentMenuItem,
+            new NativeMenuItemSeparator(),
+            openExchangeSetItem,
+            openExchangeSetZipItem,
         };
+
+        if (_libraryImporter is { } importer)
+        {
+            NativeMenuItem Add(string header, Func<Task> action)
+            {
+                var item = new NativeMenuItem(header);
+                item.Click += (_, _) => _ = action();
+                return item;
+            }
+
+            menu.Add(new NativeMenuItemSeparator());
+            menu.Add(new NativeMenuItem(Strings.Menu_AddToLibrary)
+            {
+                Menu = new NativeMenu
+                {
+                    Add(Strings.Menu_AddLibraryFolder, () => importer.AddFolderAsync(null)),
+                    Add(Strings.Menu_AddLibraryExchangeSetZip, () => importer.AddExchangeSetZipAsync(null)),
+                    Add(Strings.Menu_AddLibraryNoaaFeed, () => importer.AddNoaaFeedAsync(null)),
+                    Add(Strings.Menu_AddLibraryS128, () => importer.AddS128CatalogueAsync(null)),
+                },
+            });
+        }
+
+        return new NativeMenuItem(Strings.Menu_File) { Menu = menu };
     }
 
     private void RebuildOpenRecentMenu()

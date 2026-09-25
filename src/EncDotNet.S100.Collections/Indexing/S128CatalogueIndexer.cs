@@ -49,11 +49,21 @@ public sealed partial class S128CatalogueIndexer : ICollectionSourceIndexer
 
             progress?.Report(new IndexProgress(0, path));
             var dataset = S128Dataset.Open(path);
-            var items = dataset.Entries.Select(Map).ToArray();
-            progress?.Report(new IndexProgress(items.Length, null));
+            var items = MapEntries(dataset);
+            progress?.Report(new IndexProgress(items.Count, null));
 
             return new SourceIndex(source.Id, DateTimeOffset.UtcNow, fingerprint, items, diagnostics);
         }, cancellationToken));
+    }
+
+    /// <summary>
+    /// Maps every product entry of an already-parsed S-128 dataset onto
+    /// catalogue-only items (for example a dataset the host has loaded).
+    /// </summary>
+    public static IReadOnlyList<CollectionItem> MapEntries(S128Dataset dataset)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        return dataset.Entries.Select(Map).ToArray();
     }
 
     /// <summary>Maps one S-128 product entry onto a neutral item.</summary>
