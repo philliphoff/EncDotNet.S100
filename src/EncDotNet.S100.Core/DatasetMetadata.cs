@@ -55,19 +55,27 @@ public sealed record DatasetMetadata
     public required SpecRef Spec { get; init; }
 
     /// <summary>
-    /// The dataset's geographic extent, or <c>null</c> when it cannot be
-    /// determined without a full parse. Expressed in the coordinate system
-    /// identified by <see cref="HorizontalCrsEpsg"/> — i.e. WGS-84 decimal
-    /// degrees (lat/lon) when that is <c>null</c>, otherwise the projected
-    /// units of that CRS. Consumers framing a map viewport must reproject
-    /// through <see cref="HorizontalCrsEpsg"/> before use.
+    /// The dataset's extent in its native horizontal CRS
+    /// (<see cref="HorizontalCrsEpsg"/>), or <c>null</c> when it cannot be
+    /// determined without a full parse. It is WGS-84 decimal degrees only
+    /// when <see cref="HorizontalCrsEpsg"/> is <c>null</c> or 4326. Use
+    /// <see cref="GetGeographicExtent"/> for a WGS-84 extent, e.g. to frame a
+    /// map viewport.
     /// </summary>
     /// <remarks>
-    /// <see cref="BoundingBox"/> nominally documents itself as WGS-84; for
-    /// projected HDF5 grids (e.g. UTM S-102, S-100 Part 10c) the edge values
-    /// are the grid's native easting/northing bounds, mirroring the existing
-    /// coverage-source extent convention. <see cref="HorizontalCrsEpsg"/>
-    /// disambiguates the two cases.
+    /// <para>
+    /// <see cref="BoundingBox"/> nominally documents itself as WGS-84, but for
+    /// projected HDF5 grids (e.g. UTM S-102, S-100 Part 10c) the latitude
+    /// members hold the minimum / maximum northing and the longitude members
+    /// the minimum / maximum easting. This matches
+    /// <see cref="Pipelines.Coverage.CoverageMetadata.NativeExtent"/>.
+    /// </para>
+    /// <para>
+    /// The extent stays native because the product readers that probe it
+    /// (e.g. <c>S102DatasetReader.ReadMetadata</c>) have no CRS transform, and
+    /// because a probed and a fully loaded dataset must report the same
+    /// value.
+    /// </para>
     /// </remarks>
     public BoundingBox? Extent { get; init; }
 
@@ -97,6 +105,33 @@ public sealed record DatasetMetadata
     /// not surfaced cheaply today.
     /// </summary>
     public TimeCoverage? TimeCoverage { get; init; }
+
+    /// <summary>
+    /// Returns <see cref="Extent"/> as a WGS-84 (EPSG:4326) bounding box in
+    /// decimal degrees, reprojecting it from <see cref="HorizontalCrsEpsg"/>
+    /// when that CRS is projected.
+    /// </summary>
+    /// <param name="transformFactory">
+    /// Factory used to build the native → EPSG:4326 transform (e.g.
+    /// <c>ProjNetCrsTransformFactory</c>). It is not called when the extent
+    /// is already geographic.
+    /// </param>
+    /// <returns>
+    /// The WGS-84 envelope of all four reprojected corners, or <c>null</c>
+    /// when <see cref="Extent"/> is <c>null</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="transformFactory"/> is <see langword="null"/>.</exception>
+    public BoundingBox? GetGeographicExtent(ICrsTransformFactory transformFactory)
+    {
+        ArgumentNullException.ThrowIfNull(transformFactory);
+        if (Extent is null)
+            return null;
+        if (HorizontalCrsEpsg is null or 4326)
+            return Extent;
+
+        var transform = transformFactory.Create($"EPSG:{HorizontalCrsEpsg}", "EPSG:4326");
+        return BoundingBoxReprojection.ToWgs84(Extent, transform);
+    }
 }
 
 /// <summary>

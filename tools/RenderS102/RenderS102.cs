@@ -64,12 +64,14 @@ var styledLayer = await pipeline.ProcessAsync(source, catalogue);
 // 4. Render to bitmap
 Console.WriteLine("Rendering...");
 var renderer = new SkiaCoverageRenderer();
+// SkiaCoverageRenderer draws one pixel per grid cell and ignores the viewport
+// bounds, so the native-CRS extent (metres for a UTM tile) is fine here.
 var viewport = new Viewport
 {
-    MinLatitude = source.Metadata.Extent.SouthLatitude,
-    MaxLatitude = source.Metadata.Extent.NorthLatitude,
-    MinLongitude = source.Metadata.Extent.WestLongitude,
-    MaxLongitude = source.Metadata.Extent.EastLongitude,
+    MinLatitude = source.Metadata.NativeExtent.SouthLatitude,
+    MaxLatitude = source.Metadata.NativeExtent.NorthLatitude,
+    MinLongitude = source.Metadata.NativeExtent.WestLongitude,
+    MaxLongitude = source.Metadata.NativeExtent.EastLongitude,
     WidthPixels = source.Metadata.GridMetadata.NumColumns,
     HeightPixels = source.Metadata.GridMetadata.NumRows,
     ScaleDenominator = 50_000,

@@ -53,6 +53,45 @@ public class DescribeFeatureToolS102Tests
     }
 
     [Fact]
+    public async Task Ok_UtmCoverage_BoundingBoxIsWgs84AndNativeExtentIsMetres()
+    {
+        // A UTM 17N tile: grid georeferencing is native metres, so the
+        // WGS-84 boundingBox must come from the catalogue's reprojected
+        // bounds rather than from the grid origin/spacing.
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S102Synth.Dataset(
+            originLat: 4_600_000.0,
+            originLon: 300_000.0,
+            spacingLat: 16.0,
+            spacingLon: 16.0,
+            numRows: 3,
+            numCols: 4,
+            horizontalCrs: 32617);
+        var wgs84Bounds = LoadedDatasetFactory.Box(41.53, -83.41, 41.54, -83.40);
+        catalog.Add(LoadedDatasetFactory.S102("utm", bounds: wgs84Bounds, source: new(dataset)));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(
+            new DescribeFeatureRequest(new DatasetId("utm"), "BathymetryCoverage.01"));
+
+        Assert.True(result.TryGetValue(out var value));
+        var attrs = value.Attributes;
+        Assert.Equal(32617, attrs.GetProperty("horizontalCRS").GetInt32());
+
+        var bbox = attrs.GetProperty("boundingBox");
+        Assert.Equal(wgs84Bounds.SouthLatitude, bbox.GetProperty("south").GetDouble());
+        Assert.Equal(wgs84Bounds.WestLongitude, bbox.GetProperty("west").GetDouble());
+        Assert.Equal(wgs84Bounds.NorthLatitude, bbox.GetProperty("north").GetDouble());
+        Assert.Equal(wgs84Bounds.EastLongitude, bbox.GetProperty("east").GetDouble());
+
+        var native = attrs.GetProperty("nativeExtent");
+        Assert.Equal(300_000.0, native.GetProperty("minX").GetDouble());
+        Assert.Equal(4_600_000.0, native.GetProperty("minY").GetDouble());
+        Assert.Equal(300_000.0 + 4 * 16.0, native.GetProperty("maxX").GetDouble());
+        Assert.Equal(4_600_000.0 + 3 * 16.0, native.GetProperty("maxY").GetDouble());
+    }
+
+    [Fact]
     public async Task Ok_AcceptsBareBathymetryCoverageId()
     {
         var catalog = new FakeDatasetCatalog();

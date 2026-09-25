@@ -72,4 +72,27 @@ public static class CoverageExtent
 
         return new BoundingBox(south, west, north, east);
     }
+
+    /// <summary>
+    /// Builds the WGS-84 <see cref="Viewport"/> that frames the whole grid
+    /// footprint (<see cref="CoverageMetadata.GetGeographicExtent"/>) at one
+    /// pixel per grid cell. Coverage processors use it when the caller
+    /// supplies no map viewport.
+    /// </summary>
+    /// <param name="metadata">Coverage metadata carrying the native extent, grid size, and horizontal CRS.</param>
+    /// <param name="transformFactory">Factory used to build the native → WGS84 transform for projected grids.</param>
+    internal static Viewport FullGridViewport(CoverageMetadata metadata, ICrsTransformFactory transformFactory)
+    {
+        var extent = metadata.GetGeographicExtent(transformFactory);
+        return new Viewport
+        {
+            MinLatitude = extent.SouthLatitude,
+            MaxLatitude = extent.NorthLatitude,
+            MinLongitude = extent.WestLongitude,
+            MaxLongitude = extent.EastLongitude,
+            WidthPixels = metadata.GridMetadata.NumColumns,
+            HeightPixels = metadata.GridMetadata.NumRows,
+            ScaleDenominator = 50_000,
+        };
+    }
 }

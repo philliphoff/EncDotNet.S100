@@ -32,7 +32,7 @@ public class S111DatasetReaderMetadataTests
             {
                 var dataset = S111DatasetReader.Read(hdf);
                 var source = new S111CoverageSource(dataset);
-                fullExtent = source.Metadata.Extent;
+                fullExtent = source.Metadata.NativeExtent;
                 fullTimes = source.AvailableTimes;
             }
 

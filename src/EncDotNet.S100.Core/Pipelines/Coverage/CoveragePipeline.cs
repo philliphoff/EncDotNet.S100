@@ -255,12 +255,58 @@ public interface ICoverageSource
     }
 }
 
+/// <summary>
+/// File-level description of a gridded coverage: its product, grid
+/// georeferencing, horizontal CRS, and value fields.
+/// </summary>
+/// <remarks>
+/// Every georeferencing member here (<see cref="NativeExtent"/> and
+/// <see cref="GridMetadata"/>) is expressed in the grid's <em>native</em>
+/// CRS, <see cref="HorizontalCRS"/>, because that is what the S-100 Part 10c
+/// grid attributes carry. For a projected grid (e.g. a UTM S-102 tile) the
+/// values are metres. Call <see cref="GetGeographicExtent"/> for a WGS-84
+/// footprint.
+/// </remarks>
 public class CoverageMetadata
 {
     /// <summary>The product specification (name + edition) this coverage declares conformance to.</summary>
     public required SpecRef Spec { get; init; }
-    public required BoundingBox Extent { get; init; }
+
+    /// <summary>
+    /// The full (level-0) grid footprint in the grid's native CRS
+    /// (<see cref="HorizontalCRS"/>), from the grid origin to one spacing
+    /// past the last grid point on each axis.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="BoundingBox"/> is reused here as a plain axis-aligned
+    /// rectangle: <see cref="BoundingBox.SouthLatitude"/> /
+    /// <see cref="BoundingBox.NorthLatitude"/> hold the minimum / maximum
+    /// native Y (northing for a projected CRS) and
+    /// <see cref="BoundingBox.WestLongitude"/> /
+    /// <see cref="BoundingBox.EastLongitude"/> the minimum / maximum native X
+    /// (easting). They are decimal degrees only when
+    /// <see cref="HorizontalCRS"/> is EPSG:4326.
+    /// </para>
+    /// <para>
+    /// Consumers that need geographic coordinates (map framing, headless
+    /// render bounds, WGS-84 catalogues) must use
+    /// <see cref="GetGeographicExtent"/> instead of reading this directly.
+    /// </para>
+    /// </remarks>
+    public required BoundingBox NativeExtent { get; init; }
+
+    /// <summary>
+    /// Grid dimensions and georeferencing for the currently selected overview
+    /// level, in the native CRS (<see cref="HorizontalCRS"/>).
+    /// </summary>
     public required GridMetadata GridMetadata { get; init; }
+
+    /// <summary>
+    /// The grid's horizontal CRS as an EPSG identifier, e.g.
+    /// <c>"EPSG:4326"</c> or <c>"32617"</c> (a bare code is accepted by
+    /// <see cref="ICrsTransformFactory"/> implementations).
+    /// </summary>
     public required string HorizontalCRS { get; init; }
     public required string VerticalDatum { get; init; }
     public required float NoDataValue { get; init; }
@@ -270,6 +316,33 @@ public class CoverageMetadata
     // S-111: ["surfaceCurrentSpeed", "surfaceCurrentDirection"]
     // S-104: ["waterLevelHeight", "waterLevelTrend"]
     public required IReadOnlyList<CoverageValueField> ValueFields { get; init; }
+
+    /// <summary>
+    /// Returns <see cref="NativeExtent"/> as a WGS-84 (EPSG:4326) bounding box
+    /// in decimal degrees, reprojecting it through
+    /// <paramref name="transformFactory"/> when <see cref="HorizontalCRS"/> is
+    /// projected.
+    /// </summary>
+    /// <param name="transformFactory">
+    /// Factory used to build the <see cref="HorizontalCRS"/> → EPSG:4326
+    /// transform (e.g. <c>ProjNetCrsTransformFactory</c>). It is not called
+    /// when the grid is already geographic.
+    /// </param>
+    /// <returns>
+    /// The geographic envelope of the grid footprint. A projected rectangle
+    /// maps to a slightly curved quadrilateral, so all four native corners
+    /// are reprojected and the min/max envelope is returned.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="transformFactory"/> is <see langword="null"/>.</exception>
+    public BoundingBox GetGeographicExtent(ICrsTransformFactory transformFactory)
+    {
+        ArgumentNullException.ThrowIfNull(transformFactory);
+        if (HorizontalCRS is "4326" or "EPSG:4326")
+            return NativeExtent;
+
+        var transform = transformFactory.Create(HorizontalCRS, "EPSG:4326");
+        return BoundingBoxReprojection.ToWgs84(NativeExtent, transform);
+    }
 }
 
 public class CoverageValueField
@@ -280,13 +353,38 @@ public class CoverageValueField
     public required float FillValue { get; init; }
 }
 
+/// <summary>
+/// Dimensions and georeferencing of a regular grid, in the grid's native CRS.
+/// </summary>
+/// <remarks>
+/// The member names follow the S-100 Part 10c grid attributes
+/// (<c>gridOriginLatitude</c>, <c>gridSpacingLongitudinal</c>, …), which keep
+/// those names whatever the CRS. For a geographic (EPSG:4326) grid the values
+/// are decimal degrees. For a projected grid (e.g. a UTM S-102 tile) the
+/// <c>*Latitude</c> / <c>*Latitudinal</c> members hold the northing and the
+/// <c>*Longitude</c> / <c>*Longitudinal</c> members the easting, in metres.
+/// Reproject through the owning coverage's CRS
+/// (<see cref="CoverageMetadata.HorizontalCRS"/>) before treating them as
+/// geographic positions.
+/// </remarks>
 public class GridMetadata
 {
+    /// <summary>Number of grid points along the Y (latitude / northing) axis.</summary>
     public required int NumRows { get; init; }
+
+    /// <summary>Number of grid points along the X (longitude / easting) axis.</summary>
     public required int NumColumns { get; init; }
+
+    /// <summary>X of the first grid point: longitude in degrees, or easting in native units for a projected grid.</summary>
     public required double OriginLongitude { get; init; }
+
+    /// <summary>Y of the first grid point: latitude in degrees, or northing in native units for a projected grid.</summary>
     public required double OriginLatitude { get; init; }
+
+    /// <summary>Spacing between adjacent columns along X, in native CRS units (degrees or metres).</summary>
     public required double SpacingLongitudinal { get; init; }
+
+    /// <summary>Spacing between adjacent rows along Y, in native CRS units (degrees or metres).</summary>
     public required double SpacingLatitudinal { get; init; }
 }
 
@@ -588,7 +686,23 @@ public class SampledCoverage
         return new CoverageGridView(data, Metadata.NumRows, Metadata.NumColumns);
     }
 
-    // Geolocate a grid cell within the sampled region
+    /// <summary>
+    /// Returns the native-CRS position of a grid point within the sampled
+    /// region (<paramref name="row"/>, <paramref name="col"/> index the
+    /// sampled grid, not the source grid).
+    /// </summary>
+    /// <param name="row">Row index within the sampled grid.</param>
+    /// <param name="col">Column index within the sampled grid.</param>
+    /// <returns>
+    /// A <see cref="GeoPosition"/> built from <see cref="Metadata"/>'s origin
+    /// and spacing. For a geographic (EPSG:4326) grid it is latitude /
+    /// longitude in degrees. For a projected grid,
+    /// <see cref="GeoPosition.Latitude"/> holds the <em>northing</em> and
+    /// <see cref="GeoPosition.Longitude"/> the <em>easting</em>, in native
+    /// units. Reproject through the coverage's
+    /// <see cref="CoverageMetadata.HorizontalCRS"/> (easting first, northing
+    /// second) before treating the result as a geographic position.
+    /// </returns>
     public GeoPosition GetPosition(int row, int col)
     {
         double lat = Metadata.OriginLatitude + row * Metadata.SpacingLatitudinal;

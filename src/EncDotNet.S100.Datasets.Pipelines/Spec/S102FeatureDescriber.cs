@@ -50,7 +50,7 @@ internal sealed class S102FeatureDescriber : ISpecFeatureDescriber
         var coverage = s102.Source.Coverage;
         var metadata = s102.Source.Metadata;
 
-        var attributes = SerializeAttributes(dataset, coverage, metadata);
+        var attributes = SerializeAttributes(dataset, coverage, metadata, context.Dataset.Bounds);
 
         return ToolResult<DescribeFeatureResult>.Ok(new DescribeFeatureResult(
             context.Dataset.Spec,
@@ -92,7 +92,8 @@ internal sealed class S102FeatureDescriber : ISpecFeatureDescriber
     private static JsonElement SerializeAttributes(
         S102Dataset dataset,
         BathymetryCoverage coverage,
-        EncDotNet.S100.Pipelines.Coverage.CoverageMetadata metadata)
+        EncDotNet.S100.Pipelines.Coverage.CoverageMetadata metadata,
+        EncDotNet.S100.Pipelines.BoundingBox geographicBounds)
     {
         var (minDepth, maxDepth, noDataCount) = ComputeDepthRange(coverage.Values);
 
@@ -110,12 +111,23 @@ internal sealed class S102FeatureDescriber : ISpecFeatureDescriber
                 ["numPointsLongitudinal"] = coverage.NumPointsLongitudinal,
                 ["startSequence"] = coverage.StartSequence,
             },
+            // WGS-84 degrees: the catalogue's reprojected bounds, the same
+            // value list_datasets reports. The grid attributes above (and
+            // nativeExtent below) stay in the native CRS, which is metres
+            // for a UTM tile.
             ["boundingBox"] = new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                ["south"] = metadata.Extent.SouthLatitude,
-                ["west"] = metadata.Extent.WestLongitude,
-                ["north"] = metadata.Extent.NorthLatitude,
-                ["east"] = metadata.Extent.EastLongitude,
+                ["south"] = geographicBounds.SouthLatitude,
+                ["west"] = geographicBounds.WestLongitude,
+                ["north"] = geographicBounds.NorthLatitude,
+                ["east"] = geographicBounds.EastLongitude,
+            },
+            ["nativeExtent"] = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["minX"] = metadata.NativeExtent.WestLongitude,
+                ["minY"] = metadata.NativeExtent.SouthLatitude,
+                ["maxX"] = metadata.NativeExtent.EastLongitude,
+                ["maxY"] = metadata.NativeExtent.NorthLatitude,
             },
             ["horizontalCRS"] = dataset.HorizontalCRS,
             ["epoch"] = dataset.Epoch,

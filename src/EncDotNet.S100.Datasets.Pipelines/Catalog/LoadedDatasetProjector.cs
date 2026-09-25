@@ -16,6 +16,7 @@ using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 
@@ -280,9 +281,9 @@ public static class LoadedDatasetProjector
             S411DatasetData d => Gml(id, "S-411", d.Model.ReadMetadata(), data),
             S421DatasetData d => Gml(id, "S-421", d.Model.ReadMetadata(), data),
             S102CoverageData d => new LoadedDataset(
-                id, new SpecRef("S-102", default), ResolveS102Bounds(d.Source, transforms), null, data),
+                id, new SpecRef("S-102", default), ResolveCoverageBounds(d.Source, ComputeS102Bounds(d.Source.Dataset), transforms), null, data),
             S104CoverageData d => new LoadedDataset(
-                id, new SpecRef("S-104", default), ComputeS104Bounds(d.Source.Dataset) ?? WorldBounds, null, data),
+                id, new SpecRef("S-104", default), ResolveCoverageBounds(d.Source, ComputeS104Bounds(d.Source.Dataset), transforms), null, data),
             S104StationSeriesData d => new LoadedDataset(
                 id,
                 new SpecRef("S-104", default),
@@ -290,7 +291,7 @@ public static class LoadedDatasetProjector
                 ComputeTimeRange(d.Dataset.MinTime, d.Dataset.MaxTime, d.Dataset.Stations.Count),
                 data),
             S111CoverageData d => new LoadedDataset(
-                id, new SpecRef("S-111", default), ComputeS111Bounds(d.Source.Dataset) ?? WorldBounds, null, data),
+                id, new SpecRef("S-111", default), ResolveCoverageBounds(d.Source, ComputeS111Bounds(d.Source.Dataset), transforms), null, data),
             S111StationSeriesData d => new LoadedDataset(
                 id,
                 new SpecRef("S-111", default),
@@ -309,13 +310,15 @@ public static class LoadedDatasetProjector
         DatasetId id, string specName, DatasetMetadata metadata, LoadedDatasetData data)
         => new(id, new SpecRef(specName, metadata.Spec.Edition), metadata.Extent ?? WorldBounds, null, data);
 
-    private static BoundingBox ResolveS102Bounds(S102CoverageSource source, ICrsTransformFactory? transforms)
+    private static BoundingBox ResolveCoverageBounds(
+        ICoverageSource source, BoundingBox? naiveBounds, ICrsTransformFactory? transforms)
     {
-        // LoadedDataset.Bounds is contractually WGS-84; an S-102 tile may be
-        // in a projected CRS (e.g. UTM zone 31N) whose grid georeferencing is
-        // native metres, so reproject through CoverageExtent when a transform
-        // factory is available rather than treating native origin/spacing as
-        // degrees. Without a factory, fall back to the naive geographic box.
+        // LoadedDataset.Bounds is contractually WGS-84; a gridded S-102 /
+        // S-104 / S-111 coverage may be in a projected CRS (e.g. UTM zone 31N)
+        // whose grid georeferencing is native metres, so reproject through
+        // CoverageExtent when a transform factory is available rather than
+        // treating native origin/spacing as degrees. Without a factory, fall
+        // back to the naive box built straight from the grid attributes.
         if (transforms is not null)
         {
             try
@@ -331,7 +334,7 @@ public static class LoadedDatasetProjector
             }
         }
 
-        return ComputeS102Bounds(source.Dataset) ?? WorldBounds;
+        return naiveBounds ?? WorldBounds;
     }
 
     private static BoundingBox? ComputeS102Bounds(S102Dataset dataset)

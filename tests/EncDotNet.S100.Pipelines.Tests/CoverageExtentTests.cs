@@ -90,7 +90,7 @@ public class CoverageExtentTests
         => new()
         {
             Spec = new SpecRef("S-102", default),
-            Extent = new BoundingBox(originLat, originLon, originLat + 1, originLon + 1),
+            NativeExtent = new BoundingBox(originLat, originLon, originLat + 1, originLon + 1),
             GridMetadata = new GridMetadata
             {
                 NumRows = numRows,
