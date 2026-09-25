@@ -73,7 +73,7 @@
                              Content="{x:Static loc:Strings.Library_NewCollection}" />
                 <TextBox Text="{Binding NewCollectionName}" Margin="26,0,0,0"
                          IsEnabled="{Binding CreateNew}"
-                         Watermark="{x:Static loc:Strings.Library_CollectionNameWatermark}" />
+                         PlaceholderText="{x:Static loc:Strings.Library_CollectionNameWatermark}" />
                 <RadioButton GroupName="Target" IsChecked="{Binding AddToExisting}"
                              IsEnabled="{Binding HasExistingCollections}"
                              Content="{x:Static loc:Strings.Library_ExistingCollection}" />
