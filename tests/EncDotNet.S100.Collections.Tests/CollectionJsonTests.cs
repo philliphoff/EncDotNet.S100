@@ -16,6 +16,8 @@ public class CollectionJsonTests
                 new LocalFolderSource(Guid.NewGuid(), "Charts", "/charts/AK", Recursive: false),
                 new ExchangeSetSource(Guid.NewGuid(), null, "/charts/AK_ENCs.zip"),
                 new S128CatalogueSource(Guid.NewGuid(), "Catalogue", "/charts/s128.gml"),
+                new NoaaEncFeedSource(Guid.NewGuid(), "NOAA ENC — Alaska", NoaaEncFeedSource.DefaultCatalogUri,
+                    new NoaaEncFilter { States = ["AK"], CoastGuardDistricts = [17] }),
             ], new DateTimeOffset(2026, 9, 24, 12, 0, 0, TimeSpan.Zero)),
         ]);
 
@@ -23,6 +25,7 @@ public class CollectionJsonTests
         var restored = CollectionJson.DeserializeStore(json);
 
         Assert.Contains("\"kind\": \"localFolder\"", json);
+        Assert.Contains("\"kind\": \"noaaEncFeed\"", json);
         var collection = Assert.Single(restored.Collections);
         Assert.Equal(document.Collections[0].Name, collection.Name);
         Assert.Equal(document.Collections[0].Sources, collection.Sources);

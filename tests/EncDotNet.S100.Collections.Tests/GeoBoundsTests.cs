@@ -50,6 +50,33 @@ public class GeoBoundsTests
     }
 
     [Fact]
+    public void FromPositions_normalises_continuous_longitudes_beyond_the_antimeridian()
+    {
+        // NOAA writes 140.5°E as −219.5; a ring straddling ±180 as −185..−175.
+        Assert.Equal(
+            new GeoBounds(8, 140.29, 8.2, 140.48),
+            Round(GeoBounds.FromPositions([new GeoPosition(8, -219.71), new GeoPosition(8.2, -219.52)])!.Value));
+
+        var straddling = GeoBounds.FromPositions([new GeoPosition(50, -185), new GeoPosition(52, -175)])!.Value;
+        Assert.Equal(new GeoBounds(50, 175, 52, -175), straddling);
+        Assert.True(straddling.CrossesAntimeridian);
+    }
+
+    [Theory]
+    [InlineData(-219.52, 140.48)]
+    [InlineData(180, -180)]
+    [InlineData(540, -180)]
+    [InlineData(-180, -180)]
+    [InlineData(12.5, 12.5)]
+    public void NormalizeLongitude_maps_into_half_open_range(double input, double expected)
+    {
+        Assert.Equal(expected, GeoBounds.NormalizeLongitude(input), 9);
+    }
+
+    private static GeoBounds Round(GeoBounds b) =>
+        new(Math.Round(b.South, 6), Math.Round(b.West, 6), Math.Round(b.North, 6), Math.Round(b.East, 6));
+
+    [Fact]
     public void FromPositions_returns_null_when_empty()
     {
         Assert.Null(GeoBounds.FromPositions([]));

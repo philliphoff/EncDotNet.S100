@@ -12,6 +12,7 @@ Key types:
   - `LocalFolderSource`
   - `ExchangeSetSource`
   - `S128CatalogueSource`
+  - `NoaaEncFeedSource`
 - **`CollectionIndexer`** — indexes any supported source. It reuses a previous `SourceIndex` when the source's fingerprint is unchanged.
 - **`LocalSourceIndexer`** — handles folders and exchange sets:
   - S-100 exchange sets (`CATALOG.XML`), including their GML coverage polygons.
@@ -19,6 +20,11 @@ Key types:
   - Exchange sets inside ZIP files.
   - Loose datasets, read through a host-supplied `DatasetProbe`.
 - **`S128CatalogueIndexer`** — turns S-128 Catalogue of Nautical Products entries into catalogue-only items.
+- **`NoaaEncFeedIndexer`** — handles the NOAA ENC product catalogue (`ENCProdCat.xml`):
+  - Each cell becomes an online item with its coverage polygons, edition, update, issue date and download link.
+  - A `NoaaEncFilter` scopes a source by state, Coast Guard district or region.
+  - The catalogue is cached on disk and revalidated with conditional requests, so it is only transferred when it changes. When the server can't be reached, the cached copy is used.
+  - `NoaaEncFacets` summarises the states, districts and regions in the catalogue, with cell counts and download sizes, for choosing a filter.
 - **`CollectionJson`** — JSON persistence:
   - collection definitions are written as indented JSON
   - source indexes are written as compact, gzip-compressed JSON

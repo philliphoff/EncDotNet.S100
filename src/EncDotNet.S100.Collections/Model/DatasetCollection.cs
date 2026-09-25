@@ -33,6 +33,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(LocalFolderSource), "localFolder")]
 [JsonDerivedType(typeof(ExchangeSetSource), "exchangeSet")]
 [JsonDerivedType(typeof(S128CatalogueSource), "s128Catalogue")]
+[JsonDerivedType(typeof(NoaaEncFeedSource), "noaaEncFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -67,3 +68,20 @@ public sealed record ExchangeSetSource(Guid Id, string? DisplayName, string Path
 /// <param name="Path">The absolute path of the S-128 GML file.</param>
 public sealed record S128CatalogueSource(Guid Id, string? DisplayName, string Path)
     : CollectionSource(Id, DisplayName);
+
+/// <summary>
+/// The NOAA ENC product catalogue feed (<c>ENCProdCat.xml</c>), optionally
+/// scoped to states, Coast Guard districts or regions (for example "NOAA ENC
+/// — Alaska"). Its items are online (<see cref="RemoteItemLocation"/>) until
+/// downloaded.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="CatalogUri">The catalogue URL; see <see cref="NoaaEncFeedSource.DefaultCatalogUri"/>.</param>
+/// <param name="Filter">Which cells to include.</param>
+public sealed record NoaaEncFeedSource(Guid Id, string? DisplayName, Uri CatalogUri, NoaaEncFilter Filter)
+    : CollectionSource(Id, DisplayName)
+{
+    /// <summary>NOAA's published ENC product catalogue.</summary>
+    public static Uri DefaultCatalogUri { get; } = new("https://charts.noaa.gov/ENCs/ENCProdCat.xml");
+}

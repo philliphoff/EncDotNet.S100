@@ -421,6 +421,21 @@ Pipelines into the library.
   **runtime**, so the persisted index stays remote-only: if a local copy
   exists, the item is Local, otherwise Online. No separate index is
   needed for downloads.
+- **Longitudes (found in slice 2):** NOAA writes western-Pacific
+  coverage with **continuous longitudes past −180**, for example −219.5
+  for 140.5°E. Grid cells end exactly on −180. Rings are kept as
+  published. `GeoBounds.FromPositions` normalises them by wrapping the
+  west edge and carrying the span, so only cells that genuinely straddle
+  ±180 are recorded as crossing: two of Alaska's 1,193.
+- **Filter semantics:** the selected states, districts and regions are
+  **unioned**. Cancelled cells are excluded unless `IncludeCancelled` is
+  set.
+- **Revalidation:** a cached catalogue confirmed within
+  `FeedCacheOptions.RevalidationInterval` (15 minutes by default) is used
+  without any request. After that, a conditional GET is sent. When the
+  server cannot be reached, the cached copy is served with a warning, and
+  its unchanged fingerprint keeps an existing index. Measured on the live
+  feed: 7,117 cells indexed in 0.6 s, and a 304 revalidation in 10 ms.
 - To pick presets, the import dialog reads the distinct `states`,
   `coast_guard_districts` and `regions` values (with counts) from the
   feed after the first fetch, so nothing is hardcoded.

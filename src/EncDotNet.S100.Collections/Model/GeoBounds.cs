@@ -69,9 +69,12 @@ public readonly record struct GeoBounds(double South, double West, double North,
     /// <see langword="null"/> when there are none.
     /// </summary>
     /// <remarks>
-    /// When the positions span more than 180° of longitude they are assumed to
-    /// cross the antimeridian: the result runs from the smallest non-negative
-    /// longitude east across ±180° to the largest negative one.
+    /// Longitudes may be continuous beyond ±180 (as NOAA publishes western
+    /// Pacific coverage); the result is normalised to −180..180. When
+    /// positions already within −180..180 span more than 180° of longitude
+    /// they are assumed to cross the antimeridian: the result runs from the
+    /// smallest non-negative longitude east across ±180° to the largest
+    /// negative one.
     /// </remarks>
     public static GeoBounds? FromPositions(IEnumerable<GeoPosition> positions)
     {
@@ -98,10 +101,38 @@ public readonly record struct GeoBounds(double South, double West, double North,
         if (!any)
             return null;
 
-        if (maxLon - minLon > 180 && minNonNegLon != double.MaxValue && maxNegLon != double.MinValue)
-            return new GeoBounds(minLat, minNonNegLon, maxLat, maxNegLon);
+        var span = maxLon - minLon;
+        if (span >= 360)
+            return new GeoBounds(minLat, -180, maxLat, 180);
 
-        return new GeoBounds(minLat, minLon, maxLat, maxLon);
+        // Positions in −180..180 that jump across the antimeridian.
+        if (span > 180 && minLon >= -180 && maxLon <= 180
+            && minNonNegLon != double.MaxValue && maxNegLon != double.MinValue)
+        {
+            return new GeoBounds(minLat, minNonNegLon, maxLat, maxNegLon);
+        }
+
+        // Continuous longitudes, possibly beyond ±180 (NOAA writes the western
+        // Pacific as e.g. −219.5 for 140.5°E): normalise the west edge and
+        // carry the span, wrapping the east edge only if it passes 180.
+        var west = NormalizeLongitude(minLon);
+        var east = west + span;
+        if (east > 180)
+            east -= 360;
+
+        return new GeoBounds(minLat, west, maxLat, east);
+    }
+
+    /// <summary>Maps a longitude into the range [−180, 180).</summary>
+    public static double NormalizeLongitude(double longitude)
+    {
+        if (longitude is >= -180 and < 180)
+            return longitude;
+
+        var wrapped = (longitude + 180) % 360;
+        if (wrapped < 0)
+            wrapped += 360;
+        return wrapped - 180;
     }
 
     /// <summary>Unions a sequence of boxes, or returns <see langword="null"/> when empty.</summary>
