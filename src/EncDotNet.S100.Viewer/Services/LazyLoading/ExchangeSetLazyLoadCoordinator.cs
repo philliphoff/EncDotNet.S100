@@ -270,7 +270,8 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 if (LazyCellGate.ShouldBeLoaded(
                         entry.GeographicBounds, entry.UsageBand, scaleDenominator,
                         snapshot.MinLatitude, snapshot.MinLongitude,
-                        snapshot.MaxLatitude, snapshot.MaxLongitude))
+                        snapshot.MaxLatitude, snapshot.MaxLongitude,
+                        entry.MinimumDisplayScale))
                 {
                     toLoad.Add(entry);
                 }

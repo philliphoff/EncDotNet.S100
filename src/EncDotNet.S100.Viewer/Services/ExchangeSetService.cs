@@ -583,8 +583,19 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                         GeographicBounds: cell.BoundingBox));
                 }
 
-                var entries = _datasets.AddRangeFromExchangeSet(specs);
-                tracked.Entries.AddRange(entries);
+                // The batch insert raises a collection Reset; keep the
+                // still-empty tracked set from being released by it.
+                tracked.IsRegistering = true;
+                IReadOnlyList<DatasetEntry> entries;
+                try
+                {
+                    entries = _datasets.AddRangeFromExchangeSet(specs);
+                    tracked.Entries.AddRange(entries);
+                }
+                finally
+                {
+                    tracked.IsRegistering = false;
+                }
                 dispatched = entries.Count;
 
                 // The registered entries appear immediately (dimmed, with extent
@@ -1025,6 +1036,166 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     /// <param name="root">The resolved exchange-set root directory.</param>
     /// <returns>The catalogue's base cells.</returns>
     /// <exception cref="FileNotFoundException">No <c>CATALOG.031</c> was found under <paramref name="root"/>.</exception>
+    public async Task<IReadOnlyList<DatasetEntry>> OpenSubsetAsync(
+        ExchangeSetSubsetRequest request,
+        bool defer,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureCollectionSubscription();
+
+        var tracked = FindTracked(request.RootPath)
+            ?? await OpenTrackedForSubsetAsync(request, cancellationToken).ConfigureAwait(true);
+        var isZip = ExchangeSetDetection.IsZipPath(request.RootPath);
+
+        // Reuse entries already registered for the same relative path; register
+        // the rest in one batch.
+        var result = new DatasetEntry?[request.Items.Count];
+        var registrations = new List<(int Index, ExchangeSetCellRegistration Registration)>();
+        for (var i = 0; i < request.Items.Count; i++)
+        {
+            var item = request.Items[i];
+            var relative = ToSourcePath(item.RelativePath, isZip);
+            var existing = tracked.Entries.FirstOrDefault(e =>
+                string.Equals(e.RelativePath, relative, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                result[i] = existing;
+                continue;
+            }
+
+            registrations.Add((i, new ExchangeSetCellRegistration(
+                tracked.Source,
+                relative,
+                item.ProductSpec,
+                item.DisplayName,
+                item.UpdateRelativePaths.Select(u => ToSourcePath(u, isZip)).ToArray(),
+                item.MinimumDisplayScale,
+                item.MaximumDisplayScale,
+                item.GeographicBounds)));
+        }
+
+        if (registrations.Count > 0)
+        {
+            // The batch insert raises a collection Reset; keep the tracked set
+            // (possibly still empty) from being released by it.
+            tracked.IsRegistering = true;
+            try
+            {
+                var added = _datasets.AddRangeFromExchangeSet(registrations.Select(r => r.Registration).ToList());
+                for (var i = 0; i < added.Count; i++)
+                    result[registrations[i].Index] = added[i];
+                tracked.Entries.AddRange(added);
+            }
+            finally
+            {
+                tracked.IsRegistering = false;
+            }
+        }
+
+        var entries = result.OfType<DatasetEntry>().ToArray();
+        if (tracked.Header is { } header)
+            header.LoadedCount = tracked.Entries.Count;
+
+        if (defer && _lazyCoordinator is not null)
+        {
+            _lazyCoordinator.Register(entries.Where(e => !e.IsLoaded));
+        }
+        else
+        {
+            // Batch registration marks entries deferred; an explicit load takes
+            // them out of the lazy loader's hands.
+            var toLoad = entries.Where(e => !e.IsLoaded).ToArray();
+            _lazyCoordinator?.Unregister(toLoad);
+            foreach (var entry in toLoad)
+                entry.IsDeferred = false;
+
+            using var gate = new SemaphoreSlim(_maxConcurrentLoads);
+            await Task.WhenAll(toLoad.Select(e => LoadEntryAsync(e, gate))).ConfigureAwait(true);
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// Finds an already-open tracked set rooted at <paramref name="rootPath"/>
+    /// (whether opened from the File menu or a previous subset open).
+    /// </summary>
+    private TrackedExchangeSet? FindTracked(string rootPath)
+    {
+        var root = NormalizeRoot(rootPath);
+        return _tracked.FirstOrDefault(t => string.Equals(NormalizeRoot(t.SourcePath), root, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Opens a new tracked set for a subset: the asset source plus, where the
+    /// catalogue can be read, its signature verifier and header metadata. A
+    /// catalogue that cannot be read strictly (e.g. malformed signatures) still
+    /// yields a usable set, just without verification.
+    /// </summary>
+    private async Task<TrackedExchangeSet> OpenTrackedForSubsetAsync(
+        ExchangeSetSubsetRequest request, CancellationToken cancellationToken)
+    {
+        var root = request.RootPath;
+        var source = OpenSource(root);
+        IDisposable owner = source;
+        Func<CancellationToken, Task<ExchangeSetVerificationResult>>? verifier = null;
+        string? producer = null;
+        string? issueDate = null;
+
+        var catalogue = request.CatalogueRelativePath;
+        if (catalogue is not null && EncDotNet.S100.Collections.ExchangeSetLayout.IsS100CatalogueName(Path.GetFileName(catalogue)))
+        {
+            try
+            {
+                var exchangeSet = await ExchangeSet.OpenAsync(source, catalogue, cancellationToken).ConfigureAwait(true);
+                owner = exchangeSet;
+                var assetSource = exchangeSet.Source;
+                var parsed = exchangeSet.Catalogue;
+                verifier = ct => new ExchangeSetVerifier().VerifyAsync(
+                    assetSource, parsed, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
+                producer = parsed.Contact?.Organization;
+                issueDate = ResolveLatestIssueDate(parsed.DatasetDiscoveryMetadata);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Fall back to the bare source: the datasets are still loadable.
+            }
+        }
+        else if (catalogue is not null
+            && EncDotNet.S100.Collections.ExchangeSetLayout.IsS57CatalogueName(Path.GetFileName(catalogue))
+            && Directory.Exists(root))
+        {
+            var s57Root = Path.GetDirectoryName(Path.Combine(root, catalogue.Replace('/', Path.DirectorySeparatorChar)))!;
+            verifier = ct => S57ExchangeSetVerification.VerifyAsync(s57Root, allowUntrustedCertificates: true, ct);
+        }
+
+        var tracked = new TrackedExchangeSet(root, source, owner, verifier);
+        _tracked.Add(tracked);
+        tracked.Header = _datasets.RegisterExchangeSetHeader(
+            tracked.Source,
+            root,
+            producer,
+            issueDate,
+            request.Items.Count,
+            closeAction: CloseExchangeSetFromHeader);
+        _ = VerifySignaturesAsync(tracked);
+        return tracked;
+    }
+
+    private static string ToSourcePath(string relativePath, bool isZip) =>
+        isZip ? relativePath.Replace('\\', '/') : relativePath.Replace('/', Path.DirectorySeparatorChar);
+
+    private static string NormalizeRoot(string path)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        // A dropped CATALOG.031 file is tracked by its path; its root is the folder.
+        return EncDotNet.S100.Collections.ExchangeSetLayout.IsS57CatalogueName(Path.GetFileName(full))
+            ? Path.GetDirectoryName(full)!
+            : full;
+    }
+
     private IReadOnlyList<S57ExchangeSetCell> ReadBaseCellsCached(string root)
     {
         if (_s57CatalogCache is null)
@@ -1110,6 +1281,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         for (var i = _tracked.Count - 1; i >= 0; i--)
         {
             var tracked = _tracked[i];
+            if (tracked.IsRegistering)
+                continue;
             for (var j = tracked.Entries.Count - 1; j >= 0; j--)
             {
                 if (!_datasets.Entries.Contains(tracked.Entries[j]))
@@ -1265,6 +1438,13 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
         public List<DatasetEntry> Entries { get; } = new();
         public ExchangeSetHeader? Header { get; set; }
+
+        /// <summary>
+        /// True while entries are being batch-registered: the batch insert
+        /// raises a collection Reset before <see cref="Entries"/> is filled, and
+        /// the set must not be mistaken for an emptied one and released.
+        /// </summary>
+        public bool IsRegistering { get; set; }
 
         public TrackedExchangeSet(
             string sourcePath,

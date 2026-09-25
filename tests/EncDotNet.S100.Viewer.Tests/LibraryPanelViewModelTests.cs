@@ -11,6 +11,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     private readonly LibraryTestContext _context = new();
     private readonly LibraryService _library;
     private readonly RecordingImporter _importer = new();
+    private readonly FakeLoader _loader = new();
 
     public LibraryPanelViewModelTests()
     {
@@ -24,7 +25,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, action => action());
+    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, action => action());
 
     private async Task<DatasetCollection> AddS57CollectionAsync(string name = "Charts")
     {
@@ -196,6 +197,54 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         vm.ZoomToCommand.Execute(null);
 
         Assert.Equal(vm.Items[0].Item.Bounds, requested);
+    }
+
+    [Fact]
+    public async Task Load_commands_hand_items_to_the_loader()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+
+        Assert.False(vm.LoadCommand.CanExecute(null));
+        vm.SelectedItem = vm.Items[1];
+        vm.LoadCommand.Execute(null);
+        vm.LoadAsYouPanCommand.Execute(null);
+
+        Assert.Equal((false, 1), (_loader.Calls[0].Defer, _loader.Calls[0].Count));
+        Assert.Equal((true, 2), (_loader.Calls[1].Defer, _loader.Calls[1].Count));
+    }
+
+    [Fact]
+    public async Task Loader_changes_refresh_availability()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        Assert.Equal(LibraryAvailability.Local, vm.Items[0].Availability);
+
+        _loader.State = LibraryLoadState.Loaded;
+        _loader.RaiseChanged();
+
+        Assert.Equal(LibraryAvailability.Loaded, vm.Items[0].Availability);
+        Assert.Equal("LOADED", vm.Items[0].AvailabilityText);
+    }
+
+    private sealed class FakeLoader : ILibraryLoader
+    {
+        public LibraryLoadState State { get; set; }
+
+        public List<(bool Defer, int Count)> Calls { get; } = [];
+
+        public event EventHandler? Changed;
+
+        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+        public LibraryLoadState StateOf(CollectionItem item) => State;
+
+        public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
+        {
+            Calls.Add((defer, items.Count));
+            return Task.FromResult(new LibraryLoadResult(items.Count, 0));
+        }
     }
 
     private sealed class RecordingImporter : ILibraryImporter

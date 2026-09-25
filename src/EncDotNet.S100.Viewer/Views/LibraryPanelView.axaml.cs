@@ -19,7 +19,17 @@ public partial class LibraryPanelView : UserControl
 
         var list = this.FindControl<ListBox>("ItemList");
         if (list is not null)
+        {
             list.ContainerPrepared += OnListContainerPrepared;
+            list.DoubleTapped += OnItemDoubleTapped;
+        }
+    }
+
+    private void OnItemDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        // Double-click a dataset to load it.
+        if (DataContext is LibraryPanelViewModel vm && vm.LoadCommand.CanExecute(null))
+            vm.LoadCommand.Execute(null);
     }
 
     private void OnListContainerPrepared(object? sender, ContainerPreparedEventArgs e)

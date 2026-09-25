@@ -158,6 +158,14 @@
                         <CheckBox Grid.Column="1" IsChecked="{Binding ShowCancelled}"
                                   Content="{x:Static loc:Strings.Library_ShowCancelled}" FontSize="11" />
                     </Grid>
+                    <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
+                            Command="{Binding LoadAsYouPanCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ic:FluentIcon Icon="MapDrive" FontSize="14" />
+                            <TextBlock Text="{x:Static loc:Strings.Library_LoadAsYouPan}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <ListBox x:Name="ItemList"
@@ -210,14 +218,18 @@
                                    Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
                                    Opacity="0.6" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" TextAlignment="Center" />
-                        <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                             <TextBlock Grid.Column="0" Text="{Binding SelectedItem.Name}"
                                        FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Classes="Icon" Command="{Binding ZoomToCommand}"
+                            <Button Grid.Column="1" Classes="Icon" Command="{Binding LoadCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}">
+                                <ic:FluentIcon Icon="Open" FontSize="16" />
+                            </Button>
+                            <Button Grid.Column="2" Classes="Icon" Command="{Binding ZoomToCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}">
                                 <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
                             </Button>
-                            <Border Grid.Column="2" Background="{Binding SelectedItem.AvailabilityBrush}"
+                            <Border Grid.Column="3" Background="{Binding SelectedItem.AvailabilityBrush}"
                                     CornerRadius="9" Padding="8,3" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding SelectedItem.AvailabilityText}" FontSize="10"
                                            FontWeight="Bold" Foreground="White" />

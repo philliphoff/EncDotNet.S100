@@ -921,4 +921,12 @@ internal static class Strings
     public static string Tooltip_ShowCoverage => Get(nameof(Tooltip_ShowCoverage));
     public static string Tooltip_ZoomToDataset => Get(nameof(Tooltip_ZoomToDataset));
     public static string Tooltip_ClearLocation => Get(nameof(Tooltip_ClearLocation));
+    public static string Library_Availability_Deferred => Get(nameof(Library_Availability_Deferred));
+    public static string Library_Availability_Loaded => Get(nameof(Library_Availability_Loaded));
+    public static string Library_LoadAsYouPan => Get(nameof(Library_LoadAsYouPan));
+    public static string Tooltip_LoadDataset => Get(nameof(Tooltip_LoadDataset));
+    public static string Tooltip_LoadAsYouPan => Get(nameof(Tooltip_LoadAsYouPan));
+    public static string Toast_LibraryDeferredTitle => Get(nameof(Toast_LibraryDeferredTitle));
+    public static string Toast_LibraryDeferredFormat => Get(nameof(Toast_LibraryDeferredFormat));
+    public static string Toast_LibraryDeferredSkippedFormat => Get(nameof(Toast_LibraryDeferredSkippedFormat));
 }

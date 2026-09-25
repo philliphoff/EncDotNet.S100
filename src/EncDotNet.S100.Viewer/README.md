@@ -207,6 +207,18 @@ design in `docs/design/dataset-collections.md`.
   covering that spot. The most detailed one is selected, and tapping
   again cycles through the others. **Zoom to** (next to the dataset name)
   frames a dataset.
+- **Load**: double-click a dataset, or use the open button beside its
+  name, to load it now. **Load as you pan** registers every listed local
+  dataset to load as it comes into view, for example a whole collection
+  or everything under a map tap.
+  - **How it loads:** loading uses the same lazy loader as very large
+    exchange sets. S-57 cells are gated by usage band and S-100 datasets
+    by their coarsest display scale.
+  - **Grouping:** items from one exchange set share one Datasets-panel
+    header, and reuse it if that set is already open.
+  - **Badges:** opened datasets show **LOADED** or **ON PAN**.
+  - **What can't load:** online, missing and catalogue-only items are
+    skipped.
 - **S-128 datasets** you load appear in a temporary **Session**
   collection (this replaces the former Catalog panel). **Keep in
   library** (pin) makes one permanent.

@@ -13,14 +13,19 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class LibraryItemViewModel : ViewModelBase
 {
+    private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
     private LibraryAvailability? _availability;
 
-    public LibraryItemViewModel(CollectionItem item, LibrarySource source)
+    public LibraryItemViewModel(
+        CollectionItem item,
+        LibrarySource source,
+        Func<CollectionItem, LibraryLoadState>? loadState = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
         Item = item;
         Source = source;
+        _loadState = loadState;
     }
 
     /// <summary>The indexed item.</summary>
@@ -59,7 +64,27 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     }
 
     /// <summary>Where the data can be had now (resolved on first access).</summary>
-    public LibraryAvailability Availability => _availability ??= LibraryAvailabilityResolver.Resolve(Item);
+    public LibraryAvailability Availability => _availability ??= (_loadState?.Invoke(Item)) switch
+    {
+        LibraryLoadState.Loaded => LibraryAvailability.Loaded,
+        LibraryLoadState.Deferred => LibraryAvailability.Deferred,
+        _ => LibraryAvailabilityResolver.Resolve(Item),
+    };
+
+    /// <summary>True when the item can be opened from disk (local, not already loaded).</summary>
+    public bool CanLoad => Availability is LibraryAvailability.Local or LibraryAvailability.Deferred;
+
+    /// <summary>Re-resolves <see cref="Availability"/> after the item was opened or closed.</summary>
+    public void RefreshAvailability()
+    {
+        if (_availability is null)
+            return;  // never shown; resolved lazily on first display
+        _availability = null;
+        OnPropertyChanged(nameof(Availability));
+        OnPropertyChanged(nameof(AvailabilityText));
+        OnPropertyChanged(nameof(AvailabilityBrush));
+        OnPropertyChanged(nameof(CanLoad));
+    }
 
     /// <summary>The availability badge text.</summary>
     public string AvailabilityText => Availability switch
@@ -67,6 +92,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Local => Strings.Library_Availability_Local,
         LibraryAvailability.Online => Strings.Library_Availability_Online,
         LibraryAvailability.Missing => Strings.Library_Availability_Missing,
+        LibraryAvailability.Deferred => Strings.Library_Availability_Deferred,
+        LibraryAvailability.Loaded => Strings.Library_Availability_Loaded,
         _ => Strings.Library_Availability_Listed,
     };
 
@@ -76,6 +103,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Local => Color.Parse("#4d9a6a"),
         LibraryAvailability.Online => Color.Parse("#4f7fbf"),
         LibraryAvailability.Missing => Color.Parse("#c0504d"),
+        LibraryAvailability.Deferred => Color.Parse("#8a6fb8"),
+        LibraryAvailability.Loaded => Color.Parse("#2e6b45"),
         _ => Color.Parse("#8a8f98"),
     });
 

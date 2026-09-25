@@ -624,6 +624,29 @@ each exchange set or folder gets one `IAssetSource`:
   path, fed the chosen `DatasetDiscoveryMetadata` only.
 - **Loose** → `DatasetsViewModel.LoadFromPathAsync`.
 
+> **Slice 5 as built:**
+> - **Subset open:** instead of splitting `OpenAsync`, a separate
+>   `IExchangeSetService.OpenSubsetAsync(request, defer)` opens a subset.
+>   It registers the chosen items under one tracked set per root, reusing
+>   a set already opened from the File menu along with its header and
+>   entries.
+> - **Unreadable catalogues:** when a catalogue cannot be read strictly
+>   (malformed signatures), the set falls back to the bare source,
+>   without verification.
+> - **`LibraryLoadService`:** groups library items by root and
+>   catalogue, skips non-local, missing and unknown-spec items, and maps
+>   items to their entries so the panel can show LOADED and ON PAN.
+> - **Lazy gating:** `LazyCellGate.IsScaleEligible` gates items without
+>   a band by their coarsest display scale. `DatasetEntry.UsageBand` is
+>   now parsed only for S-57 names, because S-101 names parsed as band 1.
+> - **Pre-existing bug fixed:** a batch registration's collection Reset
+>   released a still-empty tracked set. That dropped the header and
+>   disposed the source of deferred S-57 exchange sets opened from the
+>   File menu. It is fixed with a `TrackedExchangeSet.IsRegistering`
+>   guard and covered by a regression test.
+> - **Entries loaded now:** entries loaded immediately are taken out of
+>   the lazy loader, with `IsDeferred` cleared.
+
 **Prerequisite refactor:** split `ExchangeSetService.OpenAsync` into
 "read catalogue" and "register these entries (with their shared header,
 protection and portrayal set-up)". Collections can then open a

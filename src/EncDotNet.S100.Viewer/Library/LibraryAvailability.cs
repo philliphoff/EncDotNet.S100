@@ -16,6 +16,12 @@ internal enum LibraryAvailability
 
     /// <summary>The referenced file has moved or been deleted.</summary>
     Missing,
+
+    /// <summary>Opened from the library, loading as it comes into view.</summary>
+    Deferred,
+
+    /// <summary>Loaded on the map.</summary>
+    Loaded,
 }
 
 /// <summary>Computes a <see cref="LibraryAvailability"/> from an item's location.</summary>

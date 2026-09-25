@@ -163,5 +163,55 @@ internal interface IExchangeSetService
         CancellationToken cancellationToken = default,
         INotificationHandle? notification = null,
         Action<BoundingBox>? onFramingReady = null);
+
+    /// <summary>
+    /// Opens a chosen subset of an exchange set (or of a folder of loose
+    /// datasets) — for example the datasets picked in the Library panel
+    /// (issue #655) — rather than every catalogue entry.
+    /// </summary>
+    /// <remarks>
+    /// Items are registered under one tracked set per root (reusing the set
+    /// and its Datasets-panel header when that root is already open) and
+    /// de-duplicated by relative path. With <paramref name="defer"/> they are
+    /// handed to the viewport-driven lazy loader; otherwise they are loaded
+    /// now. Never throws for per-item problems.
+    /// </remarks>
+    /// <param name="request">The root and the items to open.</param>
+    /// <param name="defer">True to load the items as they come into view.</param>
+    /// <param name="cancellationToken">Cancels the open.</param>
+    /// <returns>The entries for the requested items, in request order.</returns>
+    Task<IReadOnlyList<ViewModels.DatasetEntry>> OpenSubsetAsync(
+        ExchangeSetSubsetRequest request,
+        bool defer,
+        CancellationToken cancellationToken = default);
 }
 
+/// <summary>A subset of one exchange set (or loose-dataset folder) to open.</summary>
+/// <param name="RootPath">The exchange-set folder, ZIP, or loose-dataset folder.</param>
+/// <param name="CatalogueRelativePath">
+/// The catalogue within <paramref name="RootPath"/> (<c>CATALOG.XML</c>,
+/// <c>CATALOG.031</c>, possibly under a prefix), or <see langword="null"/> for
+/// loose datasets.
+/// </param>
+/// <param name="Items">The datasets to open.</param>
+internal sealed record ExchangeSetSubsetRequest(
+    string RootPath,
+    string? CatalogueRelativePath,
+    IReadOnlyList<ExchangeSetSubsetItem> Items);
+
+/// <summary>One dataset in an <see cref="ExchangeSetSubsetRequest"/>.</summary>
+/// <param name="RelativePath">The base dataset file, relative to the root (forward slashes).</param>
+/// <param name="UpdateRelativePaths">Sequential update files in application order.</param>
+/// <param name="ProductSpec">The product specification (e.g. <c>"S-57"</c>, <c>"S-101"</c>).</param>
+/// <param name="DisplayName">The name shown in the Datasets panel.</param>
+/// <param name="GeographicBounds">The footprint used for lazy-load culling.</param>
+/// <param name="MinimumDisplayScale">The coarsest display scale, if known.</param>
+/// <param name="MaximumDisplayScale">The finest display scale, if known.</param>
+internal sealed record ExchangeSetSubsetItem(
+    string RelativePath,
+    IReadOnlyList<string> UpdateRelativePaths,
+    string ProductSpec,
+    string DisplayName,
+    BoundingBox? GeographicBounds = null,
+    int? MinimumDisplayScale = null,
+    int? MaximumDisplayScale = null);

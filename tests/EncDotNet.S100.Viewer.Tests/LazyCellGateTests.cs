@@ -162,4 +162,15 @@ public class LazyCellGateTests
         Assert.True(double.IsNaN(LazyCellGate.ScaleDenominator(0, 0)));
         Assert.True(double.IsNaN(LazyCellGate.ScaleDenominator(-1, 0)));
     }
+
+    [Theory]
+    [InlineData(null, null, 50_000_000, true)]      // no band, no scale: always
+    [InlineData(null, 90_000, 50_000, true)]        // finer than the coarsest display scale
+    [InlineData(null, 90_000, 350_000, false)]      // too zoomed out for an S-100 dataset
+    [InlineData(5, 90_000, 350_000, false)]         // a band wins over display scale
+    [InlineData(5, null, 20_000, true)]
+    public void IsScaleEligible_uses_band_else_display_scale(int? band, int? minimumDisplayScale, double scale, bool expected)
+    {
+        Assert.Equal(expected, LazyCellGate.IsScaleEligible(band, minimumDisplayScale, scale));
+    }
 }

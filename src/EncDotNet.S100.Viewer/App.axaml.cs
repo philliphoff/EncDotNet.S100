@@ -386,6 +386,10 @@ public partial class App : Application
                 feeds: sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>());
         });
         services.AddSingleton<Library.LibraryService>();
+        services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
+            sp.GetRequiredService<IExchangeSetService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetService<Services.Notifications.INotificationService>()));
         services.AddTransient(sp =>
         {
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>();

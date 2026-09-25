@@ -21,6 +21,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 {
     private readonly LibraryService _library;
     private readonly ILibraryImporter _importer;
+    private readonly ILibraryLoader _loader;
     private readonly Action<Action> _dispatch;
 
     private LibraryNodeViewModel? _selectedNode;
@@ -34,18 +35,21 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _showCoverage = true;
     private GeoPosition? _location;
 
-    public LibraryPanelViewModel(LibraryService library, ILibraryImporter importer)
-        : this(library, importer, PostToUiThread)
+    public LibraryPanelViewModel(LibraryService library, ILibraryImporter importer, ILibraryLoader loader)
+        : this(library, importer, loader, PostToUiThread)
     {
     }
 
-    internal LibraryPanelViewModel(LibraryService library, ILibraryImporter importer, Action<Action> dispatch)
+    internal LibraryPanelViewModel(
+        LibraryService library, ILibraryImporter importer, ILibraryLoader loader, Action<Action> dispatch)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(importer);
+        ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(dispatch);
         _library = library;
         _importer = importer;
+        _loader = loader;
         _dispatch = dispatch;
 
         AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
@@ -57,6 +61,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
         ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
         ClearLocationCommand = new RelayCommand(() => SetLocation(null));
+        LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
+        LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
+        _loader.Changed += OnLoaderChanged;
 
         _library.Changed += OnLibraryChanged;
         Sync();
@@ -107,6 +114,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             {
                 OnPropertyChanged(nameof(HasSelectedItem));
                 ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -189,6 +197,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Returns the list to the selected node's datasets.</summary>
     public ICommand ClearLocationCommand { get; }
 
+    /// <summary>Loads the selected dataset now.</summary>
+    public ICommand LoadCommand { get; }
+
+    /// <summary>Registers every listed local dataset to load as it comes into view.</summary>
+    public ICommand LoadAsYouPanCommand { get; }
+
     /// <summary>
     /// Handles a tap on the map: lists every library dataset whose coverage
     /// contains <paramref name="position"/> and selects the most detailed one.
@@ -212,7 +226,26 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         return true;
     }
 
-    public void Dispose() => _library.Changed -= OnLibraryChanged;
+    public void Dispose()
+    {
+        _library.Changed -= OnLibraryChanged;
+        _loader.Changed -= OnLoaderChanged;
+    }
+
+    private void OnLoaderChanged(object? sender, EventArgs e) => _dispatch(() =>
+    {
+        foreach (var item in _items)
+            item.RefreshAvailability();
+        ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
+        // The coverage overlay styles by availability; let it redraw.
+        OnPropertyChanged(nameof(Items));
+    });
+
+    private Task LoadSelectedAsync() =>
+        _selectedItem is { } item ? _loader.LoadAsync([item.Item], defer: false) : Task.CompletedTask;
+
+    private Task LoadListedAsYouPanAsync() =>
+        _loader.LoadAsync(_items.Select(i => i.Item).ToArray(), defer: true);
 
     /// <summary>
     /// The persisted collection new sources are added to by default: the
@@ -306,13 +339,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(p => CoverageGeometry.Contains(p.Item, position))
             .OrderByDescending(p => p.Item.UsageBand ?? 0)
             .ThenBy(p => CoverageGeometry.Area(p.Item))
-            .Select(p => new LibraryItemViewModel(p.Item, p.Source))
+            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf))
             .ToList();
 
-    private static IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
+    private IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
         node is null
             ? []
-            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source)).ToArray();
+            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf)).ToArray();
 
     private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
         a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
@@ -364,6 +397,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(i => filter.Length == 0 || i.Matches(filter))
             .ToArray();
         OnPropertyChanged(nameof(ItemsSummary));
+        ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
 
         if (_selectedItem is not null && !_items.Contains(_selectedItem))
             SelectedItem = null;
