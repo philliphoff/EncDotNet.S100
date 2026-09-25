@@ -175,13 +175,14 @@ design in `docs/design/dataset-collections.md`.
   - an exchange-set ZIP
   - an **online catalogue**, chosen under **Online Catalogue…** from a
     curated list of known catalogues (NOAA ENC; USACE Inland ENC rivers
-    and buoy overlay)
+    and buoy overlay; community inland ENC lists for Europe and Brazil)
     - **The directory:** each catalogue shows its provider and region,
       and chips for what it provides: coverage outlines, bounding boxes
       or none; editions; sizes.
     - **Next step:** you pick what to include (NOAA by state, Coast Guard
-      district or region; USACE by river), with the selection's cell
-      count and download size.
+      district or region; USACE by river; a community list by download,
+      with a filter box), with the selection's cell count and download
+      size where the catalogue gives them.
     - **Catalogue age:** the catalogue's own date is shown, and flagged
       when it is over a year old.
   - an **S-128** Catalogue of Nautical Products
@@ -238,12 +239,24 @@ design in `docs/design/dataset-collections.md`.
   - **Titles:** each cell is described by its reach and river miles, e.g.
     "Pittsburgh, PA → Allegheny Lock No. 8 (Allegheny, mi 1–46)".
   - **Downloads:** go to `downloads/usace-ienc/`.
-- **Download** (NOAA and USACE feeds): the download button beside an online
+- **Community inland ENC lists**: CC0 lists maintained by the
+  [chartcatalogs](https://github.com/chartcatalogs/catalogs) project, one
+  per authority (Austria, Brazil, EuRIS, France, the Netherlands, …).
+  - **Entries are downloads:** one entry can hold a single cell or a whole
+    exchange set, and the lists give no coverage, editions or sizes. An
+    entry is listed without an outline until it is downloaded.
+  - **After downloading:** the source re-indexes, and the entry is
+    replaced by its cells, with their outlines, editions and updates.
+  - **Downloads:** go to `downloads/community/<list>/<entry>/`.
+  - **Updates:** a cell shows **UPDATE** when the list publishes a newer
+    download than the one you have.
+- **Download** (NOAA, USACE and community feeds): the download button beside an online
   dataset downloads it and then loads it. **Download N (size)** fetches
   every listed online cell, for example a whole state, at most three at
   a time, with progress and **Cancel** in a notification.
   - **Where cells go:** into one managed folder per provider,
-    `downloads/noaa-enc/` or `downloads/usace-ienc/`. These are not
+    `downloads/noaa-enc/` or `downloads/usace-ienc/`, or per community
+    list under `downloads/community/`. These are not
     caches, so "clear caches" keeps them.
   - **After downloading:** a downloaded cell is **LOCAL** and loads like
     any other.

@@ -109,6 +109,71 @@ public sealed class EncCellDownloaderTests : IDisposable
         Assert.False(cell.IsOlderThan(Cell(edition: 2, update: 9)));
     }
 
+    private static CollectionItem Package(string uri, DateTimeOffset? published = null) => new()
+    {
+        Key = "Base1",
+        ProductSpec = "S-57",
+        Name = "Base1",
+        Location = new RemoteItemLocation(new Uri(uri), null, published, "community/TEST", "Base1"),
+    };
+
+    private static byte[] BaseCell()
+    {
+        using var zip = System.IO.Compression.ZipFile.OpenRead(TestPaths.Fixture("US4OH1MK.zip"));
+        using var cell = zip.GetEntry("ENC_ROOT/US4OH1MK/US4OH1MK.000")!.Open();
+        using var buffer = new MemoryStream();
+        cell.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    [Fact]
+    public async Task A_package_records_every_cell_it_holds()
+    {
+        var cell = await Create().DownloadAsync(Package("https://example.test/p.zip"));
+
+        Assert.True(cell.IsPackage);
+        Assert.Equal("Base1", cell.Name);
+        Assert.Null(cell.Edition);
+        var location = Assert.Single(cell.Datasets).Value;
+        Assert.Equal(Path.Combine(_root.Path, "Base1", "ENC_ROOT"), location.RootPath);
+        Assert.Equal(["US4OH1MK/US4OH1MK.001"], location.UpdateRelativePaths);
+        Assert.True(Create().TryGetDownloaded("Base1")!.Datasets.ContainsKey("us4oh1mk"));
+    }
+
+    [Fact]
+    public async Task A_bare_cell_download_is_kept_as_a_loose_cell()
+    {
+        var downloader = new EncCellDownloader(new HttpClient(new ZipServer(BaseCell())), _root.Path);
+
+        var cell = await downloader.DownloadAsync(Package("https://example.test/cells/US4OH1MK.000"));
+
+        var location = cell.Datasets["US4OH1MK"];
+        Assert.Equal(Path.Combine(_root.Path, "Base1"), location.RootPath);
+        Assert.Equal("US4OH1MK.000", location.RelativePath);
+        Assert.Null(location.CatalogueRelativePath);
+    }
+
+    [Fact]
+    public async Task A_package_without_cells_is_rejected()
+    {
+        var downloader = new EncCellDownloader(new HttpClient(new ZipServer("not a chart"u8.ToArray())), _root.Path);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            downloader.DownloadAsync(Package("https://example.test/download?id=1")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_root.Path));
+    }
+
+    [Fact]
+    public async Task A_package_is_older_when_the_list_has_a_later_publication()
+    {
+        var published = new DateTimeOffset(2024, 6, 12, 0, 0, 0, TimeSpan.Zero);
+        var cell = await Create().DownloadAsync(Package("https://example.test/p.zip", published));
+
+        Assert.False(cell.IsOlderThan(Package("https://example.test/p.zip", published)));
+        Assert.True(cell.IsOlderThan(Package("https://example.test/p.zip", published.AddDays(1))));
+        Assert.False(cell.IsOlderThan(Package("https://example.test/p.zip")));
+    }
+
     [Fact]
     public void Unknown_cells_are_not_downloaded()
     {

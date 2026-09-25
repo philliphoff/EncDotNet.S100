@@ -11,6 +11,9 @@ public enum KnownCatalogueFormat
 
     /// <summary>A USACE Inland ENC product catalogue (<c>IENC…ProductCatalog</c>); see <see cref="UsaceIencFeedSource"/>.</summary>
     UsaceIenc,
+
+    /// <summary>A community chart list (<c>RncProductCatalogChartCatalogs</c>); see <see cref="ChartCatalogsFeedSource"/>.</summary>
+    ChartCatalogs,
 }
 
 /// <summary>What coverage a catalogue publishes for its cells.</summary>

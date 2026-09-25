@@ -265,6 +265,53 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal((false, 1), (_loader.Calls.Single().Defer, _loader.Calls.Single().Count));
     }
 
+    [Fact]
+    public async Task Downloading_a_package_reindexes_its_source_instead_of_loading()
+    {
+        using var context = new LibraryTestContext();
+        var indexer = new PackageIndexer();
+        using var library = context.CreateService(new Collections.Indexing.CollectionIndexer([indexer]));
+        library.Initialize();
+        library.AddCollection("Community", [new ChartCatalogsFeedSource(
+            Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
+        await library.WhenIdle();
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        vm.SelectedItem = vm.Items.Single();
+        var indexed = indexer.Calls;
+
+        vm.DownloadCommand.Execute(null);
+        await library.WhenIdle();
+
+        Assert.Equal(1, _downloader.Downloads);
+        Assert.Empty(_loader.Calls);
+        Assert.Equal(indexed + 1, indexer.Calls);
+    }
+
+    /// <summary>Indexes a community source as a single online package entry.</summary>
+    private sealed class PackageIndexer : Collections.Indexing.ICollectionSourceIndexer
+    {
+        public int Calls { get; private set; }
+
+        public bool CanIndex(CollectionSource source) => source is ChartCatalogsFeedSource;
+
+        public ValueTask<string?> GetFingerprintAsync(CollectionSource source, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>(null);
+
+        public ValueTask<SourceIndex> IndexAsync(
+            CollectionSource source, IProgress<IndexProgress>? progress, CancellationToken cancellationToken)
+        {
+            Calls++;
+            var item = new CollectionItem
+            {
+                Key = "Base1",
+                ProductSpec = "S-57",
+                Name = "Base1",
+                Location = new RemoteItemLocation(new Uri("https://example.test/p.zip"), null, null, "community/TEST", "Base1"),
+            };
+            return ValueTask.FromResult(new SourceIndex(source.Id, DateTimeOffset.UtcNow, null, [item], []));
+        }
+    }
+
     private sealed class FakeDownloader : ILibraryDownloader
     {
         public bool Downloaded { get; set; }

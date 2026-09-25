@@ -77,7 +77,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
     {
         var noaa = new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "noaa-enc"));
         var usace = new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "usace-ienc"));
-        var service = new LibraryDownloadService(uri => uri.Host switch
+        var service = new LibraryDownloadService(remote => remote.Uri.Host switch
         {
             "ienccloud.us" => usace,
             "example.test" => noaa,
@@ -93,6 +93,37 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         Assert.IsType<LocalItemLocation>(service.Localize(usaceItem).Location);
         Assert.IsType<RemoteItemLocation>(service.Localize(Cell()).Location);  // same cell, other provider
         Assert.False(service.CanDownload(elsewhere));
+    }
+
+    [Fact]
+    public async Task A_package_downloads_once_into_its_folder_and_localizes_its_cells()
+    {
+        var published = new DateTimeOffset(2024, 6, 12, 0, 0, 0, TimeSpan.Zero);
+        var folders = new List<string>();
+        var service = new LibraryDownloadService(remote =>
+        {
+            folders.Add(remote.DownloadFolder ?? "(host)");
+            return new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, remote.DownloadFolder ?? "noaa-enc"));
+        });
+        CollectionItem Member(string name, DateTimeOffset? at = null) => new()
+        {
+            Key = "Base1/" + name,
+            ProductSpec = "S-57",
+            Name = name,
+            Location = new RemoteItemLocation(new Uri("https://example.test/p.zip"), null, at ?? published, "community/TEST", "Base1"),
+        };
+
+        // Two cells of the same package: one download.
+        var result = await service.DownloadAsync([Member("US4OH1MK"), Member("OTHER")]);
+
+        Assert.Equal(new LibraryDownloadResult(1, 0, false), result);
+        Assert.True(File.Exists(Path.Combine(_context.Root, "community", "TEST", "Base1", EncCellDownloader.RecordFileName)));
+        Assert.IsType<LocalItemLocation>(service.Localize(Member("US4OH1MK")).Location);
+        // A name the package does not hold (e.g. the entry before re-indexing) stays online.
+        Assert.IsType<RemoteItemLocation>(service.Localize(Member("OTHER")).Location);
+        Assert.False(service.IsOutdated(Member("US4OH1MK")));
+        Assert.True(service.IsOutdated(Member("US4OH1MK", published.AddDays(7))));
+        Assert.DoesNotContain("(host)", folders);
     }
 
     private sealed class ZipServer(byte[] zip) : HttpMessageHandler

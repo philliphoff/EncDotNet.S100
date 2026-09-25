@@ -4,15 +4,15 @@ using System.Text.Json;
 namespace EncDotNet.S100.Collections.Downloads;
 
 /// <summary>
-/// An ENC cell downloaded into a managed folder: what was downloaded and
-/// where its exchange set now lies.
+/// An ENC cell — or a package of cells — downloaded into a managed folder:
+/// what was downloaded and where its exchange set now lies.
 /// </summary>
-/// <param name="Name">The cell name.</param>
-/// <param name="Edition">The edition downloaded.</param>
-/// <param name="Update">The update number downloaded.</param>
-/// <param name="PublishedAt">When NOAA published the zip, if known.</param>
+/// <param name="Name">The cell name, or the package name.</param>
+/// <param name="Edition">The edition downloaded (none for a package).</param>
+/// <param name="Update">The update number downloaded (none for a package).</param>
+/// <param name="PublishedAt">When the provider published the download, if known.</param>
 /// <param name="DownloadedAt">When the download completed.</param>
-/// <param name="Location">The downloaded exchange set, ready to load.</param>
+/// <param name="Location">The downloaded cell (for a package, its first cell), ready to load.</param>
 public sealed record DownloadedCell(
     string Name,
     int? Edition,
@@ -21,13 +21,31 @@ public sealed record DownloadedCell(
     DateTimeOffset DownloadedAt,
     LocalItemLocation Location)
 {
+    /// <summary>True when this is a package: a download holding any number of cells.</summary>
+    public bool IsPackage { get; init; }
+
     /// <summary>
-    /// True when <paramref name="item"/> (a feed item for the same cell)
-    /// describes a newer edition or update than this download.
+    /// The downloaded base cells by name (case-insensitive); for a single
+    /// cell, just <see cref="Location"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, LocalItemLocation> Datasets { get; init; } =
+        new Dictionary<string, LocalItemLocation>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when <paramref name="item"/> (a feed item for the same cell or
+    /// package) describes a newer download: a newer edition or update, or —
+    /// for a package, which has no edition — a later publication date.
     /// </summary>
     public bool IsOlderThan(CollectionItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
+        if (IsPackage)
+        {
+            return item.Location is RemoteItemLocation { LastModified: { } published }
+                && PublishedAt is { } downloaded
+                && published > downloaded;
+        }
+
         return (item.Edition ?? 0, item.Update ?? 0).CompareTo((Edition ?? 0, Update ?? 0)) > 0;
     }
 }
@@ -52,6 +70,12 @@ public sealed record DownloadedCell(
 /// <c>ENC_ROOT</c>, and some zips hold a bare <c>.000</c> — so the layout is
 /// discovered rather than assumed, and recorded relative to the cell folder
 /// so the managed folder can move.
+/// </para>
+/// <para>
+/// An item whose <see cref="RemoteItemLocation.Package"/> is set is a
+/// <em>package</em> (community chart lists, issue #670): it is saved under
+/// <c>&lt;root&gt;/&lt;package&gt;/</c> and every <c>.000</c> it holds is
+/// recorded. A download that is not a zip is kept as a bare cell file.
 /// </para>
 /// </remarks>
 public sealed class EncCellDownloader
@@ -78,9 +102,9 @@ public sealed class EncCellDownloader
     public string Root { get; }
 
     /// <summary>
-    /// Returns the downloaded copy of <paramref name="cellName"/>, or
-    /// <see langword="null"/> when it has not been downloaded (or its record
-    /// is unreadable or its files are gone).
+    /// Returns the downloaded copy of <paramref name="cellName"/> (a cell or
+    /// package name), or <see langword="null"/> when it has not been
+    /// downloaded (or its record is unreadable or its files are gone).
     /// </summary>
     public DownloadedCell? TryGetDownloaded(string cellName)
     {
@@ -97,16 +121,30 @@ public sealed class EncCellDownloader
             if (record is null)
                 return null;
 
-            var location = new LocalItemLocation(
-                Path.GetFullPath(Path.Combine(cellFolder, record.RootRelativePath)),
-                record.BaseRelativePath,
-                record.UpdateRelativePaths,
-                record.CatalogueRelativePath);
-            if (!File.Exists(Path.Combine(location.RootPath, location.RelativePath)))
+            // Records written before packages hold a single, top-level dataset.
+            var datasets = new Dictionary<string, LocalItemLocation>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dataset in record.Datasets ?? [new DatasetRecord(
+                record.Name, record.RootRelativePath, record.BaseRelativePath, record.UpdateRelativePaths, record.CatalogueRelativePath)])
+            {
+                var location = new LocalItemLocation(
+                    Path.GetFullPath(Path.Combine(cellFolder, dataset.RootRelativePath)),
+                    dataset.BaseRelativePath,
+                    dataset.UpdateRelativePaths,
+                    dataset.CatalogueRelativePath);
+                if (!File.Exists(Path.Combine(location.RootPath, location.RelativePath)))
+                    return null;
+                datasets.TryAdd(dataset.Name, location);
+            }
+
+            if (datasets.Count == 0)
                 return null;
 
             return new DownloadedCell(
-                record.Name, record.Edition, record.Update, record.PublishedAt, record.DownloadedAt, location);
+                record.Name, record.Edition, record.Update, record.PublishedAt, record.DownloadedAt, datasets.Values.First())
+            {
+                IsPackage = record.IsPackage,
+                Datasets = datasets,
+            };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -115,15 +153,18 @@ public sealed class EncCellDownloader
     }
 
     /// <summary>
-    /// Downloads the cell described by <paramref name="item"/>, replacing any
-    /// previous copy.
+    /// Downloads the cell (or package) described by <paramref name="item"/>,
+    /// replacing any previous copy.
     /// </summary>
-    /// <param name="item">A feed item with a <see cref="RemoteItemLocation"/>; its <see cref="CollectionItem.Name"/> is the cell name.</param>
+    /// <param name="item">
+    /// A feed item with a <see cref="RemoteItemLocation"/>; its <see cref="CollectionItem.Name"/> is the
+    /// cell name, unless the location names a <see cref="RemoteItemLocation.Package"/>.
+    /// </param>
     /// <param name="bytesProgress">Receives the number of bytes received so far.</param>
     /// <param name="cancellationToken">Cancels the download; nothing is left behind.</param>
     /// <exception cref="ArgumentException">The item has no remote location.</exception>
     /// <exception cref="HttpRequestException">The download failed.</exception>
-    /// <exception cref="InvalidDataException">The zip holds no <c>.000</c> base cell for the item.</exception>
+    /// <exception cref="InvalidDataException">The download holds no <c>.000</c> base cell for the item (or, for a package, none at all).</exception>
     public async Task<DownloadedCell> DownloadAsync(
         CollectionItem item,
         IProgress<long>? bytesProgress = null,
@@ -133,10 +174,11 @@ public sealed class EncCellDownloader
         if (item.Location is not RemoteItemLocation remote)
             throw new ArgumentException($"{item.Name} has no download location.", nameof(item));
 
+        var folderName = remote.Package ?? item.Name;
         Directory.CreateDirectory(Root);
         var token = Guid.NewGuid().ToString("N");
-        var zipPath = Path.Combine(Root, $".{item.Name}.{token}.zip.partial");
-        var staging = Path.Combine(Root, $".{item.Name}.{token}.staging");
+        var zipPath = Path.Combine(Root, $".{folderName}.{token}.zip.partial");
+        var staging = Path.Combine(Root, $".{folderName}.{token}.staging");
 
         try
         {
@@ -159,14 +201,26 @@ public sealed class EncCellDownloader
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            ZipFile.ExtractToDirectory(zipPath, staging);
+            if (IsZip(zipPath))
+            {
+                ZipFile.ExtractToDirectory(zipPath, staging);
+            }
+            else
+            {
+                // A bare cell (some community lists link .000 files directly).
+                var fileName = Path.GetFileName(remote.Uri.AbsolutePath);
+                if (!string.Equals(Path.GetExtension(fileName), ".000", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"The download for {folderName} is neither a zip nor a .000 cell.");
+                Directory.CreateDirectory(staging);
+                File.Move(zipPath, Path.Combine(staging, fileName));
+            }
 
             var record = Describe(item, remote, staging);
             File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordOptions));
 
-            Replace(CellFolder(item.Name), staging);
-            return TryGetDownloaded(item.Name)
-                ?? throw new InvalidDataException($"Downloaded {item.Name} could not be read back.");
+            Replace(CellFolder(folderName), staging);
+            return TryGetDownloaded(folderName)
+                ?? throw new InvalidDataException($"Downloaded {folderName} could not be read back.");
         }
         finally
         {
@@ -177,28 +231,59 @@ public sealed class EncCellDownloader
 
     private string CellFolder(string cellName) => Path.Combine(Root, cellName);
 
-    /// <summary>Finds the catalogue, base cell and updates in an extracted zip.</summary>
+    private static readonly EnumerationOptions Recursive = new()
+    {
+        RecurseSubdirectories = true,
+        MatchCasing = MatchCasing.CaseInsensitive,
+    };
+
+    /// <summary>Finds the catalogue, base cell(s) and updates in an extracted download.</summary>
     private CellRecord Describe(CollectionItem item, RemoteItemLocation remote, string staging)
     {
-        var baseCell = Directory
-            .EnumerateFiles(staging, item.Name + ".000", new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                MatchCasing = MatchCasing.CaseInsensitive,
-            })
-            .FirstOrDefault()
-            ?? throw new InvalidDataException($"The download for {item.Name} contains no {item.Name}.000.");
+        var catalogues = Directory.EnumerateFiles(staging, ExchangeSetLayout.S57CatalogueName, Recursive).ToArray();
+        DatasetRecord[] datasets;
+        if (remote.Package is { } package)
+        {
+            datasets = Directory.EnumerateFiles(staging, "*.000", Recursive)
+                .Order(StringComparer.Ordinal)
+                .Select(c => DescribeCell(staging, c, catalogues))
+                .DistinctBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (datasets.Length == 0)
+                throw new InvalidDataException($"The download for {package} contains no .000 base cells.");
+        }
+        else
+        {
+            var baseCell = Directory.EnumerateFiles(staging, item.Name + ".000", Recursive).FirstOrDefault()
+                ?? throw new InvalidDataException($"The download for {item.Name} contains no {item.Name}.000.");
+            datasets = [DescribeCell(staging, baseCell, catalogues)];
+        }
 
-        // Prefer the folder holding CATALOG.031 as the root (the exchange set);
-        // fall back to the base cell's own folder.
-        var catalogue = Directory
-            .EnumerateFiles(staging, ExchangeSetLayout.S57CatalogueName, new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                MatchCasing = MatchCasing.CaseInsensitive,
-            })
-            .FirstOrDefault(c => Path.GetFullPath(baseCell).StartsWith(
-                Path.GetDirectoryName(Path.GetFullPath(c))! + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+        var first = datasets[0];
+        return new CellRecord(
+            remote.Package ?? item.Name,
+            remote.Package is null ? item.Edition : null,
+            remote.Package is null ? item.Update : null,
+            remote.LastModified,
+            _time.GetUtcNow(),
+            remote.Uri.AbsoluteUri,
+            first.RootRelativePath,
+            first.BaseRelativePath,
+            first.UpdateRelativePaths,
+            first.CatalogueRelativePath,
+            remote.Package is not null,
+            remote.Package is null ? null : datasets);
+    }
+
+    /// <summary>Records one base cell: its exchange-set root, updates and catalogue.</summary>
+    private static DatasetRecord DescribeCell(string staging, string baseCell, IReadOnlyList<string> catalogues)
+    {
+        // Prefer the (nearest) folder holding CATALOG.031 above the cell as the
+        // root (the exchange set); fall back to the base cell's own folder.
+        var catalogue = catalogues
+            .Where(c => Path.GetFullPath(baseCell).StartsWith(
+                Path.GetDirectoryName(Path.GetFullPath(c))! + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            .MaxBy(c => c.Length);
         var root = catalogue is not null ? Path.GetDirectoryName(catalogue)! : Path.GetDirectoryName(baseCell)!;
 
         var stem = Path.GetFileNameWithoutExtension(baseCell);
@@ -209,17 +294,20 @@ public sealed class EncCellDownloader
             .Select(u => Relative(root, u.Path))
             .ToArray();
 
-        return new CellRecord(
-            item.Name,
-            item.Edition,
-            item.Update,
-            remote.LastModified,
-            _time.GetUtcNow(),
-            remote.Uri.AbsoluteUri,
+        return new DatasetRecord(
+            stem,
             Relative(staging, root),
             Relative(root, baseCell),
             updates,
             catalogue is null ? null : Path.GetFileName(catalogue));
+    }
+
+    private static bool IsZip(string path)
+    {
+        Span<byte> magic = stackalloc byte[4];
+        using var stream = File.OpenRead(path);
+        return stream.ReadAtLeast(magic, magic.Length, throwOnEndOfStream: false) == magic.Length
+            && magic[0] == (byte)'P' && magic[1] == (byte)'K';
     }
 
     /// <summary>
@@ -287,7 +375,11 @@ public sealed class EncCellDownloader
         }
     }
 
-    /// <summary>The <c>.source.json</c> record; paths are relative to the cell folder / exchange-set root.</summary>
+    /// <summary>
+    /// The <c>.source.json</c> record; paths are relative to the cell folder /
+    /// exchange-set root. The top-level dataset fields describe the (first)
+    /// cell; <see cref="Datasets"/> lists every cell of a package.
+    /// </summary>
     private sealed record CellRecord(
         string Name,
         int? Edition,
@@ -295,6 +387,16 @@ public sealed class EncCellDownloader
         DateTimeOffset? PublishedAt,
         DateTimeOffset DownloadedAt,
         string Source,
+        string RootRelativePath,
+        string BaseRelativePath,
+        IReadOnlyList<string> UpdateRelativePaths,
+        string? CatalogueRelativePath,
+        bool IsPackage = false,
+        IReadOnlyList<DatasetRecord>? Datasets = null);
+
+    /// <summary>One base cell of a download.</summary>
+    private sealed record DatasetRecord(
+        string Name,
         string RootRelativePath,
         string BaseRelativePath,
         IReadOnlyList<string> UpdateRelativePaths,

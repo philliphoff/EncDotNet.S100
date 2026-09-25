@@ -31,6 +31,22 @@ public class KnownCatalogueSourcesTests
     }
 
     [Fact]
+    public void Community_lists_are_known_with_no_coverage_editions_or_sizes()
+    {
+        var community = KnownCatalogueSources.All.Where(s => s.Format == KnownCatalogueFormat.ChartCatalogs).ToArray();
+
+        Assert.NotEmpty(community);
+        Assert.All(community, s =>
+        {
+            Assert.Equal("raw.githubusercontent.com", s.CatalogUri.Host);
+            Assert.StartsWith("/chartcatalogs/catalogs/", s.CatalogUri.AbsolutePath, StringComparison.Ordinal);
+            Assert.Equal(KnownCatalogueCoverage.None, s.Coverage);
+            Assert.False(s.Editions);
+            Assert.False(s.Sizes);
+        });
+    }
+
+    [Fact]
     public void Entries_in_unknown_formats_or_without_a_url_are_skipped()
     {
         const string json = """
