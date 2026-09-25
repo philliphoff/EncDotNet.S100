@@ -15,10 +15,12 @@ internal sealed class RecentFilesService : IRecentFilesService
         _settings = settings;
 
         // Drop entries that no longer exist on disk so the recent menu
-        // reflects reality on each launch. Persist if anything changed,
-        // but don't raise Changed — there are no subscribers yet.
+        // reflects reality on each launch. Entries are dataset files,
+        // exchange-set ZIPs, or exchange-set folders (issue #655). Persist if
+        // anything changed, but don't raise Changed — there are no
+        // subscribers yet.
         var pruned = _settings.RecentDatasetPaths.RemoveAll(p =>
-            string.IsNullOrWhiteSpace(p) || !File.Exists(p));
+            string.IsNullOrWhiteSpace(p) || !(File.Exists(p) || Directory.Exists(p)));
         if (pruned > 0)
         {
             _settings.Save();

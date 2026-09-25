@@ -230,6 +230,9 @@ public partial class MainWindow : ShadUI.Window
             openExchangeSetZipAsync: OpenExchangeSetZipAsync,
             libraryImporter: _libraryImporter);
 
+        // Open Recent replays exchange sets through the same progress UI.
+        _viewModel.ExchangeSetOpener = RunExchangeSetAsync;
+
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
@@ -1199,6 +1202,11 @@ public partial class MainWindow : ShadUI.Window
                 sourcePath, progress, token, notification, onFramingReady);
             _viewModel.EndExchangeSetLoad(result);
 
+            // Remember a successfully opened exchange set in Open Recent
+            // (issue #655). A dropped CATALOG.031 is recorded as its folder.
+            if (!result.Cancelled && !result.CatalogueNotFound && result.FailureMessage is null && result.Loaded > 0)
+                _recentFiles.Add(RecentExchangeSetPath(sourcePath));
+
             // Frame the loaded cells. If early framing already ran, skip the
             // reframe: the early and final union bounding boxes are computed
             // from the same immutable catalogue metadata, so they are identical
@@ -1445,5 +1453,15 @@ public partial class MainWindow : ShadUI.Window
                 isPrimary: true)
             .AutoDismiss(TimeSpan.FromSeconds(12))
             .Show();
+    }
+
+    /// <summary>
+    /// The path Open Recent records for an opened exchange set: the full path,
+    /// without a trailing separator, and a <c>CATALOG.031</c> as its folder.
+    /// </summary>
+    internal static string RecentExchangeSetPath(string sourcePath)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePath));
+        return ExchangeSetDetection.IsS57CataloguePath(full) ? Path.GetDirectoryName(full)! : full;
     }
 }

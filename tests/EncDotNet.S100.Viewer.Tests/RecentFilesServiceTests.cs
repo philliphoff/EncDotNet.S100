@@ -126,4 +126,26 @@ public class RecentFilesServiceTests : IDisposable
             File.Delete(existing);
         }
     }
+
+    [Fact]
+    public void Constructor_KeepsExchangeSetFolders()
+    {
+        // Exchange sets are recorded by folder (issue #655); a folder that
+        // still exists must survive the start-up prune.
+        var folder = Directory.CreateTempSubdirectory("viewer-recent-").FullName;
+        try
+        {
+            var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
+            settings.RecentDatasetPaths.Add(folder);
+            settings.RecentDatasetPaths.Add(folder + "-gone");
+
+            var svc = new RecentFilesService(settings);
+
+            Assert.Equal(new[] { folder }, svc.Items);
+        }
+        finally
+        {
+            Directory.Delete(folder);
+        }
+    }
 }
