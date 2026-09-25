@@ -191,22 +191,23 @@ public sealed class MapsuiDisplayListRenderer
 
         // Lower the instructions into the shared, backend-agnostic VectorScene.
         // All S-100 Part 9 correctness (draw ordering, colour / mm→px / symbol /
-        // line-style / text-anchor resolution, and the lat/lon → EPSG:3857
-        // projection half) lives in VectorSceneBuilder; the Mapsui-specific
-        // feature construction below merely consumes that IR. This builder has no
-        // PatternResolver, so pattern fills are omitted from this scene — the
-        // Mapsui features built from it exist only to carry pick identity for
-        // hit-testing. A second, pattern-complete VectorScene (built below with
-        // the pattern resolver set) is what the tiled renderer actually paints.
-        var builder = new Scene.VectorSceneBuilder
+        // line-style / pattern / text-anchor resolution, and the lat/lon →
+        // EPSG:3857 projection half) lives in VectorSceneBuilder. The tiled
+        // renderer paints this scene; the Mapsui features built from it below
+        // only carry pick identity for hit-testing, so every painted op —
+        // pattern fills included — is a pick target (issue #604).
+        var sceneBuilder = new Scene.VectorSceneBuilder
         {
             ResolveColor = Scene.ColorResolver.Create(Palette),
             SymbolResolver = ResolveSymbolAsset,
             LineStyleProvider = LineStyleProvider,
+            PatternResolver = GetPatternTilePng,
+            PatternClipCache = BuildPatternClipMemoizer(),
             SymbolScale = SymbolScale,
             TextScale = TextScale,
+            OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
         };
-        var scene = builder.Build(instructions, geometryProvider);
+        var scene = sceneBuilder.Build(instructions, geometryProvider);
 
         var mapFeatures = new List<IFeature>(scene.Ops.Count);
         // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
@@ -215,10 +216,9 @@ public sealed class MapsuiDisplayListRenderer
         var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
 
         // Build Mapsui features from the IR, in Part 9 draw order. These features
-        // carry the pick identity used for hit-testing; the base plane itself is
-        // painted by the TiledScene renderer from the pattern-complete VectorScene
-        // bound to the layer below (patterns are rendered from the IR, so no
-        // Mapsui pattern-fill features are built here).
+        // carry the pick identity used for hit-testing; the layer itself is
+        // painted by the TiledScene renderer from the same VectorScene, bound to
+        // the layer below.
         foreach (var op in scene.Ops)
         {
             // A composite point symbol (e.g. a multi-digit sounding) emits one
@@ -244,11 +244,9 @@ public sealed class MapsuiDisplayListRenderer
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
         // The layer is portrayed by the TiledScene renderer rasterising the
-        // VectorScene IR on a worker, so build a *pattern-complete* scene (the
-        // Mapsui lowering above deliberately omits patterns; the renderer paints
-        // them from the IR) and bind it to the layer. The Phase-2 tiled renderer
-        // is the default; S100_VECTOR_SCENE_MODE=single selects the Phase-1
-        // single-surface arm. Both consume the same scene.
+        // VectorScene IR on a worker, so bind the scene to the layer. The Phase-2
+        // tiled renderer is the default; S100_VECTOR_SCENE_MODE=single selects
+        // the Phase-1 single-surface arm. Both consume the same scene.
         var tiledRendererName = TiledSceneModeIsTiled
             ? S100VectorTileRenderer.RendererName
             : S100VectorSceneRenderer.RendererName;
@@ -261,29 +259,17 @@ public sealed class MapsuiDisplayListRenderer
             CustomLayerRendererName = tiledRendererName,
         };
 
-        var sceneBuilder = new Scene.VectorSceneBuilder
-        {
-            ResolveColor = Scene.ColorResolver.Create(Palette),
-            SymbolResolver = ResolveSymbolAsset,
-            LineStyleProvider = LineStyleProvider,
-            PatternResolver = GetPatternTilePng,
-            PatternClipCache = BuildPatternClipMemoizer(),
-            SymbolScale = SymbolScale,
-            TextScale = TextScale,
-            OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
-        };
-        var builtScene = sceneBuilder.Build(instructions, geometryProvider);
         if (TiledSceneModeIsTiled)
         {
             S100VectorTileRenderer.BindScene(
                 layer,
-                builtScene,
+                scene,
                 productLayerSet: Product ?? LayerName,
                 styleStateHash: ComputeStyleStateHash(instructions));
         }
         else
         {
-            S100VectorSceneRenderer.BindScene(layer, builtScene);
+            S100VectorSceneRenderer.BindScene(layer, scene);
         }
 
         return layer;
@@ -403,6 +389,7 @@ public sealed class MapsuiDisplayListRenderer
         IFeature? feature = op switch
         {
             Scene.AreaPaintOp area => CreateAreaFeature(area),
+            Scene.PatternAreaPaintOp pattern => CreatePatternAreaFeature(pattern),
             Scene.LinePaintOp line => CreateLineFeature(line),
             Scene.PointPaintOp point => CreatePointFeature(point, includePointHitRect),
             Scene.TextPaintOp text => CreateTextFeature(text),
@@ -532,6 +519,27 @@ public sealed class MapsuiDisplayListRenderer
 
         var feature = new GeometryFeature(polygon);
         feature.Styles.Add(style);
+        return feature;
+    }
+
+    /// <summary>
+    /// A pick target for a pattern fill: the area's geometry with a
+    /// near-invisible fill, like the point hit rectangles. Mapsui's hit test
+    /// only registers painted pixels, and the layer is painted by the tiled
+    /// renderer, not by this style (issue #604).
+    /// </summary>
+    private static IFeature? CreatePatternAreaFeature(Scene.PatternAreaPaintOp op)
+    {
+        var polygon = CreatePolygonFromWorld(op.WorldShell, op.WorldHoles);
+        if (polygon is null)
+            return null;
+
+        var feature = new GeometryFeature(polygon);
+        feature.Styles.Add(new VectorStyle
+        {
+            Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
+            Outline = null,
+        });
         return feature;
     }
 
