@@ -12,24 +12,29 @@ namespace EncDotNet.S100;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="Open(string)"/> is the batteries-included entry point: it detects
-/// the product specification from the file and (lazily, on first access to a
-/// data property) parses the dataset against the catalogues bundled in
-/// <c>EncDotNet.S100.Specifications</c>. Advanced users who need a caller-supplied
-/// catalogue can construct the per-spec reader directly instead.
+/// <see cref="Open(string)"/> is the batteries-included entry point for a loose
+/// file: it detects the product specification from the file and (lazily, on first
+/// access to a data property) parses the dataset against the catalogues bundled in
+/// <c>EncDotNet.S100.Specifications</c>. <see cref="OpenAsync"/> does the same for
+/// a dataset inside an <see cref="IAssetSource"/> (a folder, a ZIP archive, or a
+/// decorating source such as a caching or decrypting one), and
+/// <see cref="S100ExchangeSet"/> opens the datasets an exchange set lists.
+/// Advanced users who need a caller-supplied catalogue can construct the per-spec
+/// reader directly instead.
 /// </para>
 /// </remarks>
 public sealed class S100Dataset : IDisposable
 {
     private readonly string _detectedSpec;
+    private readonly Func<S100PipelineHost, IDatasetProcessor> _createProcessor;
     private S100PipelineHost? _host;
     private IDatasetProcessor? _processor;
     private bool _disposed;
 
-    private S100Dataset(string path, string detectedSpec)
+    private S100Dataset(string detectedSpec, Func<S100PipelineHost, IDatasetProcessor> createProcessor)
     {
-        Path = path;
         _detectedSpec = detectedSpec;
+        _createProcessor = createProcessor;
     }
 
     /// <summary>
@@ -51,13 +56,93 @@ public sealed class S100Dataset : IDisposable
 
         var spec = DatasetPipelineFactory.DetectProductSpec(path)
             ?? throw new NotSupportedException(
-                $"Could not detect an S-100 product specification for: {System.IO.Path.GetFileName(path)}");
+                $"Could not detect an S-100 product specification for: {Path.GetFileName(path)}");
 
-        return new S100Dataset(path, spec);
+        return new S100Dataset(spec, host => host.CreateProcessor(path));
     }
 
-    /// <summary>The path of the dataset file this instance was opened from.</summary>
-    internal string Path { get; }
+    /// <summary>
+    /// Opens the dataset at <paramref name="relativePath"/> inside
+    /// <paramref name="source"/>, detecting its S-100 product specification from
+    /// the dataset content (the ISO 8211 envelope, the HDF5
+    /// <c>productSpecification</c> attribute, or the GML root element).
+    /// </summary>
+    /// <param name="source">
+    /// The asset source holding the dataset: a folder
+    /// (<see cref="FileSystemAssetSource"/>), a ZIP archive
+    /// (<see cref="ZipAssetSource"/>), or a decorator over either. The dataset
+    /// borrows the source: the caller keeps ownership and must keep it alive
+    /// until the dataset is disposed, because the dataset is parsed lazily on
+    /// first use.
+    /// </param>
+    /// <param name="relativePath">
+    /// The dataset's path relative to <paramref name="source"/>
+    /// (e.g. <c>"S-101/DATASET_FILES/101AA00DS0019.000"</c>).
+    /// </param>
+    /// <param name="cancellationToken">Cancels reading the dataset for detection.</param>
+    /// <returns>An opened dataset.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="relativePath"/> is null or empty.</exception>
+    /// <exception cref="FileNotFoundException">
+    /// <paramref name="source"/> has no file at <paramref name="relativePath"/>
+    /// (the exact exception type is the source's, e.g.
+    /// <see cref="DirectoryNotFoundException"/> for a missing folder).
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// The dataset is not a recognised S-100 product specification.
+    /// </exception>
+    public static async Task<S100Dataset> OpenAsync(
+        IAssetSource source,
+        string relativePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(relativePath);
+
+        var spec = await DatasetPipelineFactory
+            .DetectProductSpecFromSourceAsync(source, relativePath, cancellationToken)
+            .ConfigureAwait(false);
+        if (spec is null)
+        {
+            // Detection reports an unreadable file the same as an unrecognised
+            // one; open it once so a missing file surfaces as the source's own
+            // not-found exception rather than as "unsupported".
+            await using (await source.OpenAsync(relativePath, cancellationToken).ConfigureAwait(false))
+            {
+            }
+
+            throw new NotSupportedException(
+                $"Could not detect an S-100 product specification for: {Path.GetFileName(relativePath)}");
+        }
+
+        return FromSource(source, relativePath, spec, supportFiles: null);
+    }
+
+    /// <summary>
+    /// Creates a dataset for <paramref name="relativePath"/> inside
+    /// <paramref name="source"/> whose product specification is already known
+    /// (declared by an exchange-set catalogue or detected by the caller).
+    /// </summary>
+    internal static S100Dataset FromSource(
+        IAssetSource source,
+        string relativePath,
+        string spec,
+        IReadOnlyDictionary<string, string>? supportFiles) =>
+        new(spec, host => host.PipelineFactory.CreateProcessor(source, relativePath, spec, supportFiles));
+
+    /// <summary>
+    /// Creates an S-101 dataset for the base cell at
+    /// <paramref name="baseRelativePath"/> with the sequential updates at
+    /// <paramref name="updateRelativePaths"/> applied, all read from
+    /// <paramref name="source"/>.
+    /// </summary>
+    internal static S100Dataset FromS101CellWithUpdates(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths,
+        IReadOnlyDictionary<string, string>? supportFiles) =>
+        new("S-101", host => host.PipelineFactory.CreateS101ProcessorWithUpdates(
+            source, baseRelativePath, updateRelativePaths, supportFiles));
 
     /// <summary>
     /// The detected product specification name (e.g. <c>"S-101"</c>) without the
@@ -99,11 +184,22 @@ public sealed class S100Dataset : IDisposable
             if (_processor is null)
             {
                 _host = S100PipelineHost.Create();
-                _processor = _host.CreateProcessor(Path);
+                _processor = _createProcessor(_host);
             }
 
             return _processor;
         }
+    }
+
+    /// <summary>
+    /// Creates a new processor for this dataset in <paramref name="host"/>, whose
+    /// catalogues may differ from the bundled ones (a renderer or feature
+    /// catalogue with overrides). The caller owns the returned processor.
+    /// </summary>
+    internal IDatasetProcessor CreateProcessor(S100PipelineHost host)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _createProcessor(host);
     }
 
     /// <inheritdoc />

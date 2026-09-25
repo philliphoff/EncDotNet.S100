@@ -69,7 +69,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         IDatasetProcessor? processor = null;
         try
         {
-            processor = host.CreateProcessor(dataset.Path);
+            processor = dataset.CreateProcessor(host);
 
             if (processor is not IHeadlessImageRenderer headless)
             {
@@ -166,7 +166,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
                 if (disposeHost)
                     toDispose.Add(host);
 
-                var processor = host.CreateProcessor(layer.Dataset.Path);
+                var processor = layer.Dataset.CreateProcessor(host);
                 if (processor is IDisposable disposableProcessor)
                     toDispose.Add(disposableProcessor);
 
