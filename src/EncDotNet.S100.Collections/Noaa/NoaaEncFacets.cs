@@ -1,11 +1,5 @@
 namespace EncDotNet.S100.Collections.Noaa;
 
-/// <summary>One selectable value of a NOAA catalogue facet, with what selecting it would include.</summary>
-/// <param name="Value">The facet value (a state code, or a district or region number as text).</param>
-/// <param name="CellCount">The number of cells with that value.</param>
-/// <param name="TotalBytes">The total download size of those cells.</param>
-public sealed record NoaaEncFacetValue(string Value, int CellCount, long TotalBytes);
-
 /// <summary>
 /// The states, Coast Guard districts and regions present in a NOAA ENC
 /// product catalogue, with cell counts and download sizes, for choosing a
@@ -15,9 +9,9 @@ public sealed record NoaaEncFacetValue(string Value, int CellCount, long TotalBy
 /// <param name="CoastGuardDistricts">Per-district counts, by district number.</param>
 /// <param name="Regions">Per-region counts, by region number.</param>
 public sealed record NoaaEncFacets(
-    IReadOnlyList<NoaaEncFacetValue> States,
-    IReadOnlyList<NoaaEncFacetValue> CoastGuardDistricts,
-    IReadOnlyList<NoaaEncFacetValue> Regions)
+    IReadOnlyList<CatalogFacetValue> States,
+    IReadOnlyList<CatalogFacetValue> CoastGuardDistricts,
+    IReadOnlyList<CatalogFacetValue> Regions)
 {
     /// <summary>
     /// Computes the facets of <paramref name="catalog"/>, counting only cells
@@ -48,11 +42,11 @@ public sealed record NoaaEncFacets(
         return (selected.Length, selected.Sum(c => c.ZipSize ?? 0));
     }
 
-    private static NoaaEncFacetValue[] Tally(IEnumerable<NoaaEncCell> cells, Func<NoaaEncCell, IEnumerable<string>> values) =>
+    private static CatalogFacetValue[] Tally(IEnumerable<NoaaEncCell> cells, Func<NoaaEncCell, IEnumerable<string>> values) =>
         cells
             .SelectMany(c => values(c).Distinct(StringComparer.OrdinalIgnoreCase).Select(v => (Value: v, Cell: c)))
             .GroupBy(x => x.Value, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new NoaaEncFacetValue(g.Key, g.Count(), g.Sum(x => x.Cell.ZipSize ?? 0)))
+            .Select(g => new CatalogFacetValue(g.Key, g.Count(), g.Sum(x => x.Cell.ZipSize ?? 0)))
             .OrderBy(f => f.Value.Length)
             .ThenBy(f => f.Value, StringComparer.Ordinal)
             .ToArray();

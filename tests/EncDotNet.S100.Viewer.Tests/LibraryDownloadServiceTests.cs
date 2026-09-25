@@ -1,6 +1,6 @@
 using System.Net;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Collections.Downloads;
 using EncDotNet.S100.Viewer.Library;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -14,7 +14,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
     public void Dispose() => _context.Dispose();
 
     private LibraryDownloadService Create() =>
-        new(new NoaaEncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "noaa-enc")));
+        new(new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "noaa-enc")));
 
     internal static CollectionItem Cell(int update = 1, string name = "US4OH1MK", CollectionItemStatus status = CollectionItemStatus.Active) => new()
     {
@@ -70,6 +70,29 @@ public sealed class LibraryDownloadServiceTests : IDisposable
 
         Assert.True(result.Cancelled);
         Assert.Equal(0, result.Downloaded);
+    }
+
+    [Fact]
+    public async Task Downloads_are_routed_to_a_folder_per_provider()
+    {
+        var noaa = new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "noaa-enc"));
+        var usace = new EncCellDownloader(new HttpClient(_server), Path.Combine(_context.Root, "usace-ienc"));
+        var service = new LibraryDownloadService(uri => uri.Host switch
+        {
+            "ienccloud.us" => usace,
+            "example.test" => noaa,
+            _ => null,
+        });
+        var usaceItem = Cell() with { Location = new RemoteItemLocation(new Uri("https://ienccloud.us/x/US4OH1MK.zip")) };
+        var elsewhere = Cell() with { Location = new RemoteItemLocation(new Uri("https://unknown.test/US4OH1MK.zip")) };
+
+        await service.DownloadAsync([usaceItem]);
+
+        Assert.True(Directory.Exists(Path.Combine(_context.Root, "usace-ienc", "US4OH1MK")));
+        Assert.False(Directory.Exists(Path.Combine(_context.Root, "noaa-enc")));
+        Assert.IsType<LocalItemLocation>(service.Localize(usaceItem).Location);
+        Assert.IsType<RemoteItemLocation>(service.Localize(Cell()).Location);  // same cell, other provider
+        Assert.False(service.CanDownload(elsewhere));
     }
 
     private sealed class ZipServer(byte[] zip) : HttpMessageHandler

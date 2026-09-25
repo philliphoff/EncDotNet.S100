@@ -938,4 +938,9 @@ internal static class Strings
     public static string Toast_LibraryDownloadedTitle => Get(nameof(Toast_LibraryDownloadedTitle));
     public static string Toast_LibraryDownloadCancelledTitle => Get(nameof(Toast_LibraryDownloadCancelledTitle));
     public static string Toast_LibraryDownloadedFormat => Get(nameof(Toast_LibraryDownloadedFormat));
+    public static string Library_UsaceRivers => Get(nameof(Library_UsaceRivers));
+    public static string Library_AddUsaceTitle => Get(nameof(Library_AddUsaceTitle));
+    public static string Library_UsaceFeed => Get(nameof(Library_UsaceFeed));
+    public static string Library_UsaceAll => Get(nameof(Library_UsaceAll));
+    public static string Menu_AddLibraryUsaceFeed => Get(nameof(Menu_AddLibraryUsaceFeed));
 }

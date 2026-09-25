@@ -378,20 +378,32 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer(
             new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp =>
         {
             var metadata = sp.GetRequiredService<IDatasetMetadataReader>();
             return EncDotNet.S100.Collections.Indexing.CollectionIndexer.CreateDefault(
                 probe: (path, _) => metadata.TryRead(path),
-                feeds: sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>());
+                feeds:
+                [
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>(),
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer>(),
+                ]);
         });
         services.AddSingleton<Library.LibraryService>();
-        services.AddSingleton(sp => new EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) },
-            Path.Combine(sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory, "noaa-enc")));
-        services.AddSingleton<Library.ILibraryDownloader>(sp => new Library.LibraryDownloadService(
-            sp.GetRequiredService<EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader>(),
-            sp.GetService<Services.Notifications.INotificationService>()));
+        services.AddSingleton<Library.ILibraryDownloader>(sp =>
+        {
+            // One managed folder per provider, chosen by download host.
+            var downloads = sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory;
+            var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            var noaa = new EncDotNet.S100.Collections.Downloads.EncCellDownloader(http, Path.Combine(downloads, "noaa-enc"));
+            var usace = new EncDotNet.S100.Collections.Downloads.EncCellDownloader(http, Path.Combine(downloads, "usace-ienc"));
+            return new Library.LibraryDownloadService(
+                uri => uri.Host.EndsWith("ienccloud.us", StringComparison.OrdinalIgnoreCase) ? usace : noaa,
+                sp.GetService<Services.Notifications.INotificationService>());
+        });
         services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
             sp.GetRequiredService<IExchangeSetService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
@@ -399,9 +411,11 @@ public partial class App : Application
         services.AddTransient(sp =>
         {
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>();
+            var usace = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer>();
             return new AddToLibraryDialogViewModel(
                 sp.GetRequiredService<Library.LibraryService>(),
-                ct => feeds.GetCatalogAsync(EncDotNet.S100.Collections.NoaaEncFeedSource.DefaultCatalogUri, cancellationToken: ct));
+                ct => feeds.GetCatalogAsync(EncDotNet.S100.Collections.NoaaEncFeedSource.DefaultCatalogUri, cancellationToken: ct),
+                ct => usace.GetCatalogAsync(EncDotNet.S100.Collections.UsaceIencFeedSource.RiversCatalogUri, cancellationToken: ct));
         });
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
         services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(

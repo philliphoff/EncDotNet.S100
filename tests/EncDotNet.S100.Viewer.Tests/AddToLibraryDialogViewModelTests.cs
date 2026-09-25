@@ -107,6 +107,46 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Usace_feed_lists_rivers_and_builds_a_scoped_source()
+    {
+        var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-u37.xml");
+        var vm = new AddToLibraryDialogViewModel(
+            _library, null, _ => Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)));
+        vm.Initialize(AddToLibraryKind.UsaceFeed, null, null);
+
+        Assert.True(vm.IsOnlineFeed);
+        Assert.Equal("USACE Inland ENC", vm.NewCollectionName);
+        var group = Assert.Single(vm.FacetGroups);
+        Assert.Equal("Rivers", group.Title);
+
+        await vm.LoadCatalogAsync();
+
+        Assert.Equal(["Allegheny", "Arkansas", "Ohio"], vm.Rivers.Select(r => r.Value));
+        Assert.Contains("All 4 cells", vm.SelectionSummary);
+
+        vm.Rivers.Single(r => r.Value == "Ohio").IsSelected = true;
+
+        Assert.StartsWith("2 cells", vm.SelectionSummary);
+        Assert.Equal("USACE Inland ENC — Ohio", vm.NewCollectionName);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<UsaceIencFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(["Ohio"], source.Filter.Rivers);
+        Assert.Equal("Ohio", source.DisplayName);
+    }
+
+    [Fact]
+    public void Noaa_feed_has_three_facet_groups()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
+
+        Assert.Equal(3, vm.FacetGroups.Count);
+        Assert.Same(vm.States, vm.FacetGroups[0].Options);
+    }
+
+    [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
         var vm = new AddToLibraryDialogViewModel(_library, _ => throw new HttpRequestException("offline"));

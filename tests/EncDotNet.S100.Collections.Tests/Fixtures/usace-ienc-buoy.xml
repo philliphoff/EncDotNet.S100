@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<IENCBuoyProductCatalog>
+  <Header>
+    <title>IENC Buoy Products Catalog</title>
+    <date_created>09/25/2026</date_created>
+    <time_created>13:35:41</time_created>
+    <ref_spec>USACE IENC Product Catalog Technical Specifications</ref_spec>
+    <ref_spec_vers>1.0</ref_spec_vers>
+  </Header>
+  <Cell>
+    <name>3UABUOYS</name>
+    <area>
+      <north>44.95899</north>
+      <south>29.77866</south>
+      <east>-79.51481</east>
+      <west>-96.41727</west>
+    </area>
+    <edition>82.0</edition>
+    <s57_file>
+      <location>https://ienccloud.us/ienc/products/files/buoys/3UABUOYS.zip</location>
+      <date_posted>09/25/2026</date_posted>
+      <time_posted>14:28</time_posted>
+      <file_size>0.3 MB</file_size>
+    </s57_file>
+    <kml_file>
+      <location>https://ienccloud.us/ienc/products/files/buoys/3UABUOYS.kmz</location>
+      <date_posted>09/25/2026</date_posted>
+    </kml_file>
+    <shp_file>
+      <location>https://ienccloud.us/ienc/products/files/buoys/3UABUOYS_SHP.zip</location>
+      <date_posted>09/25/2026</date_posted>
+    </shp_file>
+  </Cell>
+</IENCBuoyProductCatalog>

@@ -30,28 +30,25 @@
         <StackPanel Grid.Row="1" Spacing="14">
 
             <!-- NOAA: what to include -->
-            <StackPanel IsVisible="{Binding IsNoaaFeed}" Spacing="6">
+            <StackPanel IsVisible="{Binding IsOnlineFeed}" Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Library_NoaaChooseScope}" FontWeight="SemiBold" />
                 <TextBlock Text="{x:Static loc:Strings.Library_NoaaLoading}" Opacity="0.7"
                            IsVisible="{Binding IsLoading}" />
                 <TextBlock Text="{Binding LoadError}" Foreground="#c0504d" TextWrapping="Wrap"
                            IsVisible="{Binding HasLoadError}" />
-                <TabControl IsVisible="{Binding !IsLoading}" Height="260">
-                    <TabItem Header="{x:Static loc:Strings.Library_NoaaStates}">
-                        <ScrollViewer>
-                            <ItemsControl ItemsSource="{Binding States}" ItemTemplate="{StaticResource FacetTemplate}" />
-                        </ScrollViewer>
-                    </TabItem>
-                    <TabItem Header="{x:Static loc:Strings.Library_NoaaDistricts}">
-                        <ScrollViewer>
-                            <ItemsControl ItemsSource="{Binding CoastGuardDistricts}" ItemTemplate="{StaticResource FacetTemplate}" />
-                        </ScrollViewer>
-                    </TabItem>
-                    <TabItem Header="{x:Static loc:Strings.Library_NoaaRegions}">
-                        <ScrollViewer>
-                            <ItemsControl ItemsSource="{Binding Regions}" ItemTemplate="{StaticResource FacetTemplate}" />
-                        </ScrollViewer>
-                    </TabItem>
+                <TabControl IsVisible="{Binding !IsLoading}" Height="260" ItemsSource="{Binding FacetGroups}">
+                    <TabControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FacetGroupViewModel">
+                            <TextBlock Text="{Binding Title}" />
+                        </DataTemplate>
+                    </TabControl.ItemTemplate>
+                    <TabControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:FacetGroupViewModel">
+                            <ScrollViewer>
+                                <ItemsControl ItemsSource="{Binding Options}" ItemTemplate="{StaticResource FacetTemplate}" />
+                            </ScrollViewer>
+                        </DataTemplate>
+                    </TabControl.ContentTemplate>
                 </TabControl>
                 <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !IsLoading}">
                     <TextBlock Grid.Column="0" Text="{Binding SelectionSummary}" Opacity="0.8" VerticalAlignment="Center" />

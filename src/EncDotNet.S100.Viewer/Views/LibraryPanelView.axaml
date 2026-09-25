@@ -36,6 +36,9 @@
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryNoaaFeed}" Command="{Binding AddNoaaFeedCommand}">
                 <MenuItem.Icon><ic:FluentIcon Icon="Globe" FontSize="16" /></MenuItem.Icon>
             </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryUsaceFeed}" Command="{Binding AddUsaceFeedCommand}">
+                <MenuItem.Icon><ic:FluentIcon Icon="Globe" FontSize="16" /></MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}">
                 <MenuItem.Icon><ic:FluentIcon Icon="BookOpen" FontSize="16" /></MenuItem.Icon>
             </MenuItem>

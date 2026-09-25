@@ -65,6 +65,12 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         await dialog.LoadCatalogAsync();
     }
 
+    public async Task AddUsaceFeedAsync(Guid? targetCollectionId)
+    {
+        var dialog = ShowDialog(AddToLibraryKind.UsaceFeed, null, targetCollectionId);
+        await dialog.LoadCatalogAsync();
+    }
+
     public Task AddPathAsync(string path, Guid? targetCollectionId)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -117,7 +123,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
 
         _dialogManager.CreateDialog(dialog)
             .Dismissible()
-            .WithMaxWidth(kind == AddToLibraryKind.NoaaFeed ? 640 : 520)
+            .WithMaxWidth(kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed ? 640 : 520)
             .Show();
         return dialog;
     }

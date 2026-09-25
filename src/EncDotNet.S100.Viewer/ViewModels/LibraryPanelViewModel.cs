@@ -64,6 +64,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
         AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
         AddNoaaFeedCommand = new AsyncRelayCommand(() => _importer.AddNoaaFeedAsync(TargetCollectionId));
+        AddUsaceFeedCommand = new AsyncRelayCommand(() => _importer.AddUsaceFeedAsync(TargetCollectionId));
         AddS128CatalogueCommand = new AsyncRelayCommand(() => _importer.AddS128CatalogueAsync(TargetCollectionId));
         RefreshCommand = new RelayCommand(Refresh);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
@@ -192,6 +193,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     public ICommand AddExchangeSetZipCommand { get; }
 
     public ICommand AddNoaaFeedCommand { get; }
+
+    public ICommand AddUsaceFeedCommand { get; }
 
     public ICommand AddS128CatalogueCommand { get; }
 
@@ -531,6 +534,9 @@ internal interface ILibraryImporter
 
     /// <summary>Chooses a scope of the NOAA ENC feed.</summary>
     Task AddNoaaFeedAsync(Guid? targetCollectionId);
+
+    /// <summary>Chooses rivers of the USACE Inland ENC feed.</summary>
+    Task AddUsaceFeedAsync(Guid? targetCollectionId);
 
     /// <summary>Picks an S-128 catalogue file.</summary>
     Task AddS128CatalogueAsync(Guid? targetCollectionId);

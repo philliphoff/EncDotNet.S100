@@ -34,6 +34,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(ExchangeSetSource), "exchangeSet")]
 [JsonDerivedType(typeof(S128CatalogueSource), "s128Catalogue")]
 [JsonDerivedType(typeof(NoaaEncFeedSource), "noaaEncFeed")]
+[JsonDerivedType(typeof(UsaceIencFeedSource), "usaceIencFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -84,4 +85,23 @@ public sealed record NoaaEncFeedSource(Guid Id, string? DisplayName, Uri Catalog
 {
     /// <summary>NOAA's published ENC product catalogue.</summary>
     public static Uri DefaultCatalogUri { get; } = new("https://charts.noaa.gov/ENCs/ENCProdCat.xml");
+}
+
+/// <summary>
+/// A USACE Inland ENC product catalogue feed (river cells or the buoy
+/// overlay), optionally scoped to rivers (for example "USACE IENC — Ohio").
+/// Its items are online (<see cref="RemoteItemLocation"/>) until downloaded.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="CatalogUri">The catalogue URL; see <see cref="UsaceIencFeedSource.RiversCatalogUri"/>.</param>
+/// <param name="Filter">Which rivers to include.</param>
+public sealed record UsaceIencFeedSource(Guid Id, string? DisplayName, Uri CatalogUri, UsaceIencFilter Filter)
+    : CollectionSource(Id, DisplayName)
+{
+    /// <summary>USACE's catalogue of inland river ENC cells (U37).</summary>
+    public static Uri RiversCatalogUri { get; } = new("https://ienccloud.us/ienc/products/catalog/IENCU37ProductsCatalog.xml");
+
+    /// <summary>USACE's catalogue of the inland buoy overlay cell.</summary>
+    public static Uri BuoysCatalogUri { get; } = new("https://ienccloud.us/ienc/products/catalog/IENCBuoyProductsCatalog.xml");
 }
