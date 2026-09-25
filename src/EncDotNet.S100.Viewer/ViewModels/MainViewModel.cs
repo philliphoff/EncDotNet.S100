@@ -31,7 +31,6 @@ internal sealed class MainViewModel : ViewModelBase
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
-    public CatalogPanelViewModel CatalogPanel { get; }
     public LayerStackViewModel LayerStack { get; }
     public FeatureSearchViewModel Search { get; }
     public SettingsViewModel Settings { get; }
@@ -312,7 +311,10 @@ internal sealed class MainViewModel : ViewModelBase
     }
 
     private double? _catalogInnerSplit;
-    /// <summary>Persisted fraction <c>[0,1]</c> of the Catalog-tab master/detail splitter (PR-M3).</summary>
+    /// <summary>
+    /// Persisted fraction <c>[0,1]</c> of the Library tab's collections/datasets
+    /// splitter. Keeps its original Catalog-tab name so existing settings carry over.
+    /// </summary>
     public double? CatalogInnerSplit
     {
         get => _catalogInnerSplit;
@@ -988,7 +990,6 @@ internal sealed class MainViewModel : ViewModelBase
         FeatureCataloguesViewModel featureCatalogues,
         PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
-        CatalogPanelViewModel catalogPanel,
         LayerStackViewModel layerStack,
         FeatureSearchViewModel search,
         SettingsViewModel settingsViewModel,
@@ -1013,7 +1014,6 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(featureCatalogues);
         ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
-        ArgumentNullException.ThrowIfNull(catalogPanel);
         ArgumentNullException.ThrowIfNull(layerStack);
         ArgumentNullException.ThrowIfNull(search);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
@@ -1066,7 +1066,6 @@ internal sealed class MainViewModel : ViewModelBase
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
-        CatalogPanel = catalogPanel;
         LayerStack = layerStack;
         Search = search;
         Settings = settingsViewModel;

@@ -14,6 +14,10 @@ public class DatasetLoadGatewayTests
             Services.Notifications.INotificationHandle? notification = null,
             Action<EncDotNet.S100.ExchangeSets.BoundingBox>? onFramingReady = null)
             => Task.FromResult(new ExchangeSetOpenResult { SourcePath = folderOrZipPath });
+
+        public Task<IReadOnlyList<DatasetEntry>> OpenSubsetAsync(
+            ExchangeSetSubsetRequest request, bool defer, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<DatasetEntry>>([]);
     }
 
     // Synchronous dispatcher so the production gateway runs without an

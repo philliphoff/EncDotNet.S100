@@ -1,0 +1,290 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+             x:Class="EncDotNet.S100.Viewer.Views.LibraryPanelView"
+             x:DataType="vm:LibraryPanelViewModel">
+
+    <UserControl.Styles>
+        <!-- Mirror of the main window's `GridSplitter.PaneSplitter` style;
+             UserControls don't inherit window-scoped styles. -->
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- The "Add to Library" menu, shared by the toolbar and the empty state. -->
+        <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft">
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}">
+                <MenuItem.Icon><ic:FluentIcon Icon="Folder" FontSize="16" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}">
+                <MenuItem.Icon><ic:FluentIcon Icon="FolderZip" FontSize="16" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryNoaaFeed}" Command="{Binding AddNoaaFeedCommand}">
+                <MenuItem.Icon><ic:FluentIcon Icon="Globe" FontSize="16" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}">
+                <MenuItem.Icon><ic:FluentIcon Icon="BookOpen" FontSize="16" /></MenuItem.Icon>
+            </MenuItem>
+        </MenuFlyout>
+    </UserControl.Resources>
+
+    <Panel>
+        <!-- Empty state -->
+        <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="12">
+            <views:PlaceholderView Icon="Library"
+                                   Header="{x:Static loc:Strings.Library_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.Library_EmptyDescription}" />
+            <Button Classes="Outline"
+                    HorizontalAlignment="Center"
+                    Content="{x:Static loc:Strings.Button_AddToLibrary}"
+                    Flyout="{StaticResource AddMenu}" />
+        </StackPanel>
+
+        <Grid IsVisible="{Binding !IsEmpty}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="60" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="2*" MinHeight="100" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="60" />
+            </Grid.RowDefinitions>
+
+            <!-- Toolbar -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Margin="6,4">
+                <Button Classes="Icon"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddToLibrary}"
+                        Flyout="{StaticResource AddMenu}">
+                    <ic:FluentIcon Icon="Add" FontSize="16" />
+                </Button>
+                <Button Classes="Icon"
+                        Command="{Binding RefreshCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_RefreshLibrary}">
+                    <ic:FluentIcon Icon="ArrowSync" FontSize="16" />
+                </Button>
+                <Button Classes="Icon"
+                        Command="{Binding RemoveCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveFromLibrary}">
+                    <ic:FluentIcon Icon="Delete" FontSize="16" />
+                </Button>
+                <ToggleButton Classes="Icon"
+                              IsChecked="{Binding ShowCoverage}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
+                    <ic:FluentIcon Icon="Map" FontSize="16" />
+                </ToggleButton>
+                <Button Classes="Icon"
+                        Command="{Binding KeepInLibraryCommand}"
+                        IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_KeepInLibrary}">
+                    <ic:FluentIcon Icon="Pin" FontSize="16" />
+                </Button>
+            </StackPanel>
+
+            <!-- Collections and their sources -->
+            <TreeView Grid.Row="1"
+                      x:Name="CollectionTree"
+                      ItemsSource="{Binding Nodes}"
+                      SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+                      Background="Transparent"
+                      BorderThickness="0">
+                <TreeView.Styles>
+                    <Style Selector="TreeViewItem" x:DataType="vm:LibraryNodeViewModel">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    </Style>
+                </TreeView.Styles>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="vm:LibraryNodeViewModel" ItemsSource="{Binding Children}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6"
+                              Background="Transparent"
+                              ToolTip.Tip="{Binding Tooltip}">
+                            <ic:FluentIcon Grid.Column="0" Icon="{Binding Icon}" FontSize="16" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                       FontWeight="{Binding IsCollection, Converter={x:Static views:LibraryPanelView.BoolToWeight}}"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding Status}"
+                                       FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                        </Grid>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <Border Grid.Row="2" Height="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                    IsHitTestVisible="False" Background="{DynamicResource BorderColor}" />
+            <GridSplitter Grid.Row="2"
+                          Classes="PaneSplitter"
+                          Height="4"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext"
+                          bh:HoverDelay.DelayMilliseconds="500"
+                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).CatalogInnerSplit, Mode=TwoWay}" />
+
+            <!-- Datasets of the selected node -->
+            <DockPanel Grid.Row="3">
+                <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="8,6,8,4">
+                    <Border IsVisible="{Binding HasLocation}"
+                            Background="{DynamicResource AccentBrush}"
+                            CornerRadius="10" Padding="10,3,4,3" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <ic:FluentIcon Icon="Location" FontSize="14" Foreground="White" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding LocationSummary}" Foreground="White" FontSize="12"
+                                       VerticalAlignment="Center" />
+                            <Button Classes="Icon" Padding="2" Command="{Binding ClearLocationCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearLocation}">
+                                <ic:FluentIcon Icon="Dismiss" FontSize="12" Foreground="White" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    <TextBox Text="{Binding FilterText}"
+                             Watermark="{x:Static loc:Strings.Library_FilterWatermark}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding ItemsSummary}" FontSize="11" Opacity="0.6"
+                                   VerticalAlignment="Center" />
+                        <CheckBox Grid.Column="1" IsChecked="{Binding ShowCancelled}"
+                                  Content="{x:Static loc:Strings.Library_ShowCancelled}" FontSize="11" />
+                    </Grid>
+                    <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
+                            IsVisible="{Binding HasDownloadable}"
+                            Command="{Binding DownloadListedCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ic:FluentIcon Icon="ArrowDownload" FontSize="14" />
+                            <TextBlock Text="{Binding DownloadListedText}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
+                            Command="{Binding LoadAsYouPanCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ic:FluentIcon Icon="MapDrive" FontSize="14" />
+                            <TextBlock Text="{x:Static loc:Strings.Library_LoadAsYouPan}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <ListBox x:Name="ItemList"
+                         ItemsSource="{Binding Items}"
+                         SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                         Classes="accentList"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LibraryItemViewModel">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Background="Transparent">
+                                <StackPanel Grid.Column="0" Spacing="1">
+                                    <TextBlock Text="{Binding Name}" Classes="accentListTitle"
+                                               FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.8"
+                                               IsVisible="{Binding HasSubtitle}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.6"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Border Grid.Column="1"
+                                        Background="{Binding AvailabilityBrush}"
+                                        CornerRadius="9" Padding="8,3" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding AvailabilityText}" FontSize="10" FontWeight="Bold"
+                                               Foreground="White" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <Border Grid.Row="4" Height="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                    IsHitTestVisible="False" Background="{DynamicResource BorderColor}" />
+            <GridSplitter Grid.Row="4"
+                          Classes="PaneSplitter"
+                          Height="4"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext" />
+
+            <!-- Details of the selected dataset -->
+            <DockPanel Grid.Row="5" ClipToBounds="True">
+                <Border DockPanel.Dock="Top" Padding="8,8,8,4">
+                    <Panel>
+                        <TextBlock IsVisible="{Binding !HasSelectedItem}"
+                                   Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
+                                   Opacity="0.6" TextWrapping="Wrap"
+                                   HorizontalAlignment="Center" TextAlignment="Center" />
+                        <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0" Text="{Binding SelectedItem.Name}"
+                                       FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Classes="Icon" Command="{Binding DownloadCommand}"
+                                        IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadDataset}">
+                                    <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
+                                </Button>
+                                <Button Classes="Icon" Command="{Binding LoadCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}">
+                                    <ic:FluentIcon Icon="Open" FontSize="16" />
+                                </Button>
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="Icon" Command="{Binding ZoomToCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}">
+                                <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
+                            </Button>
+                            <Border Grid.Column="3" Background="{Binding SelectedItem.AvailabilityBrush}"
+                                    CornerRadius="9" Padding="8,3" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedItem.AvailabilityText}" FontSize="10"
+                                           FontWeight="Bold" Foreground="White" />
+                            </Border>
+                        </Grid>
+                    </Panel>
+                </Border>
+
+                <ScrollViewer IsVisible="{Binding HasSelectedItem}"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="10" Margin="8,4,8,8">
+                        <Border IsVisible="{Binding SelectedItem.NotForNavigation, FallbackValue=False}"
+                                Background="#FFE4B5" BorderBrush="#B8860B" BorderThickness="1"
+                                CornerRadius="4" Padding="10,8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ic:FluentIcon Icon="Warning" IconVariant="Filled" FontSize="20" Foreground="#8B4513" />
+                                <TextBlock Text="{x:Static loc:Strings.Library_NotForNavigation}"
+                                           FontWeight="SemiBold" Foreground="#8B4513" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding SelectedItem.Details}" Grid.IsSharedSizeScope="True">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnSpacing="12" Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="LibraryDetailKey" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Key}" Opacity="0.6" />
+                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Grid>
+    </Panel>
+</UserControl>

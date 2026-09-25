@@ -5,7 +5,6 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -153,6 +152,8 @@ public partial class App : Application
             .Register<Views.FeedbackDialogView, ViewModels.FeedbackDialogViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
+        _services.GetRequiredService<ShadUI.DialogManager>()
+            .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
         // wraps Mapsui's style registry. The renderer package owns the required
@@ -193,11 +194,6 @@ public partial class App : Application
                 "EncDotNet.S100.Viewer started (version {Version}).",
                 typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0");
         }
-
-        // Wire the S-128 catalog source into the aggregator. Done here (and
-        // not in MainWindow) so the registration is independent of the view.
-        _services.GetRequiredService<DatasetCatalogAggregator>()
-            .Add(_services.GetRequiredService<S128DatasetCatalogSource>());
 
         // Start (or leave disabled) the MCP server based on persisted settings.
         // Failures are logged but never block app startup.
@@ -325,6 +321,11 @@ public partial class App : Application
                 _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
             routePersistence.Initialize();
 
+            // Load the dataset collections and start background re-indexing
+            // (cached indexes appear immediately; nothing is loaded).
+            var library = _services.GetRequiredService<Library.LibraryService>();
+            library.Initialize();
+
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
 
             // Drain the tiled renderer's background Skia workers before the
@@ -338,6 +339,7 @@ public partial class App : Application
                 // Flush any pending debounced route save so the last edit is
                 // not lost to the debounce window.
                 routePersistence.Flush();
+                library.Dispose();
                 EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
             };
         }
@@ -370,10 +372,44 @@ public partial class App : Application
 
         // Shared application-level state
         services.AddSingleton<PortrayalCatalogueManager>();
-        services.AddSingleton<DatasetCatalogAggregator>();
-        services.AddSingleton<S128DatasetCatalogSource>();
-        services.AddSingleton<IDatasetCatalogSource>(
-            sp => sp.GetRequiredService<DatasetCatalogAggregator>());
+
+        // Dataset collections (issue #655): indexed metadata of local folders,
+        // exchange sets, online feeds and S-128 catalogues, never the data.
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        services.AddSingleton(sp =>
+        {
+            var metadata = sp.GetRequiredService<IDatasetMetadataReader>();
+            return EncDotNet.S100.Collections.Indexing.CollectionIndexer.CreateDefault(
+                probe: (path, _) => metadata.TryRead(path),
+                feeds: sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>());
+        });
+        services.AddSingleton<Library.LibraryService>();
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) },
+            Path.Combine(sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory, "noaa-enc")));
+        services.AddSingleton<Library.ILibraryDownloader>(sp => new Library.LibraryDownloadService(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Noaa.NoaaEncCellDownloader>(),
+            sp.GetService<Services.Notifications.INotificationService>()));
+        services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
+            sp.GetRequiredService<IExchangeSetService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetService<Services.Notifications.INotificationService>()));
+        services.AddTransient(sp =>
+        {
+            var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>();
+            return new AddToLibraryDialogViewModel(
+                sp.GetRequiredService<Library.LibraryService>(),
+                ct => feeds.GetCatalogAsync(EncDotNet.S100.Collections.NoaaEncFeedSource.DefaultCatalogUri, cancellationToken: ct));
+        });
+        services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
+        services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(
+            sp.GetRequiredService<Library.LibraryService>(),
+            sp.GetRequiredService<IFileDialogService>(),
+            sp.GetRequiredService<ShadUI.DialogManager>(),
+            sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
+            sp.GetService<IViewerUiControllerAccessor>()));
 
         // Feature-catalogue parsing is shared across every dataset load
         // — the manager's parse cache must survive across factory
@@ -766,7 +802,7 @@ public partial class App : Application
             sp.GetService<IUrlOpener>()));
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
-        services.AddSingleton<CatalogPanelViewModel>();
+        services.AddSingleton<LibraryPanelViewModel>();
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
@@ -815,11 +851,11 @@ public partial class App : Application
             title: Strings.Pane_Datasets,
             tooltip: Strings.Tooltip_Datasets,
             iconFactory: static () => new FluentIcon { Icon = Icon.Layer, IconVariant = IconVariant.Regular, FontSize = 22 });
-        services.AddActivityTab<CatalogPanelViewModel, CatalogPanelView>(
-            id: "Catalog",
+        services.AddActivityTab<LibraryPanelViewModel, LibraryPanelView>(
+            id: LibraryImportCoordinator.LibraryPanelId,
             order: 20,
-            title: Strings.Pane_Catalog,
-            tooltip: Strings.Tooltip_Catalog,
+            title: Strings.Pane_Library,
+            tooltip: Strings.Tooltip_Library,
             iconFactory: static () => new FluentIcon { Icon = Icon.Library, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
@@ -921,7 +957,7 @@ public partial class App : Application
         services.AddSingleton<MainWindow>(sp => new MainWindow(
             StartupOptions,
             sp.GetRequiredService<MainViewModel>(),
-            sp.GetRequiredService<DatasetCatalogAggregator>(),
+            sp.GetRequiredService<ILibraryImporter>(),
             sp.GetRequiredService<IRecentFilesService>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<IPickService>(),

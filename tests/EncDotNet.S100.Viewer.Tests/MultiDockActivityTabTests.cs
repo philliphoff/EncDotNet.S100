@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
@@ -153,13 +152,6 @@ public sealed class MultiDockActivityTabTests : IDisposable
         Assert.Null(settings.LastSelectedActivity);
     }
 
-    private sealed class EmptyCatalogSource : IDatasetCatalogSource
-    {
-        public string Id => "test";
-        public string DisplayName => "Test";
-        public IReadOnlyList<DatasetCatalogEntry> Entries => Array.Empty<DatasetCatalogEntry>();
-        public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
-    }
 
     private sealed class StubThemeService : IThemeService
     {
@@ -202,7 +194,6 @@ public sealed class MultiDockActivityTabTests : IDisposable
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             layerStack: new LayerStackViewModel(new NoopLoader()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),

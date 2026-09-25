@@ -51,6 +51,21 @@ public class Part15DigitalSignatureTests
     }
 
     [Theory]
+    [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert">AQ==</S100SE:S100_SE_SignatureOnData>""")]
+    [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert" dataStatus="unencrypted">not-base64</S100SE:S100_SE_SignatureOnData>""")]
+    public void Read_DiscoveryOnly_SkipsMalformedSignatureAndCertificates(string signatureElement)
+    {
+        var catalogue = ReadCatalogue(
+            $"<S100XC:digitalSignatureValue>{signatureElement}</S100XC:digitalSignatureValue>",
+            ExchangeCatalogueReadOptions.DiscoveryOnly);
+
+        var dataset = Assert.Single(catalogue.DatasetDiscoveryMetadata);
+        Assert.Equal("test.bin", dataset.FileName);
+        Assert.Empty(dataset.DigitalSignatures);
+        Assert.Null(catalogue.Certificates);
+    }
+
+    [Theory]
     [InlineData("unencrypted", SignatureDataStatus.Unencrypted)]
     [InlineData("compressed", SignatureDataStatus.Compressed)]
     [InlineData("encrypted", SignatureDataStatus.Encrypted)]
@@ -513,7 +528,8 @@ public class Part15DigitalSignatureTests
             Assert.Single(Assert.Single(result.FileResults).SignatureResults).FailureReason);
     }
 
-    private static ExchangeCatalogue ReadCatalogue(string signatureElements)
+    private static ExchangeCatalogue ReadCatalogue(
+        string signatureElements, ExchangeCatalogueReadOptions? options = null)
     {
         var xml =
             $$"""
@@ -538,7 +554,7 @@ public class Part15DigitalSignatureTests
               </S100XC:S100_ExchangeCatalogue>
               """;
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
-        return ExchangeCatalogueReader.Read(stream);
+        return ExchangeCatalogueReader.Read(stream, options ?? ExchangeCatalogueReadOptions.Default);
     }
 
     private static X509Certificate2 CreateCertificate(ECDsa ecdsa)

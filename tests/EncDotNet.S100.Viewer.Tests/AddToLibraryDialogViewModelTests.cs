@@ -1,0 +1,121 @@
+using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Viewer.Library;
+using EncDotNet.S100.Viewer.ViewModels;
+
+namespace EncDotNet.S100.Viewer.Tests;
+
+public sealed class AddToLibraryDialogViewModelTests : IDisposable
+{
+    private readonly LibraryTestContext _context = new();
+    private readonly LibraryService _library;
+
+    public AddToLibraryDialogViewModelTests()
+    {
+        // Not initialized: no background indexing (and no network) runs.
+        _library = _context.CreateService();
+    }
+
+    public void Dispose()
+    {
+        _library.Dispose();
+        _context.Dispose();
+    }
+
+    private static Task<NoaaEncProductCatalog> LoadFixtureCatalog(CancellationToken _) =>
+        Task.FromResult(NoaaEncProductCatalogReader.Read(LibraryTestContext.RepoFile(
+            "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")));
+
+    [Fact]
+    public void Folder_defaults_to_a_new_collection_named_after_the_folder()
+    {
+        var folder = Path.Combine(_context.Root, "Alaska Charts");
+        var vm = new AddToLibraryDialogViewModel(_library, null);
+        bool? closed = null;
+        vm.Closed += (_, ok) => closed = ok;
+
+        vm.Initialize(AddToLibraryKind.Folder, folder, targetCollectionId: null);
+
+        Assert.True(vm.CreateNew);
+        Assert.Equal("Alaska Charts", vm.NewCollectionName);
+        Assert.False(vm.HasExistingCollections);
+        Assert.True(vm.ConfirmCommand.CanExecute(null));
+
+        vm.ConfirmCommand.Execute(null);
+
+        Assert.True(closed);
+        var collection = Assert.Single(_library.Collections);
+        Assert.Equal("Alaska Charts", collection.Definition.Name);
+        var source = Assert.IsType<LocalFolderSource>(Assert.Single(collection.Sources).Definition);
+        Assert.Equal(folder, source.Path);
+    }
+
+    [Fact]
+    public void A_target_collection_is_preselected_and_receives_the_source()
+    {
+        var existing = _library.AddCollection("Mine", []);
+        var zip = Path.Combine(_context.Root, "set.zip");
+        var vm = new AddToLibraryDialogViewModel(_library, null);
+
+        vm.Initialize(AddToLibraryKind.ExchangeSet, zip, existing.Id);
+
+        Assert.False(vm.CreateNew);
+        Assert.True(vm.AddToExisting);
+        Assert.Equal(existing.Id, vm.SelectedCollection!.Id);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var collection = Assert.Single(_library.Collections);
+        Assert.IsType<ExchangeSetSource>(Assert.Single(collection.Sources).Definition);
+    }
+
+    [Fact]
+    public void An_empty_new_name_cannot_be_confirmed()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, null);
+        vm.Initialize(AddToLibraryKind.Folder, _context.Root, null);
+
+        vm.NewCollectionName = "  ";
+
+        Assert.False(vm.ConfirmCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Noaa_feed_lists_facets_and_builds_a_scoped_source()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
+        Assert.False(vm.ConfirmCommand.CanExecute(null));
+
+        await vm.LoadCatalogAsync();
+
+        Assert.True(vm.ConfirmCommand.CanExecute(null));
+        var alaska = vm.States.Single(s => s.Value == "AK");
+        Assert.Equal("Alaska (AK)", alaska.Label);
+        Assert.Contains("All 6 cells", vm.SelectionSummary);
+
+        alaska.IsSelected = true;
+
+        Assert.StartsWith("2 cells", vm.SelectionSummary);
+        Assert.Equal("NOAA ENC — Alaska", vm.NewCollectionName);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<NoaaEncFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(["AK"], source.Filter.States);
+        Assert.Equal("Alaska", source.DisplayName);
+    }
+
+    [Fact]
+    public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, _ => throw new HttpRequestException("offline"));
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
+
+        await vm.LoadCatalogAsync();
+
+        Assert.True(vm.HasLoadError);
+        Assert.Equal("offline", vm.LoadError);
+        Assert.False(vm.ConfirmCommand.CanExecute(null));
+    }
+}

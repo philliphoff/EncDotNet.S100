@@ -138,8 +138,8 @@ internal sealed class DatasetEntry : ViewModelBase
 
     /// <summary>
     /// The ENC navigational-purpose band (1&#160;Overview .. 6&#160;Berthing)
-    /// parsed from the cell name (S-57 Ed 3.1 App&#160;B.1 / S-101 §5.5), or
-    /// <see langword="null"/> when the name is not a recognised ENC cell.
+    /// parsed from an S-57 cell name (S-57 Ed 3.1 App&#160;B.1), or
+    /// <see langword="null"/> for other products or unrecognised names.
     /// Used as a load-free scale proxy for lazy loading (issue #458).
     /// </summary>
     public int? UsageBand { get; }
@@ -580,8 +580,12 @@ internal sealed class DatasetEntry : ViewModelBase
             filePath is { Length: > 0 }
                 ? System.IO.Path.GetFileName(filePath)
                 : DisplayName);
-        UsageBand = Services.LazyLoading.CellUsageBand.TryParse(DisplayName)
-            ?? Services.LazyLoading.CellUsageBand.TryParse(relativePath);
+        // Only S-57 cell names encode the band as their third character;
+        // S-101 names ("101AU005…") would otherwise parse as band 1.
+        UsageBand = productSpec == "S-57"
+            ? Services.LazyLoading.CellUsageBand.TryParse(DisplayName)
+                ?? Services.LazyLoading.CellUsageBand.TryParse(relativePath)
+            : null;
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
 
         _subLayers.CollectionChanged += (_, _) =>

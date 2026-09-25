@@ -143,9 +143,28 @@ internal static class LazyCellGate
         double viewSouth,
         double viewWest,
         double viewNorth,
-        double viewEast) =>
+        double viewEast,
+        int? minimumDisplayScale = null) =>
         IntersectsViewport(cell, viewSouth, viewWest, viewNorth, viewEast)
-        && IsBandEligible(band, scaleDenominator);
+        && IsScaleEligible(band, minimumDisplayScale, scaleDenominator);
+
+    /// <summary>
+    /// Scale gate for any dataset: an S-57 cell by its usage band
+    /// (<see cref="IsBandEligible"/>); otherwise, when the dataset declares a
+    /// coarsest display scale (S-100 <c>minimumDisplayScale</c>), only at or
+    /// finer than that scale; a dataset with neither is always eligible.
+    /// Issue #655 (lazy loading beyond S-57).
+    /// </summary>
+    public static bool IsScaleEligible(int? band, int? minimumDisplayScale, double scaleDenominator)
+    {
+        if (band is not null)
+            return IsBandEligible(band, scaleDenominator);
+        if (minimumDisplayScale is not { } coarsest || coarsest <= 0)
+            return true;
+        if (double.IsNaN(scaleDenominator) || scaleDenominator <= 0)
+            return true;
+        return scaleDenominator <= coarsest;
+    }
 
     /// <summary>
     /// Converts an EPSG:3857 (web-mercator) resolution in metres/pixel to an

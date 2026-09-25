@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Collections.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+  </ItemGroup>
+
+</Project>

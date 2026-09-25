@@ -17,49 +17,18 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal static class ExchangeSetDetection
 {
-    /// <summary>The canonical S-100 catalogue filename (S-100 Part 17),
-    /// matched case-insensitively.</summary>
-    private const string CatalogueFileName = "CATALOG.XML";
-
-    /// <summary>
-    /// Accepted exchange-set catalogue filenames, matched
-    /// case-insensitively. In addition to the canonical
-    /// <c>CATALOG.XML</c> (S-100 Part 17), several products in the wild
-    /// — notably JCOMM/IHO S-411 sample sets — name the catalogue
-    /// <c>catalogue.xml</c>. Both are recognised so their exchange sets
-    /// route to the exchange-set loader instead of silently falling
-    /// through to the single-file loader.
-    /// </summary>
-    private static readonly string[] CatalogueFileNames =
-    {
-        CatalogueFileName,
-        "CATALOGUE.XML",
-    };
-
-    /// <summary>The S-57 / S-63 exchange-set catalogue filename, matched
-    /// case-insensitively.</summary>
-    private const string S57CatalogueFileName = "CATALOG.031";
+    // Catalogue file names (CATALOG.XML / CATALOGUE.XML, CATALOG.031) are
+    // shared with collection indexing through ExchangeSetLayout, so the
+    // viewer and the library agree on what an exchange set is (issue #655).
 
     /// <summary>The base-cell extension shared by S-57 (S-57 Ed 3.1
     /// Appendix B.1) and S-101 (S-100 Part 10a) ENC datasets. Sequential
     /// updates use <c>.001</c>, <c>.002</c>, …</summary>
     private const string BaseCellExtension = ".000";
 
-    private static bool IsCatalogueFileName(string fileName) =>
-        Array.Exists(
-            CatalogueFileNames,
-            n => string.Equals(n, fileName, StringComparison.OrdinalIgnoreCase));
-
     private static string? PickCatalogueName(IEnumerable<string?> names) =>
-        names.OfType<string>()
-            .Where(IsCatalogueFileName)
-            .OrderBy(
-                name => string.Equals(
-                    name, CatalogueFileName, StringComparison.OrdinalIgnoreCase)
-                    ? 0
-                    : 1)
-            .ThenBy(name => name, StringComparer.Ordinal)
-            .FirstOrDefault();
+        EncDotNet.S100.Collections.ExchangeSetLayout.PickS100Catalogue(
+            names.OfType<string>().OrderBy(name => name, StringComparer.Ordinal));
 
     /// <summary>True when <paramref name="path"/> ends with
     /// <c>.zip</c> (case-insensitive).</summary>
@@ -155,7 +124,7 @@ internal static class ExchangeSetDetection
             if (!Directory.Exists(folderPath)) return false;
             return Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly)
                 .Any(f => string.Equals(
-                    Path.GetFileName(f), S57CatalogueFileName,
+                    Path.GetFileName(f), EncDotNet.S100.Collections.ExchangeSetLayout.S57CatalogueName,
                     StringComparison.OrdinalIgnoreCase));
         }
         catch (UnauthorizedAccessException) { return false; }
@@ -169,7 +138,7 @@ internal static class ExchangeSetDetection
     {
         if (string.IsNullOrEmpty(path)) return false;
         return string.Equals(
-                   Path.GetFileName(path), S57CatalogueFileName,
+                   Path.GetFileName(path), EncDotNet.S100.Collections.ExchangeSetLayout.S57CatalogueName,
                    StringComparison.OrdinalIgnoreCase)
                && File.Exists(path);
     }
@@ -188,7 +157,7 @@ internal static class ExchangeSetDetection
         {
             if (!LooksLikeS57ExchangeSetFolder(path))
                 throw new FileNotFoundException(
-                    $"No {S57CatalogueFileName} found in folder: {path}");
+                    $"No {EncDotNet.S100.Collections.ExchangeSetLayout.S57CatalogueName} found in folder: {path}");
             return Path.GetFullPath(path);
         }
 

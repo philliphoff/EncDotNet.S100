@@ -33,9 +33,6 @@
   <data name="Pane_Datasets" xml:space="preserve">
     <value>DATASETS</value>
   </data>
-  <data name="Pane_Catalog" xml:space="preserve">
-    <value>DATASET CATALOG</value>
-  </data>
   <data name="Pane_Settings" xml:space="preserve">
     <value>SETTINGS</value>
   </data>
@@ -149,9 +146,6 @@
   </data>
   <data name="Tooltip_Datasets" xml:space="preserve">
     <value>Datasets</value>
-  </data>
-  <data name="Tooltip_Catalog" xml:space="preserve">
-    <value>Dataset Catalog</value>
   </data>
   <data name="Tooltip_LayerStack" xml:space="preserve">
     <value>Layer Stack</value>
@@ -576,45 +570,6 @@
   </data>
 
   <!-- Catalog (S-128) panel -->
-  <data name="Catalog_EmptyTitle" xml:space="preserve">
-    <value>No catalogues found</value>
-  </data>
-  <data name="Catalog_EmptyDescription" xml:space="preserve">
-    <value>Open an S-128 dataset to populate this panel.</value>
-  </data>
-  <data name="Catalog_SelectEntryPlaceholder" xml:space="preserve">
-    <value>Select a catalogue entry to view its properties.</value>
-  </data>
-  <data name="Catalog_NotForNavigation" xml:space="preserve">
-    <value>Not for navigation</value>
-  </data>
-  <data name="Catalog_Field_Spec" xml:space="preserve">
-    <value>Spec</value>
-  </data>
-  <data name="Catalog_Field_Edition" xml:space="preserve">
-    <value>Edition</value>
-  </data>
-  <data name="Catalog_Field_Update" xml:space="preserve">
-    <value>Update</value>
-  </data>
-  <data name="Catalog_Field_Issued" xml:space="preserve">
-    <value>Issued</value>
-  </data>
-  <data name="Catalog_Field_Updated" xml:space="preserve">
-    <value>Updated</value>
-  </data>
-  <data name="Catalog_Field_Coverage" xml:space="preserve">
-    <value>Coverage</value>
-  </data>
-  <data name="Catalog_Field_NorthEast" xml:space="preserve">
-    <value>NE</value>
-  </data>
-  <data name="Catalog_Field_SouthWest" xml:space="preserve">
-    <value>SW</value>
-  </data>
-  <data name="Catalog_SourceProperties" xml:space="preserve">
-    <value>Source properties</value>
-  </data>
 
   <!-- Pick (Object Information) panel -->
   <data name="Pick_PanelTitle" xml:space="preserve">
@@ -1253,10 +1208,6 @@
   <data name="Status_LooseCellFolderNoCells" xml:space="preserve">
     <value>No renderable ENC cells found in {0}.</value>
     <comment>{0} = folder path. Shown when a catalogue-less folder of loose cells yields nothing loadable.</comment>
-  </data>
-  <data name="Status_FolderNoDatasets" xml:space="preserve">
-    <value>No S-100 exchange set or ENC cells found in {0}.</value>
-    <comment>{0} = dropped folder path. Shown when a dropped folder has no catalogue and no loose base cells.</comment>
   </data>
   <data name="Status_ExchangeSetUnsupportedSpec" xml:space="preserve">
     <value>Skipped {0}: unsupported product specification '{1}'.</value>
@@ -2443,5 +2394,296 @@
   </data>
   <data name="About_Time_DaysAgo" xml:space="preserve">
     <value>{0} days ago</value>
+  </data>
+  <data name="Pane_Library" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Tooltip_Library" xml:space="preserve">
+    <value>Library — collections of exchange sets and datasets</value>
+  </data>
+  <data name="Button_AddToLibrary" xml:space="preserve">
+    <value>Add to Library</value>
+  </data>
+  <data name="Button_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="FilePicker_LibraryFolderTitle" xml:space="preserve">
+    <value>Add Folder to Library</value>
+  </data>
+  <data name="FilePicker_S128CatalogueTitle" xml:space="preserve">
+    <value>Add S-128 Catalogue to Library</value>
+  </data>
+  <data name="FilePicker_S128CatalogueType" xml:space="preserve">
+    <value>S-128 Catalogue of Nautical Products</value>
+  </data>
+  <data name="Menu_AddToLibrary" xml:space="preserve">
+    <value>Add to Library</value>
+  </data>
+  <data name="Menu_AddLibraryFolder" xml:space="preserve">
+    <value>Folder…</value>
+  </data>
+  <data name="Menu_AddLibraryExchangeSetZip" xml:space="preserve">
+    <value>Exchange Set ZIP…</value>
+  </data>
+  <data name="Menu_AddLibraryNoaaFeed" xml:space="preserve">
+    <value>NOAA ENC Feed…</value>
+  </data>
+  <data name="Menu_AddLibraryS128" xml:space="preserve">
+    <value>S-128 Catalogue…</value>
+  </data>
+  <data name="Tooltip_AddToLibrary" xml:space="preserve">
+    <value>Add a folder, exchange set, online feed or S-128 catalogue</value>
+  </data>
+  <data name="Tooltip_KeepInLibrary" xml:space="preserve">
+    <value>Keep this catalogue in the library</value>
+  </data>
+  <data name="Tooltip_RefreshLibrary" xml:space="preserve">
+    <value>Re-index the selected collection</value>
+  </data>
+  <data name="Tooltip_RemoveFromLibrary" xml:space="preserve">
+    <value>Remove from the library (files are not deleted)</value>
+  </data>
+  <data name="Toast_AddedToLibraryPrompt" xml:space="preserve">
+    <value>Add this to the library to find it again without opening it.</value>
+  </data>
+  <data name="Toast_AddToLibraryAction" xml:space="preserve">
+    <value>Add to Library</value>
+  </data>
+  <data name="Library_AddTitle" xml:space="preserve">
+    <value>Add to Library</value>
+  </data>
+  <data name="Library_AddNoaaTitle" xml:space="preserve">
+    <value>Add NOAA ENC Feed</value>
+  </data>
+  <data name="Library_AddNote" xml:space="preserve">
+    <value>Only information about the datasets is indexed; nothing is loaded or downloaded, and the files stay where they are.</value>
+  </data>
+  <data name="Library_AddTo" xml:space="preserve">
+    <value>Add to</value>
+  </data>
+  <data name="Library_AndMoreFormat" xml:space="preserve">
+    <value>{0} and {1} more</value>
+  </data>
+  <data name="Library_Availability_Listed" xml:space="preserve">
+    <value>LISTED</value>
+  </data>
+  <data name="Library_Availability_Local" xml:space="preserve">
+    <value>LOCAL</value>
+  </data>
+  <data name="Library_Availability_Missing" xml:space="preserve">
+    <value>MISSING</value>
+  </data>
+  <data name="Library_Availability_Online" xml:space="preserve">
+    <value>ONLINE</value>
+  </data>
+  <data name="Library_BandFormat" xml:space="preserve">
+    <value>Band {0}</value>
+  </data>
+  <data name="Library_CollectionNameWatermark" xml:space="preserve">
+    <value>Collection name</value>
+  </data>
+  <data name="Library_DistrictFormat" xml:space="preserve">
+    <value>District {0}</value>
+  </data>
+  <data name="Library_EditionFormat" xml:space="preserve">
+    <value>Ed {0}</value>
+  </data>
+  <data name="Library_EditionUpdateFormat" xml:space="preserve">
+    <value>Ed {0} Upd {1}</value>
+  </data>
+  <data name="Library_EmptyTitle" xml:space="preserve">
+    <value>No collections yet</value>
+  </data>
+  <data name="Library_EmptyDescription" xml:space="preserve">
+    <value>Add folders of exchange sets and datasets, or an online feed such as NOAA's ENCs. The library indexes what they contain without loading them.</value>
+  </data>
+  <data name="Library_ExistingCollection" xml:space="preserve">
+    <value>Existing collection</value>
+  </data>
+  <data name="Library_FacetDetailFormat" xml:space="preserve">
+    <value>{0:N0} cells · {1}</value>
+  </data>
+  <data name="Library_Field_Band" xml:space="preserve">
+    <value>Usage band</value>
+  </data>
+  <data name="Library_Field_CompilationScale" xml:space="preserve">
+    <value>Compilation scale</value>
+  </data>
+  <data name="Library_Field_DisplayScales" xml:space="preserve">
+    <value>Display scales</value>
+  </data>
+  <data name="Library_Field_Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Library_Field_Edition" xml:space="preserve">
+    <value>Edition</value>
+  </data>
+  <data name="Library_Field_Issued" xml:space="preserve">
+    <value>Issued</value>
+  </data>
+  <data name="Library_Field_Location" xml:space="preserve">
+    <value>Location</value>
+  </data>
+  <data name="Library_Field_NorthEast" xml:space="preserve">
+    <value>North-east</value>
+  </data>
+  <data name="Library_Field_Size" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Library_Field_SouthWest" xml:space="preserve">
+    <value>South-west</value>
+  </data>
+  <data name="Library_Field_Spec" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Library_Field_Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Library_Field_Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Library_Field_Update" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="Library_Field_UpdateApplied" xml:space="preserve">
+    <value>Update applied</value>
+  </data>
+  <data name="Library_Field_Updates" xml:space="preserve">
+    <value>Update files</value>
+  </data>
+  <data name="Library_FilterWatermark" xml:space="preserve">
+    <value>Filter by name, title, product or state</value>
+  </data>
+  <data name="Library_FilteredItemCountFormat" xml:space="preserve">
+    <value>{0:N0} of {1:N0} datasets</value>
+  </data>
+  <data name="Library_IndexedAtFormat" xml:space="preserve">
+    <value>{0:N0} datasets, indexed {1:g}</value>
+  </data>
+  <data name="Library_ItemCountFormat" xml:space="preserve">
+    <value>{0:N0} datasets</value>
+  </data>
+  <data name="Library_NewCollection" xml:space="preserve">
+    <value>New collection</value>
+  </data>
+  <data name="Library_NoaaAll" xml:space="preserve">
+    <value>All ENCs</value>
+  </data>
+  <data name="Library_NoaaChooseScope" xml:space="preserve">
+    <value>Include cells in (none selected = all)</value>
+  </data>
+  <data name="Library_NoaaClearSelection" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Library_NoaaDistricts" xml:space="preserve">
+    <value>Coast Guard districts</value>
+  </data>
+  <data name="Library_NoaaFeed" xml:space="preserve">
+    <value>NOAA ENC</value>
+  </data>
+  <data name="Library_NoaaLoading" xml:space="preserve">
+    <value>Fetching the NOAA ENC catalogue…</value>
+  </data>
+  <data name="Library_NoaaRegions" xml:space="preserve">
+    <value>Regions</value>
+  </data>
+  <data name="Library_NoaaSelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} cells · {1}</value>
+  </data>
+  <data name="Library_NoaaSelectionFormat" xml:space="preserve">
+    <value>{0:N0} cells · {1}</value>
+  </data>
+  <data name="Library_NoaaStates" xml:space="preserve">
+    <value>States</value>
+  </data>
+  <data name="Library_NotForNavigation" xml:space="preserve">
+    <value>Not for navigation</value>
+  </data>
+  <data name="Library_ProblemsFormat" xml:space="preserve">
+    <value>{0:N0} problems while indexing</value>
+  </data>
+  <data name="Library_RegionFormat" xml:space="preserve">
+    <value>Region {0}</value>
+  </data>
+  <data name="Library_SelectItemPlaceholder" xml:space="preserve">
+    <value>Select a dataset to see its details</value>
+  </data>
+  <data name="Library_SessionCollectionName" xml:space="preserve">
+    <value>Session (loaded S-128)</value>
+  </data>
+  <data name="Library_ShowCancelled" xml:space="preserve">
+    <value>Show cancelled</value>
+  </data>
+  <data name="Library_Status_Failed" xml:space="preserve">
+    <value>failed</value>
+  </data>
+  <data name="Library_Status_Indexing" xml:space="preserve">
+    <value>indexing…</value>
+  </data>
+  <data name="Library_Status_Pending" xml:space="preserve">
+    <value>…</value>
+  </data>
+  <data name="Library_AtLocationFormat" xml:space="preserve">
+    <value>Datasets at {0}</value>
+  </data>
+  <data name="Tooltip_ShowCoverage" xml:space="preserve">
+    <value>Show dataset coverage on the map</value>
+  </data>
+  <data name="Tooltip_ZoomToDataset" xml:space="preserve">
+    <value>Zoom to this dataset</value>
+  </data>
+  <data name="Tooltip_ClearLocation" xml:space="preserve">
+    <value>Show the selected collection again</value>
+  </data>
+  <data name="Library_Availability_Deferred" xml:space="preserve">
+    <value>ON PAN</value>
+  </data>
+  <data name="Library_Availability_Loaded" xml:space="preserve">
+    <value>LOADED</value>
+  </data>
+  <data name="Library_LoadAsYouPan" xml:space="preserve">
+    <value>Load as you pan</value>
+  </data>
+  <data name="Tooltip_LoadDataset" xml:space="preserve">
+    <value>Load this dataset now</value>
+  </data>
+  <data name="Tooltip_LoadAsYouPan" xml:space="preserve">
+    <value>Load the listed datasets as they come into view</value>
+  </data>
+  <data name="Toast_LibraryDeferredTitle" xml:space="preserve">
+    <value>Loading as you pan</value>
+  </data>
+  <data name="Toast_LibraryDeferredFormat" xml:space="preserve">
+    <value>{0:N0} datasets will load as they come into view.</value>
+  </data>
+  <data name="Toast_LibraryDeferredSkippedFormat" xml:space="preserve">
+    <value>{0:N0} datasets will load as they come into view; {1:N0} could not be opened (online, missing or catalogue-only).</value>
+  </data>
+  <data name="Library_Availability_Outdated" xml:space="preserve">
+    <value>UPDATE</value>
+  </data>
+  <data name="Library_DownloadListedFormat" xml:space="preserve">
+    <value>Download {0:N0} ({1})</value>
+  </data>
+  <data name="Tooltip_DownloadListed" xml:space="preserve">
+    <value>Download the listed online datasets to this computer</value>
+  </data>
+  <data name="Tooltip_DownloadDataset" xml:space="preserve">
+    <value>Download this dataset and load it</value>
+  </data>
+  <data name="Toast_LibraryDownloadingTitle" xml:space="preserve">
+    <value>Downloading charts</value>
+  </data>
+  <data name="Toast_LibraryDownloadingFormat" xml:space="preserve">
+    <value>{0:N0} of {1:N0} cells · {2}</value>
+  </data>
+  <data name="Toast_LibraryDownloadedTitle" xml:space="preserve">
+    <value>Charts downloaded</value>
+  </data>
+  <data name="Toast_LibraryDownloadCancelledTitle" xml:space="preserve">
+    <value>Download cancelled</value>
+  </data>
+  <data name="Toast_LibraryDownloadedFormat" xml:space="preserve">
+    <value>{0:N0} downloaded, {1:N0} failed.</value>
   </data>
 </root>

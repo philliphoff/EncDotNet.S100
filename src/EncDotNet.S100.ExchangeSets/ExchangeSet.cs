@@ -82,7 +82,7 @@ public sealed class ExchangeSet : IDisposable
 
     /// <summary>
     /// Normalizes a catalogue-declared file name into a source-relative path:
-    /// strips the <c>file:/</c> URI prefix, converts Windows-style
+    /// strips the <c>file:/</c> (or relative <c>file:</c>) URI prefix, converts Windows-style
     /// backslash separators to forward slashes, and removes any leading
     /// slashes (which S-100 catalogues occasionally use to denote
     /// "from the exchange set root" but which would otherwise be treated
@@ -98,6 +98,12 @@ public sealed class ExchangeSet : IDisposable
         if (name.StartsWith("file:/", StringComparison.OrdinalIgnoreCase))
         {
             name = name["file:/".Length..];
+        }
+        else if (name.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+        {
+            // A relative file URI (e.g. NOAA's "file:../Southeast/…" from a
+            // catalogue kept in a sibling _CATALOG folder).
+            name = name["file:".Length..];
         }
 
         name = name.Replace('\\', '/').TrimStart('/');

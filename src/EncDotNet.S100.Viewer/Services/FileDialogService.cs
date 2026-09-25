@@ -121,4 +121,37 @@ internal sealed class FileDialogService : IFileDialogService
 
         return files[0].TryGetLocalPath();
     }
+
+    public async Task<string?> OpenLibraryFolderAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var folders = await picker.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = Strings.FilePicker_LibraryFolderTitle,
+            AllowMultiple = false,
+        });
+
+        return folders is { Count: > 0 } ? folders[0].TryGetLocalPath() : null;
+    }
+
+    public async Task<string?> OpenS128CatalogueAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_S128CatalogueTitle,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_S128CatalogueType) { Patterns = new[] { "*.gml", "*.xml" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
+    }
 }
