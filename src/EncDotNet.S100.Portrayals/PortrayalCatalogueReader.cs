@@ -18,7 +18,25 @@ public static class PortrayalCatalogueReader
     /// <summary>Reads a portrayal catalogue from an XML stream.</summary>
     /// <param name="stream">Stream positioned at the start of the catalogue XML. It is not disposed.</param>
     /// <returns>The parsed catalogue.</returns>
-    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or a required element or
+    /// attribute is missing: the <c>fileName</c>, <c>fileType</c> or
+    /// <c>fileFormat</c> of a catalogue item or rule file, a rule file's
+    /// <c>ruleType</c>, a context parameter's <c>type</c> or <c>default</c>, or
+    /// the <c>id</c> of a rule file, context parameter, viewing group layer,
+    /// display mode or display plane. The message names the missing element or
+    /// attribute.
+    /// </exception>
+    /// <remarks>
+    /// The document is not validated against the Part 9 schema. Elements and
+    /// attributes that the returned model declares non-nullable are checked for
+    /// presence, so a catalogue that lacks one fails with an
+    /// <see cref="XmlException"/> rather than yielding <see langword="null"/> in a
+    /// non-nullable property. The root <c>productId</c> and <c>version</c>, a
+    /// catalogue item's <c>id</c> and a <c>description</c>'s <c>name</c> are
+    /// lenient and read as empty strings when absent; <c>viewingGroup</c> entries
+    /// without an <c>id</c> are treated as references and skipped.
+    /// </remarks>
     public static PortrayalCatalogue Read(Stream stream)
     {
         var doc = XDocument.Load(stream);
@@ -28,8 +46,20 @@ public static class PortrayalCatalogueReader
     /// <summary>Reads a portrayal catalogue from an XML file or URI.</summary>
     /// <param name="path">Path or URI of the catalogue XML file.</param>
     /// <returns>The parsed catalogue.</returns>
-    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or a required element or
+    /// attribute is missing: the <c>fileName</c>, <c>fileType</c> or
+    /// <c>fileFormat</c> of a catalogue item or rule file, a rule file's
+    /// <c>ruleType</c>, a context parameter's <c>type</c> or <c>default</c>, or
+    /// the <c>id</c> of a rule file, context parameter, viewing group layer,
+    /// display mode or display plane. The message names the missing element or
+    /// attribute.
+    /// </exception>
     /// <exception cref="IOException">The file cannot be read (e.g. it does not exist).</exception>
+    /// <remarks>
+    /// See <see cref="Read(Stream)"/> for which elements are required and which
+    /// are read leniently.
+    /// </remarks>
     public static PortrayalCatalogue Read(string path)
     {
         var doc = XDocument.Load(path);
@@ -86,6 +116,16 @@ public static class PortrayalCatalogueReader
         return unqualified.Concat(qualified);
     }
 
+    private static string RequiredElementValue(XElement parent, string localName) =>
+        (string?)FindElement(parent, localName)
+            ?? throw new XmlException(
+                $"Portrayal catalogue element '{parent.Name.LocalName}' is missing required element '{localName}'.");
+
+    private static string RequiredAttribute(XElement element, string localName) =>
+        (string?)element.Attribute(localName)
+            ?? throw new XmlException(
+                $"Portrayal catalogue element '{element.Name.LocalName}' is missing required attribute '{localName}'.");
+
     private static List<CatalogItem> ReadCatalogItems(XElement root, string containerName, string itemName)
     {
         var container = FindElement(root, containerName);
@@ -105,10 +145,10 @@ public static class PortrayalCatalogueReader
         return new CatalogItem
         {
             Id = (string?)element.Attribute("id") ?? "",
-            Description = ReadDescription(element)!,
-            FileName = (string)(FindElement(element, "fileName") ?? element.Element(PC + "fileName"))!,
-            FileType = (string)(FindElement(element, "fileType") ?? element.Element(PC + "fileType"))!,
-            FileFormat = (string)(FindElement(element, "fileFormat") ?? element.Element(PC + "fileFormat"))!,
+            Description = ReadDescription(element),
+            FileName = RequiredElementValue(element, "fileName"),
+            FileType = RequiredElementValue(element, "fileType"),
+            FileFormat = RequiredElementValue(element, "fileFormat"),
         };
     }
 
@@ -137,7 +177,7 @@ public static class PortrayalCatalogueReader
             .Where(e => e.Attribute("id") is not null) // skip viewing group ID references
             .Select(e => new ViewingGroup
             {
-                Id = (string)e.Attribute("id")!,
+                Id = RequiredAttribute(e, "id"),
                 Description = ReadDescription(e),
             })
             .ToList();
@@ -162,7 +202,7 @@ public static class PortrayalCatalogueReader
         return FindElements(container, "viewingGroupLayer")
             .Select(e => new ViewingGroupLayer
             {
-                Id = (string)e.Attribute("id")!,
+                Id = RequiredAttribute(e, "id"),
                 Description = ReadDescription(e),
                 ViewingGroupIds = FindElements(e, "viewingGroup")
                     .Select(vg => vg.Value.Trim())
@@ -180,7 +220,7 @@ public static class PortrayalCatalogueReader
         return FindElements(container, "displayMode")
             .Select(e => new DisplayMode
             {
-                Id = (string)e.Attribute("id")!,
+                Id = RequiredAttribute(e, "id"),
                 Description = ReadDescription(e),
                 ViewingGroupLayerIds = FindElements(e, "viewingGroupLayer")
                     .Select(vgl => vgl.Value.Trim())
@@ -203,7 +243,7 @@ public static class PortrayalCatalogueReader
 
                 return new DisplayPlane
                 {
-                    Id = (string)e.Attribute("id")!,
+                    Id = RequiredAttribute(e, "id"),
                     Order = order,
                     Description = ReadDescription(e),
                 };
@@ -241,10 +281,10 @@ public static class PortrayalCatalogueReader
 
         return new ContextParameter
         {
-            Id = (string)element.Attribute("id")!,
+            Id = RequiredAttribute(element, "id"),
             Description = ReadDescription(element),
-            Type = (string)FindElement(element, "type")!,
-            Default = (string)FindElement(element, "default")!,
+            Type = RequiredElementValue(element, "type"),
+            Default = RequiredElementValue(element, "default"),
             Enable = (string?)element.Attribute("enable"),
             Validation = validation,
         };
@@ -258,12 +298,12 @@ public static class PortrayalCatalogueReader
         return FindElements(container, "ruleFile")
             .Select(e => new RuleFile
             {
-                Id = (string)e.Attribute("id")!,
+                Id = RequiredAttribute(e, "id"),
                 Description = ReadDescription(e),
-                FileName = (string)FindElement(e, "fileName")!,
-                FileType = (string)FindElement(e, "fileType")!,
-                FileFormat = (string)FindElement(e, "fileFormat")!,
-                RuleType = (string)FindElement(e, "ruleType")!,
+                FileName = RequiredElementValue(e, "fileName"),
+                FileType = RequiredElementValue(e, "fileType"),
+                FileFormat = RequiredElementValue(e, "fileFormat"),
+                RuleType = RequiredElementValue(e, "ruleType"),
             })
             .ToList();
     }

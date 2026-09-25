@@ -26,12 +26,24 @@ public static class FeatureCatalogueReader
     /// <summary>Reads a Feature Catalogue from an XML stream.</summary>
     /// <param name="stream">Stream positioned at the start of the catalogue XML. It is read to the end but not disposed.</param>
     /// <returns>The parsed catalogue.</returns>
-    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or a required element or attribute is
+    /// missing: the catalogue's <c>name</c> or <c>versionNumber</c>; the
+    /// <c>name</c> or <c>code</c> of an attribute, role, association or type (plus a simple
+    /// attribute's <c>valueType</c>, or a listed value's <c>label</c> and <c>code</c>); or a
+    /// binding's <c>multiplicity</c> (with its <c>S100Base:lower</c>) or the <c>ref</c> of its
+    /// <c>attribute</c>, <c>association</c>, <c>role</c>, <c>featureType</c> or
+    /// <c>informationType</c> reference. The message names the missing element or attribute
+    /// and, where there is one, the <c>code</c> of the enclosing catalogue entry.
+    /// </exception>
     /// <exception cref="FormatException">A multiplicity's <c>S100Base:lower</c> is not an integer.</exception>
     /// <remarks>
-    /// The document is not validated against the S-100 FC schema. Pass catalogues that conform
-    /// to it: a schema-invalid catalogue may leave required properties <see langword="null"/>
-    /// or fail with an exception other than those listed here.
+    /// The document is not validated against the S-100 FC schema. Elements and attributes that
+    /// the returned model declares non-nullable are checked for presence, so a catalogue that
+    /// lacks one fails with an <see cref="XmlException"/> rather than yielding
+    /// <see langword="null"/> in a non-nullable property. The catalogue's <c>versionDate</c> is
+    /// lenient and reads as an empty string when absent. Optional elements that are absent
+    /// yield <see langword="null"/> or empty collections.
     /// </remarks>
     public static FeatureCatalogue Read(Stream stream)
     {
@@ -43,12 +55,24 @@ public static class FeatureCatalogueReader
     /// <summary>Reads a Feature Catalogue from an XML file.</summary>
     /// <param name="path">Path (or URI) of the catalogue XML file.</param>
     /// <returns>The parsed catalogue.</returns>
-    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or a required element or attribute is
+    /// missing: the catalogue's <c>name</c> or <c>versionNumber</c>; the
+    /// <c>name</c> or <c>code</c> of an attribute, role, association or type (plus a simple
+    /// attribute's <c>valueType</c>, or a listed value's <c>label</c> and <c>code</c>); or a
+    /// binding's <c>multiplicity</c> (with its <c>S100Base:lower</c>) or the <c>ref</c> of its
+    /// <c>attribute</c>, <c>association</c>, <c>role</c>, <c>featureType</c> or
+    /// <c>informationType</c> reference. The message names the missing element or attribute
+    /// and, where there is one, the <c>code</c> of the enclosing catalogue entry.
+    /// </exception>
     /// <exception cref="FormatException">A multiplicity's <c>S100Base:lower</c> is not an integer.</exception>
     /// <remarks>
-    /// The document is not validated against the S-100 FC schema. Pass catalogues that conform
-    /// to it: a schema-invalid catalogue may leave required properties <see langword="null"/>
-    /// or fail with an exception other than those listed here.
+    /// The document is not validated against the S-100 FC schema. Elements and attributes that
+    /// the returned model declares non-nullable are checked for presence, so a catalogue that
+    /// lacks one fails with an <see cref="XmlException"/> rather than yielding
+    /// <see langword="null"/> in a non-nullable property. The catalogue's <c>versionDate</c> is
+    /// lenient and reads as an empty string when absent. Optional elements that are absent
+    /// yield <see langword="null"/> or empty collections.
     /// </remarks>
     /// <exception cref="IOException">The file cannot be opened or read (e.g. <see cref="FileNotFoundException"/>).</exception>
     public static FeatureCatalogue Read(string path)
@@ -83,7 +107,7 @@ public static class FeatureCatalogueReader
         _s100fc = ResolveNamespace(root, "S100FC", "http://www.iho.int/S100FC");
         _s100base = ResolveNamespace(root, "S100Base", "http://www.iho.int/S100Base");
         _s100ci = ResolveNamespace(root, "S100CI", "http://www.iho.int/S100CI");
-        var versionNumber = (string)root.Element(S100FC + "versionNumber")!;
+        var versionNumber = RequiredValue(root, S100FC + "versionNumber");
         var productId = (string?)root.Element(S100FC + "productId");
         CatalogueRef? catalogueRef = null;
         if (!string.IsNullOrWhiteSpace(productId)
@@ -94,12 +118,14 @@ public static class FeatureCatalogueReader
         }
         return new FeatureCatalogue
         {
-            Name = (string)root.Element(S100FC + "name")!,
+            Name = RequiredValue(root, S100FC + "name"),
             Scope = (string?)root.Element(S100FC + "scope"),
             FieldOfApplication = (string?)root.Element(S100FC + "fieldOfApplication"),
             ProductId = productId,
             VersionNumber = versionNumber,
-            VersionDate = (string)root.Element(S100FC + "versionDate")!,
+            // versionDate is mandatory in the schema but not needed to use the
+            // catalogue; hand-written catalogues often omit it, so read leniently.
+            VersionDate = (string?)root.Element(S100FC + "versionDate") ?? "",
             CatalogueRef = catalogueRef,
             Producer = ReadProducer(root.Element(S100FC + "producer")),
             Classification = (string?)root.Element(S100FC + "classification"),
@@ -166,12 +192,12 @@ public static class FeatureCatalogueReader
     {
         return new SimpleAttribute
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
-            ValueType = (string)element.Element(S100FC + "valueType")!,
+            ValueType = RequiredValue(element, S100FC + "valueType"),
             Uom = ReadUnitOfMeasure(element.Element(S100FC + "uom")),
             ListedValues = element
                 .Element(S100FC + "listedValues")?
@@ -185,9 +211,9 @@ public static class FeatureCatalogueReader
     {
         return new ListedValue
         {
-            Label = (string)element.Element(S100FC + "label")!,
+            Label = RequiredValue(element, S100FC + "label"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
         };
     }
 
@@ -216,9 +242,9 @@ public static class FeatureCatalogueReader
     {
         return new ComplexAttribute
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
             SubAttributeBindings = element
@@ -232,8 +258,8 @@ public static class FeatureCatalogueReader
     {
         return new SubAttributeBinding
         {
-            Multiplicity = ReadMultiplicity(element.Element(S100FC + "multiplicity")!),
-            AttributeRef = (string)element.Element(S100FC + "attribute")!.Attribute("ref")!,
+            Multiplicity = ReadMultiplicity(RequiredElement(element, S100FC + "multiplicity")),
+            AttributeRef = RequiredRef(element, S100FC + "attribute"),
             Sequential = string.Equals((string?)element.Attribute("sequential"), "true", StringComparison.OrdinalIgnoreCase),
         };
     }
@@ -242,9 +268,9 @@ public static class FeatureCatalogueReader
     {
         return new Role
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
         };
     }
 
@@ -252,13 +278,13 @@ public static class FeatureCatalogueReader
     {
         return new InformationAssociation
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
             IsAbstract = string.Equals((string?)element.Attribute("isAbstract"), "true", StringComparison.OrdinalIgnoreCase),
             RoleRefs = element
                 .Elements(S100FC + "role")
-                .Select(e => (string)e.Attribute("ref")!)
+                .Select(e => RequiredAttribute(e, "ref"))
                 .ToList(),
         };
     }
@@ -267,13 +293,13 @@ public static class FeatureCatalogueReader
     {
         return new FeatureAssociation
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
             IsAbstract = string.Equals((string?)element.Attribute("isAbstract"), "true", StringComparison.OrdinalIgnoreCase),
             RoleRefs = element
                 .Elements(S100FC + "role")
-                .Select(e => (string)e.Attribute("ref")!)
+                .Select(e => RequiredAttribute(e, "ref"))
                 .ToList(),
         };
     }
@@ -282,9 +308,9 @@ public static class FeatureCatalogueReader
     {
         return new InformationType
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
             IsAbstract = string.Equals((string?)element.Attribute("isAbstract"), "true", StringComparison.OrdinalIgnoreCase),
@@ -304,9 +330,9 @@ public static class FeatureCatalogueReader
     {
         return new FeatureType
         {
-            Name = (string)element.Element(S100FC + "name")!,
+            Name = RequiredValue(element, S100FC + "name"),
             Definition = (string?)element.Element(S100FC + "definition"),
-            Code = (string)element.Element(S100FC + "code")!,
+            Code = RequiredValue(element, S100FC + "code"),
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
             IsAbstract = string.Equals((string?)element.Attribute("isAbstract"), "true", StringComparison.OrdinalIgnoreCase),
@@ -335,8 +361,8 @@ public static class FeatureCatalogueReader
     {
         return new AttributeBinding
         {
-            Multiplicity = ReadMultiplicity(element.Element(S100FC + "multiplicity")!),
-            AttributeRef = (string)element.Element(S100FC + "attribute")!.Attribute("ref")!,
+            Multiplicity = ReadMultiplicity(RequiredElement(element, S100FC + "multiplicity")),
+            AttributeRef = RequiredRef(element, S100FC + "attribute"),
             Sequential = string.Equals((string?)element.Attribute("sequential"), "true", StringComparison.OrdinalIgnoreCase),
             PermittedValues = element
                 .Element(S100FC + "permittedValues")?
@@ -350,11 +376,11 @@ public static class FeatureCatalogueReader
     {
         return new FeatureBinding
         {
-            Multiplicity = ReadMultiplicity(element.Element(S100FC + "multiplicity")!),
-            AssociationRef = (string)element.Element(S100FC + "association")!.Attribute("ref")!,
-            RoleRef = (string)element.Element(S100FC + "role")!.Attribute("ref")!,
-            FeatureTypeRef = (string)element.Element(S100FC + "featureType")!.Attribute("ref")!,
-            FeatureTypeRefs = element.Elements(S100FC + "featureType").Select(e => (string)e.Attribute("ref")!).ToList(),
+            Multiplicity = ReadMultiplicity(RequiredElement(element, S100FC + "multiplicity")),
+            AssociationRef = RequiredRef(element, S100FC + "association"),
+            RoleRef = RequiredRef(element, S100FC + "role"),
+            FeatureTypeRef = RequiredRef(element, S100FC + "featureType"),
+            FeatureTypeRefs = element.Elements(S100FC + "featureType").Select(e => RequiredAttribute(e, "ref")).ToList(),
             RoleType = (string?)element.Attribute("roleType"),
         };
     }
@@ -363,11 +389,11 @@ public static class FeatureCatalogueReader
     {
         return new InformationBinding
         {
-            Multiplicity = ReadMultiplicity(element.Element(S100FC + "multiplicity")!),
-            AssociationRef = (string)element.Element(S100FC + "association")!.Attribute("ref")!,
-            RoleRef = (string)element.Element(S100FC + "role")!.Attribute("ref")!,
-            InformationTypeRef = (string)element.Element(S100FC + "informationType")!.Attribute("ref")!,
-            InformationTypeRefs = element.Elements(S100FC + "informationType").Select(e => (string)e.Attribute("ref")!).ToList(),
+            Multiplicity = ReadMultiplicity(RequiredElement(element, S100FC + "multiplicity")),
+            AssociationRef = RequiredRef(element, S100FC + "association"),
+            RoleRef = RequiredRef(element, S100FC + "role"),
+            InformationTypeRef = RequiredRef(element, S100FC + "informationType"),
+            InformationTypeRefs = element.Elements(S100FC + "informationType").Select(e => RequiredAttribute(e, "ref")).ToList(),
             RoleType = (string?)element.Attribute("roleType"),
         };
     }
@@ -389,9 +415,41 @@ public static class FeatureCatalogueReader
 
         return new Multiplicity
         {
-            Lower = (int)element.Element(S100Base + "lower")!,
+            Lower = (int)RequiredElement(element, S100Base + "lower"),
             Upper = upper,
             IsInfinite = isInfinite,
         };
+    }
+
+    private static XElement RequiredElement(XElement parent, XName name) =>
+        parent.Element(name)
+            ?? throw new XmlException(
+                $"Feature catalogue element '{parent.Name.LocalName}'{DescribeOwner(parent)} is missing required element '{name.LocalName}'.");
+
+    private static string RequiredValue(XElement parent, XName name) => (string)RequiredElement(parent, name);
+
+    private static string RequiredAttribute(XElement element, string localName) =>
+        (string?)element.Attribute(localName)
+            ?? throw new XmlException(
+                $"Feature catalogue element '{element.Name.LocalName}'{DescribeOwner(element)} is missing required attribute '{localName}'.");
+
+    private static string RequiredRef(XElement parent, XName name) =>
+        RequiredAttribute(RequiredElement(parent, name), "ref");
+
+    /// <summary>
+    /// Names the nearest enclosing catalogue entry (the closest element,
+    /// starting at <paramref name="element"/>, with an <c>S100FC:code</c>
+    /// child) so a missing-element error can be located in a large catalogue.
+    /// </summary>
+    private static string DescribeOwner(XElement element)
+    {
+        for (var current = element; current is not null; current = current.Parent)
+        {
+            var code = (string?)current.Element(S100FC + "code");
+            if (!string.IsNullOrWhiteSpace(code))
+                return $" in '{code.Trim()}'";
+        }
+
+        return "";
     }
 }

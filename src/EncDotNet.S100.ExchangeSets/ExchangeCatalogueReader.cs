@@ -40,15 +40,28 @@ public static class ExchangeCatalogueReader
     /// <param name="stream">A readable stream positioned at the start of the <c>CATALOG.XML</c> content. It is not disposed.</param>
     /// <returns>The parsed catalogue.</returns>
     /// <exception cref="XmlException">
-    /// The XML is malformed or has no root element, or a
+    /// The XML is malformed or has no root element; a required element is
+    /// missing (the catalogue <c>identifier</c>, its <c>identifier</c> child, or
+    /// the <c>fileName</c> of a dataset, support-file or catalogue
+    /// discovery-metadata record); or a
     /// <c>digitalSignatureValue</c> is invalid (not exactly one child, an
     /// unrecognized security namespace or signature element, a missing required
     /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
-    /// non-base64 value).
+    /// non-base64 value). The message names the missing element.
     /// </exception>
     /// <exception cref="FormatException">
     /// A certificate in the <c>certificates</c> block is not valid base64.
     /// </exception>
+    /// <remarks>
+    /// The document is not validated against the Part 17 schema. Elements that
+    /// the returned model declares non-nullable are checked for presence, so a
+    /// catalogue that lacks one fails with an <see cref="XmlException"/> rather
+    /// than yielding <see langword="null"/> in a non-nullable property. The
+    /// identifier's <c>dateTime</c> is lenient because the legacy <c>S100EC</c>
+    /// layout omits it: the legacy <c>date</c> is used instead, or an empty
+    /// string when neither is present. Optional elements that are absent or
+    /// unparseable yield <see langword="null"/> or default values.
+    /// </remarks>
     public static ExchangeCatalogue Read(Stream stream)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
@@ -60,15 +73,28 @@ public static class ExchangeCatalogueReader
     /// <param name="path">The path (or URI) of the <c>CATALOG.XML</c> file, as accepted by <see cref="XDocument.Load(string)"/>.</param>
     /// <returns>The parsed catalogue.</returns>
     /// <exception cref="XmlException">
-    /// The XML is malformed or has no root element, or a
+    /// The XML is malformed or has no root element; a required element is
+    /// missing (the catalogue <c>identifier</c>, its <c>identifier</c> child, or
+    /// the <c>fileName</c> of a dataset, support-file or catalogue
+    /// discovery-metadata record); or a
     /// <c>digitalSignatureValue</c> is invalid (not exactly one child, an
     /// unrecognized security namespace or signature element, a missing required
     /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
-    /// non-base64 value).
+    /// non-base64 value). The message names the missing element.
     /// </exception>
     /// <exception cref="FormatException">
     /// A certificate in the <c>certificates</c> block is not valid base64.
     /// </exception>
+    /// <remarks>
+    /// The document is not validated against the Part 17 schema. Elements that
+    /// the returned model declares non-nullable are checked for presence, so a
+    /// catalogue that lacks one fails with an <see cref="XmlException"/> rather
+    /// than yielding <see langword="null"/> in a non-nullable property. The
+    /// identifier's <c>dateTime</c> is lenient because the legacy <c>S100EC</c>
+    /// layout omits it: the legacy <c>date</c> is used instead, or an empty
+    /// string when neither is present. Optional elements that are absent or
+    /// unparseable yield <see langword="null"/> or default values.
+    /// </remarks>
     /// <exception cref="IOException">The file cannot be opened or read.</exception>
     public static ExchangeCatalogue Read(string path)
     {
@@ -84,7 +110,7 @@ public static class ExchangeCatalogueReader
         XNamespace lan = root.GetNamespaceOfPrefix("lan")
             ?? "http://standards.iso.org/iso/19115/-3/lan/2.0";
 
-        var identifierEl = root.Element(xc + "identifier")!;
+        var identifierEl = RequiredElement(root, xc + "identifier");
         var contactEl = root.Element(xc + "contact");
         var defaultLocaleEl = root.Element(xc + "defaultLocale");
 
@@ -92,8 +118,8 @@ public static class ExchangeCatalogueReader
         {
             Identifier = new ExchangeCatalogueIdentifier
             {
-                Identifier = (string)identifierEl.Element(xc + "identifier")!,
-                DateTime = (string)identifierEl.Element(xc + "dateTime")!,
+                Identifier = (string)RequiredElement(identifierEl, xc + "identifier"),
+                DateTime = ReadIdentifierDateTime(identifierEl, xc),
             },
             Contact = ReadContact(contactEl, xc),
             ProductSpecification = ReadProductSpecification(root.Element(xc + "productSpecification"), xc),
@@ -114,6 +140,23 @@ public static class ExchangeCatalogueReader
                 .ToList(),
         };
     }
+
+    /// <summary>
+    /// Reads the catalogue creation date-time from <c>identifier/dateTime</c>.
+    /// The legacy <c>S100EC</c> layout (e.g. S-411) carries
+    /// <c>identifier/date</c> (wrapping a <c>gco:Date</c>) instead, whose text
+    /// is used when <c>dateTime</c> is absent, and an empty string when both
+    /// are.
+    /// </summary>
+    private static string ReadIdentifierDateTime(XElement identifierEl, XNamespace xc) =>
+        (string?)identifierEl.Element(xc + "dateTime")
+            ?? identifierEl.Element(xc + "date")?.Value.Trim()
+            ?? "";
+
+    private static XElement RequiredElement(XElement parent, XName name) =>
+        parent.Element(name)
+            ?? throw new XmlException(
+                $"Exchange catalogue element '{parent.Name.LocalName}' is missing required element '{name.LocalName}'.");
 
     /// <summary>
     /// Collects typed discovery records (e.g. <c>S100_DatasetDiscoveryMetadata</c>)
@@ -190,7 +233,7 @@ public static class ExchangeCatalogueReader
 
         return new DatasetDiscoveryMetadata
         {
-            FileName = (string)element.Element(xc + "fileName")!,
+            FileName = (string)RequiredElement(element, xc + "fileName"),
             FilePath = (string?)element.Element(xc + "filePath"),
             Description = ReadCharacterString(element.Element(xc + "description")),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
@@ -263,7 +306,7 @@ public static class ExchangeCatalogueReader
 
         return new SupportFileDiscoveryMetadata
         {
-            FileName = (string)element.Element(xc + "fileName")!,
+            FileName = (string)RequiredElement(element, xc + "fileName"),
             // S-100 Edition 5.2.1 Part 17: support file discovery declares its
             // directory via <fileLocation>; some producers instead reuse the
             // dataset-style <filePath>. Accept either so support files placed in
@@ -298,7 +341,7 @@ public static class ExchangeCatalogueReader
 
         return new CatalogueDiscoveryMetadata
         {
-            FileName = (string)element.Element(xc + "fileName")!,
+            FileName = (string)RequiredElement(element, xc + "fileName"),
             FilePath = (string?)element.Element(xc + "filePath"),
             Purpose = (string?)element.Element(xc + "purpose"),
             EditionNumber = ParseInt(element, "editionNumber", xc),
