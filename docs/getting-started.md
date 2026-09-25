@@ -12,7 +12,7 @@ This guide gets supported S-100 data in front of you in a few minutes, with
   from the command line, no .NET installation required.
 
 If you just want to see it run, the
-[`EncDotNet.S100.Samples.Quickstart`](../samples/EncDotNet.S100.Samples.Quickstart)
+[`EncDotNet.S100.Samples.Quickstart`](../samples/EncDotNet.S100.Samples.Quickstart/README.md)
 console sample does the library path end-to-end against a bundled synthetic
 fixture — clone the repo and `dotnet run` it.
 
@@ -236,7 +236,7 @@ the freely available official sample sets:
   [IHO S-100 page](https://iho.int/en/s-100-edition-5-2-0) and the per-product
   specification repositories.
 - **Synthetic fixtures in this repo** — the small hand-authored GML/HDF5
-  fixtures under [`tests/datasets/`](../tests/datasets) are safe to experiment
+  fixtures under [`tests/datasets/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/datasets) are safe to experiment
   with and are exactly what the test suite and the quickstart sample use. They
   are deliberately minimal and are **not** navigationally meaningful.
 

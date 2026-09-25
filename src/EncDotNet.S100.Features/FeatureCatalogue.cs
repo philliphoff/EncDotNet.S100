@@ -31,7 +31,10 @@ public sealed class FeatureCatalogue
     /// <summary>Catalogue version as written in <c>S100FC:versionNumber</c>, e.g. <c>"2.0.0"</c>.</summary>
     public required string VersionNumber { get; init; }
 
-    /// <summary>Publication date of this version, verbatim from <c>S100FC:versionDate</c> (normally <c>yyyy-MM-dd</c>); not parsed.</summary>
+    /// <summary>
+    /// Publication date of this version, verbatim from <c>S100FC:versionDate</c> (normally
+    /// <c>yyyy-MM-dd</c>); not parsed. Empty when the element is absent.
+    /// </summary>
     public required string VersionDate { get; init; }
 
     /// <summary>

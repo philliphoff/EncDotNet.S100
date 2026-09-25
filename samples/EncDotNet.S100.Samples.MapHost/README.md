@@ -14,7 +14,7 @@ the public extension had only test coverage.
 
 ## The integration in three steps
 
-The whole embedding is the three steps in [`MainWindow`](MainWindow.axaml.cs)'s
+The whole embedding is the three steps in [`MainWindow`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml.cs)'s
 constructor. In essence:
 
 ```csharp
@@ -91,9 +91,9 @@ Every toolbar control and pointer gesture maps onto the reusable API surface:
 
 | File                                                   | What it shows                                                                 |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| [`MainWindow.axaml.cs`](MainWindow.axaml.cs)           | The integration itself: compose, attach, drive, dispose. Start here.          |
-| [`MainWindow.axaml`](MainWindow.axaml)                 | The toolbar and a stock Mapsui `MapControl` (`AddS100` needs no special subclass). |
-| [`SmokeTest.cs`](SmokeTest.cs)                          | The same session driven headlessly (the `--smoke` path).                       |
+| [`MainWindow.axaml.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml.cs)           | The integration itself: compose, attach, drive, dispose. Start here.          |
+| [`MainWindow.axaml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml)                 | The toolbar and a stock Mapsui `MapControl` (`AddS100` needs no special subclass). |
+| [`SmokeTest.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/SmokeTest.cs)                          | The same session driven headlessly (the `--smoke` path).                       |
 
 ## Wiring notes
 

@@ -97,7 +97,10 @@ public sealed class MapDataset
 
     /// <summary>
     /// Dataset extent in the coordinate reference system identified by
-    /// <see cref="DatasetMetadata.HorizontalCrsEpsg"/>, or <c>null</c>.
+    /// <see cref="DatasetMetadata.HorizontalCrsEpsg"/>, or <c>null</c>. This
+    /// is metres rather than degrees for a projected coverage (e.g. a UTM
+    /// S-102 tile). Use <see cref="DatasetMetadata.GetGeographicExtent"/> for a
+    /// WGS-84 extent.
     /// </summary>
     public BoundingBox? Extent => Metadata.Extent;
 

@@ -1,7 +1,7 @@
 # EncDotNet.S100.PerfReport
 
 Reads `.jsonl` telemetry files produced by
-[PerfRunner](../EncDotNet.S100.PerfRunner/) and generates markdown
+[PerfRunner](../EncDotNet.S100.PerfRunner/README.md) and generates markdown
 summaries or diffs.
 
 ## Usage

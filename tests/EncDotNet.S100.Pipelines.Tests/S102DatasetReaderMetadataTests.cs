@@ -82,7 +82,7 @@ public class S102DatasetReaderMetadataTests
             using (var hdf = PureHdfFile.Open(path))
             {
                 var dataset = S102DatasetReader.Read(hdf);
-                fullExtent = new S102CoverageSource(dataset).Metadata.Extent;
+                fullExtent = new S102CoverageSource(dataset).Metadata.NativeExtent;
             }
 
             Assert.Equal(fullExtent.SouthLatitude, metaExtent.SouthLatitude, precision: 9);

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Xml;
 
 namespace EncDotNet.S100.ExchangeSets.Tests;
 
@@ -32,10 +33,47 @@ public class ExchangeCatalogueReaderTests
     }
 
     [Fact]
-    public void Read_ToleratesMissingCatalogueIdentifier()
+    public void Read_DiscoveryOnly_SkipsCatalogueRecordsWithoutFileName()
     {
-        // S-100 Part 17 makes identifier mandatory, but some producers
-        // (e.g. IC-ENC AU S-102) omit it; the datasets must still be readable.
+        // IC-ENC NL S-104/S-111 catalogues carry catalogue discovery records
+        // with no fileName: rejected by default, skipped when indexing.
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.2">
+              <S100XC:identifier><S100XC:identifier>NL</S100XC:identifier></S100XC:identifier>
+              <S100XC:datasetDiscoveryMetadata>
+                <S100XC:S100_DatasetDiscoveryMetadata>
+                  <S100XC:fileName>104NL00_WL.h5</S100XC:fileName>
+                </S100XC:S100_DatasetDiscoveryMetadata>
+              </S100XC:datasetDiscoveryMetadata>
+              <S100XC:catalogueDiscoveryMetadata>
+                <S100XC:S100_CatalogueDiscoveryMetadata>
+                  <S100XC:purpose>fc</S100XC:purpose>
+                </S100XC:S100_CatalogueDiscoveryMetadata>
+              </S100XC:catalogueDiscoveryMetadata>
+              <S100XC:supportFileDiscoveryMetadata>
+                <S100XC:S100_SupportFileDiscoveryMetadata>
+                  <S100XC:dataType>TXT</S100XC:dataType>
+                </S100XC:S100_SupportFileDiscoveryMetadata>
+              </S100XC:supportFileDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+        using var strict = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        Assert.Throws<System.Xml.XmlException>(() => ExchangeCatalogueReader.Read(strict));
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream, ExchangeCatalogueReadOptions.DiscoveryOnly);
+
+        Assert.Single(catalogue.DatasetDiscoveryMetadata);
+        Assert.Empty(catalogue.CatalogueDiscoveryMetadata);
+        Assert.Empty(catalogue.SupportFileDiscoveryMetadata);
+    }
+
+    [Fact]
+    public void Read_DiscoveryOnly_ToleratesMissingCatalogueIdentifier()
+    {
+        // S-100 Part 17 makes identifier mandatory, and a default read rejects
+        // a catalogue without it; but some producers (e.g. IC-ENC AU S-102)
+        // omit it, so a discovery-only read (collection indexing) accepts it.
         const string xml = """
             <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.2">
               <S100XC:datasetDiscoveryMetadata>
@@ -45,9 +83,11 @@ public class ExchangeCatalogueReaderTests
               </S100XC:datasetDiscoveryMetadata>
             </S100XC:S100_ExchangeCatalogue>
             """;
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        using var strict = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        Assert.Throws<System.Xml.XmlException>(() => ExchangeCatalogueReader.Read(strict));
 
-        var catalogue = ExchangeCatalogueReader.Read(stream);
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream, ExchangeCatalogueReadOptions.DiscoveryOnly);
 
         Assert.Equal(string.Empty, catalogue.Identifier.Identifier);
         Assert.Equal(string.Empty, catalogue.Identifier.DateTime);
@@ -351,5 +391,107 @@ public class ExchangeCatalogueReaderTests
 
         Assert.Null(catalogue.DefaultLocaleLanguage);
         Assert.Null(catalogue.DefaultLocaleCharacterEncoding);
+    }
+
+    private static ExchangeCatalogue ReadXml(string xml)
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        return ExchangeCatalogueReader.Read(stream);
+    }
+
+    [Fact]
+    public void Read_MissingIdentifierElement_ThrowsXmlExceptionNamingElement()
+    {
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:exchangeCatalogueComment>No identifier</S100XC:exchangeCatalogueComment>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        var exception = Assert.Throws<XmlException>(() => ReadXml(xml));
+
+        Assert.Contains("'S100_ExchangeCatalogue'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'identifier'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Read_MissingIdentifierValue_ThrowsXmlExceptionNamingElement()
+    {
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        var exception = Assert.Throws<XmlException>(() => ReadXml(xml));
+
+        Assert.Contains("missing required element 'identifier'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("datasetDiscoveryMetadata", "S100_DatasetDiscoveryMetadata")]
+    [InlineData("supportFileDiscoveryMetadata", "S100_SupportFileDiscoveryMetadata")]
+    [InlineData("catalogueDiscoveryMetadata", "S100_CatalogueDiscoveryMetadata")]
+    public void Read_DiscoveryRecordWithoutFileName_ThrowsXmlExceptionNamingElement(
+        string wrapper, string record)
+    {
+        var xml = $"""
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:identifier>TEST</S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+                <S100XC:{wrapper}>
+                    <S100XC:{record}>
+                        <S100XC:filePath>data</S100XC:filePath>
+                    </S100XC:{record}>
+                </S100XC:{wrapper}>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        var exception = Assert.Throws<XmlException>(() => ReadXml(xml));
+
+        Assert.Contains($"'{record}'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'fileName'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Read_LegacyS100EcIdentifierDate_IsUsedAsDateTime()
+    {
+        // Legacy S100EC catalogues (e.g. S-411) carry identifier/date wrapping
+        // a gco:Date instead of identifier/dateTime.
+        const string xml = """
+            <ec:S100_ExchangeCatalogue xmlns:ec="http://www.iho.int/S100EC"
+                                       xmlns:gco="http://www.isotc211.org/2005/gco">
+                <ec:identifier>
+                    <ec:identifier>S411_TEST</ec:identifier>
+                    <ec:date>
+                        <gco:Date>20260420</gco:Date>
+                    </ec:date>
+                </ec:identifier>
+            </ec:S100_ExchangeCatalogue>
+            """;
+
+        var catalogue = ReadXml(xml);
+
+        Assert.Equal("20260420", catalogue.Identifier.DateTime);
+    }
+
+    [Fact]
+    public void Read_IdentifierWithoutDateTimeOrDate_YieldsEmptyDateTime()
+    {
+        const string xml = """
+            <ec:S100_ExchangeCatalogue xmlns:ec="http://www.iho.int/S100EC">
+                <ec:identifier>
+                    <ec:identifier>S411_TEST</ec:identifier>
+                </ec:identifier>
+            </ec:S100_ExchangeCatalogue>
+            """;
+
+        var catalogue = ReadXml(xml);
+
+        Assert.Equal("", catalogue.Identifier.DateTime);
     }
 }

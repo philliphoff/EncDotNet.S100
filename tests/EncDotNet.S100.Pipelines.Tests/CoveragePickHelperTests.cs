@@ -150,7 +150,7 @@ public class CoveragePickHelperTests
         var meta = new CoverageMetadata
         {
             Spec = new SpecRef("S-102", default),
-            Extent = new BoundingBox(
+            NativeExtent = new BoundingBox(
                 southLatitude: originLat,
                 westLongitude: originLon,
                 northLatitude: originLat + (rows - 1) * spacing,

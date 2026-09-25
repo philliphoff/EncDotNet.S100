@@ -27,8 +27,8 @@ organised around the spec's domain.
 
 ## Shared abstractions
 
-All in `EncDotNet.S100.Core.DataModel` (namespace
-`EncDotNet.S100.DataModel`):
+All in the `EncDotNet.S100.Core` package, namespace
+`EncDotNet.S100.DataModel`:
 
 - **`ProjectionDiagnostic`** — `Severity`, `Message`, `Code`,
   `RelatedId`, `RelatedAttribute`. Stable codes such as
@@ -50,7 +50,8 @@ All in `EncDotNet.S100.Core.DataModel` (namespace
 - **`ExtraAttributes.ExcludeKnown(...)`** — preserves any source
   attributes the typed model did not consume.
 
-The `GmlReference` type (in `EncDotNet.S100.Features`) is the shared
+The `GmlReference` type (namespace `EncDotNet.S100.Features`, in the
+`EncDotNet.S100.Core` package) is the shared
 representation of an `xlink:href` cross-reference, replacing the
 per-spec `SxxxReference` types from earlier iterations.
 
@@ -84,11 +85,16 @@ When adding a typed model for a new product spec:
 |---|---|---|
 | S-421 | `S421RoutePlan` | Original precedent; refactored in Pass 1 to consume the shared abstractions. |
 | S-124 | `S124NavigationalWarning` | Pass 1 second consumer. |
-| S-128 | `S128CatalogueDataset` | Pass 2 — catalogue of nautical products. |
+| S-128 | `S128ProductCatalogue` | Pass 2 — catalogue of nautical products, with resolved `Supersedes` / `SupersededBy` navigation. |
 | S-125 | `S125AtonDataset` | Pass 2 — marine aids to navigation. |
-| S-201 | `S201AtonDataset` | Pass 2 — IALA AtoN information. |
+| S-201 | `S201AtonInventory` | Pass 2 — IALA AtoN information. |
 | S-122 | `S122MarineProtectedAreaDataset` | Pass 2 — catalogue of MPAs / restricted areas / VTS areas with typed information-type bindings. |
 | S-127 | `S127MarineServicesDataset` | Pass 2 — marine resources and services. |
+| S-129 | `S129UnderKeelClearancePlan` | A single under-keel-clearance management plan. |
+| S-131 | `S131HarbourInfrastructureDataset` | Marine harbour infrastructure. |
+| S-411 | `S411SeaIceInventory` | An inventory of sea-ice and lake-ice features. |
 
-Other GML-encoded specs (S-129, S-131, S-411) expose their data through
-the schema-agnostic feature bags rather than a typed root.
+Every GML-encoded product now has a typed root, each built with
+`Sxxx{Root}.From(dataset, out diagnostics)`. S-101 (ISO 8211) and the HDF5
+coverage products (S-102, S-104, S-111) have none; read them through their
+dataset types.

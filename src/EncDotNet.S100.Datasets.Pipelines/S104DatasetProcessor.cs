@@ -80,7 +80,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     {
         if (_source is not null && _data is S104DatasetData.GriddedCoverage gridded)
         {
-            var extent = _source.Metadata.Extent;
+            // Native CRS units, labelled by HorizontalCrsEpsg (matches the
+            // reader's ReadMetadata probe); see DatasetMetadata.GetGeographicExtent.
+            var extent = _source.Metadata.NativeExtent;
             return new DatasetMetadata
             {
                 Spec = Spec,
@@ -269,16 +271,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         var metadata = source.Metadata;
 
-        var viewport = new EncDotNet.S100.Pipelines.Viewport
-        {
-            MinLatitude = metadata.Extent.SouthLatitude,
-            MaxLatitude = metadata.Extent.NorthLatitude,
-            MinLongitude = metadata.Extent.WestLongitude,
-            MaxLongitude = metadata.Extent.EastLongitude,
-            WidthPixels = metadata.GridMetadata.NumColumns,
-            HeightPixels = metadata.GridMetadata.NumRows,
-            ScaleDenominator = 50_000,
-        };
+        // Full-grid WGS-84 frame for the sub-layer. The grid extent is native
+        // CRS units, so it must be reprojected for a projected grid.
+        var viewport = CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
 
         var pipeline = new PortrayalPipeline();
 
@@ -384,10 +379,14 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        var extent = source.Metadata.Extent;
+        // The grid georeferencing is in the dataset's native CRS; frame the
+        // render with its WGS-84 envelope and let the renderer reproject each
+        // cell (a projected grid would otherwise be read as degrees).
+        var extent = source.Metadata.GetGeographicExtent(_crsTransformFactory);
         var renderer = new CoverageHeadlessRenderer
         {
             Background = background ?? new RgbaColor(255, 255, 255, 255),
+            NativeToWgs84 = _crsTransformFactory.Create(styledLayer.Georeferencer.CRS, "EPSG:4326"),
         };
 
         return renderer.Render(

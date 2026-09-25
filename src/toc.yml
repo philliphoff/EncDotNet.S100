@@ -1,0 +1,84 @@
+# Table of contents for the per-package READMEs published on the docs site
+# (see docfx.json). Keep in sync with the package list in the root README.md.
+- name: Convenience facade
+  items:
+    - name: EncDotNet.S100
+      href: EncDotNet.S100/README.md
+- name: Core framework
+  items:
+    - name: EncDotNet.S100.Core
+      href: EncDotNet.S100.Core/README.md
+    - name: EncDotNet.S100.Features
+      href: EncDotNet.S100.Features/README.md
+    - name: EncDotNet.S100.Portrayals
+      href: EncDotNet.S100.Portrayals/README.md
+    - name: EncDotNet.S100.ExchangeSets
+      href: EncDotNet.S100.ExchangeSets/README.md
+    - name: EncDotNet.S100.Specifications
+      href: EncDotNet.S100.Specifications/README.md
+- name: Encoding, scripting and CRS backends
+  items:
+    - name: EncDotNet.S100.Hdf5.PureHdf
+      href: EncDotNet.S100.Hdf5.PureHdf/README.md
+    - name: EncDotNet.S100.Scripting.MoonSharp
+      href: EncDotNet.S100.Scripting.MoonSharp/README.md
+    - name: EncDotNet.S100.Crs.ProjNet
+      href: EncDotNet.S100.Crs.ProjNet/README.md
+- name: Product datasets
+  items:
+    - name: EncDotNet.S100.Datasets.S101
+      href: EncDotNet.S100.Datasets.S101/README.md
+    - name: EncDotNet.S100.Datasets.S102
+      href: EncDotNet.S100.Datasets.S102/README.md
+    - name: EncDotNet.S100.Datasets.S104
+      href: EncDotNet.S100.Datasets.S104/README.md
+    - name: EncDotNet.S100.Datasets.S111
+      href: EncDotNet.S100.Datasets.S111/README.md
+    - name: EncDotNet.S100.Datasets.S122
+      href: EncDotNet.S100.Datasets.S122/README.md
+    - name: EncDotNet.S100.Datasets.S124
+      href: EncDotNet.S100.Datasets.S124/README.md
+    - name: EncDotNet.S100.Datasets.S125
+      href: EncDotNet.S100.Datasets.S125/README.md
+    - name: EncDotNet.S100.Datasets.S127
+      href: EncDotNet.S100.Datasets.S127/README.md
+    - name: EncDotNet.S100.Datasets.S128
+      href: EncDotNet.S100.Datasets.S128/README.md
+    - name: EncDotNet.S100.Datasets.S129
+      href: EncDotNet.S100.Datasets.S129/README.md
+    - name: EncDotNet.S100.Datasets.S131
+      href: EncDotNet.S100.Datasets.S131/README.md
+    - name: EncDotNet.S100.Datasets.S201
+      href: EncDotNet.S100.Datasets.S201/README.md
+    - name: EncDotNet.S100.Datasets.S411
+      href: EncDotNet.S100.Datasets.S411/README.md
+    - name: EncDotNet.S100.Datasets.S421
+      href: EncDotNet.S100.Datasets.S421/README.md
+    - name: EncDotNet.S100.Datasets.S57
+      href: EncDotNet.S100.Datasets.S57/README.md
+    - name: EncDotNet.S100.Datasets.Pipelines
+      href: EncDotNet.S100.Datasets.Pipelines/README.md
+- name: Rendering
+  items:
+    - name: EncDotNet.S100.Rendering.Scene
+      href: EncDotNet.S100.Rendering.Scene/README.md
+    - name: EncDotNet.S100.Renderers.Skia
+      href: EncDotNet.S100.Renderers.Skia/README.md
+    - name: EncDotNet.S100.Renderers.Mapsui
+      href: EncDotNet.S100.Renderers.Mapsui/README.md
+    - name: EncDotNet.S100.Renderers.Mapsui.Avalonia
+      href: EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md
+- name: Applications and hosts (not packaged)
+  items:
+    - name: EncDotNet.S100.Viewer
+      href: EncDotNet.S100.Viewer/README.md
+    - name: EncDotNet.S100.Mcp
+      href: EncDotNet.S100.Mcp/README.md
+    - name: EncDotNet.S100.Mcp.Tools
+      href: EncDotNet.S100.Mcp.Tools/README.md
+    - name: EncDotNet.S100.DynamicSources.Ais
+      href: EncDotNet.S100.DynamicSources.Ais/README.md
+    - name: EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo
+      href: EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/README.md
+    - name: EncDotNet.S100.Datasets.S129.Fusion
+      href: EncDotNet.S100.Datasets.S129.Fusion/README.md

@@ -102,7 +102,9 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     {
         if (_source is not null && _dataset is not null)
         {
-            var extent = _source.Metadata.Extent;
+            // Native CRS units, labelled by HorizontalCrsEpsg (matches the
+            // reader's ReadMetadata probe); see DatasetMetadata.GetGeographicExtent.
+            var extent = _source.Metadata.NativeExtent;
             return new DatasetMetadata
             {
                 Spec = Spec,
@@ -355,16 +357,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         var metadata = source.Metadata;
 
-        var viewport = new EncDotNet.S100.Pipelines.Viewport
-        {
-            MinLatitude = metadata.Extent.SouthLatitude,
-            MaxLatitude = metadata.Extent.NorthLatitude,
-            MinLongitude = metadata.Extent.WestLongitude,
-            MaxLongitude = metadata.Extent.EastLongitude,
-            WidthPixels = metadata.GridMetadata.NumColumns,
-            HeightPixels = metadata.GridMetadata.NumRows,
-            ScaleDenominator = 50_000,
-        };
+        // Full-grid WGS-84 frame for the sub-layer (the Mapsui arrow renderer
+        // derives its arrow stride from it). The grid extent is native CRS
+        // units, so it must be reprojected for a projected grid.
+        var viewport = CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
 
         var pipeline = new PortrayalPipeline();
 
@@ -425,10 +421,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     SymbolProvider = symbolName =>
                         symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
                     FallbackExtent = new GeographicBounds(
-                        metadata.Extent.WestLongitude,
-                        metadata.Extent.SouthLatitude,
-                        metadata.Extent.EastLongitude,
-                        metadata.Extent.NorthLatitude),
+                        viewport.MinLongitude,
+                        viewport.MinLatitude,
+                        viewport.MaxLongitude,
+                        viewport.MaxLatitude),
                 },
             },
             Spec = new SpecRef("S-111", default),
@@ -506,7 +502,9 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         var nativeToWgs84 = _crsTransformFactory.Create(
             styledLayer.Georeferencer.CRS, "EPSG:4326");
 
-        var extent = source.Metadata.Extent;
+        // Frame the render with the grid's WGS-84 envelope: the native extent
+        // is metres for a projected grid.
+        var extent = source.Metadata.GetGeographicExtent(_crsTransformFactory);
         var renderer = new CoverageHeadlessRenderer
         {
             Background = background ?? new RgbaColor(255, 255, 255, 255),

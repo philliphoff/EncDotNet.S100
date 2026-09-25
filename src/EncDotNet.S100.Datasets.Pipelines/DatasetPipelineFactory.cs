@@ -134,19 +134,18 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         // recognize its own datasets (mirrors the GML path below).
         if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
         {
-            if (TryReadIso8211Root(path, out var root))
+            Iso8211Document? iso;
+            try
             {
-                foreach (var registration in registry.Registrations)
-                {
-                    if (registration.MatchIso8211 is { } match && match(root))
-                        // Return the canonical spec, mirroring the GML path.
-                        return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
-                }
+                iso = Iso8211DocumentReader.ReadFromFile(path);
+            }
+            catch
+            {
+                // Not readable as ISO 8211 — unknown.
+                iso = null;
             }
 
-            // Unreadable, or claimed by nobody (a cell declaring no PRSP):
-            // treat it as S-101, which is what this factory has always done.
-            return "S-101";
+            return DetectIso8211ProductSpec(iso, registry);
         }
 
         // S-124 and other GML-encoded products.
@@ -159,6 +158,29 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     }
 
     /// <summary>
+    /// Resolves an ISO 8211 dataset's product specification by letting each
+    /// product in <paramref name="registry"/> recognize the envelope (see
+    /// <see cref="TryReadIso8211Root"/>). When <paramref name="iso"/> is
+    /// <see langword="null"/> (unreadable) or no registration claims it (an
+    /// early or non-conformant cell declaring no <c>PRSP</c>), returns
+    /// <c>"S-101"</c>, which is what this factory has always done.
+    /// </summary>
+    private static string DetectIso8211ProductSpec(Iso8211Document? iso, S100ProductRegistry registry)
+    {
+        if (iso is not null && TryReadIso8211Root(iso, out var root))
+        {
+            foreach (var registration in registry.Registrations)
+            {
+                if (registration.MatchIso8211 is { } match && match(root))
+                    // Return the canonical spec, mirroring the GML path.
+                    return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
+            }
+        }
+
+        return "S-101";
+    }
+
+    /// <summary>
     /// Reads an ISO 8211 dataset's envelope into an <see cref="Iso8211RootInfo"/>
     /// — its declared product and encoding specification (the <c>DSID</c> field's
     /// <c>PRSP</c> / <c>ENSP</c> subfields) and whether the Data Descriptive
@@ -168,12 +190,11 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// consume the result, so the file is parsed once no matter how many products
     /// are registered. S-100 Edition 5.2.1 Part 10a; S-57 Ed 3.1 Appendix B.1.
     /// </summary>
-    private static bool TryReadIso8211Root(string path, out Iso8211RootInfo root)
+    private static bool TryReadIso8211Root(Iso8211Document iso, out Iso8211RootInfo root)
     {
         root = default;
         try
         {
-            var iso = Iso8211DocumentReader.ReadFromFile(path);
             if (iso.DataDescriptiveRecord is null)
                 return false;
 
@@ -223,6 +244,25 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         try
         {
             using var hdf5 = PureHdfFile.Open(path);
+            return DetectHdf5ProductSpec(hdf5);
+        }
+        catch
+        {
+            // Not readable as HDF5: fall through to the default.
+            return "S-102";
+        }
+    }
+
+    /// <summary>
+    /// Distinguishes the HDF5 coverage products by the root
+    /// <c>productSpecification</c> attribute (S-100 Part 10c): S-104 and S-111
+    /// are recognized by name, and anything else (including a missing or
+    /// unreadable attribute) is treated as S-102.
+    /// </summary>
+    private static string DetectHdf5ProductSpec(PureHdfFile hdf5)
+    {
+        try
+        {
             var root = hdf5.Root;
 
             if (root.AttributeExists("productSpecification"))
@@ -367,8 +407,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <param name="declaredProductSpec">
     /// Product specification declared by the exchange-set catalogue (e.g. "S-101").
     /// When non-null and recognized, content sniffing is skipped. When null or
-    /// unrecognized, falls back to extension-based sniffing on
-    /// <paramref name="relativePath"/>.
+    /// unrecognized, the dataset is content-sniffed as described on
+    /// <see cref="DetectProductSpecFromSourceAsync(IAssetSource, string, CancellationToken)"/>.
     /// </param>
     /// <param name="supportFiles">
     /// Optional map of support-file name (case-insensitive) to source-relative
@@ -386,8 +426,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
         var spec = MapProductIdentifierToSpec(declaredProductSpec)
-            ?? DetectProductSpecByExtension(relativePath)
-            ?? DetectProductSpecFromSource(source, relativePath)
+            ?? DetectProductSpecFromSource(source, relativePath, _registry)
             ?? throw new NotSupportedException(
                 $"Unable to determine product specification for '{relativePath}' " +
                 $"(declared='{declaredProductSpec ?? "<none>"}').");
@@ -606,97 +645,144 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
                 : null);
     }
 
-    private static string? DetectProductSpecByExtension(string relativePath)
-    {
-        var ext = Path.GetExtension(relativePath);
-        if (string.Equals(ext, ".000", StringComparison.OrdinalIgnoreCase))
-        {
-            // Could be S-101 or legacy S-57; without content access we
-            // cannot disambiguate cheaply. Caller should supply
-            // declaredProductSpec for ISO 8211 datasets.
-            return null;
-        }
-        if (string.Equals(ext, ".h5", StringComparison.OrdinalIgnoreCase))
-        {
-            // HDF5 product spec cannot be inferred from extension alone.
-            return null;
-        }
-        return null;
-    }
-
     /// <summary>
-    /// Content-sniffs a GML dataset stored inside <paramref name="source"/> to
-    /// determine its S-100 product specification when the exchange-set catalogue
-    /// omits a machine-readable <c>productIdentifier</c>. Real-world JCOMM S-411
-    /// exchange sets declare only a human-readable product-specification
-    /// <c>name</c> (e.g. "Ice Information Product Specification (JCOMM S-411)")
-    /// with no identifier or number, so the declared spec cannot be mapped and
-    /// the dataset must be recognized from its GML root element / namespaces.
-    /// This synchronous wrapper exists for synchronous processor creation; async
-    /// callers should use <see cref="DetectProductSpecFromSourceAsync"/>.
+    /// Content-sniffs a dataset stored inside <paramref name="source"/> to
+    /// determine its S-100 product specification. This synchronous wrapper
+    /// exists for synchronous processor creation; async callers should use
+    /// <see cref="DetectProductSpecFromSourceAsync(IAssetSource, string, CancellationToken)"/>, which documents the
+    /// detection rules.
     /// </summary>
     /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
     /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
-    public static string? DetectProductSpecFromSource(IAssetSource source, string relativePath)
+    /// <returns>The canonical product-specification string, or <c>null</c> when not recognized.</returns>
+    public static string? DetectProductSpecFromSource(IAssetSource source, string relativePath) =>
+        DetectProductSpecFromSource(source, relativePath, DefaultRegistry);
+
+    /// <summary>
+    /// Registry-aware synchronous source detection, used by
+    /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>
+    /// so the ISO 8211 and GML recognizers consult the factory's own product
+    /// registry, as path-based detection does.
+    /// </summary>
+    internal static string? DetectProductSpecFromSource(
+        IAssetSource source, string relativePath, S100ProductRegistry registry)
     {
-        return DetectProductSpecFromSourceAsync(source, relativePath)
+        return DetectProductSpecFromSourceAsync(source, relativePath, registry, CancellationToken.None)
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
     }
 
     /// <summary>
-    /// Asynchronously content-sniffs a GML dataset stored inside
-    /// <paramref name="source"/> to determine its S-100 product specification
-    /// when the exchange-set catalogue omits a machine-readable
-    /// <c>productIdentifier</c>. Real-world JCOMM S-411 exchange sets declare
-    /// only a human-readable product-specification <c>name</c> (e.g. "Ice
-    /// Information Product Specification (JCOMM S-411)") with no identifier or
-    /// number, so the declared spec cannot be mapped and the dataset must be
-    /// recognized from its GML root element / namespaces. Reads only a bounded,
-    /// BOM-aware prefix of the dataset. Only <c>.gml</c>/<c>.xml</c> datasets
-    /// are sniffed; returns <c>null</c> when the file cannot be read or is
-    /// unrecognized. Returns the canonical spec string (e.g. <c>"S-411"</c>)
-    /// understood by
+    /// Asynchronously content-sniffs a dataset stored inside
+    /// <paramref name="source"/> to determine its S-100 product specification,
+    /// applying the same rules as <see cref="DetectProductSpec(string)"/> does
+    /// for a file on disk:
+    /// <list type="bullet">
+    /// <item><description>
+    /// <c>.000</c> (ISO 8211): the dataset envelope is read and each built-in
+    /// product recognizes its own cells (S-57 by its <c>DSPM</c> field, S-101
+    /// and S-401 by their declared <c>PRSP</c>); a readable cell that no product
+    /// claims is treated as <c>"S-101"</c>.
+    /// </description></item>
+    /// <item><description>
+    /// <c>.h5</c> / <c>.hdf5</c>: the root <c>productSpecification</c>
+    /// attribute distinguishes S-104 and S-111; anything else is
+    /// <c>"S-102"</c>.
+    /// </description></item>
+    /// <item><description>
+    /// <c>.gml</c> / <c>.xml</c>: the GML root element and namespaces are
+    /// matched against the built-in products, reading only a bounded,
+    /// BOM-aware prefix. This also covers catalogues that omit a
+    /// machine-readable <c>productIdentifier</c>, such as JCOMM S-411 exchange
+    /// sets that declare only a human-readable product name.
+    /// </description></item>
+    /// </list>
+    /// Returns the canonical spec string (e.g. <c>"S-411"</c>) understood by
     /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
     /// </summary>
     /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
     /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
     /// <param name="cancellationToken">Cancellation token for reading dataset bytes.</param>
-    /// <returns>The canonical product-specification string, or <c>null</c> when not recognized.</returns>
-    public static async Task<string?> DetectProductSpecFromSourceAsync(
+    /// <returns>
+    /// The canonical product-specification string, or <c>null</c> when the
+    /// extension is not one of the above, the file cannot be read, or a GML
+    /// dataset is unrecognized.
+    /// </returns>
+    public static Task<string?> DetectProductSpecFromSourceAsync(
         IAssetSource source,
         string relativePath,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        DetectProductSpecFromSourceAsync(source, relativePath, DefaultRegistry, cancellationToken);
+
+    private static async Task<string?> DetectProductSpecFromSourceAsync(
+        IAssetSource source,
+        string relativePath,
+        S100ProductRegistry registry,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
         var ext = Path.GetExtension(relativePath);
-        if (!string.Equals(ext, ".gml", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(ext, ".xml", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
         try
         {
-            await using var stream = await source.OpenAsync(relativePath, cancellationToken)
-                .ConfigureAwait(false);
-            using var streamReader = new StreamReader(
-                stream,
-                System.Text.Encoding.UTF8,
-                detectEncodingFromByteOrderMarks: true);
-            const int maxSniffPrefixChars = 64 * 1024;
-            var buffer = new char[maxSniffPrefixChars];
-            int read = await streamReader.ReadBlockAsync(
-                    buffer.AsMemory(0, maxSniffPrefixChars),
-                    cancellationToken)
-                .ConfigureAwait(false);
-            var xml = new string(buffer, 0, read).TrimStart();
-            // Source sniffing is product-agnostic (no host registry in scope), so
-            // recognize against the full built-in product set.
-            return DetectGmlProductSpecFromXml(xml, DefaultRegistry);
+            if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
+            {
+                var bytes = await source.ReadAllBytesAsync(relativePath, cancellationToken)
+                    .ConfigureAwait(false);
+                Iso8211Document? iso;
+                try
+                {
+                    iso = Iso8211DocumentReader.Read(bytes.Bytes.Span);
+                }
+                catch
+                {
+                    // Readable but not ISO 8211: same fallback as the path route.
+                    iso = null;
+                }
+
+                return DetectIso8211ProductSpec(iso, registry);
+            }
+
+            if (ext.Equals(".h5", StringComparison.OrdinalIgnoreCase)
+                || ext.Equals(".hdf5", StringComparison.OrdinalIgnoreCase))
+            {
+                await using var stream = await AssetSourceHelpers
+                    .OpenSeekableAsync(source, relativePath, cancellationToken)
+                    .ConfigureAwait(false);
+                try
+                {
+                    using var hdf5 = PureHdfFile.Open(stream);
+                    return DetectHdf5ProductSpec(hdf5);
+                }
+                catch
+                {
+                    // Readable but not HDF5: same fallback as the path route.
+                    return "S-102";
+                }
+            }
+
+            if (ext.Equals(".gml", StringComparison.OrdinalIgnoreCase)
+                || ext.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                await using var stream = await source.OpenAsync(relativePath, cancellationToken)
+                    .ConfigureAwait(false);
+                using var streamReader = new StreamReader(
+                    stream,
+                    System.Text.Encoding.UTF8,
+                    detectEncodingFromByteOrderMarks: true);
+                const int maxSniffPrefixChars = 64 * 1024;
+                var buffer = new char[maxSniffPrefixChars];
+                int read = await streamReader.ReadBlockAsync(
+                        buffer.AsMemory(0, maxSniffPrefixChars),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                var xml = new string(buffer, 0, read).TrimStart();
+                return DetectGmlProductSpecFromXml(xml, registry);
+            }
+
+            return null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -704,6 +790,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         }
         catch
         {
+            // The dataset could not be read from the source.
             return null;
         }
     }

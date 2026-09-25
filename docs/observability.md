@@ -361,7 +361,7 @@ assert on `OperationName` and tags.
 
 ## Reading a baseline run
 
-The [PerfRunner](../tools/EncDotNet.S100.PerfRunner/) `baseline`
+The [PerfRunner](../tools/EncDotNet.S100.PerfRunner/README.md) `baseline`
 command captures a snapshot of all scenario timings at a specific git
 commit. Baselines live in
 `tools/EncDotNet.S100.PerfRunner/baselines/<git-sha>/`.
@@ -371,7 +371,7 @@ commit. Baselines live in
 | File | Contents |
 |------|----------|
 | `SUMMARY.md` | Git SHA, branch, commit subject, UTC timestamp, runtime info (OS, arch, CPU count, .NET version), and a per-scenario headline table (mean and P95 of the primary span). Also notes whether the run used synthetic-only data or the full corpus. |
-| `<scenario>.jsonl` | Raw telemetry in the [JSONL schema v1](#jsonl-schema-version-1) — span records, histogram records, and counter records emitted during measured iterations. |
+| `<scenario>.jsonl` | Raw telemetry in the [JSONL schema v1](../tools/EncDotNet.S100.PerfRunner/README.md#jsonl-schema-version-1) — span records, histogram records, and counter records emitted during measured iterations. |
 | `<scenario>.md` | Per-scenario markdown summary with min/P50/P90/P95/P99/max/mean iteration durations. |
 
 The `baselines/CURRENT` file contains the SHA of the latest committed
@@ -379,7 +379,7 @@ baseline so tooling can locate it without parsing directory names.
 
 ### Interpreting the data
 
-Use the [PerfReport](../tools/EncDotNet.S100.PerfReport/) tool:
+Use the [PerfReport](../tools/EncDotNet.S100.PerfReport/README.md) tool:
 
 ```bash
 # Summarise a single scenario's telemetry
@@ -419,9 +419,9 @@ The `.github/workflows/perf.yml` workflow runs on every PR to `main`
 and catches regressions automatically:
 
 1. Builds the solution in Release mode.
-2. Runs [PerfRunner](../tools/EncDotNet.S100.PerfRunner/) `baseline`
+2. Runs [PerfRunner](../tools/EncDotNet.S100.PerfRunner/README.md) `baseline`
    with `--warmup 3 --iterations 10`.
-3. Runs [PerfReport](../tools/EncDotNet.S100.PerfReport/) `gate`
+3. Runs [PerfReport](../tools/EncDotNet.S100.PerfReport/README.md) `gate`
    comparing the candidate run against the committed baseline
    (`baselines/CURRENT`).
 4. Posts a markdown summary to the PR and **fails the check** when any

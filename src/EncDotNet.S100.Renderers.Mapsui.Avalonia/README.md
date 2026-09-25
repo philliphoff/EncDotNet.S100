@@ -3,7 +3,7 @@
 Optional Avalonia adapter for applications that host S-100 Mapsui layers in a
 live `Mapsui.UI.Avalonia.MapControl`.
 
-The base [`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/)
+The base [`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/README.md)
 package remains UI-framework neutral. It owns layer creation,
 `MapsuiLayerBands`, and `MapsuiMapNavigator`. This package adds only mechanics
 that require Avalonia:

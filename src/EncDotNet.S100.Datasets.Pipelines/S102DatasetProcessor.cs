@@ -65,7 +65,10 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     private DatasetMetadata BuildMetadata()
     {
-        var extent = _source.Metadata.Extent;
+        // Native CRS units, labelled by HorizontalCrsEpsg — the same value
+        // S102DatasetReader.ReadMetadata probes, so a probed and a loaded
+        // dataset agree. Consumers reproject via GetGeographicExtent.
+        var extent = _source.Metadata.NativeExtent;
         return new DatasetMetadata
         {
             Spec = Spec,
@@ -217,16 +220,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SelectOverviewLevelForViewport(context?.Viewport, wgs84ToNative);
             var metadata = _source.Metadata;
 
-            var viewport = context?.Viewport ?? new EncDotNet.S100.Pipelines.Viewport
-            {
-                MinLatitude = metadata.Extent.SouthLatitude,
-                MaxLatitude = metadata.Extent.NorthLatitude,
-                MinLongitude = metadata.Extent.WestLongitude,
-                MaxLongitude = metadata.Extent.EastLongitude,
-                WidthPixels = metadata.GridMetadata.NumColumns,
-                HeightPixels = metadata.GridMetadata.NumRows,
-                ScaleDenominator = 50_000,
-            };
+            var viewport = context?.Viewport
+                ?? CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
 
             try
             {
@@ -375,23 +370,17 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             .ProcessAsync(_source, _catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        var extent = _source.Metadata.Extent;
-
         // The grid extent is expressed in the dataset's native CRS, which for
         // S-102 may be a projected UTM zone (EPSG:326xx/327xx) — typical of
         // Edition 2.1 cells. CoverageHeadlessRenderer expects WGS84 lon/lat
-        // (it projects through Web Mercator), so reproject the native extent
-        // corners to WGS84 first; the transform is identity for geographic
-        // (EPSG:4326) grids. ProjNet uses lon-first/lat-second ordering, matching
-        // CoveragePickHelper. (See issue #239.)
+        // (it projects through Web Mercator), so frame the render with the
+        // WGS-84 envelope of all four reprojected corners; the transform is
+        // identity for geographic (EPSG:4326) grids. (See issue #239.)
         int crs = _dataset.HorizontalCRS ?? 4326;
         var nativeToWgs84 = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
-        var (west, south) = nativeToWgs84.IsIdentity
-            ? (extent.WestLongitude, extent.SouthLatitude)
-            : nativeToWgs84.Transform(extent.WestLongitude, extent.SouthLatitude);
-        var (east, north) = nativeToWgs84.IsIdentity
-            ? (extent.EastLongitude, extent.NorthLatitude)
-            : nativeToWgs84.Transform(extent.EastLongitude, extent.NorthLatitude);
+        var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);
+        var (west, south, east, north) =
+            (extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude);
 
         var renderer = new CoverageHeadlessRenderer
         {

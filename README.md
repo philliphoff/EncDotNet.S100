@@ -1,7 +1,7 @@
 # EncDotNet.S100
 
 [![CI](https://github.com/philliphoff/EncDotNet.S100/actions/workflows/ci.yml/badge.svg)](https://github.com/philliphoff/EncDotNet.S100/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/github/license/philliphoff/EncDotNet.S100)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/philliphoff/EncDotNet.S100)](https://github.com/philliphoff/EncDotNet.S100/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/tag/philliphoff/EncDotNet.S100?label=release&sort=semver)](https://github.com/philliphoff/EncDotNet.S100/releases)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4)](https://dotnet.microsoft.com/)
 [![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
@@ -64,7 +64,7 @@ File.WriteAllBytes("out.png", png);
 ```
 
 The runnable
-[`samples/EncDotNet.S100.Samples.Quickstart`](samples/EncDotNet.S100.Samples.Quickstart)
+[`samples/EncDotNet.S100.Samples.Quickstart`](samples/EncDotNet.S100.Samples.Quickstart/README.md)
 console project demonstrates this end-to-end against a bundled synthetic
 fixture — `dotnet run` it with no setup.
 
@@ -325,4 +325,4 @@ dashboard, Jaeger).
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://github.com/philliphoff/EncDotNet.S100/blob/main/LICENSE).

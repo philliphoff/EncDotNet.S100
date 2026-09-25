@@ -137,7 +137,7 @@ public class CoveragePipelineTests
         public CoverageMetadata Metadata => new()
         {
             Spec = new SpecRef("S-102", default),
-            Extent = new BoundingBox(
+            NativeExtent = new BoundingBox(
                 _originLat, _originLon,
                 _originLat + _spacingLat * _rows,
                 _originLon + _spacingLon * _cols),
@@ -357,7 +357,7 @@ public class CoveragePipelineTests
                 return new CoverageMetadata
                 {
                     Spec = new SpecRef(_productSpec, default),
-                    Extent = new BoundingBox(
+                    NativeExtent = new BoundingBox(
                         _originLat, _originLon,
                         _originLat + _spacingLat * rows,
                         _originLon + _spacingLon * cols),

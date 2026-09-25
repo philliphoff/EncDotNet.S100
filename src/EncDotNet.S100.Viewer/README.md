@@ -1068,7 +1068,7 @@ with the matching library README:
 The live `MapsuiMapHost` is Viewer composition, not a service contract.
 Consumers depend on focused interfaces for layer bands, viewport/navigation,
 coordinate conversion, snapshot rendering, or redraw invalidation. Late-bound
-services use typed `IMapCapabilityAccessor<TCapability>` instances, so no
+services use typed `ICapabilityAccessor<TCapability>` instances, so no
 consumer regains the former monolithic map-host dependency. Layer ordering and
 ownership remain in the reusable `MapsuiLayerBands` component, while viewport
 behavior delegates to `MapsuiMapNavigator`; both operate on `Mapsui.Map`

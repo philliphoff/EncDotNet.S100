@@ -134,6 +134,20 @@ internal sealed class S100PipelineHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// The concrete pipeline factory this host wraps, for facade types that need
+    /// its source- and update-aware construction paths (exchange-set datasets).
+    /// Bound to this host's lifetime, like <see cref="Factory"/>.
+    /// </summary>
+    internal DatasetPipelineFactory PipelineFactory
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _factory;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
