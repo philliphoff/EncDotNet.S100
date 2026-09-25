@@ -11,9 +11,16 @@ namespace EncDotNet.S100.Pipelines;
 /// </remarks>
 public sealed record Viewport
 {
+    /// <summary>South edge of the display area, in decimal degrees (WGS-84).</summary>
     public required double MinLatitude { get; init; }
+
+    /// <summary>North edge of the display area, in decimal degrees (WGS-84).</summary>
     public required double MaxLatitude { get; init; }
+
+    /// <summary>West edge of the display area, in decimal degrees (WGS-84).</summary>
     public required double MinLongitude { get; init; }
+
+    /// <summary>East edge of the display area, in decimal degrees (WGS-84).</summary>
     public required double MaxLongitude { get; init; }
 
     /// <summary>Display width in pixels.</summary>
@@ -31,6 +38,9 @@ public sealed record Viewport
     /// </summary>
     public double RotationDegrees { get; init; }
 
+    /// <summary><see cref="MaxLatitude"/> − <see cref="MinLatitude"/>, in degrees.</summary>
     public double LatitudeSpan => MaxLatitude - MinLatitude;
+
+    /// <summary><see cref="MaxLongitude"/> − <see cref="MinLongitude"/>, in degrees. Not normalised across the antimeridian.</summary>
     public double LongitudeSpan => MaxLongitude - MinLongitude;
 }

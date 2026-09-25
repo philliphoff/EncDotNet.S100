@@ -64,6 +64,12 @@ public static class LayerStackProjector
     /// <see cref="LayerStackEntry.Item"/> carries the <em>original</em>,
     /// un-suppressed payload).
     /// </param>
+    /// <param name="rebuildCoverage">
+    /// Optional callback that re-rasterises a grid coverage sub-layer the
+    /// engine replaced (e.g. a coverage with a land-area mask attached). When
+    /// omitted, or when it returns <see langword="null"/>, the prebuilt layer
+    /// is reused.
+    /// </param>
     /// <returns>
     /// One <see cref="LayerStackEntry"/> per input item, wrapping the reused (or
     /// suppression-filtered) <see cref="ILayer"/> and the ruled item. Items with

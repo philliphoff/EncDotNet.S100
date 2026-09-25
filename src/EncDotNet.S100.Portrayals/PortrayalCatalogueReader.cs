@@ -4,16 +4,32 @@ using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Portrayals;
 
+/// <summary>
+/// Parses S-100 Part 9 Portrayal Catalogue XML (<c>portrayal_catalogue.xml</c>)
+/// into a <see cref="PortrayalCatalogue"/>. Elements are matched both
+/// unqualified and in the <c>http://www.iho.int/S100PortrayalCatalog/5.2</c>
+/// namespace. Only the catalogue document is read; referenced asset and rule
+/// files are not opened.
+/// </summary>
 public static class PortrayalCatalogueReader
 {
     private static readonly XNamespace PC = "http://www.iho.int/S100PortrayalCatalog/5.2";
 
+    /// <summary>Reads a portrayal catalogue from an XML stream.</summary>
+    /// <param name="stream">Stream positioned at the start of the catalogue XML. It is not disposed.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
     public static PortrayalCatalogue Read(Stream stream)
     {
         var doc = XDocument.Load(stream);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
+    /// <summary>Reads a portrayal catalogue from an XML file or URI.</summary>
+    /// <param name="path">Path or URI of the catalogue XML file.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">The XML is malformed or has no root element.</exception>
+    /// <exception cref="IOException">The file cannot be read (e.g. it does not exist).</exception>
     public static PortrayalCatalogue Read(string path)
     {
         var doc = XDocument.Load(path);

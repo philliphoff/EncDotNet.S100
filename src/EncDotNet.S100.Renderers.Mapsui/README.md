@@ -1070,9 +1070,10 @@ Activate it by selecting the subsystem (`S100_RENDER_SUBSYSTEM=tiledscene`, the
 `TiledScene` value of `RenderingOptimizations.RenderSubsystem`, or
 **Settings → Render subsystem → Subsystem** in the viewer).
 `MapsuiDisplayListRenderer` then tags the vector layer with
-`S100VectorSceneRenderer.RendererName` and binds a *pattern-complete* scene
-(`BindScene`) — the Mapsui lowering omits patterns, so the B arm builds its own
-scene with the `PatternResolver` set and renders fills from the IR. The worker
+`S100VectorSceneRenderer.RendererName` and binds the scene (`BindScene`), built
+with the `PatternResolver` set so fills render from the IR. The layer's Mapsui
+features are lowered from the same scene and only carry pick identity; pattern
+fills get a near-invisible geometry-only pick target (issue #604). The worker
 is latest-wins coalesced (a superseded request is dropped, never published) and
 honours scale-visibility (`ScaleDenominatorFor` derives the S-100 denominator
 from the EPSG:3857 resolution, the inverse of `DenominatorToResolution`) so the

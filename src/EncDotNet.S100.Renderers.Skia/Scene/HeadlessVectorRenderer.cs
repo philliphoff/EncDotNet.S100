@@ -275,7 +275,7 @@ public static class HeadlessVectorRenderer
     /// extent, padded so the projected aspect ratio matches the requested pixel
     /// rectangle (the renderer scales X and Y independently, so matching the
     /// aspect avoids distortion). The geographic bounds are recovered from the
-    /// projected extent via <see cref="WebMercator.ToLonLat"/>.
+    /// projected extent via <see cref="WebMercator.ToLonLat(double, double)"/>.
     /// </summary>
     public static Viewport FitViewport(VectorScene scene, int widthPixels, int heightPixels)
     {

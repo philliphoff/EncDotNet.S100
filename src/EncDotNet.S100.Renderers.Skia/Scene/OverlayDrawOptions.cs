@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 
 /// <summary>
 /// Controls for the tiled subsystem's live label/symbol overlay pass, passed to
-/// <see cref="SkiaDisplayListRenderer.RenderOnto(SKCanvas, VectorScene, Viewport, OverlayDrawOptions)"/>.
+/// <see cref="SkiaDisplayListRenderer.RenderOnto(SKCanvas, VectorScene, EncDotNet.S100.Pipelines.Viewport, OverlayDrawOptions)"/>.
 /// The defaults reproduce the plain overlay behaviour: draw every point and
 /// label, with no declutter suppression and no anchor rotation.
 /// </summary>

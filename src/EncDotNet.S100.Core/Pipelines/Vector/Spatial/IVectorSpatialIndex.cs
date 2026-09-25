@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Pipelines.Vector.Spatial;
 /// The index is queried by axis-aligned <see cref="BoundingBox"/>
 /// overlap on each feature's geometry MBR. That matches the semantics
 /// of the pre-existing linear <c>IntersectsExtent</c> scan in
-/// <see cref="EncDotNet.S100.Datasets.S101.S101VectorSource"/> for
+/// <c>S101VectorSource</c> for
 /// point features, and — because the feature MBR is the axis-aligned
 /// hull of the vertex list — includes any feature whose geometry
 /// crosses the query edge, matching real-world "features intersecting

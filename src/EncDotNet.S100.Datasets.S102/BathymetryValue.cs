@@ -16,6 +16,9 @@ public readonly struct BathymetryValue
     [FieldOffset(4)]
     public readonly float Uncertainty;
 
+    /// <summary>Creates a bathymetry value.</summary>
+    /// <param name="depth">Depth in metres; positive values are below the vertical datum.</param>
+    /// <param name="uncertainty">Uncertainty of the depth in metres.</param>
     public BathymetryValue(float depth, float uncertainty)
     {
         Depth = depth;

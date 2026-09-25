@@ -43,7 +43,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </remarks>
 public sealed class S100PickHighlightLayer
 {
-    /// <summary>Default <see cref="Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
+    /// <summary>Default <see cref="global::Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
     public const string DefaultLayerName = "S-100 Pick Highlight";
 
     private readonly S100PickHighlightStyle _style;

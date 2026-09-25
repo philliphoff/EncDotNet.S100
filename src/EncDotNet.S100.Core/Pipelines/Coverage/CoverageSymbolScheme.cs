@@ -37,7 +37,10 @@ public sealed class CoverageSymbolScheme
 /// </summary>
 public sealed class SymbolBand
 {
+    /// <summary>Lower bound of the band (inclusive), in the value field's units.</summary>
     public required float MinValue { get; init; }
+
+    /// <summary>Upper bound of the band (exclusive), in the value field's units.</summary>
     public required float MaxValue { get; init; }
 
     /// <summary>Symbol reference name (e.g. "SCAROW01").</summary>
@@ -55,5 +58,6 @@ public sealed class SymbolBand
     /// </summary>
     public float ScaleFactor { get; init; } = 1.0f;
 
+    /// <summary>Optional legend label for the band, or <c>null</c>.</summary>
     public string? Label { get; init; }
 }

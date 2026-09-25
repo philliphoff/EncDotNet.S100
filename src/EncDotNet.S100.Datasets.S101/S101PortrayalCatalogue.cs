@@ -38,6 +38,18 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     private IReadOnlyList<PortrayalRule>? _rules;
 
+    /// <summary>
+    /// Creates an S-101 portrayal catalogue backed by the given provider.
+    /// Decoded assets (compiled XSLT, symbols, line styles, area fills,
+    /// palettes, Lua sources) are cached on the provider's
+    /// <see cref="PortrayalCatalogueProvider.AssetCache"/>.
+    /// </summary>
+    /// <param name="provider">The portrayal catalogue provider that supplies rule files and assets.</param>
+    /// <param name="luaEngine">
+    /// The Lua engine used to run Lua portrayal rules, or <c>null</c> when
+    /// only XSLT rules will be executed.
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="provider"/> is <c>null</c>.</exception>
     public S101PortrayalCatalogue(PortrayalCatalogueProvider provider, ILuaEngine? luaEngine = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
@@ -47,7 +59,9 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
         DisplayModeMembership.Bind(DisplayModes, ViewingGroups, _provider.Catalogue);
     }
 
+    /// <inheritdoc/>
     public SpecRef Spec => new("S-101", default);
+    /// <inheritdoc/>
     public string Edition => _provider.Catalogue.Version;
 
     // Cached product tag used for cache metrics (avoids re-allocating strings).
@@ -55,6 +69,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
     public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
+    /// <inheritdoc/>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
     /// <inheritdoc/>
@@ -93,8 +108,10 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
         ActivePalette = fallback;
     }
 
+    /// <inheritdoc/>
     public ViewingGroupController ViewingGroups { get; } = new();
 
+    /// <inheritdoc/>
     public DisplayModeController DisplayModes { get; } = new();
 
     /// <summary>Controls which S-100 Part 9 §11.6 display planes are visible.</summary>
@@ -174,6 +191,13 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Rules ──────────────────────────────────────────────────────────
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Built lazily from the catalogue's rule files, in declaration order.
+    /// A rule's type (XSLT or Lua) is taken from its file extension, and its
+    /// target feature type is inferred from the rule name with any trailing
+    /// digits removed; top-level and template rules apply to every feature.
+    /// </remarks>
     public IReadOnlyList<PortrayalRule> Rules
     {
         get
@@ -244,6 +268,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── XSLT ───────────────────────────────────────────────────────────
 
+    /// <inheritdoc/>
     public ValueTask<XslCompiledTransform> GetCompiledRuleAsync(string ruleName, CancellationToken cancellationToken = default)
     {
         if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached))
@@ -372,6 +397,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Symbols ────────────────────────────────────────────────────────
 
+    /// <inheritdoc/>
     public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default)
     {
         if (_cache.Symbols.TryGetValue(symbolName, out var cached))
@@ -410,6 +436,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Line styles ────────────────────────────────────────────────────
 
+    /// <inheritdoc/>
     public ValueTask<LineStyle> GetLineStyleAsync(string name, CancellationToken cancellationToken = default)
     {
         if (_cache.LineStyles.TryGetValue(name, out var cached))
@@ -441,6 +468,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Area fills ─────────────────────────────────────────────────────
 
+    /// <inheritdoc/>
     public ValueTask<AreaFill> GetAreaFillAsync(string name, CancellationToken cancellationToken = default)
     {
         if (_cache.AreaFills.TryGetValue(name, out var cached))

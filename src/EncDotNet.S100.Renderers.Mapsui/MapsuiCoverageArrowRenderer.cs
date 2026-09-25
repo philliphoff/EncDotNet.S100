@@ -40,7 +40,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <c>surfaceCurrentSpeed</c>, and band 9 uses
 /// <c>scaleCeiling = 2.60</c>.  These per-band factors multiply
 /// <see cref="BaseSymbolScale"/> to produce the Mapsui
-/// <see cref="ImageStyle.SymbolScale"/>.
+/// <see cref="BasePointStyle.SymbolScale"/>.
 /// </para>
 /// </remarks>
 public sealed class MapsuiCoverageArrowRenderer
@@ -80,7 +80,7 @@ public sealed class MapsuiCoverageArrowRenderer
 
     /// <summary>
     /// Multiplier applied to each band's scale factor to produce the
-    /// Mapsui <see cref="ImageStyle.SymbolScale"/>.  The bundled SCAROW
+    /// Mapsui <see cref="BasePointStyle.SymbolScale"/>.  The bundled SCAROW
     /// SVGs declare <c>width="6mm" height="11mm"</c> with viewBox
     /// <c>-3 -5.5 6 11</c>; Mapsui rasterises them at roughly
     /// 23×42 pixels at 96 dpi when <c>SymbolScale = 1.0</c>.  Callers
@@ -102,6 +102,13 @@ public sealed class MapsuiCoverageArrowRenderer
     /// </summary>
     public required Func<string, string?> SymbolProvider { get; set; }
 
+    /// <summary>
+    /// Creates an arrow renderer that places symbols in Web Mercator.
+    /// </summary>
+    /// <param name="transformFactory">
+    /// Creates the transform from a coverage's native CRS to WGS84, which is
+    /// then projected to Web Mercator.
+    /// </param>
     public MapsuiCoverageArrowRenderer(ICrsTransformFactory transformFactory)
     {
         _transformFactory = transformFactory;

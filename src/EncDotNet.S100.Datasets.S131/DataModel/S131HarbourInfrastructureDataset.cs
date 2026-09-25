@@ -21,7 +21,7 @@ namespace EncDotNet.S100.Datasets.S131.DataModel;
 /// </para>
 /// <para>
 /// Feature-type discrimination is performed against the static FC enum
-/// lists in <see cref="S131Types"/>; the projection does <b>not</b>
+/// lists in <c>S131Types.cs</c>; the projection does <b>not</b>
 /// walk the FC supertype graph at runtime. Schema-level introspection
 /// is handled by the Feature Catalogue reader and the Lua data
 /// provider (see <see cref="S131LuaDataProvider"/>).

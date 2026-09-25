@@ -18,10 +18,17 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
 
     private bool _adapterLoaded;
 
+    /// <summary>
+    /// Creates an S-411 portrayal catalogue backed by the given provider.
+    /// </summary>
+    /// <param name="provider">The portrayal catalogue provider that supplies rule files and assets.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="provider"/> is <c>null</c>.</exception>
     public S411PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
 
+    /// <inheritdoc/>
     public override SpecRef Spec => new("S-411", default);
 
+    /// <inheritdoc/>
     protected override System.Xml.XmlResolver CreateXmlResolver(IReadOnlyDictionary<string, byte[]> registeredBytes) =>
         new FetchRuleFallbackXmlResolver(Provider, registeredBytes);
 

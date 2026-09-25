@@ -36,7 +36,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly Dictionary<string, SurfaceCurrentStation> _stationsById = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Last time-step selected via <see cref="Render"/> for a station
+    /// Last time-step selected via <see cref="RenderHeadlessAsync"/> for a station
     /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
     /// at the same time the rendered arrow is showing. <c>null</c> until
     /// the first render.
@@ -44,7 +44,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private DateTime? _stationSelectedTime;
 
     /// <summary>
-    /// Prefix used on <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>
+    /// Prefix used on <c>MapsuiDisplayListRenderer.FeatureRefKey</c>
     /// tags for station-series point features. The remainder is the
     /// station identifier. <see cref="GetFeatureInfo"/> recognises this
     /// prefix to route station picks back through this processor.
@@ -142,6 +142,24 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;
 
+    /// <summary>
+    /// Initializes a new <see cref="S111DatasetProcessor"/> from the HDF5
+    /// dataset file at <paramref name="path"/>. For a regular-grid (dcf2)
+    /// dataset the file stays open and per-time-step values are decoded
+    /// lazily; station-series datasets are read in full and the file closed.
+    /// </summary>
+    /// <param name="path">Path to the S-111 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-111 portrayal catalogue.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-111 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-111 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S111DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -155,6 +173,19 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// the HDF5 dataset <paramref name="relativePath"/> from
     /// <paramref name="source"/>. Used by exchange-set bulk loading.
     /// </summary>
+    /// <param name="source">The asset source (e.g. an exchange set) holding the dataset.</param>
+    /// <param name="relativePath">Source-relative path of the S-111 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-111 portrayal catalogue.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-111 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-111 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S111DatasetProcessor(
         IAssetSource source,
         string relativePath,
@@ -760,7 +791,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Maps a current speed to a Mapsui <see cref="SymbolStyle.SymbolScale"/>
+    /// Maps a current speed to a Mapsui <c>SymbolStyle.SymbolScale</c>
     /// with a visible floor (~6 px) and ceiling (~24 px at 2 m/s).
     /// </summary>
     private static double SymbolScaleForSpeed(float speedMetresPerSecond)
@@ -775,7 +806,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <summary>
     /// Resolves dcf8 station picks routed via the Mapsui
-    /// <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/> tag the
+    /// <c>MapsuiDisplayListRenderer.FeatureRefKey</c> tag the
     /// arrow layer attaches to each station point. Refs are formatted as
     /// <c>"station:&lt;id&gt;"</c> (see <see cref="StationFeatureRefPrefix"/>).
     /// For dcf2 gridded datasets and other refs this returns <c>null</c>;

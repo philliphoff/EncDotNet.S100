@@ -32,7 +32,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly Dictionary<string, WaterLevelStation> _stationsById = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Last time-step selected via <see cref="Render"/> for a station
+    /// Last time-step selected via <see cref="RenderHeadlessAsync"/> for a station
     /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
     /// at the same time the rendered glyph is showing. <c>null</c> until
     /// the first render.
@@ -132,6 +132,22 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// </summary>
     public bool IsGriddedSurface => _source is not null;
 
+    /// <summary>
+    /// Initializes a new <see cref="S104DatasetProcessor"/> by reading and
+    /// parsing the HDF5 dataset file at <paramref name="path"/>. The file is
+    /// read in full and closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-104 HDF5 dataset file.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-104 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-104 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S104DatasetProcessor(
         string path,
         ICrsTransformFactory crsTransformFactory)
@@ -139,6 +155,23 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     {
     }
 
+    /// <summary>
+    /// Initializes a new <see cref="S104DatasetProcessor"/> by reading the
+    /// HDF5 dataset <paramref name="relativePath"/> from
+    /// <paramref name="source"/>. Used by exchange-set bulk loading.
+    /// </summary>
+    /// <param name="source">Asset source holding the dataset (e.g. a folder or ZIP archive).</param>
+    /// <param name="relativePath">Path of the dataset file within <paramref name="source"/>.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-104 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-104 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S104DatasetProcessor(
         IAssetSource source,
         string relativePath,
@@ -634,6 +667,21 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
     }
 
+    /// <summary>
+    /// Samples water level at the supplied geographic position and time.
+    /// For a gridded (dcf2) dataset the containing grid cell is sampled at
+    /// <paramref name="time"/> (the nearest available step; the first step when
+    /// <c>null</c>). For a station series the nearest station is reported at the
+    /// sample closest to <paramref name="time"/> (its first sample when
+    /// <c>null</c>).
+    /// </summary>
+    /// <param name="latitude">WGS84 latitude in degrees.</param>
+    /// <param name="longitude">WGS84 longitude in degrees.</param>
+    /// <param name="time">Time to sample at, or <c>null</c> for the first available time.</param>
+    /// <returns>
+    /// Water-level height, trend and sample time, or <c>null</c> when the point
+    /// lies outside the grid, or the dataset has no time steps or stations.
+    /// </returns>
     public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time)
     {
         if (_stationSeries is not null)

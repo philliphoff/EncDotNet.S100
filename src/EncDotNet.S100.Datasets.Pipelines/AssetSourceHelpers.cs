@@ -21,7 +21,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 internal static class AssetSourceHelpers
 {
     /// <summary>
-    /// Opens <paramref name="relativePath"/> from <paramml="source"/>
+    /// Opens <paramref name="relativePath"/> from <paramref name="source"/>
     /// synchronously and returns a seekable stream positioned at the start.
     /// Prefer <see cref="OpenSeekableAsync"/> on new code paths.
     /// </summary>

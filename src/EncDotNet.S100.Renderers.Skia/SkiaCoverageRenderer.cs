@@ -17,6 +17,14 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
     /// </summary>
     public RgbaColor NoDataColor { get; set; } = RgbaColor.Transparent;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Produces one pixel per sampled grid cell; cells with no data are
+    /// painted with <see cref="NoDataColor"/>.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// The layer has no <see cref="StyledCoverageLayer.ColorScheme"/>.
+    /// </exception>
     public SKBitmap Render(StyledCoverageLayer layer, Viewport viewport)
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.frame");

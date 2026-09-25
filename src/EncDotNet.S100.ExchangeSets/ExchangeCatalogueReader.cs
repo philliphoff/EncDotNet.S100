@@ -5,6 +5,19 @@ using EncDotNet.S100.ExchangeSets.Diagnostics;
 
 namespace EncDotNet.S100.ExchangeSets;
 
+/// <summary>
+/// Parses an S-100 Part 17 exchange catalogue (<c>CATALOG.XML</c>) into an
+/// <see cref="ExchangeCatalogue"/>.
+/// </summary>
+/// <remarks>
+/// The catalogue namespace is taken from the root element, so product-specific
+/// namespaces and discovery elements (e.g. <c>S102_DatasetDiscoveryMetadata</c>)
+/// are accepted alongside the generic <c>S100_*</c> ones, as is the legacy
+/// <c>S100EC</c> layout without wrapper elements. Most optional elements that are
+/// absent or unparseable yield <see langword="null"/> or default values rather
+/// than errors; Part 15 digital-signature elements are validated strictly.
+/// <see cref="ExchangeSet.OpenAsync"/> uses this reader to open an exchange set.
+/// </remarks>
 public static class ExchangeCatalogueReader
 {
     private static readonly XNamespace Gco = "http://standards.iso.org/iso/19115/-3/gco/1.0";
@@ -23,16 +36,59 @@ public static class ExchangeCatalogueReader
         "http://www.iho.int/s100/se/5.2",
     ];
 
+    /// <summary>Reads an exchange catalogue from a stream.</summary>
+    /// <param name="stream">A readable stream positioned at the start of the <c>CATALOG.XML</c> content. It is not disposed.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or (when security is read)
+    /// a <c>digitalSignatureValue</c> is invalid (not exactly one child, an
+    /// unrecognized security namespace or signature element, a missing required
+    /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
+    /// non-base64 value).
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A certificate in the <c>certificates</c> block is not valid base64
+    /// (only when security is read).
+    /// </exception>
     public static ExchangeCatalogue Read(Stream stream) =>
         Read(stream, ExchangeCatalogueReadOptions.Default);
 
+    /// <summary>Reads an exchange catalogue from a file path or URI.</summary>
+    /// <param name="path">The path (or URI) of the <c>CATALOG.XML</c> file, as accepted by <see cref="XDocument.Load(string)"/>.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or (when security is read)
+    /// a <c>digitalSignatureValue</c> is invalid (not exactly one child, an
+    /// unrecognized security namespace or signature element, a missing required
+    /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
+    /// non-base64 value).
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A certificate in the <c>certificates</c> block is not valid base64
+    /// (only when security is read).
+    /// </exception>
+    /// <exception cref="IOException">The file cannot be opened or read.</exception>
     public static ExchangeCatalogue Read(string path) =>
         Read(path, ExchangeCatalogueReadOptions.Default);
 
     /// <summary>
-    /// Reads an exchange catalogue from <paramref name="stream"/> with the
-    /// given <paramref name="options"/>.
+    /// Reads an exchange catalogue from a stream with the given options (for
+    /// example <see cref="ExchangeCatalogueReadOptions.DiscoveryOnly"/>).
     /// </summary>
+    /// <param name="stream">A readable stream positioned at the start of the <c>CATALOG.XML</c> content. It is not disposed.</param>
+    /// <param name="options">What to read.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or (when security is read)
+    /// a <c>digitalSignatureValue</c> is invalid (not exactly one child, an
+    /// unrecognized security namespace or signature element, a missing required
+    /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
+    /// non-base64 value).
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A certificate in the <c>certificates</c> block is not valid base64
+    /// (only when security is read).
+    /// </exception>
     public static ExchangeCatalogue Read(Stream stream, ExchangeCatalogueReadOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -42,9 +98,24 @@ public static class ExchangeCatalogueReader
     }
 
     /// <summary>
-    /// Reads the exchange catalogue at <paramref name="path"/> with the given
-    /// <paramref name="options"/>.
+    /// Reads an exchange catalogue from a file path or URI with the given
+    /// options (for example <see cref="ExchangeCatalogueReadOptions.DiscoveryOnly"/>).
     /// </summary>
+    /// <param name="path">The path (or URI) of the <c>CATALOG.XML</c> file, as accepted by <see cref="XDocument.Load(string)"/>.</param>
+    /// <param name="options">What to read.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or (when security is read)
+    /// a <c>digitalSignatureValue</c> is invalid (not exactly one child, an
+    /// unrecognized security namespace or signature element, a missing required
+    /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
+    /// non-base64 value).
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A certificate in the <c>certificates</c> block is not valid base64
+    /// (only when security is read).
+    /// </exception>
+    /// <exception cref="IOException">The file cannot be opened or read.</exception>
     public static ExchangeCatalogue Read(string path, ExchangeCatalogueReadOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);

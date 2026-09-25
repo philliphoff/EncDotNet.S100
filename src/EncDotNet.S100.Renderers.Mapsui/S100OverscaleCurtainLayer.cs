@@ -40,7 +40,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </remarks>
 public sealed class S100OverscaleCurtainLayer
 {
-    /// <summary>Default <see cref="Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
+    /// <summary>Default <see cref="global::Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
     public const string DefaultLayerName = "S-100 Overscale Curtain";
 
     private readonly OverscaleCurtainStyle _style;

@@ -108,6 +108,13 @@ internal static class CaptureCoordinator
         }
     }
 
+    /// <summary>
+    /// Captures the map once any in-flight live paint has drained, serialized
+    /// against other captures.
+    /// </summary>
+    /// <param name="requestRepaintAsync">Requests a repaint of the map control so its render markers signal a drain.</param>
+    /// <param name="captureAsync">Performs the capture and returns the encoded image, or <see langword="null"/> on failure.</param>
+    /// <param name="cancellationToken">Cancels waiting for the capture slot or the drain.</param>
     /// <param name="acquireGate">
     /// Whether to hold the live-paint gate across <paramref name="captureAsync"/>.
     /// <para>

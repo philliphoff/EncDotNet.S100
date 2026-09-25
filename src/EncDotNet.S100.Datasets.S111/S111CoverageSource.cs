@@ -4,6 +4,11 @@ using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.S111;
 
+/// <summary>
+/// Adapts an S-111 <see cref="S111Dataset"/> to the pipeline-facing
+/// <see cref="ICoverageSource"/>. Each time step in the dataset is one
+/// coverage; <see cref="SelectTime"/> chooses which one is sampled.
+/// </summary>
 public class S111CoverageSource : ICoverageSource
 {
     /// <summary>S-111 standard fill value for no-data cells.</summary>
@@ -12,6 +17,11 @@ public class S111CoverageSource : ICoverageSource
     private readonly S111Dataset _dataset;
     private int _selectedTimeIndex;
 
+    /// <summary>
+    /// Creates a coverage source over the given S-111 dataset, initially
+    /// positioned at the first time step.
+    /// </summary>
+    /// <param name="dataset">The parsed S-111 dataset.</param>
     public S111CoverageSource(S111Dataset dataset)
     {
         _dataset = dataset;
@@ -21,6 +31,12 @@ public class S111CoverageSource : ICoverageSource
     /// <summary>The underlying parsed S-111 dataset.</summary>
     public S111Dataset Dataset => _dataset;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Describes the grid of the selected time step. The value fields are
+    /// <c>surfaceCurrentSpeed</c> (knots) and <c>surfaceCurrentDirection</c>
+    /// (degrees true), with <see cref="FillValue"/> marking no-data cells.
+    /// </remarks>
     public CoverageMetadata Metadata
     {
         get
@@ -67,9 +83,16 @@ public class S111CoverageSource : ICoverageSource
         }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>One entry per time step, in dataset order.</remarks>
     public IReadOnlyList<DateTime> AvailableTimes =>
         _dataset.Coverages.Select(c => c.TimePoint).ToList();
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Selects the time step that matches <paramref name="time"/> exactly, or
+    /// otherwise the nearest one.
+    /// </remarks>
     public void SelectTime(DateTime time)
     {
         for (int i = 0; i < _dataset.Coverages.Count; i++)
@@ -97,6 +120,8 @@ public class S111CoverageSource : ICoverageSource
         _selectedTimeIndex = closest;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>Samples the time step chosen by <see cref="SelectTime"/>.</remarks>
     public SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
     {
         var coverage = _dataset.Coverages[_selectedTimeIndex];

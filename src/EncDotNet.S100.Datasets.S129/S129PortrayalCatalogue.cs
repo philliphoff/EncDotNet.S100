@@ -11,9 +11,16 @@ namespace EncDotNet.S100.Datasets.S129;
 /// </summary>
 public sealed class S129PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
+    /// <summary>
+    /// Creates an S-129 portrayal catalogue backed by the given provider.
+    /// </summary>
+    /// <param name="provider">The portrayal catalogue provider that supplies rule files and assets.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="provider"/> is <c>null</c>.</exception>
     public S129PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
+    /// <inheritdoc/>
     public override SpecRef Spec => new("S-129", default);
 
+    /// <inheritdoc/>
     protected override XmlResolver CreateXmlResolver(IReadOnlyDictionary<string, byte[]> registeredBytes) =>
         new S129XmlResolver(Provider, registeredBytes);
 

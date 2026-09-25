@@ -11,12 +11,26 @@ using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
+/// <summary>
+/// <see cref="IDatasetProcessor"/> for IHO S-128 Catalogue of Nautical
+/// Products GML datasets. Drives the standard S-100 Part 9 XSLT vector
+/// portrayal pipeline inherited from
+/// <see cref="GmlDatasetProcessorBase{TFeature}"/> and exposes the parsed
+/// catalogue through <see cref="Dataset"/>.
+/// </summary>
+/// <remarks>
+/// Normally created through the <see cref="S100Products.S128"/> registration
+/// (used by <see cref="DatasetPipelineFactory"/>) rather than constructed
+/// directly.
+/// </remarks>
 public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
 {
     private readonly S128Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
+    /// <inheritdoc />
     protected override string ProductDescription => "Catalogue of Nautical Products";
+    /// <inheritdoc />
     protected override IReadOnlyList<S128Feature> Features => _dataset.Features;
 
     /// <inheritdoc />
@@ -25,6 +39,18 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
     /// <summary>The parsed S-128 dataset backing this processor.</summary>
     public S128Dataset Dataset => _dataset;
 
+    /// <summary>
+    /// Initializes a new <see cref="S128DatasetProcessor"/> by reading and parsing the
+    /// dataset file at <paramref name="path"/>. The file is read in full and
+    /// closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-128 GML dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-128 portrayal catalogue.</param>
+    /// <param name="authorityProvider">Resolves the default S-98 display plane for the dataset's content.</param>
+    /// <param name="featureCatalogueManager">
+    /// Optional source of the S-128 feature catalogue, used to decode attribute
+    /// values in feature info; <see langword="null"/> leaves them undecoded.
+    /// </param>
     public S128DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -75,6 +101,7 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
         SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
+    /// <inheritdoc />
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S128FeatureXmlSource(_dataset);
 

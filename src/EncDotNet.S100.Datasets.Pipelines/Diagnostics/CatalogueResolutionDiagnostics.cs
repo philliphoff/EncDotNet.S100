@@ -30,7 +30,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 /// <para>
 /// Dataset processors should call this from their constructor — catalogue
 /// resolution is a one-shot per processor lifetime, and emitting at
-/// construction keeps the per-<see cref="IDatasetProcessor.Render"/> hot
+/// construction keeps the per-render hot
 /// path free of any telemetry overhead.
 /// </para>
 /// </remarks>

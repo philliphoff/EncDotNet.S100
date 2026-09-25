@@ -227,6 +227,11 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         return _paths.ContainsKey(spec) || _providers.ContainsKey(spec);
     }
 
+    /// <summary>
+    /// Disposes every <see cref="PortrayalCatalogueProvider"/> this manager has
+    /// created and clears the provider and asset caches. Registered paths are
+    /// kept.
+    /// </summary>
     public void Dispose()
     {
         foreach (var lazy in _providers.Values)

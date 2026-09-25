@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.S57;
 /// <summary>
 /// Thin wrapper over <see cref="EncDotNet.S57.S57Document"/> from the
 /// upstream <c>EncDotNet.S57</c> package. Provides the <see cref="IsS57File"/>
-/// discriminator used by <see cref="EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory"/>
+/// discriminator used by <c>DatasetPipelineFactory</c>
 /// to disambiguate <c>.000</c> files between S-57 and S-101 (which share the
 /// extension and ISO 8211 envelope).
 /// </summary>

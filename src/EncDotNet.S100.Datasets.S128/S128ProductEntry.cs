@@ -146,7 +146,7 @@ public sealed class S128ProductEntry
     /// In the IHO 2.0.0 sample the link is encoded inline as
     /// <c>&lt;S128:theReference xlink:href="#ID0002" .../&gt;&lt;ProductMapping&gt;...&lt;/ProductMapping&gt;</c>;
     /// we surface the href list and leave caller-side mapping interpretation
-    /// to <see cref="S128Catalogue.Resolve"/>.
+    /// to the caller.
     /// </remarks>
     public IEnumerable<S128XlinkReference> ReferencedProducts =>
         Feature.References.Where(r =>

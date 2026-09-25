@@ -65,6 +65,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     /// for a static singleton. The Mapsui-typed cross-dataset sort authority
     /// lives in the renderer package; the processor only needs the plane.
     /// </param>
+    /// <param name="specName">Product specification name, e.g. <c>"S-124"</c>.</param>
     protected GmlDatasetProcessorBase(
         GmlPortrayalCatalogueBase catalogue,
         FeatureCatalogueDecoder? decoder,
@@ -286,7 +287,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     /// <remarks>
     /// Tiled-symbol pattern area-fills are rasterised through
-    /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
+    /// <see cref="EncDotNet.S100.Renderers.Skia.SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
     /// the polygon, anchored to a global world-space origin so adjacent
     /// polygons sharing a pattern align seamlessly. Unlike the Mapsui path,
     /// the headless renderer does not perform NetTopologySuite

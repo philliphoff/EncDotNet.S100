@@ -17,7 +17,9 @@ public static class CoveragePickHelper
     /// </summary>
     public sealed class SamplePoint
     {
+        /// <summary>Zero-based grid row of the sampled cell (row 0 is the southernmost).</summary>
         public required int Row { get; init; }
+        /// <summary>Zero-based grid column of the sampled cell (column 0 is the westernmost).</summary>
         public required int Col { get; init; }
         /// <summary>The native-CRS coordinates of the sampled cell origin.</summary>
         public required (double X, double Y) Native { get; init; }

@@ -24,7 +24,7 @@ public sealed record DatasetCollection(
 
 /// <summary>
 /// Where a collection's items come from. Each concrete kind has an
-/// <see cref="ICollectionSourceIndexer"/> that turns it into
+/// <see cref="Indexing.ICollectionSourceIndexer"/> that turns it into
 /// <see cref="CollectionItem"/>s.
 /// </summary>
 /// <param name="Id">The source's stable identifier (keys its cached index).</param>
