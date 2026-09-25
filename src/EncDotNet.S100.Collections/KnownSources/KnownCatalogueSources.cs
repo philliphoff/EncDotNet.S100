@@ -111,6 +111,56 @@ public static class KnownCatalogueSources
             .ToArray();
     }
 
+    /// <summary>
+    /// Writes <paramref name="sources"/> as a known-sources document, for
+    /// example the user's own catalogues; <see cref="Read"/> reads it back.
+    /// </summary>
+    public static void Write(Stream stream, IEnumerable<KnownCatalogueSource> sources)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(sources);
+
+        var document = new Document(1, sources.Select(s => new Entry(
+            s.Id, s.Name, s.Provider, s.Region, s.Format, s.CatalogUri, s.Homepage, s.Coverage, s.Editions, s.Sizes, s.Note))
+            .ToArray());
+        JsonSerializer.Serialize(stream, document, WriteOptions);
+    }
+
+    /// <summary>
+    /// Describes a catalogue the user added by URL (issue #670), with what
+    /// its format provides: its title (or the host) as the name, the host as
+    /// the provider, and the region "Custom".
+    /// </summary>
+    public static KnownCatalogueSource FromUrl(Uri catalogUri, KnownCatalogueFormat format, string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(catalogUri);
+
+        var (coverage, editions, sizes) = format switch
+        {
+            KnownCatalogueFormat.NoaaEnc => (KnownCatalogueCoverage.Polygons, true, true),
+            KnownCatalogueFormat.UsaceIenc => (KnownCatalogueCoverage.BoundingBoxes, true, true),
+            _ => (KnownCatalogueCoverage.None, false, false),
+        };
+        return new KnownCatalogueSource(
+            "user-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(catalogUri.AbsoluteUri)))[..16].ToLowerInvariant(),
+            string.IsNullOrWhiteSpace(title) ? catalogUri.Host : title.Trim(),
+            catalogUri.Host,
+            [CustomRegion],
+            format,
+            catalogUri,
+            null,
+            coverage,
+            editions,
+            sizes,
+            null);
+    }
+
+    /// <summary>The region user-added catalogues are listed under.</summary>
+    public const string CustomRegion = "Custom";
+
+    private static readonly JsonSerializerOptions WriteOptions = new(Options) { WriteIndented = true };
+
     private static JsonSerializerOptions CreateOptions()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);

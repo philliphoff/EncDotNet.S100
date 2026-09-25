@@ -23,7 +23,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="20,12,20,16">
+    <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="20,12,20,16">
         <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,24,12">
             <TextBlock Text="{x:Static loc:Strings.Library_DirectoryTitle}" FontSize="15" FontWeight="SemiBold" />
             <TextBlock Text="{x:Static loc:Strings.Library_DirectoryDescription}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
@@ -38,13 +38,19 @@
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
                     <StackPanel Spacing="3" Margin="0,2" Background="Transparent">
-                        <Grid ColumnDefinitions="*,Auto">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
                             <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             <Button Grid.Column="1" Classes="Icon" Padding="2"
                                     IsVisible="{Binding HasHomepage}"
                                     Command="{Binding OpenHomepageCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_CatalogueHomepage}">
                                 <ic:FluentIcon Icon="Open" FontSize="14" />
+                            </Button>
+                            <Button Grid.Column="2" Classes="Icon" Padding="2"
+                                    IsVisible="{Binding IsUser}"
+                                    Command="{Binding RemoveCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveOnlineCatalogue}">
+                                <ic:FluentIcon Icon="Delete" FontSize="14" />
                             </Button>
                         </Grid>
                         <TextBlock Text="{Binding ProviderAndRegion}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
@@ -65,7 +71,21 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+        <!-- Add a catalogue by URL: its format is recognised from the document. -->
+        <StackPanel Grid.Row="2" Spacing="4" Margin="0,12,0,0" IsVisible="{Binding CanAddByUrl}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Grid.Column="0" Text="{Binding CatalogueUrl}"
+                         PlaceholderText="{x:Static loc:Strings.Library_DirectoryUrlWatermark}" />
+                <Button Grid.Column="1" Classes="Outline" Content="{x:Static loc:Strings.Library_DirectoryAddUrl}"
+                        Command="{Binding AddUrlCommand}" />
+            </Grid>
+            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlChecking}" IsVisible="{Binding IsChecking}"
+                       FontSize="11" Opacity="0.7" />
+            <TextBlock Text="{Binding UrlError}" IsVisible="{Binding HasUrlError}"
+                       FontSize="11" Foreground="#c0392b" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
             <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}" />
             <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Next}" Command="{Binding NextCommand}" />
         </StackPanel>

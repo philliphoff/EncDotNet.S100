@@ -778,6 +778,14 @@ antimeridian and a large item count.
   - A curated directory of known catalogues. **Done** (#670 slice 2),
     as our own `known-sources.json`, not OpenCPN's GPL `chart_sources.xml`.
   - Community `chartcatalogs` lists. **Done** (#670 slices 3–4, §7.4).
+  - User-added catalogue URLs. **Done** (#670 slice 5):
+    - `CatalogueFormatDetector` reads only the head of the document
+      (gzip-aware) and recognises the format by its root element.
+    - `S100_ExchangeCatalogue` is recognised but reported as not yet
+      supported.
+    - The viewer keeps the user's catalogues in `catalogues.json`, a
+      known-sources document written by `KnownCatalogueSources.Write`,
+      and lists them under "Custom" in the directory.
 - **S-128 as the interchange format**: export a collection as an S-128
   catalogue, and import one as a collection.
 - **SECOM** `GetSummary`/`Get` client as a source kind, once a reachable

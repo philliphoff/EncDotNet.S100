@@ -961,4 +961,12 @@ internal static class Strings
     public static string Library_CommunitySelectionFormat => Get(nameof(Library_CommunitySelectionFormat));
     public static string Library_CommunityAll => Get(nameof(Library_CommunityAll));
     public static string Library_PublishedFormat => Get(nameof(Library_PublishedFormat));
+    public static string Library_DirectoryAddUrl => Get(nameof(Library_DirectoryAddUrl));
+    public static string Library_DirectoryUrlWatermark => Get(nameof(Library_DirectoryUrlWatermark));
+    public static string Library_DirectoryUrlChecking => Get(nameof(Library_DirectoryUrlChecking));
+    public static string Library_DirectoryUrlInvalid => Get(nameof(Library_DirectoryUrlInvalid));
+    public static string Library_DirectoryUrlUnsupportedFormat => Get(nameof(Library_DirectoryUrlUnsupportedFormat));
+    public static string Library_DirectoryUrlNotXml => Get(nameof(Library_DirectoryUrlNotXml));
+    public static string Library_DirectoryUrlS100 => Get(nameof(Library_DirectoryUrlS100));
+    public static string Tooltip_RemoveOnlineCatalogue => Get(nameof(Tooltip_RemoveOnlineCatalogue));
 }

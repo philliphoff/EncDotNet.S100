@@ -2755,4 +2755,28 @@
   <data name="Library_PublishedFormat" xml:space="preserve">
     <value>Published {0}</value>
   </data>
+  <data name="Library_DirectoryAddUrl" xml:space="preserve">
+    <value>Add URL</value>
+  </data>
+  <data name="Library_DirectoryUrlWatermark" xml:space="preserve">
+    <value>Or add a catalogue by URL (https://…/catalogue.xml)</value>
+  </data>
+  <data name="Library_DirectoryUrlChecking" xml:space="preserve">
+    <value>Checking the catalogue…</value>
+  </data>
+  <data name="Library_DirectoryUrlInvalid" xml:space="preserve">
+    <value>Enter an http or https URL.</value>
+  </data>
+  <data name="Library_DirectoryUrlUnsupportedFormat" xml:space="preserve">
+    <value>Not a supported catalogue (root element {0}). Supported: NOAA ENC, USACE Inland ENC and chartcatalogs lists.</value>
+  </data>
+  <data name="Library_DirectoryUrlNotXml" xml:space="preserve">
+    <value>Not a catalogue: the URL did not return XML.</value>
+  </data>
+  <data name="Library_DirectoryUrlS100" xml:space="preserve">
+    <value>Online S-100 exchange catalogues are not supported yet.</value>
+  </data>
+  <data name="Tooltip_RemoveOnlineCatalogue" xml:space="preserve">
+    <value>Remove this catalogue from the list</value>
+  </data>
 </root>
