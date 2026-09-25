@@ -3,13 +3,13 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// <summary>
 /// Capability interface for catalogues that supply portrayal assets — SVG
 /// symbols, line styles, and area fills (S-100 Part 9 §11). The
-/// <see cref="MapsuiDisplayListRenderer"/> and equivalent renderers consume
+/// <c>MapsuiDisplayListRenderer</c> and equivalent renderers consume
 /// these via per-feature provider callbacks.
 /// </summary>
 /// <remarks>
 /// <para>
 /// All members are asynchronous because uncached lookups perform I/O against
-/// the underlying <see cref="IAssetSource"/>. Implementations are expected
+/// the underlying <see cref="EncDotNet.S100.Core.IAssetSource"/>. Implementations are expected
 /// to memoize decoded results, so the second access for the same name on a
 /// given catalogue completes synchronously through the
 /// <see cref="ValueTask{TResult}"/> fast path.

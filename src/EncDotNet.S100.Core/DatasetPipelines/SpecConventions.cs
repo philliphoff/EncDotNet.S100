@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// The two coincide for every native S-100 product. They diverge for the
 /// legacy S-57 ENC format: an S-57 cell is translated in-memory to an
 /// <c>S101Document</c> and portrayed through the S-101 catalogue
-/// (<see cref="S57DatasetProcessor"/>), so it keeps product identity
+/// (<c>S57DatasetProcessor</c>), so it keeps product identity
 /// <c>"S-57"</c> (labels, validation rebadging, examiner links) while acting
 /// as <c>"S-101"</c> for catalogue resolution, viewing-group / display-category
 /// state keying, and the S-100 Part 9 §11.7 display-mode selection.

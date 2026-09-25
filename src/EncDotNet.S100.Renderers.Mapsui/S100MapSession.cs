@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <summary>
 /// Default <see cref="IS100MapSession"/> implementation. Owns the composed
 /// dataset-layer session, processor ownership, and navigation surface attached
-/// to a single <see cref="Mapsui.Map"/>; disposing it releases all of them.
+/// to a single <see cref="global::Mapsui.Map"/>; disposing it releases all of them.
 /// </summary>
 internal sealed class S100MapSession : IS100MapSession
 {

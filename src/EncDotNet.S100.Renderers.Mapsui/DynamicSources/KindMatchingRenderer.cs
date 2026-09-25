@@ -14,9 +14,9 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 /// Match policy: longest registered key wins. A registration of
 /// <c>"vessel"</c> matches any feature with
 /// <see cref="DynamicFeature.Kind"/> equal to <c>"vessel"</c> when
-/// <paramref name="prefixMatch"/> is <see langword="false"/>, or
+/// the constructor's <c>prefixMatch</c> is <see langword="false"/>, or
 /// equal to <c>"vessel"</c> / starting with <c>"vessel."</c> when
-/// <paramref name="prefixMatch"/> is <see langword="true"/>. The
+/// <c>prefixMatch</c> is <see langword="true"/>. The
 /// latter follows the conventional dot-namespaced
 /// <see cref="DynamicFeature.Kind"/> shape (e.g. <c>"vessel.cargo"</c>,
 /// <c>"vessel.tanker"</c>).

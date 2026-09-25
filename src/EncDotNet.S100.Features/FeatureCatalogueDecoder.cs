@@ -22,13 +22,13 @@ public sealed class FeatureCatalogueDecoder
     private readonly Dictionary<string, InformationType> _informationTypesByCode;
 
     /// <summary>
-    /// Maps "<simpleAttributeCode>|<listedValueCode>" → label so listed-value
+    /// Maps <c>"&lt;simpleAttributeCode&gt;|&lt;listedValueCode&gt;"</c> → label so listed-value
     /// resolution stays O(1) regardless of catalogue size.
     /// </summary>
     private readonly Dictionary<string, string> _listedValueLabels;
 
     /// <summary>
-    /// Maps "<simpleAttributeCode>|<listedValueCode>" → definition so the
+    /// Maps <c>"&lt;simpleAttributeCode&gt;|&lt;listedValueCode&gt;"</c> → definition so the
     /// richer prose meaning of an enumerated value can be resolved in O(1).
     /// </summary>
     private readonly Dictionary<string, string> _listedValueDefinitions;

@@ -12,6 +12,11 @@ public static class ExceptionMessageFormatter
     /// <summary>
     /// Formats the standard "missing required attribute / group" message.
     /// </summary>
+    /// <param name="product">Product code, e.g. <c>"S-102"</c>.</param>
+    /// <param name="file">Dataset file name, or <see langword="null"/> when unknown.</param>
+    /// <param name="groupPath">HDF5 group path where the item was expected.</param>
+    /// <param name="attributeOrDataset">Name of the missing attribute or dataset, if any.</param>
+    /// <param name="specReference">Product-specification clause that requires the item, if known.</param>
     /// <param name="additionalContext">
     /// Optional extra sentence appended after the standard text — used,
     /// for example, to note that the dataset declares an unexpected

@@ -7,7 +7,7 @@ public interface IPortrayalCatalogue
     /// <summary>The product specification (name + edition) this catalogue targets.</summary>
     SpecRef Spec { get; }
 
-    /// <summary>The edition of the underlying portrayal catalogue (matches <see cref="PortrayalCatalogue.Version"/>).</summary>
+    /// <summary>The edition of the underlying portrayal catalogue (matches <c>PortrayalCatalogue.Version</c>).</summary>
     string Edition { get; }
 
     /// <summary>The currently active colour palette.</summary>

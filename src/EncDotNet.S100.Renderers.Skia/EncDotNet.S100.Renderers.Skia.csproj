@@ -10,6 +10,8 @@
     <!-- Ship the self-contained SkiaSharp Linux native so the headless render
          path works on arm64 and on hosts without fontconfig (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+    <!-- Temporary: public APIs here are not all documented yet (issue #656). -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />

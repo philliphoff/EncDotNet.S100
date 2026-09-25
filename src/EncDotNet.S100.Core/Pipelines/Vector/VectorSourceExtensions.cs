@@ -30,7 +30,7 @@ public static class VectorSourceExtensions
     /// </summary>
     /// <remarks>
     /// Sources that already route <c>GetFeatures(extent)</c> through
-    /// the index (like <see cref="EncDotNet.S100.Datasets.S101.S101VectorSource"/>)
+    /// the index (like <c>S101VectorSource</c>)
     /// see no behaviour change from calling this — it's provided so
     /// callers holding only an <see cref="IVectorSource"/> reference
     /// don't need to know whether the source is index-backed.

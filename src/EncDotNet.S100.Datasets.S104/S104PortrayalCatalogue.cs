@@ -88,7 +88,7 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
     ];
 
     /// <summary>
-    /// Per-palette band table. <see cref="SwitchPalette"/> selects
+    /// Per-palette band table. <see cref="SwitchPaletteAsync"/> selects
     /// which entry is returned by <see cref="ResolveColorScheme"/>.
     /// </summary>
     private static readonly IReadOnlyDictionary<PaletteType, IReadOnlyList<ColorBand>> Bands =

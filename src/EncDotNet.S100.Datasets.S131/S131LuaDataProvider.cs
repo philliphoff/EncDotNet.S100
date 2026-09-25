@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Datasets.S131;
 /// <para>
 /// S-131 is the first product in this codebase that combines GML data
 /// encoding (S-100 Part 10b) with Lua portrayal (S-100 Part 9A). The host
-/// API surface is identical to S-101 (<see cref="S101LuaDataProvider"/>),
+/// API surface is identical to S-101 (<see cref="EncDotNet.S100.Datasets.S101.S101LuaDataProvider"/>),
 /// but the underlying data source is a parsed GML document rather than
 /// ISO 8211 records.
 /// </para>

@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// directly would corrupt the session's bookkeeping.
 /// </para>
 /// <para>
-/// Implementations mutate the attached <see cref="Mapsui.Map"/> directly and do
+/// Implementations mutate the attached <see cref="global::Mapsui.Map"/> directly and do
 /// <b>not</b> marshal to a UI thread; a UI host calls them on the map-owning
 /// thread, matching the session's threading contract.
 /// </para>

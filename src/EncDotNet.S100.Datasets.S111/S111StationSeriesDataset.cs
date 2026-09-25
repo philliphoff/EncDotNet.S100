@@ -67,7 +67,7 @@ public sealed class S111StationSeriesDataset
 /// Discriminated union over the two structurally different S-111
 /// dataset shapes the reader emits — gridded coverage (dcf2) and
 /// positioned station/node series (dcf1/dcf3/dcf8). See
-/// <see cref="S111DatasetReader.ReadAny"/>.
+/// <see cref="S111DatasetReader.ReadAny(EncDotNet.S100.Hdf5.IHdf5File)"/>.
 /// </summary>
 public abstract record S111DatasetData
 {

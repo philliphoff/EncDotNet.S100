@@ -83,7 +83,7 @@ public static class SpecCompatibility
     /// dataset may use features the catalogue doesn't know about); and
     /// <see cref="SpecMatchKind.MajorDivergence"/> when the two are on
     /// different majors (incompatible — decoding may misinterpret data).
-    /// A <see cref="default(SpecVersion)"/> on either side falls through to
+    /// A <c>default(SpecVersion)</c> on either side falls through to
     /// <see cref="SpecMatchKind.Unknown"/>.
     /// </remarks>
     public static SpecMatchKind Classify(SpecVersion declared, SpecVersion catalogue)
@@ -103,7 +103,7 @@ public static class SpecCompatibility
 /// </summary>
 public enum SpecMatchKind
 {
-    /// <summary>One or both versions were unspecified (<see cref="default(SpecVersion)"/>).</summary>
+    /// <summary>One or both versions were unspecified (<c>default(SpecVersion)</c>).</summary>
     Unknown,
 
     /// <summary>Versions are equal in all components but Clarification.</summary>

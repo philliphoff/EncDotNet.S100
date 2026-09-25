@@ -4,7 +4,7 @@ using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// An explicitly owned S-100 subsystem attached to a <see cref="Mapsui.Map"/>.
+/// An explicitly owned S-100 subsystem attached to a <see cref="global::Mapsui.Map"/>.
 /// Composes and owns the reusable dataset-layer session, processor ownership,
 /// renderer, layer bands, and navigation convenience; disposing it releases all
 /// of them. Obtain one with <see cref="S100MapExtensions.AddS100"/>.

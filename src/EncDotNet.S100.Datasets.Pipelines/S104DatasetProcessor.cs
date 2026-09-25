@@ -32,7 +32,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly Dictionary<string, WaterLevelStation> _stationsById = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Last time-step selected via <see cref="Render"/> for a station
+    /// Last time-step selected via <see cref="RenderHeadlessAsync"/> for a station
     /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
     /// at the same time the rendered glyph is showing. <c>null</c> until
     /// the first render.

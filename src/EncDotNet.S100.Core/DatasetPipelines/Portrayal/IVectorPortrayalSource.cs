@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
 /// dependency on Mapsui.
 /// </summary>
 /// <remarks>
-/// Mirrors the <see cref="IHeadlessImageRenderer"/> capability pattern: the
+/// Mirrors the <c>IHeadlessImageRenderer</c> capability pattern: the
 /// concrete processors implement this alongside their headless Skia path,
 /// and the Mapsui renderer feature-tests with
 /// <c>processor is IVectorPortrayalSource</c>.

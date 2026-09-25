@@ -415,6 +415,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <param name="source">The asset source backing the exchange set.</param>
     /// <param name="baseRelativePath">Source-relative path of the base cell (<c>….000</c>).</param>
     /// <param name="updateRelativePaths">Source-relative paths of the update files, in ascending update-number order.</param>
+    /// <param name="supportFiles">
+    /// Optional map of support-file name to source-relative path, used to
+    /// resolve file references the cell makes to its exchange set.
+    /// </param>
     /// <param name="spec">
     /// The product whose catalogues portray the cell: <c>"S-101"</c> (default) or
     /// <c>"S-401"</c> for inland ENC, which shares the Part 10a encoding and the
@@ -524,7 +528,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// same directory. This gives a single dropped <c>.000</c> cell the same
     /// up-to-date rendering as one loaded from an exchange set. S-57, S-101, and
     /// S-401 cells (told apart by the ISO 8211 envelope in
-    /// <see cref="DetectProductSpec"/>) all apply updates via their respective
+    /// <see cref="DetectProductSpec(string)"/>) all apply updates via their respective
     /// <c>*WithUpdates</c> path; any other product, or a base cell with no
     /// updates on disk, falls back to <see cref="CreateProcessor(string)"/>.
     /// S-57 Ed 3.1 App B.1 / S-100 Part 10a.

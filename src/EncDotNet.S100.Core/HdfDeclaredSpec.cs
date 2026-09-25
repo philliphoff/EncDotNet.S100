@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Core;
 /// (including pre-release drafts such as <c>"INT.IHO.S-104.0.8"</c>), which
 /// <see cref="SpecRef.TryParse"/> understands. When the attribute is absent
 /// or carries only a product code without a parseable edition, the
-/// <paramref name="fallbackName"/> is used with a default (unknown) edition so
+/// caller-supplied fallback product name is used with a default (unknown) edition so
 /// the dataset's product is still identified.
 /// </remarks>
 public static class HdfDeclaredSpec

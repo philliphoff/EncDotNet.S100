@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// <remarks>
 /// <para>
 /// The single member is asynchronous because uncached lookups perform I/O
-/// against the underlying <see cref="IAssetSource"/> (the XSLT XML must be
+/// against the underlying <see cref="EncDotNet.S100.Core.IAssetSource"/> (the XSLT XML must be
 /// read and compiled). Implementations are expected to memoize compiled
 /// transforms, so subsequent accesses for the same rule complete
 /// synchronously through the <see cref="ValueTask{TResult}"/> fast path.

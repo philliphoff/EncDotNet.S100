@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Time;
 /// <para>
 /// Per the Phase 2 plan question 4 recommendation, a feature with
 /// no validity metadata at all is treated as "always valid" — its
-/// validity is <see cref="Validity.Unknown"/> and callers should
+/// validity is <see cref="Verdict.Unknown"/> and callers should
 /// include it under any <see cref="TimeQuery"/>.
 /// </para>
 /// </remarks>

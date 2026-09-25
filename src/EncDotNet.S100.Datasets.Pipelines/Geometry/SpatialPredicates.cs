@@ -66,10 +66,9 @@ public static class SpatialPredicates
             && box.NorthLatitude >= south;
 
     /// <summary>
-    /// Returns <c>true</c> when <paramref name="box"/> contains every
-    /// point of <paramref name="query"/>'s coarse bounding box. Used
-    /// by point-style queries where the query bbox collapses to the
-    /// point itself.
+    /// Returns <c>true</c> when <paramref name="box"/> contains
+    /// <paramref name="point"/>. Used by point-style queries where the
+    /// query bbox collapses to the point itself.
     /// </summary>
     public static bool Contains(BoundingBox box, GeoPoint point)
     {

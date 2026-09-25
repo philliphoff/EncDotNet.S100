@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Spec;
 /// <summary>
 /// Extracts human-readable name candidates from an
 /// <see cref="IS100Feature"/> so that name-oriented tools (e.g.
-/// <see cref="SearchFeaturesTool"/>) can search across the several places
+/// <c>SearchFeaturesTool</c>) can search across the several places
 /// a feature's name may live, independent of encoding.
 /// </summary>
 /// <remarks>

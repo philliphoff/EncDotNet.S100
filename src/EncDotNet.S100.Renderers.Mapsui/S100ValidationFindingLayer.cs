@@ -55,7 +55,7 @@ public readonly record struct S100ValidationFinding(
 /// </remarks>
 public sealed class S100ValidationFindingLayer
 {
-    /// <summary>Default <see cref="Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
+    /// <summary>Default <see cref="global::Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
     public const string DefaultLayerName = "S-100 Validation Findings";
 
     private readonly S100ValidationFindingStyle _style;
