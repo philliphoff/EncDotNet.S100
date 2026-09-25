@@ -62,12 +62,19 @@ internal static class Telemetry
 /// </summary>
 public static class PortrayalAssetKinds
 {
+    /// <summary><c>xslt</c>: compiled XSLT rule transforms.</summary>
     public const string Xslt = "xslt";
+    /// <summary><c>svg</c>: SVG symbol documents.</summary>
     public const string Svg = "svg";
+    /// <summary><c>line_style</c>: parsed line style definitions.</summary>
     public const string LineStyle = "line_style";
+    /// <summary><c>area_fill</c>: parsed area fill definitions.</summary>
     public const string AreaFill = "area_fill";
+    /// <summary><c>palette</c>: colour palettes parsed from colour profiles.</summary>
     public const string Palette = "palette";
+    /// <summary><c>lua_script</c>: compiled Lua rule scripts.</summary>
     public const string LuaScript = "lua_script";
+    /// <summary><c>lua_source</c>: Lua rule source strings.</summary>
     public const string LuaSource = "lua_source";
 }
 

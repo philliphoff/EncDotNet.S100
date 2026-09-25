@@ -5,6 +5,19 @@ using EncDotNet.S100.ExchangeSets.Diagnostics;
 
 namespace EncDotNet.S100.ExchangeSets;
 
+/// <summary>
+/// Parses an S-100 Part 17 exchange catalogue (<c>CATALOG.XML</c>) into an
+/// <see cref="ExchangeCatalogue"/>.
+/// </summary>
+/// <remarks>
+/// The catalogue namespace is taken from the root element, so product-specific
+/// namespaces and discovery elements (e.g. <c>S102_DatasetDiscoveryMetadata</c>)
+/// are accepted alongside the generic <c>S100_*</c> ones, as is the legacy
+/// <c>S100EC</c> layout without wrapper elements. Most optional elements that are
+/// absent or unparseable yield <see langword="null"/> or default values rather
+/// than errors; Part 15 digital-signature elements are validated strictly.
+/// <see cref="ExchangeSet.OpenAsync"/> uses this reader to open an exchange set.
+/// </remarks>
 public static class ExchangeCatalogueReader
 {
     private static readonly XNamespace Gco = "http://standards.iso.org/iso/19115/-3/gco/1.0";
@@ -23,6 +36,19 @@ public static class ExchangeCatalogueReader
         "http://www.iho.int/s100/se/5.2",
     ];
 
+    /// <summary>Reads an exchange catalogue from a stream.</summary>
+    /// <param name="stream">A readable stream positioned at the start of the <c>CATALOG.XML</c> content. It is not disposed.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or a
+    /// <c>digitalSignatureValue</c> is invalid (not exactly one child, an
+    /// unrecognized security namespace or signature element, a missing required
+    /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
+    /// non-base64 value).
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A certificate in the <c>certificates</c> block is not valid base64.
+    /// </exception>
     public static ExchangeCatalogue Read(Stream stream)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
@@ -30,6 +56,20 @@ public static class ExchangeCatalogueReader
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
+    /// <summary>Reads an exchange catalogue from a file path or URI.</summary>
+    /// <param name="path">The path (or URI) of the <c>CATALOG.XML</c> file, as accepted by <see cref="XDocument.Load(string)"/>.</param>
+    /// <returns>The parsed catalogue.</returns>
+    /// <exception cref="XmlException">
+    /// The XML is malformed or has no root element, or a
+    /// <c>digitalSignatureValue</c> is invalid (not exactly one child, an
+    /// unrecognized security namespace or signature element, a missing required
+    /// or disallowed attribute, an unsupported <c>dataStatus</c>, or an empty or
+    /// non-base64 value).
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A certificate in the <c>certificates</c> block is not valid base64.
+    /// </exception>
+    /// <exception cref="IOException">The file cannot be opened or read.</exception>
     public static ExchangeCatalogue Read(string path)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
