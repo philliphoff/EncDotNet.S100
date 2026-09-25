@@ -240,11 +240,13 @@ internal sealed class NativeMenuBuilder
 
         foreach (var path in paths)
         {
-            var label = Path.GetFileName(path);
-            var item = new NativeMenuItem(label)
+            // Entries may be exchange-set folders as well as files; name a
+            // folder by its last segment.
+            var label = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+            var item = new NativeMenuItem(string.IsNullOrEmpty(label) ? path : label)
             {
                 ToolTip = path,
-                IsEnabled = File.Exists(path),
+                IsEnabled = File.Exists(path) || Directory.Exists(path),
             };
             var captured = path;
             item.Click += (_, _) => _viewModel.OpenRecentCommand.Execute(captured);

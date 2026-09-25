@@ -116,8 +116,11 @@ The viewer accepts:
   ENC cell, or `.000` S-57 ENC cell onto the window. A dropped `.000`
   base cell also picks up any sibling `.001`/`.002`… updates that sit
   next to it on disk.
-- **Recent files** — the **File → Recent** submenu replays previous
-  loads in order; entries that no longer exist on disk are skipped.
+- **Recent files**: the **File → Recent** submenu replays previous
+  loads in order. It covers single datasets and exchange sets opened as
+  folders or ZIPs; a dropped `CATALOG.031` is remembered as its folder.
+  An exchange set replays through the same progress UI as a fresh open.
+  Entries that no longer exist on disk are skipped.
 
 S-57 base cells are auto-detected by inspecting the ISO 8211 header
 and translated to the in-memory S-101 model so they render through

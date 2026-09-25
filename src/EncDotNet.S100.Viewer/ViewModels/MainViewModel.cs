@@ -1343,12 +1343,19 @@ internal sealed class MainViewModel : ViewModelBase
             _selectedBottomTab = BottomTabs[0];
     }
 
+    /// <summary>
+    /// Opens an exchange set (folder, ZIP or <c>CATALOG.031</c>) with the
+    /// window's progress UI; used by Open Recent to replay an exchange set.
+    /// Set by the main window. Issue #655.
+    /// </summary>
+    internal Func<string, Task>? ExchangeSetOpener { get; set; }
+
     private async Task OpenRecentAsync(string? path)
     {
         if (string.IsNullOrEmpty(path))
             return;
 
-        if (!File.Exists(path))
+        if (!File.Exists(path) && !Directory.Exists(path))
         {
             _notifications.Create(Strings.Toast_Warning)
                 .WithSeverity(NotificationSeverity.Warning)
@@ -1362,8 +1369,23 @@ internal sealed class MainViewModel : ViewModelBase
         }
 
         SelectDefaultTab();
+        if (ExchangeSetOpener is { } openExchangeSet && IsExchangeSetPath(path))
+        {
+            await openExchangeSet(path);
+            return;
+        }
+
         await Datasets.LoadFromPathAsync(path);
     }
+
+    /// <summary>
+    /// True for a path Open Recent should replay as an exchange set: a folder,
+    /// an exchange-set ZIP, or a <c>CATALOG.031</c>.
+    /// </summary>
+    internal static bool IsExchangeSetPath(string path) =>
+        Directory.Exists(path)
+        || (ExchangeSetDetection.IsZipPath(path) && ExchangeSetDetection.LooksLikeExchangeSetZip(path))
+        || ExchangeSetDetection.IsS57CataloguePath(path);
 
     /// <summary>
     /// Collects diagnostics + an optional screenshot, then presents the

@@ -120,4 +120,47 @@ public class MainViewModelOpenRecentTests : IDisposable
 
         Assert.Empty(loader.Loaded);
     }
+
+    [Fact]
+    public async Task OpenRecent_ExchangeSetFolder_ReplaysThroughTheExchangeSetOpener()
+    {
+        var vm = CreateViewModel(out var loader, out _);
+        var opened = new List<string>();
+        vm.ExchangeSetOpener = path =>
+        {
+            opened.Add(path);
+            return Task.CompletedTask;
+        };
+        var folder = LibraryTestContext.Datasets("ExchangeSets", "Synthetic-S57-Framed");
+
+        await vm.OpenRecentCommand.ExecuteAsync(folder);
+
+        Assert.Equal([folder], opened);
+        Assert.Empty(loader.Loaded);
+    }
+
+    [Theory]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed", true)]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed/CATALOG.031", true)]
+    [InlineData("S101.zip", true)]
+    [InlineData("S57/US5MA1BO/US5MA1BO.000", false)]
+    public void IsExchangeSetPath_recognises_folders_zips_and_catalogues(string relative, bool expected)
+    {
+        var path = LibraryTestContext.Datasets(relative.Split('/'));
+
+        Assert.Equal(expected, MainViewModel.IsExchangeSetPath(path));
+    }
+
+    [Theory]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed/CATALOG.031", "ExchangeSets/Synthetic-S57-Framed")]
+    [InlineData("ExchangeSets/Synthetic-S57-Framed", "ExchangeSets/Synthetic-S57-Framed")]
+    [InlineData("S101.zip", "S101.zip")]
+    public void RecentExchangeSetPath_records_a_catalogue_as_its_folder(string relative, string expected)
+    {
+        var path = LibraryTestContext.Datasets(relative.Split('/'));
+
+        Assert.Equal(
+            LibraryTestContext.Datasets(expected.Split('/')),
+            MainWindow.RecentExchangeSetPath(path + (relative.EndsWith("Framed", StringComparison.Ordinal) ? Path.DirectorySeparatorChar : "")));
+    }
 }
