@@ -36,7 +36,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly Dictionary<string, SurfaceCurrentStation> _stationsById = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Last time-step selected via <see cref="Render"/> for a station
+    /// Last time-step selected via <see cref="RenderHeadlessAsync"/> for a station
     /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
     /// at the same time the rendered arrow is showing. <c>null</c> until
     /// the first render.
@@ -44,7 +44,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private DateTime? _stationSelectedTime;
 
     /// <summary>
-    /// Prefix used on <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>
+    /// Prefix used on <c>MapsuiDisplayListRenderer.FeatureRefKey</c>
     /// tags for station-series point features. The remainder is the
     /// station identifier. <see cref="GetFeatureInfo"/> recognises this
     /// prefix to route station picks back through this processor.
@@ -760,7 +760,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Maps a current speed to a Mapsui <see cref="SymbolStyle.SymbolScale"/>
+    /// Maps a current speed to a Mapsui <c>SymbolStyle.SymbolScale</c>
     /// with a visible floor (~6 px) and ceiling (~24 px at 2 m/s).
     /// </summary>
     private static double SymbolScaleForSpeed(float speedMetresPerSecond)
@@ -775,7 +775,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <summary>
     /// Resolves dcf8 station picks routed via the Mapsui
-    /// <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/> tag the
+    /// <c>MapsuiDisplayListRenderer.FeatureRefKey</c> tag the
     /// arrow layer attaches to each station point. Refs are formatted as
     /// <c>"station:&lt;id&gt;"</c> (see <see cref="StationFeatureRefPrefix"/>).
     /// For dcf2 gridded datasets and other refs this returns <c>null</c>;

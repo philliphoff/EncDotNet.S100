@@ -376,6 +376,7 @@ public sealed class MapsuiDisplayListRenderer
     /// feature reference and applying scale-visibility limits. Geometry in the
     /// op is already projected to EPSG:3857; sizes are already in display pixels.
     /// </summary>
+    /// <param name="op">The paint op to convert.</param>
     /// <param name="includePointHitRect">
     /// When the op is a <see cref="Scene.PointPaintOp"/>, controls whether the
     /// near-invisible pick-target rectangle is emitted. The caller suppresses it
@@ -440,7 +441,7 @@ public sealed class MapsuiDisplayListRenderer
     /// φ ≈ 50.8° (≈ 1/cos φ = 1.58) a cell's detail was suppressed roughly
     /// two-thirds of a zoom level too early. Matches the Skia headless backend,
     /// which already applies <c>cos(midLat)</c> (see
-    /// <see cref="Scene.HeadlessVectorRenderer"/>).
+    /// <see cref="EncDotNet.S100.Renderers.Skia.Scene.HeadlessVectorRenderer"/>).
     /// </summary>
     /// <param name="scaleDenominator">The S-100 true-scale denominator.</param>
     /// <param name="latitudeRadians">

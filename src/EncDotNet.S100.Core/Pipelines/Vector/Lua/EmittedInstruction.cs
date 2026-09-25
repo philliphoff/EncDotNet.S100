@@ -9,9 +9,9 @@ namespace EncDotNet.S100.Pipelines.Vector.Lua;
 /// </summary>
 /// <remarks>
 /// Exposed via the Lua-only diagnostic surface
-/// (<see cref="ILuaVectorRuleExecutor.ExecuteRaw"/>) for tooling and tests
+/// (<see cref="ILuaVectorRuleExecutor.ExecuteRawAsync"/>) for tooling and tests
 /// that inspect the pre-parse emit stream. Production callers should use
-/// <see cref="IVectorRuleExecutor.Execute"/>, which returns typed instructions.
+/// <see cref="IVectorRuleExecutor.ExecuteAsync"/>, which returns typed instructions.
 /// </remarks>
 public sealed class EmittedInstruction
 {

@@ -20,7 +20,7 @@ public static class S111DatasetReader
     /// <summary>
     /// Reads an <see cref="S111Dataset"/> from the given HDF5 file. Throws
     /// <see cref="S100DatasetNotSupportedException"/> if the dataset is
-    /// not dcf2 (regularly-gridded). Use <see cref="ReadAny"/> to handle
+    /// not dcf2 (regularly-gridded). Use <see cref="ReadAny(EncDotNet.S100.Hdf5.IHdf5File)"/> to handle
     /// dcf1, dcf2, dcf3, and dcf8.
     /// </summary>
     public static S111Dataset Read(IHdf5File file)

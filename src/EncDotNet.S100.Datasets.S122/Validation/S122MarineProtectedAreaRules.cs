@@ -30,7 +30,7 @@ namespace EncDotNet.S100.Datasets.S122.Validation;
 ///   <item><description>
 ///     <em>Information-type binding resolution</em> — the typed
 ///     projection silently drops unresolved <c>xlink</c> targets and
-///     surfaces them as <see cref="Diagnostics.ProjectionDiagnostic"/>
+///     surfaces them as <see cref="EncDotNet.S100.DataModel.ProjectionDiagnostic"/>
 ///     entries, not as fields on the projected feature. There is
 ///     nothing for a typed-model rule to observe. Mirror the deviation
 ///     note in the S-421 pilot.

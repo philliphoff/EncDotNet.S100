@@ -624,7 +624,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// <remarks>
     /// Tiled-symbol pattern area-fills (e.g. shallow-water diamonds,
     /// quality-of-bathymetry overlays) are rasterised through
-    /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
+    /// <see cref="EncDotNet.S100.Renderers.Skia.SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
     /// the polygon, anchored to a global world-space origin so adjacent
     /// polygons sharing a pattern align seamlessly. Unlike the Mapsui path,
     /// the headless renderer does not perform NetTopologySuite

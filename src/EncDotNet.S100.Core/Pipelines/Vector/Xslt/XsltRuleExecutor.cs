@@ -35,12 +35,12 @@ namespace EncDotNet.S100.Pipelines.Vector.Xslt;
 /// </para>
 /// <para>
 /// Instances are <b>render-bound</b>: the FeatureXML source, catalogue, and
-/// viewport are captured at construction and read at <see cref="Execute"/>
+/// viewport are captured at construction and read at <see cref="ExecuteAsync"/>
 /// time. Do not cache or reuse an instance across viewport, source, or
 /// catalogue changes; construct a fresh executor per render instead (this is
 /// cheap — the compiled XSLT transforms are cached in the catalogue, not the
 /// executor). The <see cref="MarinerSettings"/> argument to
-/// <see cref="Execute"/> is ignored because the XSLT engine is driven only by
+/// <see cref="ExecuteAsync"/> is ignored because the XSLT engine is driven only by
 /// the colour palette and viewport scale, not mariner preferences.
 /// </para>
 /// </remarks>
@@ -68,13 +68,13 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
 
     /// <summary>
     /// The number of distinct dataset feature types observed during the most
-    /// recent <see cref="Execute"/> call, for process-level telemetry.
+    /// recent <see cref="ExecuteAsync"/> call, for process-level telemetry.
     /// </summary>
     public int LastFeatureTypeCount { get; private set; }
 
     /// <summary>
     /// The number of applicable catalogue rules (XSLT and Lua) selected during
-    /// the most recent <see cref="Execute"/> call, for process-level telemetry.
+    /// the most recent <see cref="ExecuteAsync"/> call, for process-level telemetry.
     /// Matches the legacy <c>rules.count</c> dimension: this is the count of
     /// rules whose feature-type predicate matched, not the count of XSLT rules
     /// actually transformed.

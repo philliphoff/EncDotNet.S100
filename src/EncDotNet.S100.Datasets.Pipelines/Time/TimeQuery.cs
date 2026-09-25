@@ -21,7 +21,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Time;
 /// <para>
 /// Construct instances via the static factory methods; the underlying
 /// records validate their bounds and throw <see cref="ArgumentException"/>
-/// on degenerate inputs. Use <see cref="TimeQueryJsonReader.Parse"/>
+/// on degenerate inputs. Use <see cref="TimeQueryJsonReader.Parse(string)"/>
 /// to construct from the wire format.
 /// </para>
 /// </remarks>

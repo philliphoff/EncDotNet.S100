@@ -1637,7 +1637,7 @@ public static class S100VectorTileRenderer
     /// <item>context changed (first paint, or a device reset handed us a new
     /// <see cref="GRContext"/>) → rebuild the cache, since textures are bound to
     /// the context that created them;</item>
-    /// <item>scene/style generation advanced (a <see cref="BindScene"/>
+    /// <item>scene/style generation advanced (a <see cref="BindScene(ILayer, VectorScene)"/>
     /// invalidation) → discard the now-stale textures so the re-rasterised
     /// tiles are re-promoted.</item>
     /// </list>
@@ -1820,6 +1820,9 @@ public static class S100VectorTileRenderer
             GpuRegistry.Clear();
         }
     }
+
+    /// <summary>
+    /// Blits one cached tile (if resident): positions its guttered image by
     /// world bounds and hard-clips to the tile core so adjacent tiles meet
     /// exactly with no seam or double-drawn gutter. When a GPU context is
     /// supplied (Phase&#160;5), the tile's raster pixels are uploaded once to a

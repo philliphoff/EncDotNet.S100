@@ -60,7 +60,7 @@ public readonly record struct S100DatasetExtentIndicator(
 /// </remarks>
 public sealed class S100DatasetExtentIndicatorLayer
 {
-    /// <summary>Default <see cref="Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
+    /// <summary>Default <see cref="global::Mapsui.Layers.ILayer.Name"/> for the overlay.</summary>
     public const string DefaultLayerName = "S-100 Dataset Extent Indicators";
 
     private readonly S100DatasetExtentIndicatorStyle _style;

@@ -11,6 +11,14 @@
     <RepositoryUrl>https://github.com/philliphoff/EncDotNet.S100</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Ship XML documentation in every package so consumers get IntelliSense,
+         and fail the build (via TreatWarningsAsErrors) on missing (CS1591) or
+         malformed doc comments. Non-packable projects opt out explicitly with
+         <GenerateDocumentationFile>false</GenerateDocumentationFile>; packages
+         still being documented carry a temporary NoWarn for 1591 (issue #656).
+         Set here rather than conditioned on IsPackable because the SDK resolves
+         GenerateDocumentationFile before Directory.Build.targets is imported. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

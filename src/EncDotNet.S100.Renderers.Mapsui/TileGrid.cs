@@ -78,7 +78,8 @@ internal static class VelocityEstimator
     }
 }
 
-
+/// <summary>
+/// Origin-anchored EPSG:3857 tile-grid math for the base-plane tile compositor
 /// (S-100 render subsystem, Phase&#160;2). Uses the standard Web-Mercator
 /// power-of-two pyramid (256-DIP tiles, the same scheme Mapsui's own tile
 /// layers use), so a constant-zoom pan reuses every interior tile and only the

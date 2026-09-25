@@ -121,7 +121,7 @@ public sealed class MeanReducer : IPyramidReducer
 /// <para>
 /// NODATA sentinels (either paired field) exclude the cell from the
 /// reduction. An entirely-NODATA window returns
-/// (<paramref name="noDataSpeed"/>, <paramref name="noDataDirection"/>).
+/// the caller-supplied (<c>noDataSpeed</c>, <c>noDataDirection</c>) pair.
 /// </para>
 /// </remarks>
 public sealed class VectorMeanReducer : IVectorPyramidReducer

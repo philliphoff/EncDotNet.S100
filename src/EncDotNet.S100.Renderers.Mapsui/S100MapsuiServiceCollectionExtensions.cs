@@ -13,7 +13,7 @@ public static class S100MapsuiServiceCollectionExtensions
 {
     /// <summary>
     /// Registers an <see cref="IS100MapSessionFactory"/> that creates a
-    /// per-<see cref="Mapsui.Map"/> <see cref="IS100MapSession"/> from
+    /// per-<see cref="global::Mapsui.Map"/> <see cref="IS100MapSession"/> from
     /// container-resolved dependencies.
     /// </summary>
     /// <param name="services">The service collection.</param>

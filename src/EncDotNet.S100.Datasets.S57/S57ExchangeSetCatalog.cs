@@ -57,7 +57,7 @@ public sealed class S57ExchangeSetCell
 /// directory-rooted S-57 model rather than a shared interface. The viewer pairs
 /// this enumeration with a <c>FileSystemAssetSource</c> rooted at the
 /// exchange-set directory so each cell flows through the same
-/// <see cref="S57DatasetProcessor"/> code path as a single dropped <c>.000</c>
+/// <c>S57DatasetProcessor</c> code path as a single dropped <c>.000</c>
 /// file.
 /// </para>
 /// <para>

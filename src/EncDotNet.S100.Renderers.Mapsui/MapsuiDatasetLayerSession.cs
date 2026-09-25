@@ -801,6 +801,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
     }
 
+    /// <summary>Renders one registered dataset and applies its layers to the map.</summary>
+    /// <param name="datasetId">The registered dataset to render.</param>
+    /// <param name="presentation">Presentation state (palette, mariner settings, viewport) to render with.</param>
+    /// <param name="selectedTime">Time step to render for time-varying data, or <see langword="null"/>.</param>
+    /// <param name="kind">Why the render was requested; reported on the lifecycle events.</param>
+    /// <param name="cancellationToken">Cancels the render.</param>
     /// <param name="compose">
     /// When <see langword="true"/> (the default, single-dataset path) the layer
     /// stack is recomposed and <see cref="LayersChanged"/> raised as soon as this
@@ -909,11 +915,17 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         return result;
     }
 
+    /// <summary>Removes a registered dataset's rendered layers from the map.</summary>
+    /// <param name="datasetId">The registered dataset whose layers are cleared.</param>
+    /// <param name="updateTime">
+    /// Whether to also reset the dataset's rendered time step, so a
+    /// time-varying dataset is re-rendered at the current time next pass.
+    /// </param>
     /// <param name="compose">
     /// When <see langword="true"/> (the default) the layer stack is recomposed
     /// and <see cref="LayersChanged"/> raised inline on the calling thread. A
     /// bulk refresh passes <see langword="false"/> — it may invoke this from a
-    /// <see cref="Parallel.ForEachAsync"/> worker thread, where composing
+    /// <c>Parallel.ForEachAsync</c> worker thread, where composing
     /// <see cref="Map.Layers"/> would run off the UI thread and defeat the
     /// once-per-refresh composition — and uses the return value to drive the
     /// single deferred compose instead.

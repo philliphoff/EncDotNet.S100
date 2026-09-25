@@ -29,7 +29,7 @@ public abstract record LoadedDatasetData;
 /// <remarks>
 /// Carries the parsed <see cref="S101Dataset"/> handle. The MCP
 /// <c>describe_feature</c> tool returns
-/// <see cref="EncDotNet.S100.Datasets.Pipelines.SpecNotSupportedForTool"/> for
+/// <c>SpecNotSupportedForTool</c> for
 /// S-101 today (see <c>S101FeatureDescriber</c>); the variant exists so
 /// <c>list_datasets</c> can surface ENCs loaded into the viewer.
 /// <para>
@@ -76,7 +76,7 @@ public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 
 /// <summary>S-102 Bathymetric Surface coverage handle.</summary>
 /// <remarks>
-/// Coverage variants carry a live handle (the <see cref="ICoverageSource"/>
+/// Coverage variants carry a live handle (the <see cref="EncDotNet.S100.Pipelines.Coverage.ICoverageSource"/>
 /// or its concrete equivalent). Tool implementations must treat the handle
 /// as best-effort: it may be disposed between catalog capture and the
 /// actual sample call. Wrap reads in

@@ -377,7 +377,7 @@ public sealed class S57S101Mapping
 
     /// <summary>
     /// Builds a {acronym → value} view of an S-57 feature's raw attributes,
-    /// suitable for passing to <see cref="ResolveFeature"/>. Values for
+    /// suitable for passing to <see cref="ResolveFeature(ushort, System.Collections.Generic.IReadOnlyDictionary{string, string})"/>. Values for
     /// attributes whose ATTL is unknown to this mapping are omitted.
     /// </summary>
     public IReadOnlyDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)

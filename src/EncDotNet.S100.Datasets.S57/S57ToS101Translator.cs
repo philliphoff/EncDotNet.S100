@@ -704,7 +704,7 @@ public sealed class S57ToS101Translator
     /// Creates a translator into <paramref name="target"/> using the supplied
     /// code mapping, allowable-value lookup, and feature/attribute binding lookup.
     /// The lookups should be built from <paramref name="target"/>'s Feature
-    /// Catalogue; <see cref="ForTarget"/> wires the bundled ones.
+    /// Catalogue; <see cref="ForTarget(S57TranslationTarget)"/> wires the bundled ones.
     /// </summary>
     public S57ToS101Translator(
         S57S101Mapping mapping,
