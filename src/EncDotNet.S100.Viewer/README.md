@@ -185,6 +185,13 @@ design in `docs/design/dataset-collections.md`.
       size where the catalogue gives them.
     - **Catalogue age:** the catalogue's own date is shown, and flagged
       when it is over a year old.
+    - **Your own catalogues:** paste a catalogue URL under the list and
+      choose **Add URL**. The viewer fetches the start of the document and
+      recognises NOAA ENC, USACE Inland ENC and chartcatalogs lists by
+      their root element. It then lists the catalogue under **Custom**,
+      saved in `catalogues.json` next to `collections.json`, where it can
+      be removed again. Online S-100 exchange catalogues are not supported
+      yet.
   - an **S-128** Catalogue of Nautical Products
 
   Local sources are referenced **in place**. Files are never copied,

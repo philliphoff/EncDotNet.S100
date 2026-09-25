@@ -407,6 +407,13 @@ public partial class App : Application
                 ]);
         });
         services.AddSingleton<Library.LibraryService>();
+        services.AddSingleton<Library.UserCatalogueStore>();
+        services.AddSingleton<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(_ =>
+        {
+            // Recognises catalogues the user adds by URL (issue #670).
+            var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            return (uri, ct) => EncDotNet.S100.Collections.KnownSources.CatalogueFormatDetector.ProbeAsync(http, uri, ct);
+        });
         services.AddSingleton<Library.ILibraryDownloader>(sp =>
         {
             // One managed folder per provider, chosen by download host, unless
@@ -444,7 +451,9 @@ public partial class App : Application
             var urls = sp.GetService<IUrlOpener>();
             return new CatalogueDirectoryDialogViewModel(
                 EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All,
-                urls is null ? null : uri => urls.Open(uri.AbsoluteUri));
+                urls is null ? null : uri => urls.Open(uri.AbsoluteUri),
+                sp.GetRequiredService<Library.UserCatalogueStore>(),
+                sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>());
         });
         services.AddSingleton<Func<CatalogueDirectoryDialogViewModel>>(sp => sp.GetRequiredService<CatalogueDirectoryDialogViewModel>);
         services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(

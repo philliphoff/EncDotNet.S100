@@ -129,6 +129,16 @@ internal sealed class ViewerDataPaths
             : Path.Combine(DefaultSettingsDirectory, "collections.json");
 
     /// <summary>
+    /// Absolute path of <c>catalogues.json</c>, the online catalogues the
+    /// user added by URL (a known-sources document). Placed like
+    /// <see cref="CollectionsFilePath"/>. Issue #670.
+    /// </summary>
+    public string UserCataloguesFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "catalogues.json")
+            : Path.Combine(DefaultSettingsDirectory, "catalogues.json");
+
+    /// <summary>
     /// Directory caching each collection source's index
     /// (<c>&lt;sourceId&gt;.index.json.gz</c>). Derived data: deleting it only
     /// forces the sources to be re-indexed.
