@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Xml;
 
 namespace EncDotNet.S100.ExchangeSets.Tests;
 
@@ -328,5 +329,107 @@ public class ExchangeCatalogueReaderTests
 
         Assert.Null(catalogue.DefaultLocaleLanguage);
         Assert.Null(catalogue.DefaultLocaleCharacterEncoding);
+    }
+
+    private static ExchangeCatalogue ReadXml(string xml)
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        return ExchangeCatalogueReader.Read(stream);
+    }
+
+    [Fact]
+    public void Read_MissingIdentifierElement_ThrowsXmlExceptionNamingElement()
+    {
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:exchangeCatalogueComment>No identifier</S100XC:exchangeCatalogueComment>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        var exception = Assert.Throws<XmlException>(() => ReadXml(xml));
+
+        Assert.Contains("'S100_ExchangeCatalogue'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'identifier'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Read_MissingIdentifierValue_ThrowsXmlExceptionNamingElement()
+    {
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        var exception = Assert.Throws<XmlException>(() => ReadXml(xml));
+
+        Assert.Contains("missing required element 'identifier'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("datasetDiscoveryMetadata", "S100_DatasetDiscoveryMetadata")]
+    [InlineData("supportFileDiscoveryMetadata", "S100_SupportFileDiscoveryMetadata")]
+    [InlineData("catalogueDiscoveryMetadata", "S100_CatalogueDiscoveryMetadata")]
+    public void Read_DiscoveryRecordWithoutFileName_ThrowsXmlExceptionNamingElement(
+        string wrapper, string record)
+    {
+        var xml = $"""
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:identifier>TEST</S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+                <S100XC:{wrapper}>
+                    <S100XC:{record}>
+                        <S100XC:filePath>data</S100XC:filePath>
+                    </S100XC:{record}>
+                </S100XC:{wrapper}>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        var exception = Assert.Throws<XmlException>(() => ReadXml(xml));
+
+        Assert.Contains($"'{record}'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'fileName'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Read_LegacyS100EcIdentifierDate_IsUsedAsDateTime()
+    {
+        // Legacy S100EC catalogues (e.g. S-411) carry identifier/date wrapping
+        // a gco:Date instead of identifier/dateTime.
+        const string xml = """
+            <ec:S100_ExchangeCatalogue xmlns:ec="http://www.iho.int/S100EC"
+                                       xmlns:gco="http://www.isotc211.org/2005/gco">
+                <ec:identifier>
+                    <ec:identifier>S411_TEST</ec:identifier>
+                    <ec:date>
+                        <gco:Date>20260420</gco:Date>
+                    </ec:date>
+                </ec:identifier>
+            </ec:S100_ExchangeCatalogue>
+            """;
+
+        var catalogue = ReadXml(xml);
+
+        Assert.Equal("20260420", catalogue.Identifier.DateTime);
+    }
+
+    [Fact]
+    public void Read_IdentifierWithoutDateTimeOrDate_YieldsEmptyDateTime()
+    {
+        const string xml = """
+            <ec:S100_ExchangeCatalogue xmlns:ec="http://www.iho.int/S100EC">
+                <ec:identifier>
+                    <ec:identifier>S411_TEST</ec:identifier>
+                </ec:identifier>
+            </ec:S100_ExchangeCatalogue>
+            """;
+
+        var catalogue = ReadXml(xml);
+
+        Assert.Equal("", catalogue.Identifier.DateTime);
     }
 }
