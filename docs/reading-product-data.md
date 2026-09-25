@@ -239,5 +239,7 @@ the dataset's vertical datum, and `Trend` is 1 (decreasing), 2 (increasing),
   the contract for adding one.
 - [Loading datasets](loading-datasets.md) — opening datasets from folders, ZIPs
   and exchange sets.
+- [Custom catalogues and validation](catalogues-and-validation.md) — validating
+  datasets, with the product's rules or your own.
 - The per-product READMEs, under **Packages**, describe each product's types
   in detail.

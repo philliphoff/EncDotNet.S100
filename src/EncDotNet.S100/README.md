@@ -136,6 +136,13 @@ byte[] png = await renderer.RenderAsync(layer);
 When `FeatureCatalogue` / `PortrayalCatalogue` are left `null`, the bundled
 catalogue for the dataset's product specification is used.
 
+## Validate
+
+`dataset.Validate()` runs the product's bundled validation rules and returns a
+`ValidationReport` of findings, or `null` when the product has no rule pack. See
+[Custom catalogues and validation](../../docs/catalogues-and-validation.md),
+which also shows how to add your own rules.
+
 ## Layering — the grow-up story
 
 `S100Layer` is the composable unit, so growing from a single chart to a stacked
