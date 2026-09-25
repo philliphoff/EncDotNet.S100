@@ -4,6 +4,8 @@
   href: start-here.md
 - name: Getting started
   href: getting-started.md
+- name: Loading datasets
+  href: loading-datasets.md
 - name: Scenario guides
   items:
     - name: Render S-102 to PNG

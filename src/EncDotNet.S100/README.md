@@ -99,6 +99,9 @@ For an encrypted (S-100 Part 15) exchange set, build an `IDatasetKeyProvider`
 from the set's `Catalogue` (typically a `PermitKeyProvider` over an authenticated
 permit) and read through `exchangeSet.WithDecryption(keys)`.
 
+See [Loading datasets](../../docs/loading-datasets.md) for the full guide:
+caching, S-101 updates, custom asset sources, and the lower-level processor API.
+
 ## Read features
 
 Feature access lives on the **feature catalogue**, because decoding a feature's
