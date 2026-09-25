@@ -5,7 +5,10 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// </summary>
 public enum PortrayalRuleType
 {
+    /// <summary>An XSLT rule applied to the dataset's FeatureXML (S-100 Part 9).</summary>
     Xslt,
+
+    /// <summary>A Lua rule executed by the scripting engine (S-100 Part 9A).</summary>
     Lua,
 }
 

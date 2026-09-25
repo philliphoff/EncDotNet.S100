@@ -58,14 +58,25 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         _cache = provider.AssetCache;
     }
 
+    /// <inheritdoc/>
     public SpecRef Spec => new("S-111", default);
+    /// <inheritdoc/>
+    /// <remarks>Falls back to <c>2.0.0</c> when the catalogue does not declare a version.</remarks>
     public string Edition => _provider.Catalogue.Version ?? "2.0.0";
 
     /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
     public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
 
+    /// <inheritdoc/>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The first call also loads the speed-band table that
+    /// <see cref="ResolveSymbolScheme"/> requires. When the requested palette
+    /// is not available, falls back to the Day palette, then to any loaded
+    /// palette, then to <see cref="ColorPalette.Default"/>.
+    /// </remarks>
     public async ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
         await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
@@ -102,6 +113,15 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         return null;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Returns the arrow symbol bands from the bundled portrayal catalogue:
+    /// symbols are selected by <c>surfaceCurrentSpeed</c> and rotated by
+    /// <c>surfaceCurrentDirection</c>. Never returns <c>null</c>.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="SwitchPaletteAsync"/> has not been called yet, so the speed bands are not loaded.
+    /// </exception>
     public CoverageSymbolScheme ResolveSymbolScheme(MarinerSettings settings)
     {
         var bands = _bands ?? throw new InvalidOperationException(
@@ -129,6 +149,8 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         };
     }
 
+    /// <inheritdoc/>
+    /// <remarks>Always empty: S-111 is portrayed with arrow symbols only.</remarks>
     public IReadOnlyList<ContourStyle> Contours => [];
 
     // ── Palettes ───────────────────────────────────────────────────────

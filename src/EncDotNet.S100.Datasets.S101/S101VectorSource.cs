@@ -42,6 +42,14 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
     private readonly S101Dataset _dataset;
     private readonly FeatureCache _cache;
 
+    /// <summary>
+    /// Creates a vector source over the given S-101 dataset. Resolved
+    /// feature geometry and the spatial index are cached per dataset
+    /// instance, so constructing several sources over the same dataset
+    /// pays that cost only once.
+    /// </summary>
+    /// <param name="dataset">The parsed S-101 dataset to adapt.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="dataset"/> is <c>null</c>.</exception>
     public S101VectorSource(S101Dataset dataset)
     {
         ArgumentNullException.ThrowIfNull(dataset);
@@ -49,6 +57,12 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
         _cache = FeatureCaches.GetValue(dataset, static ds => new FeatureCache(ds));
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The horizontal CRS is always <c>EPSG:4326</c>, and
+    /// <see cref="VectorMetadata.CompilationScaleDenominator"/> is reported as
+    /// <c>0</c>.
+    /// </remarks>
     public VectorMetadata Metadata => new()
     {
         Spec = BuildSpec(_dataset.Document),

@@ -49,12 +49,24 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
     private readonly S101Dataset _dataset;
     private IReadOnlyList<string>? _featureTypes;
 
+    /// <summary>
+    /// Creates a FeatureXML source over the given S-101 dataset. The XML is
+    /// built on each call to <see cref="GetFeatureXml"/>, not up front.
+    /// </summary>
+    /// <param name="dataset">The parsed S-101 dataset to project.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="dataset"/> is <c>null</c>.</exception>
     public S101FeatureXmlSource(S101Dataset dataset)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         _dataset = dataset;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Feature type codes are resolved to their names through the dataset's
+    /// feature type catalogue (falling back to the numeric code when no name
+    /// is registered). The list is computed once and cached.
+    /// </remarks>
     public IReadOnlyList<string> FeatureTypesPresent
     {
         get
@@ -76,6 +88,7 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
         }
     }
 
+    /// <inheritdoc/>
     public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

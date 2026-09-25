@@ -14,6 +14,26 @@ using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
+/// <summary>
+/// <see cref="IDatasetProcessor"/> for S-411 Ice Information GML datasets,
+/// accepting both the JCOMM operational encoding and the IHO sample encoding.
+/// Drives the standard S-100 Part 9 XSLT vector portrayal pipeline inherited
+/// from <see cref="GmlDatasetProcessorBase{TFeature}"/> and adds the WMO ice
+/// "egg code" to sea-ice and lake-ice pick reports.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Each S-411 file is a single snapshot. As an
+/// <see cref="ITimeAwareDatasetProcessor"/> it reports its issue date as the
+/// only available time, and renders nothing while the render context's time
+/// step is earlier than that issue date.
+/// </para>
+/// <para>
+/// Normally created through the <see cref="S100Products.S411"/> registration
+/// (used by <see cref="DatasetPipelineFactory"/>) rather than constructed
+/// directly.
+/// </para>
+/// </remarks>
 public sealed class S411DatasetProcessor :
     GmlDatasetProcessorBase<S411Feature>,
     ITimeAwareDatasetProcessor
@@ -21,7 +41,9 @@ public sealed class S411DatasetProcessor :
     private readonly S411Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
+    /// <inheritdoc />
     protected override string ProductDescription => "Sea Ice";
+    /// <inheritdoc />
     protected override IReadOnlyList<S411Feature> Features => _dataset.Features;
 
     /// <inheritdoc />
@@ -36,6 +58,18 @@ public sealed class S411DatasetProcessor :
     public IReadOnlyList<DateTime> AvailableTimes =>
         _dataset.IssueDate is { } dt ? [dt] : Array.Empty<DateTime>();
 
+    /// <summary>
+    /// Initializes a new <see cref="S411DatasetProcessor"/> by reading and parsing the
+    /// dataset file at <paramref name="path"/>. The file is read in full and
+    /// closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-411 GML dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-411 portrayal catalogue.</param>
+    /// <param name="authorityProvider">Resolves the default S-98 display plane for the dataset's content.</param>
+    /// <param name="featureCatalogueManager">
+    /// Optional source of the S-411 feature catalogue, used to decode attribute
+    /// values in feature info; <see langword="null"/> leaves them undecoded.
+    /// </param>
     public S411DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -86,6 +120,7 @@ public sealed class S411DatasetProcessor :
         SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
+    /// <inheritdoc />
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S411FeatureXmlSource(_dataset);
 
@@ -211,6 +246,16 @@ public sealed class S411DatasetProcessor :
         return _validationReport;
     }
 
+    /// <summary>
+    /// Suppresses rendering when the context is an S-411 render context whose
+    /// time step is earlier than the dataset's issue date (the snapshot does
+    /// not exist yet at that time).
+    /// </summary>
+    /// <param name="context">The current render context, if any.</param>
+    /// <returns>
+    /// An info string explaining why the dataset is hidden, or <see langword="null"/>
+    /// to render normally.
+    /// </returns>
     protected override string? GetSuppressionInfo(RenderContext? context)
     {
         if (context is S411RenderContext { TimeStep: { } t }

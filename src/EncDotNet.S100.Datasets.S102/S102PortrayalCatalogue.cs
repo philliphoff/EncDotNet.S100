@@ -69,12 +69,16 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         _cache = provider.AssetCache;
     }
 
+    /// <inheritdoc/>
     public SpecRef Spec => new("S-102", default);
+    /// <inheritdoc/>
+    /// <remarks>Always <c>3.0.0</c>, the edition of the bundled S-102 portrayal catalogue.</remarks>
     public string Edition => "3.0.0";
 
     /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
     public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
 
+    /// <inheritdoc/>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
     /// <summary>
@@ -99,6 +103,13 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// </summary>
     public bool RenderNoDataFill { get; init; } = true;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The first call also loads the bundled <c>BathymetryCoverage.lua</c>
+    /// rule, which <see cref="ResolveColorScheme"/> requires. When the
+    /// requested palette is not available, the active palette is left
+    /// unchanged.
+    /// </remarks>
     public async ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
         await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
@@ -117,6 +128,16 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Runs the bundled Lua rule with the S-102 context parameters taken from
+    /// <paramref name="settings"/> and converts the emitted depth bands into a
+    /// colour scheme using the active palette. Never returns <c>null</c>.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="settings"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="SwitchPaletteAsync"/> has not been called yet, so the Lua rule is not loaded.
+    /// </exception>
     public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -171,6 +192,8 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         return ParseDrawingInstructions(instructions);
     }
 
+    /// <inheritdoc/>
+    /// <remarks>Always empty: the S-102 catalogue defines depth-band fills only.</remarks>
     public IReadOnlyList<ContourStyle> Contours => [];
 
     // ── Palettes ───────────────────────────────────────────────────────

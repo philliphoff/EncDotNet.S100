@@ -127,23 +127,86 @@ public abstract record RenderContext
     public Viewport? Viewport { get; init; }
 }
 
+/// <summary>
+/// Render context for S-101 (ENC) datasets. Carries only the shared
+/// <see cref="RenderContext"/> options; S-101 mariner selections travel in
+/// <see cref="RenderContext.Mariner"/>.
+/// </summary>
 public sealed record S101RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-102 (bathymetric surface) datasets. Carries only the
+/// shared <see cref="RenderContext"/> options; S-102 is static, so there is no
+/// time step, and its depth-band parameters travel in
+/// <see cref="RenderContext.Mariner"/>.
+/// </summary>
 public sealed record S102RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-111 (surface currents) datasets: the shared
+/// <see cref="RenderContext"/> options plus the time step to portray.
+/// </summary>
+/// <param name="TimeStep">
+/// The time step to render. The coverage source selects the matching time
+/// step, or the nearest available one; <see langword="null"/> renders the
+/// dataset's first time step.
+/// </param>
 public sealed record S111RenderContext(DateTime? TimeStep = null) : RenderContext;
 
+/// <summary>
+/// Render context for S-104 (water level) datasets: the shared
+/// <see cref="RenderContext"/> options plus the time step to portray.
+/// </summary>
+/// <param name="TimeStep">
+/// The time step to render. The coverage source selects the matching time
+/// step, or the nearest available one; <see langword="null"/> renders the
+/// dataset's first time step.
+/// </param>
 public sealed record S104RenderContext(DateTime? TimeStep = null) : RenderContext;
 
+/// <summary>
+/// Render context for S-122 (marine protected areas) datasets. Carries only
+/// the shared <see cref="RenderContext"/> options.
+/// </summary>
 public sealed record S122RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-124 (navigational warnings) datasets. Carries only
+/// the shared <see cref="RenderContext"/> options.
+/// </summary>
 public sealed record S124RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-125 (marine aids to navigation) datasets. Carries
+/// only the shared <see cref="RenderContext"/> options.
+/// </summary>
 public sealed record S125RenderContext : RenderContext;
+
+/// <summary>
+/// Render context for S-127 (marine traffic management) datasets. Carries
+/// only the shared <see cref="RenderContext"/> options.
+/// </summary>
 public sealed record S127RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-129 (under keel clearance management) datasets.
+/// Carries only the shared <see cref="RenderContext"/> options.
+/// </summary>
 public sealed record S129RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-201 (aids to navigation information) datasets.
+/// Carries only the shared <see cref="RenderContext"/> options.
+/// </summary>
 public sealed record S201RenderContext : RenderContext;
 
+/// <summary>
+/// Render context for S-411 (sea ice) datasets: the shared
+/// <see cref="RenderContext"/> options plus the time-slider position.
+/// </summary>
+/// <param name="TimeStep">
+/// The current time-slider position. Each S-411 file is a single snapshot, so
+/// the dataset is hidden while this is earlier than its issue date;
+/// <see langword="null"/> always renders it.
+/// </param>
 public sealed record S411RenderContext(DateTime? TimeStep = null) : RenderContext;

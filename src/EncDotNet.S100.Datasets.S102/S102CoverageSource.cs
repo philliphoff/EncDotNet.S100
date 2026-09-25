@@ -35,6 +35,16 @@ public class S102CoverageSource : ICoverageSource
     private readonly Lazy<CoveragePyramid> _pyramid;
     private int _selectedLevel;
 
+    /// <summary>
+    /// Creates a coverage source over one bathymetry coverage of an S-102
+    /// dataset. The overview pyramid is not built until a level other than
+    /// the base level is requested.
+    /// </summary>
+    /// <param name="dataset">The parsed S-102 dataset.</param>
+    /// <param name="coverageIndex">
+    /// Index into <see cref="S102Dataset.Coverages"/> of the coverage to expose.
+    /// Defaults to the first coverage.
+    /// </param>
     public S102CoverageSource(S102Dataset dataset, int coverageIndex = 0)
     {
         _dataset = dataset;
@@ -65,6 +75,12 @@ public class S102CoverageSource : ICoverageSource
         _selectedLevel = level;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The grid geometry reflects the currently selected overview level. The
+    /// value fields are <c>depth</c> and <c>uncertainty</c>, both in metres,
+    /// with <see cref="FillValue"/> marking no-data cells.
+    /// </remarks>
     public CoverageMetadata Metadata
     {
         get
@@ -126,9 +142,19 @@ public class S102CoverageSource : ICoverageSource
     }
 
     // S-102 is static — no time dimension
+    /// <inheritdoc/>
+    /// <remarks>S-102 has no time dimension, so this list is always empty.</remarks>
     public IReadOnlyList<DateTime> AvailableTimes => [];
+    /// <inheritdoc/>
+    /// <remarks>Does nothing: S-102 has no time dimension.</remarks>
     public void SelectTime(DateTime time) { }  // no-op
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Samples the currently selected overview level. When the region's stride
+    /// skips cells, depth is reduced to the shoalest value (minimum) and
+    /// uncertainty to the worst case (maximum) within each block.
+    /// </remarks>
     public virtual SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
     {
         Activity.Current?.SetTag(TelemetryTags.CoverageReducer, "min");

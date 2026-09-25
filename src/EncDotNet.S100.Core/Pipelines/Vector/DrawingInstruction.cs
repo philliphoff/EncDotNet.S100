@@ -318,8 +318,13 @@ public sealed class TextInstruction : DrawingInstruction
 /// </remarks>
 public enum TextHorizontalAlignment
 {
+    /// <summary>The text starts at the anchor point (left-aligned for left-to-right text).</summary>
     Start = 0,
+
+    /// <summary>The text is centred horizontally on the anchor point.</summary>
     Center = 1,
+
+    /// <summary>The text ends at the anchor point (right-aligned for left-to-right text).</summary>
     End = 2,
 }
 
@@ -330,8 +335,13 @@ public enum TextHorizontalAlignment
 /// </remarks>
 public enum TextVerticalAlignment
 {
+    /// <summary>The top of the text is placed at the anchor point.</summary>
     Top = 0,
+
+    /// <summary>The text is centred vertically on the anchor point.</summary>
     Center = 1,
+
+    /// <summary>The bottom of the text is placed at the anchor point.</summary>
     Bottom = 2,
 }
 

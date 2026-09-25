@@ -19,6 +19,29 @@ using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
+/// <summary>
+/// <see cref="IDatasetProcessor"/> for IHO S-101 Electronic Navigational Chart
+/// cells (S-100 Part 10a ISO 8211 encoding), portrayed through the S-101
+/// Part 9A Lua portrayal catalogue. Also serves S-401 Inland ENC, which shares
+/// the encoding and portrayal model, by constructing it with
+/// <c>spec: "S-401"</c> so it resolves the S-401 catalogues.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Normally created through the <see cref="S100Products.S101"/> /
+/// <see cref="S100Products.S401"/> registrations, or through
+/// a <c>DatasetPipelineFactory.CreateS101ProcessorWithUpdates</c> overload to fold
+/// a base cell's in-set sequential updates in before portrayal (the outcome is
+/// reported by <see cref="UpdateReport"/>).
+/// </para>
+/// <para>
+/// Renders are serialized per processor, and the Lua drawing-instruction list
+/// is cached by the inputs that change it. A host may inject a shared
+/// <see cref="IPortrayalInstructionCache"/> so a freshly opened processor for a
+/// previously portrayed cell can skip the Lua run; otherwise a per-processor
+/// in-memory cache is used.
+/// </para>
+/// </remarks>
 public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
 {
     private readonly S101Dataset _dataset;
@@ -146,6 +169,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private string LayerKeyPrefix =>
         _catalogueSpec.Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
 
+    /// <inheritdoc/>
     public SpecRef Spec { get; }
 
     private DatasetMetadata? _metadata;
@@ -170,6 +194,29 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// </summary>
     public S101UpdateReport? UpdateReport => _updateReport;
 
+    /// <summary>
+    /// Initializes a new <see cref="S101DatasetProcessor"/> by reading and
+    /// parsing the ISO 8211 cell at <paramref name="path"/>. External text files
+    /// the cell references are resolved relative to the cell's folder,
+    /// including a sibling <c>SUPPORT_FILES</c> folder in an S-100 exchange-set
+    /// layout.
+    /// </summary>
+    /// <param name="path">Path to the ISO 8211 cell file.</param>
+    /// <param name="catalogueManager">Supplies the portrayal catalogue for <paramref name="spec"/>.</param>
+    /// <param name="luaEngine">Lua engine that executes the portrayal catalogue's rules.</param>
+    /// <param name="featureCatalogueManager">
+    /// Supplies the feature catalogue used to decode feature and attribute
+    /// names in feature info.
+    /// </param>
+    /// <param name="sharedInstructionCache">
+    /// Optional cross-processor cache of portrayal drawing instructions;
+    /// <see langword="null"/> uses a per-processor in-memory cache.
+    /// </param>
+    /// <param name="spec">
+    /// The product whose catalogues portray the cell: <c>"S-101"</c> (default)
+    /// or <c>"S-401"</c> for inland ENC.
+    /// </param>
+    /// <exception cref="ArgumentException"><paramref name="spec"/> is <see langword="null"/> or empty.</exception>
     public S101DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -588,6 +635,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         }
     }
 
+    /// <inheritdoc/>
     public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -993,6 +1041,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return minDisplayScale;
     }
 
+    /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfo(string featureRef)
     {
         if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var featureId))
@@ -1020,6 +1069,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     public S101SoundingSample? SampleNearestSounding(double latitude, double longitude)
         => S101SoundingSampler.SampleNearest(_dataset.Document, latitude, longitude);
 
+    /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfoAt(int ordinal)
     {
         _featureIndex ??= BuildFeatureIndex();
@@ -1123,6 +1173,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         };
     }
 
+    /// <inheritdoc/>
     public IEnumerable<FeatureSummary> EnumerateFeatures()
     {
         _featureIndex ??= BuildFeatureIndex();
