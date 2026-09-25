@@ -145,6 +145,10 @@ permit keeps working for the datasets it was issued for.
 Opening a dataset whose permit is refused throws `DatasetPermitException`. Its
 `Evaluation` property carries the result above.
 
+A permit can pass these checks and still hold a key that can't decrypt the
+dataset, most often because the hardware ID is wrong. Reading that dataset
+throws `DatasetDecryptionException` instead (see [Troubleshooting](#troubleshooting)).
+
 ### Verifying signatures
 
 `ExchangeSetVerifier` checks the catalogue's signatures over each dataset.
@@ -327,10 +331,12 @@ see each failure described below.
 
 > [!IMPORTANT]
 > A **wrong hardware ID** isn't detected when the permit is checked: the cell
-> key unwraps to the wrong value, and reading the dataset fails with
-> `CryptographicException` ("Padding is invalid and cannot be removed"). If
-> every protected dataset fails that way, check the hardware ID, or the
-> manufacturer key you recovered it with.
+> key unwraps to the wrong value. Reading the dataset then throws
+> `DatasetDecryptionException`, which names the dataset in its message and in
+> `DatasetPath`. If every protected dataset fails that way, check the hardware
+> ID, or the manufacturer key you recovered it with. It's a
+> `CryptographicException`, and roughly one wrong key in 256 decrypts without
+> an error and gives unreadable content instead.
 
 > [!NOTE]
 > `CertificateUntrusted` from `AuthenticateAsync` means the data server's
