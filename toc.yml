@@ -1,4 +1,6 @@
-- name: API Reference
-  href: api/
 - name: Documentation
   href: docs/
+- name: Packages
+  href: src/
+- name: API Reference
+  href: api/

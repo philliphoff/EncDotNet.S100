@@ -472,7 +472,7 @@ responsibilities.
 ## Optional Avalonia adapter
 
 Avalonia hosts can add
-[`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/)
+[`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md)
 without coupling this base package to a UI framework. Its
 `AvaloniaMapsuiMapAdapter` attaches explicitly to a
 `CaptureSynchronizedMapControl` and owns UI-thread redraw, control-state
@@ -913,7 +913,7 @@ geometry — is delegated unchanged to the wrapped Mapsui renderer.
 The four headline optimizations — the path cache, line simplification, the raster
 snapshot, and the off-thread snapshot prebuild — are surfaced as user-facing knobs
 in the viewer under **Settings → Map → Rendering optimizations**, backed by
-[`RenderingOptimizations`](RenderingOptimizations.cs). All four default **on** (the
+[`RenderingOptimizations`](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Mapsui/RenderingOptimizations.cs). All four default **on** (the
 "best" set). The environment variables below seed those defaults and, when set
 *explicitly*, pin the value so the perf A/B harness stays faithful — an explicit
 env var always wins over the persisted viewer setting. The remaining variables
@@ -923,7 +923,7 @@ The **render subsystem switch** (A/B), the TiledScene **scene mode**
 (tiled vs single surface), and the **tiled optimization knobs** (gutter,
 in-memory / disk / GPU budgets, prediction, disk cache) are likewise bound in
 the viewer under **Settings → Render subsystem** (issue #331),
-backed by the same [`RenderingOptimizations`](RenderingOptimizations.cs) store.
+backed by the same [`RenderingOptimizations`](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Mapsui/RenderingOptimizations.cs) store.
 The env vars below seed and (when set explicitly) pin those too, disabling the
 matching UI control. Some knobs are read each frame and apply live (subsystem,
 scene mode, prediction, GPU residency); others are captured at init and apply on

@@ -92,7 +92,7 @@ The `design/` folder collects shipped implementation contracts and rationale.
 ## Troubleshooting
 
 > [!IMPORTANT]
-> If the site looks unstyled, verify `docs/styles/main.css` is included as a DocFX resource in `docfx.json`.
+> If the site looks unstyled, check that `docs/template` (which provides `public/main.css`) is still listed under `template` in `docfx.json`.
 
 ## Next step
 

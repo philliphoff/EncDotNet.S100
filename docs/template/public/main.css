@@ -3,6 +3,12 @@
   --brand-accent: #1aa3ff;
 }
 
+/* The logo SVG has a 200px intrinsic size; keep it navbar-sized. */
+#logo {
+  height: 40px;
+  width: auto;
+}
+
 .hero-brand {
   border: 1px solid color-mix(in srgb, var(--brand-accent) 35%, white);
   border-radius: 14px;
