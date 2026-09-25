@@ -62,7 +62,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     public Icon Icon => _source?.Definition switch
     {
         null => _collection.IsSession ? Icon.History : Icon.Library,
-        NoaaEncFeedSource => Icon.Globe,
+        NoaaEncFeedSource or UsaceIencFeedSource => Icon.Globe,
         S128CatalogueSource => Icon.BookOpen,
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => Icon.FolderZip,
         _ => Icon.Folder,
@@ -188,6 +188,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ExchangeSetSource e => LeafName(e.Path),
         S128CatalogueSource c => LeafName(c.Path),
         NoaaEncFeedSource n => n.Filter.IsUnscoped ? Strings.Library_NoaaAll : Strings.Library_NoaaFeed,
+        UsaceIencFeedSource u => u.Filter.IsUnscoped ? Strings.Library_UsaceAll : Strings.Library_UsaceFeed,
         _ => source.GetType().Name,
     };
 
@@ -197,6 +198,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ExchangeSetSource e => e.Path,
         S128CatalogueSource c => c.Path,
         NoaaEncFeedSource n => n.CatalogUri.AbsoluteUri,
+        UsaceIencFeedSource u => u.CatalogUri.AbsoluteUri,
         _ => string.Empty,
     };
 

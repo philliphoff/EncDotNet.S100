@@ -1,10 +1,10 @@
 using System.IO.Compression;
 using System.Text.Json;
 
-namespace EncDotNet.S100.Collections.Noaa;
+namespace EncDotNet.S100.Collections.Downloads;
 
 /// <summary>
-/// A NOAA ENC cell downloaded into a managed folder: what was downloaded and
+/// An ENC cell downloaded into a managed folder: what was downloaded and
 /// where its exchange set now lies.
 /// </summary>
 /// <param name="Name">The cell name.</param>
@@ -33,8 +33,8 @@ public sealed record DownloadedCell(
 }
 
 /// <summary>
-/// Downloads NOAA ENC cells (issue #655): each cell's zipped exchange set is
-/// fetched from its <see cref="RemoteItemLocation"/> and extracted to
+/// Downloads ENC cells from online catalogues (NOAA, USACE, …; issue #655):
+/// each cell's zip is fetched from its <see cref="RemoteItemLocation"/> and extracted to
 /// <c>&lt;root&gt;/&lt;CELL&gt;/</c>, with a <c>.source.json</c> record of the
 /// edition and layout.
 /// </summary>
@@ -46,13 +46,15 @@ public sealed record DownloadedCell(
 /// never leaves a half-written cell behind or destroys a good one.
 /// </para>
 /// <para>
-/// A NOAA cell zip holds <c>ENC_ROOT/CATALOG.031</c> and
-/// <c>ENC_ROOT/&lt;CELL&gt;/&lt;CELL&gt;.000</c> plus its sequential updates; the
-/// layout is discovered rather than assumed, and recorded relative to the
-/// cell folder so the managed folder can move.
+/// Producers lay cell zips out differently — NOAA uses
+/// <c>ENC_ROOT/CATALOG.031</c> plus <c>ENC_ROOT/&lt;CELL&gt;/&lt;CELL&gt;.000</c>,
+/// USACE keeps the catalogue in the cell folder or the cell directly in
+/// <c>ENC_ROOT</c>, and some zips hold a bare <c>.000</c> — so the layout is
+/// discovered rather than assumed, and recorded relative to the cell folder
+/// so the managed folder can move.
 /// </para>
 /// </remarks>
-public sealed class NoaaEncCellDownloader
+public sealed class EncCellDownloader
 {
     /// <summary>The name of the per-cell record file.</summary>
     public const string RecordFileName = ".source.json";
@@ -63,7 +65,7 @@ public sealed class NoaaEncCellDownloader
     private readonly TimeProvider _time;
 
     /// <summary>Creates a downloader writing under <paramref name="root"/>.</summary>
-    public NoaaEncCellDownloader(HttpClient httpClient, string root, TimeProvider? timeProvider = null)
+    public EncCellDownloader(HttpClient httpClient, string root, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentException.ThrowIfNullOrEmpty(root);
@@ -116,7 +118,7 @@ public sealed class NoaaEncCellDownloader
     /// Downloads the cell described by <paramref name="item"/>, replacing any
     /// previous copy.
     /// </summary>
-    /// <param name="item">A NOAA feed item with a <see cref="RemoteItemLocation"/>.</param>
+    /// <param name="item">A feed item with a <see cref="RemoteItemLocation"/>; its <see cref="CollectionItem.Name"/> is the cell name.</param>
     /// <param name="bytesProgress">Receives the number of bytes received so far.</param>
     /// <param name="cancellationToken">Cancels the download; nothing is left behind.</param>
     /// <exception cref="ArgumentException">The item has no remote location.</exception>

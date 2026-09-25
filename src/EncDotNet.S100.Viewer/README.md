@@ -222,12 +222,21 @@ design in `docs/design/dataset-collections.md`.
   - **Badges:** opened datasets show **LOADED** or **ON PAN**.
   - **What can't load:** online, missing and catalogue-only items are
     skipped.
-- **Download** (NOAA ENC feed): the download button beside an online
+- **USACE Inland ENC feed**: **Add to Library → USACE Inland ENC Feed…**
+  lists USACE's river cells grouped by river, with cell counts and sizes,
+  and adds the chosen rivers as a collection.
+  - **On the map:** cells show as their bounding boxes, because USACE
+    publishes no coverage polygons.
+  - **Titles:** each cell is described by its reach and river miles, e.g.
+    "Pittsburgh, PA → Allegheny Lock No. 8 (Allegheny, mi 1–46)".
+  - **Downloads:** go to `downloads/usace-ienc/`.
+- **Download** (NOAA and USACE feeds): the download button beside an online
   dataset downloads it and then loads it. **Download N (size)** fetches
   every listed online cell, for example a whole state, at most three at
   a time, with progress and **Cancel** in a notification.
-  - **Where cells go:** into the viewer's managed `downloads/noaa-enc/`
-    folder. This is not a cache, so "clear caches" keeps it.
+  - **Where cells go:** into one managed folder per provider,
+    `downloads/noaa-enc/` or `downloads/usace-ienc/`. These are not
+    caches, so "clear caches" keeps them.
   - **After downloading:** a downloaded cell is **LOCAL** and loads like
     any other.
   - **Newer editions:** when the feed lists a newer edition or update

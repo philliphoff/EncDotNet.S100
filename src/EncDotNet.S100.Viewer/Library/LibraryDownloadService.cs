@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Collections.Downloads;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -37,8 +37,8 @@ internal interface ILibraryDownloader
 }
 
 /// <summary>
-/// Downloads NOAA ENC cells from the library (issue #655) into the viewer's
-/// managed download folder, a few at a time, with a cancellable progress
+/// Downloads online ENC cells from the library (NOAA, USACE; issues #655,
+/// #670) into the viewer's managed download folders, a few at a time, with a cancellable progress
 /// notification; afterwards the cells behave as local items.
 /// </summary>
 internal sealed class LibraryDownloadService : ILibraryDownloader
@@ -46,14 +46,26 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     /// <summary>How many cells download at once.</summary>
     internal const int MaxConcurrentDownloads = 3;
 
-    private readonly NoaaEncCellDownloader _downloader;
+    private readonly Func<Uri, EncCellDownloader?> _downloaderFor;
     private readonly INotificationService? _notifications;
     private readonly ConcurrentDictionary<string, DownloadedCell?> _known = new(StringComparer.OrdinalIgnoreCase);
 
-    public LibraryDownloadService(NoaaEncCellDownloader downloader, INotificationService? notifications = null)
+    /// <summary>Creates a service that downloads every cell with <paramref name="downloader"/>.</summary>
+    public LibraryDownloadService(EncCellDownloader downloader, INotificationService? notifications = null)
+        : this(_ => downloader, notifications)
     {
         ArgumentNullException.ThrowIfNull(downloader);
-        _downloader = downloader;
+    }
+
+    /// <summary>
+    /// Creates a service that picks a downloader (and so a managed folder)
+    /// per download location, e.g. one per provider; <see langword="null"/>
+    /// means the location is not downloadable.
+    /// </summary>
+    public LibraryDownloadService(Func<Uri, EncCellDownloader?> downloaderFor, INotificationService? notifications = null)
+    {
+        ArgumentNullException.ThrowIfNull(downloaderFor);
+        _downloaderFor = downloaderFor;
         _notifications = notifications;
     }
 
@@ -71,7 +83,9 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
         item.Location is RemoteItemLocation && Downloaded(item) is { } cell && cell.IsOlderThan(item);
 
     public bool CanDownload(CollectionItem item) =>
-        item.Location is RemoteItemLocation && item.Status != CollectionItemStatus.Cancelled;
+        item.Location is RemoteItemLocation remote
+        && item.Status != CollectionItemStatus.Cancelled
+        && _downloaderFor(remote.Uri) is not null;
 
     public async Task<LibraryDownloadResult> DownloadAsync(
         IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
@@ -102,8 +116,9 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
             await gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
             try
             {
-                var cell = await _downloader.DownloadAsync(item, cancellationToken: cancellation.Token).ConfigureAwait(false);
-                _known[item.Name] = cell;
+                var downloader = _downloaderFor(((RemoteItemLocation)item.Location).Uri)!;
+                var cell = await downloader.DownloadAsync(item, cancellationToken: cancellation.Token).ConfigureAwait(false);
+                _known[Key(downloader, item.Name)] = cell;
                 Interlocked.Increment(ref done);
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
@@ -146,8 +161,14 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
         return new LibraryDownloadResult(done, failed, cancelled);
     }
 
-    private DownloadedCell? Downloaded(CollectionItem item) =>
-        _known.GetOrAdd(item.Name, name => _downloader.TryGetDownloaded(name));
+    private DownloadedCell? Downloaded(CollectionItem item)
+    {
+        if (item.Location is not RemoteItemLocation remote || _downloaderFor(remote.Uri) is not { } downloader)
+            return null;
+        return _known.GetOrAdd(Key(downloader, item.Name), _ => downloader.TryGetDownloaded(item.Name));
+    }
+
+    private static string Key(EncCellDownloader downloader, string cellName) => downloader.Root + "|" + cellName;
 
     private static string Describe(int finished, int total, long totalBytes) =>
         string.Format(CultureInfo.CurrentCulture, Strings.Toast_LibraryDownloadingFormat,

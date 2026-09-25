@@ -323,6 +323,8 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         public Task AddNoaaFeedAsync(Guid? targetCollectionId) => Record("noaa", targetCollectionId);
 
+        public Task AddUsaceFeedAsync(Guid? targetCollectionId) => Record("usace", targetCollectionId);
+
         public Task AddS128CatalogueAsync(Guid? targetCollectionId) => Record("s128", targetCollectionId);
 
         public Task AddPathAsync(string path, Guid? targetCollectionId) => Record("path", targetCollectionId);

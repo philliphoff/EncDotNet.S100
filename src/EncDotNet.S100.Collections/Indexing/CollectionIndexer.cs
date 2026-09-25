@@ -18,22 +18,20 @@ public sealed class CollectionIndexer
 
     /// <summary>
     /// Creates an indexer for the built-in source kinds: folders, exchange
-    /// sets and S-128 catalogues, plus the NOAA ENC feed when
-    /// <paramref name="feeds"/> is supplied.
+    /// sets and S-128 catalogues, plus any online <paramref name="feeds"/>
+    /// (e.g. <see cref="NoaaEncFeedIndexer"/>, <see cref="UsaceIencFeedIndexer"/>).
     /// </summary>
     /// <param name="probe">
     /// Reads metadata from loose dataset files; when <see langword="null"/>,
     /// only loose S-57 cells are recognised (without bounds).
     /// </param>
-    /// <param name="feeds">
-    /// The indexer for online feeds; when <see langword="null"/>, feed sources
-    /// are not supported.
-    /// </param>
-    public static CollectionIndexer CreateDefault(DatasetProbe? probe = null, NoaaEncFeedIndexer? feeds = null)
+    /// <param name="feeds">Indexers for online feeds; none when <see langword="null"/>.</param>
+    public static CollectionIndexer CreateDefault(
+        DatasetProbe? probe = null, IEnumerable<ICollectionSourceIndexer>? feeds = null)
     {
         var indexers = new List<ICollectionSourceIndexer> { new LocalSourceIndexer(probe), new S128CatalogueIndexer() };
         if (feeds is not null)
-            indexers.Add(feeds);
+            indexers.AddRange(feeds);
         return new CollectionIndexer(indexers);
     }
 

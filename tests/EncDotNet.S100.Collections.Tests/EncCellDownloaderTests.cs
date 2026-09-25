@@ -1,16 +1,16 @@
 using System.Net;
-using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Collections.Downloads;
 
 namespace EncDotNet.S100.Collections.Tests;
 
-public sealed class NoaaEncCellDownloaderTests : IDisposable
+public sealed class EncCellDownloaderTests : IDisposable
 {
     private readonly TempDirectory _root = new();
     private readonly ZipServer _server = new(File.ReadAllBytes(TestPaths.Fixture("US4OH1MK.zip")));
 
     public void Dispose() => _root.Dispose();
 
-    private NoaaEncCellDownloader Create() => new(new HttpClient(_server), _root.Path);
+    private EncCellDownloader Create() => new(new HttpClient(_server), _root.Path);
 
     private static CollectionItem Cell(int edition = 1, int update = 1) => new()
     {

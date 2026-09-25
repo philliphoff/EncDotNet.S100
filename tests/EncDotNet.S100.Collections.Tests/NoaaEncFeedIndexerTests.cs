@@ -16,7 +16,7 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     public NoaaEncFeedIndexerTests()
     {
         _feeds = new NoaaEncFeedIndexer(new HttpClient(_server), _cache.Path, timeProvider: _time);
-        _indexer = CollectionIndexer.CreateDefault(feeds: _feeds);
+        _indexer = CollectionIndexer.CreateDefault(feeds: [_feeds]);
     }
 
     public void Dispose() => _cache.Dispose();

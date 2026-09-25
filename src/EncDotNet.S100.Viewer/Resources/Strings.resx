@@ -2582,7 +2582,7 @@
     <value>NOAA ENC</value>
   </data>
   <data name="Library_NoaaLoading" xml:space="preserve">
-    <value>Fetching the NOAA ENC catalogue…</value>
+    <value>Fetching the catalogue…</value>
   </data>
   <data name="Library_NoaaRegions" xml:space="preserve">
     <value>Regions</value>
@@ -2685,5 +2685,20 @@
   </data>
   <data name="Toast_LibraryDownloadedFormat" xml:space="preserve">
     <value>{0:N0} downloaded, {1:N0} failed.</value>
+  </data>
+  <data name="Library_UsaceRivers" xml:space="preserve">
+    <value>Rivers</value>
+  </data>
+  <data name="Library_AddUsaceTitle" xml:space="preserve">
+    <value>Add USACE Inland ENC Feed</value>
+  </data>
+  <data name="Library_UsaceFeed" xml:space="preserve">
+    <value>USACE Inland ENC</value>
+  </data>
+  <data name="Library_UsaceAll" xml:space="preserve">
+    <value>All rivers</value>
+  </data>
+  <data name="Menu_AddLibraryUsaceFeed" xml:space="preserve">
+    <value>USACE Inland ENC Feed…</value>
   </data>
 </root>
