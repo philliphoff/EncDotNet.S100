@@ -917,4 +917,8 @@ internal static class Strings
     public static string Library_Status_Failed => Get(nameof(Library_Status_Failed));
     public static string Library_Status_Indexing => Get(nameof(Library_Status_Indexing));
     public static string Library_Status_Pending => Get(nameof(Library_Status_Pending));
+    public static string Library_AtLocationFormat => Get(nameof(Library_AtLocationFormat));
+    public static string Tooltip_ShowCoverage => Get(nameof(Tooltip_ShowCoverage));
+    public static string Tooltip_ZoomToDataset => Get(nameof(Tooltip_ZoomToDataset));
+    public static string Tooltip_ClearLocation => Get(nameof(Tooltip_ClearLocation));
 }

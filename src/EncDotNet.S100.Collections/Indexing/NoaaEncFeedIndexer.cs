@@ -127,7 +127,7 @@ public sealed class NoaaEncFeedIndexer : ICollectionSourceIndexer
     }
 
     /// <summary>Maps one catalogue cell onto a neutral item.</summary>
-    internal static CollectionItem Map(NoaaEncCell cell)
+    public static CollectionItem Map(NoaaEncCell cell)
     {
         var coverage = ToCoverage(cell.Panels);
 

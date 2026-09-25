@@ -39,6 +39,14 @@ internal sealed class MapInteractionController
     /// </summary>
     private const double LongPressMoveTolerance = 6.0;
 
+    /// <summary>
+    /// Raised for a plain single tap on the map — outside Pick Mode, with no
+    /// map tool active and no pick modifier held — with the tapped WGS-84
+    /// position. Lets passive overlays (e.g. library coverage, issue #655)
+    /// react to a click without competing with feature picking.
+    /// </summary>
+    public event EventHandler<EncDotNet.S100.DataModel.GeoPosition>? PlainTapped;
+
     private readonly MainViewModel _viewModel;
     private readonly IPickService _pickService;
     private readonly IDatasetLoaderService _loader;
@@ -381,6 +389,14 @@ internal sealed class MapInteractionController
                     hasPick: _viewModel.PickReport.HasPick))
             {
                 _viewModel.PickReport.Clear();
+            }
+
+            if (_toolController?.ActiveTool is null
+                && PlainTapped is { } handler
+                && e.GetMapInfo?.Invoke([])?.WorldPosition is { } world)
+            {
+                var (lon, lat) = Mapsui.Projections.SphericalMercator.ToLonLat(world.X, world.Y);
+                handler(this, new EncDotNet.S100.DataModel.GeoPosition(lat, lon));
             }
 
             return;

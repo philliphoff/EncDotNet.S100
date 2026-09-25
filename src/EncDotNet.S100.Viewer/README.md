@@ -191,6 +191,22 @@ design in `docs/design/dataset-collections.md`.
   | **MISSING** | the file has moved |
 
   The details pane shows the full metadata.
+- **Coverage on the map**: while the Library tab is showing, the listed
+  datasets' coverage is outlined on the chart, without loading them. The
+  outlines follow whatever the list shows, including its filters, and the
+  map toggle in the toolbar turns them off.
+  - **Styling:** local datasets are solid green, online ones dashed blue,
+    catalogue-only ones dotted grey, and missing ones dashed red. The
+    selected dataset is drawn in the accent colour with a light fill.
+  - **Which cells appear:** ENC cells show in a two-band window, the
+    usage band suited to the current scale plus the next finer one. You
+    see what zooming in will reveal, without coarse cells piling up.
+  - **Antimeridian:** Aleutian and western-Pacific coverage draws on the
+    correct side of ±180°.
+- **Tap the chart** outside Pick Mode to list every library dataset
+  covering that spot. The most detailed one is selected, and tapping
+  again cycles through the others. **Zoom to** (next to the dataset name)
+  frames a dataset.
 - **S-128 datasets** you load appear in a temporary **Session**
   collection (this replaces the former Catalog panel). **Keep in
   library** (pin) makes one permanent.

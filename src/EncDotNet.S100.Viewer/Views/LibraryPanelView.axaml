@@ -81,6 +81,11 @@
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveFromLibrary}">
                     <ic:FluentIcon Icon="Delete" FontSize="16" />
                 </Button>
+                <ToggleButton Classes="Icon"
+                              IsChecked="{Binding ShowCoverage}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
+                    <ic:FluentIcon Icon="Map" FontSize="16" />
+                </ToggleButton>
                 <Button Classes="Icon"
                         Command="{Binding KeepInLibraryCommand}"
                         IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}"
@@ -132,6 +137,19 @@
             <!-- Datasets of the selected node -->
             <DockPanel Grid.Row="3">
                 <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="8,6,8,4">
+                    <Border IsVisible="{Binding HasLocation}"
+                            Background="{DynamicResource AccentBrush}"
+                            CornerRadius="10" Padding="10,3,4,3" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <ic:FluentIcon Icon="Location" FontSize="14" Foreground="White" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding LocationSummary}" Foreground="White" FontSize="12"
+                                       VerticalAlignment="Center" />
+                            <Button Classes="Icon" Padding="2" Command="{Binding ClearLocationCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearLocation}">
+                                <ic:FluentIcon Icon="Dismiss" FontSize="12" Foreground="White" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
                     <TextBox Text="{Binding FilterText}"
                              Watermark="{x:Static loc:Strings.Library_FilterWatermark}" />
                     <Grid ColumnDefinitions="*,Auto">
@@ -192,10 +210,14 @@
                                    Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
                                    Opacity="0.6" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" TextAlignment="Center" />
-                        <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                             <TextBlock Grid.Column="0" Text="{Binding SelectedItem.Name}"
                                        FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                            <Border Grid.Column="1" Background="{Binding SelectedItem.AvailabilityBrush}"
+                            <Button Grid.Column="1" Classes="Icon" Command="{Binding ZoomToCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}">
+                                <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
+                            </Button>
+                            <Border Grid.Column="2" Background="{Binding SelectedItem.AvailabilityBrush}"
                                     CornerRadius="9" Padding="8,3" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding SelectedItem.AvailabilityText}" FontSize="10"
                                            FontWeight="Bold" Foreground="White" />

@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -30,6 +31,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private string _filterText = string.Empty;
     private bool _showCancelled;
     private bool _refreshPosted;
+    private bool _showCoverage = true;
+    private GeoPosition? _location;
 
     public LibraryPanelViewModel(LibraryService library, ILibraryImporter importer)
         : this(library, importer, PostToUiThread)
@@ -52,6 +55,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         RefreshCommand = new RelayCommand(Refresh);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
         KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
+        ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
+        ClearLocationCommand = new RelayCommand(() => SetLocation(null));
 
         _library.Changed += OnLibraryChanged;
         Sync();
@@ -74,7 +79,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(HasSelectedNode));
                 ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
-                RebuildItems(force: true);
+                if (_location is not null)
+                    SetLocation(null);
+                else
+                    RebuildItems(force: true);
             }
         }
     }
@@ -96,7 +104,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         set
         {
             if (SetProperty(ref _selectedItem, value))
+            {
                 OnPropertyChanged(nameof(HasSelectedItem));
+                ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
+            }
         }
     }
 
@@ -125,6 +136,30 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Whether the listed datasets' coverage is drawn on the map.</summary>
+    public bool ShowCoverage
+    {
+        get => _showCoverage;
+        set => SetProperty(ref _showCoverage, value);
+    }
+
+    /// <summary>
+    /// The map location the list is filtered to (set by tapping the map), or
+    /// <see langword="null"/> to list the selected node's datasets.
+    /// </summary>
+    public GeoPosition? Location => _location;
+
+    /// <summary>True when the list shows the datasets at a map location.</summary>
+    public bool HasLocation => _location is not null;
+
+    /// <summary>"Datasets at 57°N 152°W" for the location chip.</summary>
+    public string LocationSummary => _location is { } p
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_AtLocationFormat, LatLonFormatter.Format(p.Latitude, p.Longitude))
+        : string.Empty;
+
+    /// <summary>Raised when the user asks to zoom the map to a dataset's bounds.</summary>
+    public event EventHandler<GeoBounds>? ZoomRequested;
+
     /// <summary>"N datasets" or "M of N datasets" for the list header.</summary>
     public string ItemsSummary =>
         _items.Count == _allItems.Count
@@ -147,6 +182,35 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Persists the selected session S-128 catalogue as a collection.</summary>
     public ICommand KeepInLibraryCommand { get; }
+
+    /// <summary>Zooms the map to the selected dataset.</summary>
+    public ICommand ZoomToCommand { get; }
+
+    /// <summary>Returns the list to the selected node's datasets.</summary>
+    public ICommand ClearLocationCommand { get; }
+
+    /// <summary>
+    /// Handles a tap on the map: lists every library dataset whose coverage
+    /// contains <paramref name="position"/> and selects the most detailed one.
+    /// Tapping the same spot again selects the next overlapping dataset.
+    /// Returns false (changing nothing) when no dataset covers the position.
+    /// </summary>
+    public bool SelectAt(GeoPosition position)
+    {
+        var hits = HitsAt(position);
+        if (hits.Count == 0)
+            return false;
+
+        var sameSpot = _location is { } previous && Near(previous, position);
+        var previousItem = _selectedItem;
+        SetLocation(position, hits);
+
+        var index = sameSpot && previousItem is not null
+            ? (_items.ToList().FindIndex(i => SameItem(i, previousItem)) + 1) % Math.Max(1, _items.Count)
+            : 0;
+        SelectedItem = _items.Count > 0 ? _items[index] : null;
+        return true;
+    }
 
     public void Dispose() => _library.Changed -= OnLibraryChanged;
 
@@ -217,8 +281,63 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         RebuildItems(force: false);
     }
 
+    private void SetLocation(GeoPosition? position, IReadOnlyList<LibraryItemViewModel>? hits = null)
+    {
+        _location = position;
+        OnPropertyChanged(nameof(Location));
+        OnPropertyChanged(nameof(HasLocation));
+        OnPropertyChanged(nameof(LocationSummary));
+
+        var selected = _selectedItem;
+        _itemsBasis = null;
+        _allItems = position is { } p ? hits ?? HitsAt(p) : BuildNodeItems(_selectedNode);
+        ApplyFilter();
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+    }
+
+    /// <summary>
+    /// Every library dataset covering <paramref name="position"/>, most
+    /// detailed (highest usage band, then smallest extent) first.
+    /// </summary>
+    private List<LibraryItemViewModel> HitsAt(GeoPosition position) =>
+        _library.Collections
+            .SelectMany(c => c.Sources)
+            .SelectMany(s => (s.Index?.Items ?? []).Select(i => (Item: i, Source: s)))
+            .Where(p => CoverageGeometry.Contains(p.Item, position))
+            .OrderByDescending(p => p.Item.UsageBand ?? 0)
+            .ThenBy(p => CoverageGeometry.Area(p.Item))
+            .Select(p => new LibraryItemViewModel(p.Item, p.Source))
+            .ToList();
+
+    private static IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
+        node is null
+            ? []
+            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source)).ToArray();
+
+    private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
+        a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
+
+    private static bool Near(GeoPosition a, GeoPosition b) =>
+        Math.Abs(a.Latitude - b.Latitude) < 1e-4 && Math.Abs(a.Longitude - b.Longitude) < 1e-4;
+
+    private void ZoomToSelected()
+    {
+        if (_selectedItem?.Item.Bounds is { } bounds)
+            ZoomRequested?.Invoke(this, bounds);
+    }
+
     private void RebuildItems(bool force)
     {
+        if (_location is { } location)
+        {
+            // Listing datasets at a map location: refresh the hits only when
+            // the library itself changed.
+            if (force)
+                return;
+            SetLocation(location);
+            return;
+        }
+
         var node = _selectedNode;
         var basis = node?.ItemIndexes;
         if (!force && basis is not null && _itemsBasis is not null
@@ -229,9 +348,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         _itemsBasis = basis;
         var selectedKey = _selectedItem is { } sel ? (sel.Source.Id, sel.Item.Key) : default;
-        _allItems = node is null
-            ? []
-            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source)).ToArray();
+        _allItems = BuildNodeItems(node);
         ApplyFilter();
 
         SelectedItem = selectedKey == default

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -138,6 +139,63 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.False(vm.RemoveCommand.CanExecute(null));
         Assert.True(vm.KeepInLibraryCommand.CanExecute(null));
         Assert.All(vm.Items, i => Assert.Equal(LibraryAvailability.Listed, i.Availability));
+    }
+
+    [Fact]
+    public async Task Tapping_the_map_lists_the_datasets_there_and_cycles_on_repeat()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        var bounds = vm.Items.Select(i => i.Item.Bounds!.Value).ToArray();
+        // A point inside both synthetic cells' footprints, if they overlap;
+        // otherwise inside the first.
+        var both = bounds[0].Intersects(bounds[1]);
+        var point = new GeoPosition(
+            (Math.Max(bounds[0].South, bounds[1].South) + Math.Min(bounds[0].North, bounds[1].North)) / 2,
+            (Math.Max(bounds[0].West, bounds[1].West) + Math.Min(bounds[0].East, bounds[1].East)) / 2);
+        if (!both)
+            point = new GeoPosition((bounds[0].South + bounds[0].North) / 2, (bounds[0].West + bounds[0].East) / 2);
+
+        Assert.True(vm.SelectAt(point));
+
+        Assert.True(vm.HasLocation);
+        Assert.Contains(vm.SelectedItem!, vm.Items);
+        var first = vm.SelectedItem!.Name;
+        if (vm.Items.Count > 1)
+        {
+            vm.SelectAt(point);
+            Assert.NotEqual(first, vm.SelectedItem!.Name);
+        }
+
+        vm.ClearLocationCommand.Execute(null);
+        Assert.False(vm.HasLocation);
+        Assert.Equal(2, vm.Items.Count);
+    }
+
+    [Fact]
+    public async Task Tapping_where_nothing_is_covered_changes_nothing()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+
+        Assert.False(vm.SelectAt(new GeoPosition(-60, 0)));
+        Assert.False(vm.HasLocation);
+        Assert.Equal(2, vm.Items.Count);
+    }
+
+    [Fact]
+    public async Task Zoom_to_raises_the_selected_datasets_bounds()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        GeoBounds? requested = null;
+        vm.ZoomRequested += (_, b) => requested = b;
+
+        Assert.False(vm.ZoomToCommand.CanExecute(null));
+        vm.SelectedItem = vm.Items[0];
+        vm.ZoomToCommand.Execute(null);
+
+        Assert.Equal(vm.Items[0].Item.Bounds, requested);
     }
 
     private sealed class RecordingImporter : ILibraryImporter

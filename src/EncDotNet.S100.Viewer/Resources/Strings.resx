@@ -2623,4 +2623,16 @@
   <data name="Library_Status_Pending" xml:space="preserve">
     <value>…</value>
   </data>
+  <data name="Library_AtLocationFormat" xml:space="preserve">
+    <value>Datasets at {0}</value>
+  </data>
+  <data name="Tooltip_ShowCoverage" xml:space="preserve">
+    <value>Show dataset coverage on the map</value>
+  </data>
+  <data name="Tooltip_ZoomToDataset" xml:space="preserve">
+    <value>Zoom to this dataset</value>
+  </data>
+  <data name="Tooltip_ClearLocation" xml:space="preserve">
+    <value>Show the selected collection again</value>
+  </data>
 </root>

@@ -521,6 +521,27 @@ Pipelines into the library.
   items whose coverage contains the clicked point, across all
   collections.
 
+> **Slice 4 as built:**
+> - **What is drawn:** `LibraryCoverageOverlayController` outlines
+>   exactly what the Library list shows, after its filters. It is active
+>   only while the Library tab is showing, and the panel has a coverage
+>   toggle.
+> - **Band gating:** a plain `IsBandEligible` rule (the lazy-load rule)
+>   was too sparse for browsing: at an Alaska-wide view only band 1
+>   showed. Outlines use a **two-band window** instead: the finest band
+>   suited to the scale plus the next finer one.
+> - **Antimeridian:** rings are unwrapped to continuous longitudes, then
+>   drawn at each ±360° shift that overlaps the world. That handles both
+>   NOAA's continuous longitudes and S-100's jumping rings without
+>   splitting polygons.
+> - **Map clicks:** instead of a context menu, a plain map tap outside
+>   Pick Mode (`MapInteractionController.PlainTapped`) sets a
+>   **location filter** on the panel. The list shows every library
+>   dataset under the tap, most detailed first, and repeated taps cycle
+>   the selection.
+> - **Zoom to:** "Zoom to" frames the selected dataset.
+> - **Not built:** hover highlighting.
+
 ### 6.3 Library panel (replaces the Catalog panel)
 
 > **Slice 3 as built:**
