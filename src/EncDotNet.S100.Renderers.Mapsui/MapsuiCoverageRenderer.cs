@@ -60,11 +60,26 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     /// </summary>
     public IReadOnlyList<FeatureGeometry>? LandAreas { get; set; }
 
+    /// <summary>
+    /// Creates a coverage renderer that reprojects grids to Web Mercator.
+    /// </summary>
+    /// <param name="transformFactory">
+    /// Creates the transform from a coverage's native CRS to WGS84, which is
+    /// then projected to Web Mercator.
+    /// </param>
     public MapsuiCoverageRenderer(ICrsTransformFactory transformFactory)
     {
         _transformFactory = transformFactory;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Returns a <see cref="MemoryLayer"/> holding a single georeferenced
+    /// raster, named <see cref="LayerName"/> and drawn at <see cref="Opacity"/>.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// The layer has no <see cref="StyledCoverageLayer.ColorScheme"/>.
+    /// </exception>
     public ILayer Render(StyledCoverageLayer layer, PipelineViewport viewport)
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.build");

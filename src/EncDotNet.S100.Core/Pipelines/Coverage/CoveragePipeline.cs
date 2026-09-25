@@ -174,17 +174,57 @@ public class CoveragePipeline
     }
 }
 
+/// <summary>
+/// Read access to a gridded (regular-grid) coverage dataset for consumption by
+/// <see cref="CoveragePipeline"/>. Product adapters (S-102 bathymetry, S-104
+/// water level, S-111 surface currents) implement this interface over their
+/// decoded HDF5 content.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A source is stateful: <see cref="SelectTime"/> and
+/// <see cref="SelectOverviewLevel"/> change what subsequent
+/// <see cref="Metadata"/> reads and <see cref="Sample"/> calls return.
+/// Implementations are not required to be thread-safe; callers that share a
+/// source must serialise the select-then-sample sequence.
+/// </para>
+/// <para>
+/// Grid geometry is expressed in the grid's native CRS
+/// (<see cref="CoverageMetadata.HorizontalCRS"/>), which may be a projected
+/// system such as UTM rather than WGS-84.
+/// </para>
+/// </remarks>
 public interface ICoverageSource
 {
-    // File-level metadata — available immediately after opening
+    /// <summary>
+    /// File-level metadata: extent, grid geometry, CRS, no-data sentinel and
+    /// the value fields the source carries. Available immediately after the
+    /// source is constructed.
+    /// </summary>
+    /// <remarks>
+    /// Implementations may build a new instance on every read. The
+    /// <see cref="CoverageMetadata.GridMetadata"/> reflects the currently
+    /// selected overview level (see <see cref="SelectOverviewLevel"/>).
+    /// </remarks>
     CoverageMetadata Metadata { get; }
 
-    // Time dimension — null/empty for static products (S-102)
-    // Populated for time-varying products (S-111, S-104)
+    /// <summary>
+    /// The time steps this coverage can be sampled at, in the order the
+    /// dataset stores them. Empty for static products (S-102); populated for
+    /// time-varying products (S-104, S-111).
+    /// </summary>
     IReadOnlyList<DateTime> AvailableTimes { get; }
+
+    /// <summary>
+    /// Selects the time step served by subsequent <see cref="Sample"/> calls.
+    /// </summary>
+    /// <param name="time">
+    /// The requested time. Time-varying sources select the exact match in
+    /// <see cref="AvailableTimes"/> when present, otherwise the nearest
+    /// available time step. Static sources treat the call as a no-op.
+    /// </param>
     void SelectTime(DateTime time);
 
-    // The actual data access
     /// <summary>
     /// Copies the requested grid region into a <see cref="SampledCoverage"/>.
     /// The underlying grid is already resident in memory (the HDF5 read
@@ -194,6 +234,21 @@ public interface ICoverageSource
     /// </summary>
     /// <param name="region">The grid subset and stride to sample.</param>
     /// <param name="cancellationToken">Signals that the render has been cancelled.</param>
+    /// <returns>
+    /// The sampled values for every field in
+    /// <see cref="CoverageMetadata.ValueFields"/>, at the currently selected
+    /// time step and overview level. The result's
+    /// <see cref="SampledCoverage.Metadata"/> describes the geometry of the
+    /// sampled sub-grid itself (output row/column count, origin and spacing
+    /// in the native CRS), so <see cref="SampledCoverage.GetPosition"/>
+    /// locates each output cell. How cells skipped by a stride greater than
+    /// one are combined (plain decimation or a reduction such as S-102's
+    /// shoalest-depth minimum) is source-specific. An empty region yields a
+    /// zero-cell sample.
+    /// </returns>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was cancelled during the copy.
+    /// </exception>
     SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default);
 
     // -----------------------------------------------------------------
@@ -255,43 +310,137 @@ public interface ICoverageSource
     }
 }
 
+/// <summary>
+/// File-level description of a gridded coverage, returned by
+/// <see cref="ICoverageSource.Metadata"/>: spatial extent, grid geometry,
+/// reference systems, the no-data sentinel and the value fields carried.
+/// </summary>
 public class CoverageMetadata
 {
     /// <summary>The product specification (name + edition) this coverage declares conformance to.</summary>
     public required SpecRef Spec { get; init; }
+
+    /// <summary>
+    /// The coverage's footprint, derived from the grid origin, spacing and
+    /// point counts.
+    /// </summary>
+    /// <remarks>
+    /// Although typed as <see cref="BoundingBox"/>, the edge values are in the
+    /// grid's native CRS (<see cref="HorizontalCRS"/>): decimal degrees for
+    /// EPSG:4326 grids, but projected units (e.g. UTM metres) for projected
+    /// grids. Consumers needing WGS-84 bounds must transform them.
+    /// </remarks>
     public required BoundingBox Extent { get; init; }
+
+    /// <summary>
+    /// Geometry of the grid at the source's currently selected overview level
+    /// (see <see cref="ICoverageSource.SelectOverviewLevel"/>).
+    /// </summary>
     public required GridMetadata GridMetadata { get; init; }
+
+    /// <summary>
+    /// Identifier of the grid's horizontal CRS. The bundled sources report the
+    /// dataset's EPSG code either bare (e.g. <c>"32608"</c>) or, when the
+    /// dataset declares none, as <c>"EPSG:4326"</c>; consumers should accept
+    /// both forms.
+    /// </summary>
     public required string HorizontalCRS { get; init; }
+
+    /// <summary>
+    /// Display label of the vertical datum the values are referenced to
+    /// (e.g. <c>"MSL"</c>).
+    /// </summary>
     public required string VerticalDatum { get; init; }
+
+    /// <summary>
+    /// Sentinel value marking cells with no data; cells equal to it are not
+    /// portrayed (or are painted with <see cref="CoverageColorScheme.NoDataColor"/>).
+    /// </summary>
     public required float NoDataValue { get; init; }
 
-    // What value fields this coverage carries
-    // S-102: ["depth", "uncertainty"]
-    // S-111: ["surfaceCurrentSpeed", "surfaceCurrentDirection"]
-    // S-104: ["waterLevelHeight", "waterLevelTrend"]
+    /// <summary>
+    /// The value fields this coverage carries, each available as a key of
+    /// <see cref="SampledCoverage.Values"/>: e.g. S-102 <c>depth</c> /
+    /// <c>uncertainty</c>, S-104 <c>waterLevelHeight</c> /
+    /// <c>waterLevelTrend</c>, S-111 <c>surfaceCurrentSpeed</c> /
+    /// <c>surfaceCurrentDirection</c>.
+    /// </summary>
     public required IReadOnlyList<CoverageValueField> ValueFields { get; init; }
 }
 
+/// <summary>
+/// Describes one value field of a coverage (see
+/// <see cref="CoverageMetadata.ValueFields"/>).
+/// </summary>
 public class CoverageValueField
 {
+    /// <summary>
+    /// Field name; the key used in <see cref="SampledCoverage.Values"/> and
+    /// referenced by <see cref="CoverageColorScheme.FieldName"/> and
+    /// <see cref="CoverageSymbolScheme"/>.
+    /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>The storage type of the field in the source dataset.</summary>
     public required CoverageValueType Type { get; init; }
+
+    /// <summary>
+    /// Human-readable units of the values (e.g. <c>"metres"</c>,
+    /// <c>"knots"</c>, <c>"degrees"</c>).
+    /// </summary>
     public required string Units { get; init; }
+
+    /// <summary>Sentinel value marking cells of this field with no data.</summary>
     public required float FillValue { get; init; }
 }
 
+/// <summary>
+/// Geometry of a regular, node-centred grid in its native CRS. Cell
+/// <c>(row, col)</c> lies at
+/// <c>(OriginLongitude + col × SpacingLongitudinal, OriginLatitude + row × SpacingLatitudinal)</c>.
+/// </summary>
+/// <remarks>
+/// Despite the longitude/latitude names, the origin and spacing are in the
+/// grid's native CRS units: degrees for EPSG:4326, metres (easting/northing)
+/// for projected CRSs such as UTM. Either spacing may be negative
+/// (e.g. top-down grids).
+/// </remarks>
 public class GridMetadata
 {
+    /// <summary>Number of grid rows (points along the latitude / northing axis).</summary>
     public required int NumRows { get; init; }
+
+    /// <summary>Number of grid columns (points along the longitude / easting axis).</summary>
     public required int NumColumns { get; init; }
+
+    /// <summary>X coordinate (longitude or easting) of cell <c>(0, 0)</c> in the native CRS.</summary>
     public required double OriginLongitude { get; init; }
+
+    /// <summary>Y coordinate (latitude or northing) of cell <c>(0, 0)</c> in the native CRS.</summary>
     public required double OriginLatitude { get; init; }
+
+    /// <summary>Distance between adjacent columns along the X axis, in native CRS units.</summary>
     public required double SpacingLongitudinal { get; init; }
+
+    /// <summary>Distance between adjacent rows along the Y axis, in native CRS units.</summary>
     public required double SpacingLatitudinal { get; init; }
 }
 
+/// <summary>
+/// A rectangular subset of a coverage grid plus a sampling stride, passed to
+/// <see cref="ICoverageSource.Sample"/>. Bounds are zero-based cell indices
+/// with inclusive starts and exclusive ends; a <see langword="null"/> bound
+/// means the corresponding grid edge.
+/// </summary>
 public class GridRegion
 {
+    /// <summary>Creates a grid region.</summary>
+    /// <param name="rowStart">First row to sample (inclusive), or <see langword="null"/> for row 0.</param>
+    /// <param name="rowEnd">Row at which sampling stops (exclusive), or <see langword="null"/> for the grid's row count.</param>
+    /// <param name="colStart">First column to sample (inclusive), or <see langword="null"/> for column 0.</param>
+    /// <param name="colEnd">Column at which sampling stops (exclusive), or <see langword="null"/> for the grid's column count.</param>
+    /// <param name="rowStride">Sample every <paramref name="rowStride"/>-th row; <c>1</c> samples every row.</param>
+    /// <param name="colStride">Sample every <paramref name="colStride"/>-th column; <c>1</c> samples every column.</param>
     public GridRegion(int? rowStart, int? rowEnd, int? colStart, int? colEnd, int rowStride, int colStride)
     {
         RowStart = rowStart;
@@ -302,17 +451,25 @@ public class GridRegion
         ColStride = colStride;
     }
 
-    // Subset of the grid to sample
-    // null means entire grid
+    /// <summary>First row to sample (inclusive), or <see langword="null"/> for row 0.</summary>
     public int? RowStart { get; }
+
+    /// <summary>Row at which sampling stops (exclusive), or <see langword="null"/> for the grid's row count.</summary>
     public int? RowEnd { get; }
+
+    /// <summary>First column to sample (inclusive), or <see langword="null"/> for column 0.</summary>
     public int? ColStart { get; }
+
+    /// <summary>Column at which sampling stops (exclusive), or <see langword="null"/> for the grid's column count.</summary>
     public int? ColEnd { get; }
 
-    // Optional downsampling stride
+    /// <summary>Row downsampling stride; <c>1</c> samples every row.</summary>
     public int RowStride { get; }
+
+    /// <summary>Column downsampling stride; <c>1</c> samples every column.</summary>
     public int ColStride { get; }
 
+    /// <summary>A region covering the whole grid at stride 1. Returns a new instance on each access.</summary>
     public static GridRegion Full => new GridRegion(null, null, null, null, 1, 1);
 
     /// <summary>
@@ -531,6 +688,13 @@ public readonly struct CoverageGridView
 {
     private readonly float[] _data;
 
+    /// <summary>Creates a view over <paramref name="data"/> without copying it.</summary>
+    /// <param name="data">Row-major backing array; must hold at least <paramref name="rows"/> × <paramref name="cols"/> elements.</param>
+    /// <param name="rows">Number of rows.</param>
+    /// <param name="cols">Number of columns.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="rows"/> or <paramref name="cols"/> is negative.</exception>
+    /// <exception cref="ArgumentException"><paramref name="data"/> is shorter than <paramref name="rows"/> × <paramref name="cols"/>.</exception>
     public CoverageGridView(float[] data, int rows, int cols)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -567,9 +731,21 @@ public readonly struct CoverageGridView
     };
 }
 
+/// <summary>
+/// The result of <see cref="ICoverageSource.Sample"/>: per-field values for a
+/// grid region, together with the geometry of the sampled sub-grid.
+/// </summary>
 public class SampledCoverage
 {
+    /// <summary>The region that was requested from the source.</summary>
     public required GridRegion Region { get; init; }
+
+    /// <summary>
+    /// Geometry of the sampled sub-grid (not the full source grid):
+    /// <see cref="GridMetadata.NumRows"/> × <see cref="GridMetadata.NumColumns"/>
+    /// is the size of each array in <see cref="Values"/>, and the origin and
+    /// spacing locate those output cells in the native CRS.
+    /// </summary>
     public required GridMetadata Metadata { get; init; }
 
     /// <summary>
@@ -588,7 +764,16 @@ public class SampledCoverage
         return new CoverageGridView(data, Metadata.NumRows, Metadata.NumColumns);
     }
 
-    // Geolocate a grid cell within the sampled region
+    /// <summary>
+    /// Locates an output cell of this sample using <see cref="Metadata"/>.
+    /// </summary>
+    /// <param name="row">Zero-based row within the sample.</param>
+    /// <param name="col">Zero-based column within the sample.</param>
+    /// <returns>
+    /// The cell position, with Y in <see cref="GeoPosition.Latitude"/> and X in
+    /// <see cref="GeoPosition.Longitude"/>. For a projected grid these carry
+    /// northing and easting in the native CRS, not geographic degrees.
+    /// </returns>
     public GeoPosition GetPosition(int row, int col)
     {
         double lat = Metadata.OriginLatitude + row * Metadata.SpacingLatitudinal;

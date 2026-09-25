@@ -102,6 +102,13 @@ public sealed class MapsuiCoverageArrowRenderer
     /// </summary>
     public required Func<string, string?> SymbolProvider { get; set; }
 
+    /// <summary>
+    /// Creates an arrow renderer that places symbols in Web Mercator.
+    /// </summary>
+    /// <param name="transformFactory">
+    /// Creates the transform from a coverage's native CRS to WGS84, which is
+    /// then projected to Web Mercator.
+    /// </param>
     public MapsuiCoverageArrowRenderer(ICrsTransformFactory transformFactory)
     {
         _transformFactory = transformFactory;

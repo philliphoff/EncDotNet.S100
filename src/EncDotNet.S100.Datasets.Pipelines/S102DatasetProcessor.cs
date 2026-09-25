@@ -17,6 +17,24 @@ using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
+/// <summary>
+/// <see cref="IDatasetProcessor"/> for IHO S-102 Bathymetric Surface HDF5
+/// datasets. Exposes the depth grid as an <see cref="ICoveragePortrayalSource"/>
+/// portrayed through the S-102 Lua portrayal catalogue, and renders headless
+/// images through the Skia coverage core.
+/// </summary>
+/// <remarks>
+/// <para>
+/// NODATA cells are portrayed transparent rather than with the NODTA fill, so
+/// the bathymetry can overlay other layers (e.g. an S-101 ENC) without the
+/// unsurveyed remainder of the grid hiding the chart beneath.
+/// </para>
+/// <para>
+/// Normally created through the <see cref="S100Products.S102"/> registration
+/// (used by <see cref="DatasetPipelineFactory"/>) rather than constructed
+/// directly.
+/// </para>
+/// </remarks>
 public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, IDisposable, ILoadedDatasetProjection
 {
     private readonly S102Dataset _dataset;
@@ -29,6 +47,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
+    /// <inheritdoc/>
     public SpecRef Spec { get; }
 
     private DatasetMetadata? _metadata;
@@ -62,6 +81,24 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
+    /// <summary>
+    /// Initializes a new <see cref="S102DatasetProcessor"/> by reading and
+    /// parsing the HDF5 dataset file at <paramref name="path"/>. The file is
+    /// read in full and closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-102 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-102 portrayal catalogue.</param>
+    /// <param name="luaEngine">Lua engine that executes the portrayal catalogue's rules.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling the grid
+    /// for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-102 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-102 feature this reader does not support. The exception carries the file name.
+    /// </exception>
     public S102DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -142,6 +179,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
     }
 
+    /// <summary>Releases the render gate that serializes portrayal and headless rendering.</summary>
     public void Dispose()
     {
         // PortrayalPipeline is not currently disposable, but keep Dispose
@@ -299,6 +337,12 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         _source.SelectOverviewLevel(level);
     }
 
+    /// <summary>
+    /// Always returns <see langword="null"/>: an S-102 grid has no discrete
+    /// features. Use <see cref="GetCoverageInfo"/> to sample depth at a point.
+    /// </summary>
+    /// <param name="featureRef">Ignored.</param>
+    /// <returns><see langword="null"/>.</returns>
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
 
     /// <summary>

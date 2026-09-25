@@ -28,6 +28,13 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// falls back to S-101). Either way the product identity stays S-57. Symbology is S-100
 /// (not S-52); coverage is breadth-first.
 /// </summary>
+/// <remarks>
+/// Normally created through the <see cref="S100Products.S57"/> registration, or
+/// through <see cref="DatasetPipelineFactory.CreateS57ProcessorWithUpdates"/>
+/// to fold a base cell's in-set update files into the S-57 document before
+/// translation. The raw S-57 document is retained so validation can run
+/// S-57 pre-translation rules against fields the translation drops.
+/// </remarks>
 public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
 {
     // Serialises render calls so the catalogue's mutable palette / ECDIS
@@ -61,6 +68,11 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private static readonly EcdisDisplaySettings UnfilteredEcdisDisplay =
         new() { Category = EcdisDisplayCategory.All };
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Always <c>S-57</c> with no edition, whichever product the cell is
+    /// translated into; see <see cref="PortrayalSpec"/> for that.
+    /// </remarks>
     public SpecRef Spec => new("S-57", default);
 
     /// <summary>
@@ -84,6 +96,21 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_translatedDataset);
 
+    /// <summary>
+    /// Initializes a new <see cref="S57DatasetProcessor"/> by reading the S-57
+    /// base cell at <paramref name="path"/> and translating it in memory.
+    /// </summary>
+    /// <param name="path">Path to the S-57 ISO 8211 base cell (<c>….000</c>).</param>
+    /// <param name="catalogueManager">
+    /// Supplies the portrayal catalogue of the translation target (S-101, or
+    /// S-401 for an inland cell when that catalogue is available).
+    /// </param>
+    /// <param name="luaEngine">Lua engine that executes the portrayal catalogue's rules.</param>
+    /// <param name="featureCatalogueManager">
+    /// Supplies the feature catalogue used to decode feature and attribute
+    /// names in feature info.
+    /// </param>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
     public S57DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -222,6 +249,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         }
     }
 
+    /// <inheritdoc/>
     public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -334,6 +362,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         };
     }
 
+    /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfo(string featureRef)
     {
         if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer,
@@ -349,6 +378,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         return BuildFeatureInfo(feature);
     }
 
+    /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfoAt(int ordinal)
     {
         _featureIndex ??= BuildFeatureIndex();
@@ -399,6 +429,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         };
     }
 
+    /// <inheritdoc/>
     public IEnumerable<FeatureSummary> EnumerateFeatures()
     {
         _featureIndex ??= BuildFeatureIndex();
