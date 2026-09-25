@@ -14,6 +14,8 @@
       href: reading-product-data.md
     - name: Custom catalogues and validation
       href: catalogues-and-validation.md
+    - name: S-100 feed format
+      href: s100-feed-format.md
 - name: Scenario guides
   items:
     - name: Render S-102 to PNG

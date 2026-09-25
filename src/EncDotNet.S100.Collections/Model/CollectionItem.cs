@@ -155,13 +155,31 @@ public sealed record LocalItemLocation(
 /// saved under; the item is then the dataset named <see cref="CollectionItem.Name"/>
 /// within it. <see langword="null"/> when the download is the item's own cell.
 /// </param>
+/// <param name="Layout">
+/// Where the item's files lie within the download, when the publisher states
+/// it (S-100 feeds, issue #680); <see langword="null"/> to discover the layout.
+/// </param>
 public sealed record RemoteItemLocation(
     Uri Uri,
     long? SizeBytes = null,
     DateTimeOffset? LastModified = null,
     string? DownloadFolder = null,
-    string? Package = null)
+    string? Package = null,
+    PackageLayout? Layout = null)
     : ItemLocation;
+
+/// <summary>
+/// Where a dataset's files lie within a downloaded package, relative to its
+/// root (forward slashes): the same shape as a <see cref="LocalItemLocation"/>
+/// without the root.
+/// </summary>
+/// <param name="RelativePath">The base dataset file.</param>
+/// <param name="UpdateRelativePaths">Sequential update files, in application order.</param>
+/// <param name="CatalogueRelativePath">The exchange-set catalogue, or <see langword="null"/> for a loose dataset.</param>
+public sealed record PackageLayout(
+    string RelativePath,
+    IReadOnlyList<string> UpdateRelativePaths,
+    string? CatalogueRelativePath = null);
 
 /// <summary>
 /// The source describes the product but has no data for it (for example an

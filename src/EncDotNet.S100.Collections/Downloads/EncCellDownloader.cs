@@ -175,6 +175,8 @@ public sealed class EncCellDownloader
             throw new ArgumentException($"{item.Name} has no download location.", nameof(item));
 
         var folderName = remote.Package ?? item.Name;
+        if (!IsSafeName(folderName))
+            throw new InvalidDataException($"'{folderName}' is not a safe download name.");
         Directory.CreateDirectory(Root);
         var token = Guid.NewGuid().ToString("N");
         var zipPath = Path.Combine(Root, $".{folderName}.{token}.zip.partial");
@@ -242,7 +244,12 @@ public sealed class EncCellDownloader
     {
         var catalogues = Directory.EnumerateFiles(staging, ExchangeSetLayout.S57CatalogueName, Recursive).ToArray();
         DatasetRecord[] datasets;
-        if (remote.Package is { } package)
+        if (remote.Layout is { } layout)
+        {
+            // The publisher says where the files are (S-100 feeds): any product, no discovery.
+            datasets = [DescribeLayout(item, staging, layout)];
+        }
+        else if (remote.Package is { } package)
         {
             datasets = Directory.EnumerateFiles(staging, "*.000", Recursive)
                 .Order(StringComparer.Ordinal)
@@ -260,10 +267,12 @@ public sealed class EncCellDownloader
         }
 
         var first = datasets[0];
+        // A discovered package has no single edition; a stated layout is one dataset.
+        var isPackage = remote.Package is not null && remote.Layout is null;
         return new CellRecord(
             remote.Package ?? item.Name,
-            remote.Package is null ? item.Edition : null,
-            remote.Package is null ? item.Update : null,
+            isPackage ? null : item.Edition,
+            isPackage ? null : item.Update,
             remote.LastModified,
             _time.GetUtcNow(),
             remote.Uri.AbsoluteUri,
@@ -271,9 +280,39 @@ public sealed class EncCellDownloader
             first.BaseRelativePath,
             first.UpdateRelativePaths,
             first.CatalogueRelativePath,
-            remote.Package is not null,
+            isPackage,
             remote.Package is null ? null : datasets);
     }
+
+    /// <summary>Records a dataset at a publisher-stated layout, keeping only files that arrived.</summary>
+    private static DatasetRecord DescribeLayout(CollectionItem item, string staging, PackageLayout layout)
+    {
+        string? Existing(string? relative)
+        {
+            if (relative is null)
+                return null;
+            var full = Path.GetFullPath(Path.Combine(staging, relative.Replace('/', Path.DirectorySeparatorChar)));
+            if (!full.StartsWith(Path.GetFullPath(staging) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                throw new InvalidDataException($"'{relative}' leaves the download.");
+            return File.Exists(full) ? relative.Replace('\\', '/') : null;
+        }
+
+        var baseFile = Existing(layout.RelativePath)
+            ?? throw new InvalidDataException($"The download for {item.Name} contains no {layout.RelativePath}.");
+        return new DatasetRecord(
+            item.Name,
+            string.Empty,
+            baseFile,
+            layout.UpdateRelativePaths.Select(Existing).OfType<string>().ToArray(),
+            Existing(layout.CatalogueRelativePath));
+    }
+
+    /// <summary>A single, ordinary folder name: no separators, no <c>.</c>/<c>..</c>, no invalid characters.</summary>
+    private static bool IsSafeName(string name) =>
+        name.Length > 0
+        && name != "." && name != ".."
+        && name.IndexOfAny(['/', '\\', ':']) < 0
+        && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
     /// <summary>Records one base cell: its exchange-set root, updates and catalogue.</summary>
     private static DatasetRecord DescribeCell(string staging, string baseCell, IReadOnlyList<string> catalogues)
