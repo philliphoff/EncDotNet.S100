@@ -62,6 +62,10 @@ public sealed class DecryptingAssetSource : IAssetSource
     /// <exception cref="DatasetPermitException">
     /// The requested protected dataset is not authorized by its permit.
     /// </exception>
+    /// <exception cref="DatasetDecryptionException">
+    /// The permit authorized the dataset, but its cell key could not decrypt it,
+    /// most likely because the hardware id is wrong.
+    /// </exception>
     public async Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -77,15 +81,7 @@ public sealed class DecryptingAssetSource : IAssetSource
             _inner,
             relativePath,
             cancellationToken).ConfigureAwait(false);
-        byte[] plaintext;
-        try
-        {
-            plaintext = S100Cipher.DecryptDataset(ciphertext, cellKey);
-        }
-        finally
-        {
-            Array.Clear(cellKey);
-        }
+        var plaintext = ProtectedContentReader.DecryptDataset(ciphertext, cellKey, relativePath);
 
         if (_decompress && ProtectedContentReader.IsZipArchive(plaintext))
         {

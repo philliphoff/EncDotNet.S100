@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.ExchangeSets.Protection;
@@ -30,15 +31,34 @@ internal static class ProtectedContentReader
                 $"No Part 15 cell key is available for protected resource '{relativePath}'.");
         }
 
+        return DecryptDataset(ciphertext, cellKey, relativePath);
+    }
+
+    /// <summary>
+    /// Decrypts a protected resource with its cell key, then clears the key.
+    /// A decryption failure on well-formed ciphertext means the key is wrong,
+    /// so it is reported as a <see cref="DatasetDecryptionException"/>.
+    /// </summary>
+    public static byte[] DecryptDataset(byte[] ciphertext, byte[] cellKey, string relativePath)
+    {
         try
         {
             return S100Cipher.DecryptDataset(ciphertext, cellKey);
+        }
+        catch (CryptographicException ex) when (IsWholeBlocks(ciphertext))
+        {
+            throw new DatasetDecryptionException(relativePath, ex);
         }
         finally
         {
             Array.Clear(cellKey);
         }
     }
+
+    // Ciphertext that isn't whole AES blocks is malformed regardless of the key,
+    // so its failure is left as the cipher reports it.
+    private static bool IsWholeBlocks(byte[] ciphertext) =>
+        ciphertext.Length > 0 && ciphertext.Length % S100Cipher.BlockSize == 0;
 
     public static bool IsZipArchive(byte[] content) =>
         content.Length >= ZipLocalFileHeader.Length &&

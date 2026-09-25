@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.ExchangeSets.Protection;
@@ -215,6 +216,36 @@ public sealed class S100ExchangeSetTests
     }
 
     [Fact]
+    public async Task WithDecryption_WrongHardwareId_ThrowsDatasetDecryptionException()
+    {
+        const string datasetPath = "S124/navwarn_surface.gml";
+        var cellKey = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
+        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath));
+
+        // A permit unwrapped with the wrong hardware id yields a different key.
+        var hardwareId = Enumerable.Range(0x40, 16).Select(i => (byte)i).ToArray();
+        var wrongHardwareId = Enumerable.Range(0x80, 16).Select(i => (byte)i).ToArray();
+        var wrongCellKey = S100Cipher.DecryptBlock(S100Cipher.EncryptBlock(cellKey, hardwareId), wrongHardwareId);
+
+        using var source = new InMemoryAssetSource(new Dictionary<string, byte[]>
+        {
+            ["CATALOG.XML"] = Encoding.UTF8.GetBytes(ProtectedCatalogue(datasetPath)),
+            [datasetPath] = EncryptRejectedBy(plaintext, cellKey, wrongCellKey),
+        });
+
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source);
+        await using var decrypted = exchangeSet.WithDecryption(new SingleKeyProvider("navwarn_surface", wrongCellKey));
+
+        var exception = await Assert.ThrowsAsync<DatasetDecryptionException>(async () =>
+        {
+            using var dataset = await decrypted.Datasets.Single().OpenAsync();
+            _ = dataset.Spec;
+        });
+        Assert.Equal(datasetPath, exception.DatasetPath);
+        Assert.Contains("hardware id", exception.Message);
+    }
+
+    [Fact]
     public async Task WithoutDecryption_EncryptedDatasetFailsToOpen()
     {
         const string datasetPath = "S124/navwarn_surface.gml";
@@ -254,6 +285,25 @@ public sealed class S100ExchangeSetTests
           </S100XC:datasetDiscoveryMetadata>
         </S100XC:S100_ExchangeCatalogue>
         """;
+
+    // Wrong-key detection relies on the PKCS#7 padding check, which a wrong key
+    // passes about once in 256 encryptions; re-encrypt until it is rejected so
+    // the test is deterministic.
+    private static byte[] EncryptRejectedBy(byte[] plaintext, byte[] cellKey, byte[] wrongCellKey)
+    {
+        while (true)
+        {
+            var ciphertext = S100Cipher.EncryptDataset(plaintext, cellKey);
+            try
+            {
+                S100Cipher.DecryptDataset(ciphertext, wrongCellKey);
+            }
+            catch (CryptographicException)
+            {
+                return ciphertext;
+            }
+        }
+    }
 
     private sealed class SingleKeyProvider(string datasetName, byte[] cellKey) : IDatasetKeyProvider
     {
