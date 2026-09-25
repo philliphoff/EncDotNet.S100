@@ -184,8 +184,19 @@ When no `Viewport` is supplied the compositor fits a shared viewport to the
 to pin the framing. This path is entirely Mapsui-free — see the
 [headless compositing design note](design/s98-interoperability.md).
 
-For custom catalogues and the full API, see the
-[`EncDotNet.S100` README](../src/EncDotNet.S100/README.md).
+To go further with the library:
+
+- [Loading datasets](loading-datasets.md) — open data from folders, ZIPs and
+  exchange sets, with S-101 updates applied.
+- [Reading product data](reading-product-data.md) — read each product's own
+  data: warnings, routes, depths, currents.
+- [Reading protected exchange sets](protected-exchange-sets.md) — S-100 Part 15
+  permits and decryption.
+- [Custom catalogues and validation](catalogues-and-validation.md) — your own
+  catalogues, and validating datasets.
+
+The [`EncDotNet.S100` README](../src/EncDotNet.S100/README.md) summarises the
+whole facade API.
 
 ## CLI path
 
@@ -262,6 +273,10 @@ with no downloads at all.
 - [Viewer guide](../src/EncDotNet.S100.Viewer/README.md) — the desktop app's
   full feature tour.
 - [Command-line rendering](cli.md) — the full `s100` reference.
+- [Loading datasets](loading-datasets.md), [Reading product data](reading-product-data.md),
+  [Reading protected exchange sets](protected-exchange-sets.md) and
+  [Custom catalogues and validation](catalogues-and-validation.md) — the
+  developer guides.
 - [Documentation index](index.md) — per-product libraries and conceptual guides.
 - [Typed data models](typed-data-models.md) — strongly-typed projections over
   the schema-agnostic feature bags.

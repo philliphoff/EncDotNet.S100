@@ -29,8 +29,15 @@ Best for chart analysts, QA, pilots, and domain experts.
 Best for .NET developers embedding S-100 reading/rendering.
 
 - Start with: [Getting started](getting-started.md#library-path)
-- Then: [Embedding the renderer](embedding-the-renderer.md)
-- Next: [Top APIs](top-apis.md)
+- Then: [Loading datasets](loading-datasets.md) — files, folders, ZIPs,
+  exchange sets and S-101 updates
+- Then: [Reading product data](reading-product-data.md) — each product's
+  features, typed models, coverage grids and time series
+- For encrypted ENCs: [Reading protected exchange sets](protected-exchange-sets.md)
+- For your own symbology or QA checks:
+  [Custom catalogues and validation](catalogues-and-validation.md)
+- For interactive maps: [Embedding the renderer](embedding-the-renderer.md)
+- Reference: [Top APIs](top-apis.md)
 
 ### Path 3: Contribute to the Engine
 

@@ -4,14 +4,16 @@
   href: start-here.md
 - name: Getting started
   href: getting-started.md
-- name: Loading datasets
-  href: loading-datasets.md
-- name: Reading protected exchange sets
-  href: protected-exchange-sets.md
-- name: Reading product data
-  href: reading-product-data.md
-- name: Custom catalogues and validation
-  href: catalogues-and-validation.md
+- name: Developer guides
+  items:
+    - name: Loading datasets
+      href: loading-datasets.md
+    - name: Reading protected exchange sets
+      href: protected-exchange-sets.md
+    - name: Reading product data
+      href: reading-product-data.md
+    - name: Custom catalogues and validation
+      href: catalogues-and-validation.md
 - name: Scenario guides
   items:
     - name: Render S-102 to PNG

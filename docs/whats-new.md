@@ -11,6 +11,7 @@ Current highlights:
 - New **Start here** page with audience-based paths
 - New scenario guides for S-102 rendering, S-124 inspection, and S-101+S-102 composition
 - New curated **Top APIs** page
+- New **developer guides**: loading datasets, protected exchange sets, product data, and custom catalogues and validation
 - Refreshed docs navigation and visual styling
 
 ## Deep dive
@@ -18,6 +19,20 @@ Current highlights:
 ## 2026
 
 ### September 2026
+
+- **Developer guides** for the library:
+  [Loading datasets](loading-datasets.md),
+  [Reading protected exchange sets](protected-exchange-sets.md),
+  [Reading product data](reading-product-data.md) and
+  [Custom catalogues and validation](catalogues-and-validation.md). Every code
+  sample in them was run against the repository's test data.
+- The facade gained `S100Dataset.OpenAsync(IAssetSource, …)`, `S100ExchangeSet`
+  (folders, `CATALOG.XML` or ZIPs, with S-101 updates applied), and the
+  `WithDecryption` and `Validate` extensions.
+- Every public API in the NuGet packages now has XML documentation, and the
+  packages ship it for IntelliSense.
+- The docs site now covers all 29 packages in the API reference, publishes the
+  package READMEs under **Packages**, and is built on every pull request.
 
 - Added **S-401 (IEHG inland ENC)** as a first-class product: bundled IEHG
   Feature and Portrayal Catalogues, content-based detection that tells S-401,
