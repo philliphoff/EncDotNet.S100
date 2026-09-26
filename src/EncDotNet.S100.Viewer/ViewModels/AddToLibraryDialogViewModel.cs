@@ -5,6 +5,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.ChartCatalogs;
+using EncDotNet.S100.Collections.Feeds;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Noaa;
@@ -34,6 +35,9 @@ internal enum AddToLibraryKind
 
     /// <summary>Some or all entries of a community chart list (<c>chartcatalogs</c> format; issue #670).</summary>
     CommunityFeed,
+
+    /// <summary>Some or all products of an S-100 feed, e.g. one served by <c>s100 feed serve</c> (issue #680).</summary>
+    S100Feed,
 }
 
 /// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
@@ -55,6 +59,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     private readonly Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
     private readonly Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? _loadUsaceCatalog;
     private readonly Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? _loadCommunityCatalog;
+    private readonly Func<Uri, CancellationToken, Task<S100FeedDocument>>? _loadS100Feed;
+    private S100FeedDocument? _s100Feed;
     private readonly TimeProvider _time;
     private readonly List<FacetOptionViewModel> _allCharts = [];
     private ChartCatalogsProductCatalog? _communityCatalog;
@@ -78,13 +84,15 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? loadNoaaCatalog,
         Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null,
         TimeProvider? timeProvider = null,
-        Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? loadCommunityCatalog = null)
+        Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? loadCommunityCatalog = null,
+        Func<Uri, CancellationToken, Task<S100FeedDocument>>? loadS100Feed = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
         _loadCatalog = loadNoaaCatalog;
         _loadUsaceCatalog = loadUsaceCatalog;
         _loadCommunityCatalog = loadCommunityCatalog;
+        _loadS100Feed = loadS100Feed;
         _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
@@ -105,7 +113,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     public bool IsNoaaFeed => _kind == AddToLibraryKind.NoaaFeed;
 
     /// <summary>True when adding a scope of an online feed (NOAA, USACE or a community list).</summary>
-    public bool IsOnlineFeed => _kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed;
+    public bool IsOnlineFeed => _kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed
+        or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed;
 
     /// <summary>True when the feed's values can be filtered by text (community lists).</summary>
     public bool IsSearchable => _kind == AddToLibraryKind.CommunityFeed;
@@ -121,6 +130,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         ],
         AddToLibraryKind.UsaceFeed => [new(Strings.Library_UsaceRivers, Rivers)],
         AddToLibraryKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts)],
+        AddToLibraryKind.S100Feed => [new(Strings.Library_FeedProducts, Products)],
         _ => [],
     };
 
@@ -135,7 +145,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>The path being added, or the feed URL.</summary>
     public string SourceDescription => _kind switch
     {
-        AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed => CatalogUri.AbsoluteUri,
+        AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed
+            => CatalogUri.AbsoluteUri,
         _ => _path ?? string.Empty,
     };
 
@@ -236,6 +247,9 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>Rivers present in the USACE catalogue.</summary>
     public ObservableCollection<FacetOptionViewModel> Rivers { get; } = [];
 
+    /// <summary>Products present in an S-100 feed.</summary>
+    public ObservableCollection<FacetOptionViewModel> Products { get; } = [];
+
     /// <summary>The community list's entries matching <see cref="ChartSearchText"/>.</summary>
     public ObservableCollection<FacetOptionViewModel> Charts { get; } = [];
 
@@ -283,6 +297,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         {
             KnownCatalogueFormat.UsaceIenc => AddToLibraryKind.UsaceFeed,
             KnownCatalogueFormat.ChartCatalogs => AddToLibraryKind.CommunityFeed,
+            KnownCatalogueFormat.S100Feed => AddToLibraryKind.S100Feed,
             _ => AddToLibraryKind.NoaaFeed,
         };
         Initialize(kind, null, targetCollectionId, known);
@@ -317,6 +332,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.CommunityFeed)
         {
             await LoadCommunityCatalogAsync(cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.S100Feed)
+        {
+            await LoadS100FeedAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 
@@ -412,6 +433,33 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         }
     }
 
+    private async Task LoadS100FeedAsync(CancellationToken cancellationToken)
+    {
+        if (_loadS100Feed is null)
+            return;
+
+        IsLoading = true;
+        LoadError = null;
+        try
+        {
+            _s100Feed = await _loadS100Feed(CatalogUri, cancellationToken).ConfigureAwait(true);
+            SetCatalogueDate(DateOnly.FromDateTime(_s100Feed.GeneratedAt.UtcDateTime));
+            Populate(Products, S100FeedIndexer.Products(_s100Feed), f => f.Value,
+                f => string.Format(CultureInfo.CurrentCulture, Strings.Library_FeedFacetDetailFormat,
+                    f.CellCount, LibraryItemViewModel.FormatBytes(f.TotalBytes)));
+            UpdateSelection();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or System.Text.Json.JsonException
+            or NotSupportedException or TaskCanceledException)
+        {
+            LoadError = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
     private void ShowMatchingCharts()
     {
         var text = _chartSearchText.Trim();
@@ -438,6 +486,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     public UsaceIencFilter CurrentUsaceFilter => new()
     {
         Rivers = Rivers.Where(o => o.IsSelected).Select(o => o.Value).ToArray(),
+    };
+
+    /// <summary>The S-100 feed filter for the current product selection.</summary>
+    public S100FeedFilter CurrentS100FeedFilter => new()
+    {
+        ProductSpecs = Products.Where(o => o.IsSelected).Select(o => o.Value).ToArray(),
     };
 
     /// <summary>The community-list filter for the current entry selection.</summary>
@@ -471,6 +525,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.NoaaFeed => _catalog is not null && !_isLoading,
             AddToLibraryKind.UsaceFeed => _usaceCatalog is not null && !_isLoading,
             AddToLibraryKind.CommunityFeed => _communityCatalog is not null && !_isLoading,
+            AddToLibraryKind.S100Feed => _s100Feed is not null && !_isLoading,
             _ => !string.IsNullOrEmpty(_path),
         };
 
@@ -503,6 +558,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
                 id, DescribeUsaceFilter(CurrentUsaceFilter), CatalogUri, CurrentUsaceFilter),
             AddToLibraryKind.CommunityFeed => new ChartCatalogsFeedSource(
                 id, DescribeCommunitySelection(), CatalogUri, CurrentCommunityFilter),
+            AddToLibraryKind.S100Feed => new S100FeedSource(
+                id, DescribeProducts(CurrentS100FeedFilter), CatalogUri, CurrentS100FeedFilter),
             _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter), CatalogUri, CurrentFilter),
         };
     }
@@ -510,7 +567,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     private void Populate(
         ObservableCollection<FacetOptionViewModel> target,
         IEnumerable<CatalogFacetValue> values,
-        Func<CatalogFacetValue, string> label)
+        Func<CatalogFacetValue, string> label,
+        Func<CatalogFacetValue, string>? detail = null)
     {
         foreach (var option in target)
             option.PropertyChanged -= OnFacetChanged;
@@ -518,7 +576,9 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
         foreach (var value in values)
         {
-            var option = new FacetOptionViewModel(value, label(value));
+            var option = detail is null
+                ? new FacetOptionViewModel(value, label(value))
+                : new FacetOptionViewModel(value.Value, label(value), detail(value));
             option.PropertyChanged += OnFacetChanged;
             target.Add(option);
         }
@@ -532,7 +592,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
     private void ClearFacetSelection()
     {
-        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts))
+        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products))
             option.IsSelected = false;
     }
 
@@ -547,6 +607,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.CommunityFeed)
         {
             UpdateCommunitySelection();
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.S100Feed)
+        {
+            UpdateS100FeedSelection();
             return;
         }
 
@@ -595,6 +661,25 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
         NewCollectionName = unscoped ? baseName : $"{baseName} — {describe()}";
     }
+
+    private void UpdateS100FeedSelection()
+    {
+        if (_s100Feed is null)
+            return;
+
+        var filter = CurrentS100FeedFilter;
+        var selected = _s100Feed.Items.Where(filter.Matches).ToArray();
+        SelectionSummary = string.Format(
+            CultureInfo.CurrentCulture,
+            filter.IsUnscoped ? Strings.Library_FeedSelectionAllFormat : Strings.Library_FeedSelectionFormat,
+            selected.Length,
+            LibraryItemViewModel.FormatBytes(selected.Sum(i => (i.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
+
+        FollowSelectionInName(filter.IsUnscoped, () => DescribeProducts(filter));
+    }
+
+    private static string DescribeProducts(S100FeedFilter filter) =>
+        filter.IsUnscoped ? Strings.Library_FeedAll : string.Join(", ", filter.ProductSpecs);
 
     private void UpdateCommunitySelection()
     {
