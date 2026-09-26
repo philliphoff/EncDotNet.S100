@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text.Json;
 using System.Xml;
 using EncDotNet.S100.Collections.ChartCatalogs;
 using EncDotNet.S100.Collections.Usace;
@@ -9,7 +10,8 @@ namespace EncDotNet.S100.Collections.KnownSources;
 /// <param name="RootElement">The document's root element (local name), or <see langword="null"/> when it is not XML.</param>
 /// <param name="Format">The recognised, supported format, or <see langword="null"/>.</param>
 /// <param name="Title">The catalogue's own title (<c>Header/title</c>), when it has one.</param>
-public sealed record CatalogueProbe(string? RootElement, KnownCatalogueFormat? Format, string? Title)
+/// <param name="IsJson">True when the document is JSON rather than XML (an S-100 feed, or something else).</param>
+public sealed record CatalogueProbe(string? RootElement, KnownCatalogueFormat? Format, string? Title, bool IsJson = false)
 {
     /// <summary>True when the document is an S-100 exchange catalogue, recognised but not yet supported online.</summary>
     public bool IsS100ExchangeCatalogue => RootElement == "S100_ExchangeCatalogue";
@@ -18,8 +20,9 @@ public sealed record CatalogueProbe(string? RootElement, KnownCatalogueFormat? F
 /// <summary>
 /// Recognises an online chart catalogue's format from its root element
 /// (issue #670): <c>EncProductCatalog</c> (NOAA), <c>IENC…ProductCatalog</c>
-/// (USACE) and <c>RncProductCatalogChartCatalogs</c> (community lists). Only
-/// the start of the document is read.
+/// (USACE) and <c>RncProductCatalogChartCatalogs</c> (community lists) — and
+/// S-100 feeds, JSON whose <c>format</c> is <c>encdotnet-s100-feed</c>
+/// (issue #680). Only the start of the document is read.
 /// </summary>
 public static class CatalogueFormatDetector
 {
@@ -52,7 +55,13 @@ public static class CatalogueFormatDetector
 
         try
         {
-            using var reader = XmlReader.Create(content, new XmlReaderSettings
+            // Only the head is needed: at most 256 KB, decompressed.
+            var head = ReadHead(content);
+            var first = FirstSignificantByte(head);
+            if (first == (byte)'{')
+                return ProbeJson(head);
+
+            using var reader = XmlReader.Create(new MemoryStream(head), new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Ignore,
                 XmlResolver = null,
@@ -77,6 +86,63 @@ public static class CatalogueFormatDetector
             if (!ReferenceEquals(seekable, stream))
                 seekable.Dispose();
         }
+    }
+
+    private const int HeadLength = 256 * 1024;
+
+    private static byte[] ReadHead(Stream content)
+    {
+        var buffer = new byte[HeadLength];
+        var length = content.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+        return buffer[..length];
+    }
+
+    /// <summary>The first byte that is not whitespace or a UTF-8 byte-order mark.</summary>
+    private static byte? FirstSignificantByte(byte[] head)
+    {
+        var start = head.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? 3 : 0;
+        foreach (var b in head.AsSpan(start))
+        {
+            if (b is not ((byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n'))
+                return b;
+        }
+
+        return null;
+    }
+
+    /// <summary>Reads the top-level <c>format</c> and <c>title</c> of a (possibly truncated) JSON head.</summary>
+    private static CatalogueProbe ProbeJson(byte[] head)
+    {
+        string? format = null;
+        string? title = null;
+        try
+        {
+            var json = head.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? head.AsSpan(3) : head;
+            var reader = new Utf8JsonReader(json, isFinalBlock: false, state: default);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+                return new CatalogueProbe(null, null, null, IsJson: true);
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName && (format is null || title is null))
+            {
+                var name = reader.GetString();
+                if (!reader.Read())
+                    break;
+                if (reader.TokenType == JsonTokenType.String && name == "format")
+                    format = reader.GetString();
+                else if (reader.TokenType == JsonTokenType.String && name == "title")
+                    title = reader.GetString();
+                else if (!reader.TrySkip())
+                    break;
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON after all, or truncated mid-token: go with what was read.
+        }
+
+        return format == Feeds.S100Feed.FormatName
+            ? new CatalogueProbe(null, KnownCatalogueFormat.S100Feed, string.IsNullOrWhiteSpace(title) ? null : title, IsJson: true)
+            : new CatalogueProbe(null, null, null, IsJson: true);
     }
 
     private static MemoryStream Copy(Stream stream)

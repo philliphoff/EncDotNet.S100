@@ -14,6 +14,9 @@ public enum KnownCatalogueFormat
 
     /// <summary>A community chart list (<c>RncProductCatalogChartCatalogs</c>); see <see cref="ChartCatalogsFeedSource"/>.</summary>
     ChartCatalogs,
+
+    /// <summary>An S-100 feed (<c>encdotnet-s100-feed</c> JSON); see <see cref="S100FeedSource"/>.</summary>
+    S100Feed,
 }
 
 /// <summary>What coverage a catalogue publishes for its cells.</summary>
@@ -139,6 +142,7 @@ public static class KnownCatalogueSources
         {
             KnownCatalogueFormat.NoaaEnc => (KnownCatalogueCoverage.Polygons, true, true),
             KnownCatalogueFormat.UsaceIenc => (KnownCatalogueCoverage.BoundingBoxes, true, true),
+            KnownCatalogueFormat.S100Feed => (KnownCatalogueCoverage.Polygons, true, true),
             _ => (KnownCatalogueCoverage.None, false, false),
         };
         return new KnownCatalogueSource(

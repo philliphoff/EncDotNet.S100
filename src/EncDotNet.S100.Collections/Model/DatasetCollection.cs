@@ -36,6 +36,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(NoaaEncFeedSource), "noaaEncFeed")]
 [JsonDerivedType(typeof(UsaceIencFeedSource), "usaceIencFeed")]
 [JsonDerivedType(typeof(ChartCatalogsFeedSource), "chartCatalogsFeed")]
+[JsonDerivedType(typeof(S100FeedSource), "s100Feed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -119,4 +120,17 @@ public sealed record UsaceIencFeedSource(Guid Id, string? DisplayName, Uri Catal
 /// <param name="CatalogUri">The list's URL.</param>
 /// <param name="Filter">Which entries to include.</param>
 public sealed record ChartCatalogsFeedSource(Guid Id, string? DisplayName, Uri CatalogUri, ChartCatalogsFilter Filter)
+    : CollectionSource(Id, DisplayName);
+
+/// <summary>
+/// An S-100 feed (issue #680) — this library's own JSON feed, for example one
+/// served by <c>s100 feed serve</c> on another machine — optionally scoped to
+/// some product specifications. Its items carry the publisher's coverage and
+/// are online (<see cref="RemoteItemLocation"/>) until downloaded.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="FeedUri">The feed's URL (<c>…/feed.json</c>).</param>
+/// <param name="Filter">Which products to include.</param>
+public sealed record S100FeedSource(Guid Id, string? DisplayName, Uri FeedUri, S100FeedFilter Filter)
     : CollectionSource(Id, DisplayName);

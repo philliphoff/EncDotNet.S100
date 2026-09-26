@@ -110,11 +110,12 @@ public class CatalogueDirectoryDialogViewModelTests
     [InlineData("https://example.test/c.xml", "html", null, "root element html")]
     [InlineData("https://example.test/c.xml", null, null, "did not return XML")]
     [InlineData("https://example.test/c.xml", "S100_ExchangeCatalogue", null, "S-100")]
+    [InlineData("https://example.test/c.json", null, null, "JSON that is not an S-100 feed")]
     public async Task Unsupported_urls_explain_why(string url, string? root, KnownCatalogueFormat? format, string expected)
     {
         var requests = new List<Uri>();
         var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null, null,
-            Probe(new CatalogueProbe(root, format, null), requests));
+            Probe(new CatalogueProbe(root, format, null, IsJson: url.EndsWith(".json", StringComparison.Ordinal)), requests));
 
         vm.CatalogueUrl = url;
         await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)vm.AddUrlCommand).ExecuteAsync(null);

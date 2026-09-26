@@ -383,6 +383,9 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer(
             new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100FeedIndexer(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp =>
         {
             // Community lists index downloaded packages' cells from the downloads folder.
@@ -404,6 +407,7 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.ChartCatalogsFeedIndexer>(),
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>(),
                 ]);
         });
         services.AddSingleton<Library.LibraryService>();
@@ -439,11 +443,13 @@ public partial class App : Application
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>();
             var usace = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer>();
             var community = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.ChartCatalogsFeedIndexer>();
+            var s100Feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
             return new AddToLibraryDialogViewModel(
                 sp.GetRequiredService<Library.LibraryService>(),
                 (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
                 (uri, ct) => usace.GetCatalogAsync(uri, cancellationToken: ct),
-                loadCommunityCatalog: (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct));
+                loadCommunityCatalog: (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct),
+                loadS100Feed: (uri, ct) => s100Feeds.GetFeedAsync(uri, cancellationToken: ct));
         });
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
         services.AddTransient(sp =>

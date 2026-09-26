@@ -287,10 +287,34 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal(indexed + 1, indexer.Calls);
     }
 
+    [Fact]
+    public async Task Downloading_a_feed_item_loads_it_without_reindexing()
+    {
+        using var context = new LibraryTestContext();
+        var indexer = new PackageIndexer { Layout = new PackageLayout("x.000", []) };
+        using var library = context.CreateService(new Collections.Indexing.CollectionIndexer([indexer]));
+        library.Initialize();
+        library.AddCollection("Shared", [new ChartCatalogsFeedSource(
+            Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
+        await library.WhenIdle();
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        vm.SelectedItem = vm.Items.Single();
+        var indexed = indexer.Calls;
+
+        vm.DownloadCommand.Execute(null);
+        await library.WhenIdle();
+
+        Assert.Equal(1, _downloader.Downloads);
+        Assert.Single(_loader.Calls);
+        Assert.Equal(indexed, indexer.Calls);
+    }
+
     /// <summary>Indexes a community source as a single online package entry.</summary>
     private sealed class PackageIndexer : Collections.Indexing.ICollectionSourceIndexer
     {
         public int Calls { get; private set; }
+
+        public PackageLayout? Layout { get; init; }
 
         public bool CanIndex(CollectionSource source) => source is ChartCatalogsFeedSource;
 
@@ -306,7 +330,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
                 Key = "Base1",
                 ProductSpec = "S-57",
                 Name = "Base1",
-                Location = new RemoteItemLocation(new Uri("https://example.test/p.zip"), null, null, "community/TEST", "Base1"),
+                Location = new RemoteItemLocation(new Uri("https://example.test/p.zip"), null, null, "community/TEST", "Base1", Layout),
             };
             return ValueTask.FromResult(new SourceIndex(source.Id, DateTimeOffset.UtcNow, null, [item], []));
         }
