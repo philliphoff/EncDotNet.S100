@@ -21,6 +21,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Kestrel for `s100 feed serve` (already present through EncDotNet.S100.Mcp). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Spectre.Console.Cli" />
   </ItemGroup>
@@ -35,6 +40,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Collections\EncDotNet.S100.Collections.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />

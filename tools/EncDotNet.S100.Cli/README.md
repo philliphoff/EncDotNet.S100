@@ -473,6 +473,49 @@ MCP protocol** — startup notices, load warnings, and errors are written to
 standard error so they never corrupt the stream. The server runs until the
 client disconnects (stdin end-of-file) or it is interrupted.
 
+### `s100 feed serve <path>`
+
+Publishes a folder, exchange set or dataset as an
+[S-100 feed](../../docs/s100-feed-format.md) over HTTP, so another machine's
+viewer can use it:
+
+1. In the viewer, open **Library → Online Catalogue**.
+2. Add the printed URL with **Add URL**.
+
+The viewer then lists the datasets with their coverage and downloads the ones
+you choose.
+
+- **What is published:** the path is indexed in place, without loading or
+  copying anything. It is re-checked at most every `--refresh` seconds, so
+  datasets added or changed while serving appear.
+- **Routes:**
+  - `feed.json` is the feed, with an `ETag` for cheap revalidation. It is
+    compressed when the client asks.
+  - `items/<id>.zip` is each dataset with its updates and exchange-set
+    catalogue.
+- **Scope:** by default only this machine can connect. With
+  `--host 0.0.0.0` other machines can, and a random access token is added to
+  every URL unless you pass `--token` or `--no-token`. The command prints one
+  URL per network address.
+
+```
+s100 feed serve charts/
+s100 feed serve exchange-set.zip --port 9000
+s100 feed serve charts/ --host 0.0.0.0
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--host <address>` | `127.0.0.1` | The address to listen on; `0.0.0.0` serves other machines. |
+| `--port <port>` | `8100` | The port; `0` picks a free one. |
+| `--token <token>` | generated off-machine | An access token that becomes part of every URL (letters, digits, `-`, `_`). |
+| `--no-token` | off | Serve without a token even on a non-loopback address. |
+| `--title <title>` | folder or file name | The feed's title. |
+| `--refresh <seconds>` | `10` | How often, at most, to re-check the path for changes. |
+
+Files that could not be read are reported at startup and left out. The server
+runs until Ctrl-C.
+
 ## Supported specifications
 
 | Family | Specs | Path |
