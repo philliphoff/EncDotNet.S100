@@ -969,4 +969,10 @@ internal static class Strings
     public static string Library_DirectoryUrlNotXml => Get(nameof(Library_DirectoryUrlNotXml));
     public static string Library_DirectoryUrlS100 => Get(nameof(Library_DirectoryUrlS100));
     public static string Tooltip_RemoveOnlineCatalogue => Get(nameof(Tooltip_RemoveOnlineCatalogue));
+    public static string Library_FeedProducts => Get(nameof(Library_FeedProducts));
+    public static string Library_FeedAll => Get(nameof(Library_FeedAll));
+    public static string Library_FeedSelectionAllFormat => Get(nameof(Library_FeedSelectionAllFormat));
+    public static string Library_FeedSelectionFormat => Get(nameof(Library_FeedSelectionFormat));
+    public static string Library_FeedFacetDetailFormat => Get(nameof(Library_FeedFacetDetailFormat));
+    public static string Library_DirectoryUrlJson => Get(nameof(Library_DirectoryUrlJson));
 }

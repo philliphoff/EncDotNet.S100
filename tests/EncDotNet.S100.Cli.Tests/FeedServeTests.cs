@@ -122,6 +122,39 @@ public sealed class FeedServeTests : IDisposable
     }
 
     [Fact]
+    public async Task A_library_on_another_machine_indexes_downloads_and_follows_the_served_feed()
+    {
+        var folder = PublishedFolder();
+        var publisher = new FeedPublisher(folder, refreshInterval: TimeSpan.FromMilliseconds(1));
+        await using var server = await FeedServer.StartAsync(publisher, IPAddress.Loopback, 0, "t0ken");
+        using var http = new HttpClient();
+        var indexer = CollectionIndexer.CreateDefault(feeds:
+        [
+            new S100FeedIndexer(http, Path.Combine(_root, "cache"), new FeedCacheOptions { RevalidationInterval = TimeSpan.Zero }),
+        ]);
+        var source = new S100FeedSource(Guid.NewGuid(), null, server.FeedUri, S100FeedFilter.All);
+
+        // Indexed with the publisher's coverage, downloadable into a folder per feed.
+        var index = await indexer.IndexAsync(source);
+        Assert.Empty(index.Diagnostics);
+        var cell = index.Items.Single(i => i.Name == "US4OH1MK");
+        Assert.NotNull(cell.Bounds);
+        var remote = Assert.IsType<RemoteItemLocation>(cell.Location);
+
+        var downloads = new EncCellDownloader(http, Path.Combine(_root, "downloads", remote.DownloadFolder!));
+        await downloads.DownloadAsync(cell);
+        var local = downloads.TryGetDownloaded(remote.Package!)!.Datasets["US4OH1MK"];
+        Assert.True(File.Exists(Path.Combine(local.RootPath, local.RelativePath)));
+
+        // Unchanged: revalidated (304) and reused. Changed: the new dataset appears.
+        Assert.Same(index, await indexer.IndexAsync(source, index));
+        File.Copy(TestData("US5MA1BO.000"), Path.Combine(folder, "US5MA1BO.000"));
+        await Task.Delay(20);
+        var changed = await indexer.IndexAsync(source, index);
+        Assert.Contains(changed.Items, i => i.Name == "US5MA1BO");
+    }
+
+    [Fact]
     public async Task The_feed_is_compressed_when_the_client_asks()
     {
         var publisher = new FeedPublisher(PublishedFolder());

@@ -230,6 +230,50 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task S100_feed_lists_products_and_builds_a_scoped_source()
+    {
+        var feedUri = new Uri("http://machine.test:8100/feed.json");
+        var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.FromUrl(
+            feedUri, EncDotNet.S100.Collections.KnownSources.KnownCatalogueFormat.S100Feed, "Shared charts");
+        CollectionItem Item(string name, string spec, long size) => new()
+        {
+            Key = name,
+            ProductSpec = spec,
+            Name = name,
+            Location = new RemoteItemLocation(new Uri(feedUri, $"items/{name}.zip"), size),
+        };
+        var feed = new EncDotNet.S100.Collections.Feeds.S100FeedDocument(
+            EncDotNet.S100.Collections.Feeds.S100Feed.FormatName, 1, "Shared charts",
+            new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), "f1",
+            [Item("A", "S-57", 1024), Item("B", "S-101", 2048), Item("C", "S-101", 2048)]);
+        var vm = new AddToLibraryDialogViewModel(_library, null, loadS100Feed: (_, _) => Task.FromResult(feed));
+
+        vm.Initialize(known, targetCollectionId: null);
+        Assert.Equal(AddToLibraryKind.S100Feed, vm.Kind);
+        Assert.True(vm.IsOnlineFeed);
+        Assert.Equal("Shared charts", vm.NewCollectionName);
+        Assert.Equal("Products", Assert.Single(vm.FacetGroups).Title);
+
+        await vm.LoadCatalogAsync();
+
+        Assert.Equal(["S-101", "S-57"], vm.Products.Select(p => p.Value));
+        Assert.StartsWith("2 datasets", vm.Products[0].Detail);
+        Assert.StartsWith("All 3 datasets", vm.SelectionSummary);
+        Assert.Contains("2026-09-25", vm.CatalogueDateText);
+
+        vm.Products.Single(p => p.Value == "S-101").IsSelected = true;
+
+        Assert.StartsWith("2 datasets", vm.SelectionSummary);
+        Assert.Equal("Shared charts — S-101", vm.NewCollectionName);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<S100FeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(feedUri, source.FeedUri);
+        Assert.Equal(["S-101"], source.Filter.ProductSpecs);
+    }
+
+    [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
         var vm = new AddToLibraryDialogViewModel(_library, (_, _) => throw new HttpRequestException("offline"));

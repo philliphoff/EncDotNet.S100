@@ -2759,7 +2759,7 @@
     <value>Add URL</value>
   </data>
   <data name="Library_DirectoryUrlWatermark" xml:space="preserve">
-    <value>Or add a catalogue by URL (https://…/catalogue.xml)</value>
+    <value>Or add a catalogue or feed by URL (https://…/catalogue.xml, http://…/feed.json)</value>
   </data>
   <data name="Library_DirectoryUrlChecking" xml:space="preserve">
     <value>Checking the catalogue…</value>
@@ -2768,7 +2768,7 @@
     <value>Enter an http or https URL.</value>
   </data>
   <data name="Library_DirectoryUrlUnsupportedFormat" xml:space="preserve">
-    <value>Not a supported catalogue (root element {0}). Supported: NOAA ENC, USACE Inland ENC and chartcatalogs lists.</value>
+    <value>Not a supported catalogue (root element {0}). Supported: NOAA ENC, USACE Inland ENC, chartcatalogs lists and S-100 feeds.</value>
   </data>
   <data name="Library_DirectoryUrlNotXml" xml:space="preserve">
     <value>Not a catalogue: the URL did not return XML.</value>
@@ -2778,5 +2778,23 @@
   </data>
   <data name="Tooltip_RemoveOnlineCatalogue" xml:space="preserve">
     <value>Remove this catalogue from the list</value>
+  </data>
+  <data name="Library_FeedProducts" xml:space="preserve">
+    <value>Products</value>
+  </data>
+  <data name="Library_FeedAll" xml:space="preserve">
+    <value>All products</value>
+  </data>
+  <data name="Library_FeedSelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_FeedSelectionFormat" xml:space="preserve">
+    <value>{0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_FeedFacetDetailFormat" xml:space="preserve">
+    <value>{0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_DirectoryUrlJson" xml:space="preserve">
+    <value>Not a supported catalogue: JSON that is not an S-100 feed.</value>
   </data>
 </root>

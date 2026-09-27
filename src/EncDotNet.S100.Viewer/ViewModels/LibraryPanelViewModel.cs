@@ -335,12 +335,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Re-indexes the sources of any package items among <paramref name="items"/>
     /// (community lists list a downloaded package's cells, not the package).
-    /// Returns true when there were any.
+    /// Items with a stated layout (S-100 feeds) are already listed as
+    /// themselves and need no re-index. Returns true when there were any.
     /// </summary>
     private bool ReindexPackageSources(IEnumerable<LibraryItemViewModel> items)
     {
         var sources = items
-            .Where(i => i.Item.Location is RemoteItemLocation { Package: not null })
+            .Where(i => i.Item.Location is RemoteItemLocation { Package: not null, Layout: null })
             .Select(i => i.Source.Id)
             .Distinct()
             .ToArray();

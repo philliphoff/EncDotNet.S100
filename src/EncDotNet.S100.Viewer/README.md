@@ -188,7 +188,8 @@ design in `docs/design/dataset-collections.md`.
     - **Your own catalogues:** paste a catalogue URL under the list and
       choose **Add URL**. The viewer fetches the start of the document and
       recognises NOAA ENC, USACE Inland ENC and chartcatalogs lists by
-      their root element. It then lists the catalogue under **Custom**,
+      their root element, and [S-100 feeds](../../docs/s100-feed-format.md)
+      by their `format` property. It then lists the catalogue under **Custom**,
       saved in `catalogues.json` next to `collections.json`, where it can
       be removed again. Online S-100 exchange catalogues are not supported
       yet.
@@ -246,6 +247,17 @@ design in `docs/design/dataset-collections.md`.
   - **Titles:** each cell is described by its reach and river miles, e.g.
     "Pittsburgh, PA → Allegheny Lock No. 8 (Allegheny, mi 1–46)".
   - **Downloads:** go to `downloads/usace-ienc/`.
+- **S-100 feeds** (datasets shared from another machine): on the machine
+  with the data, run `s100 feed serve <folder>`, adding `--host 0.0.0.0` so
+  other machines can reach it. Then add the printed URL here with **Add URL**.
+  - **Choosing:** you can pick which products to include (S-57, S-101,
+    S-102, …), with counts and sizes.
+  - **On the map:** datasets show their real coverage before anything is
+    downloaded.
+  - **Downloads:** each download goes to its own folder under
+    `downloads/feeds/`, and loads straight away.
+  - **Changes:** the feed is revalidated at most once a minute, so datasets
+    added on the serving machine appear after a refresh.
 - **Community inland ENC lists**: CC0 lists maintained by the
   [chartcatalogs](https://github.com/chartcatalogs/catalogs) project, one
   per authority (Austria, Brazil, EuRIS, France, the Netherlands, …).

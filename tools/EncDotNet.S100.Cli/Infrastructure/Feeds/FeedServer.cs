@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Cli.Infrastructure.Feeds;
@@ -80,9 +81,12 @@ internal sealed class FeedServer : IAsyncDisposable
         return new Uri(string.Create(CultureInfo.InvariantCulture, $"http://{host}:{port}/{prefix}{S100Feed.FileName}"));
     }
 
-    /// <summary>Runs until <paramref name="cancellationToken"/> is cancelled.</summary>
-    public Task WaitForShutdownAsync(CancellationToken cancellationToken) =>
-        Task.Delay(Timeout.Infinite, cancellationToken).ContinueWith(_ => { }, TaskScheduler.Default);
+    /// <summary>
+    /// Runs until the host shuts down — on Ctrl-C (SIGINT) or SIGTERM, which
+    /// the web host handles itself — or <paramref name="cancellationToken"/>
+    /// is cancelled.
+    /// </summary>
+    public Task WaitForShutdownAsync(CancellationToken cancellationToken) => _app.WaitForShutdownAsync(cancellationToken);
 
     public async ValueTask DisposeAsync()
     {

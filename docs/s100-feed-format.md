@@ -123,6 +123,17 @@ s100 feed serve charts/ --host 0.0.0.0
 
 See the [CLI reference](../tools/EncDotNet.S100.Cli/README.md) for the options.
 
+## Using a feed in the viewer
+
+In the viewer, open **Library → Online Catalogue** and add the feed's URL with
+**Add URL**. The viewer recognises the feed from its `format` property and
+lets you choose which products to include.
+
+- **On the map:** the feed's items appear with their coverage.
+- **Downloads:** each download goes to `downloads/feeds/<host>-<port>-<hash>/`.
+- **Revalidation:** the feed is revalidated at most once a minute, with a
+  conditional request.
+
 ## Building feeds in code
 
 ```csharp

@@ -146,6 +146,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             if (probe.Format is not { } format)
             {
                 UrlError = probe.IsS100ExchangeCatalogue ? Strings.Library_DirectoryUrlS100
+                    : probe.IsJson ? Strings.Library_DirectoryUrlJson
                     : probe.RootElement is { } root ? string.Format(CultureInfo.CurrentCulture, Strings.Library_DirectoryUrlUnsupportedFormat, root)
                     : Strings.Library_DirectoryUrlNotXml;
                 return;

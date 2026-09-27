@@ -91,13 +91,6 @@ internal sealed class FeedServeCommand : AsyncCommand<FeedServeCommand.Settings>
         if (problems.Length > MaxShownProblems)
             AnsiConsole.MarkupLine(string.Create(CultureInfo.CurrentCulture, $"[yellow]…and {problems.Length - MaxShownProblems:N0} more problem(s).[/]"));
 
-        using var stop = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) =>
-        {
-            e.Cancel = true;
-            stop.Cancel();
-        };
-
         await using var server = await FeedServer.StartAsync(
             publisher, address, settings.Port, token,
             line => AnsiConsole.MarkupLine($"[grey]{DateTime.Now:HH:mm:ss}[/] {Markup.Escape(line)}")).ConfigureAwait(false);
@@ -108,7 +101,8 @@ internal sealed class FeedServeCommand : AsyncCommand<FeedServeCommand.Settings>
             AnsiConsole.MarkupLine($"  [link]{Markup.Escape(url.AbsoluteUri)}[/]");
         AnsiConsole.MarkupLine("Add the URL in the viewer under Library → Online Catalogue → Add URL. Ctrl-C to stop.");
 
-        await server.WaitForShutdownAsync(stop.Token).ConfigureAwait(false);
+        // The web host handles Ctrl-C and SIGTERM and stops itself.
+        await server.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
         return 0;
     }
 
