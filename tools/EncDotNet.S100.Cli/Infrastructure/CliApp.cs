@@ -82,6 +82,11 @@ internal static class CliApp
                     .WithExample("feed", "serve", "charts/")
                     .WithExample("feed", "serve", "exchange-set.zip", "--port", "9000")
                     .WithExample("feed", "serve", "charts/", "--host", "0.0.0.0");
+
+                feed.AddCommand<FeedExportCommand>("export")
+                    .WithDescription("Write a folder, exchange set or dataset as a static S-100 feed (feed.json plus one zip per dataset) for any web host; re-running updates it incrementally.")
+                    .WithExample("feed", "export", "charts/", "--out", "site/charts")
+                    .WithExample("feed", "export", "exchange-set.zip", "-o", "export", "--title", "Harbour survey");
             });
 
             config.AddBranch("mcp", mcp =>

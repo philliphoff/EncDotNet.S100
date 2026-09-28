@@ -123,6 +123,21 @@ s100 feed serve charts/ --host 0.0.0.0
 
 See the [CLI reference](../tools/EncDotNet.S100.Cli/README.md) for the options.
 
+## Exporting a static feed
+
+`s100 feed export <path> --out <directory>` writes `feed.json` and the item
+zips as files, for any static web host:
+
+```
+s100 feed export charts/ --out site/charts
+```
+
+- **Incremental:** re-exporting rewrites only the items whose files changed.
+- **Always consistent:** `feed.json` is written last, so it always lists zips
+  that exist.
+- **Caching:** a static host supplies its own caching headers, such as `ETag`
+  or `Last-Modified`. Readers revalidate with those.
+
 ## Using a feed in the viewer
 
 In the viewer, open **Library → Online Catalogue** and add the feed's URL with

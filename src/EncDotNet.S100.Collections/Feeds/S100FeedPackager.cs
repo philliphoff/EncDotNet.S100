@@ -67,6 +67,32 @@ public static class S100FeedPackager
         }
     }
 
+    /// <summary>
+    /// A token that changes whenever the item's download would change: its
+    /// files' paths, sizes and modification times. Exporters compare it to
+    /// skip rewriting unchanged downloads.
+    /// </summary>
+    public static string Stamp(LocalItemLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+
+        var parts = new List<string>();
+        if (location.IsZip)
+        {
+            var archive = new FileInfo(location.RootPath);
+            parts.Add($"{archive.Length}@{archive.LastWriteTimeUtc.Ticks}");
+        }
+
+        foreach (var file in Files(location))
+        {
+            var info = location.IsZip ? null : new FileInfo(FullPath(location.RootPath, file));
+            parts.Add(info is { Exists: true } ? $"{file}:{info.Length}@{info.LastWriteTimeUtc.Ticks}" : file);
+        }
+
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(string.Join('|', parts))))[..32];
+    }
+
     /// <summary>The total (uncompressed) size of the item's files, or <see langword="null"/> when unknown.</summary>
     public static long? EstimateSize(LocalItemLocation location)
     {
