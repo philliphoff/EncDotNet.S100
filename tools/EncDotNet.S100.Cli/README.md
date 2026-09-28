@@ -514,7 +514,40 @@ s100 feed serve charts/ --host 0.0.0.0
 | `--refresh <seconds>` | `10` | How often, at most, to re-check the path for changes. |
 
 Files that could not be read are reported at startup and left out. The server
-runs until Ctrl-C.
+runs until Ctrl-C or SIGTERM.
+
+### `s100 feed export <path> --out <directory>`
+
+Writes the same feed as **static files**, so it can be hosted anywhere without
+running `s100` (a web server, S3, GitHub Pages, a NAS):
+
+- `feed.json`
+- one `items/<id>.zip` per dataset
+
+Upload the folder's contents, then add the `feed.json` URL in the viewer.
+
+- **Incremental:** re-exporting into the same folder rewrites only the zips
+  whose datasets changed, and removes the zips of datasets that are gone. The
+  per-item stamps are kept in `.s100-feed-export.json`, which does not need
+  uploading.
+- **Safe to publish while uploading:** `feed.json` is written last, so it
+  never lists a zip that isn't there yet. Other files in the folder are left
+  alone.
+- **Must be outside `<path>`:** `--out` can't be inside the published folder,
+  or the export would be published with the data next time.
+
+```
+s100 feed export charts/ --out site/charts
+s100 feed export exchange-set.zip -o export --title "Harbour survey"
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--out <directory>` | required | The folder to write the feed into (created if needed). |
+| `--title <title>` | folder or file name | The feed's title. |
+
+The exit code is 1 when some datasets could not be written. Those datasets are
+left out of the feed.
 
 ## Supported specifications
 
