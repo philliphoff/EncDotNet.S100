@@ -271,6 +271,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(PrimaryStateText));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(CanLoadAfterDownload));
+        OnPropertyChanged(nameof(LoadTooltip));
         RefreshDownload();
         OnPropertyChanged(nameof(CanLoad));
         OnPropertyChanged(nameof(CanDownload));
@@ -376,6 +377,14 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             return null;
         }
     }
+
+    /// <summary>The Download button's tooltip, naming the size when known: "Download (1,7 MB)".</summary>
+    public string DownloadTooltip => Item.Location is RemoteItemLocation { SizeBytes: { } size }
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_DownloadSizeFormat, FormatBytes(size))
+        : Strings.Button_Download;
+
+    /// <summary>The Load button's tooltip: "Load after download" for an online dataset, else "Load".</summary>
+    public string LoadTooltip => CanLoadAfterDownload ? Strings.Button_LoadAfterDownload : Strings.Button_Load;
 
     /// <summary>True when the item is online and can be downloaded and then loaded in one step.</summary>
     public bool CanLoadAfterDownload => !CanLoad && CanDownload;

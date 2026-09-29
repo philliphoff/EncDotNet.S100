@@ -114,6 +114,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
         DownloadOnlyCommand = new AsyncRelayCommand(() => DownloadSelectedAsync(load: false), () => _selectedItem?.CanDownload == true);
+        LoadOrDownloadCommand = new AsyncRelayCommand(
+            () => _selectedItem?.CanLoadAfterDownload == true ? DownloadSelectedAsync(load: true) : LoadSelectedAsync(),
+            () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
         _loader.Changed += OnLoaderChanged;
@@ -175,6 +178,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -348,6 +352,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Downloads the selected online dataset without loading it.</summary>
     public ICommand DownloadOnlyCommand { get; }
+
+    /// <summary>
+    /// The details header's one Load button: loads a local dataset, or
+    /// downloads an online one and then loads it.
+    /// </summary>
+    public ICommand LoadOrDownloadCommand { get; }
 
     /// <summary>Downloads every listed online (or outdated) dataset.</summary>
     public ICommand DownloadListedCommand { get; }
@@ -581,6 +591,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(DownloadListedText));
             OnPropertyChanged(nameof(HasDownloadable));

@@ -369,6 +369,26 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task The_load_button_loads_a_local_dataset_or_downloads_then_loads_an_online_one()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        vm.SelectedItem = vm.Items[0];
+
+        // Local: loads.
+        Assert.True(vm.LoadOrDownloadCommand.CanExecute(null));
+        vm.LoadOrDownloadCommand.Execute(null);
+        Assert.Equal(0, _downloader.Downloads);
+        Assert.Single(_loader.Calls);
+
+        // Outdated (downloadable, still loadable): the button loads the local copy.
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        vm.SelectedItem.RefreshAvailability();
+        Assert.Equal("Load", vm.SelectedItem.LoadTooltip);
+    }
+
+    [Fact]
     public async Task Download_only_does_not_load()
     {
         await AddS57CollectionAsync();

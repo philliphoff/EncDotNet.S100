@@ -135,6 +135,8 @@ public sealed class LibraryItemViewModelTests
         }
         Assert.True(row.CanLoadAfterDownload);
         Assert.False(row.CanLoad);
+        Assert.Equal("Load after download", row.LoadTooltip);
+        Assert.Equal("Download (2.9 MB)", row.DownloadTooltip.Replace(',', '.'));
     }
 
     [Fact]

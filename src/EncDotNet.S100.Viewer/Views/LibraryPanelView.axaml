@@ -158,7 +158,7 @@
         <!-- Tree rows: taller, with room for the optional status line; the selection
              treatment comes from the app-wide accentTree style. -->
         <Style Selector="TreeView.libraryTree TreeViewItem">
-            <Setter Property="Padding" Value="4,7" />
+            <Setter Property="Padding" Value="10,7" />
         </Style>
 
         <!-- Toolbar and filter icon buttons: one 36 × 36 box for Button and ToggleButton
@@ -167,6 +167,15 @@
             <Setter Property="Width" Value="36" />
             <Setter Property="Height" Value="36" />
             <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <!-- The details header's 32 × 32 icon actions. -->
+        <Style Selector="Button.libraryHeaderAction">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -547,21 +556,21 @@
                                             <ic:FluentIcon Icon="ChevronDown" FontSize="14" IsVisible="{Binding IsExpanded}" />
                                         </Panel>
                                     </Button>
-                                    <!-- Name, then its tags, wrapping under it in a narrow dock. -->
-                                    <WrapPanel Grid.Row="0" Grid.Column="1" ItemSpacing="6" LineSpacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle libraryRowName"
-                                                   Classes.mono="{Binding IsNameMono}"
-                                                   FontWeight="SemiBold" VerticalAlignment="Center" />
-                                        <ItemsControl ItemsSource="{Binding Tags}"
+                                    <!-- Name, and its tags right-aligned: the name truncates first, tags never. -->
+                                    <DockPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center">
+                                        <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}"
                                                       ItemTemplate="{StaticResource LibraryTagTemplate}"
-                                                      VerticalAlignment="Center">
+                                                      Margin="12,0,0,0" VerticalAlignment="Center">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <StackPanel Orientation="Horizontal" Spacing="4" />
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                         </ItemsControl>
-                                    </WrapPanel>
+                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle libraryRowName"
+                                                   Classes.mono="{Binding IsNameMono}"
+                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </DockPanel>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Margin="0,2,0,0"
                                                FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8"
                                                IsVisible="{Binding HasSubtitle}"
@@ -607,40 +616,43 @@
                                    Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
                                    Opacity="0.6" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" TextAlignment="Center" />
-                        <StackPanel IsVisible="{Binding HasSelectedItem}" Spacing="6">
-                            <!-- Swatch, name, and the primary state in words. -->
-                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <StackPanel IsVisible="{Binding HasSelectedItem}" Spacing="2">
+                            <!-- Swatch, name (truncating), and the actions as compact icon buttons. -->
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                 <views:LibrarySwatch Grid.Column="0" State="{Binding SelectedItem.PrimaryAvailability, FallbackValue=Listed}"
-                                                     VerticalAlignment="Center" />
+                                                     Width="18" VerticalAlignment="Center" />
                                 <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedItem.Name}"
                                                      FontFamily="{StaticResource LibraryMonoFont}"
-                                                     FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="{Binding SelectedItem.PrimaryStateText}"
-                                           FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" VerticalAlignment="Center" />
+                                                     FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                     VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                    <Button Classes="Primary libraryHeaderAction"
+                                            Command="{Binding DownloadOnlyCommand}"
+                                            IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
+                                            ToolTip.Tip="{Binding SelectedItem.DownloadTooltip}"
+                                            AutomationProperties.Name="{Binding SelectedItem.DownloadTooltip}">
+                                        <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
+                                    </Button>
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding ZoomToCommand}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Button_ZoomTo}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Button_ZoomTo}">
+                                        <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
+                                    </Button>
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding LoadOrDownloadCommand}"
+                                            ToolTip.Tip="{Binding SelectedItem.LoadTooltip}"
+                                            AutomationProperties.Name="{Binding SelectedItem.LoadTooltip}">
+                                        <ic:FluentIcon Icon="Layer" FontSize="16" />
+                                    </Button>
+                                </StackPanel>
                             </Grid>
+                            <!-- Title and state, indented to the name's left edge (swatch 18 + spacing 10). -->
                             <TextBlock Text="{Binding SelectedItem.Subtitle}" IsVisible="{Binding SelectedItem.HasSubtitle, FallbackValue=False}"
+                                       Margin="28,0,0,0"
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8" TextWrapping="Wrap" />
-                            <!-- Actions, labelled, in the order they are used. -->
-                            <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
-                                <Button Classes="Primary"
-                                        Content="{x:Static loc:Strings.Button_Download}"
-                                        Command="{Binding DownloadOnlyCommand}"
-                                        IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadDataset}" />
-                                <Button Classes="Outline"
-                                        Content="{x:Static loc:Strings.Button_ZoomTo}"
-                                        Command="{Binding ZoomToCommand}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}" />
-                                <Button Classes="Outline"
-                                        Content="{x:Static loc:Strings.Button_Load}"
-                                        Command="{Binding LoadCommand}"
-                                        IsVisible="{Binding !SelectedItem.CanLoadAfterDownload, FallbackValue=True}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}" />
-                                <Button Classes="Outline"
-                                        Content="{x:Static loc:Strings.Button_LoadAfterDownload}"
-                                        Command="{Binding DownloadCommand}"
-                                        IsVisible="{Binding SelectedItem.CanLoadAfterDownload, FallbackValue=False}" />
-                            </WrapPanel>
+                            <TextBlock Text="{Binding SelectedItem.PrimaryStateText}" Margin="28,0,0,0"
+                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
                         </StackPanel>
                     </Panel>
                 </Border>

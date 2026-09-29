@@ -3106,4 +3106,7 @@
   <data name="Library_PackageGroupNoDateFormat" xml:space="preserve">
     <value>{0:N0} datasets</value>
   </data>
+  <data name="Tooltip_DownloadSizeFormat" xml:space="preserve">
+    <value>Download ({0})</value>
+  </data>
 </root>
