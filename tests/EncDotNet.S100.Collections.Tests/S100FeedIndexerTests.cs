@@ -132,6 +132,10 @@ public sealed class S100FeedIndexerTests : IDisposable
             Assert.True(probe.IsJson);
         }
 
+        var named = CatalogueFormatDetector.Probe(new MemoryStream(
+            """{ "format": "encdotnet-s100-feed", "version": 1, "title": "charts", "items": [], "machine": "bridge-pc" }"""u8.ToArray()));
+        Assert.Equal("bridge-pc", named.Machine);
+
         var other = CatalogueFormatDetector.Probe(new MemoryStream("""{ "items": [1, 2], "format": "geojson" }"""u8.ToArray()));
         Assert.Null(other.Format);
         Assert.True(other.IsJson);

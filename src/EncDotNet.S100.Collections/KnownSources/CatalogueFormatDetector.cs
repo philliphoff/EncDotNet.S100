@@ -11,7 +11,8 @@ namespace EncDotNet.S100.Collections.KnownSources;
 /// <param name="Format">The recognised, supported format, or <see langword="null"/>.</param>
 /// <param name="Title">The catalogue's own title (<c>Header/title</c>), when it has one.</param>
 /// <param name="IsJson">True when the document is JSON rather than XML (an S-100 feed, or something else).</param>
-public sealed record CatalogueProbe(string? RootElement, KnownCatalogueFormat? Format, string? Title, bool IsJson = false)
+/// <param name="Machine">For an S-100 feed, the publishing computer's name, when the feed gives it.</param>
+public sealed record CatalogueProbe(string? RootElement, KnownCatalogueFormat? Format, string? Title, bool IsJson = false, string? Machine = null)
 {
     /// <summary>True when the document is an S-100 exchange catalogue, recognised but not yet supported online.</summary>
     public bool IsS100ExchangeCatalogue => RootElement == "S100_ExchangeCatalogue";
@@ -115,6 +116,7 @@ public static class CatalogueFormatDetector
     {
         string? format = null;
         string? title = null;
+        string? machine = null;
         try
         {
             var json = head.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? head.AsSpan(3) : head;
@@ -122,7 +124,7 @@ public static class CatalogueFormatDetector
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
                 return new CatalogueProbe(null, null, null, IsJson: true);
 
-            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName && (format is null || title is null))
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
             {
                 var name = reader.GetString();
                 if (!reader.Read())
@@ -131,6 +133,8 @@ public static class CatalogueFormatDetector
                     format = reader.GetString();
                 else if (reader.TokenType == JsonTokenType.String && name == "title")
                     title = reader.GetString();
+                else if (reader.TokenType == JsonTokenType.String && name == "machine")
+                    machine = reader.GetString();
                 else if (!reader.TrySkip())
                     break;
             }
@@ -141,7 +145,8 @@ public static class CatalogueFormatDetector
         }
 
         return format == Feeds.S100Feed.FormatName
-            ? new CatalogueProbe(null, KnownCatalogueFormat.S100Feed, string.IsNullOrWhiteSpace(title) ? null : title, IsJson: true)
+            ? new CatalogueProbe(null, KnownCatalogueFormat.S100Feed, string.IsNullOrWhiteSpace(title) ? null : title, IsJson: true,
+                Machine: string.IsNullOrWhiteSpace(machine) ? null : machine)
             : new CatalogueProbe(null, null, null, IsJson: true);
     }
 

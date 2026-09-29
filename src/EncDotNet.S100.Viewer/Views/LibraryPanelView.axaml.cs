@@ -63,22 +63,25 @@ public partial class LibraryPanelView : UserControl
         }
     }
 
-    private void OnDetailValueTapped(object? sender, TappedEventArgs e)
+    private void OnCopySourceUrl(object? sender, RoutedEventArgs e) =>
+        CopyToClipboard((DataContext as LibraryPanelViewModel)?.SelectedNode?.SourceUrl?.AbsoluteUri);
+
+    private void CopyToClipboard(string? text)
     {
-        // A shortened value (a download URL, a path) copies in full.
         try
         {
-            if (sender is Control { DataContext: LibraryDetailField { CopyValue: { } value } }
-                && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            {
-                _ = clipboard.SetTextAsync(value);
-            }
+            if (text is not null && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                _ = clipboard.SetTextAsync(text);
         }
         catch
         {
             // Best-effort, as in the pick report; clipboard access can fail on some Linux WMs.
         }
     }
+
+    // A shortened value (a download URL, a path) copies in full.
+    private void OnDetailValueTapped(object? sender, TappedEventArgs e) =>
+        CopyToClipboard((sender as Control)?.DataContext is LibraryDetailField { CopyValue: { } value } ? value : null);
 
     private void OnTagTapped(object? sender, TappedEventArgs e)
     {

@@ -77,6 +77,18 @@ public sealed class LibraryNodeViewModelTests
     }
 
     [Fact]
+    public void A_shared_feed_never_shows_its_token_but_copies_it()
+    {
+        var node = Node(new S100FeedSource(Guid.NewGuid(), "bridge-pc", new Uri("http://bridge-pc.local:8100/Zm9vYmFyMTIz3f9a/feed.json"), S100FeedFilter.All), Index(1));
+
+        Assert.Equal("bridge-pc", node.Name);
+        Assert.DoesNotContain("Zm9vYmFy", node.Tooltip);
+        Assert.Contains("http://bridge-pc.local:8100/••••3f9a/feed.json", node.Tooltip);
+        Assert.Equal(new Uri("http://bridge-pc.local:8100/Zm9vYmFyMTIz3f9a/feed.json"), node.SourceUrl);
+        Assert.False(Node(new LocalFolderSource(Guid.NewGuid(), null, "/charts"), Index(1)).HasSourceUrl);
+    }
+
+    [Fact]
     public void A_shared_feed_says_whether_its_server_is_reachable()
     {
         var feed = new S100FeedSource(Guid.NewGuid(), null, FeedUri, S100FeedFilter.All);

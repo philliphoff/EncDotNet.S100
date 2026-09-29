@@ -87,7 +87,7 @@ internal sealed class FeedPublisher
 
     private PublishedFeed Publish(SourceIndex index)
     {
-        var document = S100Feed.FromIndex(index, _title, _time.GetUtcNow());
+        var document = S100Feed.FromIndex(index, _title, _time.GetUtcNow()) with { Machine = Environment.MachineName };
         using var json = new MemoryStream();
         S100Feed.Write(json, document);
         var bytes = json.ToArray();

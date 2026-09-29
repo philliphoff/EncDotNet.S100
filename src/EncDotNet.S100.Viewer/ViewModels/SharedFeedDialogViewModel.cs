@@ -99,7 +99,8 @@ internal sealed class SharedFeedDialogViewModel : ViewModelBase
                 return;
             }
 
-            Connected?.Invoke(this, KnownCatalogueSources.FromUrl(uri, KnownCatalogueFormat.S100Feed, probe.Title));
+            // Named after the serving computer when the feed says which it is.
+            Connected?.Invoke(this, KnownCatalogueSources.FromUrl(uri, KnownCatalogueFormat.S100Feed, probe.Machine ?? probe.Title));
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
         {

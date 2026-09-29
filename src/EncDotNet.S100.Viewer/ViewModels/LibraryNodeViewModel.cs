@@ -339,6 +339,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         OnPropertyChanged(nameof(Tooltip));
         OnPropertyChanged(nameof(Icon));
         OnPropertyChanged(nameof(KindTag));
+        OnPropertyChanged(nameof(SourceUrl));
+        OnPropertyChanged(nameof(HasSourceUrl));
         RaiseStatus();
         OnPropertyChanged(nameof(CanRemove));
         OnPropertyChanged(nameof(CanKeep));
@@ -364,8 +366,37 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         S128CatalogueSource c => c.Path,
         NoaaEncFeedSource n => n.CatalogUri.AbsoluteUri,
         UsaceIencFeedSource u => u.CatalogUri.AbsoluteUri,
+        ChartCatalogsFeedSource c => c.CatalogUri.AbsoluteUri,
+        S100FeedSource f => MaskToken(f.FeedUri),
         _ => string.Empty,
     };
+
+    /// <summary>The online source's full URL (for "Copy URL"), or <see langword="null"/> for a local source.</summary>
+    public Uri? SourceUrl => _source?.Definition switch
+    {
+        NoaaEncFeedSource n => n.CatalogUri,
+        UsaceIencFeedSource u => u.CatalogUri,
+        ChartCatalogsFeedSource c => c.CatalogUri,
+        S100FeedSource f => f.FeedUri,
+        _ => null,
+    };
+
+    public bool HasSourceUrl => SourceUrl is not null;
+
+    /// <summary>
+    /// A shared feed's URL with its access token (the path before
+    /// <c>feed.json</c>) masked to its last four characters:
+    /// <c>http://bridge-pc:8100/••••3f9a/feed.json</c>. The token is never shown
+    /// in full; "Copy URL" copies it.
+    /// </summary>
+    internal static string MaskToken(Uri feedUri)
+    {
+        var segments = feedUri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2)
+            return feedUri.AbsoluteUri;
+        var masked = segments[..^1].Select(s => "••••" + (s.Length > 4 ? s[^4..] : string.Empty)).Append(segments[^1]);
+        return $"{feedUri.Scheme}://{feedUri.Authority}/{string.Join('/', masked)}";
+    }
 
     private static string LeafName(string path)
     {

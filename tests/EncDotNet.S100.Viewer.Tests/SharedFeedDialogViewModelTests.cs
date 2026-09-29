@@ -29,6 +29,19 @@ public sealed class SharedFeedDialogViewModelTests
         Assert.Equal(new Uri("http://bridge-pc.local:8100/abc/feed.json"), connected.CatalogUri);
     }
 
+    [Fact]
+    public async Task The_feed_is_named_after_the_serving_computer()
+    {
+        KnownCatalogueSource? connected = null;
+        var vm = new SharedFeedDialogViewModel((_, _) =>
+            Task.FromResult(new CatalogueProbe(null, KnownCatalogueFormat.S100Feed, "charts", IsJson: true, Machine: "bridge-pc")));
+        vm.Connected += (_, s) => connected = s;
+
+        await ConnectAsync(vm, "http://bridge-pc.local:8100/abc/feed.json");
+
+        Assert.Equal("bridge-pc", connected!.Name);
+    }
+
     [Theory]
     [InlineData("not a url", "http or https")]
     [InlineData("http://machine.test/catalog.xml", "not an S-100 feed")]

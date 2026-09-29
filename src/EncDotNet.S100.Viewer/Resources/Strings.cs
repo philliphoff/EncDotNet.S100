@@ -1075,4 +1075,5 @@ internal static class Strings
     public static string Toast_LibraryUnpackedFormat => Get(nameof(Toast_LibraryUnpackedFormat));
     public static string Toast_LibraryUnpackedManyFormat => Get(nameof(Toast_LibraryUnpackedManyFormat));
     public static string Library_Field_Datasets => Get(nameof(Library_Field_Datasets));
+    public static string Menu_LibraryCopyUrl => Get(nameof(Menu_LibraryCopyUrl));
 }

@@ -3073,4 +3073,7 @@
   <data name="Library_Field_Datasets" xml:space="preserve">
     <value>Datasets</value>
   </data>
+  <data name="Menu_LibraryCopyUrl" xml:space="preserve">
+    <value>Copy URL</value>
+  </data>
 </root>
