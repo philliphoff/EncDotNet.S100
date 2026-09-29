@@ -229,61 +229,35 @@
              grouped by where the data is. -->
         <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft">
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_ThisComputer}" Classes="libraryMenuHeader" IsEnabled="False" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Folder" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="FolderZip" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="BookOpen" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}" />
             <Separator />
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_Online}" Classes="libraryMenuHeader" IsEnabled="False" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Globe" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}" />
             <Separator />
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_AnotherComputer}" Classes="libraryMenuHeader" IsEnabled="False" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding AddSharedFeedCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Desktop" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding AddSharedFeedCommand}" />
         </MenuFlyout>
 
         <!-- Rarely used, destructive actions live here rather than on the toolbar. -->
         <MenuFlyout x:Key="MoreMenu" Placement="BottomEdgeAlignedRight">
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshAll}" Command="{Binding RefreshAllCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="ArrowSync" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Rename" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshAll}" Command="{Binding RefreshAllCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}" />
             <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Delete" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}" />
         </MenuFlyout>
 
         <!-- The tree's context menu: acts on the node that was right-clicked (it is selected first). -->
         <ContextMenu x:Key="NodeMenu">
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeep}" Command="{Binding KeepInLibraryCommand}"
-                      IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Pin" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding RefreshCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="ArrowSync" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Rename" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+                      IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding RefreshCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryCopyUrl}" Click="OnCopySourceUrl"
-                      IsVisible="{Binding SelectedNode.HasSourceUrl, FallbackValue=False}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Copy" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+                      IsVisible="{Binding SelectedNode.HasSourceUrl, FallbackValue=False}" />
             <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}">
-                <MenuItem.Icon><ic:FluentIcon Icon="Delete" FontSize="16" /></MenuItem.Icon>
-            </MenuItem>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}" />
         </ContextMenu>
     </UserControl.Resources>
 
