@@ -1,5 +1,4 @@
 using System.Globalization;
-using Avalonia.Media;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
@@ -15,6 +14,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 {
     private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
     private readonly ILibraryDownloader? _downloader;
+    private readonly string? _collectionName;
+    private readonly Func<LibraryItemViewModel, Task>? _download;
+    private LibraryDownloadItemStatus? _lastDownloadStatus;
     private LibraryAvailability? _availability;
     private CollectionItem? _effective;
 
@@ -22,7 +24,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         CollectionItem item,
         LibrarySource source,
         Func<CollectionItem, LibraryLoadState>? loadState = null,
-        ILibraryDownloader? downloader = null)
+        ILibraryDownloader? downloader = null,
+        string? collectionName = null,
+        Func<LibraryItemViewModel, Task>? download = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
@@ -30,6 +34,54 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         Source = source;
         _loadState = loadState;
         _downloader = downloader;
+        _collectionName = collectionName;
+        _download = download;
+        RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
+            () => _download?.Invoke(this) ?? Task.CompletedTask);
+        CancelDownloadCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => _downloader?.Cancel(Item));
+    }
+
+    /// <summary>Downloads the item again after a failure (the "Failed · retry" tag).</summary>
+    public System.Windows.Input.ICommand RetryCommand { get; }
+
+    /// <summary>Cancels the item's download (the row's Cancel link).</summary>
+    public System.Windows.Input.ICommand CancelDownloadCommand { get; }
+
+    /// <summary>Where the item stands in a download, if anywhere.</summary>
+    private LibraryDownloadItemStatus? DownloadStatus => _downloader?.StatusOf(Item);
+
+    /// <summary>True while the item is downloading (the row shows a progress bar and Cancel).</summary>
+    public bool IsDownloading => DownloadStatus?.State == LibraryDownloadItemState.Running;
+
+    /// <summary>The fraction downloaded (0–1).</summary>
+    public double DownloadProgress => DownloadStatus?.Fraction ?? 0;
+
+    /// <summary>"1,8 / 2,9 MB" while downloading.</summary>
+    public string? DownloadProgressText => DownloadStatus is { State: LibraryDownloadItemState.Running } status
+        ? status.TotalBytes is { } total
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadProgressFormat, FormatBytes(status.BytesReceived), FormatBytes(total))
+            : FormatBytes(status.BytesReceived)
+        : null;
+
+    /// <summary>
+    /// Re-reads the item's download status and raises what changed; cheap
+    /// enough to call on every progress tick for the listed rows.
+    /// </summary>
+    public void RefreshDownload()
+    {
+        var status = DownloadStatus;
+        if (Equals(status, _lastDownloadStatus))
+            return;
+        var stateChanged = status?.State != _lastDownloadStatus?.State;
+        _lastDownloadStatus = status;
+        OnPropertyChanged(nameof(IsDownloading));
+        OnPropertyChanged(nameof(DownloadProgress));
+        OnPropertyChanged(nameof(DownloadProgressText));
+        if (stateChanged)
+        {
+            OnPropertyChanged(nameof(Tags));
+            OnPropertyChanged(nameof(Details));
+        }
     }
 
     /// <summary>
@@ -45,20 +97,110 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>The source the item was indexed from.</summary>
     public LibrarySource Source { get; }
 
-    /// <summary>The dataset name (e.g. <c>US5AK1AM</c>).</summary>
-    public string Name => Item.Name;
+    /// <summary>
+    /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
+    /// (or its group, once unpacked) is named by its description instead.
+    /// </summary>
+    public string Name => IsPackageEntry || IsGroupHeader ? Item.Title ?? Item.Name : Item.Name;
 
-    /// <summary>The descriptive title, when the source supplies one.</summary>
-    public string? Subtitle => Item.Title;
+    /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
+    public bool IsNameMono => !IsPackageEntry && !IsGroupHeader;
+
+    /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
+    public string? Subtitle => IsPackageEntry ? Strings.Library_PackageHint : IsGroupHeader ? null : Item.Title;
 
     /// <summary>True when there is a <see cref="Subtitle"/> to show.</summary>
-    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Item.Title);
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
 
-    /// <summary>A compact one-line summary: spec, band, edition/update, issue date.</summary>
+    /// <summary>
+    /// True for a community-list entry not yet downloaded: a package that may
+    /// hold several datasets, listed as one row.
+    /// </summary>
+    public bool IsPackageEntry =>
+        Item.Location is RemoteItemLocation { Package: { } package, Layout: null } && Item.Key == package;
+
+    /// <summary>True for the header row of an unpacked package's datasets.</summary>
+    public bool IsGroupHeader { get; private init; }
+
+    private bool _isGroupChild;
+    private int _groupCount;
+
+    /// <summary>True for a dataset listed under an unpacked package's header (indented).</summary>
+    public bool IsGroupChild
+    {
+        get => _isGroupChild;
+        set => SetProperty(ref _isGroupChild, value);
+    }
+
+    /// <summary>For a group header: how many datasets the package unpacked into.</summary>
+    public int GroupCount
+    {
+        get => _groupCount;
+        set
+        {
+            if (SetProperty(ref _groupCount, value))
+                OnPropertyChanged(nameof(Summary));
+        }
+    }
+
+    /// <summary>For a group header: the (source, package) it groups.</summary>
+    internal (Guid Source, string Package) GroupKey { get; private init; }
+
+    private bool _isExpanded;
+
+    /// <summary>For a group header: whether its datasets are listed.</summary>
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
+    }
+
+    /// <summary>For a group header: shows or hides its datasets.</summary>
+    public System.Windows.Input.ICommand? ToggleCommand { get; private init; }
+
+    /// <summary>
+    /// Creates the header row for an unpacked package: named by the package's
+    /// description, tagged "Unpacked", with its dataset count.
+    /// </summary>
+    internal static LibraryItemViewModel ForPackageGroup(
+        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle)
+    {
+        var item = new CollectionItem
+        {
+            Key = "package:" + package,
+            ProductSpec = "S-57",
+            Name = package,
+            Title = title ?? package,
+            Location = NoItemLocation.Instance,
+            Properties = new Dictionary<string, string> { ["package"] = package },
+        };
+        LibraryItemViewModel? header = null;
+        header = new LibraryItemViewModel(item, source)
+        {
+            IsGroupHeader = true,
+            GroupKey = (source.Id, package),
+            ToggleCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => toggle(header!)),
+        };
+        header._groupCount = count;
+        header._isExpanded = isExpanded;
+        return header;
+    }
+
+    /// <summary>A compact one-line summary: spec, band, edition/update, issue date, and download size.</summary>
     public string Summary
     {
         get
         {
+            if (IsGroupHeader)
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_PackageGroupFormat, Item.Name, GroupCount);
+            if (IsPackageEntry)
+            {
+                var published = Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                return published is null
+                    ? Item.Name
+                    : string.Format(CultureInfo.CurrentCulture, Strings.Library_PackagePublishedFormat, Item.Name, published);
+            }
+
             var parts = new List<string>(4) { Item.ProductSpec };
             if (Item.UsageBand is { } band)
                 parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Library_BandFormat, band));
@@ -70,12 +212,14 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             }
             if (Item.IssueDate is { } issued)
                 parts.Add(issued.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            if (Item.Location is RemoteItemLocation { SizeBytes: { } size })
+                parts.Add(FormatBytes(size));
             return string.Join(" · ", parts);
         }
     }
 
     /// <summary>Where the data can be had now (resolved on first access).</summary>
-    public LibraryAvailability Availability => _availability ??= (_loadState?.Invoke(EffectiveItem)) switch
+    public LibraryAvailability Availability => _availability ??= IsGroupHeader ? LibraryAvailability.Local : (_loadState?.Invoke(EffectiveItem)) switch
     {
         LibraryLoadState.Loaded => LibraryAvailability.Loaded,
         LibraryLoadState.Deferred => LibraryAvailability.Deferred,
@@ -84,7 +228,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     };
 
     /// <summary>True when the item can be opened from disk (local, not already loaded).</summary>
-    public bool CanLoad => Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated;
+    public bool CanLoad => !IsGroupHeader
+        && Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated;
 
     /// <summary>True when the item can be downloaded (online, or a newer edition is available).</summary>
     public bool CanDownload =>
@@ -100,13 +245,96 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         _effective = null;
         OnPropertyChanged(nameof(Availability));
         OnPropertyChanged(nameof(AvailabilityText));
-        OnPropertyChanged(nameof(AvailabilityBrush));
+        OnPropertyChanged(nameof(PrimaryAvailability));
+        OnPropertyChanged(nameof(PrimaryStateText));
+        OnPropertyChanged(nameof(Tags));
+        OnPropertyChanged(nameof(CanLoadAfterDownload));
+        RefreshDownload();
         OnPropertyChanged(nameof(CanLoad));
         OnPropertyChanged(nameof(CanDownload));
         OnPropertyChanged(nameof(Details));
     }
 
-    /// <summary>The availability badge text.</summary>
+    /// <summary>
+    /// Where the data is — exactly one state, drawn as the row swatch exactly
+    /// like the map outline.
+    /// </summary>
+    public LibraryPrimaryAvailability PrimaryAvailability => LibraryOutlineStyles.Primary(Availability);
+
+    /// <summary>
+    /// What is happening to the dataset — zero or more sentence-case tags
+    /// after its name (update available, loaded, on pan, …).
+    /// </summary>
+    public IReadOnlyList<LibraryItemTag> Tags
+    {
+        get
+        {
+            var tags = new List<LibraryItemTag>(2);
+            switch (DownloadStatus?.State)
+            {
+                case LibraryDownloadItemState.Queued:
+                    tags.Add(new LibraryItemTag(Strings.Library_Tag_Queued, LibraryItemTagKind.Queued));
+                    break;
+                case LibraryDownloadItemState.Failed:
+                    tags.Add(new LibraryItemTag(Strings.Library_Tag_FailedRetry, LibraryItemTagKind.Failed, _download is null ? null : RetryCommand));
+                    break;
+            }
+
+            if (IsPackageEntry)
+                tags.Add(new LibraryItemTag(Strings.Library_Tag_Package, LibraryItemTagKind.Neutral));
+            if (IsGroupHeader)
+            {
+                tags.Add(new LibraryItemTag(Strings.Library_Tag_Unpacked, LibraryItemTagKind.Neutral));
+                return tags;
+            }
+
+            switch (Availability)
+            {
+                case LibraryAvailability.Outdated:
+                    tags.Add(new LibraryItemTag(UpdateText(), LibraryItemTagKind.Update));
+                    break;
+                case LibraryAvailability.Loaded:
+                    tags.Add(new LibraryItemTag(Strings.Library_Availability_Loaded, LibraryItemTagKind.Loaded));
+                    break;
+                case LibraryAvailability.Deferred:
+                    tags.Add(new LibraryItemTag(Strings.Library_Availability_Deferred, LibraryItemTagKind.OnPan));
+                    break;
+            }
+
+            return tags;
+        }
+    }
+
+    /// <summary>"Ed 46 available" (or with the update), naming what the source now offers.</summary>
+    private string UpdateText() => (Item.Edition, Item.Update) switch
+    {
+        ({ } edition, { } update and > 0) => string.Format(CultureInfo.CurrentCulture, Strings.Library_Tag_EditionUpdateAvailableFormat, edition, update),
+        ({ } edition, _) => string.Format(CultureInfo.CurrentCulture, Strings.Library_Tag_EditionAvailableFormat, edition),
+        _ => Strings.Library_Availability_Outdated,
+    };
+
+    /// <summary>The primary state in words for the details header, e.g. "Online · 1,7 MB".</summary>
+    public string PrimaryStateText
+    {
+        get
+        {
+            var words = PrimaryAvailability switch
+            {
+                LibraryPrimaryAvailability.Local => Strings.Library_Availability_Local,
+                LibraryPrimaryAvailability.Online => Strings.Library_Availability_Online,
+                LibraryPrimaryAvailability.Missing => Strings.Library_Availability_Missing,
+                _ => Strings.Library_Availability_Listed,
+            };
+            return PrimaryAvailability == LibraryPrimaryAvailability.Online && Item.Location is RemoteItemLocation { SizeBytes: { } size }
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StateSizeFormat, words, FormatBytes(size))
+                : words;
+        }
+    }
+
+    /// <summary>True when the item is online and can be downloaded and then loaded in one step.</summary>
+    public bool CanLoadAfterDownload => !CanLoad && CanDownload;
+
+    /// <summary>The availability in words (details pane).</summary>
     public string AvailabilityText => Availability switch
     {
         LibraryAvailability.Local => Strings.Library_Availability_Local,
@@ -117,18 +345,6 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Outdated => Strings.Library_Availability_Outdated,
         _ => Strings.Library_Availability_Listed,
     };
-
-    /// <summary>The availability badge fill.</summary>
-    public IBrush AvailabilityBrush => new SolidColorBrush(Availability switch
-    {
-        LibraryAvailability.Local => Color.Parse("#4d9a6a"),
-        LibraryAvailability.Online => Color.Parse("#4f7fbf"),
-        LibraryAvailability.Missing => Color.Parse("#c0504d"),
-        LibraryAvailability.Deferred => Color.Parse("#8a6fb8"),
-        LibraryAvailability.Loaded => Color.Parse("#2e6b45"),
-        LibraryAvailability.Outdated => Color.Parse("#c07a2c"),
-        _ => Color.Parse("#8a8f98"),
-    });
 
     /// <summary>True when the item is cancelled or withdrawn.</summary>
     public bool IsCancelled => Item.Status == CollectionItemStatus.Cancelled;
@@ -141,57 +357,125 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the item has geographic bounds.</summary>
     public bool HasBounds => Item.Bounds is not null;
 
-    /// <summary>The label/value rows of the details pane, in display order.</summary>
-    public IReadOnlyList<KeyValuePair<string, string>> Details
+    /// <summary>
+    /// The details pane's fields in groups: Product (what it is), Coverage
+    /// (where), Source (where it comes from, then the source's own properties).
+    /// </summary>
+    public IReadOnlyList<LibraryDetailGroup> Details
     {
         get
         {
-            var rows = new List<KeyValuePair<string, string>>();
-            void Add(string label, string? value)
+            var c = CultureInfo.CurrentCulture;
+            var product = new List<LibraryDetailField>();
+            var coverage = new List<LibraryDetailField>();
+            var source = new List<LibraryDetailField>();
+            static void Add(List<LibraryDetailField> fields, string label, string? value, bool mono = false, string? copy = null)
             {
                 if (!string.IsNullOrWhiteSpace(value))
-                    rows.Add(new(label, value));
+                    fields.Add(new LibraryDetailField(label, value, mono, copy));
             }
 
-            var c = CultureInfo.CurrentCulture;
-            Add(Strings.Library_Field_Title, Item.Title);
-            Add(Strings.Library_Field_Spec, Item.ProductSpecVersion is { } v ? $"{Item.ProductSpec} ({v})" : Item.ProductSpec);
-            Add(Strings.Library_Field_Edition, Item.Edition?.ToString(c));
-            Add(Strings.Library_Field_Update, Item.Update?.ToString(c));
-            Add(Strings.Library_Field_Issued, Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            Add(Strings.Library_Field_UpdateApplied, Item.UpdateApplicationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            Add(Strings.Library_Field_Status, Item.Status == CollectionItemStatus.Unknown ? null : Item.Status.ToString());
-            Add(Strings.Library_Field_Band, Item.UsageBand?.ToString(c));
-            Add(Strings.Library_Field_CompilationScale, Item.CompilationScale is { } cscl ? "1:" + cscl.ToString("N0", c) : null);
-            Add(Strings.Library_Field_DisplayScales, FormatScales(Item.MinimumDisplayScale, Item.MaximumDisplayScale, c));
+            if (IsGroupHeader)
+            {
+                // An unpacked package: where it came from and what it held.
+                Add(source, Strings.Library_Field_Collection, _collectionName);
+                Add(source, PropertyLabel("package"), Item.Name);
+                Add(source, Strings.Library_Field_Datasets, GroupCount.ToString("N0", c));
+                return [new LibraryDetailGroup(Strings.Library_Group_Source, source)];
+            }
+
+            Add(product, Strings.Library_Field_Spec, ProductText());
+            Add(product, Strings.Library_Field_Edition, (Item.Edition, Item.Update) switch
+            {
+                ({ } e, { } u) => string.Format(c, Strings.Library_EditionUpdateLongFormat, e, u),
+                ({ } e, null) => string.Format(c, Strings.Library_EditionLongFormat, e),
+                _ => null,
+            }, mono: true);
+            Add(product, Strings.Library_Field_Issued, Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), mono: true);
+            Add(product, Strings.Library_Field_UpdateApplied, Item.UpdateApplicationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), mono: true);
+            Add(product, Strings.Library_Field_Status, Item.Status == CollectionItemStatus.Unknown ? null : Item.Status.ToString());
+            Add(product, Strings.Library_Field_Band, Item.UsageBand?.ToString(c));
+            Add(product, Strings.Library_Field_CompilationScale, Item.CompilationScale is { } cscl ? "1:" + cscl.ToString("N0", c) : null, mono: true);
+            Add(product, Strings.Library_Field_DisplayScales, FormatScales(Item.MinimumDisplayScale, Item.MaximumDisplayScale, c), mono: true);
+
             if (Item.Bounds is { } b)
             {
-                Add(Strings.Library_Field_NorthEast, LatLonFormatter.Format(b.North, b.East));
-                Add(Strings.Library_Field_SouthWest, LatLonFormatter.Format(b.South, b.West));
+                Add(coverage, Strings.Library_Field_NorthEast, LatLonFormatter.Format(b.North, b.East), mono: true);
+                Add(coverage, Strings.Library_Field_SouthWest, LatLonFormatter.Format(b.South, b.West), mono: true);
             }
 
+            Add(source, Strings.Library_Field_Collection, _collectionName);
             if (Item.Location is RemoteItemLocation && EffectiveItem.Location is LocalItemLocation downloaded)
-                Add(Strings.Library_Field_Location, LibraryAvailabilityResolver.ResolvePath(downloaded));
+            {
+                var path = LibraryAvailabilityResolver.ResolvePath(downloaded);
+                Add(source, Strings.Library_Field_Location, path, mono: true, copy: path);
+            }
 
             switch (Item.Location)
             {
                 case LocalItemLocation local:
-                    Add(Strings.Library_Field_Location, LibraryAvailabilityResolver.ResolvePath(local)
-                        + (local.IsZip ? " → " + local.RelativePath : string.Empty));
+                    var localPath = LibraryAvailabilityResolver.ResolvePath(local) + (local.IsZip ? " → " + local.RelativePath : string.Empty);
+                    Add(source, Strings.Library_Field_Location, localPath, mono: true, copy: localPath);
                     if (local.UpdateRelativePaths.Count > 0)
-                        Add(Strings.Library_Field_Updates, local.UpdateRelativePaths.Count.ToString(c));
+                        Add(source, Strings.Library_Field_Updates, local.UpdateRelativePaths.Count.ToString(c));
                     break;
                 case RemoteItemLocation remote:
-                    Add(Strings.Library_Field_Download, remote.Uri.AbsoluteUri);
-                    Add(Strings.Library_Field_Size, remote.SizeBytes is { } size ? FormatBytes(size) : null);
+                    Add(source, Strings.Library_Field_Download, ShortUrl(remote.Uri), mono: true, copy: remote.Uri.AbsoluteUri);
+                    Add(source, Strings.Library_Field_Size, remote.SizeBytes is { } size ? FormatBytes(size) : null);
+                    if (DownloadStatus is { State: LibraryDownloadItemState.Failed, Error: { } error })
+                        Add(source, Strings.Library_Field_LastDownload, string.Format(c, Strings.Library_LastDownloadFailedFormat, error));
                     break;
             }
 
             foreach (var (key, value) in Item.Properties.OrderBy(p => p.Key, StringComparer.Ordinal))
-                Add(key, value);
+            {
+                if (key != "notForNavigation")
+                    Add(source, PropertyLabel(key), value);
+            }
 
-            return rows;
+            return new[]
+            {
+                new LibraryDetailGroup(Strings.Library_Group_Product, product),
+                new LibraryDetailGroup(Strings.Library_Group_Coverage, coverage),
+                new LibraryDetailGroup(Strings.Library_Group_Source, source),
+            }.Where(g => g.Fields.Count > 0).ToArray();
         }
+    }
+
+    /// <summary>"S-57 · ENC cell", "S-101 · Electronic Navigational Chart (2.0.0)".</summary>
+    private string ProductText()
+    {
+        var name = Item.ProductSpec == "S-57" ? Strings.Library_Product_S57 : Strings.SpecDisplayName(Item.ProductSpec);
+        var text = name is null ? Item.ProductSpec : $"{Item.ProductSpec} · {name}";
+        return Item.ProductSpecVersion is { } version ? $"{text} ({version})" : text;
+    }
+
+    /// <summary>"ienccloud.us · U37IL257.zip": the host and file of a download URL.</summary>
+    internal static string ShortUrl(Uri uri)
+    {
+        var file = Path.GetFileName(uri.AbsolutePath);
+        return string.IsNullOrEmpty(file) ? uri.Host : $"{uri.Host} · {Uri.UnescapeDataString(file)}";
+    }
+
+    /// <summary>A readable label for a property key: curated, else the camelCase key split into words.</summary>
+    internal static string PropertyLabel(string key)
+    {
+        if (Strings.LibraryPropertyLabel(key) is { } label)
+            return label;
+
+        var words = new System.Text.StringBuilder(key.Length + 4);
+        for (var i = 0; i < key.Length; i++)
+        {
+            var ch = key[i];
+            if (i == 0)
+                words.Append(char.ToUpperInvariant(ch));
+            else if (char.IsUpper(ch) && !char.IsUpper(key[i - 1]))
+                words.Append(' ').Append(char.ToLowerInvariant(ch));
+            else
+                words.Append(ch);
+        }
+
+        return words.ToString();
     }
 
     /// <summary>Formats a byte count for display (e.g. <c>1.6 MB</c>).</summary>

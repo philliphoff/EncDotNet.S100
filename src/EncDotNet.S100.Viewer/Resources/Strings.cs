@@ -39,6 +39,14 @@ internal static class Strings
             ? null
             : ResourceManager.GetString("SpecName_" + spec.Replace("-", string.Empty), Culture);
 
+    /// <summary>
+    /// Returns a readable label for a library item property key (e.g.
+    /// <c>riverMiles</c> → "River miles"), or <c>null</c> when the key has no
+    /// curated label. Lookup keys are <c>Library_Property_&lt;key&gt;</c>.
+    /// </summary>
+    public static string? LibraryPropertyLabel(string key) =>
+        string.IsNullOrEmpty(key) ? null : ResourceManager.GetString("Library_Property_" + key, Culture);
+
     // Window
     public static string Window_Title => Get(nameof(Window_Title));
 
@@ -897,7 +905,6 @@ internal static class Strings
     public static string Library_IndexedAtFormat => Get(nameof(Library_IndexedAtFormat));
     public static string Library_ItemCountFormat => Get(nameof(Library_ItemCountFormat));
     public static string Library_NewCollection => Get(nameof(Library_NewCollection));
-    public static string Library_NoaaAll => Get(nameof(Library_NoaaAll));
     public static string Library_NoaaChooseScope => Get(nameof(Library_NoaaChooseScope));
     public static string Library_NoaaClearSelection => Get(nameof(Library_NoaaClearSelection));
     public static string Library_NoaaDistricts => Get(nameof(Library_NoaaDistricts));
@@ -940,7 +947,6 @@ internal static class Strings
     public static string Library_UsaceRivers => Get(nameof(Library_UsaceRivers));
     public static string Library_AddUsaceTitle => Get(nameof(Library_AddUsaceTitle));
     public static string Library_UsaceFeed => Get(nameof(Library_UsaceFeed));
-    public static string Library_UsaceAll => Get(nameof(Library_UsaceAll));
     public static string Menu_AddLibraryOnlineCatalogue => Get(nameof(Menu_AddLibraryOnlineCatalogue));
     public static string Library_DirectoryTitle => Get(nameof(Library_DirectoryTitle));
     public static string Library_DirectoryDescription => Get(nameof(Library_DirectoryDescription));
@@ -959,7 +965,6 @@ internal static class Strings
     public static string Library_CommunitySearchWatermark => Get(nameof(Library_CommunitySearchWatermark));
     public static string Library_CommunitySelectionAllFormat => Get(nameof(Library_CommunitySelectionAllFormat));
     public static string Library_CommunitySelectionFormat => Get(nameof(Library_CommunitySelectionFormat));
-    public static string Library_CommunityAll => Get(nameof(Library_CommunityAll));
     public static string Library_PublishedFormat => Get(nameof(Library_PublishedFormat));
     public static string Library_DirectoryAddUrl => Get(nameof(Library_DirectoryAddUrl));
     public static string Library_DirectoryUrlWatermark => Get(nameof(Library_DirectoryUrlWatermark));
@@ -970,9 +975,114 @@ internal static class Strings
     public static string Library_DirectoryUrlS100 => Get(nameof(Library_DirectoryUrlS100));
     public static string Tooltip_RemoveOnlineCatalogue => Get(nameof(Tooltip_RemoveOnlineCatalogue));
     public static string Library_FeedProducts => Get(nameof(Library_FeedProducts));
-    public static string Library_FeedAll => Get(nameof(Library_FeedAll));
     public static string Library_FeedSelectionAllFormat => Get(nameof(Library_FeedSelectionAllFormat));
     public static string Library_FeedSelectionFormat => Get(nameof(Library_FeedSelectionFormat));
     public static string Library_FeedFacetDetailFormat => Get(nameof(Library_FeedFacetDetailFormat));
     public static string Library_DirectoryUrlJson => Get(nameof(Library_DirectoryUrlJson));
+    public static string Library_Tag_EditionAvailableFormat => Get(nameof(Library_Tag_EditionAvailableFormat));
+    public static string Library_Tag_EditionUpdateAvailableFormat => Get(nameof(Library_Tag_EditionUpdateAvailableFormat));
+    public static string Library_Tag_Queued => Get(nameof(Library_Tag_Queued));
+    public static string Library_Tag_FailedRetry => Get(nameof(Library_Tag_FailedRetry));
+    public static string Library_Tag_Package => Get(nameof(Library_Tag_Package));
+    public static string Menu_AddLibrarySharedFeed => Get(nameof(Menu_AddLibrarySharedFeed));
+    public static string Library_AddMenu_ThisComputer => Get(nameof(Library_AddMenu_ThisComputer));
+    public static string Library_AddMenu_Online => Get(nameof(Library_AddMenu_Online));
+    public static string Library_AddMenu_AnotherComputer => Get(nameof(Library_AddMenu_AnotherComputer));
+    public static string Library_AddButton => Get(nameof(Library_AddButton));
+    public static string Menu_LibraryRefresh => Get(nameof(Menu_LibraryRefresh));
+    public static string Menu_LibraryRefreshAll => Get(nameof(Menu_LibraryRefreshAll));
+    public static string Menu_LibraryRename => Get(nameof(Menu_LibraryRename));
+    public static string Menu_LibraryKeep => Get(nameof(Menu_LibraryKeep));
+    public static string Menu_LibraryRemove => Get(nameof(Menu_LibraryRemove));
+    public static string Tooltip_LibraryMore => Get(nameof(Tooltip_LibraryMore));
+    public static string Library_SharedFeedTitle => Get(nameof(Library_SharedFeedTitle));
+    public static string Library_SharedFeedDescription => Get(nameof(Library_SharedFeedDescription));
+    public static string Library_SharedFeedCommand => Get(nameof(Library_SharedFeedCommand));
+    public static string Library_SharedFeedHint => Get(nameof(Library_SharedFeedHint));
+    public static string Library_SharedFeedUrlWatermark => Get(nameof(Library_SharedFeedUrlWatermark));
+    public static string Library_SharedFeedChecking => Get(nameof(Library_SharedFeedChecking));
+    public static string Library_SharedFeedInvalid => Get(nameof(Library_SharedFeedInvalid));
+    public static string Library_SharedFeedNotAFeed => Get(nameof(Library_SharedFeedNotAFeed));
+    public static string Library_SharedFeedUnreachableFormat => Get(nameof(Library_SharedFeedUnreachableFormat));
+    public static string Button_Connect => Get(nameof(Button_Connect));
+    public static string Library_State_All => Get(nameof(Library_State_All));
+    public static string Library_State_Local => Get(nameof(Library_State_Local));
+    public static string Library_State_Online => Get(nameof(Library_State_Online));
+    public static string Library_State_Updates => Get(nameof(Library_State_Updates));
+    public static string Tooltip_LibraryFilterOptions => Get(nameof(Tooltip_LibraryFilterOptions));
+    public static string Library_Group_Product => Get(nameof(Library_Group_Product));
+    public static string Library_Group_Coverage => Get(nameof(Library_Group_Coverage));
+    public static string Library_Group_Source => Get(nameof(Library_Group_Source));
+    public static string Library_Field_Collection => Get(nameof(Library_Field_Collection));
+    public static string Library_Product_S57 => Get(nameof(Library_Product_S57));
+    public static string Library_EditionUpdateLongFormat => Get(nameof(Library_EditionUpdateLongFormat));
+    public static string Library_EditionLongFormat => Get(nameof(Library_EditionLongFormat));
+    public static string Library_StateSizeFormat => Get(nameof(Library_StateSizeFormat));
+    public static string Button_Download => Get(nameof(Button_Download));
+    public static string Button_ZoomTo => Get(nameof(Button_ZoomTo));
+    public static string Button_Load => Get(nameof(Button_Load));
+    public static string Button_LoadAfterDownload => Get(nameof(Button_LoadAfterDownload));
+    public static string Tooltip_CopyValue => Get(nameof(Tooltip_CopyValue));
+    public static string Library_Property_river => Get(nameof(Library_Property_river));
+    public static string Library_Property_riverMiles => Get(nameof(Library_Property_riverMiles));
+    public static string Library_Property_states => Get(nameof(Library_Property_states));
+    public static string Library_Property_coastGuardDistricts => Get(nameof(Library_Property_coastGuardDistricts));
+    public static string Library_Property_regions => Get(nameof(Library_Property_regions));
+    public static string Library_Property_producingAgency => Get(nameof(Library_Property_producingAgency));
+    public static string Library_Property_intendedUsage => Get(nameof(Library_Property_intendedUsage));
+    public static string Library_Property_package => Get(nameof(Library_Property_package));
+    public static string Library_Property_packageTitle => Get(nameof(Library_Property_packageTitle));
+    public static string Library_Property_encodingFormat => Get(nameof(Library_Property_encodingFormat));
+    public static string Library_Property_purpose => Get(nameof(Library_Property_purpose));
+    public static string Library_Property_timeStart => Get(nameof(Library_Property_timeStart));
+    public static string Library_Property_timeEnd => Get(nameof(Library_Property_timeEnd));
+    public static string Library_Property_classification => Get(nameof(Library_Property_classification));
+    public static string Library_Property_dataProtection => Get(nameof(Library_Property_dataProtection));
+    public static string Library_Property_distributionStatus => Get(nameof(Library_Property_distributionStatus));
+    public static string Library_Property_serviceStatus => Get(nameof(Library_Property_serviceStatus));
+    public static string Library_StatusLine_FailedFormat => Get(nameof(Library_StatusLine_FailedFormat));
+    public static string Library_StatusLine_ProblemsFormat => Get(nameof(Library_StatusLine_ProblemsFormat));
+    public static string Library_StatusLine_Session => Get(nameof(Library_StatusLine_Session));
+    public static string Library_StatusLine_ReachableFormat => Get(nameof(Library_StatusLine_ReachableFormat));
+    public static string Library_StatusLine_UnreachableFormat => Get(nameof(Library_StatusLine_UnreachableFormat));
+    public static string Library_StatusLine_UnreachableNoCopyFormat => Get(nameof(Library_StatusLine_UnreachableNoCopyFormat));
+    public static string Library_StatusLine_AccessDenied => Get(nameof(Library_StatusLine_AccessDenied));
+    public static string Library_StatusLine_DownloadingFormat => Get(nameof(Library_StatusLine_DownloadingFormat));
+    public static string Library_AgeMinutesFormat => Get(nameof(Library_AgeMinutesFormat));
+    public static string Library_AgeHoursFormat => Get(nameof(Library_AgeHoursFormat));
+    public static string Library_AgeDaysFormat => Get(nameof(Library_AgeDaysFormat));
+    public static string Library_LocationHitsFormat => Get(nameof(Library_LocationHitsFormat));
+    public static string Library_LocationHitsOne => Get(nameof(Library_LocationHitsOne));
+    public static string Library_LocationCover => Get(nameof(Library_LocationCover));
+    public static string Library_LocationCovers => Get(nameof(Library_LocationCovers));
+    public static string Library_LocationIndexFormat => Get(nameof(Library_LocationIndexFormat));
+    public static string Library_LocationNext => Get(nameof(Library_LocationNext));
+    public static string Library_BulkToDownloadFormat => Get(nameof(Library_BulkToDownloadFormat));
+    public static string Library_BulkNothing => Get(nameof(Library_BulkNothing));
+    public static string Library_BulkListedFormat => Get(nameof(Library_BulkListedFormat));
+    public static string Library_BulkScopeFiltered => Get(nameof(Library_BulkScopeFiltered));
+    public static string Library_BulkScopeAll => Get(nameof(Library_BulkScopeAll));
+    public static string Library_BulkAlreadyLocalFormat => Get(nameof(Library_BulkAlreadyLocalFormat));
+    public static string Library_BulkDownloadingFormat => Get(nameof(Library_BulkDownloadingFormat));
+    public static string Library_BulkOnPan => Get(nameof(Library_BulkOnPan));
+    public static string Library_DownloadProgressFormat => Get(nameof(Library_DownloadProgressFormat));
+    public static string Library_CancelDownload => Get(nameof(Library_CancelDownload));
+    public static string Library_Tag_Unpacked => Get(nameof(Library_Tag_Unpacked));
+    public static string Library_PackageHint => Get(nameof(Library_PackageHint));
+    public static string Library_PackagePublishedFormat => Get(nameof(Library_PackagePublishedFormat));
+    public static string Library_PackageGroupFormat => Get(nameof(Library_PackageGroupFormat));
+    public static string Toast_LibraryUnpackedTitle => Get(nameof(Toast_LibraryUnpackedTitle));
+    public static string Toast_LibraryUnpackedFormat => Get(nameof(Toast_LibraryUnpackedFormat));
+    public static string Toast_LibraryUnpackedManyFormat => Get(nameof(Toast_LibraryUnpackedManyFormat));
+    public static string Library_Field_Datasets => Get(nameof(Library_Field_Datasets));
+    public static string Menu_LibraryCopyUrl => Get(nameof(Menu_LibraryCopyUrl));
+    public static string Library_Quick_Folder => Get(nameof(Library_Quick_Folder));
+    public static string Library_Quick_FolderSub => Get(nameof(Library_Quick_FolderSub));
+    public static string Library_Quick_Online => Get(nameof(Library_Quick_Online));
+    public static string Library_Quick_OnlineSub => Get(nameof(Library_Quick_OnlineSub));
+    public static string Library_Quick_Feed => Get(nameof(Library_Quick_Feed));
+    public static string Library_Quick_FeedSub => Get(nameof(Library_Quick_FeedSub));
+    public static string Library_DropHint => Get(nameof(Library_DropHint));
+    public static string Library_Field_LastDownload => Get(nameof(Library_Field_LastDownload));
+    public static string Library_LastDownloadFailedFormat => Get(nameof(Library_LastDownloadFailedFormat));
 }

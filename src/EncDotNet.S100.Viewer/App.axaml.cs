@@ -155,7 +155,8 @@ public partial class App : Application
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
-            .Register<Views.CatalogueDirectoryDialogView, ViewModels.CatalogueDirectoryDialogViewModel>();
+            .Register<Views.CatalogueDirectoryDialogView, ViewModels.CatalogueDirectoryDialogViewModel>()
+            .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
         // wraps Mapsui's style registry. The renderer package owns the required
@@ -462,12 +463,16 @@ public partial class App : Application
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>());
         });
         services.AddSingleton<Func<CatalogueDirectoryDialogViewModel>>(sp => sp.GetRequiredService<CatalogueDirectoryDialogViewModel>);
+        services.AddTransient(sp => new SharedFeedDialogViewModel(
+            sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>()));
+        services.AddSingleton<Func<SharedFeedDialogViewModel>>(sp => sp.GetRequiredService<SharedFeedDialogViewModel>);
         services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(
             sp.GetRequiredService<Library.LibraryService>(),
             sp.GetRequiredService<IFileDialogService>(),
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
             sp.GetRequiredService<Func<CatalogueDirectoryDialogViewModel>>(),
+            sp.GetRequiredService<Func<SharedFeedDialogViewModel>>(),
             sp.GetService<IViewerUiControllerAccessor>()));
 
         // Feature-catalogue parsing is shared across every dataset load
@@ -861,7 +866,17 @@ public partial class App : Application
             sp.GetService<IUrlOpener>()));
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
-        services.AddSingleton<LibraryPanelViewModel>();
+        services.AddSingleton(sp =>
+        {
+            // A shared feed's status line reports whether its server was reachable.
+            var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
+            return new LibraryPanelViewModel(
+                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<ILibraryImporter>(),
+                sp.GetRequiredService<Library.ILibraryLoader>(),
+                sp.GetRequiredService<Library.ILibraryDownloader>(),
+                source => source is EncDotNet.S100.Collections.S100FeedSource feed ? feeds.HealthOf(feed.FeedUri) : null);
+        });
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(

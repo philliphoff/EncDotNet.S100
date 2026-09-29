@@ -54,6 +54,7 @@ public sealed class FeedServeTests : IDisposable
 
         var first = await publisher.GetAsync();
         Assert.Equal("published", first.Document.Title);
+        Assert.Equal(Environment.MachineName, first.Document.Machine);
         Assert.Contains(first.Document.Items, i => i.Name == "US4OH1MK");
         Assert.Contains(first.Document.Items, i => i.ProductSpec == "S-101");
 

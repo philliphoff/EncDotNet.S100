@@ -31,6 +31,7 @@ compact; it is shown indented here:
   "title": "Ohio charts",
   "generatedAt": "2026-09-25T23:27:38.364377+00:00",
   "fingerprint": "local-v1:F053E74084A10F99E7ECB1E2AA827E5778C8B8A962D573D95EDB65B2D1E9F2B4",
+  "machine": "bridge-pc",
   "items": [
     {
       "key": "ENC_ROOT/US4OH1MK",
@@ -76,6 +77,8 @@ compact; it is shown indented here:
 
 - **Header fields:**
   - `format` must be `encdotnet-s100-feed`.
+  - `machine` (optional) is the publishing computer's name. `s100 feed serve`
+    sets it, and the viewer names a shared feed after it.
   - A reader rejects a `version` newer than it knows.
 - **`fingerprint`:** changes whenever the published data changes. A server
   uses it as the HTTP `ETag`, so readers can revalidate with conditional

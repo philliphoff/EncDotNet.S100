@@ -208,6 +208,30 @@ internal sealed class LibraryService : IDisposable
         return true;
     }
 
+    /// <summary>Renames a source (its display name).</summary>
+    public bool RenameSource(Guid collectionId, Guid sourceId, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        lock (_gate)
+        {
+            var index = _collections.FindIndex(c => c.Id == collectionId);
+            if (index < 0)
+                return false;
+            var sources = _collections[index].Sources.ToList();
+            var at = sources.FindIndex(s => s.Id == sourceId);
+            if (at < 0)
+                return false;
+            sources[at] = sources[at] with { DisplayName = name.Trim() };
+            _collections[index] = _collections[index] with { Sources = sources };
+            _snapshot = null;
+        }
+
+        SaveStore();
+        RaiseChanged();
+        return true;
+    }
+
     /// <summary>
     /// Removes a collection and its cached indexes. The referenced data is
     /// never touched.

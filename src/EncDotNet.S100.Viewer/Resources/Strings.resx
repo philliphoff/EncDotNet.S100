@@ -2423,10 +2423,10 @@
     <value>Folder…</value>
   </data>
   <data name="Menu_AddLibraryExchangeSetZip" xml:space="preserve">
-    <value>Exchange Set ZIP…</value>
+    <value>Exchange set or ZIP…</value>
   </data>
   <data name="Menu_AddLibraryS128" xml:space="preserve">
-    <value>S-128 Catalogue…</value>
+    <value>S-128 catalogue…</value>
   </data>
   <data name="Tooltip_AddToLibrary" xml:space="preserve">
     <value>Add a folder, exchange set, online feed or S-128 catalogue</value>
@@ -2462,16 +2462,16 @@
     <value>{0} and {1} more</value>
   </data>
   <data name="Library_Availability_Listed" xml:space="preserve">
-    <value>LISTED</value>
+    <value>Listed</value>
   </data>
   <data name="Library_Availability_Local" xml:space="preserve">
-    <value>LOCAL</value>
+    <value>Local</value>
   </data>
   <data name="Library_Availability_Missing" xml:space="preserve">
-    <value>MISSING</value>
+    <value>Missing</value>
   </data>
   <data name="Library_Availability_Online" xml:space="preserve">
-    <value>ONLINE</value>
+    <value>Online</value>
   </data>
   <data name="Library_BandFormat" xml:space="preserve">
     <value>Band {0}</value>
@@ -2489,10 +2489,10 @@
     <value>Ed {0} Upd {1}</value>
   </data>
   <data name="Library_EmptyTitle" xml:space="preserve">
-    <value>No collections yet</value>
+    <value>Your library is empty</value>
   </data>
   <data name="Library_EmptyDescription" xml:space="preserve">
-    <value>Add folders of exchange sets and datasets, or an online feed such as NOAA's ENCs. The library indexes what they contain without loading them.</value>
+    <value>Add chart data to browse it and see its coverage on the map. Only an index is kept. Nothing is loaded, copied or downloaded until you ask.</value>
   </data>
   <data name="Library_ExistingCollection" xml:space="preserve">
     <value>Existing collection</value>
@@ -2549,22 +2549,19 @@
     <value>Update files</value>
   </data>
   <data name="Library_FilterWatermark" xml:space="preserve">
-    <value>Filter by name, title, product or state</value>
+    <value>Filter by name, title, product…</value>
   </data>
   <data name="Library_FilteredItemCountFormat" xml:space="preserve">
-    <value>{0:N0} of {1:N0} datasets</value>
+    <value>{0:N0} of {1:N0}</value>
   </data>
   <data name="Library_IndexedAtFormat" xml:space="preserve">
     <value>{0:N0} datasets, indexed {1:g}</value>
   </data>
   <data name="Library_ItemCountFormat" xml:space="preserve">
-    <value>{0:N0} datasets</value>
+    <value>{0:N0}</value>
   </data>
   <data name="Library_NewCollection" xml:space="preserve">
     <value>New collection</value>
-  </data>
-  <data name="Library_NoaaAll" xml:space="preserve">
-    <value>All ENCs</value>
   </data>
   <data name="Library_NoaaChooseScope" xml:space="preserve">
     <value>Include cells in (none selected = all)</value>
@@ -2609,13 +2606,13 @@
     <value>Session (loaded S-128)</value>
   </data>
   <data name="Library_ShowCancelled" xml:space="preserve">
-    <value>Show cancelled</value>
+    <value>Include cancelled</value>
   </data>
   <data name="Library_Status_Failed" xml:space="preserve">
     <value>failed</value>
   </data>
   <data name="Library_Status_Indexing" xml:space="preserve">
-    <value>indexing…</value>
+    <value>Indexing…</value>
   </data>
   <data name="Library_Status_Pending" xml:space="preserve">
     <value>…</value>
@@ -2633,10 +2630,10 @@
     <value>Show the selected collection again</value>
   </data>
   <data name="Library_Availability_Deferred" xml:space="preserve">
-    <value>ON PAN</value>
+    <value>On pan</value>
   </data>
   <data name="Library_Availability_Loaded" xml:space="preserve">
-    <value>LOADED</value>
+    <value>Loaded</value>
   </data>
   <data name="Library_LoadAsYouPan" xml:space="preserve">
     <value>Load as you pan</value>
@@ -2657,10 +2654,10 @@
     <value>{0:N0} datasets will load as they come into view; {1:N0} could not be opened (online, missing or catalogue-only).</value>
   </data>
   <data name="Library_Availability_Outdated" xml:space="preserve">
-    <value>UPDATE</value>
+    <value>Update available</value>
   </data>
   <data name="Library_DownloadListedFormat" xml:space="preserve">
-    <value>Download {0:N0} ({1})</value>
+    <value>Download {0:N0}</value>
   </data>
   <data name="Tooltip_DownloadListed" xml:space="preserve">
     <value>Download the listed online datasets to this computer</value>
@@ -2669,13 +2666,13 @@
     <value>Download this dataset and load it</value>
   </data>
   <data name="Toast_LibraryDownloadingTitle" xml:space="preserve">
-    <value>Downloading charts</value>
+    <value>Downloading datasets</value>
   </data>
   <data name="Toast_LibraryDownloadingFormat" xml:space="preserve">
-    <value>{0:N0} of {1:N0} cells · {2}</value>
+    <value>{0:N0} of {1:N0} · {2}</value>
   </data>
   <data name="Toast_LibraryDownloadedTitle" xml:space="preserve">
-    <value>Charts downloaded</value>
+    <value>Datasets downloaded</value>
   </data>
   <data name="Toast_LibraryDownloadCancelledTitle" xml:space="preserve">
     <value>Download cancelled</value>
@@ -2692,11 +2689,8 @@
   <data name="Library_UsaceFeed" xml:space="preserve">
     <value>USACE Inland ENC</value>
   </data>
-  <data name="Library_UsaceAll" xml:space="preserve">
-    <value>All rivers</value>
-  </data>
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
-    <value>Online Catalogue…</value>
+    <value>Browse online catalogues…</value>
   </data>
   <data name="Library_DirectoryTitle" xml:space="preserve">
     <value>Add Online Catalogue</value>
@@ -2738,19 +2732,16 @@
     <value>— over a year old; it may no longer be maintained.</value>
   </data>
   <data name="Library_CommunityCharts" xml:space="preserve">
-    <value>Downloads</value>
+    <value>Packages</value>
   </data>
   <data name="Library_CommunitySearchWatermark" xml:space="preserve">
-    <value>Filter downloads</value>
+    <value>Filter packages</value>
   </data>
   <data name="Library_CommunitySelectionAllFormat" xml:space="preserve">
-    <value>All {0:N0} downloads · sizes unknown</value>
+    <value>All {0:N0} packages · sizes unknown</value>
   </data>
   <data name="Library_CommunitySelectionFormat" xml:space="preserve">
-    <value>{0:N0} downloads · sizes unknown</value>
-  </data>
-  <data name="Library_CommunityAll" xml:space="preserve">
-    <value>All downloads</value>
+    <value>{0:N0} packages · sizes unknown</value>
   </data>
   <data name="Library_PublishedFormat" xml:space="preserve">
     <value>Published {0}</value>
@@ -2759,7 +2750,7 @@
     <value>Add URL</value>
   </data>
   <data name="Library_DirectoryUrlWatermark" xml:space="preserve">
-    <value>Or add a catalogue or feed by URL (https://…/catalogue.xml, http://…/feed.json)</value>
+    <value>Or add a catalogue by URL (https://…/catalogue.xml)</value>
   </data>
   <data name="Library_DirectoryUrlChecking" xml:space="preserve">
     <value>Checking the catalogue…</value>
@@ -2782,9 +2773,6 @@
   <data name="Library_FeedProducts" xml:space="preserve">
     <value>Products</value>
   </data>
-  <data name="Library_FeedAll" xml:space="preserve">
-    <value>All products</value>
-  </data>
   <data name="Library_FeedSelectionAllFormat" xml:space="preserve">
     <value>All {0:N0} datasets · {1}</value>
   </data>
@@ -2796,5 +2784,323 @@
   </data>
   <data name="Library_DirectoryUrlJson" xml:space="preserve">
     <value>Not a supported catalogue: JSON that is not an S-100 feed.</value>
+  </data>
+  <data name="Library_Tag_EditionAvailableFormat" xml:space="preserve">
+    <value>Ed {0} available</value>
+  </data>
+  <data name="Library_Tag_EditionUpdateAvailableFormat" xml:space="preserve">
+    <value>Ed {0} Upd {1} available</value>
+  </data>
+  <data name="Library_Tag_Queued" xml:space="preserve">
+    <value>Queued</value>
+  </data>
+  <data name="Library_Tag_FailedRetry" xml:space="preserve">
+    <value>Failed · retry</value>
+  </data>
+  <data name="Library_Tag_Package" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="Menu_AddLibrarySharedFeed" xml:space="preserve">
+    <value>Connect to a shared feed…</value>
+  </data>
+  <data name="Library_AddMenu_ThisComputer" xml:space="preserve">
+    <value>On this computer</value>
+  </data>
+  <data name="Library_AddMenu_Online" xml:space="preserve">
+    <value>Online</value>
+  </data>
+  <data name="Library_AddMenu_AnotherComputer" xml:space="preserve">
+    <value>Another computer</value>
+  </data>
+  <data name="Library_AddButton" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Menu_LibraryRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Menu_LibraryRefreshAll" xml:space="preserve">
+    <value>Refresh all</value>
+  </data>
+  <data name="Menu_LibraryRename" xml:space="preserve">
+    <value>Rename…</value>
+  </data>
+  <data name="Menu_LibraryKeep" xml:space="preserve">
+    <value>Keep in library</value>
+  </data>
+  <data name="Menu_LibraryRemove" xml:space="preserve">
+    <value>Remove from library</value>
+  </data>
+  <data name="Tooltip_LibraryMore" xml:space="preserve">
+    <value>More actions</value>
+  </data>
+  <data name="Library_SharedFeedTitle" xml:space="preserve">
+    <value>Connect to a shared feed</value>
+  </data>
+  <data name="Library_SharedFeedDescription" xml:space="preserve">
+    <value>Use datasets served from another computer. On that computer, run:</value>
+  </data>
+  <data name="Library_SharedFeedCommand" xml:space="preserve">
+    <value>s100 feed serve &lt;folder&gt; --host 0.0.0.0</value>
+  </data>
+  <data name="Library_SharedFeedHint" xml:space="preserve">
+    <value>Then paste the URL it prints. The feed is checked before it is added.</value>
+  </data>
+  <data name="Library_SharedFeedUrlWatermark" xml:space="preserve">
+    <value>http://&lt;computer&gt;:8100/&lt;token&gt;/feed.json</value>
+  </data>
+  <data name="Library_SharedFeedChecking" xml:space="preserve">
+    <value>Connecting…</value>
+  </data>
+  <data name="Library_SharedFeedInvalid" xml:space="preserve">
+    <value>Enter the http or https URL that s100 feed serve printed.</value>
+  </data>
+  <data name="Library_SharedFeedNotAFeed" xml:space="preserve">
+    <value>That address answered, but it is not an S-100 feed.</value>
+  </data>
+  <data name="Library_SharedFeedUnreachableFormat" xml:space="preserve">
+    <value>Could not reach the feed: {0}</value>
+  </data>
+  <data name="Button_Connect" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Library_State_All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Library_State_Local" xml:space="preserve">
+    <value>Local</value>
+  </data>
+  <data name="Library_State_Online" xml:space="preserve">
+    <value>Online</value>
+  </data>
+  <data name="Library_State_Updates" xml:space="preserve">
+    <value>Updates</value>
+  </data>
+  <data name="Tooltip_LibraryFilterOptions" xml:space="preserve">
+    <value>Filter options</value>
+  </data>
+  <data name="Library_Group_Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Library_Group_Coverage" xml:space="preserve">
+    <value>Coverage</value>
+  </data>
+  <data name="Library_Group_Source" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Library_Field_Collection" xml:space="preserve">
+    <value>Collection</value>
+  </data>
+  <data name="Library_Product_S57" xml:space="preserve">
+    <value>ENC cell</value>
+  </data>
+  <data name="Library_EditionUpdateLongFormat" xml:space="preserve">
+    <value>Ed {0} · Update {1}</value>
+  </data>
+  <data name="Library_EditionLongFormat" xml:space="preserve">
+    <value>Ed {0}</value>
+  </data>
+  <data name="Library_StateSizeFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Button_Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Button_ZoomTo" xml:space="preserve">
+    <value>Zoom to</value>
+  </data>
+  <data name="Button_Load" xml:space="preserve">
+    <value>Load</value>
+  </data>
+  <data name="Button_LoadAfterDownload" xml:space="preserve">
+    <value>Load after download</value>
+  </data>
+  <data name="Tooltip_CopyValue" xml:space="preserve">
+    <value>Click to copy</value>
+  </data>
+  <data name="Library_Property_river" xml:space="preserve">
+    <value>River</value>
+  </data>
+  <data name="Library_Property_riverMiles" xml:space="preserve">
+    <value>River miles</value>
+  </data>
+  <data name="Library_Property_states" xml:space="preserve">
+    <value>States</value>
+  </data>
+  <data name="Library_Property_coastGuardDistricts" xml:space="preserve">
+    <value>Coast Guard districts</value>
+  </data>
+  <data name="Library_Property_regions" xml:space="preserve">
+    <value>Regions</value>
+  </data>
+  <data name="Library_Property_producingAgency" xml:space="preserve">
+    <value>Producing agency</value>
+  </data>
+  <data name="Library_Property_intendedUsage" xml:space="preserve">
+    <value>Intended usage</value>
+  </data>
+  <data name="Library_Property_package" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="Library_Property_packageTitle" xml:space="preserve">
+    <value>Package title</value>
+  </data>
+  <data name="Library_Property_encodingFormat" xml:space="preserve">
+    <value>Encoding format</value>
+  </data>
+  <data name="Library_Property_purpose" xml:space="preserve">
+    <value>Purpose</value>
+  </data>
+  <data name="Library_Property_timeStart" xml:space="preserve">
+    <value>Valid from</value>
+  </data>
+  <data name="Library_Property_timeEnd" xml:space="preserve">
+    <value>Valid to</value>
+  </data>
+  <data name="Library_Property_classification" xml:space="preserve">
+    <value>Classification</value>
+  </data>
+  <data name="Library_Property_dataProtection" xml:space="preserve">
+    <value>Data protection</value>
+  </data>
+  <data name="Library_Property_distributionStatus" xml:space="preserve">
+    <value>Distribution status</value>
+  </data>
+  <data name="Library_Property_serviceStatus" xml:space="preserve">
+    <value>Service status</value>
+  </data>
+  <data name="Library_StatusLine_FailedFormat" xml:space="preserve">
+    <value>Failed · {0}</value>
+  </data>
+  <data name="Library_StatusLine_ProblemsFormat" xml:space="preserve">
+    <value>{0:N0} problems</value>
+  </data>
+  <data name="Library_StatusLine_Session" xml:space="preserve">
+    <value>Temporary · Pin to keep</value>
+  </data>
+  <data name="Library_StatusLine_ReachableFormat" xml:space="preserve">
+    <value>Reachable · {0}</value>
+  </data>
+  <data name="Library_StatusLine_UnreachableFormat" xml:space="preserve">
+    <value>Unreachable since {0:t} · cached index, {1} old</value>
+  </data>
+  <data name="Library_StatusLine_UnreachableNoCopyFormat" xml:space="preserve">
+    <value>Unreachable · {0}</value>
+  </data>
+  <data name="Library_StatusLine_AccessDenied" xml:space="preserve">
+    <value>Access denied · paste the new URL the server printed</value>
+  </data>
+  <data name="Library_StatusLine_DownloadingFormat" xml:space="preserve">
+    <value>Downloading {0:N0} of {1:N0} · {2} left</value>
+  </data>
+  <data name="Library_AgeMinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="Library_AgeHoursFormat" xml:space="preserve">
+    <value>{0} h</value>
+  </data>
+  <data name="Library_AgeDaysFormat" xml:space="preserve">
+    <value>{0} days</value>
+  </data>
+  <data name="Library_LocationHitsFormat" xml:space="preserve">
+    <value>{0:N0} datasets</value>
+  </data>
+  <data name="Library_LocationHitsOne" xml:space="preserve">
+    <value>1 dataset</value>
+  </data>
+  <data name="Library_LocationCover" xml:space="preserve">
+    <value>cover this point</value>
+  </data>
+  <data name="Library_LocationCovers" xml:space="preserve">
+    <value>covers this point</value>
+  </data>
+  <data name="Library_LocationIndexFormat" xml:space="preserve">
+    <value>{0:N0} / {1:N0}</value>
+  </data>
+  <data name="Library_LocationNext" xml:space="preserve">
+    <value>Next ›</value>
+  </data>
+  <data name="Library_BulkToDownloadFormat" xml:space="preserve">
+    <value>{0:N0} to download · {1}</value>
+  </data>
+  <data name="Library_BulkNothing" xml:space="preserve">
+    <value>Nothing to download</value>
+  </data>
+  <data name="Library_BulkListedFormat" xml:space="preserve">
+    <value>{0:N0} datasets listed</value>
+  </data>
+  <data name="Library_BulkScopeFiltered" xml:space="preserve">
+    <value>Filtered set</value>
+  </data>
+  <data name="Library_BulkScopeAll" xml:space="preserve">
+    <value>All listed datasets</value>
+  </data>
+  <data name="Library_BulkAlreadyLocalFormat" xml:space="preserve">
+    <value>{0} · {1:N0} already local</value>
+  </data>
+  <data name="Library_BulkDownloadingFormat" xml:space="preserve">
+    <value>Downloading {0:N0} of {1:N0} · {2:P0}</value>
+  </data>
+  <data name="Library_BulkOnPan" xml:space="preserve">
+    <value>On pan</value>
+  </data>
+  <data name="Library_DownloadProgressFormat" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="Library_CancelDownload" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Library_Tag_Unpacked" xml:space="preserve">
+    <value>Unpacked</value>
+  </data>
+  <data name="Library_PackageHint" xml:space="preserve">
+    <value>Holds several datasets. Coverage and contents show after download.</value>
+  </data>
+  <data name="Library_PackagePublishedFormat" xml:space="preserve">
+    <value>{0} · published {1}</value>
+  </data>
+  <data name="Library_PackageGroupFormat" xml:space="preserve">
+    <value>{0} · {1:N0} datasets</value>
+  </data>
+  <data name="Toast_LibraryUnpackedTitle" xml:space="preserve">
+    <value>Package unpacked</value>
+  </data>
+  <data name="Toast_LibraryUnpackedFormat" xml:space="preserve">
+    <value>Package unpacked into {0:N0} datasets.</value>
+  </data>
+  <data name="Toast_LibraryUnpackedManyFormat" xml:space="preserve">
+    <value>{0:N0} packages unpacked into {1:N0} datasets.</value>
+  </data>
+  <data name="Library_Field_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Menu_LibraryCopyUrl" xml:space="preserve">
+    <value>Copy URL</value>
+  </data>
+  <data name="Library_Quick_Folder" xml:space="preserve">
+    <value>Add a folder…</value>
+  </data>
+  <data name="Library_Quick_FolderSub" xml:space="preserve">
+    <value>Scanned recursively, referenced in place</value>
+  </data>
+  <data name="Library_Quick_Online" xml:space="preserve">
+    <value>Browse online catalogues…</value>
+  </data>
+  <data name="Library_Quick_OnlineSub" xml:space="preserve">
+    <value>NOAA, USACE, European inland lists</value>
+  </data>
+  <data name="Library_Quick_Feed" xml:space="preserve">
+    <value>Connect to a shared feed…</value>
+  </data>
+  <data name="Library_Quick_FeedSub" xml:space="preserve">
+    <value>Charts served from another computer</value>
+  </data>
+  <data name="Library_DropHint" xml:space="preserve">
+    <value>Or drop a folder, .zip or CATALOG file here</value>
+  </data>
+  <data name="Library_Field_LastDownload" xml:space="preserve">
+    <value>Last download</value>
+  </data>
+  <data name="Library_LastDownloadFailedFormat" xml:space="preserve">
+    <value>Failed: {0}</value>
   </data>
 </root>

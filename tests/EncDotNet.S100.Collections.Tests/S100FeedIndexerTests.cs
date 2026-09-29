@@ -65,6 +65,31 @@ public sealed class S100FeedIndexerTests : IDisposable
     }
 
     [Fact]
+    public async Task Health_records_whether_the_feed_was_reachable()
+    {
+        var server = new FeedServer(await FeedJsonAsync());
+        var feeds = new S100FeedIndexer(new HttpClient(server), _temp.Path, new FeedCacheOptions { RevalidationInterval = TimeSpan.Zero });
+        Assert.Null(feeds.HealthOf(FeedUri));
+
+        await feeds.GetFeedAsync(FeedUri);
+        Assert.True(feeds.HealthOf(FeedUri)!.IsReachable);
+
+        server.Down = true;
+        await feeds.GetFeedAsync(FeedUri);  // served from the cached copy
+        var failing = feeds.HealthOf(FeedUri)!;
+        Assert.False(failing.IsReachable);
+        Assert.NotNull(failing.CopyFetchedAt);
+        Assert.NotNull(failing.FailingSince);
+
+        await feeds.GetFeedAsync(FeedUri);
+        Assert.Equal(failing.FailingSince, feeds.HealthOf(FeedUri)!.FailingSince);  // the run of failures began earlier
+
+        server.Down = false;
+        await feeds.GetFeedAsync(FeedUri);
+        Assert.True(feeds.HealthOf(FeedUri)!.IsReachable);
+    }
+
+    [Fact]
     public async Task The_filter_selects_products_and_facets_count_them()
     {
         var server = new FeedServer(await FeedJsonAsync());
@@ -107,6 +132,10 @@ public sealed class S100FeedIndexerTests : IDisposable
             Assert.True(probe.IsJson);
         }
 
+        var named = CatalogueFormatDetector.Probe(new MemoryStream(
+            """{ "format": "encdotnet-s100-feed", "version": 1, "title": "charts", "items": [], "machine": "bridge-pc" }"""u8.ToArray()));
+        Assert.Equal("bridge-pc", named.Machine);
+
         var other = CatalogueFormatDetector.Probe(new MemoryStream("""{ "items": [1, 2], "format": "geojson" }"""u8.ToArray()));
         Assert.Null(other.Format);
         Assert.True(other.IsJson);
@@ -120,8 +149,13 @@ public sealed class S100FeedIndexerTests : IDisposable
     {
         private const string Tag = "\"v1\"";
 
+        public bool Down { get; set; }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (Down)
+                throw new HttpRequestException("Connection refused");
+
             if (request.Headers.IfNoneMatch.Any(t => t.Tag == Tag))
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotModified));
 

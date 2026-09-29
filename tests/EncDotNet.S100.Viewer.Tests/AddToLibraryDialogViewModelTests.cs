@@ -137,6 +137,20 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task An_unscoped_feed_source_is_named_after_the_catalogue()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
+        await vm.LoadCatalogAsync();
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<NoaaEncFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.True(source.Filter.IsUnscoped);
+        Assert.Equal("NOAA ENC", source.DisplayName);
+    }
+
+    [Fact]
     public void Noaa_feed_has_three_facet_groups()
     {
         var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
@@ -203,14 +217,14 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(AddToLibraryKind.CommunityFeed, vm.Kind);
         Assert.True(vm.IsSearchable);
-        Assert.Equal("Downloads", Assert.Single(vm.FacetGroups).Title);
+        Assert.Equal("Packages", Assert.Single(vm.FacetGroups).Title);
 
         await vm.LoadCatalogAsync();
 
         // The repeated entry is listed once.
         Assert.Equal(["Base1", "Base2", "XX5RIV01"], vm.Charts.Select(c => c.Value));
         Assert.Equal("Published 2024-06-12", vm.Charts[0].Detail);
-        Assert.StartsWith("All 3 downloads", vm.SelectionSummary);
+        Assert.StartsWith("All 3 packages", vm.SelectionSummary);
         Assert.Contains("2026-09-20", vm.CatalogueDateText);
 
         vm.ChartSearchText = "1750";
@@ -219,7 +233,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         vm.ChartSearchText = string.Empty;
 
         Assert.Equal(3, vm.Charts.Count);
-        Assert.StartsWith("1 downloads", vm.SelectionSummary);
+        Assert.StartsWith("1 packages", vm.SelectionSummary);
         Assert.Equal($"{known.Name} — River 1750 - 790 (Base2)", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);

@@ -14,11 +14,78 @@ namespace EncDotNet.S100.Viewer.Library;
 /// <param name="Cancelled">True when the user cancelled before every cell finished.</param>
 internal sealed record LibraryDownloadResult(int Downloaded, int Failed, bool Cancelled);
 
+/// <summary>Where one item stands in a download.</summary>
+internal enum LibraryDownloadItemState
+{
+    /// <summary>Waiting in a bulk download.</summary>
+    Queued,
+
+    /// <summary>Downloading now.</summary>
+    Running,
+
+    /// <summary>The last download failed (any existing copy is kept).</summary>
+    Failed,
+}
+
+/// <summary>One item's download status.</summary>
+/// <param name="State">Queued, running or failed.</param>
+/// <param name="BytesReceived">Bytes received so far (running).</param>
+/// <param name="TotalBytes">The download's size, if known.</param>
+/// <param name="Error">Why it failed (failed).</param>
+internal sealed record LibraryDownloadItemStatus(
+    LibraryDownloadItemState State, long BytesReceived = 0, long? TotalBytes = null, string? Error = null)
+{
+    /// <summary>The fraction received (0–1), when the size is known.</summary>
+    public double? Fraction => TotalBytes is > 0 and var total ? Math.Clamp(BytesReceived / (double)total, 0, 1) : null;
+}
+
+/// <summary>The running bulk download: how many items are done and how many bytes remain.</summary>
+/// <param name="Completed">Items downloaded.</param>
+/// <param name="Failed">Items that failed.</param>
+/// <param name="Total">Items in the batch.</param>
+/// <param name="BytesDone">Bytes received, including finished items.</param>
+/// <param name="BytesTotal">The batch's total size, as far as known.</param>
+internal sealed record LibraryDownloadProgress(int Completed, int Failed, int Total, long BytesDone, long BytesTotal)
+{
+    /// <summary>Items still to finish.</summary>
+    public int Remaining => Math.Max(0, Total - Completed - Failed);
+
+    /// <summary>Bytes still to receive.</summary>
+    public long BytesLeft => Math.Max(0, BytesTotal - BytesDone);
+
+    /// <summary>The fraction done (0–1), by bytes when sizes are known, else by items.</summary>
+    public double Fraction => BytesTotal > 0
+        ? Math.Clamp(BytesDone / (double)BytesTotal, 0, 1)
+        : Total == 0 ? 1 : (Completed + Failed) / (double)Total;
+}
+
 /// <summary>Downloads online library items and resolves their downloaded copies.</summary>
 internal interface ILibraryDownloader
 {
-    /// <summary>Raised when a download completes (a copy appeared or changed).</summary>
+    /// <summary>Raised when a download completes, fails or is cancelled (a copy appeared or changed).</summary>
     event EventHandler? Changed;
+
+    /// <summary>
+    /// Raised (throttled) as bytes arrive, so rows and the bulk bar can show
+    /// progress without re-resolving every item's availability.
+    /// </summary>
+    event EventHandler? ProgressChanged { add { } remove { } }
+
+    /// <summary>The running bulk download, or <see langword="null"/> when none is running.</summary>
+    LibraryDownloadProgress? Progress => null;
+
+    /// <summary>Where <paramref name="item"/> stands in a download, or <see langword="null"/> when it is not queued, running or failed.</summary>
+    LibraryDownloadItemStatus? StatusOf(CollectionItem item) => null;
+
+    /// <summary>Cancels the running bulk download.</summary>
+    void CancelAll()
+    {
+    }
+
+    /// <summary>Cancels <paramref name="item"/>'s download (queued or running).</summary>
+    void Cancel(CollectionItem item)
+    {
+    }
 
     /// <summary>
     /// Returns <paramref name="item"/> with a local location when it is an
@@ -46,9 +113,17 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     /// <summary>How many cells download at once.</summary>
     internal const int MaxConcurrentDownloads = 3;
 
+    /// <summary>How often, at most, <see cref="ProgressChanged"/> is raised.</summary>
+    internal static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
+
     private readonly Func<RemoteItemLocation, EncCellDownloader?> _downloaderFor;
     private readonly INotificationService? _notifications;
     private readonly ConcurrentDictionary<string, DownloadedCell?> _known = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, LibraryDownloadItemStatus> _status = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _itemCancellation = new(StringComparer.OrdinalIgnoreCase);
+    private CancellationTokenSource? _batchCancellation;
+    private LibraryDownloadProgress? _progress;
+    private long _lastProgressTicks;
 
     /// <summary>Creates a service that downloads every cell with <paramref name="downloader"/>.</summary>
     public LibraryDownloadService(EncCellDownloader downloader, INotificationService? notifications = null)
@@ -72,6 +147,25 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     }
 
     public event EventHandler? Changed;
+
+    public event EventHandler? ProgressChanged;
+
+    public LibraryDownloadProgress? Progress => Volatile.Read(ref _progress);
+
+    public LibraryDownloadItemStatus? StatusOf(CollectionItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return StatusKey(item) is { } key && _status.TryGetValue(key, out var status) ? status : null;
+    }
+
+    public void CancelAll() => Volatile.Read(ref _batchCancellation)?.Cancel();
+
+    public void Cancel(CollectionItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (StatusKey(item) is { } key && _itemCancellation.TryGetValue(key, out var cancellation))
+            cancellation.Cancel();
+    }
 
     public CollectionItem Localize(CollectionItem item)
     {
@@ -99,13 +193,25 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        // A package downloads once however many of its cells are asked for.
-        var toDownload = items.Where(CanDownload).DistinctBy(DownloadName, StringComparer.OrdinalIgnoreCase).ToArray();
+        // A package downloads once however many of its cells are asked for; the
+        // same name from different sources (folders) downloads once per source.
+        var toDownload = items.Where(CanDownload).DistinctBy(i => StatusKey(i)!, StringComparer.OrdinalIgnoreCase).ToArray();
         if (toDownload.Length == 0)
             return new LibraryDownloadResult(0, 0, false);
 
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var totalBytes = Math.Max(1, toDownload.Sum(i => ((RemoteItemLocation)i.Location).SizeBytes ?? 0));
+        Volatile.Write(ref _batchCancellation, cancellation);
+        var sizes = toDownload.Select(i => ((RemoteItemLocation)i.Location).SizeBytes ?? 0).ToArray();
+        var totalBytes = Math.Max(1, sizes.Sum());
+        foreach (var item in toDownload)
+        {
+            _status[StatusKey(item)!] = new LibraryDownloadItemStatus(
+                LibraryDownloadItemState.Queued, 0, ((RemoteItemLocation)item.Location).SizeBytes);
+        }
+
+        Volatile.Write(ref _progress, new LibraryDownloadProgress(0, 0, toDownload.Length, 0, sizes.Sum()));
+        RaiseChanged();
+
         var handle = _notifications?.Create(Strings.Toast_LibraryDownloadingTitle)
             .WithSeverity(NotificationSeverity.Info)
             .WithContent(Describe(0, toDownload.Length, totalBytes))
@@ -117,31 +223,68 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
         var done = 0;
         var failed = 0;
         long completedBytes = 0;
+        var received = new long[toDownload.Length];
         using var gate = new SemaphoreSlim(MaxConcurrentDownloads);
 
-        async Task DownloadOneAsync(CollectionItem item)
+        async Task DownloadOneAsync(CollectionItem item, int index)
         {
-            await gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
+            var key = StatusKey(item)!;
+            using var itemCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+            _itemCancellation[key] = itemCancellation;
             try
             {
-                var downloader = _downloaderFor((RemoteItemLocation)item.Location)!;
-                var cell = await downloader.DownloadAsync(item, cancellationToken: cancellation.Token).ConfigureAwait(false);
-                _known[Key(downloader, DownloadName(item))] = cell;
-                Interlocked.Increment(ref done);
+                await gate.WaitAsync(itemCancellation.Token).ConfigureAwait(false);
+                try
+                {
+                    var size = ((RemoteItemLocation)item.Location).SizeBytes;
+                    _status[key] = new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, 0, size);
+                    RaiseProgress(force: true);
+                    var bytes = new Progress<long>(n =>
+                    {
+                        Interlocked.Exchange(ref received[index], n);
+                        _status[key] = new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, n, size);
+                        UpdateProgress(done, failed, received, sizes);
+                        RaiseProgress(force: false);
+                    });
+
+                    var downloader = _downloaderFor((RemoteItemLocation)item.Location)!;
+                    var cell = await downloader.DownloadAsync(item, bytes, itemCancellation.Token).ConfigureAwait(false);
+                    _known[Key(downloader, DownloadName(item))] = cell;
+                    _status.TryRemove(key, out _);
+                    Interlocked.Increment(ref done);
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }
+            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested && itemCancellation.IsCancellationRequested)
+            {
+                // This item alone was cancelled: the batch carries on.
+                _status.TryRemove(key, out _);
+                Interlocked.Increment(ref failed);
+            }
+            catch (OperationCanceledException)
+            {
+                _status.TryRemove(key, out _);
+                throw;
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
             {
+                _status[key] = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, ex.Message);
                 Interlocked.Increment(ref failed);
             }
             finally
             {
-                gate.Release();
+                _itemCancellation.TryRemove(key, out _);
             }
 
-            var bytes = Interlocked.Add(ref completedBytes, ((RemoteItemLocation)item.Location).SizeBytes ?? 0);
-            handle?.Report(Math.Min(1.0, bytes / (double)totalBytes));
+            Interlocked.Exchange(ref received[index], sizes[index]);
+            var bytesDone = Interlocked.Add(ref completedBytes, sizes[index]);
+            UpdateProgress(Volatile.Read(ref done), Volatile.Read(ref failed), received, sizes);
+            handle?.Report(Math.Min(1.0, bytesDone / (double)totalBytes));
             handle?.Update(message: Describe(Volatile.Read(ref done) + Volatile.Read(ref failed), toDownload.Length, totalBytes));
-            Changed?.Invoke(this, EventArgs.Empty);
+            RaiseChanged();
         }
 
         var cancelled = false;
@@ -152,6 +295,19 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
         catch (OperationCanceledException)
         {
             cancelled = true;
+        }
+        finally
+        {
+            // Anything still queued when the batch stops is no longer waiting.
+            foreach (var item in toDownload)
+            {
+                if (StatusKey(item) is { } key && _status.TryGetValue(key, out var status) && status.State != LibraryDownloadItemState.Failed)
+                    _status.TryRemove(key, out _);
+            }
+
+            Interlocked.CompareExchange(ref _batchCancellation, null, cancellation);
+            Volatile.Write(ref _progress, null);
+            RaiseChanged();
         }
 
         if (handle is not null && !handle.IsDismissed)
@@ -168,6 +324,36 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
 
         return new LibraryDownloadResult(done, failed, cancelled);
     }
+
+    private void UpdateProgress(int done, int failed, long[] received, long[] sizes)
+    {
+        if (Volatile.Read(ref _progress) is not { } current)
+            return;
+        long bytes = 0;
+        for (var i = 0; i < received.Length; i++)
+            bytes += Math.Min(Interlocked.Read(ref received[i]), sizes[i] > 0 ? sizes[i] : long.MaxValue);
+        Volatile.Write(ref _progress, current with { Completed = done, Failed = failed, BytesDone = bytes });
+    }
+
+    private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Raises <see cref="ProgressChanged"/> at most every <see cref="ProgressInterval"/> (unless forced).</summary>
+    private void RaiseProgress(bool force)
+    {
+        var now = DateTime.UtcNow.Ticks;
+        var last = Interlocked.Read(ref _lastProgressTicks);
+        if (!force && now - last < ProgressInterval.Ticks)
+            return;
+        if (Interlocked.CompareExchange(ref _lastProgressTicks, now, last) != last && !force)
+            return;
+        ProgressChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The key an item's download status is kept under (its downloader and download name).</summary>
+    private string? StatusKey(CollectionItem item) =>
+        item.Location is RemoteItemLocation remote && _downloaderFor(remote) is { } downloader
+            ? Key(downloader, DownloadName(item))
+            : null;
 
     private DownloadedCell? Downloaded(CollectionItem item)
     {

@@ -74,6 +74,37 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task State_segments_filter_the_list_and_count_each_state()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        var total = vm.Items.Count;
+        Assert.True(total > 0);
+
+        Assert.True(vm.IsStateAll);
+        Assert.Equal((total, total, 0, 0), (vm.AllCount, vm.LocalCount, vm.OnlineCount, vm.UpdatesCount));
+        Assert.Equal(total.ToString(System.Globalization.CultureInfo.CurrentCulture), vm.ItemsSummary);
+
+        vm.IsStateOnline = true;
+        Assert.Equal(LibraryStateFilter.Online, vm.StateFilter);
+        Assert.Empty(vm.Items);
+        Assert.StartsWith("0 of ", vm.ItemsSummary);
+
+        // A newer edition online moves them from Local to Updates.
+        _downloader.Outdated = true;
+        _downloader.RaiseChanged();
+        Assert.Equal((0, total), (vm.LocalCount, vm.UpdatesCount));
+
+        vm.IsStateUpdates = true;
+        Assert.Equal(total, vm.Items.Count);
+
+        // Updating them (no newer edition any more) empties the segment.
+        _downloader.Outdated = false;
+        _downloader.RaiseChanged();
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
     public async Task Library_changes_update_nodes_in_place_and_keep_selection()
     {
         await AddS57CollectionAsync("First");
@@ -130,6 +161,50 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Connect_to_a_shared_feed_targets_the_selected_collection()
+    {
+        var collection = await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+
+        vm.AddSharedFeedCommand.Execute(null);
+
+        Assert.Equal(("feed", (Guid?)collection.Id), _importer.Calls.Single());
+    }
+
+    [Fact]
+    public async Task Collections_and_sources_can_be_renamed_in_place()
+    {
+        await AddS57CollectionAsync("Charts");
+        using var vm = CreateViewModel();
+        var collection = vm.Nodes.Single();
+
+        vm.RenameCommand.Execute(null);
+        Assert.True(collection.IsRenaming);
+        Assert.Equal("Charts", collection.RenameText);
+        collection.RenameText = "  Harbour charts ";
+        vm.CommitRenameCommand.Execute(null);
+        await _library.WhenIdle();
+
+        Assert.False(collection.IsRenaming);
+        Assert.Equal("Harbour charts", Assert.Single(_library.Collections).Definition.Name);
+
+        vm.SelectedNode = vm.Nodes.Single().Children.Single();
+        vm.RenameCommand.Execute(null);
+        vm.SelectedNode!.RenameText = "Survey 2026";
+        vm.CommitRenameCommand.Execute(null);
+        await _library.WhenIdle();
+
+        Assert.Equal("Survey 2026", Assert.Single(Assert.Single(_library.Collections).Sources).Definition.DisplayName);
+        Assert.Equal("Survey 2026", vm.Nodes.Single().Children.Single().Name);
+
+        // Escape leaves the name alone.
+        vm.RenameCommand.Execute(null);
+        vm.SelectedNode!.RenameText = "Something else";
+        vm.CancelRenameCommand.Execute(null);
+        Assert.Equal("Survey 2026", vm.Nodes.Single().Children.Single().Name);
+    }
+
+    [Fact]
     public void Session_catalogue_can_be_kept_but_not_removed()
     {
         var path = LibraryTestContext.Datasets("S128", "S128_TDS_sample.gml");
@@ -162,11 +237,25 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         Assert.True(vm.HasLocation);
         Assert.Contains(vm.SelectedItem!, vm.Items);
+        Assert.Equal(vm.Items.Count, vm.LocationHitCount);
+        Assert.Equal(1, vm.LocationHitIndex);
+        Assert.Equal($"1 / {vm.Items.Count}", vm.LocationPositionText);
         var first = vm.SelectedItem!.Name;
         if (vm.Items.Count > 1)
         {
             vm.SelectAt(point);
             Assert.NotEqual(first, vm.SelectedItem!.Name);
+            Assert.Equal(2, vm.LocationHitIndex);
+
+            // Next, from the banner, steps the same way and wraps round.
+            for (var i = 0; i < vm.Items.Count - 1; i++)
+                vm.NextAtLocationCommand.Execute(null);
+            Assert.Equal(first, vm.SelectedItem!.Name);
+        }
+        else
+        {
+            Assert.False(vm.NextAtLocationCommand.CanExecute(null));
+            Assert.Equal("1 dataset", vm.LocationHitsText);
         }
 
         vm.ClearLocationCommand.Execute(null);
@@ -226,7 +315,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _loader.RaiseChanged();
 
         Assert.Equal(LibraryAvailability.Loaded, vm.Items[0].Availability);
-        Assert.Equal("LOADED", vm.Items[0].AvailabilityText);
+        Assert.Equal("Loaded", vm.Items[0].AvailabilityText);
     }
 
     [Fact]
@@ -246,6 +335,53 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         Assert.IsType<LocalItemLocation>(vmItem.EffectiveItem.Location);
         Assert.False(vmItem.CanDownload);
+    }
+
+    [Fact]
+    public async Task The_bulk_bar_says_what_it_acts_on_and_shows_a_running_download()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+
+        // Nothing online: the bar names the listed datasets and offers only On pan.
+        Assert.True(vm.HasBulkBar);
+        Assert.False(vm.HasDownloadable);
+        Assert.Equal("Nothing to download", vm.BulkScope);
+
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        _downloader.RaiseChanged();
+        Assert.True(vm.HasDownloadable);
+        Assert.StartsWith($"{vm.Items.Count} to download", vm.BulkSummary);
+        Assert.Equal("All listed datasets", vm.BulkScope);
+        vm.FilterText = "52m";
+        Assert.Equal("Filtered set", vm.BulkScope);
+
+        _downloader.Progress = new LibraryDownloadProgress(1, 0, 4, 500_000, 1_000_000);
+        _downloader.RaiseProgress();
+        Assert.True(vm.IsBulkDownloading);
+        Assert.False(vm.HasDownloadable);  // the primary button is Cancel now
+        Assert.StartsWith("3 to download", vm.BulkSummary);
+        Assert.StartsWith("Downloading 2 of 4", vm.BulkScope);
+        Assert.True(vm.CancelDownloadsCommand.CanExecute(null));
+        vm.CancelDownloadsCommand.Execute(null);
+        Assert.True(_downloader.CancelledAll);
+    }
+
+    [Fact]
+    public async Task Download_only_does_not_load()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        vm.SelectedItem = vm.Items[0];
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        vm.SelectedItem.RefreshAvailability();
+
+        vm.DownloadOnlyCommand.Execute(null);
+
+        Assert.Equal(1, _downloader.Downloads);
+        Assert.Empty(_loader.Calls);
     }
 
     [Fact]
@@ -309,12 +445,55 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal(indexed, indexer.Calls);
     }
 
+    [Fact]
+    public async Task Unpacked_packages_are_groups_and_undownloaded_ones_are_named_by_description()
+    {
+        using var context = new LibraryTestContext();
+        var indexer = new PackageIndexer { Unpacked = true };
+        using var library = context.CreateService(new Collections.Indexing.CollectionIndexer([indexer]));
+        library.Initialize();
+        library.AddCollection("Romania", [new ChartCatalogsFeedSource(
+            Guid.NewGuid(), null, new Uri("https://example.test/RO_IENC_Catalog.xml"), ChartCatalogsFilter.All)]);
+        await library.WhenIdle();
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+
+        // Base1 is unpacked (a collapsed group); Base2 is still a package.
+        Assert.Equal(2, vm.Items.Count);
+        var group = vm.Items[0];
+        Assert.True(group.IsGroupHeader);
+        Assert.Equal("Dunărea 790 - 0 (Base1)", group.Name);
+        Assert.Equal((3, false), (group.GroupCount, group.IsExpanded));
+        Assert.Equal("Unpacked", Assert.Single(group.Tags).Text);
+        Assert.False(group.CanLoad);
+        var package = vm.Items[1];
+        Assert.True(package.IsPackageEntry);
+        Assert.Equal("Dunărea 1750 - 790 (Base2)", package.Name);
+        Assert.False(package.IsNameMono);
+        Assert.Equal("Package", Assert.Single(package.Tags).Text);
+        Assert.StartsWith("Base2 · published 2024-08-23", package.Summary);
+        Assert.Equal(4, vm.AllCount);  // counts are datasets, not rows
+
+        group.ToggleCommand!.Execute(null);
+        Assert.Equal(5, vm.Items.Count);
+        Assert.All(vm.Items.Skip(1).Take(3), i => Assert.True(i.IsGroupChild));
+        vm.SelectedItem = vm.Items[2];
+        var selected = vm.SelectedItem;
+
+        // A text match inside a collapsed group opens it, keeping the selection.
+        vm.Items[0].ToggleCommand!.Execute(null);
+        vm.FilterText = "3R7D";
+        Assert.Equal(3, vm.Items.Count);
+        Assert.Same(selected, vm.Items.Single(i => ReferenceEquals(i, selected)));
+    }
+
     /// <summary>Indexes a community source as a single online package entry.</summary>
     private sealed class PackageIndexer : Collections.Indexing.ICollectionSourceIndexer
     {
         public int Calls { get; private set; }
 
         public PackageLayout? Layout { get; init; }
+
+        public bool Unpacked { get; init; }
 
         public bool CanIndex(CollectionSource source) => source is ChartCatalogsFeedSource;
 
@@ -332,12 +511,47 @@ public sealed class LibraryPanelViewModelTests : IDisposable
                 Name = "Base1",
                 Location = new RemoteItemLocation(new Uri("https://example.test/p.zip"), null, null, "community/TEST", "Base1", Layout),
             };
+            if (Unpacked)
+            {
+                var remote = new RemoteItemLocation(new Uri("https://example.test/p1.zip"), null, null, "community/RO", "Base1");
+                CollectionItem Cell(string name) => new()
+                {
+                    Key = "Base1/" + name,
+                    ProductSpec = "S-57",
+                    Name = name,
+                    Location = remote,
+                    Properties = new Dictionary<string, string> { ["package"] = "Base1", ["packageTitle"] = "Dunărea 790 - 0 (Base1)" },
+                };
+                var entry = new CollectionItem
+                {
+                    Key = "Base2",
+                    ProductSpec = "S-57",
+                    Name = "Base2",
+                    Title = "Dunărea 1750 - 790 (Base2)",
+                    IssueDate = new DateOnly(2024, 8, 23),
+                    Location = new RemoteItemLocation(new Uri("https://example.test/p2.zip"), null, null, "community/RO", "Base2"),
+                    Properties = new Dictionary<string, string> { ["package"] = "Base2" },
+                };
+                return ValueTask.FromResult(new SourceIndex(
+                    source.Id, DateTimeOffset.UtcNow, null, [Cell("3R7D0000"), Cell("3R7D0004"), entry, Cell("other")], []));
+            }
+
             return ValueTask.FromResult(new SourceIndex(source.Id, DateTimeOffset.UtcNow, null, [item], []));
         }
     }
 
     private sealed class FakeDownloader : ILibraryDownloader
     {
+        public LibraryDownloadProgress? Progress { get; set; }
+
+        public bool CancelledAll { get; private set; }
+
+        public event EventHandler? ProgressChanged;
+
+        public void RaiseProgress() => ProgressChanged?.Invoke(this, EventArgs.Empty);
+
+        public void CancelAll() => CancelledAll = true;
+
         public bool Downloaded { get; set; }
 
         public bool Outdated { get; set; }
@@ -363,6 +577,8 @@ public sealed class LibraryPanelViewModelTests : IDisposable
             Changed?.Invoke(this, EventArgs.Empty);
             return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
         }
+
+        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
     }
 
     private sealed class FakeLoader : ILibraryLoader
@@ -393,6 +609,8 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         public Task AddExchangeSetZipAsync(Guid? targetCollectionId) => Record("zip", targetCollectionId);
 
         public Task AddOnlineCatalogueAsync(Guid? targetCollectionId) => Record("online", targetCollectionId);
+
+        public Task AddSharedFeedAsync(Guid? targetCollectionId) => Record("feed", targetCollectionId);
 
         public Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId) =>
             Record("known:" + source.Id, targetCollectionId);

@@ -30,13 +30,18 @@ namespace EncDotNet.S100.Collections.Feeds;
 /// <param name="GeneratedAt">When the feed was generated.</param>
 /// <param name="Fingerprint">Changes whenever the published data changes (servers use it as the ETag).</param>
 /// <param name="Items">The published datasets.</param>
+/// <param name="Machine">
+/// The publishing computer's name (<c>s100 feed serve</c> sets it), which a
+/// reader can use to name the feed; <see langword="null"/> when not given.
+/// </param>
 public sealed record S100FeedDocument(
     string Format,
     int Version,
     string? Title,
     DateTimeOffset GeneratedAt,
     string? Fingerprint,
-    IReadOnlyList<CollectionItem> Items);
+    IReadOnlyList<CollectionItem> Items,
+    string? Machine = null);
 
 /// <summary>Builds, writes and reads <see cref="S100FeedDocument"/>s.</summary>
 public static class S100Feed

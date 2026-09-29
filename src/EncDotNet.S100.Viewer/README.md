@@ -197,20 +197,41 @@ design in `docs/design/dataset-collections.md`.
 
   Local sources are referenced **in place**. Files are never copied,
   and removing a collection never deletes data.
-- **Browse**: the tree lists collections and their sources, with item
-  counts. The list below shows the selected node's datasets and can be
-  filtered by name, title, product or state; cancelled cells are hidden
-  unless **Show cancelled** is ticked. Each row carries an availability
-  badge:
+- **Browse**: the tree lists collections and their sources.
+  - **Tree nodes:** each shows a small kind tag (`DIR`, `ZIP`, `WEB` for an
+    online catalogue, `LIST` for a community list, `FEED` for a shared feed,
+    `S-128`) and its dataset count.
+  - **Status lines:** a second line appears only when something needs
+    saying: indexing, a download in progress, problems, a shared feed's
+    reachability, or the Session's pin hint.
+  - **Actions:** Rename, Refresh, Copy URL and Remove are in the tree's
+    context menu and the ··· menu.
 
-  | Badge | Meaning |
-  |---|---|
-  | **LOCAL** | on disk |
-  | **ONLINE** | downloadable |
-  | **LISTED** | catalogue-only |
-  | **MISSING** | the file has moved |
+  The list below shows the selected node's datasets.
+  - **Filter box:** filter by name, title or product. The count is shown
+    inside the box, and cancelled datasets are included from its filter menu.
+  - **State segments:** narrow the list to **Local**, **Online** or
+    **Updates**, each with its count.
+  - **Primary state:** each row starts with a short line drawn exactly like
+    the dataset's outline on the map, so the list doubles as the map's legend:
 
-  The details pane shows the full metadata.
+    | Line | Meaning |
+    |---|---|
+    | solid green | Local: on disk |
+    | dashed blue | Online: downloadable |
+    | dotted grey | Listed: catalogue only |
+    | dashed red | Missing: the file has moved |
+
+  - **Secondary states:** these are small tags after the name:
+    - "Ed 46 available" (a newer edition online)
+    - "Loaded"
+    - "On pan"
+    - "Queued"
+    - "Failed · retry" (click to retry)
+  - **Details pane:** groups the metadata under Product, Coverage and
+    Source. Its **Download**, **Zoom to** and **Load** (or **Load after
+    download**) buttons come in the order you'd use them. A shortened
+    download link copies in full when clicked.
 - **Coverage on the map**: while the Library tab is showing, the listed
   datasets' coverage is outlined on the chart, without loading them. The
   outlines follow whatever the list shows, including its filters, and the
@@ -224,11 +245,12 @@ design in `docs/design/dataset-collections.md`.
   - **Antimeridian:** Aleutian and western-Pacific coverage draws on the
     correct side of ±180°.
 - **Tap the chart** outside Pick Mode to list every library dataset
-  covering that spot. The most detailed one is selected, and tapping
-  again cycles through the others. **Zoom to** (next to the dataset name)
-  frames a dataset.
-- **Load**: double-click a dataset, or use the open button beside its
-  name, to load it now. **Load as you pan** registers every listed local
+  covering that spot. A banner says how many there are ("3 datasets cover
+  this point · 1 / 3"). The most detailed one is selected, and **Next ›**
+  (or tapping again) steps through the others. **Zoom to** in the details
+  pane frames a dataset.
+- **Load**: double-click a dataset, or use **Load** in the details pane, to
+  load it now. **On pan** in the bulk bar registers every listed local
   dataset to load as it comes into view, for example a whole collection
   or everything under a map tap.
   - **How it loads:** loading uses the same lazy loader as very large
@@ -236,7 +258,7 @@ design in `docs/design/dataset-collections.md`.
     by their coarsest display scale.
   - **Grouping:** items from one exchange set share one Datasets-panel
     header, and reuse it if that set is already open.
-  - **Badges:** opened datasets show **LOADED** or **ON PAN**.
+  - **Tags:** opened datasets show **Loaded** or **On pan**.
   - **What can't load:** online, missing and catalogue-only items are
     skipped.
 - **USACE Inland ENC**: the rivers catalogue lists USACE's river cells
@@ -249,7 +271,11 @@ design in `docs/design/dataset-collections.md`.
   - **Downloads:** go to `downloads/usace-ienc/`.
 - **S-100 feeds** (datasets shared from another machine): on the machine
   with the data, run `s100 feed serve <folder>`, adding `--host 0.0.0.0` so
-  other machines can reach it. Then add the printed URL here with **Add URL**.
+  other machines can reach it. Then choose **Add → Connect to a shared
+  feed…** and paste the printed URL.
+  - **Naming:** the feed is named after the serving computer.
+  - **The tree:** it says whether the computer is reachable. The URL's
+    access token is never shown in full, and **Copy URL** copies it.
   - **Choosing:** you can pick which products to include (S-57, S-101,
     S-102, …), with counts and sizes.
   - **On the map:** datasets show their real coverage before anything is
@@ -264,24 +290,34 @@ design in `docs/design/dataset-collections.md`.
   - **Entries are downloads:** one entry can hold a single cell or a whole
     exchange set, and the lists give no coverage, editions or sizes. An
     entry is listed without an outline until it is downloaded.
-  - **After downloading:** the source re-indexes, and the entry is
-    replaced by its cells, with their outlines, editions and updates.
+  - **Before downloading:** an entry is listed by its description and
+    tagged "Package".
+  - **After downloading:** the source re-indexes, and the entry becomes a
+    group tagged "Unpacked". Its datasets are listed under it, with their
+    outlines, editions and updates, and a notification says how many it
+    held.
   - **Downloads:** go to `downloads/community/<list>/<entry>/`.
-  - **Updates:** a cell shows **UPDATE** when the list publishes a newer
-    download than the one you have.
-- **Download** (NOAA, USACE and community feeds): the download button beside an online
-  dataset downloads it and then loads it. **Download N (size)** fetches
-  every listed online cell, for example a whole state, at most three at
-  a time, with progress and **Cancel** in a notification.
+  - **Updates:** a cell shows "Update available" when the list publishes a
+    newer download than the one you have.
+- **Download** (NOAA, USACE, community lists and shared feeds):
+  - **One dataset:** **Download** in the details pane downloads a dataset,
+    and **Load after download** also loads it.
+  - **Many at once:** the bulk bar says what it acts on ("6 to download ·
+    16,4 MB / Filtered set · 2 already local"). **Download 6** fetches them
+    at most three at a time.
+  - **Progress:** it shows in the bar, in each downloading row (with
+    **Cancel**), on the tree node and in a notification. The bar's
+    **Cancel** stops the batch.
   - **Where cells go:** into one managed folder per provider,
     `downloads/noaa-enc/` or `downloads/usace-ienc/`, or per community
     list under `downloads/community/`. These are not
     caches, so "clear caches" keeps them.
-  - **After downloading:** a downloaded cell is **LOCAL** and loads like
+  - **After downloading:** a downloaded cell is **Local** and loads like
     any other.
   - **Newer editions:** when the feed lists a newer edition or update
-    than you downloaded, the cell shows **UPDATE**. Downloading again
-    replaces the copy.
+    than you downloaded, the row is tagged with it, for example "Ed 46
+    available", and appears under **Updates**. Downloading again replaces
+    the copy.
   - **Interrupted downloads:** a failed or interrupted download never
     replaces a good copy.
 - **S-128 datasets** you load appear in a temporary **Session**
