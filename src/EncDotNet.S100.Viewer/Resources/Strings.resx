@@ -2498,7 +2498,7 @@
     <value>Existing collection</value>
   </data>
   <data name="Library_FacetDetailFormat" xml:space="preserve">
-    <value>{0:N0} cells · {1}</value>
+    <value>{0:N0} datasets · {1}</value>
   </data>
   <data name="Library_Field_Band" xml:space="preserve">
     <value>Usage band</value>
@@ -2564,7 +2564,7 @@
     <value>New collection</value>
   </data>
   <data name="Library_NoaaChooseScope" xml:space="preserve">
-    <value>Include cells in (none selected = all)</value>
+    <value>Include datasets in (none selected = all)</value>
   </data>
   <data name="Library_NoaaClearSelection" xml:space="preserve">
     <value>Clear</value>
@@ -2582,10 +2582,10 @@
     <value>Regions</value>
   </data>
   <data name="Library_NoaaSelectionAllFormat" xml:space="preserve">
-    <value>All {0:N0} cells · {1}</value>
+    <value>All {0:N0} datasets · {1}</value>
   </data>
   <data name="Library_NoaaSelectionFormat" xml:space="preserve">
-    <value>{0:N0} cells · {1}</value>
+    <value>{0:N0} datasets · {1}</value>
   </data>
   <data name="Library_NoaaStates" xml:space="preserve">
     <value>States</value>
@@ -3059,7 +3059,7 @@
     <value>{0} · published {1}</value>
   </data>
   <data name="Library_PackageGroupFormat" xml:space="preserve">
-    <value>{0} · {1:N0} datasets</value>
+    <value>{0:N0} datasets · published {1}</value>
   </data>
   <data name="Toast_LibraryUnpackedTitle" xml:space="preserve">
     <value>Package unpacked</value>
@@ -3102,5 +3102,8 @@
   </data>
   <data name="Library_LastDownloadFailedFormat" xml:space="preserve">
     <value>Failed: {0}</value>
+  </data>
+  <data name="Library_PackageGroupNoDateFormat" xml:space="preserve">
+    <value>{0:N0} datasets</value>
   </data>
 </root>

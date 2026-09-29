@@ -101,13 +101,19 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
     /// (or its group, once unpacked) is named by its description instead.
     /// </summary>
-    public string Name => IsPackageEntry || IsGroupHeader ? Item.Title ?? Item.Name : Item.Name;
+    public string Name => IsPackageEntry || IsGroupHeader
+        ? Item.Title is { } title ? PackageTitles.Clean(title) : Item.Name
+        : Item.Name;
 
     /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
     public bool IsNameMono => !IsPackageEntry && !IsGroupHeader;
 
     /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
-    public string? Subtitle => IsPackageEntry ? Strings.Library_PackageHint : IsGroupHeader ? null : Item.Title;
+    /// <remarks>A dataset under an unpacked package drops a title that only repeats the package's.</remarks>
+    public string? Subtitle => IsPackageEntry ? Strings.Library_PackageHint
+        : IsGroupHeader ? null
+        : _isGroupChild && Item.Title is { } title && Item.Properties.TryGetValue("packageTitle", out var package) && title == package ? null
+        : Item.Title;
 
     /// <summary>True when there is a <see cref="Subtitle"/> to show.</summary>
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
@@ -123,13 +129,21 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public bool IsGroupHeader { get; private init; }
 
     private bool _isGroupChild;
+    private DateTimeOffset? _publishedAt;
     private int _groupCount;
 
     /// <summary>True for a dataset listed under an unpacked package's header (indented).</summary>
     public bool IsGroupChild
     {
         get => _isGroupChild;
-        set => SetProperty(ref _isGroupChild, value);
+        set
+        {
+            if (SetProperty(ref _isGroupChild, value))
+            {
+                OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(HasSubtitle));
+            }
+        }
     }
 
     /// <summary>For a group header: how many datasets the package unpacked into.</summary>
@@ -163,7 +177,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// description, tagged "Unpacked", with its dataset count.
     /// </summary>
     internal static LibraryItemViewModel ForPackageGroup(
-        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle)
+        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle,
+        DateTimeOffset? publishedAt = null)
     {
         var item = new CollectionItem
         {
@@ -183,6 +198,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         };
         header._groupCount = count;
         header._isExpanded = isExpanded;
+        header._publishedAt = publishedAt;
         return header;
     }
 
@@ -192,7 +208,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         get
         {
             if (IsGroupHeader)
-                return string.Format(CultureInfo.CurrentCulture, Strings.Library_PackageGroupFormat, Item.Name, GroupCount);
+            {
+                // "116 datasets · published 23.10.2025 15:17" — the package number is already in its name.
+                return _publishedAt is { } published
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Library_PackageGroupFormat, GroupCount,
+                        published.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))
+                    : string.Format(CultureInfo.CurrentCulture, Strings.Library_PackageGroupNoDateFormat, GroupCount);
+            }
             if (IsPackageEntry)
             {
                 var published = Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -325,9 +347,33 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 LibraryPrimaryAvailability.Missing => Strings.Library_Availability_Missing,
                 _ => Strings.Library_Availability_Listed,
             };
-            return PrimaryAvailability == LibraryPrimaryAvailability.Online && Item.Location is RemoteItemLocation { SizeBytes: { } size }
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StateSizeFormat, words, FormatBytes(size))
+            var size = PrimaryAvailability switch
+            {
+                LibraryPrimaryAvailability.Online => (Item.Location as RemoteItemLocation)?.SizeBytes,
+                LibraryPrimaryAvailability.Local => LocalSize(),
+                _ => null,
+            };
+            return size is { } bytes
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StateSizeFormat, words, FormatBytes(bytes))
                 : words;
+        }
+    }
+
+    /// <summary>The size of the local copy's files (base and updates), or <see langword="null"/> when unknown.</summary>
+    private long? LocalSize()
+    {
+        if (EffectiveItem.Location is not LocalItemLocation { IsZip: false } local)
+            return null;
+        try
+        {
+            return new[] { local.RelativePath }.Concat(local.UpdateRelativePaths)
+                .Select(p => new FileInfo(Path.Combine(local.RootPath, p.Replace('/', Path.DirectorySeparatorChar))))
+                .Where(f => f.Exists)
+                .Sum(f => f.Length) is > 0 and var total ? total : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
         }
     }
 

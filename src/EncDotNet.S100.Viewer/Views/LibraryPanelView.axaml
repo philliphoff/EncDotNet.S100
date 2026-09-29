@@ -25,14 +25,17 @@
 
         <!-- Secondary-state tags on dataset rows: small sentence-case pills. -->
         <Style Selector="Border.libraryTag">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="MinHeight" Value="{DynamicResource LibraryTagHeight}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
         </Style>
         <Style Selector="Border.libraryTag > TextBlock">
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Border.libraryTag.update">
             <Setter Property="Background" Value="{DynamicResource LibraryTagWarningBackground}" />
@@ -64,17 +67,18 @@
         <!-- The state segments under the filter box. -->
         <Style Selector="Border.librarySegments">
             <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="2" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="3" />
         </Style>
         <Style Selector="RadioButton.librarySegment">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Border Name="PART_Segment" CornerRadius="4" Padding="4,3" Background="Transparent">
+                    <Border Name="PART_Segment" CornerRadius="6" MinHeight="30" Padding="6,0" Background="Transparent">
                         <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
                                           Foreground="{TemplateBinding Foreground}" />
                     </Border>
                 </ControlTemplate>
@@ -90,7 +94,7 @@
 
         <!-- Details pane: small uppercase group headers, mono values, click-to-copy. -->
         <Style Selector="TextBlock.libraryGroupHeader">
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="11.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Opacity" Value="0.55" />
         </Style>
@@ -105,15 +109,18 @@
         <Style Selector="Border.libraryKindTag">
             <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="3" />
-            <Setter Property="Padding" Value="3,0" />
-            <Setter Property="MinWidth" Value="30" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinWidth" Value="42" />
+            <Setter Property="MinHeight" Value="20" />
         </Style>
         <Style Selector="Border.libraryKindTag > TextBlock">
             <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
-            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
             <Setter Property="Opacity" Value="0.7" />
             <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Ellipse.libraryStatusDot">
             <Setter Property="Fill" Value="{DynamicResource MutedColor}" />
@@ -135,8 +142,41 @@
         <Style Selector="TextBlock.libraryRowName.mono">
             <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
         </Style>
-        <Style Selector="Grid.libraryGroupChild">
-            <Setter Property="Margin" Value="16,0,0,0" />
+        <Style Selector="Border.libraryRow.groupChild">
+            <Setter Property="Margin" Value="20,0,0,0" />
+        </Style>
+        <!-- An unpacked package's header row sits on a muted surface. -->
+        <Style Selector="Border.libraryRow.groupHeader">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="6,4" />
+        </Style>
+        <Style Selector="ListBox#ItemList ListBoxItem">
+            <Setter Property="Padding" Value="12,9" />
+        </Style>
+
+        <!-- Tree rows: taller, with room for the optional status line; the selection
+             treatment comes from the app-wide accentTree style. -->
+        <Style Selector="TreeView.libraryTree TreeViewItem">
+            <Setter Property="Padding" Value="4,7" />
+        </Style>
+
+        <!-- Toolbar and filter icon buttons: one 36 × 36 box for Button and ToggleButton
+             alike (ShadUI's Icon class only sizes Button). -->
+        <Style Selector="Button.libraryIcon, ToggleButton.libraryIcon">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <!-- The bulk bar's compact buttons. -->
+        <Style Selector="Button.libraryCompact">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <!-- Empty state's large targets. -->
@@ -164,6 +204,9 @@
 
     <UserControl.Resources>
         <FontFamily x:Key="LibraryMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+        <!-- Sizes that differ from the ShadUI defaults (14 px body text, 36 px controls). -->
+        <x:Double x:Key="LibrarySecondaryFontSize">13</x:Double>
+        <x:Double x:Key="LibraryTagHeight">22</x:Double>
         <!-- Tints for tags, from the theme's warning and error colours. -->
         <SolidColorBrush x:Key="LibraryTagWarningBackground" Color="{DynamicResource WarningColor}" Opacity="0.10" />
         <SolidColorBrush x:Key="LibraryTagWarningBorder" Color="{DynamicResource WarningColor}" Opacity="0.35" />
@@ -249,14 +292,14 @@
         <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyTitle}" FontSize="15" FontWeight="SemiBold"
                        HorizontalAlignment="Center" />
-            <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="12" Opacity="0.7"
+            <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.7"
                        TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6" />
             <Button Classes="Outline libraryQuickAction" Command="{Binding AddFolderCommand}">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="DIR" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Folder}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FolderSub}" FontSize="11" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FolderSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -265,7 +308,7 @@
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="WEB" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Online}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_OnlineSub}" FontSize="11" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_OnlineSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -274,15 +317,15 @@
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="FEED" /></Border>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="11" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
-            <TextBlock Text="{x:Static loc:Strings.Library_DropHint}" FontSize="11" Opacity="0.55"
+            <TextBlock Text="{x:Static loc:Strings.Library_DropHint}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.55"
                        HorizontalAlignment="Center" Margin="0,4,0,0" />
         </StackPanel>
 
-        <Grid IsVisible="{Binding !IsEmpty}">
+        <Grid x:Name="PanelGrid" IsVisible="{Binding !IsEmpty}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" MinHeight="60" />
@@ -296,23 +339,23 @@
                  (The dock's own header already says "LIBRARY".) -->
             <DockPanel Grid.Row="0" Margin="6,4">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
-                    <Button Classes="Icon"
+                    <Button Classes="Icon libraryIcon"
                             Command="{Binding RefreshCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_RefreshLibrary}">
                         <ic:FluentIcon Icon="ArrowSync" FontSize="16" />
                     </Button>
-                    <ToggleButton Classes="Icon coverageToggle"
+                    <ToggleButton Classes="Icon libraryIcon coverageToggle"
                                   IsChecked="{Binding ShowCoverage}"
                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
                         <ic:FluentIcon Icon="Map" FontSize="16" />
                     </ToggleButton>
-                    <Button Classes="Icon"
+                    <Button Classes="Icon libraryIcon"
                             Flyout="{StaticResource MoreMenu}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryMore}">
                         <ic:FluentIcon Icon="MoreHorizontal" FontSize="16" />
                     </Button>
                 </StackPanel>
-                <Button Classes="Secondary" HorizontalAlignment="Left" Padding="8,3"
+                <Button Classes="Secondary" HorizontalAlignment="Left"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddToLibrary}"
                         Flyout="{StaticResource AddMenu}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
@@ -323,9 +366,12 @@
                 </Button>
             </DockPanel>
 
-            <!-- Collections and their sources -->
+            <!-- Collections and their sources: sized to its content (up to about 40 % of the
+                 panel, see code-behind) until the user drags the splitter. -->
             <TreeView Grid.Row="1"
                       x:Name="CollectionTree"
+                      Classes="accentTree libraryTree"
+                      Margin="4,0"
                       ItemsSource="{Binding Nodes}"
                       SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
                       ContextMenu="{StaticResource NodeMenu}"
@@ -339,9 +385,10 @@
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="vm:LibraryNodeViewModel" ItemsSource="{Binding Children}">
                         <!-- Kind tag, name, count; a second line only when something is off-normal. -->
-                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="6"
-                              Background="Transparent"
+                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8"
+                              MinHeight="20" Background="Transparent"
                               ToolTip.Tip="{Binding Tooltip}">
+                            <!-- Centred on the first line (row 0), also when a status line follows. -->
                             <Border Grid.Column="0" Classes="libraryKindTag" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding KindTag}" />
                             </Border>
@@ -351,7 +398,7 @@
                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             <TextBox Grid.Column="1" Text="{Binding RenameText}"
                                      IsVisible="{Binding IsRenaming}"
-                                     Padding="4,1" MinHeight="0" FontSize="12"
+                                     Padding="4,1" MinHeight="0"
                                      AttachedToVisualTree="OnRenameBoxAttached">
                                 <TextBox.KeyBindings>
                                     <KeyBinding Gesture="Enter"
@@ -361,15 +408,17 @@
                                 </TextBox.KeyBindings>
                             </TextBox>
                             <TextBlock Grid.Column="2" Text="{Binding Status}"
-                                       FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
-                            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="5"
-                                        IsVisible="{Binding HasStatusLine}" Margin="0,1,0,1">
-                                <Ellipse Width="6" Height="6" VerticalAlignment="Center" Classes="libraryStatusDot"
+                                       FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                       Foreground="{DynamicResource ForegroundColor}" Opacity="0.6" VerticalAlignment="Center" />
+                            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6"
+                                        IsVisible="{Binding HasStatusLine}" Margin="0,2,0,0">
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Classes="libraryStatusDot"
                                          Classes.busy="{Binding IsStatusBusy}"
                                          Classes.warning="{Binding IsStatusWarning}"
                                          Classes.error="{Binding IsStatusError}"
                                          Classes.ok="{Binding IsStatusOk}" />
-                                <TextBlock Text="{Binding StatusLine}" FontSize="11" Opacity="0.7"
+                                <TextBlock Text="{Binding StatusLine}" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                           Foreground="{DynamicResource ForegroundColor}" Opacity="0.7"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             </StackPanel>
                         </Grid>
@@ -380,6 +429,7 @@
             <Border Grid.Row="2" Height="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                     IsHitTestVisible="False" Background="{DynamicResource BorderColor}" />
             <GridSplitter Grid.Row="2"
+                          x:Name="TreeSplitter"
                           Classes="PaneSplitter"
                           Height="4"
                           HorizontalAlignment="Stretch"
@@ -400,13 +450,13 @@
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="8,2,2,2">
                             <ic:FluentIcon Grid.Column="0" Icon="Location" FontSize="14"
                                            Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis">
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource LibrarySecondaryFontSize}" TextTrimming="CharacterEllipsis">
                                 <Run Text="{Binding LocationHitsText}" FontWeight="SemiBold" />
                                 <Run Text="{Binding LocationCoverText}" />
                             </TextBlock>
-                            <TextBlock Grid.Column="2" Text="{Binding LocationPositionText}" FontSize="11" Opacity="0.6"
+                            <TextBlock Grid.Column="2" Text="{Binding LocationPositionText}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                        FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
-                            <Button Grid.Column="3" Classes="Ghost" Padding="4,0" FontSize="12"
+                            <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
                                     Command="{Binding NextAtLocationCommand}" />
                             <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding ClearLocationCommand}"
@@ -419,11 +469,11 @@
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
-                                <TextBlock Text="{Binding ItemsSummary}" FontSize="11" Opacity="0.6"
+                                <TextBlock Text="{Binding ItemsSummary}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                            VerticalAlignment="Center" Margin="4,0,8,0" />
                             </TextBox.InnerRightContent>
                         </TextBox>
-                        <Button Grid.Column="1" Classes="Icon"
+                        <Button Grid.Column="1" Classes="Icon libraryIcon"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
@@ -440,51 +490,51 @@
                             <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_All}" />
-                                    <TextBlock Text="{Binding AllCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                    <TextBlock Text="{Binding AllCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Local}" />
-                                    <TextBlock Text="{Binding LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                    <TextBlock Text="{Binding LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Online}" />
-                                    <TextBlock Text="{Binding OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                    <TextBlock Text="{Binding OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
-                                    <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                    <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                         </UniformGrid>
                     </Border>
                     <!-- One bulk bar: what the buttons act on, then Download (or Cancel) and On pan. -->
                     <Border IsVisible="{Binding HasBulkBar}" Background="{DynamicResource MutedBackgroundColor}"
-                            CornerRadius="6" Padding="8,5">
+                            CornerRadius="8" Padding="10,6">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0">
-                                <TextBlock Text="{Binding BulkSummary}" FontSize="12" FontWeight="SemiBold"
+                                <TextBlock Text="{Binding BulkSummary}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding BulkScope}" FontSize="11" Opacity="0.65"
+                                <TextBlock Text="{Binding BulkScope}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <Panel Grid.Column="1" VerticalAlignment="Center">
-                                <Button Classes="Primary" Padding="10,3" FontSize="12"
+                                <Button Classes="Primary libraryCompact"
                                         IsVisible="{Binding HasDownloadable}"
                                         Content="{Binding DownloadListedText}"
                                         Command="{Binding DownloadListedCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}" />
-                                <Button Classes="Primary" Padding="10,3" FontSize="12"
+                                <Button Classes="Primary libraryCompact"
                                         IsVisible="{Binding IsBulkDownloading}"
                                         Content="{x:Static loc:Strings.Button_Cancel}"
                                         Command="{Binding CancelDownloadsCommand}" />
                             </Panel>
-                            <Button Grid.Column="2" Classes="Outline" Padding="10,3" FontSize="12" VerticalAlignment="Center"
+                            <Button Grid.Column="2" Classes="Outline libraryCompact"
                                     Content="{x:Static loc:Strings.Library_BulkOnPan}"
                                     Command="{Binding LoadAsYouPanCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}" />
@@ -505,53 +555,61 @@
                              name and tags, title, meta line. Kept cheap: the list is virtualised
                              and can hold thousands of rows. -->
                         <DataTemplate x:DataType="vm:LibraryItemViewModel">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Background="Transparent"
-                                  Classes.libraryGroupChild="{Binding IsGroupChild}">
-                                <views:LibrarySwatch Grid.Column="0" State="{Binding PrimaryAvailability}"
-                                                     IsVisible="{Binding !IsGroupHeader}"
-                                                     VerticalAlignment="Top" Margin="0,8,0,0" />
-                                <!-- An unpacked package: a toggle for the datasets listed under it. -->
-                                <Button Grid.Column="0" Classes="Icon" Padding="0" Width="16" MinHeight="0"
-                                        IsVisible="{Binding IsGroupHeader}" VerticalAlignment="Top" Margin="0,1,0,0"
-                                        Command="{Binding ToggleCommand}">
-                                    <Panel>
-                                        <ic:FluentIcon Icon="ChevronRight" FontSize="12" IsVisible="{Binding !IsExpanded}" />
-                                        <ic:FluentIcon Icon="ChevronDown" FontSize="12" IsVisible="{Binding IsExpanded}" />
-                                    </Panel>
-                                </Button>
-                                <StackPanel Grid.Column="1" Spacing="1">
-                                    <DockPanel>
-                                        <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}"
+                            <Border Classes="libraryRow"
+                                    Classes.groupHeader="{Binding IsGroupHeader}"
+                                    Classes.groupChild="{Binding IsGroupChild}"
+                                    Background="Transparent">
+                                <Grid ColumnDefinitions="18,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                                    <!-- The swatch (or an unpacked package's chevron) sits in one 18 px column,
+                                         centred on the name line. -->
+                                    <views:LibrarySwatch Grid.Row="0" Grid.Column="0" State="{Binding PrimaryAvailability}"
+                                                         Width="18" IsVisible="{Binding !IsGroupHeader}"
+                                                         VerticalAlignment="Center" />
+                                    <Button Grid.Row="0" Grid.Column="0" Classes="Icon" Padding="0" Width="18" Height="20" MinHeight="0"
+                                            IsVisible="{Binding IsGroupHeader}" VerticalAlignment="Center"
+                                            Command="{Binding ToggleCommand}">
+                                        <Panel>
+                                            <ic:FluentIcon Icon="ChevronRight" FontSize="14" IsVisible="{Binding !IsExpanded}" />
+                                            <ic:FluentIcon Icon="ChevronDown" FontSize="14" IsVisible="{Binding IsExpanded}" />
+                                        </Panel>
+                                    </Button>
+                                    <!-- Name, then its tags, wrapping under it in a narrow dock. -->
+                                    <WrapPanel Grid.Row="0" Grid.Column="1" ItemSpacing="6" LineSpacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle libraryRowName"
+                                                   Classes.mono="{Binding IsNameMono}"
+                                                   FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <ItemsControl ItemsSource="{Binding Tags}"
                                                       ItemTemplate="{StaticResource LibraryTagTemplate}"
-                                                      Margin="6,0,0,0" VerticalAlignment="Center">
+                                                      VerticalAlignment="Center">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <StackPanel Orientation="Horizontal" Spacing="4" />
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                         </ItemsControl>
-                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle libraryRowName"
-                                                   Classes.mono="{Binding IsNameMono}"
-                                                   FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                                    </DockPanel>
-                                    <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.8"
+                                    </WrapPanel>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Subtitle}" Margin="0,2,0,0"
+                                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8"
                                                IsVisible="{Binding HasSubtitle}"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.6"
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Summary}" Margin="0,2,0,0"
+                                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                                TextTrimming="CharacterEllipsis" />
                                     <!-- While downloading: a thin progress bar, how much has arrived, and Cancel. -->
-                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsDownloading}"
-                                          Margin="0,2,0,0">
+                                    <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8"
+                                          IsVisible="{Binding IsDownloading}" Margin="0,4,0,0">
                                         <ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding DownloadProgress}"
                                                      Height="4" MinHeight="4" VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="1" Text="{Binding DownloadProgressText}" FontSize="10.5" Opacity="0.65"
+                                        <TextBlock Grid.Column="1" Text="{Binding DownloadProgressText}"
+                                                   FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
                                                    FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
-                                        <Button Grid.Column="2" Classes="Ghost" Padding="4,0" FontSize="11" MinHeight="0"
+                                        <Button Grid.Column="2" Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
+                                                FontSize="{StaticResource LibrarySecondaryFontSize}"
                                                 Content="{x:Static loc:Strings.Library_CancelDownload}"
                                                 Command="{Binding CancelDownloadCommand}" />
                                     </Grid>
-                                </StackPanel>
-                            </Grid>
+                                </Grid>
+                            </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -582,29 +640,29 @@
                                                      VerticalAlignment="Center" />
                                 <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedItem.Name}"
                                                      FontFamily="{StaticResource LibraryMonoFont}"
-                                                     FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="{Binding SelectedItem.PrimaryStateText}" FontSize="11"
-                                           Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                                     FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding SelectedItem.PrimaryStateText}"
+                                           FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" VerticalAlignment="Center" />
                             </Grid>
                             <TextBlock Text="{Binding SelectedItem.Subtitle}" IsVisible="{Binding SelectedItem.HasSubtitle, FallbackValue=False}"
-                                       FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
+                                       FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8" TextWrapping="Wrap" />
                             <!-- Actions, labelled, in the order they are used. -->
                             <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
-                                <Button Classes="Primary" Padding="10,3" FontSize="12"
+                                <Button Classes="Primary"
                                         Content="{x:Static loc:Strings.Button_Download}"
                                         Command="{Binding DownloadOnlyCommand}"
                                         IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadDataset}" />
-                                <Button Classes="Outline" Padding="10,3" FontSize="12"
+                                <Button Classes="Outline"
                                         Content="{x:Static loc:Strings.Button_ZoomTo}"
                                         Command="{Binding ZoomToCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}" />
-                                <Button Classes="Outline" Padding="10,3" FontSize="12"
+                                <Button Classes="Outline"
                                         Content="{x:Static loc:Strings.Button_Load}"
                                         Command="{Binding LoadCommand}"
                                         IsVisible="{Binding !SelectedItem.CanLoadAfterDownload, FallbackValue=True}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}" />
-                                <Button Classes="Outline" Padding="10,3" FontSize="12"
+                                <Button Classes="Outline"
                                         Content="{x:Static loc:Strings.Button_LoadAfterDownload}"
                                         Command="{Binding DownloadCommand}"
                                         IsVisible="{Binding SelectedItem.CanLoadAfterDownload, FallbackValue=False}" />
@@ -646,8 +704,10 @@
                                                             <ColumnDefinition Width="Auto" SharedSizeGroup="LibraryDetailKey" />
                                                             <ColumnDefinition Width="*" />
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{Binding Label}" Opacity="0.6" FontSize="12" />
-                                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12"
+                                                        <TextBlock Grid.Column="0" Text="{Binding Label}" Opacity="0.6"
+                                                                   FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
+                                                                             FontSize="{StaticResource LibrarySecondaryFontSize}"
                                                                              Classes.mono="{Binding IsMono}"
                                                                              Classes.copyable="{Binding IsCopyable}"
                                                                              ToolTip.Tip="{Binding CopyValue}"

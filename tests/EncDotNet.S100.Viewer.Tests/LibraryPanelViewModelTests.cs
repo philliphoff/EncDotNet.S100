@@ -472,10 +472,15 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal("Package", Assert.Single(package.Tags).Text);
         Assert.StartsWith("Base2 · published 2024-08-23", package.Summary);
         Assert.Equal(4, vm.AllCount);  // counts are datasets, not rows
+        Assert.Equal("4", vm.ItemsSummary);  // a collapsed group's datasets count; its header doesn't
+        Assert.StartsWith("3 datasets · published ", group.Summary);
 
         group.ToggleCommand!.Execute(null);
         Assert.Equal(5, vm.Items.Count);
         Assert.All(vm.Items.Skip(1).Take(3), i => Assert.True(i.IsGroupChild));
+        Assert.Equal("4", vm.ItemsSummary);
+        // Children don't repeat the package's title.
+        Assert.All(vm.Items.Skip(1).Take(3), i => Assert.False(i.HasSubtitle));
         vm.SelectedItem = vm.Items[2];
         var selected = vm.SelectedItem;
 
@@ -513,12 +518,14 @@ public sealed class LibraryPanelViewModelTests : IDisposable
             };
             if (Unpacked)
             {
-                var remote = new RemoteItemLocation(new Uri("https://example.test/p1.zip"), null, null, "community/RO", "Base1");
+                var remote = new RemoteItemLocation(
+                    new Uri("https://example.test/p1.zip"), null, new DateTimeOffset(2025, 10, 23, 15, 17, 0, TimeSpan.Zero), "community/RO", "Base1");
                 CollectionItem Cell(string name) => new()
                 {
                     Key = "Base1/" + name,
                     ProductSpec = "S-57",
                     Name = name,
+                    Title = "Dunărea 790 - 0 (Base1)",
                     Location = remote,
                     Properties = new Dictionary<string, string> { ["package"] = "Base1", ["packageTitle"] = "Dunărea 790 - 0 (Base1)" },
                 };
