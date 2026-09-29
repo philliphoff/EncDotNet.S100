@@ -39,6 +39,14 @@ internal static class Strings
             ? null
             : ResourceManager.GetString("SpecName_" + spec.Replace("-", string.Empty), Culture);
 
+    /// <summary>
+    /// Returns a readable label for a library item property key (e.g.
+    /// <c>riverMiles</c> → "River miles"), or <c>null</c> when the key has no
+    /// curated label. Lookup keys are <c>Library_Property_&lt;key&gt;</c>.
+    /// </summary>
+    public static string? LibraryPropertyLabel(string key) =>
+        string.IsNullOrEmpty(key) ? null : ResourceManager.GetString("Library_Property_" + key, Culture);
+
     // Window
     public static string Window_Title => Get(nameof(Window_Title));
 
@@ -1002,4 +1010,34 @@ internal static class Strings
     public static string Library_State_Online => Get(nameof(Library_State_Online));
     public static string Library_State_Updates => Get(nameof(Library_State_Updates));
     public static string Tooltip_LibraryFilterOptions => Get(nameof(Tooltip_LibraryFilterOptions));
+    public static string Library_Group_Product => Get(nameof(Library_Group_Product));
+    public static string Library_Group_Coverage => Get(nameof(Library_Group_Coverage));
+    public static string Library_Group_Source => Get(nameof(Library_Group_Source));
+    public static string Library_Field_Collection => Get(nameof(Library_Field_Collection));
+    public static string Library_Product_S57 => Get(nameof(Library_Product_S57));
+    public static string Library_EditionUpdateLongFormat => Get(nameof(Library_EditionUpdateLongFormat));
+    public static string Library_EditionLongFormat => Get(nameof(Library_EditionLongFormat));
+    public static string Library_StateSizeFormat => Get(nameof(Library_StateSizeFormat));
+    public static string Button_Download => Get(nameof(Button_Download));
+    public static string Button_ZoomTo => Get(nameof(Button_ZoomTo));
+    public static string Button_Load => Get(nameof(Button_Load));
+    public static string Button_LoadAfterDownload => Get(nameof(Button_LoadAfterDownload));
+    public static string Tooltip_CopyValue => Get(nameof(Tooltip_CopyValue));
+    public static string Library_Property_river => Get(nameof(Library_Property_river));
+    public static string Library_Property_riverMiles => Get(nameof(Library_Property_riverMiles));
+    public static string Library_Property_states => Get(nameof(Library_Property_states));
+    public static string Library_Property_coastGuardDistricts => Get(nameof(Library_Property_coastGuardDistricts));
+    public static string Library_Property_regions => Get(nameof(Library_Property_regions));
+    public static string Library_Property_producingAgency => Get(nameof(Library_Property_producingAgency));
+    public static string Library_Property_intendedUsage => Get(nameof(Library_Property_intendedUsage));
+    public static string Library_Property_package => Get(nameof(Library_Property_package));
+    public static string Library_Property_packageTitle => Get(nameof(Library_Property_packageTitle));
+    public static string Library_Property_encodingFormat => Get(nameof(Library_Property_encodingFormat));
+    public static string Library_Property_purpose => Get(nameof(Library_Property_purpose));
+    public static string Library_Property_timeStart => Get(nameof(Library_Property_timeStart));
+    public static string Library_Property_timeEnd => Get(nameof(Library_Property_timeEnd));
+    public static string Library_Property_classification => Get(nameof(Library_Property_classification));
+    public static string Library_Property_dataProtection => Get(nameof(Library_Property_dataProtection));
+    public static string Library_Property_distributionStatus => Get(nameof(Library_Property_distributionStatus));
+    public static string Library_Property_serviceStatus => Get(nameof(Library_Property_serviceStatus));
 }

@@ -2878,4 +2878,94 @@
   <data name="Tooltip_LibraryFilterOptions" xml:space="preserve">
     <value>Filter options</value>
   </data>
+  <data name="Library_Group_Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Library_Group_Coverage" xml:space="preserve">
+    <value>Coverage</value>
+  </data>
+  <data name="Library_Group_Source" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Library_Field_Collection" xml:space="preserve">
+    <value>Collection</value>
+  </data>
+  <data name="Library_Product_S57" xml:space="preserve">
+    <value>ENC cell</value>
+  </data>
+  <data name="Library_EditionUpdateLongFormat" xml:space="preserve">
+    <value>Ed {0} · Update {1}</value>
+  </data>
+  <data name="Library_EditionLongFormat" xml:space="preserve">
+    <value>Ed {0}</value>
+  </data>
+  <data name="Library_StateSizeFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Button_Download" xml:space="preserve">
+    <value>Download</value>
+  </data>
+  <data name="Button_ZoomTo" xml:space="preserve">
+    <value>Zoom to</value>
+  </data>
+  <data name="Button_Load" xml:space="preserve">
+    <value>Load</value>
+  </data>
+  <data name="Button_LoadAfterDownload" xml:space="preserve">
+    <value>Load after download</value>
+  </data>
+  <data name="Tooltip_CopyValue" xml:space="preserve">
+    <value>Click to copy</value>
+  </data>
+  <data name="Library_Property_river" xml:space="preserve">
+    <value>River</value>
+  </data>
+  <data name="Library_Property_riverMiles" xml:space="preserve">
+    <value>River miles</value>
+  </data>
+  <data name="Library_Property_states" xml:space="preserve">
+    <value>States</value>
+  </data>
+  <data name="Library_Property_coastGuardDistricts" xml:space="preserve">
+    <value>Coast Guard districts</value>
+  </data>
+  <data name="Library_Property_regions" xml:space="preserve">
+    <value>Regions</value>
+  </data>
+  <data name="Library_Property_producingAgency" xml:space="preserve">
+    <value>Producing agency</value>
+  </data>
+  <data name="Library_Property_intendedUsage" xml:space="preserve">
+    <value>Intended usage</value>
+  </data>
+  <data name="Library_Property_package" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="Library_Property_packageTitle" xml:space="preserve">
+    <value>Package title</value>
+  </data>
+  <data name="Library_Property_encodingFormat" xml:space="preserve">
+    <value>Encoding format</value>
+  </data>
+  <data name="Library_Property_purpose" xml:space="preserve">
+    <value>Purpose</value>
+  </data>
+  <data name="Library_Property_timeStart" xml:space="preserve">
+    <value>Valid from</value>
+  </data>
+  <data name="Library_Property_timeEnd" xml:space="preserve">
+    <value>Valid to</value>
+  </data>
+  <data name="Library_Property_classification" xml:space="preserve">
+    <value>Classification</value>
+  </data>
+  <data name="Library_Property_dataProtection" xml:space="preserve">
+    <value>Data protection</value>
+  </data>
+  <data name="Library_Property_distributionStatus" xml:space="preserve">
+    <value>Distribution status</value>
+  </data>
+  <data name="Library_Property_serviceStatus" xml:space="preserve">
+    <value>Service status</value>
+  </data>
 </root>

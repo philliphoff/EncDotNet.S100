@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
@@ -59,6 +60,23 @@ public partial class LibraryPanelView : UserControl
                 if (box.IsVisible && DataContext is LibraryPanelViewModel vm)
                     vm.CommitRenameCommand.Execute(null);
             };
+        }
+    }
+
+    private void OnDetailValueTapped(object? sender, TappedEventArgs e)
+    {
+        // A shortened value (a download URL, a path) copies in full.
+        try
+        {
+            if (sender is Control { DataContext: LibraryDetailField { CopyValue: { } value } }
+                && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            {
+                _ = clipboard.SetTextAsync(value);
+            }
+        }
+        catch
+        {
+            // Best-effort, as in the pick report; clipboard access can fail on some Linux WMs.
         }
     }
 

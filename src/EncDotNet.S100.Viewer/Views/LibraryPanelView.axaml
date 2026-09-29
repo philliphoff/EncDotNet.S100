@@ -42,11 +42,11 @@
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
         </Style>
         <Style Selector="Border.libraryTag.loaded">
-            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryColor}" />
         </Style>
         <Style Selector="Border.libraryTag.loaded > TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryForegroundColor}" />
         </Style>
         <Style Selector="Border.libraryTag.queued">
             <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
@@ -86,6 +86,19 @@
         </Style>
         <Style Selector="RadioButton.librarySegment:not(:checked)">
             <Setter Property="Opacity" Value="0.75" />
+        </Style>
+
+        <!-- Details pane: small uppercase group headers, mono values, click-to-copy. -->
+        <Style Selector="TextBlock.libraryGroupHeader">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+        <Style Selector="SelectableTextBlock.mono">
+            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+        </Style>
+        <Style Selector="SelectableTextBlock.copyable">
+            <Setter Property="Cursor" Value="Hand" />
         </Style>
 
         <!-- Non-interactive group headers in the Add menu. -->
@@ -432,27 +445,41 @@
                                    Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
                                    Opacity="0.6" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" TextAlignment="Center" />
-                        <Grid IsVisible="{Binding HasSelectedItem}" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                            <TextBlock Grid.Column="0" Text="{Binding SelectedItem.Name}"
-                                       FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <Button Classes="Icon" Command="{Binding DownloadCommand}"
+                        <StackPanel IsVisible="{Binding HasSelectedItem}" Spacing="6">
+                            <!-- Swatch, name, and the primary state in words. -->
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                <views:LibrarySwatch Grid.Column="0" State="{Binding SelectedItem.PrimaryAvailability, FallbackValue=Listed}"
+                                                     VerticalAlignment="Center" />
+                                <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedItem.Name}"
+                                                     FontFamily="{StaticResource LibraryMonoFont}"
+                                                     FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding SelectedItem.PrimaryStateText}" FontSize="11"
+                                           Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                            <TextBlock Text="{Binding SelectedItem.Subtitle}" IsVisible="{Binding SelectedItem.HasSubtitle, FallbackValue=False}"
+                                       FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
+                            <!-- Actions, labelled, in the order they are used. -->
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+                                <Button Classes="Primary" Padding="10,3" FontSize="12"
+                                        Content="{x:Static loc:Strings.Button_Download}"
+                                        Command="{Binding DownloadOnlyCommand}"
                                         IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadDataset}">
-                                    <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
-                                </Button>
-                                <Button Classes="Icon" Command="{Binding LoadCommand}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}">
-                                    <ic:FluentIcon Icon="Open" FontSize="16" />
-                                </Button>
-                            </StackPanel>
-                            <Button Grid.Column="2" Classes="Icon" Command="{Binding ZoomToCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}">
-                                <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
-                            </Button>
-                            <TextBlock Grid.Column="3" Text="{Binding SelectedItem.AvailabilityText}" FontSize="11"
-                                       Opacity="0.7" VerticalAlignment="Center" />
-                        </Grid>
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadDataset}" />
+                                <Button Classes="Outline" Padding="10,3" FontSize="12"
+                                        Content="{x:Static loc:Strings.Button_ZoomTo}"
+                                        Command="{Binding ZoomToCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}" />
+                                <Button Classes="Outline" Padding="10,3" FontSize="12"
+                                        Content="{x:Static loc:Strings.Button_Load}"
+                                        Command="{Binding LoadCommand}"
+                                        IsVisible="{Binding !SelectedItem.CanLoadAfterDownload, FallbackValue=True}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadDataset}" />
+                                <Button Classes="Outline" Padding="10,3" FontSize="12"
+                                        Content="{x:Static loc:Strings.Button_LoadAfterDownload}"
+                                        Command="{Binding DownloadCommand}"
+                                        IsVisible="{Binding SelectedItem.CanLoadAfterDownload, FallbackValue=False}" />
+                            </WrapPanel>
+                        </StackPanel>
                     </Panel>
                 </Border>
 
@@ -470,17 +497,36 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Product, Coverage, Source. -->
                         <ItemsControl ItemsSource="{Binding SelectedItem.Details}" Grid.IsSharedSizeScope="True">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="10" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid ColumnSpacing="12" Margin="0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" SharedSizeGroup="LibraryDetailKey" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Key}" Opacity="0.6" />
-                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
-                                    </Grid>
+                                <DataTemplate x:DataType="vm:LibraryDetailGroup">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Header}" Classes="libraryGroupHeader" />
+                                        <ItemsControl ItemsSource="{Binding Fields}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:LibraryDetailField">
+                                                    <Grid ColumnSpacing="12" Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="LibraryDetailKey" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="{Binding Label}" Opacity="0.6" FontSize="12" />
+                                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12"
+                                                                             Classes.mono="{Binding IsMono}"
+                                                                             Classes.copyable="{Binding IsCopyable}"
+                                                                             ToolTip.Tip="{Binding CopyValue}"
+                                                                             Tapped="OnDetailValueTapped" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

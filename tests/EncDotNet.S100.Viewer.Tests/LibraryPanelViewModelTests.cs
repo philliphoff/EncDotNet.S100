@@ -324,6 +324,22 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Download_only_does_not_load()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        vm.SelectedItem = vm.Items[0];
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        vm.SelectedItem.RefreshAvailability();
+
+        vm.DownloadOnlyCommand.Execute(null);
+
+        Assert.Equal(1, _downloader.Downloads);
+        Assert.Empty(_loader.Calls);
+    }
+
+    [Fact]
     public async Task Download_command_downloads_and_then_loads_the_selected_item()
     {
         await AddS57CollectionAsync();

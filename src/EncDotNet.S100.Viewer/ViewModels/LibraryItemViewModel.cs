@@ -14,6 +14,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 {
     private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
     private readonly ILibraryDownloader? _downloader;
+    private readonly string? _collectionName;
     private LibraryAvailability? _availability;
     private CollectionItem? _effective;
 
@@ -21,7 +22,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         CollectionItem item,
         LibrarySource source,
         Func<CollectionItem, LibraryLoadState>? loadState = null,
-        ILibraryDownloader? downloader = null)
+        ILibraryDownloader? downloader = null,
+        string? collectionName = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
@@ -29,6 +31,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         Source = source;
         _loadState = loadState;
         _downloader = downloader;
+        _collectionName = collectionName;
     }
 
     /// <summary>
@@ -102,7 +105,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(Availability));
         OnPropertyChanged(nameof(AvailabilityText));
         OnPropertyChanged(nameof(PrimaryAvailability));
+        OnPropertyChanged(nameof(PrimaryStateText));
         OnPropertyChanged(nameof(Tags));
+        OnPropertyChanged(nameof(CanLoadAfterDownload));
         OnPropertyChanged(nameof(CanLoad));
         OnPropertyChanged(nameof(CanDownload));
         OnPropertyChanged(nameof(Details));
@@ -148,6 +153,27 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         _ => Strings.Library_Availability_Outdated,
     };
 
+    /// <summary>The primary state in words for the details header, e.g. "Online · 1,7 MB".</summary>
+    public string PrimaryStateText
+    {
+        get
+        {
+            var words = PrimaryAvailability switch
+            {
+                LibraryPrimaryAvailability.Local => Strings.Library_Availability_Local,
+                LibraryPrimaryAvailability.Online => Strings.Library_Availability_Online,
+                LibraryPrimaryAvailability.Missing => Strings.Library_Availability_Missing,
+                _ => Strings.Library_Availability_Listed,
+            };
+            return PrimaryAvailability == LibraryPrimaryAvailability.Online && Item.Location is RemoteItemLocation { SizeBytes: { } size }
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StateSizeFormat, words, FormatBytes(size))
+                : words;
+        }
+    }
+
+    /// <summary>True when the item is online and can be downloaded and then loaded in one step.</summary>
+    public bool CanLoadAfterDownload => !CanLoad && CanDownload;
+
     /// <summary>The availability in words (details pane).</summary>
     public string AvailabilityText => Availability switch
     {
@@ -171,57 +197,114 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the item has geographic bounds.</summary>
     public bool HasBounds => Item.Bounds is not null;
 
-    /// <summary>The label/value rows of the details pane, in display order.</summary>
-    public IReadOnlyList<KeyValuePair<string, string>> Details
+    /// <summary>
+    /// The details pane's fields in groups: Product (what it is), Coverage
+    /// (where), Source (where it comes from, then the source's own properties).
+    /// </summary>
+    public IReadOnlyList<LibraryDetailGroup> Details
     {
         get
         {
-            var rows = new List<KeyValuePair<string, string>>();
-            void Add(string label, string? value)
+            var c = CultureInfo.CurrentCulture;
+            var product = new List<LibraryDetailField>();
+            var coverage = new List<LibraryDetailField>();
+            var source = new List<LibraryDetailField>();
+            static void Add(List<LibraryDetailField> fields, string label, string? value, bool mono = false, string? copy = null)
             {
                 if (!string.IsNullOrWhiteSpace(value))
-                    rows.Add(new(label, value));
+                    fields.Add(new LibraryDetailField(label, value, mono, copy));
             }
 
-            var c = CultureInfo.CurrentCulture;
-            Add(Strings.Library_Field_Title, Item.Title);
-            Add(Strings.Library_Field_Spec, Item.ProductSpecVersion is { } v ? $"{Item.ProductSpec} ({v})" : Item.ProductSpec);
-            Add(Strings.Library_Field_Edition, Item.Edition?.ToString(c));
-            Add(Strings.Library_Field_Update, Item.Update?.ToString(c));
-            Add(Strings.Library_Field_Issued, Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            Add(Strings.Library_Field_UpdateApplied, Item.UpdateApplicationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            Add(Strings.Library_Field_Status, Item.Status == CollectionItemStatus.Unknown ? null : Item.Status.ToString());
-            Add(Strings.Library_Field_Band, Item.UsageBand?.ToString(c));
-            Add(Strings.Library_Field_CompilationScale, Item.CompilationScale is { } cscl ? "1:" + cscl.ToString("N0", c) : null);
-            Add(Strings.Library_Field_DisplayScales, FormatScales(Item.MinimumDisplayScale, Item.MaximumDisplayScale, c));
+            Add(product, Strings.Library_Field_Spec, ProductText());
+            Add(product, Strings.Library_Field_Edition, (Item.Edition, Item.Update) switch
+            {
+                ({ } e, { } u) => string.Format(c, Strings.Library_EditionUpdateLongFormat, e, u),
+                ({ } e, null) => string.Format(c, Strings.Library_EditionLongFormat, e),
+                _ => null,
+            }, mono: true);
+            Add(product, Strings.Library_Field_Issued, Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), mono: true);
+            Add(product, Strings.Library_Field_UpdateApplied, Item.UpdateApplicationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), mono: true);
+            Add(product, Strings.Library_Field_Status, Item.Status == CollectionItemStatus.Unknown ? null : Item.Status.ToString());
+            Add(product, Strings.Library_Field_Band, Item.UsageBand?.ToString(c));
+            Add(product, Strings.Library_Field_CompilationScale, Item.CompilationScale is { } cscl ? "1:" + cscl.ToString("N0", c) : null, mono: true);
+            Add(product, Strings.Library_Field_DisplayScales, FormatScales(Item.MinimumDisplayScale, Item.MaximumDisplayScale, c), mono: true);
+
             if (Item.Bounds is { } b)
             {
-                Add(Strings.Library_Field_NorthEast, LatLonFormatter.Format(b.North, b.East));
-                Add(Strings.Library_Field_SouthWest, LatLonFormatter.Format(b.South, b.West));
+                Add(coverage, Strings.Library_Field_NorthEast, LatLonFormatter.Format(b.North, b.East), mono: true);
+                Add(coverage, Strings.Library_Field_SouthWest, LatLonFormatter.Format(b.South, b.West), mono: true);
             }
 
+            Add(source, Strings.Library_Field_Collection, _collectionName);
             if (Item.Location is RemoteItemLocation && EffectiveItem.Location is LocalItemLocation downloaded)
-                Add(Strings.Library_Field_Location, LibraryAvailabilityResolver.ResolvePath(downloaded));
+            {
+                var path = LibraryAvailabilityResolver.ResolvePath(downloaded);
+                Add(source, Strings.Library_Field_Location, path, mono: true, copy: path);
+            }
 
             switch (Item.Location)
             {
                 case LocalItemLocation local:
-                    Add(Strings.Library_Field_Location, LibraryAvailabilityResolver.ResolvePath(local)
-                        + (local.IsZip ? " → " + local.RelativePath : string.Empty));
+                    var localPath = LibraryAvailabilityResolver.ResolvePath(local) + (local.IsZip ? " → " + local.RelativePath : string.Empty);
+                    Add(source, Strings.Library_Field_Location, localPath, mono: true, copy: localPath);
                     if (local.UpdateRelativePaths.Count > 0)
-                        Add(Strings.Library_Field_Updates, local.UpdateRelativePaths.Count.ToString(c));
+                        Add(source, Strings.Library_Field_Updates, local.UpdateRelativePaths.Count.ToString(c));
                     break;
                 case RemoteItemLocation remote:
-                    Add(Strings.Library_Field_Download, remote.Uri.AbsoluteUri);
-                    Add(Strings.Library_Field_Size, remote.SizeBytes is { } size ? FormatBytes(size) : null);
+                    Add(source, Strings.Library_Field_Download, ShortUrl(remote.Uri), mono: true, copy: remote.Uri.AbsoluteUri);
+                    Add(source, Strings.Library_Field_Size, remote.SizeBytes is { } size ? FormatBytes(size) : null);
                     break;
             }
 
             foreach (var (key, value) in Item.Properties.OrderBy(p => p.Key, StringComparer.Ordinal))
-                Add(key, value);
+            {
+                if (key != "notForNavigation")
+                    Add(source, PropertyLabel(key), value);
+            }
 
-            return rows;
+            return new[]
+            {
+                new LibraryDetailGroup(Strings.Library_Group_Product, product),
+                new LibraryDetailGroup(Strings.Library_Group_Coverage, coverage),
+                new LibraryDetailGroup(Strings.Library_Group_Source, source),
+            }.Where(g => g.Fields.Count > 0).ToArray();
         }
+    }
+
+    /// <summary>"S-57 · ENC cell", "S-101 · Electronic Navigational Chart (2.0.0)".</summary>
+    private string ProductText()
+    {
+        var name = Item.ProductSpec == "S-57" ? Strings.Library_Product_S57 : Strings.SpecDisplayName(Item.ProductSpec);
+        var text = name is null ? Item.ProductSpec : $"{Item.ProductSpec} · {name}";
+        return Item.ProductSpecVersion is { } version ? $"{text} ({version})" : text;
+    }
+
+    /// <summary>"ienccloud.us · U37IL257.zip": the host and file of a download URL.</summary>
+    internal static string ShortUrl(Uri uri)
+    {
+        var file = Path.GetFileName(uri.AbsolutePath);
+        return string.IsNullOrEmpty(file) ? uri.Host : $"{uri.Host} · {Uri.UnescapeDataString(file)}";
+    }
+
+    /// <summary>A readable label for a property key: curated, else the camelCase key split into words.</summary>
+    internal static string PropertyLabel(string key)
+    {
+        if (Strings.LibraryPropertyLabel(key) is { } label)
+            return label;
+
+        var words = new System.Text.StringBuilder(key.Length + 4);
+        for (var i = 0; i < key.Length; i++)
+        {
+            var ch = key[i];
+            if (i == 0)
+                words.Append(char.ToUpperInvariant(ch));
+            else if (char.IsUpper(ch) && !char.IsUpper(key[i - 1]))
+                words.Append(' ').Append(char.ToLowerInvariant(ch));
+            else
+                words.Append(ch);
+        }
+
+        return words.ToString();
     }
 
     /// <summary>Formats a byte count for display (e.g. <c>1.6 MB</c>).</summary>

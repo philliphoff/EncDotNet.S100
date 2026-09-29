@@ -96,6 +96,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
+        DownloadOnlyCommand = new AsyncRelayCommand(() => DownloadSelectedAsync(load: false), () => _selectedItem?.CanDownload == true);
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         _loader.Changed += OnLoaderChanged;
         _downloader.Changed += OnLoaderChanged;
@@ -152,6 +153,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -293,8 +295,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Registers every listed local dataset to load as it comes into view.</summary>
     public ICommand LoadAsYouPanCommand { get; }
 
-    /// <summary>Downloads the selected online dataset, then loads it.</summary>
+    /// <summary>Downloads the selected online dataset, then loads it ("Load after download").</summary>
     public ICommand DownloadCommand { get; }
+
+    /// <summary>Downloads the selected online dataset without loading it.</summary>
+    public ICommand DownloadOnlyCommand { get; }
 
     /// <summary>Downloads every listed online (or outdated) dataset.</summary>
     public ICommand DownloadListedCommand { get; }
@@ -374,6 +379,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ApplyFilter();
             ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(DownloadListedText));
             OnPropertyChanged(nameof(HasDownloadable));
@@ -388,7 +394,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private Task LoadListedAsYouPanAsync() =>
         _loader.LoadAsync(_items.Select(i => i.EffectiveItem).ToArray(), defer: true);
 
-    private async Task DownloadSelectedAsync()
+    private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
+
+    private async Task DownloadSelectedAsync(bool load)
     {
         if (_selectedItem is not { } item)
             return;
@@ -402,7 +410,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             return;
 
         item.RefreshAvailability();
-        await _loader.LoadAsync([item.EffectiveItem], defer: false).ConfigureAwait(true);
+        if (load)
+            await _loader.LoadAsync([item.EffectiveItem], defer: false).ConfigureAwait(true);
     }
 
     private async Task DownloadListedAsync()
@@ -526,13 +535,18 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(p => CoverageGeometry.Contains(p.Item, position))
             .OrderByDescending(p => p.Item.UsageBand ?? 0)
             .ThenBy(p => CoverageGeometry.Area(p.Item))
-            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader))
+            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, CollectionNameOf(p.Source.Id)))
             .ToList();
+
+    private string? CollectionNameOf(Guid sourceId) =>
+        _library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == sourceId))?.Definition.Name;
 
     private IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
         node is null
             ? []
-            : node.EnumerateItems().Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader)).ToArray();
+            : node.EnumerateItems()
+                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name))
+                .ToArray();
 
     private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
         a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;

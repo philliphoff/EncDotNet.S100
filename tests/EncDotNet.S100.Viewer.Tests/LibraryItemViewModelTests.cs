@@ -82,6 +82,47 @@ public sealed class LibraryItemViewModelTests
         Assert.Equal((text, Enum.Parse<LibraryItemTagKind>(kind)), (tag.Text, tag.Kind));
     }
 
+    [Fact]
+    public void Details_are_grouped_with_readable_labels_and_a_short_download_link()
+    {
+        var item = Online(46, 2) with
+        {
+            Bounds = new GeoBounds(41.2, -88.5, 41.5, -87.9),
+            Properties = new Dictionary<string, string>
+            {
+                ["riverMiles"] = "257–285",
+                ["someOtherKey"] = "x",
+                ["notForNavigation"] = "true",
+            },
+        };
+        var row = new LibraryItemViewModel(item, Source, _ => LibraryLoadState.None, new StubDownloader(false), "USACE rivers");
+
+        Assert.Equal(["Product", "Coverage", "Source"], row.Details.Select(g => g.Title));
+        Assert.Equal("PRODUCT", row.Details[0].Header);
+        var fields = row.Details.SelectMany(g => g.Fields).ToDictionary(f => f.Label);
+        Assert.Equal("S-57 · ENC cell", fields["Product"].Value);
+        Assert.Equal("Ed 46 · Update 2", fields["Edition"].Value);
+        Assert.True(fields["Edition"].IsMono);
+        Assert.True(fields["North-east"].IsMono);
+        Assert.Equal("USACE rivers", fields["Collection"].Value);
+        Assert.Equal("example.test · US4OH1MK.zip", fields["Download"].Value);
+        Assert.Equal("https://example.test/US4OH1MK.zip", fields["Download"].CopyValue);
+        Assert.Equal("257–285", fields["River miles"].Value);
+        Assert.Equal("x", fields["Some other key"].Value);
+        Assert.DoesNotContain("notForNavigation", fields.Keys);
+        Assert.True(row.NotForNavigation);
+    }
+
+    [Fact]
+    public void The_header_names_the_primary_state_and_offers_load_after_download()
+    {
+        var row = Row(Online());
+
+        Assert.Equal("Online · 2.9 MB", row.PrimaryStateText.Replace(',', '.'));
+        Assert.True(row.CanLoadAfterDownload);
+        Assert.False(row.CanLoad);
+    }
+
     private sealed class StubDownloader(bool outdated) : ILibraryDownloader
     {
         public event EventHandler? Changed { add { } remove { } }
