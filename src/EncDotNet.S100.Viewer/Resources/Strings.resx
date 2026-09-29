@@ -3097,4 +3097,10 @@
   <data name="Library_DropHint" xml:space="preserve">
     <value>Or drop a folder, .zip or CATALOG file here</value>
   </data>
+  <data name="Library_Field_LastDownload" xml:space="preserve">
+    <value>Last download</value>
+  </data>
+  <data name="Library_LastDownloadFailedFormat" xml:space="preserve">
+    <value>Failed: {0}</value>
+  </data>
 </root>

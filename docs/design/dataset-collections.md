@@ -545,6 +545,27 @@ Pipelines into the library.
 
 ### 6.3 Library panel (replaces the Catalog panel)
 
+> **UX refinement (2026-09-28):** a design pass reworked the panel. Now:
+> - **Vocabulary:** "dataset" everywhere; "package" for community entries;
+>   sentence-case states.
+> - **Rows:** a swatch drawn like the map outline (`LibraryOutlineStyles`,
+>   shared with the overlay, which now outlines by the primary state), plus
+>   secondary-state tags.
+> - **Tree:** kind tags (DIR / ZIP / WEB / LIST / FEED / S-128) and a status
+>   line only when off-normal. A shared feed's reachability comes from
+>   `FeedHealth`.
+> - **Filter:** the count sits inside the filter box, with Local / Online /
+>   Updates segments.
+> - **Bulk bar:** one bar with download progress and Cancel, backed by
+>   per-item and batch status on `ILibraryDownloader`.
+> - **Map-tap banner:** a count, the position and Next.
+> - **Details:** grouped fields with labelled actions.
+> - **Packages:** community packages become "Unpacked" groups after
+>   download.
+> - **Shared feeds:** "Connect to a shared feed…", named after the serving
+>   machine (`machine` in the feed JSON), with the token masked.
+> - **Empty state:** three large targets.
+
 > **Slice 3 as built:**
 > - The service is `LibraryService`, not `CollectionService`. It keeps
 >   immutable snapshots, a single background indexing queue, and a

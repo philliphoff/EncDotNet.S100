@@ -1083,4 +1083,6 @@ internal static class Strings
     public static string Library_Quick_Feed => Get(nameof(Library_Quick_Feed));
     public static string Library_Quick_FeedSub => Get(nameof(Library_Quick_FeedSub));
     public static string Library_DropHint => Get(nameof(Library_DropHint));
+    public static string Library_Field_LastDownload => Get(nameof(Library_Field_LastDownload));
+    public static string Library_LastDownloadFailedFormat => Get(nameof(Library_LastDownloadFailedFormat));
 }

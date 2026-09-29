@@ -78,7 +78,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(DownloadProgress));
         OnPropertyChanged(nameof(DownloadProgressText));
         if (stateChanged)
+        {
             OnPropertyChanged(nameof(Tags));
+            OnPropertyChanged(nameof(Details));
+        }
     }
 
     /// <summary>
@@ -419,6 +422,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 case RemoteItemLocation remote:
                     Add(source, Strings.Library_Field_Download, ShortUrl(remote.Uri), mono: true, copy: remote.Uri.AbsoluteUri);
                     Add(source, Strings.Library_Field_Size, remote.SizeBytes is { } size ? FormatBytes(size) : null);
+                    if (DownloadStatus is { State: LibraryDownloadItemState.Failed, Error: { } error })
+                        Add(source, Strings.Library_Field_LastDownload, string.Format(c, Strings.Library_LastDownloadFailedFormat, error));
                     break;
             }
 

@@ -148,6 +148,7 @@ public sealed class LibraryItemViewModelTests
         Assert.Equal(("Failed · retry", LibraryItemTagKind.Failed), (failed.Text, failed.Kind));
         failed.Command!.Execute(null);
         Assert.Equal(1, retried);
+        Assert.Equal("Failed: 404", row.Details.SelectMany(g => g.Fields).Single(f => f.Label == "Last download").Value);
     }
 
     private sealed class StubDownloader(bool outdated) : ILibraryDownloader
