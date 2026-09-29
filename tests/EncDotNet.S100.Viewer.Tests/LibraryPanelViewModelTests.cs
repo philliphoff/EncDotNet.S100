@@ -226,7 +226,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _loader.RaiseChanged();
 
         Assert.Equal(LibraryAvailability.Loaded, vm.Items[0].Availability);
-        Assert.Equal("LOADED", vm.Items[0].AvailabilityText);
+        Assert.Equal("Loaded", vm.Items[0].AvailabilityText);
     }
 
     [Fact]

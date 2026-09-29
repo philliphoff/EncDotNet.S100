@@ -239,7 +239,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 .ToArray();
             var bytes = downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0);
             return string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadListedFormat,
-                downloadable.Length, LibraryItemViewModel.FormatBytes(bytes));
+                downloadable.Length);
         }
     }
 

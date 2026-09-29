@@ -2462,16 +2462,16 @@
     <value>{0} and {1} more</value>
   </data>
   <data name="Library_Availability_Listed" xml:space="preserve">
-    <value>LISTED</value>
+    <value>Listed</value>
   </data>
   <data name="Library_Availability_Local" xml:space="preserve">
-    <value>LOCAL</value>
+    <value>Local</value>
   </data>
   <data name="Library_Availability_Missing" xml:space="preserve">
-    <value>MISSING</value>
+    <value>Missing</value>
   </data>
   <data name="Library_Availability_Online" xml:space="preserve">
-    <value>ONLINE</value>
+    <value>Online</value>
   </data>
   <data name="Library_BandFormat" xml:space="preserve">
     <value>Band {0}</value>
@@ -2563,9 +2563,6 @@
   <data name="Library_NewCollection" xml:space="preserve">
     <value>New collection</value>
   </data>
-  <data name="Library_NoaaAll" xml:space="preserve">
-    <value>All ENCs</value>
-  </data>
   <data name="Library_NoaaChooseScope" xml:space="preserve">
     <value>Include cells in (none selected = all)</value>
   </data>
@@ -2609,7 +2606,7 @@
     <value>Session (loaded S-128)</value>
   </data>
   <data name="Library_ShowCancelled" xml:space="preserve">
-    <value>Show cancelled</value>
+    <value>Include cancelled</value>
   </data>
   <data name="Library_Status_Failed" xml:space="preserve">
     <value>failed</value>
@@ -2633,10 +2630,10 @@
     <value>Show the selected collection again</value>
   </data>
   <data name="Library_Availability_Deferred" xml:space="preserve">
-    <value>ON PAN</value>
+    <value>On pan</value>
   </data>
   <data name="Library_Availability_Loaded" xml:space="preserve">
-    <value>LOADED</value>
+    <value>Loaded</value>
   </data>
   <data name="Library_LoadAsYouPan" xml:space="preserve">
     <value>Load as you pan</value>
@@ -2657,10 +2654,10 @@
     <value>{0:N0} datasets will load as they come into view; {1:N0} could not be opened (online, missing or catalogue-only).</value>
   </data>
   <data name="Library_Availability_Outdated" xml:space="preserve">
-    <value>UPDATE</value>
+    <value>Update available</value>
   </data>
   <data name="Library_DownloadListedFormat" xml:space="preserve">
-    <value>Download {0:N0} ({1})</value>
+    <value>Download {0:N0}</value>
   </data>
   <data name="Tooltip_DownloadListed" xml:space="preserve">
     <value>Download the listed online datasets to this computer</value>
@@ -2669,13 +2666,13 @@
     <value>Download this dataset and load it</value>
   </data>
   <data name="Toast_LibraryDownloadingTitle" xml:space="preserve">
-    <value>Downloading charts</value>
+    <value>Downloading datasets</value>
   </data>
   <data name="Toast_LibraryDownloadingFormat" xml:space="preserve">
-    <value>{0:N0} of {1:N0} cells · {2}</value>
+    <value>{0:N0} of {1:N0} · {2}</value>
   </data>
   <data name="Toast_LibraryDownloadedTitle" xml:space="preserve">
-    <value>Charts downloaded</value>
+    <value>Datasets downloaded</value>
   </data>
   <data name="Toast_LibraryDownloadCancelledTitle" xml:space="preserve">
     <value>Download cancelled</value>
@@ -2691,9 +2688,6 @@
   </data>
   <data name="Library_UsaceFeed" xml:space="preserve">
     <value>USACE Inland ENC</value>
-  </data>
-  <data name="Library_UsaceAll" xml:space="preserve">
-    <value>All rivers</value>
   </data>
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
     <value>Online Catalogue…</value>
@@ -2738,19 +2732,16 @@
     <value>— over a year old; it may no longer be maintained.</value>
   </data>
   <data name="Library_CommunityCharts" xml:space="preserve">
-    <value>Downloads</value>
+    <value>Packages</value>
   </data>
   <data name="Library_CommunitySearchWatermark" xml:space="preserve">
-    <value>Filter downloads</value>
+    <value>Filter packages</value>
   </data>
   <data name="Library_CommunitySelectionAllFormat" xml:space="preserve">
-    <value>All {0:N0} downloads · sizes unknown</value>
+    <value>All {0:N0} packages · sizes unknown</value>
   </data>
   <data name="Library_CommunitySelectionFormat" xml:space="preserve">
-    <value>{0:N0} downloads · sizes unknown</value>
-  </data>
-  <data name="Library_CommunityAll" xml:space="preserve">
-    <value>All downloads</value>
+    <value>{0:N0} packages · sizes unknown</value>
   </data>
   <data name="Library_PublishedFormat" xml:space="preserve">
     <value>Published {0}</value>
@@ -2781,9 +2772,6 @@
   </data>
   <data name="Library_FeedProducts" xml:space="preserve">
     <value>Products</value>
-  </data>
-  <data name="Library_FeedAll" xml:space="preserve">
-    <value>All products</value>
   </data>
   <data name="Library_FeedSelectionAllFormat" xml:space="preserve">
     <value>All {0:N0} datasets · {1}</value>

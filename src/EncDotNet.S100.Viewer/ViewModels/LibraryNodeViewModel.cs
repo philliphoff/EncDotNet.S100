@@ -187,8 +187,10 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         LocalFolderSource f => LeafName(f.Path),
         ExchangeSetSource e => LeafName(e.Path),
         S128CatalogueSource c => LeafName(c.Path),
-        NoaaEncFeedSource n => n.Filter.IsUnscoped ? Strings.Library_NoaaAll : Strings.Library_NoaaFeed,
-        UsaceIencFeedSource u => u.Filter.IsUnscoped ? Strings.Library_UsaceAll : Strings.Library_UsaceFeed,
+        NoaaEncFeedSource => Strings.Library_NoaaFeed,
+        UsaceIencFeedSource => Strings.Library_UsaceFeed,
+        ChartCatalogsFeedSource c => c.CatalogUri.Host,
+        S100FeedSource f => f.FeedUri.Host,
         _ => source.GetType().Name,
     };
 

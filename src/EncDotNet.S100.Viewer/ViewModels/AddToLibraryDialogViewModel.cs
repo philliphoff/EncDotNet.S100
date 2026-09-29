@@ -555,12 +555,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.ExchangeSet => new ExchangeSetSource(id, null, _path!),
             AddToLibraryKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
             AddToLibraryKind.UsaceFeed => new UsaceIencFeedSource(
-                id, DescribeUsaceFilter(CurrentUsaceFilter), CatalogUri, CurrentUsaceFilter),
+                id, DescribeUsaceFilter(CurrentUsaceFilter) ?? FeedName, CatalogUri, CurrentUsaceFilter),
             AddToLibraryKind.CommunityFeed => new ChartCatalogsFeedSource(
-                id, DescribeCommunitySelection(), CatalogUri, CurrentCommunityFilter),
+                id, DescribeCommunitySelection() ?? FeedName, CatalogUri, CurrentCommunityFilter),
             AddToLibraryKind.S100Feed => new S100FeedSource(
-                id, DescribeProducts(CurrentS100FeedFilter), CatalogUri, CurrentS100FeedFilter),
-            _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter), CatalogUri, CurrentFilter),
+                id, DescribeProducts(CurrentS100FeedFilter) ?? FeedName, CatalogUri, CurrentS100FeedFilter),
+            _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter) ?? FeedName, CatalogUri, CurrentFilter),
         };
     }
 
@@ -628,7 +628,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             LibraryItemViewModel.FormatBytes(bytes));
 
         // Follow the selection in the suggested name until the user edits it.
-        FollowSelectionInName(filter.IsUnscoped, () => DescribeFilter(filter));
+        FollowSelectionInName(filter.IsUnscoped, () => DescribeFilter(filter)!);
     }
 
     private void UpdateUsaceSelection()
@@ -644,7 +644,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             selected.Length,
             LibraryItemViewModel.FormatBytes(selected.Sum(c => c.ZipSize ?? 0)));
 
-        FollowSelectionInName(filter.IsUnscoped, () => DescribeUsaceFilter(filter));
+        FollowSelectionInName(filter.IsUnscoped, () => DescribeUsaceFilter(filter)!);
     }
 
     /// <summary>
@@ -675,11 +675,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             selected.Length,
             LibraryItemViewModel.FormatBytes(selected.Sum(i => (i.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
 
-        FollowSelectionInName(filter.IsUnscoped, () => DescribeProducts(filter));
+        FollowSelectionInName(filter.IsUnscoped, () => DescribeProducts(filter)!);
     }
 
-    private static string DescribeProducts(S100FeedFilter filter) =>
-        filter.IsUnscoped ? Strings.Library_FeedAll : string.Join(", ", filter.ProductSpecs);
+    /// <summary>The selected products, or <see langword="null"/> for all (the source is then named after the catalogue).</summary>
+    private static string? DescribeProducts(S100FeedFilter filter) =>
+        filter.IsUnscoped ? null : string.Join(", ", filter.ProductSpecs);
 
     private void UpdateCommunitySelection()
     {
@@ -691,24 +692,24 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             ? string.Format(CultureInfo.CurrentCulture, Strings.Library_CommunitySelectionAllFormat, _allCharts.Count)
             : string.Format(CultureInfo.CurrentCulture, Strings.Library_CommunitySelectionFormat, selected);
 
-        FollowSelectionInName(selected == 0, DescribeCommunitySelection);
+        FollowSelectionInName(selected == 0, () => DescribeCommunitySelection()!);
     }
 
-    private string DescribeCommunitySelection()
+    private string? DescribeCommunitySelection()
     {
         var labels = _allCharts.Where(o => o.IsSelected).Select(o => o.Label).ToArray();
         return labels.Length switch
         {
-            0 => Strings.Library_CommunityAll,
+            0 => null,
             <= 3 => string.Join(", ", labels),
             _ => string.Format(CultureInfo.CurrentCulture, Strings.Library_AndMoreFormat, string.Join(", ", labels.Take(2)), labels.Length - 2),
         };
     }
 
-    private static string DescribeUsaceFilter(UsaceIencFilter filter)
+    private static string? DescribeUsaceFilter(UsaceIencFilter filter)
     {
         if (filter.IsUnscoped)
-            return Strings.Library_UsaceAll;
+            return null;
 
         var rivers = filter.Rivers.ToArray();
         return rivers.Length <= 3
@@ -716,10 +717,10 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             : string.Format(CultureInfo.CurrentCulture, Strings.Library_AndMoreFormat, string.Join(", ", rivers.Take(2)), rivers.Length - 2);
     }
 
-    private string DescribeFilter(NoaaEncFilter filter)
+    private string? DescribeFilter(NoaaEncFilter filter)
     {
         if (filter.IsUnscoped)
-            return Strings.Library_NoaaAll;
+            return null;
 
         var parts = States.Where(o => o.IsSelected).Select(o => UsStateNames.SortKey(o.Value))
             .Concat(CoastGuardDistricts.Where(o => o.IsSelected).Select(o => o.Label))

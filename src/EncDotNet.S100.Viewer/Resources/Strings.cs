@@ -897,7 +897,6 @@ internal static class Strings
     public static string Library_IndexedAtFormat => Get(nameof(Library_IndexedAtFormat));
     public static string Library_ItemCountFormat => Get(nameof(Library_ItemCountFormat));
     public static string Library_NewCollection => Get(nameof(Library_NewCollection));
-    public static string Library_NoaaAll => Get(nameof(Library_NoaaAll));
     public static string Library_NoaaChooseScope => Get(nameof(Library_NoaaChooseScope));
     public static string Library_NoaaClearSelection => Get(nameof(Library_NoaaClearSelection));
     public static string Library_NoaaDistricts => Get(nameof(Library_NoaaDistricts));
@@ -940,7 +939,6 @@ internal static class Strings
     public static string Library_UsaceRivers => Get(nameof(Library_UsaceRivers));
     public static string Library_AddUsaceTitle => Get(nameof(Library_AddUsaceTitle));
     public static string Library_UsaceFeed => Get(nameof(Library_UsaceFeed));
-    public static string Library_UsaceAll => Get(nameof(Library_UsaceAll));
     public static string Menu_AddLibraryOnlineCatalogue => Get(nameof(Menu_AddLibraryOnlineCatalogue));
     public static string Library_DirectoryTitle => Get(nameof(Library_DirectoryTitle));
     public static string Library_DirectoryDescription => Get(nameof(Library_DirectoryDescription));
@@ -959,7 +957,6 @@ internal static class Strings
     public static string Library_CommunitySearchWatermark => Get(nameof(Library_CommunitySearchWatermark));
     public static string Library_CommunitySelectionAllFormat => Get(nameof(Library_CommunitySelectionAllFormat));
     public static string Library_CommunitySelectionFormat => Get(nameof(Library_CommunitySelectionFormat));
-    public static string Library_CommunityAll => Get(nameof(Library_CommunityAll));
     public static string Library_PublishedFormat => Get(nameof(Library_PublishedFormat));
     public static string Library_DirectoryAddUrl => Get(nameof(Library_DirectoryAddUrl));
     public static string Library_DirectoryUrlWatermark => Get(nameof(Library_DirectoryUrlWatermark));
@@ -970,7 +967,6 @@ internal static class Strings
     public static string Library_DirectoryUrlS100 => Get(nameof(Library_DirectoryUrlS100));
     public static string Tooltip_RemoveOnlineCatalogue => Get(nameof(Tooltip_RemoveOnlineCatalogue));
     public static string Library_FeedProducts => Get(nameof(Library_FeedProducts));
-    public static string Library_FeedAll => Get(nameof(Library_FeedAll));
     public static string Library_FeedSelectionAllFormat => Get(nameof(Library_FeedSelectionAllFormat));
     public static string Library_FeedSelectionFormat => Get(nameof(Library_FeedSelectionFormat));
     public static string Library_FeedFacetDetailFormat => Get(nameof(Library_FeedFacetDetailFormat));
