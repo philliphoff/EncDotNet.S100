@@ -74,6 +74,37 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task State_segments_filter_the_list_and_count_each_state()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        var total = vm.Items.Count;
+        Assert.True(total > 0);
+
+        Assert.True(vm.IsStateAll);
+        Assert.Equal((total, total, 0, 0), (vm.AllCount, vm.LocalCount, vm.OnlineCount, vm.UpdatesCount));
+        Assert.Equal(total.ToString(System.Globalization.CultureInfo.CurrentCulture), vm.ItemsSummary);
+
+        vm.IsStateOnline = true;
+        Assert.Equal(LibraryStateFilter.Online, vm.StateFilter);
+        Assert.Empty(vm.Items);
+        Assert.StartsWith("0 of ", vm.ItemsSummary);
+
+        // A newer edition online moves them from Local to Updates.
+        _downloader.Outdated = true;
+        _downloader.RaiseChanged();
+        Assert.Equal((0, total), (vm.LocalCount, vm.UpdatesCount));
+
+        vm.IsStateUpdates = true;
+        Assert.Equal(total, vm.Items.Count);
+
+        // Updating them (no newer edition any more) empties the segment.
+        _downloader.Outdated = false;
+        _downloader.RaiseChanged();
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
     public async Task Library_changes_update_nodes_in_place_and_keep_selection()
     {
         await AddS57CollectionAsync("First");
@@ -407,6 +438,8 @@ public sealed class LibraryPanelViewModelTests : IDisposable
             Changed?.Invoke(this, EventArgs.Empty);
             return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
         }
+
+        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
     }
 
     private sealed class FakeLoader : ILibraryLoader

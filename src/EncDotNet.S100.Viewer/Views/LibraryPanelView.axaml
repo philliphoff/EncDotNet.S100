@@ -61,6 +61,33 @@
         <Style Selector="Border.libraryTag.failed > TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource ErrorColor}" />
         </Style>
+        <!-- The state segments under the filter box. -->
+        <Style Selector="Border.librarySegments">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="2" />
+        </Style>
+        <Style Selector="RadioButton.librarySegment">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Segment" CornerRadius="4" Padding="4,3" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.librarySegment:checked /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <Style Selector="RadioButton.librarySegment:not(:checked)">
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+
         <!-- Non-interactive group headers in the Add menu. -->
         <Style Selector="MenuItem.libraryMenuHeader">
             <Setter Property="FontSize" Value="10.5" />
@@ -277,14 +304,54 @@
                             </Button>
                         </StackPanel>
                     </Border>
-                    <TextBox Text="{Binding FilterText}"
-                             PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}" />
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding ItemsSummary}" FontSize="11" Opacity="0.6"
-                                   VerticalAlignment="Center" />
-                        <CheckBox Grid.Column="1" IsChecked="{Binding ShowCancelled}"
-                                  Content="{x:Static loc:Strings.Library_ShowCancelled}" FontSize="11" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                        <TextBox Grid.Column="0" Text="{Binding FilterText}"
+                                 PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
+                            <TextBox.InnerRightContent>
+                                <TextBlock Text="{Binding ItemsSummary}" FontSize="11" Opacity="0.6"
+                                           VerticalAlignment="Center" Margin="4,0,8,0" />
+                            </TextBox.InnerRightContent>
+                        </TextBox>
+                        <Button Grid.Column="1" Classes="Icon"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
+                            <Button.Flyout>
+                                <Flyout Placement="BottomEdgeAlignedRight">
+                                    <CheckBox IsChecked="{Binding ShowCancelled}"
+                                              Content="{x:Static loc:Strings.Library_ShowCancelled}" />
+                                </Flyout>
+                            </Button.Flyout>
+                            <ic:FluentIcon Icon="Filter" FontSize="16" />
+                        </Button>
                     </Grid>
+                    <!-- State segments: what do I have, what can I get, what is new. -->
+                    <Border Classes="librarySegments">
+                        <UniformGrid Rows="1">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_State_All}" />
+                                    <TextBlock Text="{Binding AllCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_State_Local}" />
+                                    <TextBlock Text="{Binding LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_State_Online}" />
+                                    <TextBlock Text="{Binding OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
+                                    <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" />
+                                </StackPanel>
+                            </RadioButton>
+                        </UniformGrid>
+                    </Border>
                     <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
                             IsVisible="{Binding HasDownloadable}"
                             Command="{Binding DownloadListedCommand}"

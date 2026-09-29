@@ -2549,16 +2549,16 @@
     <value>Update files</value>
   </data>
   <data name="Library_FilterWatermark" xml:space="preserve">
-    <value>Filter by name, title, product or state</value>
+    <value>Filter by name, title, product…</value>
   </data>
   <data name="Library_FilteredItemCountFormat" xml:space="preserve">
-    <value>{0:N0} of {1:N0} datasets</value>
+    <value>{0:N0} of {1:N0}</value>
   </data>
   <data name="Library_IndexedAtFormat" xml:space="preserve">
     <value>{0:N0} datasets, indexed {1:g}</value>
   </data>
   <data name="Library_ItemCountFormat" xml:space="preserve">
-    <value>{0:N0} datasets</value>
+    <value>{0:N0}</value>
   </data>
   <data name="Library_NewCollection" xml:space="preserve">
     <value>New collection</value>
@@ -2862,5 +2862,20 @@
   </data>
   <data name="Button_Connect" xml:space="preserve">
     <value>Connect</value>
+  </data>
+  <data name="Library_State_All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Library_State_Local" xml:space="preserve">
+    <value>Local</value>
+  </data>
+  <data name="Library_State_Online" xml:space="preserve">
+    <value>Online</value>
+  </data>
+  <data name="Library_State_Updates" xml:space="preserve">
+    <value>Updates</value>
+  </data>
+  <data name="Tooltip_LibraryFilterOptions" xml:space="preserve">
+    <value>Filter options</value>
   </data>
 </root>

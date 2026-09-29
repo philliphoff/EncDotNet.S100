@@ -997,4 +997,9 @@ internal static class Strings
     public static string Library_SharedFeedNotAFeed => Get(nameof(Library_SharedFeedNotAFeed));
     public static string Library_SharedFeedUnreachableFormat => Get(nameof(Library_SharedFeedUnreachableFormat));
     public static string Button_Connect => Get(nameof(Button_Connect));
+    public static string Library_State_All => Get(nameof(Library_State_All));
+    public static string Library_State_Local => Get(nameof(Library_State_Local));
+    public static string Library_State_Online => Get(nameof(Library_State_Online));
+    public static string Library_State_Updates => Get(nameof(Library_State_Updates));
+    public static string Tooltip_LibraryFilterOptions => Get(nameof(Tooltip_LibraryFilterOptions));
 }

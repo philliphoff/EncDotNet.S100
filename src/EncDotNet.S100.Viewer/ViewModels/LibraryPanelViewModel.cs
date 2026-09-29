@@ -10,6 +10,22 @@ using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
+/// <summary>Which datasets the Library list shows, by where their data is and what is new.</summary>
+internal enum LibraryStateFilter
+{
+    /// <summary>Every dataset.</summary>
+    All,
+
+    /// <summary>On disk and current: local, loaded or loading on pan.</summary>
+    Local,
+
+    /// <summary>Downloadable, not yet downloaded.</summary>
+    Online,
+
+    /// <summary>Downloaded, with a newer edition or update available.</summary>
+    Updates,
+}
+
 /// <summary>
 /// View model for the Library panel (issue #655), which replaces the former
 /// S-128 Catalog panel. Shows the user's dataset collections as a tree of
@@ -33,6 +49,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private LibraryItemViewModel? _selectedItem;
     private string _filterText = string.Empty;
     private bool _showCancelled;
+    private LibraryStateFilter _stateFilter;
+    private IReadOnlyList<LibraryItemViewModel> _textFiltered = [];
     private bool _refreshPosted;
     private bool _showCoverage = true;
     private GeoPosition? _location;
@@ -163,6 +181,43 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Which datasets are listed by state (the segments under the filter box).</summary>
+    public LibraryStateFilter StateFilter
+    {
+        get => _stateFilter;
+        set
+        {
+            if (SetProperty(ref _stateFilter, value))
+            {
+                OnPropertyChanged(nameof(IsStateAll));
+                OnPropertyChanged(nameof(IsStateLocal));
+                OnPropertyChanged(nameof(IsStateOnline));
+                OnPropertyChanged(nameof(IsStateUpdates));
+                ApplyFilter();
+            }
+        }
+    }
+
+    public bool IsStateAll { get => _stateFilter == LibraryStateFilter.All; set { if (value) StateFilter = LibraryStateFilter.All; } }
+
+    public bool IsStateLocal { get => _stateFilter == LibraryStateFilter.Local; set { if (value) StateFilter = LibraryStateFilter.Local; } }
+
+    public bool IsStateOnline { get => _stateFilter == LibraryStateFilter.Online; set { if (value) StateFilter = LibraryStateFilter.Online; } }
+
+    public bool IsStateUpdates { get => _stateFilter == LibraryStateFilter.Updates; set { if (value) StateFilter = LibraryStateFilter.Updates; } }
+
+    /// <summary>Datasets passing the text filter (the "All" segment's count).</summary>
+    public int AllCount => _textFiltered.Count;
+
+    /// <summary>Of those, how many are local and current (local, loaded or on pan).</summary>
+    public int LocalCount { get; private set; }
+
+    /// <summary>Of those, how many are online.</summary>
+    public int OnlineCount { get; private set; }
+
+    /// <summary>Of those, how many have an update available.</summary>
+    public int UpdatesCount { get; private set; }
+
     /// <summary>Whether the listed datasets' coverage is drawn on the map.</summary>
     public bool ShowCoverage
     {
@@ -187,7 +242,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Raised when the user asks to zoom the map to a dataset's bounds.</summary>
     public event EventHandler<GeoBounds>? ZoomRequested;
 
-    /// <summary>"N datasets" or "M of N datasets" for the list header.</summary>
+    /// <summary>"116", or "8 of 116" when filtered, shown inside the filter box.</summary>
     public string ItemsSummary =>
         _items.Count == _allItems.Count
             ? string.Format(CultureInfo.CurrentCulture, Strings.Library_ItemCountFormat, _allItems.Count)
@@ -308,8 +363,15 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             lock (Nodes)
                 _availabilityRefreshPosted = false;
-            foreach (var item in _items)
+            // Every row, not only the listed ones: the state segments count them all.
+            // (A row whose availability was never resolved returns at once.)
+            foreach (var item in _allItems)
                 item.RefreshAvailability();
+            // A dataset whose state changed may now belong to another segment.
+            if (_stateFilter == LibraryStateFilter.All)
+                Recount();
+            else
+                ApplyFilter();
             ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
@@ -517,10 +579,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private void ApplyFilter()
     {
         var filter = _filterText.Trim();
-        Items = _allItems
+        _textFiltered = _allItems
             .Where(i => _showCancelled || !i.IsCancelled)
             .Where(i => filter.Length == 0 || i.Matches(filter))
             .ToArray();
+        Items = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
+        Recount();
         OnPropertyChanged(nameof(ItemsSummary));
         ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
@@ -529,6 +593,26 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         if (_selectedItem is not null && !_items.Contains(_selectedItem))
             SelectedItem = null;
+    }
+
+    private static bool InState(LibraryItemViewModel item, LibraryStateFilter state) => state switch
+    {
+        LibraryStateFilter.Local => item.Availability is LibraryAvailability.Local or LibraryAvailability.Loaded or LibraryAvailability.Deferred,
+        LibraryStateFilter.Online => item.Availability == LibraryAvailability.Online,
+        LibraryStateFilter.Updates => item.Availability == LibraryAvailability.Outdated,
+        _ => true,
+    };
+
+    /// <summary>Updates the segment counts (availability can change without the list changing).</summary>
+    private void Recount()
+    {
+        LocalCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Local));
+        OnlineCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Online));
+        UpdatesCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Updates));
+        OnPropertyChanged(nameof(AllCount));
+        OnPropertyChanged(nameof(LocalCount));
+        OnPropertyChanged(nameof(OnlineCount));
+        OnPropertyChanged(nameof(UpdatesCount));
     }
 
     private void Refresh()
