@@ -2612,7 +2612,7 @@
     <value>failed</value>
   </data>
   <data name="Library_Status_Indexing" xml:space="preserve">
-    <value>indexing…</value>
+    <value>Indexing…</value>
   </data>
   <data name="Library_Status_Pending" xml:space="preserve">
     <value>…</value>
@@ -2967,5 +2967,38 @@
   </data>
   <data name="Library_Property_serviceStatus" xml:space="preserve">
     <value>Service status</value>
+  </data>
+  <data name="Library_StatusLine_FailedFormat" xml:space="preserve">
+    <value>Failed · {0}</value>
+  </data>
+  <data name="Library_StatusLine_ProblemsFormat" xml:space="preserve">
+    <value>{0:N0} problems</value>
+  </data>
+  <data name="Library_StatusLine_Session" xml:space="preserve">
+    <value>Temporary · Pin to keep</value>
+  </data>
+  <data name="Library_StatusLine_ReachableFormat" xml:space="preserve">
+    <value>Reachable · {0}</value>
+  </data>
+  <data name="Library_StatusLine_UnreachableFormat" xml:space="preserve">
+    <value>Unreachable since {0:t} · cached index, {1} old</value>
+  </data>
+  <data name="Library_StatusLine_UnreachableNoCopyFormat" xml:space="preserve">
+    <value>Unreachable · {0}</value>
+  </data>
+  <data name="Library_StatusLine_AccessDenied" xml:space="preserve">
+    <value>Access denied · paste the new URL the server printed</value>
+  </data>
+  <data name="Library_StatusLine_DownloadingFormat" xml:space="preserve">
+    <value>Downloading {0:N0} of {1:N0} · {2} left</value>
+  </data>
+  <data name="Library_AgeMinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="Library_AgeHoursFormat" xml:space="preserve">
+    <value>{0} h</value>
+  </data>
+  <data name="Library_AgeDaysFormat" xml:space="preserve">
+    <value>{0} days</value>
   </data>
 </root>

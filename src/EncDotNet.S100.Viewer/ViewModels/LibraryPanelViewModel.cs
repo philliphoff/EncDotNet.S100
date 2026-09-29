@@ -39,6 +39,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly ILibraryImporter _importer;
     private readonly ILibraryLoader _loader;
     private readonly ILibraryDownloader _downloader;
+    private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
     private bool _availabilityRefreshPosted;
     private readonly Action<Action> _dispatch;
 
@@ -56,8 +57,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private GeoPosition? _location;
 
     public LibraryPanelViewModel(
-        LibraryService library, ILibraryImporter importer, ILibraryLoader loader, ILibraryDownloader downloader)
-        : this(library, importer, loader, downloader, PostToUiThread)
+        LibraryService library,
+        ILibraryImporter importer,
+        ILibraryLoader loader,
+        ILibraryDownloader downloader,
+        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth)
     {
     }
 
@@ -66,8 +71,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryImporter importer,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
-        Action<Action> dispatch)
+        Action<Action> dispatch,
+        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null)
     {
+        _feedHealth = feedHealth;
         ArgumentNullException.ThrowIfNull(downloader);
         _downloader = downloader;
         ArgumentNullException.ThrowIfNull(library);
@@ -488,7 +495,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             var existing = Nodes.FirstOrDefault(n => n.Id == collection.Id);
             if (existing is null)
             {
-                Nodes.Insert(i, LibraryNodeViewModel.ForCollection(collection));
+                Nodes.Insert(i, LibraryNodeViewModel.ForCollection(collection, _feedHealth));
                 continue;
             }
 

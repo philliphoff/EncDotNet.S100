@@ -109,6 +109,13 @@ public sealed class S100FeedIndexer : ICollectionSourceIndexer
         return await Task.Run(() => ReadSnapshot(snapshot, feedUri), cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// How the last attempt to reach the feed at <paramref name="feedUri"/>
+    /// went (reachable, or failing since when, with a cached copy or not);
+    /// <see langword="null"/> before the first attempt.
+    /// </summary>
+    public FeedHealth? HealthOf(Uri feedUri) => _cache.HealthOf(feedUri);
+
     /// <summary>Summarises the products in <paramref name="feed"/> (item counts and sizes), for choosing a filter.</summary>
     public static IReadOnlyList<CatalogFacetValue> Products(S100FeedDocument feed)
     {

@@ -23,6 +23,20 @@ namespace EncDotNet.S100.Collections.Indexing;
 internal sealed record FeedSnapshot(string FilePath, string Version, DateTimeOffset FetchedAt, string? StaleReason);
 
 /// <summary>
+/// How the last attempt to reach a feed went, for showing whether a shared
+/// feed's server is reachable (UX refinement §2).
+/// </summary>
+/// <param name="CheckedAt">When the feed was last fetched or revalidated (or tried).</param>
+/// <param name="Failure">Why the last attempt failed (e.g. <c>404 Not Found</c>), or <see langword="null"/> when it succeeded.</param>
+/// <param name="FailingSince">When the current run of failures began, if failing.</param>
+/// <param name="CopyFetchedAt">When the cached copy in use was fetched, if a cached copy is being served while failing.</param>
+public sealed record FeedHealth(DateTimeOffset CheckedAt, string? Failure, DateTimeOffset? FailingSince, DateTimeOffset? CopyFetchedAt)
+{
+    /// <summary>True when the last attempt reached the server.</summary>
+    public bool IsReachable => Failure is null;
+}
+
+/// <summary>
 /// Downloads feed documents (catalogues) over HTTP into a local cache and
 /// revalidates them with conditional requests, so a large catalogue is only
 /// transferred when it has changed.
@@ -49,6 +63,7 @@ internal sealed class FeedCache
     private readonly FeedCacheOptions _options;
     private readonly TimeProvider _time;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, FeedHealth> _health = new(StringComparer.Ordinal);
 
     public FeedCache(HttpClient httpClient, string directory, FeedCacheOptions? options, TimeProvider? timeProvider)
     {
@@ -72,6 +87,32 @@ internal sealed class FeedCache
     {
         ArgumentNullException.ThrowIfNull(uri);
 
+        var key = uri.AbsoluteUri;
+        _health.TryGetValue(key, out var previous);
+        try
+        {
+            var snapshot = await GetCoreAsync(uri, forceRevalidate, cancellationToken).ConfigureAwait(false);
+            _health[key] = snapshot.StaleReason is { } reason
+                ? new FeedHealth(_time.GetUtcNow(), reason, previous?.FailingSince ?? _time.GetUtcNow(), snapshot.FetchedAt)
+                : new FeedHealth(snapshot.FetchedAt, null, null, null);
+            return snapshot;
+        }
+        catch (HttpRequestException ex)
+        {
+            _health[key] = new FeedHealth(_time.GetUtcNow(), ex.Message, previous?.FailingSince ?? _time.GetUtcNow(), null);
+            throw;
+        }
+    }
+
+    /// <summary>How the last attempt to reach <paramref name="uri"/> went, or <see langword="null"/> when none was made.</summary>
+    public FeedHealth? HealthOf(Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        return _health.TryGetValue(uri.AbsoluteUri, out var health) ? health : null;
+    }
+
+    private async Task<FeedSnapshot> GetCoreAsync(Uri uri, bool forceRevalidate, CancellationToken cancellationToken)
+    {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

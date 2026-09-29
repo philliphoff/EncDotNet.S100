@@ -1,11 +1,34 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 using FluentIcons.Common;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
+
+/// <summary>How a tree node's status line is marked (the colour of its dot).</summary>
+internal enum LibraryNodeStatusKind
+{
+    /// <summary>No status line.</summary>
+    None,
+
+    /// <summary>Work in progress: indexing, downloading.</summary>
+    Busy,
+
+    /// <summary>Something needs attention but still works (problems, an unreachable feed with a cached index).</summary>
+    Warning,
+
+    /// <summary>Not working (failed, access denied).</summary>
+    Error,
+
+    /// <summary>Healthy, worth saying (a reachable shared feed).</summary>
+    Ok,
+
+    /// <summary>A hint (the session collection).</summary>
+    Info,
+}
 
 /// <summary>
 /// A node of the Library panel's tree: a collection, or one of its sources.
@@ -14,24 +37,29 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class LibraryNodeViewModel : ViewModelBase
 {
+    private readonly Func<CollectionSource, FeedHealth?>? _health;
     private LibraryCollection _collection;
     private LibrarySource? _source;
+    private string? _downloadStatus;
     private bool _isExpanded;
     private bool _isRenaming;
     private string _renameText = string.Empty;
 
-    private LibraryNodeViewModel(LibraryCollection collection, LibrarySource? source)
+    private LibraryNodeViewModel(LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health)
     {
         _collection = collection;
         _source = source;
+        _health = health;
     }
 
     /// <summary>Creates a collection node with a child per source.</summary>
-    public static LibraryNodeViewModel ForCollection(LibraryCollection collection)
+    /// <param name="collection">The collection.</param>
+    /// <param name="health">How a shared feed's server last answered, for its status line.</param>
+    public static LibraryNodeViewModel ForCollection(LibraryCollection collection, Func<CollectionSource, FeedHealth?>? health = null)
     {
-        var node = new LibraryNodeViewModel(collection, null);
+        var node = new LibraryNodeViewModel(collection, null, health);
         foreach (var source in collection.Sources)
-            node.Children.Add(new LibraryNodeViewModel(collection, source));
+            node.Children.Add(new LibraryNodeViewModel(collection, source, health));
         return node;
     }
 
@@ -87,20 +115,133 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         _ => Icon.Folder,
     };
 
-    /// <summary>The item count, or indexing/error state, shown after the name.</summary>
+    /// <summary>
+    /// A small mono tag naming the kind of source: <c>DIR</c>, <c>ZIP</c>,
+    /// <c>WEB</c> (an online catalogue), <c>LIST</c> (a community list),
+    /// <c>FEED</c> (a shared feed) or <c>S-128</c>. A collection shows its
+    /// sources' kind.
+    /// </summary>
+    public string KindTag => _source is { } s
+        ? KindOf(s.Definition)
+        : _collection.IsSession ? "S-128" : _collection.Sources.Select(x => KindOf(x.Definition)).FirstOrDefault() ?? "DIR";
+
+    /// <summary>The dataset count shown after the name, or "—" before there is an index.</summary>
     public string Status
     {
         get
         {
-            var sources = _source is { } s ? [s] : _collection.Sources;
-            if (sources.Any(x => x.State == LibrarySourceState.Indexing))
-                return Strings.Library_Status_Indexing;
-            if (sources.Any(x => x.State == LibrarySourceState.Failed) && sources.All(x => x.Index is null))
-                return Strings.Library_Status_Failed;
-            if (sources.All(x => x.Index is null))
-                return Strings.Library_Status_Pending;
-            return sources.Sum(x => x.Index?.Items.Count ?? 0).ToString("N0", CultureInfo.CurrentCulture);
+            var sources = Sources;
+            return sources.All(x => x.Index is null)
+                ? "—"
+                : sources.Sum(x => x.Index?.Items.Count ?? 0).ToString("N0", CultureInfo.CurrentCulture);
         }
+    }
+
+    /// <summary>
+    /// A second line shown only when something is off-normal: indexing,
+    /// downloading, problems, a shared feed's reachability, or the session's
+    /// pin hint. <see langword="null"/> keeps the node to one line.
+    /// </summary>
+    public string? StatusLine => ComputeStatus().Line;
+
+    /// <summary>How <see cref="StatusLine"/> is marked.</summary>
+    public LibraryNodeStatusKind StatusKind => ComputeStatus().Kind;
+
+    public bool HasStatusLine => StatusLine is not null;
+
+    public bool IsStatusBusy => StatusKind == LibraryNodeStatusKind.Busy;
+
+    public bool IsStatusWarning => StatusKind == LibraryNodeStatusKind.Warning;
+
+    public bool IsStatusError => StatusKind == LibraryNodeStatusKind.Error;
+
+    public bool IsStatusOk => StatusKind == LibraryNodeStatusKind.Ok;
+
+    public bool IsStatusInfo => StatusKind == LibraryNodeStatusKind.Info;
+
+    /// <summary>
+    /// "Downloading 2 of 5 · 4,3 MB left" while a download runs under this
+    /// node, set by the panel; <see langword="null"/> otherwise.
+    /// </summary>
+    public string? DownloadStatus
+    {
+        get => _downloadStatus;
+        set
+        {
+            if (SetProperty(ref _downloadStatus, value))
+                RaiseStatus();
+        }
+    }
+
+    private IReadOnlyList<LibrarySource> Sources => _source is { } s ? [s] : _collection.Sources;
+
+    private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus()
+    {
+        var c = CultureInfo.CurrentCulture;
+        var sources = Sources;
+        if (_downloadStatus is { } downloading)
+            return (downloading, LibraryNodeStatusKind.Busy);
+        if (sources.Any(x => x.State == LibrarySourceState.Indexing))
+            return (Strings.Library_Status_Indexing, LibraryNodeStatusKind.Busy);
+        if (sources.FirstOrDefault(x => x.State == LibrarySourceState.Failed && x.Index is null) is { } failed)
+            return (string.Format(c, Strings.Library_StatusLine_FailedFormat, failed.Error ?? string.Empty), LibraryNodeStatusKind.Error);
+
+        // A shared feed says whether its server is reachable (for a source, or a one-source collection).
+        if (sources is [{ Definition: S100FeedSource feed }] && _health?.Invoke(feed) is { } health)
+            return FeedStatus(feed, health, c);
+
+        var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
+        if (problems > 0)
+            return (string.Format(c, Strings.Library_StatusLine_ProblemsFormat, problems), LibraryNodeStatusKind.Warning);
+        if (_collection.IsSession)
+            return (Strings.Library_StatusLine_Session, LibraryNodeStatusKind.Info);
+        return (null, LibraryNodeStatusKind.None);
+    }
+
+    private static (string, LibraryNodeStatusKind) FeedStatus(S100FeedSource feed, FeedHealth health, CultureInfo c)
+    {
+        if (health.IsReachable)
+            return (string.Format(c, Strings.Library_StatusLine_ReachableFormat, feed.FeedUri.Authority), LibraryNodeStatusKind.Ok);
+        if (System.Text.RegularExpressions.Regex.IsMatch(health.Failure!, @"\b(401|403|404)\b"))
+            return (Strings.Library_StatusLine_AccessDenied, LibraryNodeStatusKind.Error);
+        if (health.CopyFetchedAt is { } copied)
+        {
+            var since = (health.FailingSince ?? health.CheckedAt).ToLocalTime();
+            return (string.Format(c, Strings.Library_StatusLine_UnreachableFormat, since, FormatAge(health.CheckedAt - copied)),
+                LibraryNodeStatusKind.Warning);
+        }
+
+        return (string.Format(c, Strings.Library_StatusLine_UnreachableNoCopyFormat, health.Failure), LibraryNodeStatusKind.Error);
+    }
+
+    /// <summary>"12 min", "2 h", "3 days".</summary>
+    internal static string FormatAge(TimeSpan age) => age switch
+    {
+        { TotalHours: < 1 } => string.Format(CultureInfo.CurrentCulture, Strings.Library_AgeMinutesFormat, Math.Max(1, (int)age.TotalMinutes)),
+        { TotalHours: < 48 } => string.Format(CultureInfo.CurrentCulture, Strings.Library_AgeHoursFormat, (int)age.TotalHours),
+        _ => string.Format(CultureInfo.CurrentCulture, Strings.Library_AgeDaysFormat, (int)age.TotalDays),
+    };
+
+    private static string KindOf(CollectionSource source) => source switch
+    {
+        ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => "ZIP",
+        NoaaEncFeedSource or UsaceIencFeedSource => "WEB",
+        ChartCatalogsFeedSource => "LIST",
+        S100FeedSource => "FEED",
+        S128CatalogueSource => "S-128",
+        _ => "DIR",
+    };
+
+    private void RaiseStatus()
+    {
+        OnPropertyChanged(nameof(StatusLine));
+        OnPropertyChanged(nameof(StatusKind));
+        OnPropertyChanged(nameof(HasStatusLine));
+        OnPropertyChanged(nameof(IsStatusBusy));
+        OnPropertyChanged(nameof(IsStatusWarning));
+        OnPropertyChanged(nameof(IsStatusError));
+        OnPropertyChanged(nameof(IsStatusOk));
+        OnPropertyChanged(nameof(IsStatusInfo));
     }
 
     /// <summary>
@@ -177,7 +318,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             var existing = Children.FirstOrDefault(c => c.Id == source.Id);
             if (existing is null)
             {
-                Children.Insert(i, new LibraryNodeViewModel(collection, source));
+                Children.Insert(i, new LibraryNodeViewModel(collection, source, _health));
             }
             else
             {
@@ -197,6 +338,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(Tooltip));
         OnPropertyChanged(nameof(Icon));
+        OnPropertyChanged(nameof(KindTag));
+        RaiseStatus();
         OnPropertyChanged(nameof(CanRemove));
         OnPropertyChanged(nameof(CanKeep));
         OnPropertyChanged(nameof(CanRename));

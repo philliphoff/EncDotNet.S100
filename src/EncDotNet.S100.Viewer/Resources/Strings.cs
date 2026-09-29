@@ -1040,4 +1040,15 @@ internal static class Strings
     public static string Library_Property_dataProtection => Get(nameof(Library_Property_dataProtection));
     public static string Library_Property_distributionStatus => Get(nameof(Library_Property_distributionStatus));
     public static string Library_Property_serviceStatus => Get(nameof(Library_Property_serviceStatus));
+    public static string Library_StatusLine_FailedFormat => Get(nameof(Library_StatusLine_FailedFormat));
+    public static string Library_StatusLine_ProblemsFormat => Get(nameof(Library_StatusLine_ProblemsFormat));
+    public static string Library_StatusLine_Session => Get(nameof(Library_StatusLine_Session));
+    public static string Library_StatusLine_ReachableFormat => Get(nameof(Library_StatusLine_ReachableFormat));
+    public static string Library_StatusLine_UnreachableFormat => Get(nameof(Library_StatusLine_UnreachableFormat));
+    public static string Library_StatusLine_UnreachableNoCopyFormat => Get(nameof(Library_StatusLine_UnreachableNoCopyFormat));
+    public static string Library_StatusLine_AccessDenied => Get(nameof(Library_StatusLine_AccessDenied));
+    public static string Library_StatusLine_DownloadingFormat => Get(nameof(Library_StatusLine_DownloadingFormat));
+    public static string Library_AgeMinutesFormat => Get(nameof(Library_AgeMinutesFormat));
+    public static string Library_AgeHoursFormat => Get(nameof(Library_AgeHoursFormat));
+    public static string Library_AgeDaysFormat => Get(nameof(Library_AgeDaysFormat));
 }

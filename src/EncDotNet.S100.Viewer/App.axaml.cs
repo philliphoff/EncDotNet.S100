@@ -866,7 +866,17 @@ public partial class App : Application
             sp.GetService<IUrlOpener>()));
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
-        services.AddSingleton<LibraryPanelViewModel>();
+        services.AddSingleton(sp =>
+        {
+            // A shared feed's status line reports whether its server was reachable.
+            var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
+            return new LibraryPanelViewModel(
+                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<ILibraryImporter>(),
+                sp.GetRequiredService<Library.ILibraryLoader>(),
+                sp.GetRequiredService<Library.ILibraryDownloader>(),
+                source => source is EncDotNet.S100.Collections.S100FeedSource feed ? feeds.HealthOf(feed.FeedUri) : null);
+        });
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(

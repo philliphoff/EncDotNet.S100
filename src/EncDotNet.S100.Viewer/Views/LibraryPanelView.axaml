@@ -101,6 +101,36 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
 
+        <!-- Tree: a small bordered mono tag for the source kind, and a status dot. -->
+        <Style Selector="Border.libraryKindTag">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="3,0" />
+            <Setter Property="MinWidth" Value="30" />
+        </Style>
+        <Style Selector="Border.libraryKindTag > TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Ellipse.libraryStatusDot">
+            <Setter Property="Fill" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="Ellipse.libraryStatusDot.busy">
+            <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Ellipse.libraryStatusDot.warning">
+            <Setter Property="Fill" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Ellipse.libraryStatusDot.error">
+            <Setter Property="Fill" Value="{DynamicResource ErrorColor}" />
+        </Style>
+        <Style Selector="Ellipse.libraryStatusDot.ok">
+            <Setter Property="Fill" Value="{DynamicResource SuccessColor}" />
+        </Style>
+
         <!-- Non-interactive group headers in the Add menu. -->
         <Style Selector="MenuItem.libraryMenuHeader">
             <Setter Property="FontSize" Value="10.5" />
@@ -263,10 +293,13 @@
                 </TreeView.Styles>
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="vm:LibraryNodeViewModel" ItemsSource="{Binding Children}">
-                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6"
+                        <!-- Kind tag, name, count; a second line only when something is off-normal. -->
+                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="6"
                               Background="Transparent"
                               ToolTip.Tip="{Binding Tooltip}">
-                            <ic:FluentIcon Grid.Column="0" Icon="{Binding Icon}" FontSize="16" VerticalAlignment="Center" />
+                            <Border Grid.Column="0" Classes="libraryKindTag" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding KindTag}" />
+                            </Border>
                             <TextBlock Grid.Column="1" Text="{Binding Name}"
                                        IsVisible="{Binding !IsRenaming}"
                                        FontWeight="{Binding IsCollection, Converter={x:Static views:LibraryPanelView.BoolToWeight}}"
@@ -284,6 +317,16 @@
                             </TextBox>
                             <TextBlock Grid.Column="2" Text="{Binding Status}"
                                        FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="5"
+                                        IsVisible="{Binding HasStatusLine}" Margin="0,1,0,1">
+                                <Ellipse Width="6" Height="6" VerticalAlignment="Center" Classes="libraryStatusDot"
+                                         Classes.busy="{Binding IsStatusBusy}"
+                                         Classes.warning="{Binding IsStatusWarning}"
+                                         Classes.error="{Binding IsStatusError}"
+                                         Classes.ok="{Binding IsStatusOk}" />
+                                <TextBlock Text="{Binding StatusLine}" FontSize="11" Opacity="0.7"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </StackPanel>
                         </Grid>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
