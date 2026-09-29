@@ -971,4 +971,9 @@ internal static class Strings
     public static string Library_FeedSelectionFormat => Get(nameof(Library_FeedSelectionFormat));
     public static string Library_FeedFacetDetailFormat => Get(nameof(Library_FeedFacetDetailFormat));
     public static string Library_DirectoryUrlJson => Get(nameof(Library_DirectoryUrlJson));
+    public static string Library_Tag_EditionAvailableFormat => Get(nameof(Library_Tag_EditionAvailableFormat));
+    public static string Library_Tag_EditionUpdateAvailableFormat => Get(nameof(Library_Tag_EditionUpdateAvailableFormat));
+    public static string Library_Tag_Queued => Get(nameof(Library_Tag_Queued));
+    public static string Library_Tag_FailedRetry => Get(nameof(Library_Tag_FailedRetry));
+    public static string Library_Tag_Package => Get(nameof(Library_Tag_Package));
 }

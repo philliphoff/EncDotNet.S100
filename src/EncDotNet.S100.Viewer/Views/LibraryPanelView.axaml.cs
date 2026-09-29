@@ -25,6 +25,16 @@ public partial class LibraryPanelView : UserControl
         }
     }
 
+    private void OnTagTapped(object? sender, TappedEventArgs e)
+    {
+        // A clickable tag (e.g. "Failed · retry") runs its command, not the row's selection.
+        if (sender is Control { DataContext: LibraryItemTag { Command: { } command } } && command.CanExecute(null))
+        {
+            command.Execute(null);
+            e.Handled = true;
+        }
+    }
+
     private void OnItemDoubleTapped(object? sender, TappedEventArgs e)
     {
         // Double-click a dataset to load it.

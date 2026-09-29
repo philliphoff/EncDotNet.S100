@@ -1,5 +1,4 @@
 using System.Globalization;
-using Avalonia.Media;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
@@ -54,7 +53,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when there is a <see cref="Subtitle"/> to show.</summary>
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Item.Title);
 
-    /// <summary>A compact one-line summary: spec, band, edition/update, issue date.</summary>
+    /// <summary>A compact one-line summary: spec, band, edition/update, issue date, and download size.</summary>
     public string Summary
     {
         get
@@ -70,6 +69,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             }
             if (Item.IssueDate is { } issued)
                 parts.Add(issued.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            if (Item.Location is RemoteItemLocation { SizeBytes: { } size })
+                parts.Add(FormatBytes(size));
             return string.Join(" · ", parts);
         }
     }
@@ -100,13 +101,54 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         _effective = null;
         OnPropertyChanged(nameof(Availability));
         OnPropertyChanged(nameof(AvailabilityText));
-        OnPropertyChanged(nameof(AvailabilityBrush));
+        OnPropertyChanged(nameof(PrimaryAvailability));
+        OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(CanLoad));
         OnPropertyChanged(nameof(CanDownload));
         OnPropertyChanged(nameof(Details));
     }
 
-    /// <summary>The availability badge text.</summary>
+    /// <summary>
+    /// Where the data is — exactly one state, drawn as the row swatch exactly
+    /// like the map outline.
+    /// </summary>
+    public LibraryPrimaryAvailability PrimaryAvailability => LibraryOutlineStyles.Primary(Availability);
+
+    /// <summary>
+    /// What is happening to the dataset — zero or more sentence-case tags
+    /// after its name (update available, loaded, on pan, …).
+    /// </summary>
+    public IReadOnlyList<LibraryItemTag> Tags
+    {
+        get
+        {
+            var tags = new List<LibraryItemTag>(2);
+            switch (Availability)
+            {
+                case LibraryAvailability.Outdated:
+                    tags.Add(new LibraryItemTag(UpdateText(), LibraryItemTagKind.Update));
+                    break;
+                case LibraryAvailability.Loaded:
+                    tags.Add(new LibraryItemTag(Strings.Library_Availability_Loaded, LibraryItemTagKind.Loaded));
+                    break;
+                case LibraryAvailability.Deferred:
+                    tags.Add(new LibraryItemTag(Strings.Library_Availability_Deferred, LibraryItemTagKind.OnPan));
+                    break;
+            }
+
+            return tags;
+        }
+    }
+
+    /// <summary>"Ed 46 available" (or with the update), naming what the source now offers.</summary>
+    private string UpdateText() => (Item.Edition, Item.Update) switch
+    {
+        ({ } edition, { } update and > 0) => string.Format(CultureInfo.CurrentCulture, Strings.Library_Tag_EditionUpdateAvailableFormat, edition, update),
+        ({ } edition, _) => string.Format(CultureInfo.CurrentCulture, Strings.Library_Tag_EditionAvailableFormat, edition),
+        _ => Strings.Library_Availability_Outdated,
+    };
+
+    /// <summary>The availability in words (details pane).</summary>
     public string AvailabilityText => Availability switch
     {
         LibraryAvailability.Local => Strings.Library_Availability_Local,
@@ -117,18 +159,6 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Outdated => Strings.Library_Availability_Outdated,
         _ => Strings.Library_Availability_Listed,
     };
-
-    /// <summary>The availability badge fill.</summary>
-    public IBrush AvailabilityBrush => new SolidColorBrush(Availability switch
-    {
-        LibraryAvailability.Local => Color.Parse("#4d9a6a"),
-        LibraryAvailability.Online => Color.Parse("#4f7fbf"),
-        LibraryAvailability.Missing => Color.Parse("#c0504d"),
-        LibraryAvailability.Deferred => Color.Parse("#8a6fb8"),
-        LibraryAvailability.Loaded => Color.Parse("#2e6b45"),
-        LibraryAvailability.Outdated => Color.Parse("#c07a2c"),
-        _ => Color.Parse("#8a8f98"),
-    });
 
     /// <summary>True when the item is cancelled or withdrawn.</summary>
     public bool IsCancelled => Item.Status == CollectionItemStatus.Cancelled;

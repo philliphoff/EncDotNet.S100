@@ -22,9 +22,70 @@
         <Style Selector="GridSplitter.PaneSplitter:pressed">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
+
+        <!-- Secondary-state tags on dataset rows: small sentence-case pills. -->
+        <Style Selector="Border.libraryTag">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag > TextBlock">
+            <Setter Property="FontSize" Value="10.5" />
+        </Style>
+        <Style Selector="Border.libraryTag.update">
+            <Setter Property="Background" Value="{DynamicResource LibraryTagWarningBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LibraryTagWarningBorder}" />
+        </Style>
+        <Style Selector="Border.libraryTag.update > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag.loaded">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag.loaded > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource BackgroundColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag.queued">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag.queued > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag.failed">
+            <Setter Property="Background" Value="{DynamicResource LibraryTagErrorBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LibraryTagErrorBorder}" />
+        </Style>
+        <Style Selector="Border.libraryTag.failed > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorColor}" />
+        </Style>
+        <Style Selector="Border.libraryTag.clickable">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
     </UserControl.Styles>
 
     <UserControl.Resources>
+        <FontFamily x:Key="LibraryMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+        <!-- Tints for tags, from the theme's warning and error colours. -->
+        <SolidColorBrush x:Key="LibraryTagWarningBackground" Color="{DynamicResource WarningColor}" Opacity="0.10" />
+        <SolidColorBrush x:Key="LibraryTagWarningBorder" Color="{DynamicResource WarningColor}" Opacity="0.35" />
+        <SolidColorBrush x:Key="LibraryTagErrorBackground" Color="{DynamicResource ErrorColor}" Opacity="0.08" />
+        <SolidColorBrush x:Key="LibraryTagErrorBorder" Color="{DynamicResource ErrorColor}" Opacity="0.35" />
+
+        <!-- A dataset's secondary-state tags. -->
+        <DataTemplate x:Key="LibraryTagTemplate" x:DataType="vm:LibraryItemTag">
+            <Border Classes="libraryTag"
+                    Classes.update="{Binding IsUpdate}"
+                    Classes.loaded="{Binding IsLoaded}"
+                    Classes.queued="{Binding IsQueued}"
+                    Classes.failed="{Binding IsFailed}"
+                    Classes.clickable="{Binding IsClickable}"
+                    Tapped="OnTagTapped">
+                <TextBlock Text="{Binding Text}" />
+            </Border>
+        </DataTemplate>
         <!-- The "Add to Library" menu, shared by the toolbar and the empty state. -->
         <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft">
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}">
@@ -186,23 +247,34 @@
                          Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
+                        <!-- Swatch (drawn like the map outline, so the list is the map's legend),
+                             name and tags, title, meta line. Kept cheap: the list is virtualised
+                             and can hold thousands of rows. -->
                         <DataTemplate x:DataType="vm:LibraryItemViewModel">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Background="Transparent">
-                                <StackPanel Grid.Column="0" Spacing="1">
-                                    <TextBlock Text="{Binding Name}" Classes="accentListTitle"
-                                               FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Background="Transparent">
+                                <views:LibrarySwatch Grid.Column="0" State="{Binding PrimaryAvailability}"
+                                                     VerticalAlignment="Top" Margin="0,8,0,0" />
+                                <StackPanel Grid.Column="1" Spacing="1">
+                                    <DockPanel>
+                                        <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}"
+                                                      ItemTemplate="{StaticResource LibraryTagTemplate}"
+                                                      Margin="6,0,0,0" VerticalAlignment="Center">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="4" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle"
+                                                   FontFamily="{StaticResource LibraryMonoFont}"
+                                                   FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
                                     <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.8"
                                                IsVisible="{Binding HasSubtitle}"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.6"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Border Grid.Column="1"
-                                        Background="{Binding AvailabilityBrush}"
-                                        CornerRadius="9" Padding="8,3" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding AvailabilityText}" FontSize="10" FontWeight="Bold"
-                                               Foreground="White" />
-                                </Border>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -245,11 +317,8 @@
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToDataset}">
                                 <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
                             </Button>
-                            <Border Grid.Column="3" Background="{Binding SelectedItem.AvailabilityBrush}"
-                                    CornerRadius="9" Padding="8,3" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding SelectedItem.AvailabilityText}" FontSize="10"
-                                           FontWeight="Bold" Foreground="White" />
-                            </Border>
+                            <TextBlock Grid.Column="3" Text="{Binding SelectedItem.AvailabilityText}" FontSize="11"
+                                       Opacity="0.7" VerticalAlignment="Center" />
                         </Grid>
                     </Panel>
                 </Border>

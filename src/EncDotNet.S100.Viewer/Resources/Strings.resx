@@ -2785,4 +2785,19 @@
   <data name="Library_DirectoryUrlJson" xml:space="preserve">
     <value>Not a supported catalogue: JSON that is not an S-100 feed.</value>
   </data>
+  <data name="Library_Tag_EditionAvailableFormat" xml:space="preserve">
+    <value>Ed {0} available</value>
+  </data>
+  <data name="Library_Tag_EditionUpdateAvailableFormat" xml:space="preserve">
+    <value>Ed {0} Upd {1} available</value>
+  </data>
+  <data name="Library_Tag_Queued" xml:space="preserve">
+    <value>Queued</value>
+  </data>
+  <data name="Library_Tag_FailedRetry" xml:space="preserve">
+    <value>Failed · retry</value>
+  </data>
+  <data name="Library_Tag_Package" xml:space="preserve">
+    <value>Package</value>
+  </data>
 </root>
