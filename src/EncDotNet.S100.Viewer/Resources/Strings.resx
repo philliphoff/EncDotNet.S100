@@ -2489,10 +2489,10 @@
     <value>Ed {0} Upd {1}</value>
   </data>
   <data name="Library_EmptyTitle" xml:space="preserve">
-    <value>No collections yet</value>
+    <value>Your library is empty</value>
   </data>
   <data name="Library_EmptyDescription" xml:space="preserve">
-    <value>Add folders of exchange sets and datasets, or an online feed such as NOAA's ENCs. The library indexes what they contain without loading them.</value>
+    <value>Add chart data to browse it and see its coverage on the map. Only an index is kept. Nothing is loaded, copied or downloaded until you ask.</value>
   </data>
   <data name="Library_ExistingCollection" xml:space="preserve">
     <value>Existing collection</value>
@@ -3075,5 +3075,26 @@
   </data>
   <data name="Menu_LibraryCopyUrl" xml:space="preserve">
     <value>Copy URL</value>
+  </data>
+  <data name="Library_Quick_Folder" xml:space="preserve">
+    <value>Add a folder…</value>
+  </data>
+  <data name="Library_Quick_FolderSub" xml:space="preserve">
+    <value>Scanned recursively, referenced in place</value>
+  </data>
+  <data name="Library_Quick_Online" xml:space="preserve">
+    <value>Browse online catalogues…</value>
+  </data>
+  <data name="Library_Quick_OnlineSub" xml:space="preserve">
+    <value>NOAA, USACE, European inland lists</value>
+  </data>
+  <data name="Library_Quick_Feed" xml:space="preserve">
+    <value>Connect to a shared feed…</value>
+  </data>
+  <data name="Library_Quick_FeedSub" xml:space="preserve">
+    <value>Charts served from another computer</value>
+  </data>
+  <data name="Library_DropHint" xml:space="preserve">
+    <value>Or drop a folder, .zip or CATALOG file here</value>
   </data>
 </root>

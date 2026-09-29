@@ -139,6 +139,13 @@
             <Setter Property="Margin" Value="16,0,0,0" />
         </Style>
 
+        <!-- Empty state's large targets. -->
+        <Style Selector="Button.libraryQuickAction">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="12,8" />
+        </Style>
+
         <!-- Non-interactive group headers in the Add menu. -->
         <Style Selector="MenuItem.libraryMenuHeader">
             <Setter Property="FontSize" Value="10.5" />
@@ -238,15 +245,41 @@
     </UserControl.Resources>
 
     <Panel>
-        <!-- Empty state -->
-        <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="12">
-            <views:PlaceholderView Icon="Library"
-                                   Header="{x:Static loc:Strings.Library_EmptyTitle}"
-                                   Description="{x:Static loc:Strings.Library_EmptyDescription}" />
-            <Button Classes="Outline"
-                    HorizontalAlignment="Center"
-                    Content="{x:Static loc:Strings.Button_AddToLibrary}"
-                    Flyout="{StaticResource AddMenu}" />
+        <!-- Empty state: the three most common ways in, as large targets. -->
+        <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
+            <TextBlock Text="{x:Static loc:Strings.Library_EmptyTitle}" FontSize="15" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="12" Opacity="0.7"
+                       TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6" />
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddFolderCommand}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="DIR" /></Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Folder}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FolderSub}" FontSize="11" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddOnlineCatalogueCommand}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="WEB" /></Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Online}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_OnlineSub}" FontSize="11" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddSharedFeedCommand}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="FEED" /></Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="11" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <TextBlock Text="{x:Static loc:Strings.Library_DropHint}" FontSize="11" Opacity="0.55"
+                       HorizontalAlignment="Center" Margin="0,4,0,0" />
         </StackPanel>
 
         <Grid IsVisible="{Binding !IsEmpty}">

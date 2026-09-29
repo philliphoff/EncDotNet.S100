@@ -1076,4 +1076,11 @@ internal static class Strings
     public static string Toast_LibraryUnpackedManyFormat => Get(nameof(Toast_LibraryUnpackedManyFormat));
     public static string Library_Field_Datasets => Get(nameof(Library_Field_Datasets));
     public static string Menu_LibraryCopyUrl => Get(nameof(Menu_LibraryCopyUrl));
+    public static string Library_Quick_Folder => Get(nameof(Library_Quick_Folder));
+    public static string Library_Quick_FolderSub => Get(nameof(Library_Quick_FolderSub));
+    public static string Library_Quick_Online => Get(nameof(Library_Quick_Online));
+    public static string Library_Quick_OnlineSub => Get(nameof(Library_Quick_OnlineSub));
+    public static string Library_Quick_Feed => Get(nameof(Library_Quick_Feed));
+    public static string Library_Quick_FeedSub => Get(nameof(Library_Quick_FeedSub));
+    public static string Library_DropHint => Get(nameof(Library_DropHint));
 }
