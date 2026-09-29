@@ -131,6 +131,14 @@
             <Setter Property="Fill" Value="{DynamicResource SuccessColor}" />
         </Style>
 
+        <!-- Rows: dataset codes in monospace; datasets of an unpacked package indented. -->
+        <Style Selector="TextBlock.libraryRowName.mono">
+            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+        </Style>
+        <Style Selector="Grid.libraryGroupChild">
+            <Setter Property="Margin" Value="16,0,0,0" />
+        </Style>
+
         <!-- Non-interactive group headers in the Add menu. -->
         <Style Selector="MenuItem.libraryMenuHeader">
             <Setter Property="FontSize" Value="10.5" />
@@ -460,9 +468,20 @@
                              name and tags, title, meta line. Kept cheap: the list is virtualised
                              and can hold thousands of rows. -->
                         <DataTemplate x:DataType="vm:LibraryItemViewModel">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Background="Transparent">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Background="Transparent"
+                                  Classes.libraryGroupChild="{Binding IsGroupChild}">
                                 <views:LibrarySwatch Grid.Column="0" State="{Binding PrimaryAvailability}"
+                                                     IsVisible="{Binding !IsGroupHeader}"
                                                      VerticalAlignment="Top" Margin="0,8,0,0" />
+                                <!-- An unpacked package: a toggle for the datasets listed under it. -->
+                                <Button Grid.Column="0" Classes="Icon" Padding="0" Width="16" MinHeight="0"
+                                        IsVisible="{Binding IsGroupHeader}" VerticalAlignment="Top" Margin="0,1,0,0"
+                                        Command="{Binding ToggleCommand}">
+                                    <Panel>
+                                        <ic:FluentIcon Icon="ChevronRight" FontSize="12" IsVisible="{Binding !IsExpanded}" />
+                                        <ic:FluentIcon Icon="ChevronDown" FontSize="12" IsVisible="{Binding IsExpanded}" />
+                                    </Panel>
+                                </Button>
                                 <StackPanel Grid.Column="1" Spacing="1">
                                     <DockPanel>
                                         <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Tags}"
@@ -474,8 +493,8 @@
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                         </ItemsControl>
-                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle"
-                                                   FontFamily="{StaticResource LibraryMonoFont}"
+                                        <TextBlock Text="{Binding Name}" Classes="accentListTitle libraryRowName"
+                                                   Classes.mono="{Binding IsNameMono}"
                                                    FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
                                     </DockPanel>
                                     <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.8"

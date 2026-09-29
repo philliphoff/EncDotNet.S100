@@ -1067,4 +1067,12 @@ internal static class Strings
     public static string Library_BulkOnPan => Get(nameof(Library_BulkOnPan));
     public static string Library_DownloadProgressFormat => Get(nameof(Library_DownloadProgressFormat));
     public static string Library_CancelDownload => Get(nameof(Library_CancelDownload));
+    public static string Library_Tag_Unpacked => Get(nameof(Library_Tag_Unpacked));
+    public static string Library_PackageHint => Get(nameof(Library_PackageHint));
+    public static string Library_PackagePublishedFormat => Get(nameof(Library_PackagePublishedFormat));
+    public static string Library_PackageGroupFormat => Get(nameof(Library_PackageGroupFormat));
+    public static string Toast_LibraryUnpackedTitle => Get(nameof(Toast_LibraryUnpackedTitle));
+    public static string Toast_LibraryUnpackedFormat => Get(nameof(Toast_LibraryUnpackedFormat));
+    public static string Toast_LibraryUnpackedManyFormat => Get(nameof(Toast_LibraryUnpackedManyFormat));
+    public static string Library_Field_Datasets => Get(nameof(Library_Field_Datasets));
 }

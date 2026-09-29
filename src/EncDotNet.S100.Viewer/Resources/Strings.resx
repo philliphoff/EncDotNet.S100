@@ -3049,4 +3049,28 @@
   <data name="Library_CancelDownload" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="Library_Tag_Unpacked" xml:space="preserve">
+    <value>Unpacked</value>
+  </data>
+  <data name="Library_PackageHint" xml:space="preserve">
+    <value>Holds several datasets. Coverage and contents show after download.</value>
+  </data>
+  <data name="Library_PackagePublishedFormat" xml:space="preserve">
+    <value>{0} · published {1}</value>
+  </data>
+  <data name="Library_PackageGroupFormat" xml:space="preserve">
+    <value>{0} · {1:N0} datasets</value>
+  </data>
+  <data name="Toast_LibraryUnpackedTitle" xml:space="preserve">
+    <value>Package unpacked</value>
+  </data>
+  <data name="Toast_LibraryUnpackedFormat" xml:space="preserve">
+    <value>Package unpacked into {0:N0} datasets.</value>
+  </data>
+  <data name="Toast_LibraryUnpackedManyFormat" xml:space="preserve">
+    <value>{0:N0} packages unpacked into {1:N0} datasets.</value>
+  </data>
+  <data name="Library_Field_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
 </root>

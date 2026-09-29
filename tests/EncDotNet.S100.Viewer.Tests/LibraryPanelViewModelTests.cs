@@ -445,12 +445,55 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal(indexed, indexer.Calls);
     }
 
+    [Fact]
+    public async Task Unpacked_packages_are_groups_and_undownloaded_ones_are_named_by_description()
+    {
+        using var context = new LibraryTestContext();
+        var indexer = new PackageIndexer { Unpacked = true };
+        using var library = context.CreateService(new Collections.Indexing.CollectionIndexer([indexer]));
+        library.Initialize();
+        library.AddCollection("Romania", [new ChartCatalogsFeedSource(
+            Guid.NewGuid(), null, new Uri("https://example.test/RO_IENC_Catalog.xml"), ChartCatalogsFilter.All)]);
+        await library.WhenIdle();
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+
+        // Base1 is unpacked (a collapsed group); Base2 is still a package.
+        Assert.Equal(2, vm.Items.Count);
+        var group = vm.Items[0];
+        Assert.True(group.IsGroupHeader);
+        Assert.Equal("Dunărea 790 - 0 (Base1)", group.Name);
+        Assert.Equal((3, false), (group.GroupCount, group.IsExpanded));
+        Assert.Equal("Unpacked", Assert.Single(group.Tags).Text);
+        Assert.False(group.CanLoad);
+        var package = vm.Items[1];
+        Assert.True(package.IsPackageEntry);
+        Assert.Equal("Dunărea 1750 - 790 (Base2)", package.Name);
+        Assert.False(package.IsNameMono);
+        Assert.Equal("Package", Assert.Single(package.Tags).Text);
+        Assert.StartsWith("Base2 · published 2024-08-23", package.Summary);
+        Assert.Equal(4, vm.AllCount);  // counts are datasets, not rows
+
+        group.ToggleCommand!.Execute(null);
+        Assert.Equal(5, vm.Items.Count);
+        Assert.All(vm.Items.Skip(1).Take(3), i => Assert.True(i.IsGroupChild));
+        vm.SelectedItem = vm.Items[2];
+        var selected = vm.SelectedItem;
+
+        // A text match inside a collapsed group opens it, keeping the selection.
+        vm.Items[0].ToggleCommand!.Execute(null);
+        vm.FilterText = "3R7D";
+        Assert.Equal(3, vm.Items.Count);
+        Assert.Same(selected, vm.Items.Single(i => ReferenceEquals(i, selected)));
+    }
+
     /// <summary>Indexes a community source as a single online package entry.</summary>
     private sealed class PackageIndexer : Collections.Indexing.ICollectionSourceIndexer
     {
         public int Calls { get; private set; }
 
         public PackageLayout? Layout { get; init; }
+
+        public bool Unpacked { get; init; }
 
         public bool CanIndex(CollectionSource source) => source is ChartCatalogsFeedSource;
 
@@ -468,6 +511,31 @@ public sealed class LibraryPanelViewModelTests : IDisposable
                 Name = "Base1",
                 Location = new RemoteItemLocation(new Uri("https://example.test/p.zip"), null, null, "community/TEST", "Base1", Layout),
             };
+            if (Unpacked)
+            {
+                var remote = new RemoteItemLocation(new Uri("https://example.test/p1.zip"), null, null, "community/RO", "Base1");
+                CollectionItem Cell(string name) => new()
+                {
+                    Key = "Base1/" + name,
+                    ProductSpec = "S-57",
+                    Name = name,
+                    Location = remote,
+                    Properties = new Dictionary<string, string> { ["package"] = "Base1", ["packageTitle"] = "Dunărea 790 - 0 (Base1)" },
+                };
+                var entry = new CollectionItem
+                {
+                    Key = "Base2",
+                    ProductSpec = "S-57",
+                    Name = "Base2",
+                    Title = "Dunărea 1750 - 790 (Base2)",
+                    IssueDate = new DateOnly(2024, 8, 23),
+                    Location = new RemoteItemLocation(new Uri("https://example.test/p2.zip"), null, null, "community/RO", "Base2"),
+                    Properties = new Dictionary<string, string> { ["package"] = "Base2" },
+                };
+                return ValueTask.FromResult(new SourceIndex(
+                    source.Id, DateTimeOffset.UtcNow, null, [Cell("3R7D0000"), Cell("3R7D0004"), entry, Cell("other")], []));
+            }
+
             return ValueTask.FromResult(new SourceIndex(source.Id, DateTimeOffset.UtcNow, null, [item], []));
         }
     }

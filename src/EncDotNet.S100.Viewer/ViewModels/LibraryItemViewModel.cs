@@ -94,20 +94,110 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>The source the item was indexed from.</summary>
     public LibrarySource Source { get; }
 
-    /// <summary>The dataset name (e.g. <c>US5AK1AM</c>).</summary>
-    public string Name => Item.Name;
+    /// <summary>
+    /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
+    /// (or its group, once unpacked) is named by its description instead.
+    /// </summary>
+    public string Name => IsPackageEntry || IsGroupHeader ? Item.Title ?? Item.Name : Item.Name;
 
-    /// <summary>The descriptive title, when the source supplies one.</summary>
-    public string? Subtitle => Item.Title;
+    /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
+    public bool IsNameMono => !IsPackageEntry && !IsGroupHeader;
+
+    /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
+    public string? Subtitle => IsPackageEntry ? Strings.Library_PackageHint : IsGroupHeader ? null : Item.Title;
 
     /// <summary>True when there is a <see cref="Subtitle"/> to show.</summary>
-    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Item.Title);
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
+
+    /// <summary>
+    /// True for a community-list entry not yet downloaded: a package that may
+    /// hold several datasets, listed as one row.
+    /// </summary>
+    public bool IsPackageEntry =>
+        Item.Location is RemoteItemLocation { Package: { } package, Layout: null } && Item.Key == package;
+
+    /// <summary>True for the header row of an unpacked package's datasets.</summary>
+    public bool IsGroupHeader { get; private init; }
+
+    private bool _isGroupChild;
+    private int _groupCount;
+
+    /// <summary>True for a dataset listed under an unpacked package's header (indented).</summary>
+    public bool IsGroupChild
+    {
+        get => _isGroupChild;
+        set => SetProperty(ref _isGroupChild, value);
+    }
+
+    /// <summary>For a group header: how many datasets the package unpacked into.</summary>
+    public int GroupCount
+    {
+        get => _groupCount;
+        set
+        {
+            if (SetProperty(ref _groupCount, value))
+                OnPropertyChanged(nameof(Summary));
+        }
+    }
+
+    /// <summary>For a group header: the (source, package) it groups.</summary>
+    internal (Guid Source, string Package) GroupKey { get; private init; }
+
+    private bool _isExpanded;
+
+    /// <summary>For a group header: whether its datasets are listed.</summary>
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
+    }
+
+    /// <summary>For a group header: shows or hides its datasets.</summary>
+    public System.Windows.Input.ICommand? ToggleCommand { get; private init; }
+
+    /// <summary>
+    /// Creates the header row for an unpacked package: named by the package's
+    /// description, tagged "Unpacked", with its dataset count.
+    /// </summary>
+    internal static LibraryItemViewModel ForPackageGroup(
+        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle)
+    {
+        var item = new CollectionItem
+        {
+            Key = "package:" + package,
+            ProductSpec = "S-57",
+            Name = package,
+            Title = title ?? package,
+            Location = NoItemLocation.Instance,
+            Properties = new Dictionary<string, string> { ["package"] = package },
+        };
+        LibraryItemViewModel? header = null;
+        header = new LibraryItemViewModel(item, source)
+        {
+            IsGroupHeader = true,
+            GroupKey = (source.Id, package),
+            ToggleCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => toggle(header!)),
+        };
+        header._groupCount = count;
+        header._isExpanded = isExpanded;
+        return header;
+    }
 
     /// <summary>A compact one-line summary: spec, band, edition/update, issue date, and download size.</summary>
     public string Summary
     {
         get
         {
+            if (IsGroupHeader)
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_PackageGroupFormat, Item.Name, GroupCount);
+            if (IsPackageEntry)
+            {
+                var published = Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                return published is null
+                    ? Item.Name
+                    : string.Format(CultureInfo.CurrentCulture, Strings.Library_PackagePublishedFormat, Item.Name, published);
+            }
+
             var parts = new List<string>(4) { Item.ProductSpec };
             if (Item.UsageBand is { } band)
                 parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Library_BandFormat, band));
@@ -126,7 +216,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     }
 
     /// <summary>Where the data can be had now (resolved on first access).</summary>
-    public LibraryAvailability Availability => _availability ??= (_loadState?.Invoke(EffectiveItem)) switch
+    public LibraryAvailability Availability => _availability ??= IsGroupHeader ? LibraryAvailability.Local : (_loadState?.Invoke(EffectiveItem)) switch
     {
         LibraryLoadState.Loaded => LibraryAvailability.Loaded,
         LibraryLoadState.Deferred => LibraryAvailability.Deferred,
@@ -135,7 +225,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     };
 
     /// <summary>True when the item can be opened from disk (local, not already loaded).</summary>
-    public bool CanLoad => Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated;
+    public bool CanLoad => !IsGroupHeader
+        && Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated;
 
     /// <summary>True when the item can be downloaded (online, or a newer edition is available).</summary>
     public bool CanDownload =>
@@ -184,6 +275,14 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 case LibraryDownloadItemState.Failed:
                     tags.Add(new LibraryItemTag(Strings.Library_Tag_FailedRetry, LibraryItemTagKind.Failed, _download is null ? null : RetryCommand));
                     break;
+            }
+
+            if (IsPackageEntry)
+                tags.Add(new LibraryItemTag(Strings.Library_Tag_Package, LibraryItemTagKind.Neutral));
+            if (IsGroupHeader)
+            {
+                tags.Add(new LibraryItemTag(Strings.Library_Tag_Unpacked, LibraryItemTagKind.Neutral));
+                return tags;
             }
 
             switch (Availability)
@@ -271,6 +370,15 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             {
                 if (!string.IsNullOrWhiteSpace(value))
                     fields.Add(new LibraryDetailField(label, value, mono, copy));
+            }
+
+            if (IsGroupHeader)
+            {
+                // An unpacked package: where it came from and what it held.
+                Add(source, Strings.Library_Field_Collection, _collectionName);
+                Add(source, PropertyLabel("package"), Item.Name);
+                Add(source, Strings.Library_Field_Datasets, GroupCount.ToString("N0", c));
+                return [new LibraryDetailGroup(Strings.Library_Group_Source, source)];
             }
 
             Add(product, Strings.Library_Field_Spec, ProductText());

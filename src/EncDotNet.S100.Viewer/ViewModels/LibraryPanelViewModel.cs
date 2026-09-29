@@ -43,6 +43,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _availabilityRefreshPosted;
     private bool _progressRefreshPosted;
     private readonly Dictionary<Guid, List<CollectionItem>> _downloadingBySource = [];
+    private readonly HashSet<(Guid Source, string Package)> _expandedPackages = [];
+    private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
+    private readonly Services.Notifications.INotificationService? _notifications;
     private readonly Action<Action> _dispatch;
 
     private LibraryNodeViewModel? _selectedNode;
@@ -63,8 +66,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryImporter importer,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
-        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth)
+        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
+        Services.Notifications.INotificationService? notifications = null)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications)
     {
     }
 
@@ -74,9 +78,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryLoader loader,
         ILibraryDownloader downloader,
         Action<Action> dispatch,
-        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null)
+        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
+        Services.Notifications.INotificationService? notifications = null)
     {
         _feedHealth = feedHealth;
+        _notifications = notifications;
         ArgumentNullException.ThrowIfNull(downloader);
         _downloader = downloader;
         ArgumentNullException.ThrowIfNull(library);
@@ -582,7 +588,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _selectedItem is { } item ? _loader.LoadAsync([item.EffectiveItem], defer: false) : Task.CompletedTask;
 
     private Task LoadListedAsYouPanAsync() =>
-        _loader.LoadAsync(_items.Select(i => i.EffectiveItem).ToArray(), defer: true);
+        _loader.LoadAsync(_items.Where(i => !i.IsGroupHeader).Select(i => i.EffectiveItem).ToArray(), defer: true);
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 
@@ -599,7 +605,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         // A package's cells (and their coverage) appear once its source re-indexes.
         if (ReindexPackageSources([item]))
+        {
+            await AnnouncePackagesAsync([item]).ConfigureAwait(true);
             return;
+        }
 
         item.RefreshAvailability();
         if (load)
@@ -613,8 +622,44 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .ToArray();
         TrackDownloads(items);
         var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
-        if (result.Downloaded > 0)
-            ReindexPackageSources(items);
+        if (result.Downloaded > 0 && ReindexPackageSources(items))
+            await AnnouncePackagesAsync(items).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Once the re-index lists an unpacked package's datasets, opens its group
+    /// (once) and says how many datasets it held.
+    /// </summary>
+    private async Task AnnouncePackagesAsync(IEnumerable<LibraryItemViewModel> items)
+    {
+        var packages = items
+            .Where(i => i.IsPackageEntry)
+            .Select(i => (i.Source.Id, ((RemoteItemLocation)i.Item.Location).Package!))
+            .Distinct()
+            .ToArray();
+        if (packages.Length == 0)
+            return;
+
+        await _library.WhenIdle().ConfigureAwait(true);
+        var counts = packages.Select(p => _library.Collections
+                .SelectMany(c => c.Sources)
+                .Where(s => s.Id == p.Item1)
+                .SelectMany(s => s.Index?.Items ?? [])
+                .Count(i => i.Properties.TryGetValue("package", out var pkg) && pkg == p.Item2 && i.Key != pkg))
+            .ToArray();
+        foreach (var package in packages)
+            _expandedPackages.Add(package);
+        _dispatch(() => RebuildItems(force: true));
+
+        var datasets = counts.Sum();
+        if (datasets == 0)
+            return;
+        _notifications?.Create(Strings.Toast_LibraryUnpackedTitle)
+            .WithSeverity(Services.Notifications.NotificationSeverity.Success)
+            .WithContent(packages.Length == 1
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Toast_LibraryUnpackedFormat, datasets)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Toast_LibraryUnpackedManyFormat, packages.Length, datasets))
+            .Show();
     }
 
     /// <summary>Remembers which sources' datasets are downloading, for the tree's status lines.</summary>
@@ -803,7 +848,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(i => _showCancelled || !i.IsCancelled)
             .Where(i => filter.Length == 0 || i.Matches(filter))
             .ToArray();
-        Items = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
+        Items = GroupPackages(_textFiltered.Where(i => InState(i, _stateFilter)), expandAll: filter.Length > 0);
         Recount();
         OnPropertyChanged(nameof(LocationHitCount));
         OnPropertyChanged(nameof(LocationHitsText));
@@ -821,6 +866,85 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         if (_selectedItem is not null && !_items.Contains(_selectedItem))
             SelectedItem = null;
+    }
+
+    /// <summary>
+    /// Lists the datasets an unpacked community-list package holds under a
+    /// header row named by the package (collapsed unless it was just
+    /// unpacked, or the text filter matched inside it), so the entry the user
+    /// downloaded does not simply disappear.
+    /// </summary>
+    private IReadOnlyList<LibraryItemViewModel> GroupPackages(IEnumerable<LibraryItemViewModel> items, bool expandAll)
+    {
+        var rows = new List<LibraryItemViewModel>();
+        var groups = new Dictionary<(Guid, string), List<LibraryItemViewModel>>();
+        foreach (var item in items)
+        {
+            if (PackageOf(item) is { } key)
+            {
+                if (!groups.TryGetValue(key, out var members))
+                {
+                    groups[key] = members = [];
+                    rows.Add(item);  // the group's place in the list
+                }
+
+                members.Add(item);
+            }
+            else
+            {
+                rows.Add(item);
+            }
+        }
+
+        if (groups.Count == 0)
+            return rows;
+
+        var result = new List<LibraryItemViewModel>(rows.Count + groups.Count);
+        foreach (var row in rows)
+        {
+            if (PackageOf(row) is not { } key)
+            {
+                result.Add(row);
+                continue;
+            }
+
+            var members = groups[key];
+            var expanded = expandAll || _expandedPackages.Contains(key);
+            if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, row.Source))
+            {
+                _packageHeaders[key] = header = LibraryItemViewModel.ForPackageGroup(
+                    row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage);
+            }
+
+            header.GroupCount = members.Count;
+            header.IsExpanded = expanded;
+            result.Add(header);
+            if (expanded)
+            {
+                foreach (var member in members)
+                    member.IsGroupChild = true;
+                result.AddRange(members);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>The unpacked package a community-list dataset came from, if any.</summary>
+    private static (Guid, string)? PackageOf(LibraryItemViewModel item) =>
+        item.Source.Definition is ChartCatalogsFeedSource
+        && item.Item.Properties.TryGetValue("package", out var package)
+        && item.Item.Key != package
+            ? (item.Source.Id, package)
+            : null;
+
+    private void TogglePackage(LibraryItemViewModel header)
+    {
+        if (!_expandedPackages.Remove(header.GroupKey))
+            _expandedPackages.Add(header.GroupKey);
+        var selected = _selectedItem;
+        ApplyFilter();
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
     }
 
     private static bool InState(LibraryItemViewModel item, LibraryStateFilter state) => state switch
