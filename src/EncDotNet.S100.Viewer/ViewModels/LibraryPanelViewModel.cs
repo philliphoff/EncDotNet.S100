@@ -100,6 +100,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
         ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
         ClearLocationCommand = new RelayCommand(() => SetLocation(null));
+        NextAtLocationCommand = new RelayCommand(NextAtLocation, () => _location is not null && _items.Count > 1);
         LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
@@ -157,6 +158,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _selectedItem, value))
             {
                 OnPropertyChanged(nameof(HasSelectedItem));
+                OnPropertyChanged(nameof(LocationHitIndex));
+                OnPropertyChanged(nameof(LocationPositionText));
                 ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
@@ -296,6 +299,27 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Returns the list to the selected node's datasets.</summary>
     public ICommand ClearLocationCommand { get; }
 
+    /// <summary>Selects the next dataset covering the tapped point (as tapping the same spot again does).</summary>
+    public ICommand NextAtLocationCommand { get; }
+
+    /// <summary>How many listed datasets cover the tapped point.</summary>
+    public int LocationHitCount => _location is null ? 0 : _items.Count;
+
+    /// <summary>The selected dataset's 1-based position among them, or 0 when none is selected.</summary>
+    public int LocationHitIndex => _location is null || _selectedItem is null ? 0 : IndexOf(_selectedItem) + 1;
+
+    /// <summary>"3 datasets" for the map-tap banner.</summary>
+    public string LocationHitsText => LocationHitCount == 1
+        ? Strings.Library_LocationHitsOne
+        : string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationHitsFormat, LocationHitCount);
+
+    /// <summary>"cover this point" (or "covers" for one).</summary>
+    public string LocationCoverText => LocationHitCount == 1 ? Strings.Library_LocationCovers : Strings.Library_LocationCover;
+
+    /// <summary>"1 / 3" for the map-tap banner.</summary>
+    public string LocationPositionText =>
+        string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationIndexFormat, LocationHitIndex, LocationHitCount);
+
     /// <summary>Loads the selected dataset now.</summary>
     public ICommand LoadCommand { get; }
 
@@ -347,11 +371,37 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         var previousItem = _selectedItem;
         SetLocation(position, hits);
 
-        var index = sameSpot && previousItem is not null
-            ? (_items.ToList().FindIndex(i => SameItem(i, previousItem)) + 1) % Math.Max(1, _items.Count)
-            : 0;
-        SelectedItem = _items.Count > 0 ? _items[index] : null;
+        if (sameSpot && previousItem is not null)
+        {
+            SelectedItem = _items.FirstOrDefault(i => SameItem(i, previousItem));
+            NextAtLocation();
+        }
+        else
+        {
+            SelectedItem = _items.Count > 0 ? _items[0] : null;
+        }
+
         return true;
+    }
+
+    /// <summary>Selects the next dataset at the tapped point, wrapping round.</summary>
+    private void NextAtLocation()
+    {
+        if (_location is null || _items.Count == 0)
+            return;
+        var next = _selectedItem is null ? 0 : (IndexOf(_selectedItem) + 1) % _items.Count;
+        SelectedItem = _items[next];
+    }
+
+    private int IndexOf(LibraryItemViewModel item)
+    {
+        for (var i = 0; i < _items.Count; i++)
+        {
+            if (SameItem(_items[i], item))
+                return i;
+        }
+
+        return -1;
     }
 
     public void Dispose()
@@ -523,6 +573,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(Location));
         OnPropertyChanged(nameof(HasLocation));
         OnPropertyChanged(nameof(LocationSummary));
+        ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
 
         var selected = _selectedItem;
         _itemsBasis = null;
@@ -606,6 +657,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .ToArray();
         Items = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
         Recount();
+        OnPropertyChanged(nameof(LocationHitCount));
+        OnPropertyChanged(nameof(LocationHitsText));
+        OnPropertyChanged(nameof(LocationCoverText));
+        OnPropertyChanged(nameof(LocationPositionText));
+        ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(ItemsSummary));
         ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();

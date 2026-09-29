@@ -1051,4 +1051,10 @@ internal static class Strings
     public static string Library_AgeMinutesFormat => Get(nameof(Library_AgeMinutesFormat));
     public static string Library_AgeHoursFormat => Get(nameof(Library_AgeHoursFormat));
     public static string Library_AgeDaysFormat => Get(nameof(Library_AgeDaysFormat));
+    public static string Library_LocationHitsFormat => Get(nameof(Library_LocationHitsFormat));
+    public static string Library_LocationHitsOne => Get(nameof(Library_LocationHitsOne));
+    public static string Library_LocationCover => Get(nameof(Library_LocationCover));
+    public static string Library_LocationCovers => Get(nameof(Library_LocationCovers));
+    public static string Library_LocationIndexFormat => Get(nameof(Library_LocationIndexFormat));
+    public static string Library_LocationNext => Get(nameof(Library_LocationNext));
 }

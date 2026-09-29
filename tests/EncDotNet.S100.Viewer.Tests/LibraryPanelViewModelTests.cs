@@ -237,11 +237,25 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         Assert.True(vm.HasLocation);
         Assert.Contains(vm.SelectedItem!, vm.Items);
+        Assert.Equal(vm.Items.Count, vm.LocationHitCount);
+        Assert.Equal(1, vm.LocationHitIndex);
+        Assert.Equal($"1 / {vm.Items.Count}", vm.LocationPositionText);
         var first = vm.SelectedItem!.Name;
         if (vm.Items.Count > 1)
         {
             vm.SelectAt(point);
             Assert.NotEqual(first, vm.SelectedItem!.Name);
+            Assert.Equal(2, vm.LocationHitIndex);
+
+            // Next, from the banner, steps the same way and wraps round.
+            for (var i = 0; i < vm.Items.Count - 1; i++)
+                vm.NextAtLocationCommand.Execute(null);
+            Assert.Equal(first, vm.SelectedItem!.Name);
+        }
+        else
+        {
+            Assert.False(vm.NextAtLocationCommand.CanExecute(null));
+            Assert.Equal("1 dataset", vm.LocationHitsText);
         }
 
         vm.ClearLocationCommand.Execute(null);

@@ -3001,4 +3001,22 @@
   <data name="Library_AgeDaysFormat" xml:space="preserve">
     <value>{0} days</value>
   </data>
+  <data name="Library_LocationHitsFormat" xml:space="preserve">
+    <value>{0:N0} datasets</value>
+  </data>
+  <data name="Library_LocationHitsOne" xml:space="preserve">
+    <value>1 dataset</value>
+  </data>
+  <data name="Library_LocationCover" xml:space="preserve">
+    <value>cover this point</value>
+  </data>
+  <data name="Library_LocationCovers" xml:space="preserve">
+    <value>covers this point</value>
+  </data>
+  <data name="Library_LocationIndexFormat" xml:space="preserve">
+    <value>{0:N0} / {1:N0}</value>
+  </data>
+  <data name="Library_LocationNext" xml:space="preserve">
+    <value>Next ›</value>
+  </data>
 </root>
