@@ -1057,4 +1057,14 @@ internal static class Strings
     public static string Library_LocationCovers => Get(nameof(Library_LocationCovers));
     public static string Library_LocationIndexFormat => Get(nameof(Library_LocationIndexFormat));
     public static string Library_LocationNext => Get(nameof(Library_LocationNext));
+    public static string Library_BulkToDownloadFormat => Get(nameof(Library_BulkToDownloadFormat));
+    public static string Library_BulkNothing => Get(nameof(Library_BulkNothing));
+    public static string Library_BulkListedFormat => Get(nameof(Library_BulkListedFormat));
+    public static string Library_BulkScopeFiltered => Get(nameof(Library_BulkScopeFiltered));
+    public static string Library_BulkScopeAll => Get(nameof(Library_BulkScopeAll));
+    public static string Library_BulkAlreadyLocalFormat => Get(nameof(Library_BulkAlreadyLocalFormat));
+    public static string Library_BulkDownloadingFormat => Get(nameof(Library_BulkDownloadingFormat));
+    public static string Library_BulkOnPan => Get(nameof(Library_BulkOnPan));
+    public static string Library_DownloadProgressFormat => Get(nameof(Library_DownloadProgressFormat));
+    public static string Library_CancelDownload => Get(nameof(Library_CancelDownload));
 }

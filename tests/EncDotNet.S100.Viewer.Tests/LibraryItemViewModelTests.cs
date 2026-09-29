@@ -123,8 +123,39 @@ public sealed class LibraryItemViewModelTests
         Assert.False(row.CanLoad);
     }
 
+    [Fact]
+    public void Download_states_show_as_tags_and_progress()
+    {
+        var downloader = new StubDownloader(false);
+        var retried = 0;
+        var row = new LibraryItemViewModel(Online(), Source, _ => LibraryLoadState.None, downloader, null, _ => { retried++; return Task.CompletedTask; });
+
+        downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Queued, 0, 3_040_870);
+        row.RefreshDownload();
+        Assert.Equal(LibraryItemTagKind.Queued, Assert.Single(row.Tags).Kind);
+        Assert.False(row.IsDownloading);
+
+        downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, 1_900_000, 3_040_870);
+        row.RefreshDownload();
+        Assert.True(row.IsDownloading);
+        Assert.Equal(0.62, row.DownloadProgress, 2);
+        Assert.Equal("1.8 MB / 2.9 MB", row.DownloadProgressText!.Replace(',', '.'));
+        Assert.Empty(row.Tags);
+
+        downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, "404");
+        row.RefreshDownload();
+        var failed = Assert.Single(row.Tags);
+        Assert.Equal(("Failed · retry", LibraryItemTagKind.Failed), (failed.Text, failed.Kind));
+        failed.Command!.Execute(null);
+        Assert.Equal(1, retried);
+    }
+
     private sealed class StubDownloader(bool outdated) : ILibraryDownloader
     {
+        public LibraryDownloadItemStatus? Status { get; set; }
+
+        public LibraryDownloadItemStatus? StatusOf(CollectionItem item) => Status;
+
         public event EventHandler? Changed { add { } remove { } }
 
         public CollectionItem Localize(CollectionItem item) => item;

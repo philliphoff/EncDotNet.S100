@@ -3019,4 +3019,34 @@
   <data name="Library_LocationNext" xml:space="preserve">
     <value>Next ›</value>
   </data>
+  <data name="Library_BulkToDownloadFormat" xml:space="preserve">
+    <value>{0:N0} to download · {1}</value>
+  </data>
+  <data name="Library_BulkNothing" xml:space="preserve">
+    <value>Nothing to download</value>
+  </data>
+  <data name="Library_BulkListedFormat" xml:space="preserve">
+    <value>{0:N0} datasets listed</value>
+  </data>
+  <data name="Library_BulkScopeFiltered" xml:space="preserve">
+    <value>Filtered set</value>
+  </data>
+  <data name="Library_BulkScopeAll" xml:space="preserve">
+    <value>All listed datasets</value>
+  </data>
+  <data name="Library_BulkAlreadyLocalFormat" xml:space="preserve">
+    <value>{0} · {1:N0} already local</value>
+  </data>
+  <data name="Library_BulkDownloadingFormat" xml:space="preserve">
+    <value>Downloading {0:N0} of {1:N0} · {2:P0}</value>
+  </data>
+  <data name="Library_BulkOnPan" xml:space="preserve">
+    <value>On pan</value>
+  </data>
+  <data name="Library_DownloadProgressFormat" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="Library_CancelDownload" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
 </root>

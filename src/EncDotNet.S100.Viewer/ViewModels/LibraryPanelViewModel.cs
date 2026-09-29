@@ -41,6 +41,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly ILibraryDownloader _downloader;
     private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
     private bool _availabilityRefreshPosted;
+    private bool _progressRefreshPosted;
+    private readonly Dictionary<Guid, List<CollectionItem>> _downloadingBySource = [];
     private readonly Action<Action> _dispatch;
 
     private LibraryNodeViewModel? _selectedNode;
@@ -106,8 +108,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
         DownloadOnlyCommand = new AsyncRelayCommand(() => DownloadSelectedAsync(load: false), () => _selectedItem?.CanDownload == true);
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
+        CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
         _loader.Changed += OnLoaderChanged;
         _downloader.Changed += OnLoaderChanged;
+        _downloader.ProgressChanged += OnDownloadProgress;
 
         _library.Changed += OnLibraryChanged;
         Sync();
@@ -335,23 +339,78 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Downloads every listed online (or outdated) dataset.</summary>
     public ICommand DownloadListedCommand { get; }
 
-    /// <summary>How many listed datasets can be downloaded.</summary>
-    public int DownloadableCount => _items.Count(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+    /// <summary>Cancels the running bulk download.</summary>
+    public ICommand CancelDownloadsCommand { get; }
 
-    /// <summary>True when some listed dataset can be downloaded.</summary>
-    public bool HasDownloadable => DownloadableCount > 0;
+    /// <summary>True while a bulk download runs (the bulk bar shows its progress and Cancel).</summary>
+    public bool IsBulkDownloading => _downloader.Progress is not null;
+
+    /// <summary>True when there are listed datasets for the bulk bar to act on.</summary>
+    public bool HasBulkBar => _items.Count > 0 || IsBulkDownloading;
+
+    /// <summary>
+    /// The bulk bar's first line: "6 to download · 16,4 MB" (or, while
+    /// downloading, what is left).
+    /// </summary>
+    public string BulkSummary
+    {
+        get
+        {
+            if (_downloader.Progress is { } progress)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkToDownloadFormat,
+                    progress.Remaining, LibraryItemViewModel.FormatBytes(progress.BytesLeft));
+            }
+
+            var downloadable = Downloadable().ToArray();
+            return downloadable.Length == 0
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkListedFormat, _items.Count)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkToDownloadFormat, downloadable.Length,
+                    LibraryItemViewModel.FormatBytes(downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
+        }
+    }
+
+    /// <summary>
+    /// The bulk bar's second line: what the buttons act on ("Filtered set · 2
+    /// already local"), or the download's progress.
+    /// </summary>
+    public string BulkScope
+    {
+        get
+        {
+            if (_downloader.Progress is { } progress)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkDownloadingFormat,
+                    Math.Min(progress.Total, progress.Completed + progress.Failed + 1), progress.Total, progress.Fraction);
+            }
+
+            if (DownloadableCount == 0)
+                return Strings.Library_BulkNothing;
+
+            var scope = IsFiltered ? Strings.Library_BulkScopeFiltered : Strings.Library_BulkScopeAll;
+            var local = _items.Count(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local && !_downloader.IsOutdated(i.Item));
+            return local == 0 ? scope : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkAlreadyLocalFormat, scope, local);
+        }
+    }
+
+    /// <summary>True when the list is narrowed by text, state or a map tap.</summary>
+    private bool IsFiltered => _filterText.Trim().Length > 0 || _stateFilter != LibraryStateFilter.All || _location is not null;
+
+    /// <summary>How many listed datasets can be downloaded.</summary>
+    public int DownloadableCount => Downloadable().Count();
+
+    private IEnumerable<LibraryItemViewModel> Downloadable() =>
+        _items.Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+
+    /// <summary>True when some listed dataset can be downloaded (and no bulk download is running).</summary>
+    public bool HasDownloadable => !IsBulkDownloading && DownloadableCount > 0;
 
     /// <summary>"Download 1,193 (203 MB)" for the bulk download button.</summary>
     public string DownloadListedText
     {
         get
         {
-            var downloadable = _items
-                .Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)))
-                .ToArray();
-            var bytes = downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0);
-            return string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadListedFormat,
-                downloadable.Length);
+            return string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadListedFormat, DownloadableCount);
         }
     }
 
@@ -409,6 +468,77 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _library.Changed -= OnLibraryChanged;
         _loader.Changed -= OnLoaderChanged;
         _downloader.Changed -= OnLoaderChanged;
+        _downloader.ProgressChanged -= OnDownloadProgress;
+    }
+
+    private void OnDownloadProgress(object? sender, EventArgs e)
+    {
+        lock (Nodes)
+        {
+            if (_progressRefreshPosted)
+                return;
+            _progressRefreshPosted = true;
+        }
+
+        _dispatch(() =>
+        {
+            lock (Nodes)
+                _progressRefreshPosted = false;
+            RefreshDownloadProgress();
+        });
+    }
+
+    /// <summary>Updates rows, the bulk bar and the tree's download lines — without re-resolving availability.</summary>
+    private void RefreshDownloadProgress()
+    {
+        foreach (var item in _items)
+            item.RefreshDownload();
+        OnPropertyChanged(nameof(IsBulkDownloading));
+        OnPropertyChanged(nameof(HasDownloadable));
+        OnPropertyChanged(nameof(HasBulkBar));
+        OnPropertyChanged(nameof(BulkSummary));
+        OnPropertyChanged(nameof(BulkScope));
+        ((RelayCommand)CancelDownloadsCommand).NotifyCanExecuteChanged();
+        UpdateNodeDownloadStatus();
+    }
+
+    /// <summary>Sets "Downloading 2 of 5 · 4,3 MB left" on the nodes whose datasets are downloading.</summary>
+    private void UpdateNodeDownloadStatus()
+    {
+        var bySource = new Dictionary<Guid, string?>();
+        lock (_downloadingBySource)
+        {
+            foreach (var (sourceId, items) in _downloadingBySource.ToArray())
+            {
+                var statuses = items.Select(_downloader.StatusOf).ToArray();
+                var pending = statuses.Count(s => s is { State: not LibraryDownloadItemState.Failed });
+                if (pending == 0 || _downloader.Progress is null)
+                {
+                    _downloadingBySource.Remove(sourceId);
+                    bySource[sourceId] = null;
+                    continue;
+                }
+
+                var left = items.Zip(statuses)
+                    .Where(p => p.Second is { State: not LibraryDownloadItemState.Failed })
+                    .Sum(p => Math.Max(0, ((p.First.Location as RemoteItemLocation)?.SizeBytes ?? 0) - p.Second!.BytesReceived));
+                bySource[sourceId] = string.Format(CultureInfo.CurrentCulture, Strings.Library_StatusLine_DownloadingFormat,
+                    items.Count - pending + 1, items.Count, LibraryItemViewModel.FormatBytes(left));
+            }
+        }
+
+        foreach (var collection in Nodes)
+        {
+            string? collectionStatus = null;
+            foreach (var child in collection.Children)
+            {
+                if (bySource.TryGetValue(child.Id, out var status))
+                    child.DownloadStatus = status;
+                collectionStatus ??= child.DownloadStatus;
+            }
+
+            collection.DownloadStatus = collectionStatus;
+        }
     }
 
     private void OnLoaderChanged(object? sender, EventArgs e)
@@ -429,6 +559,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             // (A row whose availability was never resolved returns at once.)
             foreach (var item in _allItems)
                 item.RefreshAvailability();
+            RefreshDownloadProgress();
             // A dataset whose state changed may now belong to another segment.
             if (_stateFilter == LibraryStateFilter.All)
                 Recount();
@@ -440,6 +571,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(DownloadListedText));
             OnPropertyChanged(nameof(HasDownloadable));
+            OnPropertyChanged(nameof(BulkSummary));
+            OnPropertyChanged(nameof(BulkScope));
             // The coverage overlay styles by availability; let it redraw.
             OnPropertyChanged(nameof(Items));
         });
@@ -453,11 +586,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 
-    private async Task DownloadSelectedAsync(bool load)
-    {
-        if (_selectedItem is not { } item)
-            return;
+    private Task DownloadSelectedAsync(bool load) =>
+        _selectedItem is { } item ? DownloadItemAsync(item, load) : Task.CompletedTask;
 
+    /// <summary>Downloads one row (the details' Download, "Load after download", or a retry), then optionally loads it.</summary>
+    private async Task DownloadItemAsync(LibraryItemViewModel item, bool load)
+    {
+        TrackDownloads([item]);
         var result = await _downloader.DownloadAsync([item.Item]).ConfigureAwait(true);
         if (result.Downloaded == 0)
             return;
@@ -476,9 +611,20 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         var items = _items
             .Where(i => i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item))
             .ToArray();
+        TrackDownloads(items);
         var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
         if (result.Downloaded > 0)
             ReindexPackageSources(items);
+    }
+
+    /// <summary>Remembers which sources' datasets are downloading, for the tree's status lines.</summary>
+    private void TrackDownloads(IEnumerable<LibraryItemViewModel> items)
+    {
+        lock (_downloadingBySource)
+        {
+            foreach (var group in items.GroupBy(i => i.Source.Id))
+                _downloadingBySource[group.Key] = group.Select(i => i.Item).ToList();
+        }
     }
 
     /// <summary>
@@ -593,7 +739,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(p => CoverageGeometry.Contains(p.Item, position))
             .OrderByDescending(p => p.Item.UsageBand ?? 0)
             .ThenBy(p => CoverageGeometry.Area(p.Item))
-            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, CollectionNameOf(p.Source.Id)))
+            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, CollectionNameOf(p.Source.Id), RetryDownloadAsync))
             .ToList();
 
     private string? CollectionNameOf(Guid sourceId) =>
@@ -603,8 +749,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         node is null
             ? []
             : node.EnumerateItems()
-                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name))
+                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name, RetryDownloadAsync))
                 .ToArray();
+
+    private Task RetryDownloadAsync(LibraryItemViewModel item) => DownloadItemAsync(item, load: false);
 
     private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
         a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
@@ -663,6 +811,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(LocationPositionText));
         ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(ItemsSummary));
+        OnPropertyChanged(nameof(HasBulkBar));
+        OnPropertyChanged(nameof(BulkSummary));
+        OnPropertyChanged(nameof(BulkScope));
         ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(DownloadListedText));

@@ -15,6 +15,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private readonly Func<CollectionItem, LibraryLoadState>? _loadState;
     private readonly ILibraryDownloader? _downloader;
     private readonly string? _collectionName;
+    private readonly Func<LibraryItemViewModel, Task>? _download;
+    private LibraryDownloadItemStatus? _lastDownloadStatus;
     private LibraryAvailability? _availability;
     private CollectionItem? _effective;
 
@@ -23,7 +25,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibrarySource source,
         Func<CollectionItem, LibraryLoadState>? loadState = null,
         ILibraryDownloader? downloader = null,
-        string? collectionName = null)
+        string? collectionName = null,
+        Func<LibraryItemViewModel, Task>? download = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
@@ -32,6 +35,50 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         _loadState = loadState;
         _downloader = downloader;
         _collectionName = collectionName;
+        _download = download;
+        RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
+            () => _download?.Invoke(this) ?? Task.CompletedTask);
+        CancelDownloadCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => _downloader?.Cancel(Item));
+    }
+
+    /// <summary>Downloads the item again after a failure (the "Failed · retry" tag).</summary>
+    public System.Windows.Input.ICommand RetryCommand { get; }
+
+    /// <summary>Cancels the item's download (the row's Cancel link).</summary>
+    public System.Windows.Input.ICommand CancelDownloadCommand { get; }
+
+    /// <summary>Where the item stands in a download, if anywhere.</summary>
+    private LibraryDownloadItemStatus? DownloadStatus => _downloader?.StatusOf(Item);
+
+    /// <summary>True while the item is downloading (the row shows a progress bar and Cancel).</summary>
+    public bool IsDownloading => DownloadStatus?.State == LibraryDownloadItemState.Running;
+
+    /// <summary>The fraction downloaded (0–1).</summary>
+    public double DownloadProgress => DownloadStatus?.Fraction ?? 0;
+
+    /// <summary>"1,8 / 2,9 MB" while downloading.</summary>
+    public string? DownloadProgressText => DownloadStatus is { State: LibraryDownloadItemState.Running } status
+        ? status.TotalBytes is { } total
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadProgressFormat, FormatBytes(status.BytesReceived), FormatBytes(total))
+            : FormatBytes(status.BytesReceived)
+        : null;
+
+    /// <summary>
+    /// Re-reads the item's download status and raises what changed; cheap
+    /// enough to call on every progress tick for the listed rows.
+    /// </summary>
+    public void RefreshDownload()
+    {
+        var status = DownloadStatus;
+        if (Equals(status, _lastDownloadStatus))
+            return;
+        var stateChanged = status?.State != _lastDownloadStatus?.State;
+        _lastDownloadStatus = status;
+        OnPropertyChanged(nameof(IsDownloading));
+        OnPropertyChanged(nameof(DownloadProgress));
+        OnPropertyChanged(nameof(DownloadProgressText));
+        if (stateChanged)
+            OnPropertyChanged(nameof(Tags));
     }
 
     /// <summary>
@@ -108,6 +155,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(PrimaryStateText));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(CanLoadAfterDownload));
+        RefreshDownload();
         OnPropertyChanged(nameof(CanLoad));
         OnPropertyChanged(nameof(CanDownload));
         OnPropertyChanged(nameof(Details));
@@ -128,6 +176,16 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         get
         {
             var tags = new List<LibraryItemTag>(2);
+            switch (DownloadStatus?.State)
+            {
+                case LibraryDownloadItemState.Queued:
+                    tags.Add(new LibraryItemTag(Strings.Library_Tag_Queued, LibraryItemTagKind.Queued));
+                    break;
+                case LibraryDownloadItemState.Failed:
+                    tags.Add(new LibraryItemTag(Strings.Library_Tag_FailedRetry, LibraryItemTagKind.Failed, _download is null ? null : RetryCommand));
+                    break;
+            }
+
             switch (Availability)
             {
                 case LibraryAvailability.Outdated:

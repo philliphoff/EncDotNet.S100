@@ -338,6 +338,37 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task The_bulk_bar_says_what_it_acts_on_and_shows_a_running_download()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+
+        // Nothing online: the bar names the listed datasets and offers only On pan.
+        Assert.True(vm.HasBulkBar);
+        Assert.False(vm.HasDownloadable);
+        Assert.Equal("Nothing to download", vm.BulkScope);
+
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        _downloader.RaiseChanged();
+        Assert.True(vm.HasDownloadable);
+        Assert.StartsWith($"{vm.Items.Count} to download", vm.BulkSummary);
+        Assert.Equal("All listed datasets", vm.BulkScope);
+        vm.FilterText = "52m";
+        Assert.Equal("Filtered set", vm.BulkScope);
+
+        _downloader.Progress = new LibraryDownloadProgress(1, 0, 4, 500_000, 1_000_000);
+        _downloader.RaiseProgress();
+        Assert.True(vm.IsBulkDownloading);
+        Assert.False(vm.HasDownloadable);  // the primary button is Cancel now
+        Assert.StartsWith("3 to download", vm.BulkSummary);
+        Assert.StartsWith("Downloading 2 of 4", vm.BulkScope);
+        Assert.True(vm.CancelDownloadsCommand.CanExecute(null));
+        vm.CancelDownloadsCommand.Execute(null);
+        Assert.True(_downloader.CancelledAll);
+    }
+
+    [Fact]
     public async Task Download_only_does_not_load()
     {
         await AddS57CollectionAsync();
@@ -443,6 +474,16 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
     private sealed class FakeDownloader : ILibraryDownloader
     {
+        public LibraryDownloadProgress? Progress { get; set; }
+
+        public bool CancelledAll { get; private set; }
+
+        public event EventHandler? ProgressChanged;
+
+        public void RaiseProgress() => ProgressChanged?.Invoke(this, EventArgs.Empty);
+
+        public void CancelAll() => CancelledAll = true;
+
         public bool Downloaded { get; set; }
 
         public bool Outdated { get; set; }

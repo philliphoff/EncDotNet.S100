@@ -126,6 +126,97 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         Assert.DoesNotContain("(host)", folders);
     }
 
+    [Fact]
+    public async Task Items_report_queued_running_and_done_while_the_batch_reports_progress()
+    {
+        var server = new GatedServer(File.ReadAllBytes(
+            LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
+        var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")));
+        var items = Enumerable.Range(0, LibraryDownloadService.MaxConcurrentDownloads + 1)
+            .Select(i => Cell() with { Key = $"k{i}", Location = new RemoteItemLocation(new Uri($"https://example.test/{i}/US4OH1MK.zip"), 10_279) })
+            .ToArray();
+        // Distinct download names, so none are de-duplicated.
+        items = items.Select((c, i) => c with { Name = $"US4OH1M{i}" }).ToArray();
+        Assert.Null(service.Progress);
+
+        var download = service.DownloadAsync(items);
+        await server.WaitForRequestsAsync(LibraryDownloadService.MaxConcurrentDownloads);
+
+        Assert.Equal(items.Length, service.Progress!.Total);
+        Assert.Equal(LibraryDownloadItemState.Running, service.StatusOf(items[0])!.State);
+        Assert.Equal(LibraryDownloadItemState.Queued, service.StatusOf(items[^1])!.State);
+
+        server.Release();
+        var result = await download;
+
+        // The zip only holds US4OH1MK.000, so these names fail — and say so.
+        Assert.Equal(items.Length, result.Failed);
+        Assert.Null(service.Progress);
+        var failed = service.StatusOf(items[0])!;
+        Assert.Equal(LibraryDownloadItemState.Failed, failed.State);
+        Assert.Contains("US4OH1M0", failed.Error);
+    }
+
+    [Fact]
+    public async Task One_item_can_be_cancelled_while_the_batch_carries_on()
+    {
+        var server = new GatedServer(File.ReadAllBytes(
+            LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
+        var service = new LibraryDownloadService(remote => new EncCellDownloader(
+            new HttpClient(server), Path.Combine(_context.Root, remote.Uri.Segments[1].TrimEnd('/'))));
+        var first = Cell() with { Location = new RemoteItemLocation(new Uri("https://example.test/a/US4OH1MK.zip"), 10_279) };
+        var second = Cell() with { Key = "b", Location = new RemoteItemLocation(new Uri("https://example.test/b/US4OH1MK.zip"), 10_279) };
+
+        var download = service.DownloadAsync([first, second]);
+        await server.WaitForRequestsAsync(2);
+        service.Cancel(first);
+        server.Release();
+        var result = await download;
+
+        Assert.Equal(new LibraryDownloadResult(1, 1, false), result);
+        Assert.Null(service.StatusOf(first));
+        Assert.IsType<LocalItemLocation>(service.Localize(second).Location);
+    }
+
+    [Fact]
+    public async Task Cancelling_all_stops_the_batch_and_clears_its_items()
+    {
+        var server = new GatedServer(File.ReadAllBytes(
+            LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
+        var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")));
+
+        var download = service.DownloadAsync([Cell()]);
+        await server.WaitForRequestsAsync(1);
+        service.CancelAll();
+        var result = await download;
+
+        Assert.True(result.Cancelled);
+        Assert.Null(service.StatusOf(Cell()));
+        Assert.Null(service.Progress);
+    }
+
+    /// <summary>Holds every request until <see cref="Release"/>, so a test can observe a running batch.</summary>
+    private sealed class GatedServer(byte[] zip) : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _requests;
+
+        public void Release() => _gate.TrySetResult();
+
+        public async Task WaitForRequestsAsync(int count)
+        {
+            for (var i = 0; i < 500 && Volatile.Read(ref _requests) < count; i++)
+                await Task.Delay(10);
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _requests);
+            await _gate.Task.WaitAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) };
+        }
+    }
+
     private sealed class ZipServer(byte[] zip) : HttpMessageHandler
     {
         public bool Fail { get; set; }

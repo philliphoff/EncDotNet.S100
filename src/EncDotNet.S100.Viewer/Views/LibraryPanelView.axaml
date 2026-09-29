@@ -418,23 +418,33 @@
                             </RadioButton>
                         </UniformGrid>
                     </Border>
-                    <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
-                            IsVisible="{Binding HasDownloadable}"
-                            Command="{Binding DownloadListedCommand}"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ic:FluentIcon Icon="ArrowDownload" FontSize="14" />
-                            <TextBlock Text="{Binding DownloadListedText}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Classes="Outline" HorizontalAlignment="Stretch" FontSize="12" Padding="8,3"
-                            Command="{Binding LoadAsYouPanCommand}"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ic:FluentIcon Icon="MapDrive" FontSize="14" />
-                            <TextBlock Text="{x:Static loc:Strings.Library_LoadAsYouPan}" />
-                        </StackPanel>
-                    </Button>
+                    <!-- One bulk bar: what the buttons act on, then Download (or Cancel) and On pan. -->
+                    <Border IsVisible="{Binding HasBulkBar}" Background="{DynamicResource MutedBackgroundColor}"
+                            CornerRadius="6" Padding="8,5">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0">
+                                <TextBlock Text="{Binding BulkSummary}" FontSize="12" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding BulkScope}" FontSize="11" Opacity="0.65"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <Panel Grid.Column="1" VerticalAlignment="Center">
+                                <Button Classes="Primary" Padding="10,3" FontSize="12"
+                                        IsVisible="{Binding HasDownloadable}"
+                                        Content="{Binding DownloadListedText}"
+                                        Command="{Binding DownloadListedCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}" />
+                                <Button Classes="Primary" Padding="10,3" FontSize="12"
+                                        IsVisible="{Binding IsBulkDownloading}"
+                                        Content="{x:Static loc:Strings.Button_Cancel}"
+                                        Command="{Binding CancelDownloadsCommand}" />
+                            </Panel>
+                            <Button Grid.Column="2" Classes="Outline" Padding="10,3" FontSize="12" VerticalAlignment="Center"
+                                    Content="{x:Static loc:Strings.Library_BulkOnPan}"
+                                    Command="{Binding LoadAsYouPanCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}" />
+                        </Grid>
+                    </Border>
                 </StackPanel>
 
                 <ListBox x:Name="ItemList"
@@ -473,6 +483,17 @@
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.6"
                                                TextTrimming="CharacterEllipsis" />
+                                    <!-- While downloading: a thin progress bar, how much has arrived, and Cancel. -->
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsDownloading}"
+                                          Margin="0,2,0,0">
+                                        <ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding DownloadProgress}"
+                                                     Height="4" MinHeight="4" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding DownloadProgressText}" FontSize="10.5" Opacity="0.65"
+                                                   FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
+                                        <Button Grid.Column="2" Classes="Ghost" Padding="4,0" FontSize="11" MinHeight="0"
+                                                Content="{x:Static loc:Strings.Library_CancelDownload}"
+                                                Command="{Binding CancelDownloadCommand}" />
+                                    </Grid>
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>
