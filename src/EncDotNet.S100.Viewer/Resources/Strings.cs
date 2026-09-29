@@ -976,4 +976,25 @@ internal static class Strings
     public static string Library_Tag_Queued => Get(nameof(Library_Tag_Queued));
     public static string Library_Tag_FailedRetry => Get(nameof(Library_Tag_FailedRetry));
     public static string Library_Tag_Package => Get(nameof(Library_Tag_Package));
+    public static string Menu_AddLibrarySharedFeed => Get(nameof(Menu_AddLibrarySharedFeed));
+    public static string Library_AddMenu_ThisComputer => Get(nameof(Library_AddMenu_ThisComputer));
+    public static string Library_AddMenu_Online => Get(nameof(Library_AddMenu_Online));
+    public static string Library_AddMenu_AnotherComputer => Get(nameof(Library_AddMenu_AnotherComputer));
+    public static string Library_AddButton => Get(nameof(Library_AddButton));
+    public static string Menu_LibraryRefresh => Get(nameof(Menu_LibraryRefresh));
+    public static string Menu_LibraryRefreshAll => Get(nameof(Menu_LibraryRefreshAll));
+    public static string Menu_LibraryRename => Get(nameof(Menu_LibraryRename));
+    public static string Menu_LibraryKeep => Get(nameof(Menu_LibraryKeep));
+    public static string Menu_LibraryRemove => Get(nameof(Menu_LibraryRemove));
+    public static string Tooltip_LibraryMore => Get(nameof(Tooltip_LibraryMore));
+    public static string Library_SharedFeedTitle => Get(nameof(Library_SharedFeedTitle));
+    public static string Library_SharedFeedDescription => Get(nameof(Library_SharedFeedDescription));
+    public static string Library_SharedFeedCommand => Get(nameof(Library_SharedFeedCommand));
+    public static string Library_SharedFeedHint => Get(nameof(Library_SharedFeedHint));
+    public static string Library_SharedFeedUrlWatermark => Get(nameof(Library_SharedFeedUrlWatermark));
+    public static string Library_SharedFeedChecking => Get(nameof(Library_SharedFeedChecking));
+    public static string Library_SharedFeedInvalid => Get(nameof(Library_SharedFeedInvalid));
+    public static string Library_SharedFeedNotAFeed => Get(nameof(Library_SharedFeedNotAFeed));
+    public static string Library_SharedFeedUnreachableFormat => Get(nameof(Library_SharedFeedUnreachableFormat));
+    public static string Button_Connect => Get(nameof(Button_Connect));
 }

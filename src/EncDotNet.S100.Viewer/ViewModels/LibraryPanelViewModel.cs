@@ -65,7 +65,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
         AddOnlineCatalogueCommand = new AsyncRelayCommand(() => _importer.AddOnlineCatalogueAsync(TargetCollectionId));
         AddS128CatalogueCommand = new AsyncRelayCommand(() => _importer.AddS128CatalogueAsync(TargetCollectionId));
+        AddSharedFeedCommand = new AsyncRelayCommand(() => _importer.AddSharedFeedAsync(TargetCollectionId));
         RefreshCommand = new RelayCommand(Refresh);
+        RefreshAllCommand = new RelayCommand(() => _library.Refresh());
+        RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
+        CommitRenameCommand = new RelayCommand(CommitRename);
+        CancelRenameCommand = new RelayCommand(CancelRename);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
         KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
         ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
@@ -98,6 +103,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(HasSelectedNode));
                 ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
                 if (_location is not null)
                     SetLocation(null);
                 else
@@ -195,6 +201,21 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     public ICommand AddOnlineCatalogueCommand { get; }
 
     public ICommand AddS128CatalogueCommand { get; }
+
+    /// <summary>Connects to a feed served by <c>s100 feed serve</c> on another computer.</summary>
+    public ICommand AddSharedFeedCommand { get; }
+
+    /// <summary>Re-indexes every source.</summary>
+    public ICommand RefreshAllCommand { get; }
+
+    /// <summary>Starts renaming the selected collection or source in place.</summary>
+    public ICommand RenameCommand { get; }
+
+    /// <summary>Applies the name typed while renaming.</summary>
+    public ICommand CommitRenameCommand { get; }
+
+    /// <summary>Leaves renaming without changing the name.</summary>
+    public ICommand CancelRenameCommand { get; }
 
     /// <summary>Re-indexes the selected node (or everything when nothing is selected).</summary>
     public ICommand RefreshCommand { get; }
@@ -414,6 +435,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsEmpty));
         ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
         ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
         RebuildItems(force: false);
     }
 
@@ -528,6 +550,39 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             _library.RemoveSource(node.Collection.Id, node.Id);
     }
 
+    private void BeginRename()
+    {
+        if (_selectedNode is not { CanRename: true } node)
+            return;
+        foreach (var other in Nodes.SelectMany(n => n.Children.Prepend(n)).Where(n => n.IsRenaming))
+            other.IsRenaming = false;
+        node.RenameText = node.Name;
+        node.IsRenaming = true;
+    }
+
+    private void CommitRename()
+    {
+        var node = Nodes.SelectMany(n => n.Children.Prepend(n)).FirstOrDefault(n => n.IsRenaming);
+        if (node is null)
+            return;
+
+        node.IsRenaming = false;
+        var name = node.RenameText.Trim();
+        if (name.Length == 0 || name == node.Name)
+            return;
+
+        if (node.IsCollection)
+            _library.RenameCollection(node.Collection.Id, name);
+        else
+            _library.RenameSource(node.Collection.Id, node.Id, name);
+    }
+
+    private void CancelRename()
+    {
+        foreach (var node in Nodes.SelectMany(n => n.Children.Prepend(n)).Where(n => n.IsRenaming))
+            node.IsRenaming = false;
+    }
+
     private void Keep()
     {
         if (_selectedNode is { CanKeep: true, Source: { } source })
@@ -561,6 +616,12 @@ internal interface ILibraryImporter
     /// chosen catalogue's scope picker.
     /// </summary>
     Task AddOnlineCatalogueAsync(Guid? targetCollectionId);
+
+    /// <summary>
+    /// Asks for the URL of a feed served by <c>s100 feed serve</c> on another
+    /// computer, checks it, then opens its product picker (issue #680).
+    /// </summary>
+    Task AddSharedFeedAsync(Guid? targetCollectionId);
 
     /// <summary>Opens the scope picker for a known online catalogue directly.</summary>
     Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId);

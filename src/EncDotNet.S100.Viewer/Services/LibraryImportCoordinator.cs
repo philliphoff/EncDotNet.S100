@@ -23,6 +23,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     private readonly DialogManager _dialogManager;
     private readonly Func<AddToLibraryDialogViewModel> _dialogFactory;
     private readonly Func<CatalogueDirectoryDialogViewModel> _directoryFactory;
+    private readonly Func<SharedFeedDialogViewModel>? _sharedFeedFactory;
     private readonly IViewerUiControllerAccessor? _ui;
 
     public LibraryImportCoordinator(
@@ -31,6 +32,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         DialogManager dialogManager,
         Func<AddToLibraryDialogViewModel> dialogFactory,
         Func<CatalogueDirectoryDialogViewModel> directoryFactory,
+        Func<SharedFeedDialogViewModel>? sharedFeedFactory = null,
         IViewerUiControllerAccessor? ui = null)
     {
         ArgumentNullException.ThrowIfNull(library);
@@ -43,6 +45,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         _dialogManager = dialogManager;
         _dialogFactory = dialogFactory;
         _directoryFactory = directoryFactory;
+        _sharedFeedFactory = sharedFeedFactory;
         _ui = ui;
     }
 
@@ -77,6 +80,26 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         _dialogManager.CreateDialog(directory)
             .Dismissible()
             .WithMaxWidth(560)
+            .Show();
+        return Task.CompletedTask;
+    }
+
+    public Task AddSharedFeedAsync(Guid? targetCollectionId)
+    {
+        if (_sharedFeedFactory is null)
+            return Task.CompletedTask;
+
+        var dialog = _sharedFeedFactory();
+        dialog.Connected += (_, source) =>
+        {
+            _dialogManager.Close(dialog);
+            _ = AddKnownCatalogueAsync(source, targetCollectionId);
+        };
+        dialog.Cancelled += (_, _) => _dialogManager.Close(dialog);
+
+        _dialogManager.CreateDialog(dialog)
+            .Dismissible()
+            .WithMaxWidth(520)
             .Show();
         return Task.CompletedTask;
     }

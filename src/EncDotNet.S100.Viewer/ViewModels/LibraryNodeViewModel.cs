@@ -17,6 +17,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private LibraryCollection _collection;
     private LibrarySource? _source;
     private bool _isExpanded;
+    private bool _isRenaming;
+    private string _renameText = string.Empty;
 
     private LibraryNodeViewModel(LibraryCollection collection, LibrarySource? source)
     {
@@ -54,6 +56,23 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         get => _isExpanded;
         set => SetProperty(ref _isExpanded, value);
     }
+
+    /// <summary>True while the node's name is being edited in place.</summary>
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        set => SetProperty(ref _isRenaming, value);
+    }
+
+    /// <summary>The name being typed while <see cref="IsRenaming"/>.</summary>
+    public string RenameText
+    {
+        get => _renameText;
+        set => SetProperty(ref _renameText, value ?? string.Empty);
+    }
+
+    /// <summary>True when the node can be renamed (anything but the session collection and its catalogues).</summary>
+    public bool CanRename => !_collection.IsSession;
 
     /// <summary>The display name.</summary>
     public string Name => _source is { } s ? DescribeSource(s.Definition) : _collection.Definition.Name;
@@ -180,6 +199,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         OnPropertyChanged(nameof(Icon));
         OnPropertyChanged(nameof(CanRemove));
         OnPropertyChanged(nameof(CanKeep));
+        OnPropertyChanged(nameof(CanRename));
     }
 
     private static string DescribeSource(CollectionSource source) => source.DisplayName ?? source switch

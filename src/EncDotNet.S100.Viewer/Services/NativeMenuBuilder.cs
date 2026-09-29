@@ -210,10 +210,14 @@ internal sealed class NativeMenuBuilder
             {
                 Menu = new NativeMenu
                 {
+                    // Grouped by where the data is: this computer, online, another computer.
                     Add(Strings.Menu_AddLibraryFolder, () => importer.AddFolderAsync(null)),
                     Add(Strings.Menu_AddLibraryExchangeSetZip, () => importer.AddExchangeSetZipAsync(null)),
-                    Add(Strings.Menu_AddLibraryOnlineCatalogue, () => importer.AddOnlineCatalogueAsync(null)),
                     Add(Strings.Menu_AddLibraryS128, () => importer.AddS128CatalogueAsync(null)),
+                    new NativeMenuItemSeparator(),
+                    Add(Strings.Menu_AddLibraryOnlineCatalogue, () => importer.AddOnlineCatalogueAsync(null)),
+                    new NativeMenuItemSeparator(),
+                    Add(Strings.Menu_AddLibrarySharedFeed, () => importer.AddSharedFeedAsync(null)),
                 },
             });
         }

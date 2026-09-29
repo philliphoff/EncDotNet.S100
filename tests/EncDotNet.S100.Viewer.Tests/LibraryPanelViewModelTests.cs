@@ -130,6 +130,50 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Connect_to_a_shared_feed_targets_the_selected_collection()
+    {
+        var collection = await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+
+        vm.AddSharedFeedCommand.Execute(null);
+
+        Assert.Equal(("feed", (Guid?)collection.Id), _importer.Calls.Single());
+    }
+
+    [Fact]
+    public async Task Collections_and_sources_can_be_renamed_in_place()
+    {
+        await AddS57CollectionAsync("Charts");
+        using var vm = CreateViewModel();
+        var collection = vm.Nodes.Single();
+
+        vm.RenameCommand.Execute(null);
+        Assert.True(collection.IsRenaming);
+        Assert.Equal("Charts", collection.RenameText);
+        collection.RenameText = "  Harbour charts ";
+        vm.CommitRenameCommand.Execute(null);
+        await _library.WhenIdle();
+
+        Assert.False(collection.IsRenaming);
+        Assert.Equal("Harbour charts", Assert.Single(_library.Collections).Definition.Name);
+
+        vm.SelectedNode = vm.Nodes.Single().Children.Single();
+        vm.RenameCommand.Execute(null);
+        vm.SelectedNode!.RenameText = "Survey 2026";
+        vm.CommitRenameCommand.Execute(null);
+        await _library.WhenIdle();
+
+        Assert.Equal("Survey 2026", Assert.Single(Assert.Single(_library.Collections).Sources).Definition.DisplayName);
+        Assert.Equal("Survey 2026", vm.Nodes.Single().Children.Single().Name);
+
+        // Escape leaves the name alone.
+        vm.RenameCommand.Execute(null);
+        vm.SelectedNode!.RenameText = "Something else";
+        vm.CancelRenameCommand.Execute(null);
+        Assert.Equal("Survey 2026", vm.Nodes.Single().Children.Single().Name);
+    }
+
+    [Fact]
     public void Session_catalogue_can_be_kept_but_not_removed()
     {
         var path = LibraryTestContext.Datasets("S128", "S128_TDS_sample.gml");
@@ -393,6 +437,8 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         public Task AddExchangeSetZipAsync(Guid? targetCollectionId) => Record("zip", targetCollectionId);
 
         public Task AddOnlineCatalogueAsync(Guid? targetCollectionId) => Record("online", targetCollectionId);
+
+        public Task AddSharedFeedAsync(Guid? targetCollectionId) => Record("feed", targetCollectionId);
 
         public Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId) =>
             Record("known:" + source.Id, targetCollectionId);
