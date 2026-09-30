@@ -47,7 +47,10 @@ public sealed record OverscaleRegion(string Name, double Factor, Geometry Region
 /// The result depends only on the loaded cells and the viewport resolution — not
 /// on pan — because each region is expressed in world (EPSG:3857) coordinates;
 /// the renderer projects and clips it per frame. Callers therefore only need to
-/// recompute when the resolution or the set of loaded cells changes.
+/// recompute when the resolution or the set of loaded cells changes. Each
+/// cell's region (its coverage minus finer coverages) does not depend on the
+/// resolution at all; <see cref="OverscaleCurtainRegionCache"/> memoises it so
+/// a zoom only re-evaluates which cells are overscaled.
 /// </para>
 /// </remarks>
 public static class OverscaleCurtain
@@ -82,14 +85,9 @@ public static class OverscaleCurtain
         List<OverscaleRegion>? regions = null;
         foreach (var cell in cells)
         {
-            if (cell.Coverage is not { IsEmpty: false } coverage || cell.CompilationScaleDenominator <= 0)
+            if (!TryGetCompilationResolution(cell, out var coverage, out var compilationResolution))
                 continue;
 
-            var envelope = coverage.EnvelopeInternal;
-            var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
-                (envelope.MinY + envelope.MaxY) / 2.0);
-            var compilationResolution = MapsuiDisplayListRenderer.DenominatorToResolution(
-                cell.CompilationScaleDenominator, latitudeRadians);
             var factor = compilationResolution / viewportResolution;
             if (factor <= OverscaleEvaluator.OverscaleThreshold)
                 continue;
@@ -101,11 +99,18 @@ public static class OverscaleCurtain
             (regions ??= []).Add(new OverscaleRegion(cell.Name, factor, region));
         }
 
+        return Sorted(regions);
+    }
+
+    /// <summary>
+    /// Sorts regions worst offender first, tie-breaking by name so the overlay
+    /// ordering is stable as the view pans (matches OverscaleEvaluator).
+    /// </summary>
+    internal static IReadOnlyList<OverscaleRegion> Sorted(List<OverscaleRegion>? regions)
+    {
         if (regions is null)
             return [];
 
-        // Worst offender first; tie-break by name so the overlay ordering is
-        // stable as the view pans (matches OverscaleEvaluator).
         regions.Sort(static (a, b) =>
         {
             var byFactor = b.Factor.CompareTo(a.Factor);
@@ -116,6 +121,33 @@ public static class OverscaleCurtain
     }
 
     /// <summary>
+    /// Gets a usable cell's coverage and its compilation resolution (the
+    /// viewport resolution, in Web-Mercator metres per pixel, at which its
+    /// overscale factor is exactly 1), evaluated at the coverage's mid-latitude.
+    /// Returns <see langword="false"/> for a cell with no coverage or scale.
+    /// </summary>
+    internal static bool TryGetCompilationResolution(
+        OverscaleCellInput cell,
+        out Geometry coverage,
+        out double compilationResolution)
+    {
+        if (cell.Coverage is not { IsEmpty: false } usable || cell.CompilationScaleDenominator <= 0)
+        {
+            coverage = null!;
+            compilationResolution = 0;
+            return false;
+        }
+
+        var envelope = usable.EnvelopeInternal;
+        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+            (envelope.MinY + envelope.MaxY) / 2.0);
+        coverage = usable;
+        compilationResolution = MapsuiDisplayListRenderer.DenominatorToResolution(
+            cell.CompilationScaleDenominator, latitudeRadians);
+        return true;
+    }
+
+    /// <summary>
     /// Subtracts from <paramref name="coverage"/> the coverage of every other
     /// cell that is strictly finer (a smaller compilation-scale denominator = a
     /// larger scale) and overlaps it — the finer cells that draw on top of
@@ -123,7 +155,7 @@ public static class OverscaleCurtain
     /// no finer cell overlaps, or the difference geometry (possibly empty) when
     /// finer cells cover part or all of it.
     /// </summary>
-    private static Geometry? SubtractFinerCoverages(
+    internal static Geometry? SubtractFinerCoverages(
         OverscaleCellInput cell,
         Geometry coverage,
         IReadOnlyList<OverscaleCellInput> cells)

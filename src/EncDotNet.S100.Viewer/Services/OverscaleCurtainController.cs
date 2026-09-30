@@ -22,6 +22,10 @@ namespace EncDotNet.S100.Viewer.Services;
 /// last resolution and skips recomputation on a pure pan, recomputing only when
 /// the zoom changes, a dataset is added/removed/(re)loaded/hidden/shown, or the
 /// mariner toggles <see cref="SettingsViewModel.ShowOverscaleIndication"/>.
+/// Because a zoom leaves the cells unchanged, the per-cell regions are
+/// memoised in an <see cref="OverscaleCurtainRegionCache"/>, so a zoom step
+/// only re-evaluates which cells are overscaled rather than re-running the
+/// polygon overlay (issue #691).
 /// </para>
 /// <para>
 /// The overscale factor per cell is derived from its compilation-scale
@@ -46,6 +50,7 @@ internal sealed class OverscaleCurtainController : IDisposable
     private readonly SettingsViewModel _settings;
     private readonly Action<Action> _marshal;
     private readonly S100OverscaleCurtainLayer _curtain;
+    private readonly OverscaleCurtainRegionCache _regions = new();
     private readonly HashSet<DatasetEntry> _subscribed = new();
     private double _lastResolution = double.NaN;
     private bool _disposed;
@@ -170,7 +175,7 @@ internal sealed class OverscaleCurtainController : IDisposable
         {
             var cells = _loader.GetOverscaleCells();
             if (cells.Count > 0)
-                regions = OverscaleCurtain.ComputeRegions(cells, _lastResolution);
+                regions = _regions.ComputeRegions(cells, _lastResolution);
         }
 
         _curtain.Show(regions);
