@@ -8,6 +8,11 @@
              x:DataType="vm:AddCollectionManifestDialogViewModel"
              Width="640">
 
+    <!-- Declared before the styles: static resources resolve in document order. -->
+    <UserControl.Resources>
+        <FontFamily x:Key="ManifestMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+    </UserControl.Resources>
+
     <UserControl.Styles>
         <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/WizardStyles.axaml" />
         <Style Selector="Border.fileTag">
@@ -26,10 +31,6 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </UserControl.Styles>
-
-    <UserControl.Resources>
-        <FontFamily x:Key="ManifestMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
-    </UserControl.Resources>
 
     <Grid RowDefinitions="Auto,600,Auto" DataContext="{Binding Scope}" x:DataType="vm:AddToLibraryDialogViewModel">
 

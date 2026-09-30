@@ -1182,4 +1182,6 @@ internal static class Strings
     public static string Library_GroupValueFormat => Get(nameof(Library_GroupValueFormat));
     public static string Manifest_TwoFormat => Get(nameof(Manifest_TwoFormat));
     public static string Manifest_AndMoreFormat => Get(nameof(Manifest_AndMoreFormat));
+    public static string Library_Quick_Manifest => Get(nameof(Library_Quick_Manifest));
+    public static string Library_Quick_ManifestSub => Get(nameof(Library_Quick_ManifestSub));
 }

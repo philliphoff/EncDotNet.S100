@@ -283,7 +283,7 @@
     </UserControl.Resources>
 
     <Panel>
-        <!-- Empty state: the three most common ways in, as large targets. -->
+        <!-- Empty state: the most common ways in, as large targets. -->
         <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyTitle}" FontSize="15" FontWeight="SemiBold"
                        HorizontalAlignment="Center" />
@@ -313,6 +313,15 @@
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" />
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddCollectionManifestCommand}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="JSON" /></Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Manifest}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_ManifestSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>

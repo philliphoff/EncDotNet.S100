@@ -3062,7 +3062,7 @@
     <value>Charts served from another computer</value>
   </data>
   <data name="Library_DropHint" xml:space="preserve">
-    <value>Or drop a folder, .zip or CATALOG file here</value>
+    <value>Or drop a folder, .zip, CATALOG or collection manifest file here</value>
   </data>
   <data name="Library_Field_LastDownload" xml:space="preserve">
     <value>Last download</value>
@@ -3393,5 +3393,11 @@
   </data>
   <data name="Manifest_AndMoreFormat" xml:space="preserve">
     <value>{0}, {1} and {2} more</value>
+  </data>
+  <data name="Library_Quick_Manifest" xml:space="preserve">
+    <value>Add a collection manifest…</value>
+  </data>
+  <data name="Library_Quick_ManifestSub" xml:space="preserve">
+    <value>Named groups of local folders, from a .s100collection.json file</value>
   </data>
 </root>
