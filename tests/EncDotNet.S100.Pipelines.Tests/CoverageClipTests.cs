@@ -96,6 +96,24 @@ public class CoverageClipTests
     }
 
     [Fact]
+    public void BuildActiveDifferencePaths_FinerOffScreen_IsSkipped()
+    {
+        var layer = new MemoryLayer();
+        // The viewport spans world (-100,-100)-(100,100). A finer cell wholly
+        // outside it removes nothing on screen, so it contributes no clip path;
+        // one straddling the edge still does.
+        CoverageClip.Set(layer,
+        [
+            new FinerCoverage(Square(500, 500, 100), CutoffResolution: 2.0),   // off-screen
+            new FinerCoverage(Square(90, -20, 40), CutoffResolution: 2.0),     // straddles right edge
+            new FinerCoverage(Square(-300, 0, 100), CutoffResolution: 2.0),    // off-screen (left)
+        ]);
+
+        var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
+        Assert.Equal(190f, path.Bounds.Left, 3);
+    }
+
+    [Fact]
     public void BuildActiveDifferencePaths_PolygonWithHole_IsEvenOddWithBothRings()
     {
         var layer = new MemoryLayer();

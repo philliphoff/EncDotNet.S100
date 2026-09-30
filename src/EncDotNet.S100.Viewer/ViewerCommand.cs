@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Avalonia;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Renderers.Mapsui;
 using Spectre.Console.Cli;
 
 namespace EncDotNet.S100.Viewer;
@@ -245,6 +246,7 @@ internal sealed class ViewerCommand : Command<ViewerCommandSettings>
         {
             AppBuilder.Configure<App>()
                 .UsePlatformDetect()
+                .With(CreateSkiaOptions())
                 .WithInterFont()
                 .LogToTrace()
                 .StartWithClassicDesktopLifetime([]);
@@ -258,4 +260,14 @@ internal sealed class ViewerCommand : Command<ViewerCommandSettings>
 
         return 0;
     }
+
+    /// <summary>
+    /// Sizes the GPU resource cache so the tiles every drawing layer blits stay
+    /// resident between frames instead of being re-uploaded on each paint
+    /// (see <see cref="RenderingOptimizations.SkiaGpuResourceMb"/>).
+    /// </summary>
+    internal static SkiaOptions CreateSkiaOptions() => new()
+    {
+        MaxGpuResourceSizeBytes = (long)(RenderingOptimizations.SkiaGpuResourceMb * 1024 * 1024),
+    };
 }

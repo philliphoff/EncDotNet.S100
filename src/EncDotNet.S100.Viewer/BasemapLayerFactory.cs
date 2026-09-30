@@ -147,14 +147,14 @@ internal static class BasemapLayerFactory
         {
             foreach (var polygon in NaturalEarthBasemap.LandPolygons)
             {
-                var shell = ToLinearRing(polygon.WorldShell, offsetX);
+                var shell = ToLinearRing(polygon.WorldShell, offsetX, counterClockwise: true);
                 if (shell is null)
                     continue;
 
                 var holes = new List<LinearRing>(polygon.WorldHoles.Count);
                 foreach (var hole in polygon.WorldHoles)
                 {
-                    var ring = ToLinearRing(hole, offsetX);
+                    var ring = ToLinearRing(hole, offsetX, counterClockwise: false);
                     if (ring is not null)
                         holes.Add(ring);
                 }
@@ -166,7 +166,8 @@ internal static class BasemapLayerFactory
         return features;
     }
 
-    private static LinearRing? ToLinearRing(IReadOnlyList<(double X, double Y)> world, double offsetX)
+    private static LinearRing? ToLinearRing(
+        IReadOnlyList<(double X, double Y)> world, double offsetX, bool counterClockwise)
     {
         if (world.Count < 4)
             return null;
@@ -174,6 +175,28 @@ internal static class BasemapLayerFactory
         var coordinates = new Coordinate[world.Count];
         for (int i = 0; i < world.Count; i++)
             coordinates[i] = new Coordinate(world[i].X + offsetX, world[i].Y);
-        return new LinearRing(coordinates);
+
+        // Store rings in the winding Mapsui's polygon path builder wants (shell
+        // counter-clockwise, holes clockwise) so it never has to reverse a
+        // continent-sized ring on a paint.
+        if (NetTopologySuite.Algorithm.Orientation.IsCCW(coordinates) != counterClockwise)
+            Array.Reverse(coordinates);
+
+        return new BasemapRing(coordinates);
+    }
+
+    /// <summary>
+    /// A <see cref="LinearRing"/> that computes <see cref="Geometry.IsSimple"/>
+    /// once. Mapsui's polygon path builder checks <c>IsRing</c> (and so
+    /// <c>IsSimple</c>, a full NTS noding pass) on every path rebuild, and its
+    /// path cache is keyed on the viewport extent, so every pan frame rebuilt
+    /// it — several milliseconds per frame for the Natural Earth continent
+    /// rings. The basemap geometry is immutable, so the answer never changes.
+    /// </summary>
+    private sealed class BasemapRing(Coordinate[] coordinates) : LinearRing(coordinates)
+    {
+        private bool? _isSimple;
+
+        public override bool IsSimple => _isSimple ??= base.IsSimple;
     }
 }

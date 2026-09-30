@@ -762,6 +762,12 @@ public static class S100VectorTileRenderer
                 return;
             }
 
+            // Only tiles that intersect this cell's base content can draw
+            // anything; the rest would rasterise to pure transparency. Dropping
+            // them keeps raster, cache, disk and per-frame blit work bounded by
+            // the part of the viewport this cell covers.
+            visible = WithContent(state, visible);
+
             var currentViewport = new TileViewport(
                 centerX,
                 centerY,
@@ -867,6 +873,11 @@ public static class S100VectorTileRenderer
                     state.VelocityX, state.VelocityY);
                 foreach (var key in predicted)
                 {
+                    if (!TileHasContent(state, key))
+                    {
+                        continue;
+                    }
+
                     state.CurrentSpeculative.Add(key);
                     if (!visibleSet.Contains(key)
                         && !state.Cache.Contains(key)
@@ -904,6 +915,11 @@ public static class S100VectorTileRenderer
                     CrossBandPrewarmMaxTiles);
                 foreach (var key in crossBand)
                 {
+                    if (!TileHasContent(state, key))
+                    {
+                        continue;
+                    }
+
                     state.CurrentSpeculative.Add(key);
                     // Also exclude keys already queued in a higher tier this frame:
                     // the band ± 1 centre tiles overlap TileGrid.PredictedTiles, so
@@ -1217,6 +1233,54 @@ public static class S100VectorTileRenderer
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="key"/>'s tile (+ gutter) intersects any base op of
+    /// the bound scene. A tile with no candidate ops rasterises to pure
+    /// transparency, so it is never scheduled, cached or blitted. Mirrors the
+    /// <see cref="RasterizeTile"/> query bounds exactly, so skipping is
+    /// pixel-identical. Conservatively <see langword="true"/> before a scene (and
+    /// its index) is bound. Call under <c>state.Sync</c>.
+    /// </summary>
+    private static bool TileHasContent(TileState state, TileKey key)
+    {
+        if (state.BaseIndex is not { } index)
+        {
+            return true;
+        }
+
+        var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
+        var gutterWorld = GutterDip * TileGrid.ResolutionForBand(key.Band);
+        return index.Intersects(minX - gutterWorld, minY - gutterWorld, maxX + gutterWorld, maxY + gutterWorld);
+    }
+
+    /// <summary>
+    /// Filters <paramref name="keys"/> to the tiles that intersect base content
+    /// (see <see cref="TileHasContent"/>), returning the input list unchanged
+    /// when every tile qualifies. Call under <c>state.Sync</c>.
+    /// </summary>
+    private static IReadOnlyList<TileKey> WithContent(TileState state, IReadOnlyList<TileKey> keys)
+    {
+        List<TileKey>? filtered = null;
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var key = keys[i];
+            if (TileHasContent(state, key))
+            {
+                filtered?.Add(key);
+            }
+            else if (filtered is null)
+            {
+                filtered = new List<TileKey>(keys.Count);
+                for (var j = 0; j < i; j++)
+                {
+                    filtered.Add(keys[j]);
+                }
+            }
+        }
+
+        return (IReadOnlyList<TileKey>?)filtered ?? keys;
+    }
+
     private static bool InvalidateViewport(TileState state)
     {
         lock (state.Sync)
@@ -1361,7 +1425,9 @@ public static class S100VectorTileRenderer
 
         // Target band visible tiles, and whether the band fully covers the
         // viewport (every visible tile already cached).
-        var target = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
+        var target = WithContent(
+            state,
+            TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band));
 
         // Pin the visible set so neither the hot nor the GPU cache can evict a
         // tile that is on screen this frame, no matter how small the budget is:
@@ -1370,7 +1436,9 @@ public static class S100VectorTileRenderer
         state.Cache.Protect(target);
         gpuCache?.Protect(target);
 
-        var targetComplete = target.Count > 0;
+        // An empty target (no tile in view intersects this cell's content) is
+        // trivially complete: there is nothing to draw and no gap to backfill.
+        var targetComplete = true;
         foreach (var key in target)
         {
             if (!state.Cache.Contains(key))

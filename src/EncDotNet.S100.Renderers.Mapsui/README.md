@@ -833,6 +833,23 @@ original single worker, `Balanced` uses two, `HighEnd` scales with cores (≈ on
 per four, capped at 8). The viewer surfaces the profile, detected tier, and the
 worker count in Settings.
 
+The tier also sizes the host GPU context's resource cache
+(`RenderingOptimizations.SkiaGpuResourceMb`, `S100_SKIA_GPU_RESOURCE_MB`; 128 /
+256 / 512 MB for `LowEnd` / `Balanced` / `HighEnd`). Skia keeps the uploaded
+texture for every raster tile blitted in that cache, so it must hold the visible
+tiles of every drawing layer. Otherwise every tile is re-uploaded on every
+frame. Avalonia's default (about 28 MB) fits only a couple of dozen retina
+tiles, so a host passes this budget to `SkiaOptions.MaxGpuResourceSizeBytes`.
+The viewer does this at start-up.
+
+A tile whose bounds (+ gutter) intersect no base op of the cell is never
+scheduled, cached, persisted or blitted
+(`BaseSpatialIndex.Intersects`). Such a tile would rasterise to pure
+transparency, so skipping it is pixel-identical. It keeps a cell's tile work
+proportional to the part of the viewport the cell actually covers. Before this,
+every drawing cell produced a full viewport of tiles, most of them empty, which
+dominated both frame time and memory with many small cells in view.
+
 #### Constant-size symbol/sounding overlay
 
 Base tiles carry **only** area fills, contours, and lines. Point symbols and
