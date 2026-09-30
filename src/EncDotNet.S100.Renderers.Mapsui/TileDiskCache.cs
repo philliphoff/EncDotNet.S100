@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using EncDotNet.S100.Core.Caching;
 using SkiaSharp;
 using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics.Telemetry;
 
@@ -36,10 +37,13 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <b>Robustness</b> mirrors <c>DiskPortrayalInstructionCache</c>: any IO error,
 /// truncated/corrupt file, or codec failure is treated as a miss; failures never
 /// propagate. Writes are atomic (temp file + move). The total on-disk size is
-/// bounded by <see cref="MaxBytes"/> with least-recently-accessed eviction.
+/// bounded by <see cref="MaxBytes"/> with least-recently-used eviction from an
+/// in-memory index (<see cref="DiskCacheBudget"/>), so a write costs the same
+/// however many tiles the cache holds. Directories left by an older
+/// <see cref="FormatVersion"/> are deleted once, in the background, at startup.
 /// Reads are concurrent; a bounded write-behind queue deduplicates persistence
 /// requests and one low-priority writer owns encoding, final-path mutation, and
-/// budget sweeps. Deferred requests may carry a relevance predicate so obsolete
+/// eviction. Deferred requests may carry a relevance predicate so obsolete
 /// viewport work is discarded before snapshot, PNG encoding, and file commit.
 /// </para>
 /// </remarks>
@@ -61,13 +65,8 @@ internal sealed class TileDiskCache : IDisposable
     private const string FileExtension = ".png";
 
     private readonly string _rootDirectory;
-    private readonly object _gate = new();
+    private readonly DiskCacheBudget _budget;
 
-    // EnforceSizeCap enumerates the whole tree, so it is throttled to run only
-    // every Nth write rather than on every tile (writes happen in bursts during
-    // a pan). The budget is a soft cap, so a brief overshoot between sweeps is
-    // acceptable.
-    private const int CapSweepInterval = 32;
     private const int DefaultWriteQueueCapacity = 64;
 
     private readonly BlockingCollection<WriteRequest> _writeQueue;
@@ -76,7 +75,7 @@ internal sealed class TileDiskCache : IDisposable
     private readonly ManualResetEventSlim _writeQueueIdle = new(initialState: true);
     private readonly Action? _beforeWrite;
     private readonly Thread _writeThread;
-    private int _writesSinceSweep;
+    private readonly string _parentDirectory;
     private bool _disposed;
 
     internal enum WriteEnqueueResult
@@ -89,7 +88,7 @@ internal sealed class TileDiskCache : IDisposable
     }
 
     /// <summary>Soft upper bound, in bytes, on the total size of all tile files.</summary>
-    public long MaxBytes { get; }
+    public long MaxBytes => _budget.MaxBytes;
 
     /// <summary>The root directory under which per-namespace tile subdirectories live.</summary>
     public string RootDirectory => _rootDirectory;
@@ -98,7 +97,10 @@ internal sealed class TileDiskCache : IDisposable
     /// Creates a disk tile cache rooted at <paramref name="rootDirectory"/> with
     /// the given soft byte budget. The directory is created on first write.
     /// </summary>
-    /// <param name="rootDirectory">Private cache root (the LRU sweep enumerates every tile under it).</param>
+    /// <param name="rootDirectory">
+    /// Private cache root: every tile under it counts toward the budget, and
+    /// <c>v&lt;n&gt;</c> subdirectories of other format versions are deleted.
+    /// </param>
     /// <param name="maxBytes">Soft total-size cap; must be positive.</param>
     /// <param name="writeQueueCapacity">Maximum accepted persistence requests awaiting the writer.</param>
     /// <param name="beforeWrite">Optional callback invoked by the writer before snapshot and persistence.</param>
@@ -129,8 +131,9 @@ internal sealed class TileDiskCache : IDisposable
                 "Write queue capacity must be positive.");
         }
 
-        _rootDirectory = Path.Combine(rootDirectory, "v" + FormatVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        MaxBytes = maxBytes;
+        _parentDirectory = rootDirectory;
+        _rootDirectory = Path.Combine(rootDirectory, VersionDirectoryName(FormatVersion));
+        _budget = new DiskCacheBudget(_rootDirectory, FileExtension, maxBytes, recursive: true);
         _writeQueue = new BlockingCollection<WriteRequest>(
             new ConcurrentQueue<WriteRequest>(),
             writeQueueCapacity);
@@ -162,8 +165,7 @@ internal sealed class TileDiskCache : IDisposable
     /// <summary>
     /// Reads and decodes the warm tile for <paramref name="key"/> in
     /// <paramref name="ns"/>, or <see langword="null"/> on any miss (absent,
-    /// unreadable, or undecodable). On a hit the file's access time is stamped so
-    /// the LRU sweep treats it as most-recently-used.
+    /// unreadable, or undecodable). A hit marks the tile most recently used.
     /// </summary>
     public SKImage? TryRead(string ns, TileKey key)
     {
@@ -172,24 +174,12 @@ internal sealed class TileDiskCache : IDisposable
             return null;
         }
 
-        var path = EntryPath(ns, key);
-        byte[] bytes;
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
-
-            bytes = File.ReadAllBytes(path);
-            TouchAccessTime(path);
-        }
-        catch
+        var bytes = _budget.TryRead(EntryPath(ns, key));
+        if (bytes is null)
         {
             return null;
         }
 
-        // Decode outside the lock so workers do not serialise on the codec.
         try
         {
             using var data = SKData.CreateCopy(bytes);
@@ -203,8 +193,9 @@ internal sealed class TileDiskCache : IDisposable
 
     /// <summary>
     /// Encodes and atomically writes <paramref name="image"/> as the warm tile
-    /// for <paramref name="key"/> in <paramref name="ns"/>, then enforces the
-    /// byte budget. Best-effort: all failures are swallowed.
+    /// for <paramref name="key"/> in <paramref name="ns"/>, evicting
+    /// least-recently-used tiles if the byte budget is exceeded. Best-effort:
+    /// all failures are swallowed.
     /// </summary>
     public void Write(string ns, TileKey key, SKImage image)
     {
@@ -385,8 +376,6 @@ internal sealed class TileDiskCache : IDisposable
             "s100.render.tile.cache.persist", ActivityKind.Internal);
         persistActivity?.SetTag("s100.render.tile.key", $"{key.Band}/{key.X}/{key.Y}");
 
-        // Encode outside the lock (the expensive part) so the persistence
-        // worker does not block cache reads while running the PNG codec.
         byte[] encoded;
         using (S100Diag.ActivitySource.StartActivity(
                    "s100.render.tile.cache.encode", ActivityKind.Internal))
@@ -413,57 +402,24 @@ internal sealed class TileDiskCache : IDisposable
             return false;
         }
 
-        var dir = Path.Combine(_rootDirectory, ns);
-        var path = Path.Combine(dir, FileName(key));
-        var temp = Path.Combine(dir, Path.GetRandomFileName() + ".tmp");
-        bool sweep;
-        var lockStart = Stopwatch.GetTimestamp();
+        bool committed;
         using (S100Diag.ActivitySource.StartActivity(
                    "s100.render.tile.cache.file_write", ActivityKind.Internal))
         {
-            lock (_gate)
-            {
-                persistActivity?.SetTag(
-                    "s100.render.tile.cache.lock_wait_ms",
-                    Stopwatch.GetElapsedTime(lockStart).TotalMilliseconds);
-                try
-                {
-                    Directory.CreateDirectory(dir);
-                    File.WriteAllBytes(temp, encoded);
-                    if (!IsWriteRelevant(isRelevant))
-                    {
-                        TryDelete(temp);
-                        RecordStaleWriteDiscard();
-                        return false;
-                    }
-
-                    File.Move(temp, path, overwrite: true);
-                    TouchAccessTime(path);
-                }
-                catch
-                {
-                    TryDelete(temp);
-                    return false;
-                }
-
-                sweep = ++_writesSinceSweep >= CapSweepInterval;
-                if (sweep)
-                {
-                    _writesSinceSweep = 0;
-                }
-            }
+            committed = _budget.TryWrite(
+                EntryPath(ns, key),
+                encoded,
+                () => IsWriteRelevant(isRelevant));
         }
 
-        if (sweep)
+        if (!committed)
         {
-            using (S100Diag.ActivitySource.StartActivity(
-                       "s100.render.tile.cache.sweep", ActivityKind.Internal))
+            if (!IsWriteRelevant(isRelevant))
             {
-                lock (_gate)
-                {
-                    EnforceSizeCap();
-                }
+                RecordStaleWriteDiscard();
             }
+
+            return false;
         }
 
         persistActivity?.SetTag("s100.render.tile.cache.encoded_bytes", encoded.Length);
@@ -472,6 +428,8 @@ internal sealed class TileDiskCache : IDisposable
 
     private void ProcessWriteQueue()
     {
+        DeleteStaleFormatDirectories();
+
         foreach (var request in _writeQueue.GetConsumingEnumerable())
         {
             SKImage? image = null;
@@ -516,6 +474,44 @@ internal sealed class TileDiskCache : IDisposable
         }
     }
 
+    /// <summary>
+    /// Deletes <c>v&lt;n&gt;</c> directories under the cache root left by other
+    /// <see cref="FormatVersion"/>s. Their tiles can never be served, and the
+    /// budget covers only the current version's directory, so without this they
+    /// would stay on disk forever. Best-effort.
+    /// </summary>
+    private void DeleteStaleFormatDirectories()
+    {
+        var current = VersionDirectoryName(FormatVersion);
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(_parentDirectory, "v*"))
+            {
+                var name = Path.GetFileName(dir);
+                if (name.Length > 1
+                    && name.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0
+                    && !string.Equals(name, current, StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        Directory.Delete(dir, recursive: true);
+                    }
+                    catch
+                    {
+                        // Retried on the next start.
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // The root may not exist yet; nothing to reclaim.
+        }
+    }
+
+    private static string VersionDirectoryName(int version) =>
+        "v" + version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     private static bool IsWriteRelevant(Func<bool>? isRelevant) =>
         isRelevant?.Invoke() ?? true;
 
@@ -543,94 +539,6 @@ internal sealed class TileDiskCache : IDisposable
 
     private string EntryPath(string ns, TileKey key) =>
         Path.Combine(_rootDirectory, ns, FileName(key));
-
-    private static void TouchAccessTime(string path)
-    {
-        try
-        {
-            File.SetLastAccessTimeUtc(path, DateTime.UtcNow);
-        }
-        catch
-        {
-            // Non-fatal: a missed touch only affects eviction ordering.
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-            // Non-fatal.
-        }
-    }
-
-    /// <summary>
-    /// Evicts least-recently-accessed tile files across every namespace until the
-    /// total size is at or below <see cref="MaxBytes"/>, and sweeps orphaned
-    /// <c>*.tmp</c> files. Called under the lock.
-    /// </summary>
-    private void EnforceSizeCap()
-    {
-        FileInfo[] files;
-        try
-        {
-            var dir = new DirectoryInfo(_rootDirectory);
-            if (!dir.Exists)
-            {
-                return;
-            }
-
-            foreach (var tmp in dir.GetFiles("*.tmp", SearchOption.AllDirectories))
-            {
-                TryDelete(tmp.FullName);
-            }
-
-            files = dir.GetFiles("*" + FileExtension, SearchOption.AllDirectories);
-        }
-        catch
-        {
-            return;
-        }
-
-        long total = 0;
-        foreach (var f in files)
-        {
-            total += f.Length;
-        }
-
-        if (total <= MaxBytes)
-        {
-            return;
-        }
-
-        Array.Sort(files, static (a, b) => a.LastAccessTimeUtc.CompareTo(b.LastAccessTimeUtc));
-
-        foreach (var f in files)
-        {
-            if (total <= MaxBytes)
-            {
-                break;
-            }
-
-            var len = f.Length;
-            try
-            {
-                f.Delete();
-                total -= len;
-            }
-            catch
-            {
-                // Skip a file we cannot delete; the next sweep retries.
-            }
-        }
-    }
 
     private readonly record struct WriteKey(string Namespace, TileKey Tile);
 

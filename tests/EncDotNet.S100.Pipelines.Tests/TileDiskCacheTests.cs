@@ -136,8 +136,8 @@ public class TileDiskCacheTests : IDisposable
     [Fact]
     public void Write_EnforcesByteBudget_EvictingLeastRecentlyUsed()
     {
-        // Size the budget to a few tiles, then write well past it (a multiple of
-        // the internal sweep interval so a sweep runs on the final write).
+        // Size the budget to a few tiles, then write well past it. The budget is
+        // enforced on every write, so the directory never holds more than it.
         var ns = TileDiskCache.NamespaceFor("cell", "style");
 
         // Measure one encoded tile to derive a budget of ~4 tiles.
@@ -155,7 +155,7 @@ public class TileDiskCacheTests : IDisposable
         var budget = oneTileBytes * 4;
         using var cache = new TileDiskCache(_root, budget);
 
-        const int count = 64; // 2 × CapSweepInterval, so a sweep runs on write 64.
+        const int count = 64;
         for (var i = 0; i < count; i++)
         {
             using var img = NoiseImage(48, seed: 1000 + i);
@@ -171,6 +171,31 @@ public class TileDiskCacheTests : IDisposable
         // The most-recently-written tile survives eviction.
         using var newest = cache.TryRead(ns, Key(5, count - 1, 0));
         Assert.NotNull(newest);
+    }
+
+    [Fact]
+    public void Startup_DeletesOtherFormatVersionDirectories_Only()
+    {
+        var stale = Path.Combine(_root, "v1", "ns");
+        var unrelated = Path.Combine(_root, "vendor");
+        Directory.CreateDirectory(stale);
+        Directory.CreateDirectory(unrelated);
+        File.WriteAllBytes(Path.Combine(stale, "0_0_0.png"), [1, 2, 3]);
+
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        var ns = TileDiskCache.NamespaceFor("cell", "style");
+        using var img = NoiseImage(16, seed: 7);
+
+        // The writer thread reclaims stale versions before its first request.
+        Assert.Equal(
+            TileDiskCache.WriteEnqueueResult.Queued,
+            cache.TryQueueWrite(ns, Key(1, 2, 3), img));
+        Assert.True(cache.WaitForWriteQueueIdle(TimeSpan.FromSeconds(10)));
+
+        Assert.False(Directory.Exists(Path.Combine(_root, "v1")));
+        Assert.True(Directory.Exists(unrelated));
+        using var read = cache.TryRead(ns, Key(1, 2, 3));
+        Assert.NotNull(read);
     }
 
     [Fact]
