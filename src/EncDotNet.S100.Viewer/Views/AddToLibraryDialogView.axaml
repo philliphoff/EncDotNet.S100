@@ -8,17 +8,6 @@
              x:DataType="vm:AddToLibraryDialogViewModel"
              MinWidth="440">
 
-    <UserControl.Resources>
-        <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
-            <CheckBox IsChecked="{Binding IsSelected}" Margin="2,1">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding Label}" />
-                    <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11" VerticalAlignment="Center" />
-                </StackPanel>
-            </CheckBox>
-        </DataTemplate>
-    </UserControl.Resources>
-
     <Grid RowDefinitions="Auto,*,Auto" Margin="20,12,20,16">
 
         <!-- Header (the dialog host supplies the close button). -->
@@ -29,44 +18,6 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Spacing="14">
-
-            <!-- NOAA: what to include -->
-            <StackPanel IsVisible="{Binding IsOnlineFeed}" Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Library_NoaaChooseScope}" FontWeight="SemiBold" />
-                <TextBlock Text="{x:Static loc:Strings.Library_NoaaLoading}" Opacity="0.7"
-                           IsVisible="{Binding IsLoading}" />
-                <TextBlock Text="{Binding LoadError}" Foreground="#c0504d" TextWrapping="Wrap"
-                           IsVisible="{Binding HasLoadError}" />
-                <StackPanel Orientation="Horizontal" Spacing="6"
-                            IsVisible="{Binding CatalogueDateText, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <ic:FluentIcon Icon="Warning" FontSize="14" Foreground="#c07a2c"
-                                   IsVisible="{Binding IsCatalogueStale}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding CatalogueDateText}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
-                    <TextBlock Text="{x:Static loc:Strings.Library_CatalogueStale}" FontSize="11" Foreground="#c07a2c"
-                               IsVisible="{Binding IsCatalogueStale}" VerticalAlignment="Center" />
-                </StackPanel>
-                <TextBox Text="{Binding ChartSearchText}" IsVisible="{Binding IsSearchable}"
-                         PlaceholderText="{x:Static loc:Strings.Library_CommunitySearchWatermark}" />
-                <TabControl IsVisible="{Binding !IsLoading}" Height="260" ItemsSource="{Binding FacetGroups}">
-                    <TabControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:FacetGroupViewModel">
-                            <TextBlock Text="{Binding Title}" />
-                        </DataTemplate>
-                    </TabControl.ItemTemplate>
-                    <TabControl.ContentTemplate>
-                        <DataTemplate x:DataType="vm:FacetGroupViewModel">
-                            <ScrollViewer>
-                                <ItemsControl ItemsSource="{Binding Options}" ItemTemplate="{StaticResource FacetTemplate}" />
-                            </ScrollViewer>
-                        </DataTemplate>
-                    </TabControl.ContentTemplate>
-                </TabControl>
-                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !IsLoading}">
-                    <TextBlock Grid.Column="0" Text="{Binding SelectionSummary}" Opacity="0.8" VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Classes="Ghost" Content="{x:Static loc:Strings.Library_NoaaClearSelection}"
-                            Command="{Binding SelectNoneCommand}" />
-                </Grid>
-            </StackPanel>
 
             <!-- Target collection -->
             <StackPanel Spacing="6">

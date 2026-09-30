@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:lib="using:EncDotNet.S100.Viewer.Library"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.CatalogueTargetStepView"
+             x:DataType="vm:AddToLibraryDialogViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.reviewKey">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBlock.reviewValue">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="12">
+        <!-- A new or existing collection; the field sits inside its card, and using it chooses the card. -->
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+            <Border Classes="wizardCard" Classes.chosen="{Binding CreateNew}">
+                <StackPanel Spacing="8">
+                    <RadioButton Classes="cardRadio" GroupName="WizardTarget" IsChecked="{Binding CreateNew}"
+                                 Content="{x:Static loc:Strings.Library_NewCollection}" />
+                    <StackPanel Spacing="4" Classes.inactive="{Binding AddToExisting}">
+                        <TextBox Text="{Binding NewCollectionName}"
+                                 PlaceholderText="{x:Static loc:Strings.Library_CollectionNameWatermark}" />
+                        <TextBlock Text="{Binding NameHint}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="wizardCard" Classes.chosen="{Binding AddToExisting}"
+                    IsEnabled="{Binding HasExistingCollections}">
+                <StackPanel Spacing="8">
+                    <RadioButton Classes="cardRadio" GroupName="WizardTarget" IsChecked="{Binding AddToExisting}"
+                                 Content="{x:Static loc:Strings.Library_ExistingCollection}" />
+                    <ComboBox ItemsSource="{Binding ExistingCollections}"
+                              SelectedItem="{Binding SelectedCollection}"
+                              HorizontalAlignment="Stretch"
+                              Classes.inactive="{Binding CreateNew}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="lib:LibraryCollection">
+                                <TextBlock Text="{Binding Definition.Name}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Review. -->
+        <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderColor}"
+                Background="{DynamicResource MutedBackgroundColor}" Padding="14,10">
+            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+                <TextBlock Grid.Row="0" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Catalogue}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Classes="reviewValue" Text="{Binding CatalogueName}" />
+
+                <TextBlock Grid.Row="1" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Includes}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="reviewValue" Text="{Binding ReviewIncludes}" />
+
+                <TextBlock Grid.Row="2" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_ShownOnMap}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Classes="reviewValue" Text="{Binding ReviewCoverage}"
+                           Classes.warning="{Binding IsReviewCoverageWarning}" />
+
+                <TextBlock Grid.Row="3" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Updates}" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Classes="reviewValue" Text="{Binding ReviewUpdates}"
+                           Classes.warning="{Binding IsReviewUpdatesWarning}" />
+            </Grid>
+        </Border>
+
+        <TextBlock Text="{x:Static loc:Strings.Wizard_OnlineNote}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

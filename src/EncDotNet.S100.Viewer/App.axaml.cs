@@ -155,7 +155,7 @@ public partial class App : Application
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
-            .Register<Views.CatalogueDirectoryDialogView, ViewModels.CatalogueDirectoryDialogViewModel>()
+            .Register<Views.AddOnlineCatalogueWizardView, ViewModels.AddOnlineCatalogueWizardViewModel>()
             .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
@@ -462,7 +462,10 @@ public partial class App : Application
                 sp.GetRequiredService<Library.UserCatalogueStore>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>());
         });
-        services.AddSingleton<Func<CatalogueDirectoryDialogViewModel>>(sp => sp.GetRequiredService<CatalogueDirectoryDialogViewModel>);
+        services.AddTransient(sp => new AddOnlineCatalogueWizardViewModel(
+            sp.GetRequiredService<CatalogueDirectoryDialogViewModel>(),
+            sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>()));
+        services.AddSingleton<Func<AddOnlineCatalogueWizardViewModel>>(sp => sp.GetRequiredService<AddOnlineCatalogueWizardViewModel>);
         services.AddTransient(sp => new SharedFeedDialogViewModel(
             sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>()));
         services.AddSingleton<Func<SharedFeedDialogViewModel>>(sp => sp.GetRequiredService<SharedFeedDialogViewModel>);
@@ -471,7 +474,7 @@ public partial class App : Application
             sp.GetRequiredService<IFileDialogService>(),
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
-            sp.GetRequiredService<Func<CatalogueDirectoryDialogViewModel>>(),
+            sp.GetRequiredService<Func<AddOnlineCatalogueWizardViewModel>>(),
             sp.GetRequiredService<Func<SharedFeedDialogViewModel>>(),
             sp.GetService<IViewerUiControllerAccessor>()));
 

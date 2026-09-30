@@ -288,6 +288,100 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Ticking_a_value_chooses_only_what_is_selected()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
+        await vm.LoadCatalogAsync();
+        Assert.True(vm.IncludeAll);
+        Assert.Equal("Everything", vm.ScopeDescription);
+        Assert.Equal("Nothing selected yet", vm.OnlySelectedSummary);
+        Assert.StartsWith("6 cells · ", vm.EverythingSummary);
+
+        vm.States.Single(s => s.Value == "AK").IsSelected = true;
+
+        Assert.False(vm.IncludeAll);
+        Assert.True(vm.OnlySelected);
+        Assert.Equal("Alaska", vm.ScopeDescription);
+        Assert.Equal(1, vm.FacetGroups[0].SelectedCount);
+        Assert.True(vm.CanContinueFromScope);
+
+        vm.SelectNoneCommand.Execute(null);
+
+        Assert.False(vm.IncludeAll);
+        Assert.False(vm.CanContinueFromScope);
+        Assert.True(vm.IsScopeSummaryWarning);
+        Assert.Equal("Tick at least one item, or choose Everything.", vm.ScopeSummary);
+    }
+
+    [Fact]
+    public async Task Include_all_builds_an_unscoped_source_and_keeps_the_ticks()
+    {
+        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
+        await vm.LoadCatalogAsync();
+        var alaska = vm.States.Single(s => s.Value == "AK");
+        alaska.IsSelected = true;
+        Assert.Equal("NOAA ENC — Alaska", vm.NewCollectionName);
+
+        vm.IncludeAll = true;
+
+        Assert.True(alaska.IsSelected);
+        Assert.Equal("NOAA ENC", vm.NewCollectionName);
+        Assert.Equal("Everything is included; your 1 picks are kept if you switch back", vm.ScopeSummary);
+        var source = Assert.IsType<NoaaEncFeedSource>(vm.BuildSource());
+        Assert.True(source.Filter.IsUnscoped);
+        Assert.Equal("NOAA ENC", source.DisplayName);
+
+        vm.OnlySelected = true;
+
+        Assert.Equal(["AK"], Assert.IsType<NoaaEncFeedSource>(vm.BuildSource()).Filter.States);
+    }
+
+    [Fact]
+    public async Task A_typed_name_is_kept_and_chooses_a_new_collection()
+    {
+        var existing = _library.AddCollection("Mine", []);
+        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
+        vm.Initialize(AddToLibraryKind.NoaaFeed, null, existing.Id);
+        await vm.LoadCatalogAsync();
+        Assert.True(vm.AddToExisting);
+        Assert.Equal("Mine", vm.TargetDescription);
+        Assert.Equal("Follows your selection until you type your own.", vm.NameHint);
+
+        vm.NewCollectionName = "My charts";
+        vm.States.Single(s => s.Value == "AK").IsSelected = true;
+
+        Assert.True(vm.CreateNew);
+        Assert.Equal("New collection", vm.TargetDescription);
+        Assert.Equal("My charts", vm.NewCollectionName);
+        Assert.Equal("Your name is kept.", vm.NameHint);
+
+        vm.SelectedCollection = null;
+        vm.SelectedCollection = vm.ExistingCollections.Single(c => c.Id == existing.Id);
+        Assert.True(vm.AddToExisting);
+    }
+
+    [Fact]
+    public async Task A_one_option_catalogue_is_a_single_entry()
+    {
+        var buoys = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("usace-ienc-buoys")!;
+        var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-buoy.xml");
+        var vm = new AddToLibraryDialogViewModel(_library, null, (_, _) =>
+            Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)));
+        vm.Initialize(buoys, targetCollectionId: null);
+        Assert.False(vm.IsSingleEntry);
+
+        await vm.LoadCatalogAsync();
+
+        Assert.True(vm.IsSingleEntry);
+        Assert.False(vm.ShowsChoices);
+        Assert.NotNull(vm.SingleEntry);
+        Assert.Equal("Its one download", vm.ScopeDescription);
+        Assert.True(vm.CanContinueFromScope);
+    }
+
+    [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
         var vm = new AddToLibraryDialogViewModel(_library, (_, _) => throw new HttpRequestException("offline"));
