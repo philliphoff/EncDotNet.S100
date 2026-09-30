@@ -37,6 +37,32 @@ public partial class LibraryPanelView : UserControl
         }
     }
 
+    private LibraryPanelViewModel? _viewModel;
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+
+        if (_viewModel is not null)
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        _viewModel = DataContext as LibraryPanelViewModel;
+        if (_viewModel is not null)
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    /// <summary>A map tap selects a dataset without changing the list: bring its row into view.</summary>
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LibraryPanelViewModel.SelectedItem)
+            || _viewModel is not { HasTap: true, SelectedItem: { } item }
+            || this.FindControl<ListBox>("ItemList") is not { } list)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => list.ScrollIntoView(item), Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
     /// <summary>The largest share of the panel the tree takes before it scrolls.</summary>
     internal const double TreeMaxFraction = 0.4;
 
@@ -152,8 +178,11 @@ public partial class LibraryPanelView : UserControl
 
     private void OnItemDoubleTapped(object? sender, TappedEventArgs e)
     {
-        // Double-click a dataset to load it.
-        if (DataContext is LibraryPanelViewModel vm && vm.LoadCommand.CanExecute(null))
+        // Double-click a dataset to bring it into view (keeping the zoom) and load it.
+        if (DataContext is not LibraryPanelViewModel vm)
+            return;
+        vm.CenterOnSelected();
+        if (vm.LoadCommand.CanExecute(null))
             vm.LoadCommand.Execute(null);
     }
 

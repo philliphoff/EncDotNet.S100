@@ -24,7 +24,15 @@ internal enum LibraryPrimaryAvailability
 }
 
 /// <summary>A coverage outline's stroke: colour, width in pixels, dash pattern in pixels, and fill opacity.</summary>
-internal sealed record LibraryOutlineStyle(Color Color, double Width, IReadOnlyList<float>? DashArray, float FillOpacity);
+internal sealed record LibraryOutlineStyle(Color Color, double Width, IReadOnlyList<float>? DashArray, float FillOpacity)
+{
+    /// <summary>
+    /// True for round caps: a pattern starting with a zero-length dash draws
+    /// true dots. Every other line uses butt caps, since round caps add the
+    /// line width to each dash.
+    /// </summary>
+    public bool RoundCap => DashArray is [0f, ..];
+}
 
 /// <summary>
 /// The coverage outline styles shared by the map overlay
@@ -33,13 +41,31 @@ internal sealed record LibraryOutlineStyle(Color Color, double Width, IReadOnlyL
 /// </summary>
 internal static class LibraryOutlineStyles
 {
-    public static LibraryOutlineStyle Local { get; } = new(Color.FromRgb(0x3d, 0x8a, 0x5a), 1.6, null, 0);
+    public static LibraryOutlineStyle Local { get; } = new(Color.FromRgb(0x3d, 0x8a, 0x5a), 1.0, null, 0);
 
-    public static LibraryOutlineStyle Online { get; } = new(Color.FromRgb(0x3f, 0x6f, 0xb5), 1.6, [6f, 4f], 0);
+    public static LibraryOutlineStyle Online { get; } = new(Color.FromRgb(0x3f, 0x6f, 0xb5), 1.0, [5f, 3f], 0);
 
-    public static LibraryOutlineStyle Listed { get; } = new(Color.FromRgb(0x80, 0x86, 0x90), 1.4, [1.5f, 3f], 0);
+    public static LibraryOutlineStyle Listed { get; } = new(Color.FromRgb(0x80, 0x86, 0x90), 1.2, [0f, 3f], 0);
 
-    public static LibraryOutlineStyle Missing { get; } = new(Color.FromRgb(0xc0, 0x50, 0x4d), 1.6, [4f, 3f], 0);
+    public static LibraryOutlineStyle Missing { get; } = new(Color.FromRgb(0xc0, 0x50, 0x4d), 1.2, [3f, 2f], 0);
+
+    /// <summary>The selected dataset's line width (drawn in the accent colour).</summary>
+    public const double SelectedWidth = 2.0;
+
+    /// <summary>The selected dataset's fill opacity.</summary>
+    public const float SelectedFillOpacity = 0.06f;
+
+    /// <summary>How much wider than its line an outline's casing is.</summary>
+    public const double CasingExtraWidth = 2.0;
+
+    /// <summary>The casing's opacity (it is drawn in the chart's background colour).</summary>
+    public const float CasingOpacity = 0.6f;
+
+    /// <summary>An outline's line opacity.</summary>
+    public const float LineOpacity = 0.85f;
+
+    /// <summary>The other outlines' line opacity while a dataset is selected.</summary>
+    public const float DimmedLineOpacity = 0.5f;
 
     /// <summary>The style for a primary availability.</summary>
     public static LibraryOutlineStyle For(LibraryPrimaryAvailability availability) => availability switch

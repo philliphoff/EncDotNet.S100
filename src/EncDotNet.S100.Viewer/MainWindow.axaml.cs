@@ -460,7 +460,7 @@ public partial class MainWindow : ShadUI.Window
             _loader,
             App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>());
         interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
-        interactionController.PlainTapped += (_, position) => _libraryCoverageController?.HandleTap(position);
+        interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);
 
         // Wire the map-tool controller to the map: tools are registered with
         // the view-model's controller and pointer events are forwarded by

@@ -3262,4 +3262,16 @@
   <data name="Button_Checking" xml:space="preserve">
     <value>Checking…</value>
   </data>
+  <data name="Library_TapHereFormat" xml:space="preserve">
+    <value>{0:N0} here</value>
+  </data>
+  <data name="Library_TapIndexFormat" xml:space="preserve">
+    <value>· {0} of {1}</value>
+  </data>
+  <data name="Library_TapListThese" xml:space="preserve">
+    <value>List these</value>
+  </data>
+  <data name="Tooltip_ClearTap" xml:space="preserve">
+    <value>Clear the selection</value>
+  </data>
 </root>

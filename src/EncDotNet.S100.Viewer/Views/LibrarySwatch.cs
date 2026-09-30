@@ -17,7 +17,7 @@ internal sealed class LibrarySwatch : Control
     public static readonly StyledProperty<LibraryPrimaryAvailability> StateProperty =
         AvaloniaProperty.Register<LibrarySwatch, LibraryPrimaryAvailability>(nameof(State));
 
-    /// <summary>The line thickness in pixels (the map's dash lengths are kept in pixels).</summary>
+    /// <summary>The control's height in pixels; each line is drawn at its map width, centred.</summary>
     public const double Thickness = 2;
 
     private static readonly Dictionary<LibraryPrimaryAvailability, ImmutablePen> Pens = Enum
@@ -49,8 +49,9 @@ internal sealed class LibrarySwatch : Control
 
     private static ImmutablePen CreatePen(LibraryOutlineStyle style)
     {
-        // Avalonia dash lengths are multiples of the thickness; the map's are pixels.
-        var dashes = style.DashArray is { } d ? new ImmutableDashStyle(d.Select(x => x / Thickness), 0) : null;
-        return new ImmutablePen(new ImmutableSolidColorBrush(style.Color), Thickness, dashes, PenLineCap.Flat);
+        // Avalonia dash lengths are multiples of the line width; the map's are pixels.
+        var dashes = style.DashArray is { } d ? new ImmutableDashStyle(d.Select(x => x / style.Width), 0) : null;
+        return new ImmutablePen(new ImmutableSolidColorBrush(style.Color), style.Width, dashes,
+            style.RoundCap ? PenLineCap.Round : PenLineCap.Flat);
     }
 }

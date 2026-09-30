@@ -218,45 +218,57 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.All(vm.Items, i => Assert.Equal(LibraryAvailability.Listed, i.Availability));
     }
 
+    private static GeoPosition CentreOf(LibraryItemViewModel item) =>
+        new((item.Item.Bounds!.Value.South + item.Item.Bounds.Value.North) / 2,
+            (item.Item.Bounds.Value.West + item.Item.Bounds.Value.East) / 2);
+
     [Fact]
-    public async Task Tapping_the_map_lists_the_datasets_there_and_cycles_on_repeat()
+    public async Task A_tap_selects_the_top_hit_and_leaves_the_list_alone()
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
-        var bounds = vm.Items.Select(i => i.Item.Bounds!.Value).ToArray();
-        // A point inside both synthetic cells' footprints, if they overlap;
-        // otherwise inside the first.
-        var both = bounds[0].Intersects(bounds[1]);
-        var point = new GeoPosition(
-            (Math.Max(bounds[0].South, bounds[1].South) + Math.Min(bounds[0].North, bounds[1].North)) / 2,
-            (Math.Max(bounds[0].West, bounds[1].West) + Math.Min(bounds[0].East, bounds[1].East)) / 2);
-        if (!both)
-            point = new GeoPosition((bounds[0].South + bounds[0].North) / 2, (bounds[0].West + bounds[0].East) / 2);
+        var node = vm.SelectedNode;
+        var items = vm.Items.ToArray();
+        var point = CentreOf(items[1]);
 
-        Assert.True(vm.SelectAt(point));
+        vm.SelectTapHits(point, [items[1], items[0]], sameSpot: false);
+
+        Assert.Same(items[1], vm.SelectedItem);
+        Assert.Equal(items, vm.Items);
+        Assert.Same(node, vm.SelectedNode);
+        Assert.False(vm.HasLocation);
+        Assert.True(vm.HasTap);
+        Assert.Equal("2 here", vm.TapHitsText);
+        Assert.Equal("· 1 of 2", vm.TapPositionText);
+
+        // The same spot again steps to the next hit; Next does the same and wraps round.
+        vm.SelectTapHits(point, [items[1], items[0]], sameSpot: true);
+        Assert.Same(items[0], vm.SelectedItem);
+        Assert.Equal("· 2 of 2", vm.TapPositionText);
+        vm.NextTapHitCommand.Execute(null);
+        Assert.Same(items[1], vm.SelectedItem);
+
+        // A new spot starts from the top hit again.
+        vm.SelectTapHits(point, [items[0], items[1]], sameSpot: false);
+        Assert.Same(items[0], vm.SelectedItem);
+    }
+
+    [Fact]
+    public async Task List_these_lists_every_dataset_at_the_tapped_point()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        var target = vm.Items[0];
+
+        vm.SelectTapHits(CentreOf(target), [target], sameSpot: false);
+        Assert.False(vm.NextTapHitCommand.CanExecute(null));
+        vm.ListTapHitsCommand.Execute(null);
 
         Assert.True(vm.HasLocation);
-        Assert.Contains(vm.SelectedItem!, vm.Items);
+        Assert.False(vm.HasTap);
+        Assert.Contains(vm.Items, i => i.Name == target.Name);
+        Assert.Equal(target.Name, vm.SelectedItem!.Name);
         Assert.Equal(vm.Items.Count, vm.LocationHitCount);
-        Assert.Equal(1, vm.LocationHitIndex);
-        Assert.Equal($"1 / {vm.Items.Count}", vm.LocationPositionText);
-        var first = vm.SelectedItem!.Name;
-        if (vm.Items.Count > 1)
-        {
-            vm.SelectAt(point);
-            Assert.NotEqual(first, vm.SelectedItem!.Name);
-            Assert.Equal(2, vm.LocationHitIndex);
-
-            // Next, from the banner, steps the same way and wraps round.
-            for (var i = 0; i < vm.Items.Count - 1; i++)
-                vm.NextAtLocationCommand.Execute(null);
-            Assert.Equal(first, vm.SelectedItem!.Name);
-        }
-        else
-        {
-            Assert.False(vm.NextAtLocationCommand.CanExecute(null));
-            Assert.Equal("1 dataset", vm.LocationHitsText);
-        }
 
         vm.ClearLocationCommand.Execute(null);
         Assert.False(vm.HasLocation);
@@ -264,14 +276,103 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task Tapping_where_nothing_is_covered_changes_nothing()
+    public async Task Clearing_a_tap_hides_the_banner_and_clears_the_selection()
     {
         await AddS57CollectionAsync();
         using var vm = CreateViewModel();
+        vm.SelectTapHits(CentreOf(vm.Items[0]), [vm.Items[0]], sameSpot: false);
 
-        Assert.False(vm.SelectAt(new GeoPosition(-60, 0)));
-        Assert.False(vm.HasLocation);
+        vm.ClearTapCommand.Execute(null);
+
+        Assert.False(vm.HasTap);
+        Assert.Null(vm.SelectedItem);
         Assert.Equal(2, vm.Items.Count);
+
+        // A tap where nothing is outlined clears a hand-picked selection too.
+        vm.SelectedItem = vm.Items[1];
+        vm.ClearTap();
+        Assert.Null(vm.SelectedItem);
+    }
+
+    [Fact]
+    public async Task What_ends_a_tap()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        var items = vm.Items.ToArray();
+        var point = CentreOf(items[0]);
+
+        // Picking a row that is one of the hits keeps the banner; another row ends it.
+        vm.SelectTapHits(point, [items[0], items[1]], sameSpot: false);
+        vm.SelectedItem = items[1];
+        Assert.True(vm.HasTap);
+        vm.SelectTapHits(point, [items[0]], sameSpot: false);
+        vm.SelectedItem = items[1];
+        Assert.False(vm.HasTap);
+        Assert.Same(items[1], vm.SelectedItem);
+
+        // The text filter ends it.
+        vm.SelectTapHits(point, [items[0]], sameSpot: false);
+        vm.FilterText = "US5";
+        Assert.False(vm.HasTap);
+
+        // So does the state filter.
+        vm.SelectTapHits(point, [vm.Items[0]], sameSpot: false);
+        vm.StateFilter = LibraryStateFilter.Local;
+        Assert.False(vm.HasTap);
+
+        // And selecting a tree node.
+        vm.SelectTapHits(point, [vm.Items[0]], sameSpot: false);
+        vm.SelectedNode = vm.Nodes[0].Children[0];
+        Assert.False(vm.HasTap);
+    }
+
+    [Fact]
+    public async Task Taps_hit_only_the_outlines_drawn_at_the_scale()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        var target = vm.Items[0];
+        var point = CentreOf(target);
+
+        // The synthetic cells are band 5 (harbour): outlined at harbour scale, not at overview.
+        var harbour = EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, null, point, 20_000);
+        Assert.Contains(harbour, h => ReferenceEquals(h, target));
+        Assert.Empty(EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, null, point, 10_000_000));
+
+        // The selection is always drawn, so it can always be hit.
+        var selected = EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, target, point, 10_000_000);
+        Assert.Same(target, Assert.Single(selected));
+
+        // Only listed datasets are candidates.
+        vm.FilterText = "nothing matches this";
+        Assert.Empty(EncDotNet.S100.Viewer.Services.LibraryCoverageOverlayController.Hits(vm.Items, null, point, 20_000));
+    }
+
+    [Fact]
+    public async Task Centering_on_a_dataset_raises_its_centre()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        GeoPosition? requested = null;
+        vm.CenterRequested += (_, p) => requested = p;
+
+        vm.CenterOnSelected();
+        Assert.Null(requested);
+
+        vm.SelectedItem = vm.Items[0];
+        vm.CenterOnSelected();
+
+        Assert.Equal(CentreOf(vm.Items[0]), requested);
+    }
+
+    [Fact]
+    public void The_centre_of_bounds_crossing_the_antimeridian_is_across_it()
+    {
+        var centre = LibraryPanelViewModel.CenterOf(new GeoBounds(50, 170, 60, -170));
+
+        Assert.Equal(55, centre.Latitude);
+        Assert.Equal(180, Math.Abs(centre.Longitude), 6);
     }
 
     [Fact]

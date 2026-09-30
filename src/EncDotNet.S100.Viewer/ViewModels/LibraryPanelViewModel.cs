@@ -61,6 +61,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _refreshPosted;
     private bool _showCoverage = true;
     private GeoPosition? _location;
+    private GeoPosition? _tapPosition;
+    private IReadOnlyList<LibraryItemViewModel>? _tapHits;
+    private bool _selectingTapHit;
 
     public LibraryPanelViewModel(
         LibraryService library,
@@ -110,6 +113,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
         ClearLocationCommand = new RelayCommand(() => SetLocation(null));
         NextAtLocationCommand = new RelayCommand(NextAtLocation, () => _location is not null && _items.Count > 1);
+        NextTapHitCommand = new RelayCommand(NextTapHit, () => TapHitCount > 1);
+        ListTapHitsCommand = new RelayCommand(ListTapHits, () => _tapPosition is not null);
+        ClearTapCommand = new RelayCommand(ClearTap);
         LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
@@ -145,6 +151,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
+                EndTap();
                 if (_location is not null)
                     SetLocation(null);
                 else
@@ -171,9 +178,14 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedItem, value))
             {
+                // Picking a row by hand keeps the tap while the row is one of its hits.
+                if (!_selectingTapHit && _tapHits is not null && (value is null || TapHitIndexOf(value) < 0))
+                    EndTap();
+
                 OnPropertyChanged(nameof(HasSelectedItem));
                 OnPropertyChanged(nameof(LocationHitIndex));
                 OnPropertyChanged(nameof(LocationPositionText));
+                OnPropertyChanged(nameof(TapPositionText));
                 ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
@@ -193,7 +205,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         set
         {
             if (SetProperty(ref _filterText, value ?? string.Empty))
+            {
+                EndTap();
                 ApplyFilter();
+            }
         }
     }
 
@@ -204,7 +219,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         set
         {
             if (SetProperty(ref _showCancelled, value))
+            {
+                EndTap();
                 ApplyFilter();
+            }
         }
     }
 
@@ -220,6 +238,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(IsStateLocal));
                 OnPropertyChanged(nameof(IsStateOnline));
                 OnPropertyChanged(nameof(IsStateUpdates));
+                EndTap();
                 ApplyFilter();
             }
         }
@@ -253,7 +272,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// The map location the list is filtered to (set by tapping the map), or
+    /// The map location the list is filtered to (set by the tap banner's "List these"), or
     /// <see langword="null"/> to list the selected node's datasets.
     /// </summary>
     public GeoPosition? Location => _location;
@@ -268,6 +287,26 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Raised when the user asks to zoom the map to a dataset's bounds.</summary>
     public event EventHandler<GeoBounds>? ZoomRequested;
+
+    /// <summary>Raised when the user asks to centre the map on a dataset without changing the zoom.</summary>
+    public event EventHandler<GeoPosition>? CenterRequested;
+
+    /// <summary>
+    /// Centres the map on the selected dataset (its bounds' centre), keeping
+    /// the zoom — e.g. when its row is double-clicked and it may be off screen.
+    /// </summary>
+    public void CenterOnSelected()
+    {
+        if (_selectedItem is { IsGroupHeader: false, Item.Bounds: { } bounds })
+            CenterRequested?.Invoke(this, CenterOf(bounds));
+    }
+
+    /// <summary>The centre of <paramref name="bounds"/>, across the antimeridian when they cross it.</summary>
+    internal static GeoPosition CenterOf(GeoBounds bounds)
+    {
+        var east = bounds.CrossesAntimeridian ? bounds.East + 360 : bounds.East;
+        return new GeoPosition((bounds.South + bounds.North) / 2, GeoBounds.NormalizeLongitude((bounds.West + east) / 2));
+    }
 
     /// <summary>"116", or "8 of 116" when filtered, shown inside the filter box.</summary>
     public string ItemsSummary =>
@@ -340,6 +379,31 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>"1 / 3" for the map-tap banner.</summary>
     public string LocationPositionText =>
         string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationIndexFormat, LocationHitIndex, LocationHitCount);
+
+    /// <summary>
+    /// True while a map tap is active and the list is not already the point
+    /// list: the tap banner ("2 here · 1 of 2") shows.
+    /// </summary>
+    public bool HasTap => _tapHits is not null && _location is null;
+
+    /// <summary>How many outlined datasets the active tap hit.</summary>
+    public int TapHitCount => _tapHits?.Count ?? 0;
+
+    /// <summary>"2 here" for the tap banner.</summary>
+    public string TapHitsText => string.Format(CultureInfo.CurrentCulture, Strings.Library_TapHereFormat, TapHitCount);
+
+    /// <summary>"· 1 of 2" for the tap banner.</summary>
+    public string TapPositionText => string.Format(CultureInfo.CurrentCulture, Strings.Library_TapIndexFormat,
+        _selectedItem is null ? 0 : TapHitIndexOf(_selectedItem) + 1, TapHitCount);
+
+    /// <summary>Selects the next dataset the tap hit, wrapping round (as tapping the same spot again does).</summary>
+    public ICommand NextTapHitCommand { get; }
+
+    /// <summary>Lists the datasets at the tapped point, from every collection (what a tap used to do).</summary>
+    public ICommand ListTapHitsCommand { get; }
+
+    /// <summary>Ends the tap: hides the banner and clears the selection.</summary>
+    public ICommand ClearTapCommand { get; }
 
     /// <summary>Loads the selected dataset now.</summary>
     public ICommand LoadCommand { get; }
@@ -438,32 +502,96 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Handles a tap on the map: lists every library dataset whose coverage
-    /// contains <paramref name="position"/> and selects the most detailed one.
-    /// Tapping the same spot again selects the next overlapping dataset.
-    /// Returns false (changing nothing) when no dataset covers the position.
+    /// Handles a map tap that hit <paramref name="hits"/> (listed, outlined
+    /// datasets, most detailed first): selects the first, or — when the same
+    /// spot was tapped again — the one after the current selection. The list
+    /// itself does not change; the tap banner offers Next and "List these".
     /// </summary>
-    public bool SelectAt(GeoPosition position)
+    public void SelectTapHits(GeoPosition position, IReadOnlyList<LibraryItemViewModel> hits, bool sameSpot)
     {
-        var hits = HitsAt(position);
+        ArgumentNullException.ThrowIfNull(hits);
         if (hits.Count == 0)
-            return false;
-
-        var sameSpot = _location is { } previous && Near(previous, position);
-        var previousItem = _selectedItem;
-        SetLocation(position, hits);
-
-        if (sameSpot && previousItem is not null)
         {
-            SelectedItem = _items.FirstOrDefault(i => SameItem(i, previousItem));
-            NextAtLocation();
-        }
-        else
-        {
-            SelectedItem = _items.Count > 0 ? _items[0] : null;
+            ClearTap();
+            return;
         }
 
-        return true;
+        var current = _selectedItem is null ? -1 : IndexIn(hits, _selectedItem);
+        _tapPosition = position;
+        _tapHits = hits;
+        SelectTapHit(sameSpot && current >= 0 ? (current + 1) % hits.Count : 0);
+        OnTapChanged();
+    }
+
+    /// <summary>Ends any map tap and clears the selection (a tap where nothing is outlined, or the banner's ×).</summary>
+    public void ClearTap()
+    {
+        EndTap();
+        SelectedItem = null;
+    }
+
+    private void NextTapHit()
+    {
+        if (_tapHits is not { Count: > 0 } hits)
+            return;
+        var current = _selectedItem is null ? -1 : IndexIn(hits, _selectedItem);
+        SelectTapHit((current + 1) % hits.Count);
+    }
+
+    private void SelectTapHit(int index)
+    {
+        var hit = _tapHits![index];
+        _selectingTapHit = true;
+        try
+        {
+            // The list may have been rebuilt since the tap; select the row as listed now.
+            SelectedItem = _items.FirstOrDefault(i => SameItem(i, hit)) ?? hit;
+        }
+        finally
+        {
+            _selectingTapHit = false;
+        }
+    }
+
+    private void ListTapHits()
+    {
+        if (_tapPosition is not { } position)
+            return;
+        EndTap();
+        SetLocation(position);
+    }
+
+    /// <summary>Forgets the map tap (the banner hides); the selection is left alone.</summary>
+    private void EndTap()
+    {
+        if (_tapHits is null)
+            return;
+        _tapHits = null;
+        _tapPosition = null;
+        OnTapChanged();
+    }
+
+    private void OnTapChanged()
+    {
+        OnPropertyChanged(nameof(HasTap));
+        OnPropertyChanged(nameof(TapHitCount));
+        OnPropertyChanged(nameof(TapHitsText));
+        OnPropertyChanged(nameof(TapPositionText));
+        ((RelayCommand)NextTapHitCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)ListTapHitsCommand).NotifyCanExecuteChanged();
+    }
+
+    private int TapHitIndexOf(LibraryItemViewModel item) => _tapHits is { } hits ? IndexIn(hits, item) : -1;
+
+    private static int IndexIn(IReadOnlyList<LibraryItemViewModel> items, LibraryItemViewModel item)
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (SameItem(items[i], item))
+                return i;
+        }
+
+        return -1;
     }
 
     /// <summary>Selects the next dataset at the tapped point, wrapping round.</summary>
@@ -776,17 +904,18 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         RebuildItems(force: false);
     }
 
-    private void SetLocation(GeoPosition? position, IReadOnlyList<LibraryItemViewModel>? hits = null)
+    private void SetLocation(GeoPosition? position)
     {
         _location = position;
         OnPropertyChanged(nameof(Location));
         OnPropertyChanged(nameof(HasLocation));
+        OnPropertyChanged(nameof(HasTap));
         OnPropertyChanged(nameof(LocationSummary));
         ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
 
         var selected = _selectedItem;
         _itemsBasis = null;
-        _allItems = position is { } p ? hits ?? HitsAt(p) : BuildNodeItems(_selectedNode);
+        _allItems = position is { } p ? HitsAt(p) : BuildNodeItems(_selectedNode);
         ApplyFilter();
         SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
     }
@@ -819,9 +948,6 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
         a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
-
-    private static bool Near(GeoPosition a, GeoPosition b) =>
-        Math.Abs(a.Latitude - b.Latitude) < 1e-4 && Math.Abs(a.Longitude - b.Longitude) < 1e-4;
 
     private void ZoomToSelected()
     {

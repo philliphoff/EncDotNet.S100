@@ -59,4 +59,29 @@ public sealed class MapInteractionControllerTests
             pickModifierActive: true,
             hasPick: true));
     }
+
+    [Theory]
+    [InlineData(3, 0, false)]
+    [InlineData(4, 4, false)]
+    [InlineData(5, 0, true)]
+    [InlineData(0, -5, true)]
+    public void MovedBeyondTap_TreatsMovesBeyondTheTapSizeAsPans(double dx, double dy, bool moved)
+    {
+        Assert.Equal(moved, MapInteractionController.MovedBeyondTap(
+            new Avalonia.Point(100, 100), new Avalonia.Point(100 + dx, 100 + dy), new Avalonia.Size(4, 4)));
+    }
+
+    private static MapTap Tap(double worldX, double worldY, double resolution) =>
+        new(new EncDotNet.S100.DataModel.GeoPosition(0, 0), 0, 0, worldX, worldY, resolution, TapSize: 4);
+
+    [Fact]
+    public void IsSameSpot_ComparesInScreenPixelsAtAnUnchangedResolution()
+    {
+        var first = Tap(1000, 1000, resolution: 10);
+
+        Assert.True(MapTap.IsSameSpot(first, Tap(1030, 1000, 10)));   // 3 px away
+        Assert.False(MapTap.IsSameSpot(first, Tap(1050, 1000, 10)));  // 5 px away
+        Assert.False(MapTap.IsSameSpot(first, Tap(1000, 1000, 5)));   // zoomed in
+        Assert.False(MapTap.IsSameSpot(null, first));
+    }
 }

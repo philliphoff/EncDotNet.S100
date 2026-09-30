@@ -425,7 +425,31 @@
             <!-- Datasets of the selected node -->
             <DockPanel Grid.Row="3">
                 <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="8,6,8,4">
-                    <!-- After a map tap: how many datasets cover the point, and a way to step through them. -->
+                    <!-- After a map tap: the tap selected one of the outlined datasets there and left the list
+                         alone. Step through them, or list every dataset at the point ("List these"). -->
+                    <Panel IsVisible="{Binding HasTap}">
+                        <Border Background="{DynamicResource AccentBrush}" Opacity="0.06" CornerRadius="6" />
+                        <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" Opacity="0.3" CornerRadius="6" />
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="8,2,2,2">
+                            <ic:FluentIcon Grid.Column="0" Icon="Location" FontSize="14"
+                                           Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource LibrarySecondaryFontSize}" TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding TapHitsText}" FontWeight="SemiBold" />
+                                <Run Text="{Binding TapPositionText}" />
+                            </TextBlock>
+                            <Button Grid.Column="2" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                    Content="{x:Static loc:Strings.Library_LocationNext}"
+                                    Command="{Binding NextTapHitCommand}" />
+                            <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                    Content="{x:Static loc:Strings.Library_TapListThese}"
+                                    Command="{Binding ListTapHitsCommand}" />
+                            <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding ClearTapCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearTap}">
+                                <ic:FluentIcon Icon="Dismiss" FontSize="12" />
+                            </Button>
+                        </Grid>
+                    </Panel>
+                    <!-- After "List these": how many datasets cover the point, and a way to step through them. -->
                     <!-- A thin accent outline over a faint accent wash (both follow the user's accent colour). -->
                     <Panel IsVisible="{Binding HasLocation}" ToolTip.Tip="{Binding LocationSummary}">
                         <Border Background="{DynamicResource AccentBrush}" Opacity="0.06" CornerRadius="6" />

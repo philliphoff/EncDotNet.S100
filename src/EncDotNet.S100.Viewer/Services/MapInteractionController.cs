@@ -41,11 +41,17 @@ internal sealed class MapInteractionController
 
     /// <summary>
     /// Raised for a plain single tap on the map — outside Pick Mode, with no
-    /// map tool active and no pick modifier held — with the tapped WGS-84
-    /// position. Lets passive overlays (e.g. library coverage, issue #655)
-    /// react to a click without competing with feature picking.
+    /// map tool active and no pick modifier held — with where it landed and
+    /// the view it landed in. Lets passive overlays (e.g. library coverage,
+    /// issue #655) react to a click without competing with feature picking.
     /// </summary>
-    public event EventHandler<EncDotNet.S100.DataModel.GeoPosition>? PlainTapped;
+    /// <remarks>
+    /// Stray clicks are not taps: the tap is held for the platform's
+    /// double-tap time and dropped if it becomes a double-click (a zoom), and
+    /// a press that moved more than the platform's tap size (a pan) or that
+    /// became a long-press is never a tap.
+    /// </remarks>
+    public event EventHandler<MapTap>? PlainTapped;
 
     private readonly MainViewModel _viewModel;
     private readonly IPickService _pickService;
@@ -58,6 +64,21 @@ internal sealed class MapInteractionController
     private DispatcherTimer? _longPressTimer;
     private Point? _longPressOrigin;
     private bool _longPressFired;
+
+    /// <summary>Where the most recent left-button press on the map landed, for the pan-is-not-a-tap test.</summary>
+    private Point? _pressOrigin;
+
+    /// <summary>True when the pointer moved beyond the tap size since <see cref="_pressOrigin"/>.</summary>
+    private bool _pressMoved;
+
+    private PointerType _pressPointerType = PointerType.Mouse;
+
+    /// <summary>A plain tap held until the double-tap time has passed without a second click.</summary>
+    private DispatcherTimer? _plainTapTimer;
+    private MapTap? _pendingPlainTap;
+
+    /// <summary>When the last double-tap arrived; the second click's own tap is dropped within the double-tap time.</summary>
+    private long _lastDoubleTapTimestamp;
 
     /// <summary>
     /// Modifier state captured at the most recent pointer-press on the map,
@@ -326,6 +347,11 @@ internal sealed class MapInteractionController
 
     private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // A double-click is never a Library tap: drop the held first click,
+        // and the second click's tap if it arrives after this.
+        CancelPendingPlainTap();
+        _lastDoubleTapTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+
         // Active tool gets first refusal (e.g. measure-mode finalises on double-tap).
         if (_toolController?.OnDoubleTapped(e) == true)
         {
@@ -392,11 +418,22 @@ internal sealed class MapInteractionController
             }
 
             if (_toolController?.ActiveTool is null
-                && PlainTapped is { } handler
-                && e.GetMapInfo?.Invoke([])?.WorldPosition is { } world)
+                && PlainTapped is not null
+                && !_pressMoved
+                && !IsWithinDoubleTapTime(_lastDoubleTapTimestamp)
+                && e.WorldPosition is { } world
+                && _mapControl?.Map?.Navigator is { } navigator)
             {
                 var (lon, lat) = Mapsui.Projections.SphericalMercator.ToLonLat(world.X, world.Y);
-                handler(this, new EncDotNet.S100.DataModel.GeoPosition(lat, lon));
+                var tapSize = PlatformSettings()?.GetTapSize(_pressPointerType) ?? new Size(4, 4);
+                HoldPlainTap(new MapTap(
+                    new EncDotNet.S100.DataModel.GeoPosition(lat, lon),
+                    e.ScreenPosition.X,
+                    e.ScreenPosition.Y,
+                    world.X,
+                    world.Y,
+                    navigator.Viewport.Resolution,
+                    Math.Max(tapSize.Width, tapSize.Height)));
             }
 
             return;
@@ -404,6 +441,55 @@ internal sealed class MapInteractionController
 
         PerformPickAt(e);
     }
+
+    private static Avalonia.Platform.IPlatformSettings? PlatformSettings() => Application.Current?.PlatformSettings;
+
+    private TimeSpan DoubleTapTime() =>
+        PlatformSettings()?.GetDoubleTapTime(_pressPointerType) ?? TimeSpan.FromMilliseconds(500);
+
+    private bool IsWithinDoubleTapTime(long timestamp) =>
+        timestamp != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(timestamp) < DoubleTapTime();
+
+    /// <summary>
+    /// Holds a plain tap for the platform's double-tap time; it is raised
+    /// through <see cref="PlainTapped"/> only if no double-tap arrives first.
+    /// </summary>
+    private void HoldPlainTap(MapTap tap)
+    {
+        CancelPendingPlainTap();
+        _pendingPlainTap = tap;
+        _plainTapTimer = new DispatcherTimer { Interval = DoubleTapTime() };
+        _plainTapTimer.Tick += OnPlainTapTimerElapsed;
+        _plainTapTimer.Start();
+    }
+
+    private void OnPlainTapTimerElapsed(object? sender, EventArgs e)
+    {
+        var tap = _pendingPlainTap;
+        CancelPendingPlainTap();
+        if (tap is not null)
+            PlainTapped?.Invoke(this, tap);
+    }
+
+    private void CancelPendingPlainTap()
+    {
+        if (_plainTapTimer is { } timer)
+        {
+            timer.Stop();
+            timer.Tick -= OnPlainTapTimerElapsed;
+        }
+
+        _plainTapTimer = null;
+        _pendingPlainTap = null;
+    }
+
+    /// <summary>
+    /// True when a press that started at <paramref name="origin"/> and is now
+    /// at <paramref name="current"/> has moved beyond the platform's tap size:
+    /// it is a pan (or a drag), never a tap.
+    /// </summary>
+    internal static bool MovedBeyondTap(Point origin, Point current, Size tapSize) =>
+        Math.Abs(current.X - origin.X) > tapSize.Width || Math.Abs(current.Y - origin.Y) > tapSize.Height;
 
     /// <summary>
     /// Decides whether a plain (unmodified) single-tap on the map should clear
@@ -462,6 +548,12 @@ internal sealed class MapInteractionController
         // Mapsui tap event doesn't carry keyboard modifiers).
         _lastPressedModifiers = e.KeyModifiers;
 
+        // Remember where the press started: a press that then moves beyond
+        // the tap size is a pan, never a tap.
+        _pressOrigin = e.GetPosition(_mapControl);
+        _pressMoved = false;
+        _pressPointerType = e.Pointer.Type;
+
         // Modifier-click is handled in OnMapTapped (where we have a MapInfo
         // resolver); skip the long-press timer for that case.
         if (IsPickModifierActive())
@@ -490,6 +582,8 @@ internal sealed class MapInteractionController
         {
             e.Handled = true;
         }
+
+        TrackPressMovement(e);
 
         if (_longPressTimer is null || _longPressOrigin is not { } origin || _mapControl is null)
             return;
@@ -572,7 +666,19 @@ internal sealed class MapInteractionController
         {
             e.Handled = true;
         }
+
+        TrackPressMovement(e);
         CancelLongPress();
+    }
+
+    private void TrackPressMovement(PointerEventArgs e)
+    {
+        if (_pressOrigin is not { } origin || _pressMoved || _mapControl is null)
+            return;
+
+        var tapSize = PlatformSettings()?.GetTapSize(_pressPointerType) ?? new Size(4, 4);
+        if (MovedBeyondTap(origin, e.GetPosition(_mapControl), tapSize))
+            _pressMoved = true;
     }
 
     private void OnMapPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
