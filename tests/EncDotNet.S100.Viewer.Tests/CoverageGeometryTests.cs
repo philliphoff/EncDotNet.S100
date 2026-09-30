@@ -16,16 +16,16 @@ public class CoverageGeometryTests
 
     private static CollectionItem Item(
         GeoBounds? bounds, int? band = null, int? minimumDisplayScale = null, int? maximumDisplayScale = null) => new()
-    {
-        Key = "k",
-        ProductSpec = "S-57",
-        Name = "k",
-        Bounds = bounds,
-        UsageBand = band,
-        MinimumDisplayScale = minimumDisplayScale,
-        MaximumDisplayScale = maximumDisplayScale,
-        Location = NoItemLocation.Instance,
-    };
+        {
+            Key = "k",
+            ProductSpec = "S-57",
+            Name = "k",
+            Bounds = bounds,
+            UsageBand = band,
+            MinimumDisplayScale = minimumDisplayScale,
+            MaximumDisplayScale = maximumDisplayScale,
+            Location = NoItemLocation.Instance,
+        };
 
     [Fact]
     public void Unwrap_makes_longitudes_continuous_across_the_antimeridian()
