@@ -53,6 +53,8 @@ internal sealed class BaseSpatialIndex
 
     private readonly double _minX;
     private readonly double _minY;
+    private readonly double _maxX;
+    private readonly double _maxY;
     private readonly double _invCellW;
     private readonly double _invCellH;
     private readonly int _cols;
@@ -106,6 +108,7 @@ internal sealed class BaseSpatialIndex
             _cols = _rows = 1;
             _cells = new List<int>[1] { new() };
             _minX = _minY = 0;
+            _maxX = _maxY = -1;
             _invCellW = _invCellH = 0;
             return;
         }
@@ -117,6 +120,8 @@ internal sealed class BaseSpatialIndex
         _rows = (maxY > minY) ? target : 1;
         _minX = minX;
         _minY = minY;
+        _maxX = maxX;
+        _maxY = maxY;
         double width = Math.Max(maxX - minX, double.Epsilon);
         double height = Math.Max(maxY - minY, double.Epsilon);
         // Nudge the divisor so the max coordinate maps to the last cell, not one past.
@@ -185,6 +190,47 @@ internal sealed class BaseSpatialIndex
         foreach (var idx in ordered)
             results.Add(_ops[idx]);
         return results;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <see cref="Query"/> over the same world
+    /// AABB would return at least one op, without allocating. A tile whose bounds
+    /// (+ gutter) intersect no base op rasterises to pure transparency, so the
+    /// compositor uses this to skip such tiles entirely — no raster, no cache
+    /// entry, no disk write and no per-frame blit — which keeps a cell's tile
+    /// work proportional to the part of the viewport it actually covers rather
+    /// than the whole viewport.
+    /// </summary>
+    public bool Intersects(double minX, double minY, double maxX, double maxY)
+    {
+        if (maxX < minX || maxY < minY)
+            return false;
+        if (_alwaysCandidates.Count > 0)
+            return true;
+        if (maxX < _minX || minX > _maxX || maxY < _minY || minY > _maxY)
+            return false;
+
+        int c0 = ColOf(minX), c1 = ColOf(maxX);
+        int r0 = RowOf(minY), r1 = RowOf(maxY);
+        for (int r = r0; r <= r1; r++)
+        {
+            int rowBase = r * _cols;
+            for (int c = c0; c <= c1; c++)
+            {
+                var bucket = _cells[rowBase + c];
+                if (bucket is null)
+                    continue;
+                foreach (var idx in bucket)
+                {
+                    if (_maxXs[idx] < minX || _minXs[idx] > maxX ||
+                        _maxYs[idx] < minY || _minYs[idx] > maxY)
+                        continue;
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private int ColOf(double x)

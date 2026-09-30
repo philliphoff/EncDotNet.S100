@@ -178,4 +178,61 @@ public class BaseSpatialIndexTests
         // And it keeps its draw-order slot when real ops also match.
         Assert.Equal(new[] { "a", "ghost" }, Query(idx, -10, -10, 20, 20));
     }
+
+    [Fact]
+    public void Intersects_AgreesWithQueryNonEmpty()
+    {
+        // Intersects is the allocation-free "would Query return anything?" test
+        // the compositor uses to skip tiles that would rasterise transparent, so
+        // it must agree with Query exactly — a false negative would drop a tile
+        // that has content.
+        var rng = new System.Random(4321);
+        var ops = new List<PaintOp>();
+        for (int i = 0; i < 200; i++)
+        {
+            double x = rng.NextDouble() * 10_000;
+            double y = rng.NextDouble() * 10_000;
+            ops.Add(i % 2 == 0
+                ? Area("a" + i, x, y, x + rng.NextDouble() * 300, y + rng.NextDouble() * 300)
+                : Line("l" + i, (x, y), (x + rng.NextDouble() * 300, y + rng.NextDouble() * 300)));
+        }
+        var idx = new BaseSpatialIndex(new VectorScene(ops));
+
+        for (int q = 0; q < 500; q++)
+        {
+            double qx = rng.NextDouble() * 14_000 - 2_000;
+            double qy = rng.NextDouble() * 14_000 - 2_000;
+            double qx1 = qx + rng.NextDouble() * 400, qy1 = qy + rng.NextDouble() * 400;
+
+            Assert.Equal(idx.Query(qx, qy, qx1, qy1).Count > 0, idx.Intersects(qx, qy, qx1, qy1));
+        }
+    }
+
+    [Fact]
+    public void Intersects_OutsideIndexBounds_IsFalse()
+    {
+        // The grid clamps out-of-range queries to its edge cells; the precise
+        // bounds test must still reject a query entirely outside the content.
+        var idx = new BaseSpatialIndex(new VectorScene(new List<PaintOp> { Area("a", 0, 0, 10, 10) }));
+
+        Assert.True(idx.Intersects(5, 5, 6, 6));
+        Assert.True(idx.Intersects(10, 10, 20, 20));
+        Assert.False(idx.Intersects(10.5, 0, 20, 10));
+        Assert.False(idx.Intersects(-100, -100, -1, -1));
+    }
+
+    [Fact]
+    public void Intersects_EmptyScene_IsFalse_GeometrylessOp_IsTrue()
+    {
+        Assert.False(new BaseSpatialIndex(new VectorScene(new List<PaintOp>())).Intersects(-1e6, -1e6, 1e6, 1e6));
+
+        var ghost = new AreaPaintOp
+        {
+            FeatureReference = "ghost",
+            WorldShell = System.Array.Empty<(double, double)>(),
+            Fill = new RgbaColor(0, 0, 0, 0),
+        };
+        var idx = new BaseSpatialIndex(new VectorScene(new List<PaintOp> { ghost }));
+        Assert.True(idx.Intersects(50_000, 50_000, 50_100, 50_100));
+    }
 }

@@ -54,6 +54,17 @@ public static class MachineProfile
         _ => RenderingOptimizations.DefaultTileGpuBudgetMb,
     };
 
+    /// <summary>
+    /// Host GPU resource-cache budget, MB, for each resolved tier (see
+    /// <see cref="RenderingOptimizations.SkiaGpuResourceMb"/>).
+    /// </summary>
+    public static double SkiaGpuResourceMb(PerformanceProfile tier) => tier switch
+    {
+        PerformanceProfile.LowEnd => 128.0,
+        PerformanceProfile.Balanced => 256.0,
+        _ => 512.0,
+    };
+
     /// <summary>Shared warm disk-cache budget, MB, for each resolved tier.</summary>
     public static double TileDiskMb(PerformanceProfile tier) => tier switch
     {

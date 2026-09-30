@@ -22,6 +22,7 @@ internal sealed class Program
         builder = builder.WithDeveloperTools();
 #endif
         return builder
+            .With(ViewerCommand.CreateSkiaOptions())
             .WithInterFont()
             .LogToTrace();
     }

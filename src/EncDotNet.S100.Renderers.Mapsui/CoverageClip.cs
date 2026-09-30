@@ -93,6 +93,19 @@ internal static class CoverageClip
         if (regions is null || regions.Length == 0)
             return [];
 
+        // A finer coverage wholly outside the (rotation-aware) viewport removes
+        // nothing on screen, so it is skipped rather than projected and pushed
+        // onto the clip stack. A coarse cell can carry hundreds of finer cells;
+        // without this every one of them is re-projected and anti-alias clipped
+        // on every frame even when only a handful are in view. A one-pixel halo
+        // keeps the anti-aliased edge of a coverage just off-screen exact.
+        var extent = viewport.ToExtent();
+        var halo = resolution;
+        var minX = extent.MinX - halo;
+        var minY = extent.MinY - halo;
+        var maxX = extent.MaxX + halo;
+        var maxY = extent.MaxY + halo;
+
         List<SKPath>? paths = null;
         foreach (var region in regions)
         {
@@ -102,6 +115,10 @@ internal static class CoverageClip
             if (resolution > region.CutoffResolution)
                 continue;
             if (region.Coverage.IsEmpty)
+                continue;
+            var envelope = region.Coverage.EnvelopeInternal;
+            if (envelope.MaxX < minX || envelope.MinX > maxX
+                || envelope.MaxY < minY || envelope.MinY > maxY)
                 continue;
 
             var path = new SKPath { FillType = SKPathFillType.EvenOdd };

@@ -62,6 +62,12 @@ public static class RenderingOptimizations
     /// <inheritdoc cref="MinTileGpuBudgetMb"/>
     public const double MaxTileGpuBudgetMb = 4096.0;
 
+    /// <summary>Minimum / maximum accepted Skia GPU resource-cache budget, in MB (<c>S100_SKIA_GPU_RESOURCE_MB</c>).</summary>
+    public const double MinSkiaGpuResourceMb = 32.0;
+
+    /// <inheritdoc cref="MinSkiaGpuResourceMb"/>
+    public const double MaxSkiaGpuResourceMb = 4096.0;
+
     /// <summary>Minimum / maximum accepted concurrent tile-rasterisation workers per layer.</summary>
     public const int MinTileWorkers = 1;
 
@@ -121,6 +127,8 @@ public static class RenderingOptimizations
             SeedDouble("S100_VECTOR_TILE_GPU_MB", MachineProfile.TileGpuBudgetMb(tier), MinTileGpuBudgetMb, MaxTileGpuBudgetMb);
         (_tileWorkerCount, TileWorkerCountEnvExplicit) =
             SeedInt("S100_VECTOR_TILE_WORKERS", MachineProfile.TileWorkers(tier), MinTileWorkers, MaxTileWorkers);
+        (SkiaGpuResourceMb, _) =
+            SeedDouble("S100_SKIA_GPU_RESOURCE_MB", MachineProfile.SkiaGpuResourceMb(tier), MinSkiaGpuResourceMb, MaxSkiaGpuResourceMb);
 
         var diskDir = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
         TileDiskDirectoryEnvExplicit = !string.IsNullOrEmpty(diskDir);
@@ -305,6 +313,19 @@ public static class RenderingOptimizations
 
     /// <summary>True when <see cref="TileGpuBudgetMb"/> is pinned by an explicit environment variable.</summary>
     public static bool TileGpuBudgetMbEnvExplicit { get; }
+
+    /// <summary>
+    /// Budget, in MB, for the host GPU context's resource cache — the cache Skia
+    /// keeps uploaded textures in, including the textures for the raster tiles
+    /// the compositor blits every frame. Seeded from
+    /// <c>S100_SKIA_GPU_RESOURCE_MB</c> (default
+    /// <see cref="MachineProfile.SkiaGpuResourceMb(PerformanceProfile)"/>) and read
+    /// by a host when it creates its GPU context, so it is start-up only. When the
+    /// visible tiles of every drawing layer do not fit, Skia evicts and
+    /// re-uploads them on every frame; Avalonia's own default (about 28&#160;MB)
+    /// holds only a couple of dozen retina tiles.
+    /// </summary>
+    public static double SkiaGpuResourceMb { get; }
 
     /// <summary>
     /// Number of concurrent tile-rasterisation workers per layer

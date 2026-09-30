@@ -248,6 +248,25 @@ public class RenderingOptimizationsTests
             <= MachineProfile.TileBudgetMb(PerformanceProfile.HighEnd));
         Assert.True(MachineProfile.TileDiskMb(PerformanceProfile.LowEnd)
             < MachineProfile.TileDiskMb(PerformanceProfile.Balanced));
+        Assert.True(MachineProfile.SkiaGpuResourceMb(PerformanceProfile.LowEnd)
+            < MachineProfile.SkiaGpuResourceMb(PerformanceProfile.Balanced));
+        Assert.True(MachineProfile.SkiaGpuResourceMb(PerformanceProfile.Balanced)
+            < MachineProfile.SkiaGpuResourceMb(PerformanceProfile.HighEnd));
+    }
+
+    [Fact]
+    public void SkiaGpuResourceBudget_ExceedsAvaloniaDefault_OnEveryTier()
+    {
+        // Avalonia's own default (29,491,200 bytes) holds only a couple of dozen
+        // retina tiles, so multi-layer frames re-uploaded every tile each paint.
+        const double avaloniaDefaultMb = 29_491_200 / (1024.0 * 1024.0);
+        foreach (var tier in new[] { PerformanceProfile.LowEnd, PerformanceProfile.Balanced, PerformanceProfile.HighEnd })
+            Assert.True(MachineProfile.SkiaGpuResourceMb(tier) >= 4 * avaloniaDefaultMb);
+
+        Assert.InRange(
+            RenderingOptimizations.SkiaGpuResourceMb,
+            RenderingOptimizations.MinSkiaGpuResourceMb,
+            RenderingOptimizations.MaxSkiaGpuResourceMb);
     }
 
     [Fact]
