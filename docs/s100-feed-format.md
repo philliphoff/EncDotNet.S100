@@ -143,8 +143,8 @@ s100 feed export charts/ --out site/charts
 
 ## Using a feed in the viewer
 
-In the viewer, open **Library → Online Catalogue** and add the feed's URL with
-**Add URL**. The viewer recognises the feed from its `format` property and
+In the viewer, open **Library → Online Catalogue**, choose **Add a catalogue by
+URL** and add the feed's URL with **Check & add**. The viewer recognises the feed from its `format` property and
 lets you choose which products to include.
 
 - **On the map:** the feed's items appear with their coverage.

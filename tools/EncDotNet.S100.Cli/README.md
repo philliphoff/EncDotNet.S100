@@ -480,7 +480,7 @@ Publishes a folder, exchange set or dataset as an
 viewer can use it:
 
 1. In the viewer, open **Library → Online Catalogue**.
-2. Add the printed URL with **Add URL**.
+2. Choose **Add a catalogue by URL** and add the printed URL with **Check & add**.
 
 The viewer then lists the datasets with their coverage and downloads the ones
 you choose.

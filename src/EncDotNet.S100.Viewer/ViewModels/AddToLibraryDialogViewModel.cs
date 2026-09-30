@@ -41,9 +41,47 @@ internal enum AddToLibraryKind
 }
 
 /// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
-/// <param name="Title">The group title (e.g. "States", "Rivers").</param>
-/// <param name="Options">The group's values.</param>
-internal sealed record FacetGroupViewModel(string Title, ObservableCollection<FacetOptionViewModel> Options);
+internal sealed class FacetGroupViewModel : ViewModelBase
+{
+    private readonly Func<IEnumerable<FacetOptionViewModel>> _all;
+    private int _selectedCount;
+
+    /// <param name="title">The group title (e.g. "States", "Rivers").</param>
+    /// <param name="options">The group's values as shown (a community list's are filtered).</param>
+    /// <param name="all">Every value, shown or not; defaults to <paramref name="options"/>.</param>
+    public FacetGroupViewModel(
+        string title, ObservableCollection<FacetOptionViewModel> options, Func<IEnumerable<FacetOptionViewModel>>? all = null)
+    {
+        Title = title;
+        Options = options;
+        _all = all ?? (() => options);
+    }
+
+    /// <summary>The group title (e.g. "States", "Rivers").</summary>
+    public string Title { get; }
+
+    /// <summary>The group's values as shown.</summary>
+    public ObservableCollection<FacetOptionViewModel> Options { get; }
+
+    /// <summary>Every value of the group, including any hidden by a filter.</summary>
+    public IEnumerable<FacetOptionViewModel> AllOptions => _all();
+
+    /// <summary>How many of the group's values are ticked (shown or not).</summary>
+    public int SelectedCount
+    {
+        get => _selectedCount;
+        private set
+        {
+            if (SetProperty(ref _selectedCount, value))
+                OnPropertyChanged(nameof(HasSelection));
+        }
+    }
+
+    /// <summary>True when any value is ticked (the tab shows a count badge).</summary>
+    public bool HasSelection => _selectedCount > 0;
+
+    internal void Refresh() => SelectedCount = _all().Count(o => o.IsSelected);
+}
 
 /// <summary>
 /// View model for the "Add to Library" dialog: confirms which collection a
@@ -67,6 +105,10 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     private string _chartSearchText = string.Empty;
     private KnownCatalogueSource? _known;
     private DateOnly? _catalogueDate;
+    private IReadOnlyList<FacetGroupViewModel> _facetGroups = [];
+    private FacetGroupViewModel? _selectedFacetGroup;
+    private bool _includeAll = true;
+    private bool _nameEdited;
 
     private AddToLibraryKind _kind;
     private string? _path;
@@ -98,6 +140,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
         CancelCommand = new RelayCommand(() => Closed?.Invoke(this, false));
         SelectNoneCommand = new RelayCommand(ClearFacetSelection);
+        ToggleShownCommand = new RelayCommand(ToggleShown);
     }
 
     /// <summary>Raised with <see langword="true"/> when confirmed, <see langword="false"/> when cancelled.</summary>
@@ -120,7 +163,26 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     public bool IsSearchable => _kind == AddToLibraryKind.CommunityFeed;
 
     /// <summary>The facet tabs for the current feed.</summary>
-    public IReadOnlyList<FacetGroupViewModel> FacetGroups => _kind switch
+    public IReadOnlyList<FacetGroupViewModel> FacetGroups => _facetGroups;
+
+    /// <summary>True when the feed has more than one facet group (shown as tabs).</summary>
+    public bool HasFacetTabs => _facetGroups.Count > 1;
+
+    /// <summary>True when the one facet group's title stands in for tabs (a community list shows its filter instead).</summary>
+    public bool ShowsGroupTitle => _facetGroups.Count == 1 && !IsSearchable;
+
+    /// <summary>The facet tab being shown.</summary>
+    public FacetGroupViewModel? SelectedFacetGroup
+    {
+        get => _selectedFacetGroup;
+        set
+        {
+            if (SetProperty(ref _selectedFacetGroup, value))
+                OnPropertyChanged(nameof(ToggleShownText));
+        }
+    }
+
+    private IReadOnlyList<FacetGroupViewModel> CreateFacetGroups() => _kind switch
     {
         AddToLibraryKind.NoaaFeed =>
         [
@@ -129,7 +191,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             new(Strings.Library_NoaaRegions, Regions),
         ],
         AddToLibraryKind.UsaceFeed => [new(Strings.Library_UsaceRivers, Rivers)],
-        AddToLibraryKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts)],
+        AddToLibraryKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts, () => _allCharts)],
         AddToLibraryKind.S100Feed => [new(Strings.Library_FeedProducts, Products)],
         _ => [],
     };
@@ -173,6 +235,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             if (SetProperty(ref _createNew, value))
             {
                 OnPropertyChanged(nameof(AddToExisting));
+                OnPropertyChanged(nameof(TargetDescription));
                 RefreshCanConfirm();
             }
         }
@@ -188,27 +251,52 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>True when there is at least one existing collection to add to.</summary>
     public bool HasExistingCollections => ExistingCollections.Count > 0;
 
-    /// <summary>The name of the new collection.</summary>
+    /// <summary>
+    /// The name of the new collection. Typing one selects "New collection"
+    /// and stops the name following the selection (until it is cleared).
+    /// </summary>
     public string NewCollectionName
     {
         get => _newCollectionName;
         set
         {
-            if (SetProperty(ref _newCollectionName, value ?? string.Empty))
-                RefreshCanConfirm();
+            if (!SetProperty(ref _newCollectionName, value ?? string.Empty))
+                return;
+
+            _nameEdited = !string.IsNullOrWhiteSpace(_newCollectionName);
+            OnPropertyChanged(nameof(IsNameEdited));
+            OnPropertyChanged(nameof(NameHint));
+            CreateNew = true;
+            RefreshCanConfirm();
         }
     }
 
-    /// <summary>The existing collection to add to.</summary>
+    /// <summary>True once the user has typed their own collection name.</summary>
+    public bool IsNameEdited => _nameEdited;
+
+    /// <summary>Whether the suggested name follows the selection, or the user's name is kept.</summary>
+    public string NameHint => _nameEdited ? Strings.Wizard_NameKept : Strings.Wizard_NameFollows;
+
+    /// <summary>The existing collection to add to; picking one selects "Existing collection".</summary>
     public LibraryCollection? SelectedCollection
     {
         get => _selectedCollection;
         set
         {
-            if (SetProperty(ref _selectedCollection, value))
-                RefreshCanConfirm();
+            if (!SetProperty(ref _selectedCollection, value))
+                return;
+
+            if (value is not null)
+                CreateNew = false;
+            OnPropertyChanged(nameof(TargetDescription));
+            RefreshCanConfirm();
         }
     }
+
+    /// <summary>"New collection", or the name of the existing collection the source goes into.</summary>
+    public string TargetDescription => _createNew
+        ? Strings.Library_NewCollection
+        : _selectedCollection?.Definition.Name ?? Strings.Library_ExistingCollection;
 
     /// <summary>True while the NOAA catalogue is being fetched.</summary>
     public bool IsLoading
@@ -217,7 +305,10 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         private set
         {
             if (SetProperty(ref _isLoading, value))
+            {
                 RefreshCanConfirm();
+                OnScopeChanged();
+            }
         }
     }
 
@@ -271,6 +362,182 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         private set => SetProperty(ref _selectionSummary, value);
     }
 
+    /// <summary>
+    /// True to include the whole catalogue whatever is ticked (the default);
+    /// false to include only the ticked values. Ticking a value clears it;
+    /// setting it keeps the ticks for switching back.
+    /// </summary>
+    public bool IncludeAll
+    {
+        get => _includeAll;
+        set
+        {
+            if (!SetProperty(ref _includeAll, value))
+                return;
+
+            OnPropertyChanged(nameof(OnlySelected));
+            UpdateSelection();
+            OnScopeChanged();
+        }
+    }
+
+    /// <summary>The inverse of <see cref="IncludeAll"/>, for radio-button binding.</summary>
+    public bool OnlySelected
+    {
+        get => !_includeAll;
+        set => IncludeAll = !value;
+    }
+
+    /// <summary>True once the catalogue has been read.</summary>
+    public bool IsLoaded => _kind switch
+    {
+        AddToLibraryKind.NoaaFeed => _catalog is not null,
+        AddToLibraryKind.UsaceFeed => _usaceCatalog is not null,
+        AddToLibraryKind.CommunityFeed => _communityCatalog is not null,
+        AddToLibraryKind.S100Feed => _s100Feed is not null,
+        _ => false,
+    };
+
+    /// <summary>True when the catalogue has been read and it lists more than one choice.</summary>
+    public bool ShowsChoices => IsLoaded && !_isLoading && !IsSingleEntry;
+
+    /// <summary>Every facet value, shown or not, across all groups.</summary>
+    private IEnumerable<FacetOptionViewModel> AllOptions => _facetGroups.SelectMany(g => g.AllOptions);
+
+    /// <summary>How many facet values are ticked, across all groups.</summary>
+    public int SelectedCount => AllOptions.Count(o => o.IsSelected);
+
+    /// <summary>True when any facet value is ticked.</summary>
+    public bool HasSelection => AllOptions.Any(o => o.IsSelected);
+
+    /// <summary>
+    /// True when the loaded catalogue lists exactly one download (the USACE
+    /// buoy overlay, a one-entry community list): there is nothing to choose.
+    /// </summary>
+    public bool IsSingleEntry => SingleEntry is not null;
+
+    /// <summary>The catalogue's only download, when it lists just one; otherwise <see langword="null"/>.</summary>
+    public FacetOptionViewModel? SingleEntry
+    {
+        get
+        {
+            string Size(long? bytes) => bytes is { } b ? LibraryItemViewModel.FormatBytes(b) : string.Empty;
+            return _kind switch
+            {
+                AddToLibraryKind.NoaaFeed when _catalog?.Cells is [var cell] =>
+                    new(cell.Name, cell.LongName ?? cell.Name, Size(cell.ZipSize)),
+                AddToLibraryKind.UsaceFeed when _usaceCatalog?.Cells is [var cell] =>
+                    new(cell.Name, cell.Name, Size(cell.ZipSize)),
+                AddToLibraryKind.CommunityFeed when _communityCatalog is not null && _allCharts is [var chart] => chart,
+                AddToLibraryKind.S100Feed when _s100Feed?.Items is [var item] =>
+                    new(item.Key, item.Name ?? item.Key, Size((item.Location as RemoteItemLocation)?.SizeBytes)),
+                _ => null,
+            };
+        }
+    }
+
+    /// <summary>"12,345 cells · 1.2 GB" (or "N downloads · sizes unknown") for the whole catalogue.</summary>
+    public string EverythingSummary
+    {
+        get
+        {
+            switch (_kind)
+            {
+                case AddToLibraryKind.NoaaFeed when _catalog is not null:
+                    var (count, bytes) = NoaaEncFacets.Summarize(_catalog, new NoaaEncFilter());
+                    return CellsSummary(count, bytes);
+                case AddToLibraryKind.UsaceFeed when _usaceCatalog is not null:
+                    return CellsSummary(_usaceCatalog.Cells.Count, _usaceCatalog.Cells.Sum(c => c.ZipSize ?? 0));
+                case AddToLibraryKind.S100Feed when _s100Feed is not null:
+                    return CellsSummary(_s100Feed.Items.Count,
+                        _s100Feed.Items.Sum(i => (i.Location as RemoteItemLocation)?.SizeBytes ?? 0));
+                case AddToLibraryKind.CommunityFeed when _communityCatalog is not null:
+                    return string.Format(CultureInfo.CurrentCulture, Strings.Wizard_EverythingDownloadsFormat, _allCharts.Count);
+                default:
+                    return string.Empty;
+            }
+
+            static string CellsSummary(int count, long bytes) => string.Format(
+                CultureInfo.CurrentCulture, Strings.Wizard_EverythingCellsFormat, count, LibraryItemViewModel.FormatBytes(bytes));
+        }
+    }
+
+    /// <summary>The "Only what I select" sub-line: the selection summary, or "Nothing selected yet".</summary>
+    public string OnlySelectedSummary => HasSelection ? _selectionSummary : Strings.Wizard_NothingSelected;
+
+    /// <summary>The summary under the facet list.</summary>
+    public string ScopeSummary =>
+        _includeAll
+            ? HasSelection
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_KeptPicksFormat, SelectedCount)
+                : _selectionSummary
+            : HasSelection ? _selectionSummary : Strings.Wizard_TickAtLeastOne;
+
+    /// <summary>True when <see cref="ScopeSummary"/> asks the user to tick something.</summary>
+    public bool IsScopeSummaryWarning => !_includeAll && !HasSelection;
+
+    /// <summary>What is included: "Everything", "Its one download", or the selection ("Alaska, Hawaii").</summary>
+    public string ScopeDescription =>
+        IsSingleEntry ? Strings.Wizard_SingleEntryValue
+        : _includeAll ? Strings.Wizard_Everything
+        : DescribeSelection() ?? Strings.Wizard_NothingSelected;
+
+    /// <summary>True when the scope step is complete: the catalogue is read and something is included.</summary>
+    public bool CanContinueFromScope => IsLoaded && !_isLoading && (_includeAll || IsSingleEntry || HasSelection);
+
+    /// <summary>The catalogue's name.</summary>
+    public string CatalogueName => _known?.Name ?? Title;
+
+    /// <summary>"host · catalogue dated 2026-09-17", or just the host until the catalogue is read.</summary>
+    public string CatalogueDetail => _catalogueDate is { } date
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_DatedFormat, CatalogUri.Host,
+            date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+        : CatalogUri.Host;
+
+    /// <summary>" · over a year old; may no longer be maintained" for a stale catalogue, else empty.</summary>
+    public string CatalogueStaleSuffix => IsCatalogueStale ? Strings.Wizard_StaleSuffix : string.Empty;
+
+    /// <summary>The review's "Includes" line.</summary>
+    public string ReviewIncludes =>
+        _includeAll || IsSingleEntry
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_Review_EverythingFormat, EverythingSummary)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Wizard_Review_SelectionFormat, DescribeSelection(), _selectionSummary);
+
+    private KnownCatalogueCoverage Coverage => _known?.Coverage ?? _kind switch
+    {
+        AddToLibraryKind.UsaceFeed => KnownCatalogueCoverage.BoundingBoxes,
+        AddToLibraryKind.CommunityFeed => KnownCatalogueCoverage.None,
+        _ => KnownCatalogueCoverage.Polygons,
+    };
+
+    /// <summary>The review's "Shown on the map" line.</summary>
+    public string ReviewCoverage => Coverage switch
+    {
+        KnownCatalogueCoverage.Polygons => Strings.Wizard_Review_CoveragePolygons,
+        KnownCatalogueCoverage.BoundingBoxes => Strings.Wizard_Review_CoverageBoxes,
+        _ => Strings.Wizard_Review_CoverageNone,
+    };
+
+    /// <summary>True when nothing is shown on the map until an entry is downloaded.</summary>
+    public bool IsReviewCoverageWarning => Coverage == KnownCatalogueCoverage.None;
+
+    private bool HasEditions => _known?.Editions ?? _kind != AddToLibraryKind.CommunityFeed;
+
+    /// <summary>The review's "Updates" line.</summary>
+    public string ReviewUpdates => HasEditions ? Strings.Wizard_Review_UpdatesDetected : Strings.Wizard_Review_UpdatesNotDetected;
+
+    /// <summary>True when new editions are not detected.</summary>
+    public bool IsReviewUpdatesWarning => !HasEditions;
+
+    /// <summary>"Select all", "Select shown" (when filtered) or "Deselect shown", for the shown tab.</summary>
+    public string ToggleShownText =>
+        _selectedFacetGroup is { Options.Count: > 0 } group && group.Options.All(o => o.IsSelected)
+            ? Strings.Wizard_DeselectShown
+            : IsSearchable && _chartSearchText.Trim().Length > 0 ? Strings.Wizard_SelectShown : Strings.Wizard_SelectAll;
+
+    /// <summary>Ticks every shown value of the shown tab, or unticks them when all are ticked.</summary>
+    public ICommand ToggleShownCommand { get; }
+
     public ICommand ConfirmCommand { get; }
 
     public ICommand CancelCommand { get; }
@@ -309,6 +576,10 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         _path = path;
         _known = known;
         _catalogueDate = null;
+        _includeAll = true;
+        _nameEdited = false;
+        _facetGroups = CreateFacetGroups();
+        _selectedFacetGroup = _facetGroups.FirstOrDefault();
         ExistingCollections = _library.Collections.Where(c => !c.IsSession).ToArray();
         _selectedCollection = targetCollectionId is { } id
             ? ExistingCollections.FirstOrDefault(c => c.Id == id)
@@ -473,13 +744,17 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
                 Charts.Add(option);
             }
         }
+
+        OnPropertyChanged(nameof(ToggleShownText));
     }
 
     private void SetCatalogueDate(DateOnly? date)
     {
         _catalogueDate = date;
         OnPropertyChanged(nameof(CatalogueDateText));
+        OnPropertyChanged(nameof(CatalogueDetail));
         OnPropertyChanged(nameof(IsCatalogueStale));
+        OnPropertyChanged(nameof(CatalogueStaleSuffix));
     }
 
     /// <summary>The USACE filter for the current river selection.</summary>
@@ -554,15 +829,30 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.Folder => new LocalFolderSource(id, null, _path!),
             AddToLibraryKind.ExchangeSet => new ExchangeSetSource(id, null, _path!),
             AddToLibraryKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
-            AddToLibraryKind.UsaceFeed => new UsaceIencFeedSource(
-                id, DescribeUsaceFilter(CurrentUsaceFilter) ?? FeedName, CatalogUri, CurrentUsaceFilter),
-            AddToLibraryKind.CommunityFeed => new ChartCatalogsFeedSource(
-                id, DescribeCommunitySelection() ?? FeedName, CatalogUri, CurrentCommunityFilter),
-            AddToLibraryKind.S100Feed => new S100FeedSource(
-                id, DescribeProducts(CurrentS100FeedFilter) ?? FeedName, CatalogUri, CurrentS100FeedFilter),
-            _ => new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter) ?? FeedName, CatalogUri, CurrentFilter),
+            AddToLibraryKind.UsaceFeed => _includeAll
+                ? new UsaceIencFeedSource(id, FeedName, CatalogUri, new UsaceIencFilter())
+                : new UsaceIencFeedSource(id, DescribeUsaceFilter(CurrentUsaceFilter) ?? FeedName, CatalogUri, CurrentUsaceFilter),
+            AddToLibraryKind.CommunityFeed => _includeAll
+                ? new ChartCatalogsFeedSource(id, FeedName, CatalogUri, ChartCatalogsFilter.All)
+                : new ChartCatalogsFeedSource(id, DescribeCommunitySelection() ?? FeedName, CatalogUri, CurrentCommunityFilter),
+            AddToLibraryKind.S100Feed => _includeAll
+                ? new S100FeedSource(id, FeedName, CatalogUri, new S100FeedFilter())
+                : new S100FeedSource(id, DescribeProducts(CurrentS100FeedFilter) ?? FeedName, CatalogUri, CurrentS100FeedFilter),
+            _ => _includeAll
+                ? new NoaaEncFeedSource(id, FeedName, CatalogUri, new NoaaEncFilter())
+                : new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter) ?? FeedName, CatalogUri, CurrentFilter),
         };
     }
+
+    /// <summary>Describes the ticked values ("Alaska, Hawaii"), or <see langword="null"/> when nothing is ticked.</summary>
+    private string? DescribeSelection() => _kind switch
+    {
+        AddToLibraryKind.NoaaFeed => DescribeFilter(CurrentFilter),
+        AddToLibraryKind.UsaceFeed => DescribeUsaceFilter(CurrentUsaceFilter),
+        AddToLibraryKind.CommunityFeed => DescribeCommunitySelection(),
+        AddToLibraryKind.S100Feed => DescribeProducts(CurrentS100FeedFilter),
+        _ => null,
+    };
 
     private void Populate(
         ObservableCollection<FacetOptionViewModel> target,
@@ -586,14 +876,52 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
     private void OnFacetChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(FacetOptionViewModel.IsSelected))
-            UpdateSelection();
+        if (e.PropertyName != nameof(FacetOptionViewModel.IsSelected))
+            return;
+
+        // Ticking a value means "only what I select"; unticking leaves the choice alone.
+        if (sender is FacetOptionViewModel { IsSelected: true })
+            IncludeAll = false;
+        UpdateSelection();
+        OnScopeChanged();
     }
 
     private void ClearFacetSelection()
     {
         foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products))
             option.IsSelected = false;
+    }
+
+    private void ToggleShown()
+    {
+        if (_selectedFacetGroup is not { } group)
+            return;
+
+        var select = !group.Options.All(o => o.IsSelected);
+        foreach (var option in group.Options.ToArray())
+            option.IsSelected = select;
+    }
+
+    /// <summary>Raises change notifications for everything derived from the scope (catalogue, choice and ticks).</summary>
+    private void OnScopeChanged()
+    {
+        foreach (var group in _facetGroups)
+            group.Refresh();
+
+        OnPropertyChanged(nameof(IsLoaded));
+        OnPropertyChanged(nameof(ShowsChoices));
+        OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(IsSingleEntry));
+        OnPropertyChanged(nameof(SingleEntry));
+        OnPropertyChanged(nameof(EverythingSummary));
+        OnPropertyChanged(nameof(OnlySelectedSummary));
+        OnPropertyChanged(nameof(ScopeSummary));
+        OnPropertyChanged(nameof(IsScopeSummaryWarning));
+        OnPropertyChanged(nameof(ScopeDescription));
+        OnPropertyChanged(nameof(CanContinueFromScope));
+        OnPropertyChanged(nameof(ReviewIncludes));
+        OnPropertyChanged(nameof(ToggleShownText));
     }
 
     private void UpdateSelection()
@@ -628,7 +956,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             LibraryItemViewModel.FormatBytes(bytes));
 
         // Follow the selection in the suggested name until the user edits it.
-        FollowSelectionInName(filter.IsUnscoped, () => DescribeFilter(filter)!);
+        FollowSelectionInName(_includeAll || filter.IsUnscoped, () => DescribeFilter(filter)!);
     }
 
     private void UpdateUsaceSelection()
@@ -644,7 +972,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             selected.Length,
             LibraryItemViewModel.FormatBytes(selected.Sum(c => c.ZipSize ?? 0)));
 
-        FollowSelectionInName(filter.IsUnscoped, () => DescribeUsaceFilter(filter)!);
+        FollowSelectionInName(_includeAll || filter.IsUnscoped, () => DescribeUsaceFilter(filter)!);
     }
 
     /// <summary>
@@ -654,12 +982,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     private void FollowSelectionInName(bool unscoped, Func<string> describe)
     {
         var baseName = FeedName;
-        if (baseName is null || !_createNew)
-            return;
-        if (!string.IsNullOrWhiteSpace(_newCollectionName) && !_newCollectionName.StartsWith(baseName, StringComparison.Ordinal))
+        if (baseName is null || !_createNew || _nameEdited)
             return;
 
-        NewCollectionName = unscoped ? baseName : $"{baseName} — {describe()}";
+        var name = unscoped ? baseName : $"{baseName} — {describe()}";
+        if (SetProperty(ref _newCollectionName, name, nameof(NewCollectionName)))
+            RefreshCanConfirm();
     }
 
     private void UpdateS100FeedSelection()
@@ -675,7 +1003,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             selected.Length,
             LibraryItemViewModel.FormatBytes(selected.Sum(i => (i.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
 
-        FollowSelectionInName(filter.IsUnscoped, () => DescribeProducts(filter)!);
+        FollowSelectionInName(_includeAll || filter.IsUnscoped, () => DescribeProducts(filter)!);
     }
 
     /// <summary>The selected products, or <see langword="null"/> for all (the source is then named after the catalogue).</summary>
@@ -692,7 +1020,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             ? string.Format(CultureInfo.CurrentCulture, Strings.Library_CommunitySelectionAllFormat, _allCharts.Count)
             : string.Format(CultureInfo.CurrentCulture, Strings.Library_CommunitySelectionFormat, selected);
 
-        FollowSelectionInName(selected == 0, () => DescribeCommunitySelection()!);
+        FollowSelectionInName(_includeAll || selected == 0, () => DescribeCommunitySelection()!);
     }
 
     private string? DescribeCommunitySelection()

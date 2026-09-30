@@ -173,26 +173,32 @@ design in `docs/design/dataset-collections.md`.
   - a folder, scanned recursively for S-100 `CATALOG.XML` and S-57
     `CATALOG.031` exchange sets, zipped exchange sets, and loose datasets
   - an exchange-set ZIP
-  - an **online catalogue**, chosen under **Online Catalogue…** from a
-    curated list of known catalogues (NOAA ENC; USACE Inland ENC rivers
-    and buoy overlay; community inland ENC lists for Europe and Brazil)
-    - **The directory:** each catalogue shows its provider and region,
-      and chips for what it provides: coverage outlines, bounding boxes
-      or none; editions; sizes.
-    - **Next step:** you pick what to include (NOAA by state, Coast Guard
-      district or region; USACE by river; a community list by download,
-      with a filter box), with the selection's cell count and download
-      size where the catalogue gives them.
-    - **Catalogue age:** the catalogue's own date is shown, and flagged
-      when it is over a year old.
-    - **Your own catalogues:** paste a catalogue URL under the list and
-      choose **Add URL**. The viewer fetches the start of the document and
-      recognises NOAA ENC, USACE Inland ENC and chartcatalogs lists by
-      their root element, and [S-100 feeds](../../docs/s100-feed-format.md)
-      by their `format` property. It then lists the catalogue under **Custom**,
-      saved in `catalogues.json` next to `collections.json`, where it can
-      be removed again. Online S-100 exchange catalogues are not supported
-      yet.
+  - an **online catalogue**, added in the three-step **Add online
+    catalogue** wizard from a curated list of known catalogues (NOAA ENC;
+    USACE Inland ENC rivers and buoy overlay; community inland ENC lists
+    for Europe and Brazil). **Back** and the step header go back without
+    losing any choice, and each catalogue is read once.
+    - **1. Catalogue:** the directory, grouped by region and searchable by
+      name, provider, country or format. The chosen catalogue shows chips
+      for what it provides (coverage outlines, bounding boxes or none;
+      editions; sizes), its URL and a link to its terms.
+    - **2. What to include:** **Everything**, or **Only what I select**
+      (NOAA by state, Coast Guard district or region; USACE by river; a
+      community list by download, with a filter box), with cell counts and
+      download sizes where the catalogue gives them. Ticks are kept when you
+      switch back to Everything or to another catalogue. The catalogue's own
+      date is shown, and flagged when it is over a year old.
+    - **3. Add to:** a new collection (its name follows the selection until
+      you type your own) or an existing one, with a review of what is added,
+      what the map shows and whether new editions are detected.
+    - **Your own catalogues:** choose **Add a catalogue by URL** under the
+      list, paste the URL and choose **Check & add**. The viewer fetches the
+      start of the document and recognises NOAA ENC, USACE Inland ENC and
+      chartcatalogs lists by their root element, and
+      [S-100 feeds](../../docs/s100-feed-format.md) by their `format`
+      property. It then lists the catalogue under **Custom**, saved in
+      `catalogues.json` next to `collections.json`, where it can be removed
+      again. Online S-100 exchange catalogues are not supported yet.
   - an **S-128** Catalogue of Nautical Products
 
   Local sources are referenced **in place**. Files are never copied,

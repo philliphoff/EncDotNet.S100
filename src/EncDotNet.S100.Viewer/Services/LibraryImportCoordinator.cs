@@ -10,8 +10,9 @@ namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Adds sources to the library interactively (issue #655): picks a folder,
-/// ZIP or S-128 file (or the NOAA feed), then confirms the target collection
-/// in the "Add to Library" dialog and reveals the Library panel.
+/// ZIP or S-128 file and confirms the target collection in the "Add to
+/// Library" dialog, or walks through the "Add online catalogue" wizard for an
+/// online catalogue; then reveals the Library panel.
 /// </summary>
 internal sealed class LibraryImportCoordinator : ILibraryImporter
 {
@@ -22,7 +23,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     private readonly IFileDialogService _fileDialogs;
     private readonly DialogManager _dialogManager;
     private readonly Func<AddToLibraryDialogViewModel> _dialogFactory;
-    private readonly Func<CatalogueDirectoryDialogViewModel> _directoryFactory;
+    private readonly Func<AddOnlineCatalogueWizardViewModel> _wizardFactory;
     private readonly Func<SharedFeedDialogViewModel>? _sharedFeedFactory;
     private readonly IViewerUiControllerAccessor? _ui;
 
@@ -31,7 +32,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         IFileDialogService fileDialogs,
         DialogManager dialogManager,
         Func<AddToLibraryDialogViewModel> dialogFactory,
-        Func<CatalogueDirectoryDialogViewModel> directoryFactory,
+        Func<AddOnlineCatalogueWizardViewModel> wizardFactory,
         Func<SharedFeedDialogViewModel>? sharedFeedFactory = null,
         IViewerUiControllerAccessor? ui = null)
     {
@@ -39,12 +40,12 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         ArgumentNullException.ThrowIfNull(fileDialogs);
         ArgumentNullException.ThrowIfNull(dialogManager);
         ArgumentNullException.ThrowIfNull(dialogFactory);
-        ArgumentNullException.ThrowIfNull(directoryFactory);
+        ArgumentNullException.ThrowIfNull(wizardFactory);
         _library = library;
         _fileDialogs = fileDialogs;
         _dialogManager = dialogManager;
         _dialogFactory = dialogFactory;
-        _directoryFactory = directoryFactory;
+        _wizardFactory = wizardFactory;
         _sharedFeedFactory = sharedFeedFactory;
         _ui = ui;
     }
@@ -69,18 +70,9 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
 
     public Task AddOnlineCatalogueAsync(Guid? targetCollectionId)
     {
-        var directory = _directoryFactory();
-        directory.Chosen += (_, source) =>
-        {
-            _dialogManager.Close(directory);
-            _ = AddKnownCatalogueAsync(source, targetCollectionId);
-        };
-        directory.Cancelled += (_, _) => _dialogManager.Close(directory);
-
-        _dialogManager.CreateDialog(directory)
-            .Dismissible()
-            .WithMaxWidth(560)
-            .Show();
+        var wizard = _wizardFactory();
+        wizard.Start(targetCollectionId);
+        ShowWizard(wizard);
         return Task.CompletedTask;
     }
 
@@ -108,8 +100,31 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        var dialog = CreateDialog(d => d.Initialize(source, targetCollectionId), online: true);
-        await dialog.LoadCatalogAsync();
+        var wizard = _wizardFactory();
+        var load = wizard.StartAtIncludeAsync(source, targetCollectionId);
+        ShowWizard(wizard);
+        await load;
+    }
+
+    private void ShowWizard(AddOnlineCatalogueWizardViewModel wizard)
+    {
+        wizard.Closed += (_, added) =>
+        {
+            _dialogManager.Close(wizard);
+            if (added)
+                RevealLibrary();
+        };
+
+        _dialogManager.CreateDialog(wizard)
+            .Dismissible()
+            .WithMaxWidth(640)
+            .Show();
+    }
+
+    private void RevealLibrary()
+    {
+        if (_ui?.Current is { } ui)
+            _ = ui.SetPanelVisibilityAsync(LibraryPanelId, visible: true);
     }
 
     public Task AddPathAsync(string path, Guid? targetCollectionId)
@@ -151,25 +166,21 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)
         || path.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-    private AddToLibraryDialogViewModel ShowDialog(AddToLibraryKind kind, string? path, Guid? targetCollectionId) =>
-        CreateDialog(d => d.Initialize(kind, path, targetCollectionId), online: false);
-
-    private AddToLibraryDialogViewModel CreateDialog(Action<AddToLibraryDialogViewModel> initialize, bool online)
+    private void ShowDialog(AddToLibraryKind kind, string? path, Guid? targetCollectionId)
     {
         var dialog = _dialogFactory();
-        initialize(dialog);
+        dialog.Initialize(kind, path, targetCollectionId);
         dialog.Closed += (_, confirmed) =>
         {
             _dialogManager.Close(dialog);
-            if (confirmed && _ui?.Current is { } ui)
-                _ = ui.SetPanelVisibilityAsync(LibraryPanelId, visible: true);
+            if (confirmed)
+                RevealLibrary();
         };
 
         _dialogManager.CreateDialog(dialog)
             .Dismissible()
-            .WithMaxWidth(online ? 640 : 520)
+            .WithMaxWidth(520)
             .Show();
-        return dialog;
     }
 
     private static IEnumerable<string?> SafeFileNames(string directory)

@@ -4,10 +4,49 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.CatalogueDirectoryDialogView"
-             x:DataType="vm:CatalogueDirectoryDialogViewModel"
-             MinWidth="480">
+             x:DataType="vm:CatalogueDirectoryDialogViewModel">
 
     <UserControl.Styles>
+        <!-- Rows draw their own selection (a tinted card), so the container is bare. -->
+        <Style Selector="ListBox#CatalogueList ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Background="Transparent"
+                                      HorizontalContentAlignment="Stretch" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ListBox#CatalogueList ListBoxItem:pointerover Border.catalogueRow">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="ListBox#CatalogueList ListBoxItem:pointerover Border.catalogueRow.chosen">
+            <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
+        </Style>
+        <Style Selector="Border.catalogueRow">
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Border.catalogueRow.chosen">
+            <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WizardSelectedBorderBrush}" />
+        </Style>
+        <!-- The 16 px radio mark. -->
+        <Style Selector="Ellipse.radioRing">
+            <Setter Property="Stroke" Value="{DynamicResource BorderColor}" />
+            <Setter Property="StrokeThickness" Value="1.5" />
+        </Style>
+        <Style Selector="Ellipse.radioRing.chosen">
+            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+        </Style>
         <!-- Quality chips: a neutral pill, dimmed when it states a limitation. -->
         <Style Selector="Border.chip">
             <Setter Property="CornerRadius" Value="8" />
@@ -21,73 +60,150 @@
         <Style Selector="Border.chip TextBlock">
             <Setter Property="FontSize" Value="11" />
         </Style>
+        <!-- The collapsed "Add a catalogue by URL" row. -->
+        <Style Selector="Button.addByUrl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="Transparent">
+                        <Rectangle Name="PART_Dash" Stroke="{DynamicResource BorderColor}" StrokeThickness="1"
+                                   StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                        <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Stretch" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.addByUrl:pointerover /template/ Rectangle#PART_Dash">
+            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBox.error">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="TextBox.error:focus /template/ Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="20,12,20,16">
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,24,12">
-            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryTitle}" FontSize="15" FontWeight="SemiBold" />
-            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryDescription}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
-        </StackPanel>
+    <Grid RowDefinitions="Auto,*,Auto">
 
-        <ListBox Grid.Row="1"
-                 ItemsSource="{Binding Entries}"
-                 SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-                 MaxHeight="360"
-                 Classes="accentList"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
-                    <StackPanel Spacing="3" Margin="0,2" Background="Transparent">
-                        <Grid ColumnDefinitions="*,Auto,Auto">
-                            <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="1" Classes="Icon" Padding="2"
-                                    IsVisible="{Binding HasHomepage}"
-                                    Command="{Binding OpenHomepageCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CatalogueHomepage}">
-                                <ic:FluentIcon Icon="Open" FontSize="14" />
-                            </Button>
-                            <Button Grid.Column="2" Classes="Icon" Padding="2"
-                                    IsVisible="{Binding IsUser}"
-                                    Command="{Binding RemoveCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveOnlineCatalogue}">
-                                <ic:FluentIcon Icon="Delete" FontSize="14" />
-                            </Button>
-                        </Grid>
-                        <TextBlock Text="{Binding ProviderAndRegion}" FontSize="11" Opacity="0.7" TextTrimming="CharacterEllipsis" />
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <Border Classes="chip" Classes.limited="{Binding IsCoverageLimited}">
-                                <TextBlock Text="{Binding CoverageChip}" />
-                            </Border>
-                            <Border Classes="chip" Classes.limited="{Binding IsEditionsLimited}">
-                                <TextBlock Text="{Binding EditionsChip}" />
-                            </Border>
-                            <Border Classes="chip" Classes.limited="{Binding IsSizesLimited}">
-                                <TextBlock Text="{Binding SizesChip}" />
-                            </Border>
-                        </StackPanel>
-                        <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="11" Opacity="0.8" TextWrapping="Wrap" />
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- Search, with the count at the right. -->
+        <Panel Grid.Row="0" Margin="0,0,0,8">
+            <TextBox Text="{Binding SearchText}" Padding="10,0,72,0"
+                     PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
+            <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="12" IsHitTestVisible="False"
+                       HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" />
+        </Panel>
 
-        <!-- Add a catalogue by URL: its format is recognised from the document. -->
-        <StackPanel Grid.Row="2" Spacing="4" Margin="0,12,0,0" IsVisible="{Binding CanAddByUrl}">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <TextBox Grid.Column="0" Text="{Binding CatalogueUrl}"
-                         PlaceholderText="{x:Static loc:Strings.Library_DirectoryUrlWatermark}" />
-                <Button Grid.Column="1" Classes="Outline" Content="{x:Static loc:Strings.Library_DirectoryAddUrl}"
-                        Command="{Binding AddUrlCommand}" />
-            </Grid>
-            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlChecking}" IsVisible="{Binding IsChecking}"
-                       FontSize="11" Opacity="0.7" />
-            <TextBlock Text="{Binding UrlError}" IsVisible="{Binding HasUrlError}"
-                       FontSize="11" Foreground="#c0392b" TextWrapping="Wrap" />
-        </StackPanel>
+        <Panel Grid.Row="1">
+            <ListBox Name="CatalogueList"
+                     ItemsSource="{Binding Rows}"
+                     SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                     Background="Transparent"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
+                        <Panel>
+                            <!-- Region header (not selectable). -->
+                            <TextBlock IsVisible="{Binding IsGroupHeader}" Text="{Binding HeaderText}"
+                                       Classes="muted" FontSize="11.5" FontWeight="SemiBold" LetterSpacing="0.7"
+                                       Padding="4,10,4,4" />
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}" />
-            <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Next}" Command="{Binding NextCommand}" />
-        </StackPanel>
+                            <Border IsVisible="{Binding !IsGroupHeader}" Classes="catalogueRow"
+                                    Classes.chosen="{Binding IsSelected}">
+                                <Grid ColumnDefinitions="16,*" ColumnSpacing="10">
+                                    <Panel Width="16" Height="16" VerticalAlignment="Top" Margin="0,2,0,0">
+                                        <Ellipse Classes="radioRing" Classes.chosen="{Binding IsSelected}" />
+                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}"
+                                                 IsVisible="{Binding IsSelected}" />
+                                    </Panel>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{Binding FormatText}" Classes="muted" FontSize="12"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding ProviderAndRegion}" Classes="muted" FontSize="12"
+                                                   TextTrimming="CharacterEllipsis" />
+
+                                        <!-- Details of the chosen catalogue only. -->
+                                        <StackPanel IsVisible="{Binding IsSelected}" Spacing="6" Margin="0,6,0,0">
+                                            <WrapPanel Orientation="Horizontal">
+                                                <Border Classes="chip" Classes.limited="{Binding IsCoverageLimited}" Margin="0,0,4,0">
+                                                    <TextBlock Text="{Binding CoverageChip}" />
+                                                </Border>
+                                                <Border Classes="chip" Classes.limited="{Binding IsEditionsLimited}" Margin="0,0,4,0">
+                                                    <TextBlock Text="{Binding EditionsChip}" />
+                                                </Border>
+                                                <Border Classes="chip" Classes.limited="{Binding IsSizesLimited}">
+                                                    <TextBlock Text="{Binding SizesChip}" />
+                                                </Border>
+                                            </WrapPanel>
+                                            <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="12.5"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding CatalogUrl}" Classes="muted" FontSize="11.5"
+                                                       FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CatalogUrl}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="14">
+                                                <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryTerms}"
+                                                        IsVisible="{Binding HasHomepage}" Command="{Binding OpenHomepageCommand}" />
+                                                <Button Classes="link danger" Content="{x:Static loc:Strings.Library_DirectoryRemove}"
+                                                        IsVisible="{Binding IsUser}" Command="{Binding RemoveCommand}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Panel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoMatches}" IsVisible="{Binding HasNoMatches}"
+                       Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
+        </Panel>
+
+        <!-- Add a catalogue by URL: collapsed to one dashed row until asked for. -->
+        <Panel Grid.Row="2" Margin="0,10,0,0" IsVisible="{Binding CanAddByUrl}">
+            <Button Classes="addByUrl" IsVisible="{Binding !IsUrlPanelOpen}" Command="{Binding OpenUrlPanelCommand}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                    <ic:FluentIcon Icon="Add" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.Library_DirectoryAddByUrl}" FontSize="13"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{x:Static loc:Strings.Library_DirectoryAddByUrlHint}" Classes="muted"
+                               FontSize="12" VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+
+            <Border Classes="wizardPanel" Padding="12,10" IsVisible="{Binding IsUrlPanelOpen}">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHeading}" FontSize="13" FontWeight="SemiBold" />
+                        <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Button_Close}"
+                                Command="{Binding CloseUrlPanelCommand}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox Name="UrlBox" Text="{Binding CatalogueUrl}" Classes.error="{Binding HasUrlError}"
+                                 PlaceholderText="https://…/catalogue.xml" />
+                        <Button Grid.Column="1" Classes="Outline" Command="{Binding AddUrlCommand}">
+                            <Panel>
+                                <TextBlock Text="{x:Static loc:Strings.Button_CheckAndAdd}" IsVisible="{Binding !IsChecking}" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_Checking}" IsVisible="{Binding IsChecking}" />
+                            </Panel>
+                        </Button>
+                    </Grid>
+                    <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHelp}" IsVisible="{Binding ShowsUrlHelp}"
+                               Classes="muted" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding UrlError}" IsVisible="{Binding HasUrlError}"
+                               Classes="destructive" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding UrlSuccess}" IsVisible="{Binding UrlSuccess, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               Classes="success" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Panel>
     </Grid>
 </UserControl>

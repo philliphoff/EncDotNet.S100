@@ -2563,9 +2563,6 @@
   <data name="Library_NewCollection" xml:space="preserve">
     <value>New collection</value>
   </data>
-  <data name="Library_NoaaChooseScope" xml:space="preserve">
-    <value>Include datasets in (none selected = all)</value>
-  </data>
   <data name="Library_NoaaClearSelection" xml:space="preserve">
     <value>Clear</value>
   </data>
@@ -2574,9 +2571,6 @@
   </data>
   <data name="Library_NoaaFeed" xml:space="preserve">
     <value>NOAA ENC</value>
-  </data>
-  <data name="Library_NoaaLoading" xml:space="preserve">
-    <value>Fetching the catalogue…</value>
   </data>
   <data name="Library_NoaaRegions" xml:space="preserve">
     <value>Regions</value>
@@ -2692,12 +2686,6 @@
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
     <value>Browse online catalogues…</value>
   </data>
-  <data name="Library_DirectoryTitle" xml:space="preserve">
-    <value>Add Online Catalogue</value>
-  </data>
-  <data name="Library_DirectoryDescription" xml:space="preserve">
-    <value>Choose a chart catalogue. Only its index is fetched; you pick which cells to include next, and nothing is downloaded until you ask.</value>
-  </data>
   <data name="Library_Chip_CoveragePolygons" xml:space="preserve">
     <value>Coverage outlines</value>
   </data>
@@ -2719,23 +2707,14 @@
   <data name="Library_Chip_NoSizes" xml:space="preserve">
     <value>No sizes</value>
   </data>
-  <data name="Tooltip_CatalogueHomepage" xml:space="preserve">
-    <value>Open the provider's page (terms and notices)</value>
-  </data>
   <data name="Button_Next" xml:space="preserve">
     <value>Next</value>
   </data>
   <data name="Library_CatalogueDatedFormat" xml:space="preserve">
     <value>Catalogue dated {0}</value>
   </data>
-  <data name="Library_CatalogueStale" xml:space="preserve">
-    <value>— over a year old; it may no longer be maintained.</value>
-  </data>
   <data name="Library_CommunityCharts" xml:space="preserve">
     <value>Packages</value>
-  </data>
-  <data name="Library_CommunitySearchWatermark" xml:space="preserve">
-    <value>Filter packages</value>
   </data>
   <data name="Library_CommunitySelectionAllFormat" xml:space="preserve">
     <value>All {0:N0} packages · sizes unknown</value>
@@ -2745,15 +2724,6 @@
   </data>
   <data name="Library_PublishedFormat" xml:space="preserve">
     <value>Published {0}</value>
-  </data>
-  <data name="Library_DirectoryAddUrl" xml:space="preserve">
-    <value>Add URL</value>
-  </data>
-  <data name="Library_DirectoryUrlWatermark" xml:space="preserve">
-    <value>Or add a catalogue by URL (https://…/catalogue.xml)</value>
-  </data>
-  <data name="Library_DirectoryUrlChecking" xml:space="preserve">
-    <value>Checking the catalogue…</value>
   </data>
   <data name="Library_DirectoryUrlInvalid" xml:space="preserve">
     <value>Enter an http or https URL.</value>
@@ -2766,9 +2736,6 @@
   </data>
   <data name="Library_DirectoryUrlS100" xml:space="preserve">
     <value>Online S-100 exchange catalogues are not supported yet.</value>
-  </data>
-  <data name="Tooltip_RemoveOnlineCatalogue" xml:space="preserve">
-    <value>Remove this catalogue from the list</value>
   </data>
   <data name="Library_FeedProducts" xml:space="preserve">
     <value>Products</value>
@@ -3108,5 +3075,191 @@
   </data>
   <data name="Tooltip_DownloadSizeFormat" xml:space="preserve">
     <value>Download ({0})</value>
+  </data>
+  <data name="Wizard_Title" xml:space="preserve">
+    <value>Add online catalogue</value>
+  </data>
+  <data name="Wizard_StepCatalogue" xml:space="preserve">
+    <value>Catalogue</value>
+  </data>
+  <data name="Wizard_StepInclude" xml:space="preserve">
+    <value>What to include</value>
+  </data>
+  <data name="Wizard_StepAddTo" xml:space="preserve">
+    <value>Add to</value>
+  </data>
+  <data name="Wizard_StepOfFormat" xml:space="preserve">
+    <value>Step {0} of {1}</value>
+  </data>
+  <data name="Wizard_ChooseCatalogueFirst" xml:space="preserve">
+    <value>Choose a catalogue first</value>
+  </data>
+  <data name="Wizard_Collection" xml:space="preserve">
+    <value>Collection</value>
+  </data>
+  <data name="Wizard_Everything" xml:space="preserve">
+    <value>Everything</value>
+  </data>
+  <data name="Wizard_OnlySelected" xml:space="preserve">
+    <value>Only what I select</value>
+  </data>
+  <data name="Wizard_NothingSelected" xml:space="preserve">
+    <value>Nothing selected yet</value>
+  </data>
+  <data name="Wizard_SelectAtLeastOne" xml:space="preserve">
+    <value>Select at least one</value>
+  </data>
+  <data name="Wizard_TickAtLeastOne" xml:space="preserve">
+    <value>Tick at least one item, or choose Everything.</value>
+  </data>
+  <data name="Wizard_KeptPicksFormat" xml:space="preserve">
+    <value>Everything is included; your {0:N0} picks are kept if you switch back</value>
+  </data>
+  <data name="Wizard_EverythingCellsFormat" xml:space="preserve">
+    <value>{0:N0} cells · {1}</value>
+  </data>
+  <data name="Wizard_EverythingDownloadsFormat" xml:space="preserve">
+    <value>{0:N0} downloads · sizes unknown</value>
+  </data>
+  <data name="Wizard_SingleEntryTitle" xml:space="preserve">
+    <value>Nothing to choose: this catalogue lists one download</value>
+  </data>
+  <data name="Wizard_SingleEntryNote" xml:space="preserve">
+    <value>It is added as is. Continue to choose where it goes.</value>
+  </data>
+  <data name="Wizard_SingleEntryValue" xml:space="preserve">
+    <value>Its one download</value>
+  </data>
+  <data name="Wizard_Loading" xml:space="preserve">
+    <value>Reading the catalogue…</value>
+  </data>
+  <data name="Wizard_LoadErrorTitle" xml:space="preserve">
+    <value>Couldn't read this catalogue</value>
+  </data>
+  <data name="Wizard_LoadErrorSuffix" xml:space="preserve">
+    <value> Your choice is kept; try again, or go back and pick another catalogue.</value>
+  </data>
+  <data name="Wizard_TryAgain" xml:space="preserve">
+    <value>Try again</value>
+  </data>
+  <data name="Wizard_Change" xml:space="preserve">
+    <value>Change</value>
+  </data>
+  <data name="Wizard_StaleSuffix" xml:space="preserve">
+    <value> · over a year old; may no longer be maintained</value>
+  </data>
+  <data name="Wizard_DatedFormat" xml:space="preserve">
+    <value>{0} · catalogue dated {1}</value>
+  </data>
+  <data name="Wizard_FilterDownloads" xml:space="preserve">
+    <value>Filter downloads</value>
+  </data>
+  <data name="Wizard_SelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
+  <data name="Wizard_SelectShown" xml:space="preserve">
+    <value>Select shown</value>
+  </data>
+  <data name="Wizard_DeselectShown" xml:space="preserve">
+    <value>Deselect shown</value>
+  </data>
+  <data name="Wizard_NameFollows" xml:space="preserve">
+    <value>Follows your selection until you type your own.</value>
+  </data>
+  <data name="Wizard_NameKept" xml:space="preserve">
+    <value>Your name is kept.</value>
+  </data>
+  <data name="Wizard_Review_Catalogue" xml:space="preserve">
+    <value>Catalogue</value>
+  </data>
+  <data name="Wizard_Review_Includes" xml:space="preserve">
+    <value>Includes</value>
+  </data>
+  <data name="Wizard_Review_ShownOnMap" xml:space="preserve">
+    <value>Shown on the map</value>
+  </data>
+  <data name="Wizard_Review_Updates" xml:space="preserve">
+    <value>Updates</value>
+  </data>
+  <data name="Wizard_Review_EverythingFormat" xml:space="preserve">
+    <value>Everything · {0}</value>
+  </data>
+  <data name="Wizard_Review_SelectionFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Wizard_Review_CoveragePolygons" xml:space="preserve">
+    <value>Coverage polygons for every cell</value>
+  </data>
+  <data name="Wizard_Review_CoverageBoxes" xml:space="preserve">
+    <value>A bounding box per cell</value>
+  </data>
+  <data name="Wizard_Review_CoverageNone" xml:space="preserve">
+    <value>Nothing until an entry is downloaded</value>
+  </data>
+  <data name="Wizard_Review_UpdatesDetected" xml:space="preserve">
+    <value>New editions are detected on refresh</value>
+  </data>
+  <data name="Wizard_Review_UpdatesNotDetected" xml:space="preserve">
+    <value>Not detected; this list has no editions</value>
+  </data>
+  <data name="Wizard_OnlineNote" xml:space="preserve">
+    <value>Only the catalogue is indexed. Nothing is downloaded until you load cells from the Library panel.</value>
+  </data>
+  <data name="Library_DirectorySearchWatermark" xml:space="preserve">
+    <value>Search by name, provider or country</value>
+  </data>
+  <data name="Library_DirectoryCountFormat" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="Library_DirectoryNoMatches" xml:space="preserve">
+    <value>No catalogue matches. Add one by URL below.</value>
+  </data>
+  <data name="Library_DirectoryAddByUrl" xml:space="preserve">
+    <value>Add a catalogue by URL</value>
+  </data>
+  <data name="Library_DirectoryAddByUrlHint" xml:space="preserve">
+    <value>NOAA, USACE, chartcatalogs or S-100 feed</value>
+  </data>
+  <data name="Library_DirectoryUrlHeading" xml:space="preserve">
+    <value>Catalogue URL</value>
+  </data>
+  <data name="Library_DirectoryUrlHelp" xml:space="preserve">
+    <value>The format is recognised from the document itself. Added catalogues are listed under Custom.</value>
+  </data>
+  <data name="Library_DirectoryUrlRecognisedFormat" xml:space="preserve">
+    <value>Recognised as {0} and added under Custom.</value>
+  </data>
+  <data name="Library_DirectoryAddedByUrl" xml:space="preserve">
+    <value>added by URL</value>
+  </data>
+  <data name="Library_DirectoryTerms" xml:space="preserve">
+    <value>Terms &amp; notices ↗</value>
+  </data>
+  <data name="Library_DirectoryRemove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Library_Format_NoaaEnc" xml:space="preserve">
+    <value>NOAA ENC</value>
+  </data>
+  <data name="Library_Format_UsaceIenc" xml:space="preserve">
+    <value>USACE IENC</value>
+  </data>
+  <data name="Library_Format_ChartCatalogs" xml:space="preserve">
+    <value>chartcatalogs</value>
+  </data>
+  <data name="Library_Format_S100Feed" xml:space="preserve">
+    <value>S-100 feed</value>
+  </data>
+  <data name="Button_Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="Button_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Button_CheckAndAdd" xml:space="preserve">
+    <value>Check &amp; add</value>
+  </data>
+  <data name="Button_Checking" xml:space="preserve">
+    <value>Checking…</value>
   </data>
 </root>

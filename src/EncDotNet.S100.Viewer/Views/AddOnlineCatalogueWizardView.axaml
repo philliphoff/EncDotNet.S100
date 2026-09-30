@@ -1,0 +1,244 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.AddOnlineCatalogueWizardView"
+             x:DataType="vm:AddOnlineCatalogueWizardViewModel"
+             Width="640">
+
+    <!-- Styles shared by the three steps (the step views are nested below, so these reach them). -->
+    <UserControl.Styles>
+        <!-- Step header: a completed step is a button back to it; the current and later steps are inert. -->
+        <Style Selector="Button.wizardStep">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"
+                                      HorizontalContentAlignment="Stretch" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.wizardStep:disabled">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.wizardStep:not(:disabled)">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Ellipse.stepMarker">
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="Stroke" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Fill" Value="Transparent" />
+        </Style>
+        <Style Selector="Ellipse.stepMarker.current">
+            <Setter Property="Fill" Value="{DynamicResource PrimaryColor}" />
+            <Setter Property="Stroke" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+        <Style Selector="Ellipse.stepMarker.done">
+            <Setter Property="Fill" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="Stroke" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBlock.stepNumber">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="TextBlock.stepNumber.current">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryForegroundColor}" />
+        </Style>
+
+        <!-- Muted secondary text, and the status colours. -->
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="TextBlock.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="TextBlock.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="TextBlock.success">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessColor}" />
+        </Style>
+
+        <!-- Text-only link buttons ("Change", "Clear", "Select all", "Terms & notices ↗"). -->
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                                      Background="Transparent" Foreground="{TemplateBinding Foreground}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.link:pointerover">
+            <Setter Property="Opacity" Value="0.8" />
+        </Style>
+        <Style Selector="Button.link.danger">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+
+        <!-- Radio cards (scope and target): bordered, tinted with the accent when chosen. -->
+        <Style Selector="Border.wizardCard">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.wizardCard.chosen">
+            <Setter Property="BorderBrush" Value="{DynamicResource WizardSelectedBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
+        </Style>
+        <Style Selector="RadioButton.cardRadio">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
+        <Style Selector=":is(Control).inactive">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+        <Style Selector=":is(Control).dimmed">
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+
+        <!-- A bordered panel (the facet panel, the URL panel, the single-entry note). -->
+        <Style Selector="Border.wizardPanel">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Border.skeleton">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,452,Auto">
+
+        <!-- Header: title and step navigation (the dialog host supplies the close button). -->
+        <StackPanel Grid.Row="0" Margin="20,16,20,0">
+            <TextBlock Text="{x:Static loc:Strings.Wizard_Title}" FontSize="15" FontWeight="SemiBold" Margin="0,0,32,0" />
+            <Border Margin="0,12,0,0" Padding="0,0,0,14" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderColor}">
+                <ItemsControl ItemsSource="{Binding Steps}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:WizardStepViewModel">
+                            <Button Classes="wizardStep" Command="{Binding GoToCommand}" Margin="0,0,12,0">
+                                <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
+                                    <Panel Width="22" Height="22" VerticalAlignment="Top">
+                                        <Ellipse Classes="stepMarker"
+                                                 Classes.current="{Binding IsCurrent}"
+                                                 Classes.done="{Binding IsDone}" />
+                                        <TextBlock Classes="stepNumber" Classes.current="{Binding IsCurrent}"
+                                                   Text="{Binding Number}" IsVisible="{Binding !IsDone}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <ic:FluentIcon Icon="Checkmark" FontSize="12" IsVisible="{Binding IsDone}"
+                                                       Foreground="{DynamicResource ForegroundColor}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Panel>
+                                    <StackPanel Grid.Column="1" Spacing="1">
+                                        <TextBlock Text="{Binding Label}" FontSize="13" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Value}" Classes="muted" FontSize="12"
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </StackPanel>
+
+        <!-- Body: a fixed height, so the footer never moves; lists scroll inside. -->
+        <Panel Grid.Row="1" Margin="20,14,20,12">
+            <Panel IsVisible="{Binding IsCatalogueStep}">
+                <views:CatalogueDirectoryDialogView DataContext="{Binding Directory}" />
+            </Panel>
+
+            <Grid IsVisible="{Binding IsIncludeStep}" RowDefinitions="Auto,*">
+                <!-- The chosen catalogue, with a way back to the directory. -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                    <StackPanel Grid.Column="0" Spacing="1">
+                        <TextBlock Text="{Binding Scope.CatalogueName, FallbackValue=''}" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding Scope.CatalogueDetail, FallbackValue=''}"
+                                 Foreground="{DynamicResource MutedColor}" /><Run
+                                 Text="{Binding Scope.CatalogueStaleSuffix, FallbackValue=''}"
+                                 Foreground="{DynamicResource WarningColor}" />
+                        </TextBlock>
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Wizard_Change}"
+                            Command="{Binding ChangeCatalogueCommand}" />
+                </Grid>
+
+                <Panel Grid.Row="1">
+                    <Panel IsVisible="{Binding !Scope.HasLoadError, FallbackValue=True}">
+                        <views:CatalogueScopeStepView DataContext="{Binding Scope}" />
+                    </Panel>
+
+                    <!-- The catalogue could not be read: the choice is kept; retry or go back. -->
+                    <Border IsVisible="{Binding Scope.HasLoadError, FallbackValue=False}"
+                            VerticalAlignment="Top" CornerRadius="8" Padding="14,12" BorderThickness="1"
+                            Background="{DynamicResource WizardErrorBrush}"
+                            BorderBrush="{DynamicResource WizardErrorBorderBrush}">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="{x:Static loc:Strings.Wizard_LoadErrorTitle}" Classes="destructive"
+                                       FontWeight="SemiBold" />
+                            <TextBlock TextWrapping="Wrap" FontSize="13">
+                                <Run Text="{Binding Scope.LoadError, FallbackValue=''}" /><Run
+                                     Text="{x:Static loc:Strings.Wizard_LoadErrorSuffix}" />
+                            </TextBlock>
+                            <Button Classes="Primary" Height="32" MinHeight="32" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                    Content="{x:Static loc:Strings.Wizard_TryAgain}" Command="{Binding TryAgainCommand}" />
+                        </StackPanel>
+                    </Border>
+                </Panel>
+            </Grid>
+
+            <Panel IsVisible="{Binding IsAddToStep}">
+                <views:CatalogueTargetStepView DataContext="{Binding Scope}" />
+            </Panel>
+        </Panel>
+
+        <!-- Footer: Back on the left; step count (or what is missing); Cancel and the primary action. -->
+        <Border Grid.Row="2" Padding="20,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderColor}"
+                Background="{DynamicResource MutedBackgroundColor}">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                <Button Grid.Column="0" Classes="Outline" Height="36" Content="{x:Static loc:Strings.Button_Back}"
+                        Command="{Binding BackCommand}" />
+                <Panel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding StepOfText}" Classes="muted" FontSize="12.5"
+                               IsVisible="{Binding !HasFooterHint}" />
+                    <TextBlock Text="{Binding FooterHint}" Classes="warning" FontSize="12.5"
+                               IsVisible="{Binding HasFooterHint}" />
+                </Panel>
+                <Button Grid.Column="2" Classes="Ghost" Content="{x:Static loc:Strings.Button_Cancel}"
+                        Command="{Binding CancelCommand}" />
+                <Panel Grid.Column="3">
+                    <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Next}"
+                            Command="{Binding NextCommand}" IsVisible="{Binding !IsLastStep}" IsDefault="True" />
+                    <Button Classes="Primary" Content="{x:Static loc:Strings.Button_AddToLibrary}"
+                            Command="{Binding AddCommand}" IsVisible="{Binding IsLastStep}" />
+                </Panel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,169 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.CatalogueScopeStepView"
+             x:DataType="vm:AddToLibraryDialogViewModel">
+
+    <UserControl.Styles>
+        <!-- Facet tabs: a segmented strip; each tab carries a count badge when it has ticks. -->
+        <Style Selector="ListBox.facetTabs">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.facetTabs ListBoxItem">
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Segment" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ListBox.facetTabs ListBoxItem:selected /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <Style Selector="ListBox.facetTabs ListBoxItem:not(:selected)">
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+        <Style Selector="Border.countBadge">
+            <Setter Property="MinWidth" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="5,0" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- Facet rows: 32 px, the detail right-aligned. -->
+        <Style Selector="CheckBox.facet">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="8,0,0,0" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- The check box stretches over the label; the detail sits right-aligned beside it. -->
+        <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="10,0">
+                <CheckBox Classes="facet" IsChecked="{Binding IsSelected}">
+                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding Label}" />
+                </CheckBox>
+                <TextBlock Grid.Column="1" Text="{Binding Detail}" Classes="muted" FontSize="12.5"
+                           VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Panel>
+        <!-- Reading the catalogue: skeletons in place of the cards and the list. -->
+        <Grid IsVisible="{Binding IsLoading}" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+            <TextBlock Text="{x:Static loc:Strings.Wizard_Loading}" Classes="muted" FontSize="13" />
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Border Classes="skeleton" Height="54" />
+                <Border Grid.Column="1" Classes="skeleton" Height="54" />
+            </Grid>
+            <Border Grid.Row="2" Classes="skeleton" />
+        </Grid>
+
+        <!-- Nothing to choose: the catalogue lists one download. -->
+        <Border IsVisible="{Binding IsSingleEntry}" Classes="wizardPanel" Padding="14,12" VerticalAlignment="Top">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Wizard_SingleEntryTitle}" FontSize="13" FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Text="{Binding SingleEntry.Label, FallbackValue=''}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding SingleEntry.Detail, FallbackValue=''}" Classes="muted"
+                               FontSize="12.5" />
+                </Grid>
+                <TextBlock Text="{x:Static loc:Strings.Wizard_SingleEntryNote}" Classes="muted" FontSize="12.5"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Grid IsVisible="{Binding ShowsChoices}" RowDefinitions="Auto,*" RowSpacing="10">
+            <!-- Everything, or only what is ticked. -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Border Classes="wizardCard" Classes.chosen="{Binding IncludeAll}">
+                    <StackPanel Spacing="2">
+                        <RadioButton Classes="cardRadio" GroupName="WizardScope" IsChecked="{Binding IncludeAll}"
+                                     Content="{x:Static loc:Strings.Wizard_Everything}" />
+                        <TextBlock Text="{Binding EverythingSummary}" Classes="muted" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" Margin="26,0,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Classes="wizardCard" Classes.chosen="{Binding OnlySelected}">
+                    <StackPanel Spacing="2">
+                        <RadioButton Classes="cardRadio" GroupName="WizardScope" IsChecked="{Binding OnlySelected}"
+                                     Content="{x:Static loc:Strings.Wizard_OnlySelected}" />
+                        <TextBlock Text="{Binding OnlySelectedSummary}" Classes="muted" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" Margin="26,0,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- The facet panel: toolbar, list, summary. -->
+            <Border Grid.Row="1" Classes="wizardPanel">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Grid.Row="0" Background="{DynamicResource MutedBackgroundColor}" Padding="6,5,10,5"
+                            BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderColor}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" MinHeight="30">
+                            <ListBox Classes="facetTabs" IsVisible="{Binding HasFacetTabs}"
+                                     ItemsSource="{Binding FacetGroups}" SelectedItem="{Binding SelectedFacetGroup}">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FacetGroupViewModel">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding Title}" FontSize="13" VerticalAlignment="Center" />
+                                            <Border Classes="countBadge" IsVisible="{Binding HasSelection}" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding SelectedCount}" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBox IsVisible="{Binding IsSearchable}" Text="{Binding ChartSearchText}"
+                                     Height="30" MinHeight="30" FontSize="13" Padding="8,0"
+                                     PlaceholderText="{x:Static loc:Strings.Wizard_FilterDownloads}" />
+                            <TextBlock IsVisible="{Binding ShowsGroupTitle}" Margin="4,0,0,0"
+                                       Text="{Binding SelectedFacetGroup.Title, FallbackValue=''}"
+                                       FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Classes="link" Content="{Binding ToggleShownText}"
+                                    Command="{Binding ToggleShownCommand}" />
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                  Classes.dimmed="{Binding IncludeAll}">
+                        <ItemsControl ItemsSource="{Binding SelectedFacetGroup.Options, FallbackValue={x:Null}}"
+                                      ItemTemplate="{StaticResource FacetTemplate}" Margin="0,4" />
+                    </ScrollViewer>
+
+                    <Border Grid.Row="2" Padding="10,6" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderColor}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" MinHeight="22">
+                            <TextBlock Text="{Binding ScopeSummary}" FontSize="12.5" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Classes="muted" Classes.warning="{Binding IsScopeSummaryWarning}" />
+                            <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Library_NoaaClearSelection}"
+                                    Command="{Binding SelectNoneCommand}" IsVisible="{Binding HasSelection}" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Panel>
+</UserControl>
