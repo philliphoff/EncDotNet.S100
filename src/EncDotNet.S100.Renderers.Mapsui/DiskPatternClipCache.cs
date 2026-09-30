@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using EncDotNet.S100.Core.Caching;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 
@@ -41,8 +42,9 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </para>
 /// <para>
 /// The cache is bounded by a total-bytes cap enforced with a least-recently-used
-/// eviction policy. The cache directory is shared across every S-101 processor,
-/// so all instance methods are thread-safe (guarded by a single lock).
+/// eviction policy (see <see cref="DiskCacheBudget"/>). The cache directory is
+/// shared across every S-101 processor, so all instance methods are
+/// thread-safe; hits read and deserialize without a lock.
 /// </para>
 /// </remarks>
 public sealed class DiskPatternClipCache : IPatternClipCache
@@ -61,10 +63,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     private const string FileExtension = ".clip";
 
     private readonly string _cacheDirectory;
-    private readonly long _maxBytes;
-    private readonly object _gate = new();
-    private readonly WKBWriter _wkbWriter = new();
-    private readonly WKBReader _wkbReader = new();
+    private readonly DiskCacheBudget _budget;
 
     private long _hits;
     private long _misses;
@@ -80,8 +79,8 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// </param>
     /// <param name="maxBytes">
     /// Soft upper bound, in bytes, on the total size of all persisted clip
-    /// files. After each write the least-recently-accessed files are evicted
-    /// until the total is at or below this cap. Must be positive.
+    /// files. After a write that exceeds it, the least-recently-used files are
+    /// evicted until the total is at or below this cap. Must be positive.
     /// </param>
     /// <exception cref="ArgumentException">
     /// <paramref name="cacheDirectory"/> is null or empty.
@@ -95,20 +94,14 @@ public sealed class DiskPatternClipCache : IPatternClipCache
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
 
         _cacheDirectory = cacheDirectory;
-        _maxBytes = maxBytes;
+        _budget = new DiskCacheBudget(cacheDirectory, FileExtension, maxBytes);
     }
 
     /// <inheritdoc />
-    public long Hits
-    {
-        get { lock (_gate) { return _hits; } }
-    }
+    public long Hits => Interlocked.Read(ref _hits);
 
     /// <inheritdoc />
-    public long Misses
-    {
-        get { lock (_gate) { return _misses; } }
-    }
+    public long Misses => Interlocked.Read(ref _misses);
 
     /// <inheritdoc />
     public IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)> GetOrCompute(
@@ -120,29 +113,22 @@ public sealed class DiskPatternClipCache : IPatternClipCache
 
         var path = GetEntryPath(key);
 
-        lock (_gate)
+        var cached = TryRead(path);
+        if (cached is not null)
         {
-            var cached = TryRead(path);
-            if (cached is not null)
-            {
-                _hits++;
-                TouchAccessTime(path);
-                return cached;
-            }
-
-            _misses++;
+            Interlocked.Increment(ref _hits);
+            return cached;
         }
 
-        // Run the expensive clip OUTSIDE the lock so a single ~multi-second miss
-        // does not stall hits / unrelated computes on other processors sharing
-        // this cache. Concurrent misses on the same key merely duplicate work
+        Interlocked.Increment(ref _misses);
+
+        // Nothing is locked while the expensive clip runs, so a single
+        // ~multi-second miss does not stall hits / unrelated computes on other
+        // processors sharing this cache. Concurrent misses on the same key merely duplicate work
         // (rare) and the last writer wins; the result is identical either way.
         var produced = factory();
 
-        lock (_gate)
-        {
-            TryWrite(path, produced);
-        }
+        TryWrite(path, produced);
 
         return produced;
     }
@@ -165,149 +151,42 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// </summary>
     private IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)>? TryRead(string path)
     {
+        var bytes = _budget.TryRead(path);
+        if (bytes is null)
+            return null;
+
         try
         {
-            if (!File.Exists(path))
-                return null;
-
-            var bytes = File.ReadAllBytes(path);
             return Deserialize(bytes);
         }
         catch
         {
-            // Any IO/parse failure is a miss: recompute and overwrite.
+            // Any parse failure is a miss: recompute and overwrite.
             return null;
         }
     }
 
     /// <summary>
-    /// Serializes and atomically writes a clip entry, then enforces the LRU size
-    /// cap. All failures are swallowed: an unwritable cache must never break a
-    /// render (the freshly computed value is still returned to the caller).
+    /// Serializes and atomically writes a clip entry, evicting
+    /// least-recently-used entries if the cap is exceeded. All failures are
+    /// swallowed: an unwritable cache must never break a render (the freshly
+    /// computed value is still returned to the caller).
     /// </summary>
     private void TryWrite(
         string path,
         IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)> entries)
     {
-        var temp = Path.Combine(
-            _cacheDirectory,
-            Path.GetRandomFileName() + ".tmp");
+        byte[] bytes;
         try
         {
-            Directory.CreateDirectory(_cacheDirectory);
-            var bytes = Serialize(entries);
-
-            // Temp file in the same directory so File.Move is an atomic rename.
-            File.WriteAllBytes(temp, bytes);
-            File.Move(temp, path, overwrite: true);
-            TouchAccessTime(path);
-
-            EnforceSizeCap(path);
-        }
-        catch
-        {
-            // Best-effort persistence only.
-        }
-        finally
-        {
-            // A crash/throw before File.Move can orphan the temp file; remove it.
-            TryDelete(temp);
-        }
-    }
-
-    /// <summary>Deletes a file if present, swallowing any IO error.</summary>
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-            // Non-fatal.
-        }
-    }
-
-    /// <summary>
-    /// Stamps a cache file's last-access time to "now" so the LRU sweep treats a
-    /// just-written or just-read entry as most-recently-used. Explicitly setting
-    /// the timestamp avoids relying on filesystem access-time tracking, which may
-    /// be disabled (e.g. <c>noatime</c> mounts).
-    /// </summary>
-    private static void TouchAccessTime(string path)
-    {
-        try
-        {
-            File.SetLastAccessTimeUtc(path, DateTime.UtcNow);
-        }
-        catch
-        {
-            // Non-fatal: a missed touch only affects eviction ordering.
-        }
-    }
-
-    /// <summary>
-    /// Evicts least-recently-accessed sidecar files until the total size of all
-    /// persisted entries is at or below <see cref="_maxBytes"/>. The
-    /// just-written <paramref name="freshPath"/> is evicted only as a last
-    /// resort (when it alone still exceeds the cap), so a normal write is never
-    /// immediately discarded due to coarse access-time resolution. Also sweeps
-    /// orphaned <c>*.tmp</c> files left by interrupted writes.
-    /// </summary>
-    private void EnforceSizeCap(string freshPath)
-    {
-        FileInfo[] files;
-        try
-        {
-            var dir = new DirectoryInfo(_cacheDirectory);
-
-            // Remove orphaned temp files from interrupted writes; they are not
-            // counted toward the cap but would otherwise accumulate unbounded.
-            foreach (var tmp in dir.GetFiles("*.tmp", SearchOption.TopDirectoryOnly))
-                TryDelete(tmp.FullName);
-
-            files = dir.GetFiles("*" + FileExtension, SearchOption.TopDirectoryOnly);
+            bytes = Serialize(entries);
         }
         catch
         {
             return;
         }
 
-        long total = 0;
-        foreach (var f in files)
-            total += f.Length;
-
-        if (total <= _maxBytes)
-            return;
-
-        // Oldest access time first (least-recently-used); the just-written entry
-        // is sorted last so it survives unless it is the only thing left.
-        Array.Sort(files, (a, b) =>
-        {
-            var aFresh = string.Equals(a.FullName, freshPath, StringComparison.Ordinal);
-            var bFresh = string.Equals(b.FullName, freshPath, StringComparison.Ordinal);
-            if (aFresh != bFresh)
-                return aFresh ? 1 : -1;
-            return a.LastAccessTimeUtc.CompareTo(b.LastAccessTimeUtc);
-        });
-
-        foreach (var f in files)
-        {
-            if (total <= _maxBytes)
-                break;
-
-            var len = f.Length;
-            try
-            {
-                f.Delete();
-                total -= len;
-            }
-            catch
-            {
-                // Skip files we cannot delete (e.g. transient lock).
-            }
-        }
+        _budget.TryWrite(path, bytes);
     }
 
     /// <summary>
@@ -316,9 +195,11 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// <c>[patternRefUtf8Len:int][patternRefUtf8 bytes][priority:int][wkbLen:int][wkb bytes]</c>.
     /// All integers are written little-endian via <see cref="BinaryWriter"/>.
     /// </summary>
-    private byte[] Serialize(
+    private static byte[] Serialize(
         IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)> entries)
     {
+        // WKB readers/writers are not thread-safe, and calls run concurrently.
+        var wkbWriter = new WKBWriter();
         using var ms = new MemoryStream();
         using (var writer = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
         {
@@ -332,7 +213,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
                 writer.Write(refBytes);
                 writer.Write(priority);
 
-                var wkb = _wkbWriter.Write(geometry);
+                var wkb = wkbWriter.Write(geometry);
                 writer.Write(wkb.Length);
                 writer.Write(wkb);
             }
@@ -347,7 +228,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// <see cref="FormatVersion"/>. Throws on truncation/corruption, which the
     /// caller treats as a miss.
     /// </summary>
-    private IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)>? Deserialize(byte[] bytes)
+    private static IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)>? Deserialize(byte[] bytes)
     {
         using var ms = new MemoryStream(bytes, writable: false);
         using var reader = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
@@ -364,6 +245,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
         if (count < 0 || count > remaining / 12)
             return null;
 
+        var wkbReader = new WKBReader();
         var result = new List<(string PatternRef, int Priority, Geometry Geometry)>(count);
         for (var i = 0; i < count; i++)
         {
@@ -383,7 +265,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
             var wkb = reader.ReadBytes(wkbLen);
             if (wkb.Length != wkbLen)
                 return null;
-            var geometry = _wkbReader.Read(wkb);
+            var geometry = wkbReader.Read(wkb);
 
             result.Add((patternRef, priority, geometry));
         }

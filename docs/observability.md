@@ -155,8 +155,11 @@ count and output dimensions.
 
 Persistent cache writes run independently on a bounded, low-priority writer
 after tile publication. Root `s100.render.tile.cache.persist` spans describe
-that background work, with child `cache.encode`, `cache.file_write`, and
-`cache.sweep` spans. Queue overflow and duplicate requests are best-effort
+that background work, with child `cache.encode` and `cache.file_write` spans.
+The byte budget is enforced from an in-memory LRU index inside
+`cache.file_write`, so no span enumerates the cache directory; it is rescanned
+only on first write, every ten minutes, or after an external deletion (such as
+"Clear caches") is noticed. Queue overflow and duplicate requests are best-effort
 discards rather than render-worker backpressure. The discard `reason` may also
 be `stale` when a queued tile leaves the current viewport before snapshot,
 encoding, or atomic file commit. These spans are inert unless an
