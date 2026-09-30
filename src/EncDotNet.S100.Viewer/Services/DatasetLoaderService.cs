@@ -1033,7 +1033,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         foreach (var snapshot in _mapSession.GetDatasets())
         {
-            if (snapshot.MaximumDisplayScale is not int compilationScale
+            // Catalogue / discovery metadata supplies the compilation scale for
+            // S-100 cells. S-57 catalogues (CATALOG.031) carry none, so fall
+            // back to the scale the processor read from the cell (DSPM CSCL).
+            if ((snapshot.MaximumDisplayScale ?? snapshot.CellCompilationScale) is not int compilationScale
                 || compilationScale <= 0
                 || !snapshot.IsDrawing
                 || snapshot.CoverageGeometry is not { IsEmpty: false } coverage)

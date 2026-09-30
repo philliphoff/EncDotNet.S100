@@ -803,6 +803,12 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.Equal(19_999_999, coarse.MinimumDisplayScale);
         Assert.Equal(3_500_000, Assert.Single(coarse.StackEntries!).SourceScaleDenominator);
         Assert.Equal(700_000, Assert.Single(fine.StackEntries!).SourceScaleDenominator);
+
+        // The cell's own CSCL is exposed for the overscale indication, which
+        // has no catalogue compilation scale to use for S-57 cells.
+        Assert.Null(coarse.MaximumDisplayScale);
+        Assert.Equal(3_500_000, coarse.CellCompilationScale);
+        Assert.Equal(700_000, fine.CellCompilationScale);
     }
 
     [Fact]

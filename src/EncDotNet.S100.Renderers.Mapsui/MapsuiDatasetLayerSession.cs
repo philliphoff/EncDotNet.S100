@@ -1677,6 +1677,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = entry.CoverageGeometry,
             MinimumDisplayScale = EffectiveMinimumDisplayScale(entry),
             MaximumDisplayScale = entry.MaximumDisplayScale,
+            CellCompilationScale = entry.CellCompilationScale,
             ContentMaxVisibleResolution = entry.ContentMaxVisibleResolution,
             IsDrawing = isDrawing,
         };

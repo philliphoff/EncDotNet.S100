@@ -46,6 +46,14 @@ public sealed class MapsuiMapDatasetSnapshot
     public int? MaximumDisplayScale { get; init; }
 
     /// <summary>
+    /// Gets the compilation-scale denominator the processor read from the cell
+    /// itself (for S-57, DSPM <c>CSCL</c>), or <see langword="null"/>. Unlike
+    /// <see cref="MaximumDisplayScale"/>, which comes from catalogue or
+    /// discovery metadata, this is known only once the cell has been rendered.
+    /// </summary>
+    public int? CellCompilationScale { get; init; }
+
+    /// <summary>
     /// Gets the coarsest EPSG:3857 resolution at which dataset content draws, or
     /// <see langword="null"/> when no whole-cell scale window applies.
     /// </summary>
