@@ -119,8 +119,24 @@ public sealed class LibraryItemViewModelTests
         var row = Row(Online());
 
         Assert.Equal("Online · 2.9 MB", row.PrimaryStateText.Replace(',', '.'));
+
+        // A local copy names its size too.
+        var dir = Directory.CreateTempSubdirectory("library-item-");
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir.FullName, "x.000"), new byte[2048]);
+            var local = new LibraryItemViewModel(Online() with { Location = new LocalItemLocation(dir.FullName, "x.000", []) }, Source,
+                _ => LibraryLoadState.None, new StubDownloader(false));
+            Assert.Equal("Local · 2 KB", local.PrimaryStateText);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
         Assert.True(row.CanLoadAfterDownload);
         Assert.False(row.CanLoad);
+        Assert.Equal("Load after download", row.LoadTooltip);
+        Assert.Equal("Download (2.9 MB)", row.DownloadTooltip.Replace(',', '.'));
     }
 
     [Fact]

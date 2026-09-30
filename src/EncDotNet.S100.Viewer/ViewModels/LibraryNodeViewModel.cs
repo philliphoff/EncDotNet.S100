@@ -103,7 +103,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     public bool CanRename => !_collection.IsSession;
 
     /// <summary>The display name.</summary>
-    public string Name => _source is { } s ? DescribeSource(s.Definition) : _collection.Definition.Name;
+    public string Name => _source is { } s ? SourceName(s) : _collection.Definition.Name;
 
     /// <summary>The node's icon.</summary>
     public Icon Icon => _source?.Definition switch
@@ -346,6 +346,58 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanKeep));
         OnPropertyChanged(nameof(CanRename));
     }
+
+    /// <summary>
+    /// Display names older builds gave every unscoped online source. They say
+    /// nothing about the source, so the source is named as if it had none.
+    /// </summary>
+    private static readonly HashSet<string> LegacyGenericNames =
+        new(["All ENCs", "All rivers", "All downloads", "All products"], StringComparer.Ordinal);
+
+    /// <summary>
+    /// The source's name: the user's (or the dialog's) display name, unless it
+    /// only repeats something generic — a legacy "All …" name, the collection's
+    /// name or the catalogue's — in which case it is derived: a community list
+    /// holding a single package is named by that package's description.
+    /// </summary>
+    private string SourceName(LibrarySource source)
+    {
+        var definition = source.Definition;
+        var catalogue = CatalogueUri(definition) is { } uri
+            ? EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All.FirstOrDefault(k => k.CatalogUri == uri)?.Name
+            : null;
+        var generic = definition.DisplayName is { } name
+            && CatalogueUri(definition) is not null
+            && (LegacyGenericNames.Contains(name) || name == _collection.Definition.Name || name == catalogue);
+        if (definition.DisplayName is { } display && !generic)
+            return display;
+
+        if (definition is ChartCatalogsFeedSource && SinglePackageTitle(source.Index) is { } package)
+            return package;
+        return catalogue ?? DescribeSource(definition with { DisplayName = null });
+    }
+
+    /// <summary>The one package a community list's index holds, by description, or <see langword="null"/>.</summary>
+    private static string? SinglePackageTitle(SourceIndex? index)
+    {
+        if (index is null)
+            return null;
+        var titles = index.Items
+            .Select(i => i.Properties.GetValueOrDefault("packageTitle") ?? (i.Properties.ContainsKey("package") ? i.Title : null))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        return titles.Length == 1 ? PackageTitles.Clean(titles[0]) : null;
+    }
+
+    private static Uri? CatalogueUri(CollectionSource source) => source switch
+    {
+        NoaaEncFeedSource n => n.CatalogUri,
+        UsaceIencFeedSource u => u.CatalogUri,
+        ChartCatalogsFeedSource c => c.CatalogUri,
+        _ => null,
+    };
 
     private static string DescribeSource(CollectionSource source) => source.DisplayName ?? source switch
     {

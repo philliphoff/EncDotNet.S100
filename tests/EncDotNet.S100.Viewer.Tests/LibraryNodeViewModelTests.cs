@@ -47,6 +47,36 @@ public sealed class LibraryNodeViewModelTests
         Assert.Equal(tag, Node(source, Index(1)).KindTag);
     }
 
+    [Theory]
+    [InlineData("All downloads")]
+    [InlineData("C")]  // the collection's name
+    [InlineData(null)]
+    public void A_community_list_holding_one_package_is_named_by_it(string? displayName)
+    {
+        var items = Enumerable.Range(0, 3).Select(i => new CollectionItem
+        {
+            Key = $"269/c{i}",
+            ProductSpec = "S-57",
+            Name = $"c{i}",
+            Location = NoItemLocation.Instance,
+            Properties = new Dictionary<string, string> { ["package"] = "269", ["packageTitle"] = "23.10.2025 15:17 - New IENCs and bIENCs (269)" },
+        }).ToArray();
+        var index = new SourceIndex(Guid.NewGuid(), DateTimeOffset.UnixEpoch, "fp", items, []);
+        var source = new ChartCatalogsFeedSource(Guid.NewGuid(), displayName, new Uri("https://example.test/AT_IENC_Catalog.xml"), ChartCatalogsFilter.All);
+
+        Assert.Equal("New IENCs and bIENCs (269)", Node(source, index).Name);
+    }
+
+    [Fact]
+    public void Legacy_generic_names_give_way_to_the_catalogue_name_but_user_names_stay()
+    {
+        var noaa = new NoaaEncFeedSource(Guid.NewGuid(), "All ENCs", NoaaEncFeedSource.DefaultCatalogUri, NoaaEncFilter.All);
+        Assert.Equal(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("noaa-enc")!.Name, Node(noaa, Index(1)).Name);
+
+        var named = noaa with { DisplayName = "Alaska" };
+        Assert.Equal("Alaska", Node(named, Index(1)).Name);
+    }
+
     [Fact]
     public void Normal_nodes_are_one_line_with_a_count()
     {

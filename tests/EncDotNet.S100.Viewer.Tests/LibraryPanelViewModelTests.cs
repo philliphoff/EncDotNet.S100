@@ -369,6 +369,26 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task The_load_button_loads_a_local_dataset_or_downloads_then_loads_an_online_one()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        vm.SelectedItem = vm.Items[0];
+
+        // Local: loads.
+        Assert.True(vm.LoadOrDownloadCommand.CanExecute(null));
+        vm.LoadOrDownloadCommand.Execute(null);
+        Assert.Equal(0, _downloader.Downloads);
+        Assert.Single(_loader.Calls);
+
+        // Outdated (downloadable, still loadable): the button loads the local copy.
+        _downloader.CanDownloadAll = true;
+        _downloader.Outdated = true;
+        vm.SelectedItem.RefreshAvailability();
+        Assert.Equal("Load", vm.SelectedItem.LoadTooltip);
+    }
+
+    [Fact]
     public async Task Download_only_does_not_load()
     {
         await AddS57CollectionAsync();
@@ -472,10 +492,15 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal("Package", Assert.Single(package.Tags).Text);
         Assert.StartsWith("Base2 · published 2024-08-23", package.Summary);
         Assert.Equal(4, vm.AllCount);  // counts are datasets, not rows
+        Assert.Equal("4", vm.ItemsSummary);  // a collapsed group's datasets count; its header doesn't
+        Assert.StartsWith("3 datasets · published ", group.Summary);
 
         group.ToggleCommand!.Execute(null);
         Assert.Equal(5, vm.Items.Count);
         Assert.All(vm.Items.Skip(1).Take(3), i => Assert.True(i.IsGroupChild));
+        Assert.Equal("4", vm.ItemsSummary);
+        // Children don't repeat the package's title.
+        Assert.All(vm.Items.Skip(1).Take(3), i => Assert.False(i.HasSubtitle));
         vm.SelectedItem = vm.Items[2];
         var selected = vm.SelectedItem;
 
@@ -513,12 +538,14 @@ public sealed class LibraryPanelViewModelTests : IDisposable
             };
             if (Unpacked)
             {
-                var remote = new RemoteItemLocation(new Uri("https://example.test/p1.zip"), null, null, "community/RO", "Base1");
+                var remote = new RemoteItemLocation(
+                    new Uri("https://example.test/p1.zip"), null, new DateTimeOffset(2025, 10, 23, 15, 17, 0, TimeSpan.Zero), "community/RO", "Base1");
                 CollectionItem Cell(string name) => new()
                 {
                     Key = "Base1/" + name,
                     ProductSpec = "S-57",
                     Name = name,
+                    Title = "Dunărea 790 - 0 (Base1)",
                     Location = remote,
                     Properties = new Dictionary<string, string> { ["package"] = "Base1", ["packageTitle"] = "Dunărea 790 - 0 (Base1)" },
                 };

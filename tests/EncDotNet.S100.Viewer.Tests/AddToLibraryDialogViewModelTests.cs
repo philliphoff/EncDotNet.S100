@@ -92,11 +92,11 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         Assert.True(vm.ConfirmCommand.CanExecute(null));
         var alaska = vm.States.Single(s => s.Value == "AK");
         Assert.Equal("Alaska (AK)", alaska.Label);
-        Assert.Contains("All 6 cells", vm.SelectionSummary);
+        Assert.Contains("All 6 datasets", vm.SelectionSummary);
 
         alaska.IsSelected = true;
 
-        Assert.StartsWith("2 cells", vm.SelectionSummary);
+        Assert.StartsWith("2 datasets", vm.SelectionSummary);
         Assert.Equal("NOAA ENC — Alaska", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);
@@ -122,11 +122,11 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         await vm.LoadCatalogAsync();
 
         Assert.Equal(["Allegheny", "Arkansas", "Ohio"], vm.Rivers.Select(r => r.Value));
-        Assert.Contains("All 4 cells", vm.SelectionSummary);
+        Assert.Contains("All 4 datasets", vm.SelectionSummary);
 
         vm.Rivers.Single(r => r.Value == "Ohio").IsSelected = true;
 
-        Assert.StartsWith("2 cells", vm.SelectionSummary);
+        Assert.StartsWith("2 datasets", vm.SelectionSummary);
         Assert.Equal("USACE Inland ENC — Ohio", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);

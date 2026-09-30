@@ -57,6 +57,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _showCancelled;
     private LibraryStateFilter _stateFilter;
     private IReadOnlyList<LibraryItemViewModel> _textFiltered = [];
+    private int _listedDatasets;
     private bool _refreshPosted;
     private bool _showCoverage = true;
     private GeoPosition? _location;
@@ -113,6 +114,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
         DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
         DownloadOnlyCommand = new AsyncRelayCommand(() => DownloadSelectedAsync(load: false), () => _selectedItem?.CanDownload == true);
+        LoadOrDownloadCommand = new AsyncRelayCommand(
+            () => _selectedItem?.CanLoadAfterDownload == true ? DownloadSelectedAsync(load: true) : LoadSelectedAsync(),
+            () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
         _loader.Changed += OnLoaderChanged;
@@ -174,6 +178,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -266,9 +271,15 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>"116", or "8 of 116" when filtered, shown inside the filter box.</summary>
     public string ItemsSummary =>
-        _items.Count == _allItems.Count
+        ListedCount == _allItems.Count
             ? string.Format(CultureInfo.CurrentCulture, Strings.Library_ItemCountFormat, _allItems.Count)
-            : string.Format(CultureInfo.CurrentCulture, Strings.Library_FilteredItemCountFormat, _items.Count, _allItems.Count);
+            : string.Format(CultureInfo.CurrentCulture, Strings.Library_FilteredItemCountFormat, ListedCount, _allItems.Count);
+
+    /// <summary>
+    /// How many datasets pass the filters — including those inside a collapsed
+    /// package group, and never the groups' header rows.
+    /// </summary>
+    private int ListedCount => _listedDatasets;
 
     public ICommand AddFolderCommand { get; }
 
@@ -313,7 +324,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     public ICommand NextAtLocationCommand { get; }
 
     /// <summary>How many listed datasets cover the tapped point.</summary>
-    public int LocationHitCount => _location is null ? 0 : _items.Count;
+    public int LocationHitCount => _location is null ? 0 : ListedCount;
 
     /// <summary>The selected dataset's 1-based position among them, or 0 when none is selected.</summary>
     public int LocationHitIndex => _location is null || _selectedItem is null ? 0 : IndexOf(_selectedItem) + 1;
@@ -341,6 +352,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Downloads the selected online dataset without loading it.</summary>
     public ICommand DownloadOnlyCommand { get; }
+
+    /// <summary>
+    /// The details header's one Load button: loads a local dataset, or
+    /// downloads an online one and then loads it.
+    /// </summary>
+    public ICommand LoadOrDownloadCommand { get; }
 
     /// <summary>Downloads every listed online (or outdated) dataset.</summary>
     public ICommand DownloadListedCommand { get; }
@@ -370,7 +387,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
             var downloadable = Downloadable().ToArray();
             return downloadable.Length == 0
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkListedFormat, _items.Count)
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkListedFormat, ListedCount)
                 : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkToDownloadFormat, downloadable.Length,
                     LibraryItemViewModel.FormatBytes(downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
         }
@@ -574,6 +591,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(DownloadListedText));
             OnPropertyChanged(nameof(HasDownloadable));
@@ -848,7 +866,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(i => _showCancelled || !i.IsCancelled)
             .Where(i => filter.Length == 0 || i.Matches(filter))
             .ToArray();
-        Items = GroupPackages(_textFiltered.Where(i => InState(i, _stateFilter)), expandAll: filter.Length > 0);
+        var listed = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
+        _listedDatasets = listed.Length;
+        Items = GroupPackages(listed, expandAll: filter.Length > 0);
         Recount();
         OnPropertyChanged(nameof(LocationHitCount));
         OnPropertyChanged(nameof(LocationHitsText));
@@ -913,7 +933,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, row.Source))
             {
                 _packageHeaders[key] = header = LibraryItemViewModel.ForPackageGroup(
-                    row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage);
+                    row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage,
+                    members.Select(m => (m.Item.Location as RemoteItemLocation)?.LastModified).Max());
             }
 
             header.GroupCount = members.Count;

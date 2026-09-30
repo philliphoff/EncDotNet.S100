@@ -20,6 +20,11 @@ public partial class LibraryPanelView : UserControl
     {
         InitializeComponent();
 
+        var grid = this.FindControl<Grid>("PanelGrid");
+        var splitter = this.FindControl<GridSplitter>("TreeSplitter");
+        if (grid is not null && splitter is not null)
+            FitTreeToContent(grid, splitter);
+
         var tree = this.FindControl<TreeView>("CollectionTree");
         if (tree is not null)
             tree.ContextRequested += OnTreeContextRequested;
@@ -30,6 +35,58 @@ public partial class LibraryPanelView : UserControl
             list.ContainerPrepared += OnListContainerPrepared;
             list.DoubleTapped += OnItemDoubleTapped;
         }
+    }
+
+    /// <summary>The largest share of the panel the tree takes before it scrolls.</summary>
+    internal const double TreeMaxFraction = 0.4;
+
+    /// <summary>
+    /// Sizes the tree's row to its content (a few sources shouldn't take half the
+    /// dock), capped at <see cref="TreeMaxFraction"/> of the panel — unless the
+    /// user has a saved splitter position. Dragging the splitter switches both
+    /// rows back to proportional heights, so the position is saved as before.
+    /// </summary>
+    private static void FitTreeToContent(Grid grid, GridSplitter splitter)
+    {
+        var treeRow = grid.RowDefinitions[1];
+        var listRow = grid.RowDefinitions[3];
+
+        void UpdateCap()
+        {
+            if (treeRow.Height.IsAuto)
+                treeRow.MaxHeight = Math.Max(treeRow.MinHeight, grid.Bounds.Height * TreeMaxFraction);
+        }
+
+        grid.AttachedToVisualTree += (_, _) =>
+        {
+            if (Behaviors.SplitterPersistence.GetSavedFraction(splitter) is null)
+            {
+                treeRow.Height = GridLength.Auto;
+                UpdateCap();
+            }
+        };
+        grid.SizeChanged += (_, _) => UpdateCap();
+        splitter.PropertyChanged += (_, e) =>
+        {
+            // A saved position that arrives after attaching (its binding resolves late) still wins.
+            if (e.Property == Behaviors.SplitterPersistence.SavedFractionProperty
+                && e.NewValue is double f and > 0 and < 1 && treeRow.Height.IsAuto)
+            {
+                treeRow.MaxHeight = double.PositiveInfinity;
+                treeRow.Height = new GridLength(f, GridUnitType.Star);
+                listRow.Height = new GridLength(1 - f, GridUnitType.Star);
+            }
+        };
+        splitter.DragStarted += (_, _) =>
+        {
+            if (!treeRow.Height.IsAuto)
+                return;
+            var tree = treeRow.ActualHeight;
+            var list = listRow.ActualHeight;
+            treeRow.MaxHeight = double.PositiveInfinity;
+            treeRow.Height = new GridLength(Math.Max(1, tree), GridUnitType.Star);
+            listRow.Height = new GridLength(Math.Max(1, list), GridUnitType.Star);
+        };
     }
 
     private void OnTreeContextRequested(object? sender, ContextRequestedEventArgs e)

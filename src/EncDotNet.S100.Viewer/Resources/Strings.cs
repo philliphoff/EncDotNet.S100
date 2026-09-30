@@ -1085,4 +1085,6 @@ internal static class Strings
     public static string Library_DropHint => Get(nameof(Library_DropHint));
     public static string Library_Field_LastDownload => Get(nameof(Library_Field_LastDownload));
     public static string Library_LastDownloadFailedFormat => Get(nameof(Library_LastDownloadFailedFormat));
+    public static string Library_PackageGroupNoDateFormat => Get(nameof(Library_PackageGroupNoDateFormat));
+    public static string Tooltip_DownloadSizeFormat => Get(nameof(Tooltip_DownloadSizeFormat));
 }
