@@ -156,7 +156,8 @@ public partial class App : Application
             .Register<Views.AddToLibraryDialogView, ViewModels.AddToLibraryDialogViewModel>();
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AddOnlineCatalogueWizardView, ViewModels.AddOnlineCatalogueWizardViewModel>()
-            .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>();
+            .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>()
+            .Register<Views.AddCollectionManifestDialogView, ViewModels.AddCollectionManifestDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
         // wraps Mapsui's style registry. The renderer package owns the required
@@ -476,7 +477,8 @@ public partial class App : Application
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
             sp.GetRequiredService<Func<AddOnlineCatalogueWizardViewModel>>(),
             sp.GetRequiredService<Func<SharedFeedDialogViewModel>>(),
-            sp.GetService<IViewerUiControllerAccessor>()));
+            sp.GetService<IViewerUiControllerAccessor>(),
+            sp.GetService<Services.Notifications.INotificationService>()));
 
         // Feature-catalogue parsing is shared across every dataset load
         // — the manager's parse cache must survive across factory

@@ -745,6 +745,11 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 
         public Task AddS128CatalogueAsync(Guid? targetCollectionId) => Record("s128", targetCollectionId);
 
+        public Task AddCollectionManifestAsync(Guid? targetCollectionId) => Record("manifest", targetCollectionId);
+
+        public Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source) =>
+            Record("choose:" + source.Id, collectionId);
+
         public Task AddPathAsync(string path, Guid? targetCollectionId) => Record("path", targetCollectionId);
 
         public bool IsInLibrary(string path) => false;

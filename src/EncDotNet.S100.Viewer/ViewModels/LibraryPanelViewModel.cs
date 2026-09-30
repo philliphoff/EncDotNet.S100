@@ -49,6 +49,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Action<Action> _dispatch;
 
     private LibraryNodeViewModel? _selectedNode;
+    private bool _hasSynced;
     private IReadOnlyList<SourceIndex?>? _itemsBasis;
     private IReadOnlyList<LibraryItemViewModel> _allItems = [];
     private IReadOnlyList<LibraryItemViewModel> _items = [];
@@ -103,6 +104,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         AddOnlineCatalogueCommand = new AsyncRelayCommand(() => _importer.AddOnlineCatalogueAsync(TargetCollectionId));
         AddS128CatalogueCommand = new AsyncRelayCommand(() => _importer.AddS128CatalogueAsync(TargetCollectionId));
         AddSharedFeedCommand = new AsyncRelayCommand(() => _importer.AddSharedFeedAsync(TargetCollectionId));
+        AddCollectionManifestCommand = new AsyncRelayCommand(() => _importer.AddCollectionManifestAsync(TargetCollectionId));
+        ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
@@ -151,6 +154,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
                 EndTap();
                 if (_location is not null)
                     SetLocation(null);
@@ -331,6 +335,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Connects to a feed served by <c>s100 feed serve</c> on another computer.</summary>
     public ICommand AddSharedFeedCommand { get; }
+
+    /// <summary>Picks a collection manifest (<c>*.s100collection.json</c>).</summary>
+    public ICommand AddCollectionManifestCommand { get; }
+
+    /// <summary>Changes which groups the selected collection-manifest source includes.</summary>
+    public ICommand ChooseGroupsCommand { get; }
 
     /// <summary>Re-indexes every source.</summary>
     public ICommand RefreshAllCommand { get; }
@@ -865,12 +875,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     internal void Sync()
     {
         var snapshot = _library.Collections;
+        var knownSources = Nodes.SelectMany(n => n.Children).Select(c => c.Id).ToHashSet();
 
         for (var i = Nodes.Count - 1; i >= 0; i--)
         {
             if (!snapshot.Any(c => c.Id == Nodes[i].Id))
             {
-                if (ReferenceEquals(Nodes[i], _selectedNode) || Nodes[i].Children.Contains(_selectedNode!))
+                if (_selectedNode is not null && Nodes[i].SelfAndDescendants().Contains(_selectedNode))
                     SelectedNode = null;
                 Nodes.RemoveAt(i);
             }
@@ -886,15 +897,38 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 continue;
             }
 
-            var selectedWasChild = _selectedNode is { IsCollection: false } && existing.Children.Contains(_selectedNode);
+            var selected = _selectedNode is { IsCollection: false } node && existing.SelfAndDescendants().Contains(node)
+                ? node
+                : null;
             existing.Update(collection);
-            if (selectedWasChild && !existing.Children.Contains(_selectedNode!))
-                SelectedNode = existing;
+            if (selected is not null && !existing.SelfAndDescendants().Contains(selected))
+            {
+                // A vanished group falls back to its source, a vanished source to its collection.
+                SelectedNode = selected.IsGroup
+                    ? existing.Children.FirstOrDefault(c => c.Id == selected.Id) ?? existing
+                    : existing;
+            }
 
             var at = Nodes.IndexOf(existing);
             if (at != i)
                 Nodes.Move(at, i);
         }
+
+        // A newly added collection manifest opens expanded, with its collection, once.
+        if (_hasSynced)
+        {
+            foreach (var collection in Nodes)
+            {
+                foreach (var source in collection.Children.Where(
+                    c => c.Source?.Definition is LocalManifestSource && !knownSources.Contains(c.Id)))
+                {
+                    collection.IsExpanded = true;
+                    source.IsExpanded = true;
+                }
+            }
+        }
+
+        _hasSynced = true;
 
         SelectedNode ??= Nodes.FirstOrDefault();
         OnPropertyChanged(nameof(IsEmpty));
@@ -1114,6 +1148,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(UpdatesCount));
     }
 
+    private Task ChooseGroupsAsync() =>
+        _selectedNode is { CanChooseGroups: true, Source.Definition: LocalManifestSource source } node
+            ? _importer.ChooseManifestGroupsAsync(node.Collection.Id, source)
+            : Task.CompletedTask;
+
     private void Refresh()
     {
         if (_selectedNode is { Collection.IsSession: false } node)
@@ -1137,7 +1176,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     {
         if (_selectedNode is not { CanRename: true } node)
             return;
-        foreach (var other in Nodes.SelectMany(n => n.Children.Prepend(n)).Where(n => n.IsRenaming))
+        foreach (var other in Nodes.SelectMany(n => n.SelfAndDescendants()).Where(n => n.IsRenaming))
             other.IsRenaming = false;
         node.RenameText = node.Name;
         node.IsRenaming = true;
@@ -1145,7 +1184,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private void CommitRename()
     {
-        var node = Nodes.SelectMany(n => n.Children.Prepend(n)).FirstOrDefault(n => n.IsRenaming);
+        var node = Nodes.SelectMany(n => n.SelfAndDescendants()).FirstOrDefault(n => n.IsRenaming);
         if (node is null)
             return;
 
@@ -1162,7 +1201,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private void CancelRename()
     {
-        foreach (var node in Nodes.SelectMany(n => n.Children.Prepend(n)).Where(n => n.IsRenaming))
+        foreach (var node in Nodes.SelectMany(n => n.SelfAndDescendants()).Where(n => n.IsRenaming))
             node.IsRenaming = false;
     }
 
@@ -1211,6 +1250,12 @@ internal interface ILibraryImporter
 
     /// <summary>Picks an S-128 catalogue file.</summary>
     Task AddS128CatalogueAsync(Guid? targetCollectionId);
+
+    /// <summary>Picks a collection manifest (<c>*.s100collection.json</c>) and opens its group picker.</summary>
+    Task AddCollectionManifestAsync(Guid? targetCollectionId);
+
+    /// <summary>Reopens a collection manifest's group picker to change an existing source's selection.</summary>
+    Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source);
 
     /// <summary>Adds a known path (for example a dropped folder), confirming the target collection.</summary>
     Task AddPathAsync(string path, Guid? targetCollectionId);

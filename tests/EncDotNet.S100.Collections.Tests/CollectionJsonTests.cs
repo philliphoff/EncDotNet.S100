@@ -18,6 +18,8 @@ public class CollectionJsonTests
                 new S128CatalogueSource(Guid.NewGuid(), "Catalogue", "/charts/s128.gml"),
                 new NoaaEncFeedSource(Guid.NewGuid(), "NOAA ENC — Alaska", NoaaEncFeedSource.DefaultCatalogUri,
                     new NoaaEncFilter { States = ["AK"], CoastGuardDistricts = [17] }),
+                new LocalManifestSource(Guid.NewGuid(), "IC-ENC — Belgium", "/charts/ic-enc.s100collection.json",
+                    new LocalManifestFilter { Groups = ["BE"] }),
             ], new DateTimeOffset(2026, 9, 24, 12, 0, 0, TimeSpan.Zero)),
         ]);
 
@@ -26,6 +28,7 @@ public class CollectionJsonTests
 
         Assert.Contains("\"kind\": \"localFolder\"", json);
         Assert.Contains("\"kind\": \"noaaEncFeed\"", json);
+        Assert.Contains("\"kind\": \"localManifest\"", json);
         var collection = Assert.Single(restored.Collections);
         Assert.Equal(document.Collections[0].Name, collection.Name);
         Assert.Equal(document.Collections[0].Sources, collection.Sources);

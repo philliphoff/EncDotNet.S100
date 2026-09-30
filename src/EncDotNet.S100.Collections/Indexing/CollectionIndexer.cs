@@ -18,7 +18,7 @@ public sealed class CollectionIndexer
 
     /// <summary>
     /// Creates an indexer for the built-in source kinds: folders, exchange
-    /// sets and S-128 catalogues, plus any online <paramref name="feeds"/>
+    /// sets, collection manifests and S-128 catalogues, plus any online <paramref name="feeds"/>
     /// (e.g. <see cref="NoaaEncFeedIndexer"/>, <see cref="UsaceIencFeedIndexer"/>).
     /// </summary>
     /// <param name="probe">
@@ -29,7 +29,8 @@ public sealed class CollectionIndexer
     public static CollectionIndexer CreateDefault(
         DatasetProbe? probe = null, IEnumerable<ICollectionSourceIndexer>? feeds = null)
     {
-        var indexers = new List<ICollectionSourceIndexer> { new LocalSourceIndexer(probe), new S128CatalogueIndexer() };
+        var local = new LocalSourceIndexer(probe);
+        var indexers = new List<ICollectionSourceIndexer> { local, new LocalManifestIndexer(local), new S128CatalogueIndexer() };
         if (feeds is not null)
             indexers.AddRange(feeds);
         return new CollectionIndexer(indexers);

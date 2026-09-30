@@ -8,6 +8,7 @@ using EncDotNet.S100.Collections.ChartCatalogs;
 using EncDotNet.S100.Collections.Feeds;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Collections.Usace;
 using EncDotNet.S100.Viewer.Library;
@@ -38,6 +39,9 @@ internal enum AddToLibraryKind
 
     /// <summary>Some or all products of an S-100 feed, e.g. one served by <c>s100 feed serve</c> (issue #680).</summary>
     S100Feed,
+
+    /// <summary>Some or all groups of a local collection manifest (<c>*.s100collection.json</c>).</summary>
+    LocalManifest,
 }
 
 /// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
@@ -91,7 +95,7 @@ internal sealed class FacetGroupViewModel : ViewModelBase
 /// (searchable, as lists run to over a thousand). Nothing is loaded or downloaded
 /// except the feed's catalogue itself.
 /// </summary>
-internal sealed class AddToLibraryDialogViewModel : ViewModelBase
+internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 {
     private readonly LibraryService _library;
     private readonly Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
@@ -160,7 +164,10 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed;
 
     /// <summary>True when the feed's values can be filtered by text (community lists).</summary>
-    public bool IsSearchable => _kind == AddToLibraryKind.CommunityFeed;
+    public bool IsSearchable => _kind is AddToLibraryKind.CommunityFeed or AddToLibraryKind.LocalManifest;
+
+    /// <summary>The placeholder of the filter box.</summary>
+    public string SearchPlaceholder => IsManifest ? Strings.Manifest_FilterPlaceholder : Strings.Wizard_FilterDownloads;
 
     /// <summary>The facet tabs for the current feed.</summary>
     public IReadOnlyList<FacetGroupViewModel> FacetGroups => _facetGroups;
@@ -169,7 +176,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     public bool HasFacetTabs => _facetGroups.Count > 1;
 
     /// <summary>True when the one facet group's title stands in for tabs (a community list shows its filter instead).</summary>
-    public bool ShowsGroupTitle => _facetGroups.Count == 1 && !IsSearchable;
+    public bool ShowsGroupTitle => _facetGroups.Count == 1 && (!IsSearchable || IsManifest);
 
     /// <summary>The facet tab being shown.</summary>
     public FacetGroupViewModel? SelectedFacetGroup
@@ -193,6 +200,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.UsaceFeed => [new(Strings.Library_UsaceRivers, Rivers)],
         AddToLibraryKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts, () => _allCharts)],
         AddToLibraryKind.S100Feed => [new(Strings.Library_FeedProducts, Products)],
+        AddToLibraryKind.LocalManifest => [new(Strings.Manifest_GroupsTitle, Groups, () => _allGroups)],
         _ => [],
     };
 
@@ -201,6 +209,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     {
         AddToLibraryKind.NoaaFeed => Strings.Library_AddNoaaTitle,
         AddToLibraryKind.UsaceFeed => Strings.Library_AddUsaceTitle,
+        AddToLibraryKind.LocalManifest => IsEditing ? Strings.Manifest_ChooseGroupsTitle : Strings.Manifest_DialogTitle,
         _ => Strings.Library_AddTitle,
     };
 
@@ -275,7 +284,9 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     public bool IsNameEdited => _nameEdited;
 
     /// <summary>Whether the suggested name follows the selection, or the user's name is kept.</summary>
-    public string NameHint => _nameEdited ? Strings.Wizard_NameKept : Strings.Wizard_NameFollows;
+    public string NameHint => IsManifest
+        ? _nameEdited ? Strings.Manifest_NameKept : Strings.Manifest_NameFollows
+        : _nameEdited ? Strings.Wizard_NameKept : Strings.Wizard_NameFollows;
 
     /// <summary>The existing collection to add to; picking one selects "Existing collection".</summary>
     public LibraryCollection? SelectedCollection
@@ -395,6 +406,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.UsaceFeed => _usaceCatalog is not null,
         AddToLibraryKind.CommunityFeed => _communityCatalog is not null,
         AddToLibraryKind.S100Feed => _s100Feed is not null,
+        AddToLibraryKind.LocalManifest => _manifest is not null,
         _ => false,
     };
 
@@ -453,6 +465,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
                         _s100Feed.Items.Sum(i => (i.Location as RemoteItemLocation)?.SizeBytes ?? 0));
                 case AddToLibraryKind.CommunityFeed when _communityCatalog is not null:
                     return string.Format(CultureInfo.CurrentCulture, Strings.Wizard_EverythingDownloadsFormat, _allCharts.Count);
+                case AddToLibraryKind.LocalManifest when _manifest is not null:
+                    return ManifestEverythingSummary;
                 default:
                     return string.Empty;
             }
@@ -467,14 +481,15 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
     /// <summary>The summary under the facet list.</summary>
     public string ScopeSummary =>
-        _includeAll
+        IsManifest ? ManifestScopeSummary
+        : _includeAll
             ? HasSelection
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_KeptPicksFormat, SelectedCount)
                 : _selectionSummary
             : HasSelection ? _selectionSummary : Strings.Wizard_TickAtLeastOne;
 
     /// <summary>True when <see cref="ScopeSummary"/> asks the user to tick something.</summary>
-    public bool IsScopeSummaryWarning => !_includeAll && !HasSelection;
+    public bool IsScopeSummaryWarning => IsManifest ? IsManifestSummaryWarning : !_includeAll && !HasSelection;
 
     /// <summary>What is included: "Everything", "Its one download", or the selection ("Alaska, Hawaii").</summary>
     public string ScopeDescription =>
@@ -575,6 +590,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         _kind = kind;
         _path = path;
         _known = known;
+        ResetManifest();
         _catalogueDate = null;
         _includeAll = true;
         _nameEdited = false;
@@ -609,6 +625,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.S100Feed)
         {
             await LoadS100FeedAsync(cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.LocalManifest)
+        {
+            await LoadManifestAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 
@@ -734,14 +756,15 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     private void ShowMatchingCharts()
     {
         var text = _chartSearchText.Trim();
-        Charts.Clear();
-        foreach (var option in _allCharts)
+        var (shown, all) = IsManifest ? (Groups, _allGroups) : (Charts, _allCharts);
+        shown.Clear();
+        foreach (var option in all)
         {
             if (text.Length == 0
                 || option.Label.Contains(text, StringComparison.CurrentCultureIgnoreCase)
                 || option.Value.Contains(text, StringComparison.OrdinalIgnoreCase))
             {
-                Charts.Add(option);
+                shown.Add(option);
             }
         }
 
@@ -780,6 +803,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     {
         AddToLibraryKind.NoaaFeed => Strings.Library_NoaaFeed,
         AddToLibraryKind.UsaceFeed => Strings.Library_UsaceFeed,
+        AddToLibraryKind.LocalManifest => ManifestBaseName,
         _ => null,
     };
 
@@ -794,7 +818,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     };
 
     private bool CanConfirm =>
-        (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null)
+        IsManifest ? CanConfirmManifest
+        : (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null)
         && _kind switch
         {
             AddToLibraryKind.NoaaFeed => _catalog is not null && !_isLoading,
@@ -810,6 +835,13 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
     {
         if (!CanConfirm)
             return;
+
+        if (_editing is { } editing)
+        {
+            _library.UpdateSource(editing.CollectionId, BuildSource());
+            Closed?.Invoke(this, true);
+            return;
+        }
 
         var source = BuildSource();
         if (_createNew)
@@ -829,6 +861,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.Folder => new LocalFolderSource(id, null, _path!),
             AddToLibraryKind.ExchangeSet => new ExchangeSetSource(id, null, _path!),
             AddToLibraryKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
+            AddToLibraryKind.LocalManifest => BuildManifestSource(id),
             AddToLibraryKind.UsaceFeed => _includeAll
                 ? new UsaceIencFeedSource(id, FeedName, CatalogUri, new UsaceIencFilter())
                 : new UsaceIencFeedSource(id, DescribeUsaceFilter(CurrentUsaceFilter) ?? FeedName, CatalogUri, CurrentUsaceFilter),
@@ -851,6 +884,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.UsaceFeed => DescribeUsaceFilter(CurrentUsaceFilter),
         AddToLibraryKind.CommunityFeed => DescribeCommunitySelection(),
         AddToLibraryKind.S100Feed => DescribeProducts(CurrentS100FeedFilter),
+        AddToLibraryKind.LocalManifest => DescribeManifestSelection(),
         _ => null,
     };
 
@@ -888,7 +922,7 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
 
     private void ClearFacetSelection()
     {
-        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products))
+        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products).Concat(_allGroups))
             option.IsSelected = false;
     }
 
@@ -922,6 +956,8 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanContinueFromScope));
         OnPropertyChanged(nameof(ReviewIncludes));
         OnPropertyChanged(nameof(ToggleShownText));
+        if (IsManifest)
+            RaiseManifestChanged();
     }
 
     private void UpdateSelection()
@@ -941,6 +977,12 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.S100Feed)
         {
             UpdateS100FeedSelection();
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.LocalManifest)
+        {
+            UpdateManifestSelection();
             return;
         }
 
@@ -1064,7 +1106,9 @@ internal sealed class AddToLibraryDialogViewModel : ViewModelBase
         if (string.IsNullOrEmpty(path))
             return string.Empty;
         var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var name = Path.GetFileNameWithoutExtension(trimmed);
+        var name = trimmed.EndsWith(CollectionManifest.FileSuffix, StringComparison.OrdinalIgnoreCase)
+            ? Path.GetFileName(trimmed)[..^CollectionManifest.FileSuffix.Length]
+            : Path.GetFileNameWithoutExtension(trimmed);
         return string.IsNullOrEmpty(name) ? trimmed : name;
     }
 }
@@ -1095,6 +1139,24 @@ internal sealed class FacetOptionViewModel : ViewModelBase
 
     /// <summary>"N cells · X MB", or other detail (a community entry's publication date).</summary>
     public string Detail { get; }
+
+    /// <summary>A collection-manifest group's first path, as written in the manifest; otherwise <see langword="null"/>.</summary>
+    public string? PathText { get; init; }
+
+    /// <summary>"+2" when a manifest group lists more paths than <see cref="PathText"/>; otherwise <see langword="null"/>.</summary>
+    public string? MorePathsText { get; init; }
+
+    /// <summary>Every path of a manifest group, one per line, for the tooltip.</summary>
+    public string? PathsTooltip { get; init; }
+
+    /// <summary>True when some path of a manifest group does not exist on disk.</summary>
+    public bool IsMissing { get; init; }
+
+    /// <summary>True when the row shows paths (a manifest group) rather than <see cref="Detail"/>.</summary>
+    public bool HasPaths => PathText is not null;
+
+    /// <summary>True when <see cref="MorePathsText"/> is set.</summary>
+    public bool HasMorePaths => MorePathsText is not null;
 
     /// <summary>Whether the value is included.</summary>
     public bool IsSelected

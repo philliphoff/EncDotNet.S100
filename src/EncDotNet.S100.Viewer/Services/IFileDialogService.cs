@@ -47,4 +47,7 @@ internal interface IFileDialogService
 
     /// <summary>Opens a file picker for an S-128 Catalogue of Nautical Products dataset.</summary>
     Task<string?> OpenS128CatalogueAsync(TopLevel? topLevel);
+
+    /// <summary>Opens a file picker for a collection manifest (<c>*.s100collection.json</c>).</summary>
+    Task<string?> OpenCollectionManifestAsync(TopLevel? topLevel);
 }

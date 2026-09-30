@@ -31,7 +31,8 @@ internal enum LibraryNodeStatusKind
 }
 
 /// <summary>
-/// A node of the Library panel's tree: a collection, or one of its sources.
+/// A node of the Library panel's tree: a collection, one of its sources, or
+/// (under a collection-manifest source with two or more groups) one group.
 /// Nodes are updated in place from new <see cref="LibraryService"/> snapshots
 /// so tree expansion and selection survive background indexing.
 /// </summary>
@@ -40,16 +41,21 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private readonly Func<CollectionSource, FeedHealth?>? _health;
     private LibraryCollection _collection;
     private LibrarySource? _source;
+    private SourceIndexGroup? _group;
     private string? _downloadStatus;
     private bool _isExpanded;
     private bool _isRenaming;
     private string _renameText = string.Empty;
 
-    private LibraryNodeViewModel(LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health)
+    private LibraryNodeViewModel(
+        LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health, SourceIndexGroup? group = null)
     {
         _collection = collection;
         _source = source;
         _health = health;
+        _group = group;
+        if (source is not null && group is null)
+            SyncGroups();
     }
 
     /// <summary>Creates a collection node with a child per source.</summary>
@@ -63,7 +69,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         return node;
     }
 
-    /// <summary>The source nodes of a collection node; empty for a source node.</summary>
+    /// <summary>The source nodes of a collection node; a manifest source's group nodes; otherwise empty.</summary>
     public ObservableCollection<LibraryNodeViewModel> Children { get; } = [];
 
     /// <summary>The collection this node is (or belongs to).</summary>
@@ -74,6 +80,16 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
     /// <summary>True for a collection node.</summary>
     public bool IsCollection => _source is null;
+
+    /// <summary>True for a collection-manifest group node.</summary>
+    public bool IsGroup => _group is not null;
+
+    /// <summary>The manifest group id of a group node; otherwise <see langword="null"/>.</summary>
+    public string? GroupId => _group?.Id;
+
+    /// <summary>This node and every node below it.</summary>
+    public IEnumerable<LibraryNodeViewModel> SelfAndDescendants() =>
+        Children.SelectMany(c => c.SelfAndDescendants()).Prepend(this);
 
     /// <summary>The node's stable id (collection or source id).</summary>
     public Guid Id => _source?.Id ?? _collection.Id;
@@ -100,15 +116,31 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     }
 
     /// <summary>True when the node can be renamed (anything but the session collection and its catalogues).</summary>
-    public bool CanRename => !_collection.IsSession;
+    public bool CanRename => !_collection.IsSession && !IsGroup;
+
+    /// <summary>True for a collection-manifest source, whose groups can be chosen again.</summary>
+    public bool CanChooseGroups => !IsGroup && _source?.Definition is LocalManifestSource && !_collection.IsSession;
 
     /// <summary>The display name.</summary>
-    public string Name => _source is { } s ? SourceName(s) : _collection.Definition.Name;
+    public string Name => _group?.Name ?? (_source is { } s ? SourceName(s) : _collection.Definition.Name);
+
+    /// <summary>
+    /// A muted second name: a manifest source named like its collection shows
+    /// its file name, so the two rows don't read as duplicates.
+    /// </summary>
+    public string? SecondaryName =>
+        !IsGroup && _source?.Definition is LocalManifestSource manifest && Name == _collection.Definition.Name
+            ? Path.GetFileName(manifest.Path)
+            : null;
+
+    /// <summary>True when <see cref="SecondaryName"/> is set.</summary>
+    public bool HasSecondaryName => SecondaryName is not null;
 
     /// <summary>The node's icon.</summary>
-    public Icon Icon => _source?.Definition switch
+    public Icon Icon => IsGroup ? Icon.Folder : _source?.Definition switch
     {
         null => _collection.IsSession ? Icon.History : Icon.Library,
+        LocalManifestSource => Icon.DocumentBulletList,
         NoaaEncFeedSource or UsaceIencFeedSource => Icon.Globe,
         S128CatalogueSource => Icon.BookOpen,
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => Icon.FolderZip,
@@ -121,15 +153,21 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// <c>FEED</c> (a shared feed) or <c>S-128</c>. A collection shows its
     /// sources' kind.
     /// </summary>
-    public string KindTag => _source is { } s
+    public string KindTag => IsGroup ? string.Empty : _source is { } s
         ? KindOf(s.Definition)
         : _collection.IsSession ? "S-128" : _collection.Sources.Select(x => KindOf(x.Definition)).FirstOrDefault() ?? "DIR";
+
+    /// <summary>True when <see cref="KindTag"/> is shown (not for a group node).</summary>
+    public bool HasKindTag => KindTag.Length > 0;
 
     /// <summary>The dataset count shown after the name, or "—" before there is an index.</summary>
     public string Status
     {
         get
         {
+            if (IsGroup)
+                return EnumerateItems().Count().ToString("N0", CultureInfo.CurrentCulture);
+
             var sources = Sources;
             return sources.All(x => x.Index is null)
                 ? "—"
@@ -183,6 +221,10 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return (downloading, LibraryNodeStatusKind.Busy);
         if (sources.Any(x => x.State == LibrarySourceState.Indexing))
             return (Strings.Library_Status_Indexing, LibraryNodeStatusKind.Busy);
+        if (_group is { MissingPathCount: > 0 })
+            return (Strings.Library_StatusLine_PathNotFound, LibraryNodeStatusKind.Warning);
+        if (IsGroup)
+            return (null, LibraryNodeStatusKind.None);
         if (sources.FirstOrDefault(x => x.State == LibrarySourceState.Failed && x.Index is null) is { } failed)
             return (string.Format(c, Strings.Library_StatusLine_FailedFormat, failed.Error ?? string.Empty), LibraryNodeStatusKind.Error);
 
@@ -229,6 +271,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
         S128CatalogueSource => "S-128",
+        LocalManifestSource => "JSON",
         _ => "DIR",
     };
 
@@ -254,6 +297,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         {
             var sources = _source is { } s ? [s] : _collection.Sources;
             var lines = new List<string>();
+            if (_group is { } group)
+                lines.Add(group.Name);
             foreach (var source in sources)
             {
                 lines.Add(SourceLocation(source.Definition));
@@ -274,10 +319,10 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     }
 
     /// <summary>True when this node can be removed (anything but the session collection).</summary>
-    public bool CanRemove => !_collection.IsSession;
+    public bool CanRemove => !_collection.IsSession && !IsGroup;
 
     /// <summary>True when this is a session catalogue that can be kept in the library.</summary>
-    public bool CanKeep => _collection.IsSession && _source is not null;
+    public bool CanKeep => _collection.IsSession && _source is not null && !IsGroup;
 
     /// <summary>
     /// Every item under this node with the source it came from, in source
@@ -286,7 +331,11 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     public IEnumerable<(CollectionItem Item, LibrarySource Source)> EnumerateItems()
     {
         var sources = _source is { } s ? [s] : _collection.Sources;
-        return sources.SelectMany(src => (src.Index?.Items ?? []).Select(item => (item, src)));
+        var items = sources.SelectMany(src => (src.Index?.Items ?? []).Select(item => (item, src)));
+        return _group is { } group
+            ? items.Where(p => string.Equals(
+                p.item.Properties.GetValueOrDefault(LocalManifestIndexer.GroupProperty), group.Id, StringComparison.OrdinalIgnoreCase))
+            : items;
     }
 
     /// <summary>
@@ -324,6 +373,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             {
                 existing._collection = collection;
                 existing._source = source;
+                existing.SyncGroups();
                 existing.RaiseAll();
                 var at = Children.IndexOf(existing);
                 if (at != i)
@@ -332,9 +382,49 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Brings a collection-manifest source's group children in line with its
+    /// index (in manifest order, matched by group id so expansion and selection
+    /// survive). Groups are shown only when there are two or more; none while
+    /// the manifest cannot be read.
+    /// </summary>
+    private void SyncGroups()
+    {
+        var groups = _source is { Definition: LocalManifestSource, Index.Groups: { Count: >= 2 } g } ? g : [];
+
+        for (var i = Children.Count - 1; i >= 0; i--)
+        {
+            if (!groups.Any(g => string.Equals(g.Id, Children[i].GroupId, StringComparison.OrdinalIgnoreCase)))
+                Children.RemoveAt(i);
+        }
+
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            var existing = Children.FirstOrDefault(c => string.Equals(c.GroupId, group.Id, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                Children.Insert(i, new LibraryNodeViewModel(_collection, _source, _health, group));
+                continue;
+            }
+
+            existing._collection = _collection;
+            existing._source = _source;
+            existing._group = group;
+            existing.RaiseAll();
+            var at = Children.IndexOf(existing);
+            if (at != i)
+                Children.Move(at, i);
+        }
+    }
+
     private void RaiseAll()
     {
         OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(SecondaryName));
+        OnPropertyChanged(nameof(HasSecondaryName));
+        OnPropertyChanged(nameof(HasKindTag));
+        OnPropertyChanged(nameof(CanChooseGroups));
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(Tooltip));
         OnPropertyChanged(nameof(Icon));
@@ -404,6 +494,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         LocalFolderSource f => LeafName(f.Path),
         ExchangeSetSource e => LeafName(e.Path),
         S128CatalogueSource c => LeafName(c.Path),
+        LocalManifestSource m => ManifestName(m.Path),
         NoaaEncFeedSource => Strings.Library_NoaaFeed,
         UsaceIencFeedSource => Strings.Library_UsaceFeed,
         ChartCatalogsFeedSource c => c.CatalogUri.Host,
@@ -416,6 +507,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         LocalFolderSource f => f.Path,
         ExchangeSetSource e => e.Path,
         S128CatalogueSource c => c.Path,
+        LocalManifestSource m => m.Path,
         NoaaEncFeedSource n => n.CatalogUri.AbsoluteUri,
         UsaceIencFeedSource u => u.CatalogUri.AbsoluteUri,
         ChartCatalogsFeedSource c => c.CatalogUri.AbsoluteUri,
@@ -448,6 +540,15 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return feedUri.AbsoluteUri;
         var masked = segments[..^1].Select(s => "••••" + (s.Length > 4 ? s[^4..] : string.Empty)).Append(segments[^1]);
         return $"{feedUri.Scheme}://{feedUri.Authority}/{string.Join('/', masked)}";
+    }
+
+    /// <summary>A manifest's file name without <c>.s100collection.json</c> (or <c>.json</c>).</summary>
+    private static string ManifestName(string path)
+    {
+        var name = LeafName(path);
+        return name.EndsWith(EncDotNet.S100.Collections.Manifests.CollectionManifest.FileSuffix, StringComparison.OrdinalIgnoreCase)
+            ? name[..^EncDotNet.S100.Collections.Manifests.CollectionManifest.FileSuffix.Length]
+            : Path.GetFileNameWithoutExtension(name);
     }
 
     private static string LeafName(string path)

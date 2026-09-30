@@ -37,6 +37,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(UsaceIencFeedSource), "usaceIencFeed")]
 [JsonDerivedType(typeof(ChartCatalogsFeedSource), "chartCatalogsFeed")]
 [JsonDerivedType(typeof(S100FeedSource), "s100Feed")]
+[JsonDerivedType(typeof(LocalManifestSource), "localManifest")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -133,4 +134,19 @@ public sealed record ChartCatalogsFeedSource(Guid Id, string? DisplayName, Uri C
 /// <param name="FeedUri">The feed's URL (<c>…/feed.json</c>).</param>
 /// <param name="Filter">Which products to include.</param>
 public sealed record S100FeedSource(Guid Id, string? DisplayName, Uri FeedUri, S100FeedFilter Filter)
+    : CollectionSource(Id, DisplayName);
+
+/// <summary>
+/// A local collection manifest (<c>*.s100collection.json</c>): a JSON file
+/// that names groups of local folders, exchange sets or datasets (for example
+/// one per producing country), optionally scoped to some of its groups. The
+/// manifest is a live reference — it is re-read on every refresh — and its
+/// data is referenced in place, never copied. See
+/// <c>docs/local-collection-manifest.md</c>.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="Path">The absolute path of the manifest file.</param>
+/// <param name="Filter">Which groups to include.</param>
+public sealed record LocalManifestSource(Guid Id, string? DisplayName, string Path, LocalManifestFilter Filter)
     : CollectionSource(Id, DisplayName);

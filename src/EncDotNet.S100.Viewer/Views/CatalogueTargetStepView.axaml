@@ -46,12 +46,14 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
+                    <TextBlock Text="{Binding ExistingHint}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                               IsVisible="{Binding IsManifest}" Classes.inactive="{Binding CreateNew}" />
                 </StackPanel>
             </Border>
         </Grid>
 
-        <!-- Review. -->
-        <Border CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderColor}"
+        <!-- Review (not for a collection manifest, whose dialog is one page). -->
+        <Border IsVisible="{Binding !IsManifest}" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderColor}"
                 Background="{DynamicResource MutedBackgroundColor}" Padding="14,10">
             <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
                 <TextBlock Grid.Row="0" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Catalogue}" />
@@ -70,6 +72,6 @@
             </Grid>
         </Border>
 
-        <TextBlock Text="{x:Static loc:Strings.Wizard_OnlineNote}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+        <TextBlock IsVisible="{Binding !IsManifest}" Text="{x:Static loc:Strings.Wizard_OnlineNote}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
     </StackPanel>
 </UserControl>

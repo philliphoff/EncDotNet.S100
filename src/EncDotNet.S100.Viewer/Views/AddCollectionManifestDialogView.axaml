@@ -1,0 +1,124 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.AddCollectionManifestDialogView"
+             x:DataType="vm:AddCollectionManifestDialogViewModel"
+             Width="640">
+
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/WizardStyles.axaml" />
+        <Style Selector="Border.fileTag">
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.fileTag > TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource ManifestMonoFont}" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <FontFamily x:Key="ManifestMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,600,Auto" DataContext="{Binding Scope}" x:DataType="vm:AddToLibraryDialogViewModel">
+
+        <!-- Header: title, then the manifest file with a way to pick another (the dialog host supplies the close button). -->
+        <StackPanel Grid.Row="0" Margin="20,16,20,0">
+            <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" Margin="0,0,32,0" />
+            <Border Margin="0,12,0,0" Padding="0,0,0,14" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderColor}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <Border Width="32" Height="32" CornerRadius="6" Background="{DynamicResource MutedBackgroundColor}">
+                        <ic:FluentIcon Icon="DocumentBulletList" FontSize="16"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding ManifestTitle}" FontSize="14" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <Border Classes="fileTag">
+                                <TextBlock Text="JSON" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding ManifestPath}" Classes="muted" FontSize="12"
+                                   FontFamily="{StaticResource ManifestMonoFont}"
+                                   TextTrimming="{x:Static TextTrimming.PrefixCharacterEllipsis}"
+                                   ToolTip.Tip="{Binding ManifestPath}" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="Outline" Height="32" MinHeight="32" VerticalAlignment="Center"
+                            Content="{x:Static loc:Strings.Manifest_Change}" Command="{Binding ChangeManifestCommand}"
+                            IsVisible="{Binding ShowsTarget}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <!-- Body: a fixed height, so the footer never moves; the group list scrolls inside. -->
+        <Grid Grid.Row="1" Margin="20,14,20,12" RowDefinitions="*,Auto" RowSpacing="10">
+            <Panel Grid.Row="0">
+                <Panel IsVisible="{Binding !HasManifestProblems}">
+                    <views:CatalogueScopeStepView />
+                </Panel>
+
+                <!-- The manifest could not be read: every problem, then a way to fix and reload it. -->
+                <Border IsVisible="{Binding HasManifestProblems}"
+                        VerticalAlignment="Top" CornerRadius="8" Padding="14,12" BorderThickness="1"
+                        Background="{DynamicResource WizardErrorBrush}"
+                        BorderBrush="{DynamicResource WizardErrorBorderBrush}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{x:Static loc:Strings.Manifest_ErrorTitle}" Classes="destructive"
+                                   FontWeight="SemiBold" />
+                        <ScrollViewer MaxHeight="300" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ManifestProblems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Margin="0,1"
+                                                   FontFamily="{StaticResource ManifestMonoFont}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock Text="{x:Static loc:Strings.Manifest_ErrorBody}" FontSize="13" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                            <Button Classes="Primary" Height="32" MinHeight="32"
+                                    Content="{x:Static loc:Strings.Manifest_ReloadFile}"
+                                    Command="{Binding ReloadManifestCommand}" />
+                            <Button Classes="Outline" Height="32" MinHeight="32"
+                                    Content="{x:Static loc:Strings.Manifest_OpenInEditor}"
+                                    Command="{Binding OpenManifestCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Panel>
+
+            <!-- Where it goes: a new or existing collection (not when choosing groups for an existing source). -->
+            <Panel Grid.Row="1" IsVisible="{Binding ShowsTarget}"
+                   Classes.inactive="{Binding HasManifestProblems}" IsEnabled="{Binding !HasManifestProblems}">
+                <views:CatalogueTargetStepView />
+            </Panel>
+        </Grid>
+
+        <!-- Footer: a hint on the left; Cancel and the primary action. -->
+        <Border Grid.Row="2" Padding="20,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderColor}"
+                Background="{DynamicResource MutedBackgroundColor}">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0" Text="{Binding ManifestFooterHint}" FontSize="12.5" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Classes="muted" Classes.warning="{Binding HasManifestProblems}" />
+                <Button Grid.Column="1" Classes="Ghost" Content="{x:Static loc:Strings.Button_Cancel}"
+                        Command="{Binding CancelCommand}" />
+                <Button Grid.Column="2" Classes="Primary" Content="{Binding PrimaryButtonText}"
+                        Command="{Binding ConfirmCommand}" IsDefault="True" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

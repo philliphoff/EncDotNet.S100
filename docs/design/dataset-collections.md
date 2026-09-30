@@ -218,6 +218,8 @@ public sealed record NoaaEncFeedSource(Guid Id, string? DisplayName, Uri Catalog
     : CollectionSource(Id, DisplayName);
 public sealed record S128CatalogueSource(Guid Id, string? DisplayName, string Path)
     : CollectionSource(Id, DisplayName);
+public sealed record LocalManifestSource(Guid Id, string? DisplayName, string Path, LocalManifestFilter Filter)  // *.s100collection.json (§5.6)
+    : CollectionSource(Id, DisplayName);
 
 public sealed record NoaaEncFilter(
     IReadOnlyList<string> States,              // "AK"
@@ -298,6 +300,8 @@ Notes:
 - **Loose file**: the path relative to the folder source.
 - **NOAA**: cell name.
 - **S-128**: product number.
+- **Collection manifest**: `<group id>:<manifest-relative path>/` plus the
+  key the item would have under a folder source at that path (§5.6).
 
 The **same physical dataset** can appear in several collections. The
 viewer loads it **once**, keyed by its resolved absolute path (and the
@@ -453,6 +457,29 @@ Pipelines into the library.
 - The details that `S128DatasetCatalogSource` maps today move here
   unchanged.
 
+### 5.6 Collection manifest (`LocalManifestSource`)
+
+Added 2026-09-30. A `*.s100collection.json` file names groups of local
+paths, such as one per producing country (see
+[Local collection manifests](../local-collection-manifest.md)). It is the
+first local source with facets.
+
+- **Indexing.** `LocalManifestIndexer` re-reads the manifest on every
+  refresh, so the source is a live reference. It then indexes each path of
+  each selected group through `LocalSourceIndexer.IndexPath`, which is the
+  same code a folder source uses.
+- **Item keys and tags.** Keys are prefixed with the group id and the path,
+  so a folder listed by two groups gives two distinct items. Items carry
+  `group` and `groupName` properties.
+- **Groups on the index.** `SourceIndex.Groups` records the selected groups
+  and how many of their paths were missing. This lets the viewer show a
+  group with no datasets.
+- **Fingerprint.** It hashes the manifest's content (not its timestamp,
+  because sync clients touch timestamps), the selection, and the scan
+  fingerprint of each selected path.
+- **Errors.** An unreadable manifest gives an error diagnostic and no
+  fingerprint, and never an exception. A missing path gives a warning.
+
 ---
 
 ## 6. Viewer
@@ -603,6 +630,13 @@ Pipelines into the library.
   | Item or selection | Load · Load as you pan · Download · Zoom to · Reveal in Finder/Explorer · Copy path/URL |
   | Collection or source | Refresh index · Rename · Add source · Remove (the reference only; never deletes data) · Show/hide coverage |
 
+- **Collection manifests (2026-09-30):**
+  - A manifest source with two or more groups gets a third tree level, one
+    node per group.
+  - Selecting a group node lists only its datasets.
+  - A missing group shows "Path not found".
+  - Group nodes can't be renamed or removed. **Choose groups…** on the
+    source (`LibraryService.UpdateSource`) changes the selection in place.
 - **Loaded S-128 datasets:** loading an S-128 dataset still renders it
   as a dataset. Its entries also appear under a **transient "Session"
   group** in the Library, so today's behaviour is kept, and a
@@ -623,6 +657,9 @@ Pipelines into the library.
   4. Create.
 
   Nothing is downloaded at this point.
+- **Collection manifests** are added through **Collection manifest…**, or
+  by dropping one, into a one-page dialog. The dialog reuses the online
+  wizard's scope and target views.
 - **Drag-drop** of a folder or ZIP asks "Open now" / "Add to library" /
   "Both". A remembered preference is fine.
 - **Recents:** exchange sets and folders are recorded in Open Recent as
