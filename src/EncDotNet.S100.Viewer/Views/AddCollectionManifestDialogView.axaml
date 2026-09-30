@@ -32,7 +32,10 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,600,Auto" DataContext="{Binding Scope}" x:DataType="vm:AddToLibraryDialogViewModel">
+    <!-- At most the designed height (a 600 px body); in a smaller window the body shrinks
+         (see code-behind), the group list scrolls, and the footer stays visible. -->
+    <Grid RowDefinitions="Auto,*,Auto" MaxHeight="790"
+          DataContext="{Binding Scope}" x:DataType="vm:AddToLibraryDialogViewModel">
 
         <!-- Header: title, then the manifest file with a way to pick another (the dialog host supplies the close button). -->
         <StackPanel Grid.Row="0" Margin="20,16,20,0">
@@ -63,8 +66,8 @@
             </Border>
         </StackPanel>
 
-        <!-- Body: a fixed height, so the footer never moves; the group list scrolls inside. -->
-        <Grid Grid.Row="1" Margin="20,14,20,12" RowDefinitions="*,Auto" RowSpacing="10">
+        <!-- Body: fills the height left over, so the footer never moves; the group list scrolls inside. -->
+        <Grid Grid.Row="1" Margin="20,14,20,12" RowDefinitions="*,Auto" RowSpacing="10" MinHeight="280">
             <Panel Grid.Row="0">
                 <Panel IsVisible="{Binding !HasManifestProblems}">
                     <views:CatalogueScopeStepView />

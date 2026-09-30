@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
@@ -60,6 +61,44 @@ public sealed class AddCollectionManifestDialogViewTests
                 Assert.Equal(640, view.Bounds.Width);
                 window.Close();
             }
+        });
+    }
+
+    [Theory]
+    [InlineData(560)]
+    [InlineData(700)]
+    [InlineData(1000)]
+    public async Task Footer_buttons_stay_inside_a_short_window(double windowHeight)
+    {
+        using var context = new LibraryTestContext();
+        using var library = context.CreateService();
+        var path = Path.Combine(context.Root, "many.s100collection.json");
+        var groups = string.Join(",", Enumerable.Range(0, 20).Select(i => $$"""{ "id": "G{{i}}", "paths": ["G{{i}}"] }"""));
+        File.WriteAllText(path, $$"""{ "format": "encdotnet-s100-collection", "version": 1, "groups": [ {{groups}} ] }""");
+
+        var scope = new AddToLibraryDialogViewModel(library, null);
+        scope.Initialize(AddToLibraryKind.LocalManifest, path, targetCollectionId: null);
+        await scope.LoadCatalogAsync();
+
+        HeadlessTest.Run(() =>
+        {
+            var view = new AddCollectionManifestDialogView { DataContext = new AddCollectionManifestDialogViewModel(scope) };
+            var window = new Window { Content = view, Width = 640, Height = windowHeight };
+            window.Show();
+            window.Measure(new Size(640, windowHeight));
+            window.Arrange(new Rect(0, 0, 640, windowHeight));
+
+            var buttons = view.GetVisualDescendants().OfType<Button>()
+                .Where(b => b.Content is "Cancel" or "Add to Library")
+                .ToArray();
+            Assert.Equal(2, buttons.Length);
+            foreach (var button in buttons)
+            {
+                var bottom = button.TranslatePoint(new Point(0, button.Bounds.Height), window)!.Value.Y;
+                Assert.InRange(bottom, 1, windowHeight);
+            }
+
+            window.Close();
         });
     }
 }
