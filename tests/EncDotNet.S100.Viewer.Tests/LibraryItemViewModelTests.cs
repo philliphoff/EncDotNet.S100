@@ -50,6 +50,24 @@ public sealed class LibraryItemViewModelTests
     }
 
     [Fact]
+    public void Outlines_are_thin_with_butt_caps_except_the_listed_dots()
+    {
+        Assert.Equal(1.0, LibraryOutlineStyles.Local.Width);
+        Assert.Equal(1.0, LibraryOutlineStyles.Online.Width);
+        Assert.Equal(1.2, LibraryOutlineStyles.Listed.Width);
+        Assert.Equal(1.2, LibraryOutlineStyles.Missing.Width);
+        Assert.Equal([5f, 3f], LibraryOutlineStyles.Online.DashArray);
+        Assert.Equal([0f, 3f], LibraryOutlineStyles.Listed.DashArray);
+        Assert.Equal([3f, 2f], LibraryOutlineStyles.Missing.DashArray);
+
+        // A zero-length dash with round caps draws true dots; round caps elsewhere would lengthen each dash.
+        Assert.True(LibraryOutlineStyles.Listed.RoundCap);
+        Assert.False(LibraryOutlineStyles.Local.RoundCap);
+        Assert.False(LibraryOutlineStyles.Online.RoundCap);
+        Assert.False(LibraryOutlineStyles.Missing.RoundCap);
+    }
+
+    [Fact]
     public void An_online_row_has_no_tags_and_shows_its_size()
     {
         var row = Row(Online());

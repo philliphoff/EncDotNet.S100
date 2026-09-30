@@ -33,9 +33,13 @@ namespace EncDotNet.S100.Viewer.Services;
 /// selected dataset is drawn on top in the accent colour with a faint fill.
 /// </para>
 /// <para>
-/// A plain map tap while the overlay is active lists and selects the
-/// datasets under the tap (<see cref="LibraryPanelViewModel.SelectAt"/>);
-/// the panel's "Zoom to" moves the map to a dataset's bounds.
+/// A plain map tap while the overlay is active selects the most detailed
+/// outlined dataset under the tap, and leaves the list alone
+/// (<see cref="LibraryPanelViewModel.SelectTapHits"/>). Only what is drawn can
+/// be hit: the same candidates the overlay outlines, plus loaded datasets.
+/// Tapping the same spot again steps to the next hit; tapping where nothing
+/// is outlined clears the tap. The panel's "Zoom to" moves the map to a
+/// dataset's bounds.
 /// </para>
 /// </remarks>
 internal sealed class LibraryCoverageOverlayController : IDisposable
@@ -57,6 +61,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     private readonly MemoryLayer _layer;
     private bool _disposed;
     private bool _rebuildPosted;
+    private MapTap? _lastTap;
 
     public LibraryCoverageOverlayController(
         IMapLayerCollection layers,
@@ -85,6 +90,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
         _panel.PropertyChanged += OnPanelChanged;
         _panel.ZoomRequested += OnZoomRequested;
+        _panel.CenterRequested += OnCenterRequested;
         _main.PropertyChanged += OnMainChanged;
         _viewport.ViewportChanged += OnViewportChanged;
         _appearance.Changed += OnAppearanceChanged;
@@ -106,10 +112,61 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     public int OutlinedCount { get; private set; }
 
     /// <summary>
-    /// Handles a plain map tap: when the overlay is active, lists and selects
-    /// the library datasets under <paramref name="position"/>.
+    /// Handles a plain map tap: when the overlay is active, selects the most
+    /// detailed outlined dataset under <paramref name="tap"/> (the next one,
+    /// when the same spot is tapped again), or clears the tap when nothing
+    /// outlined is there. Returns true when something was hit.
     /// </summary>
-    public bool HandleTap(GeoPosition position) => IsActive && _panel.SelectAt(position);
+    public bool HandleTap(MapTap tap)
+    {
+        ArgumentNullException.ThrowIfNull(tap);
+        if (!IsActive)
+            return false;
+
+        var scale = CurrentScale() is var current && !double.IsNaN(current)
+            ? current
+            : LazyCellGate.ScaleDenominator(tap.Resolution, tap.Position.Latitude);
+        var hits = Hits(_panel.Items, _panel.SelectedItem, tap.Position, scale);
+        if (hits.Count == 0)
+        {
+            _lastTap = null;
+            _panel.ClearTap();
+            return false;
+        }
+
+        var sameSpot = _panel.HasTap && MapTap.IsSameSpot(_lastTap, tap);
+        _lastTap = tap;
+        _panel.SelectTapHits(tap.Position, hits, sameSpot);
+        return true;
+    }
+
+    /// <summary>
+    /// The datasets a tap at <paramref name="position"/> hits: the
+    /// <see cref="Candidates"/> at <paramref name="scale"/> (including loaded
+    /// datasets, which the overlay leaves to the chart, and the selection,
+    /// which is always drawn) whose coverage contains it, most detailed
+    /// (highest usage band, then smallest area) first.
+    /// </summary>
+    internal static IReadOnlyList<LibraryItemViewModel> Hits(
+        IEnumerable<LibraryItemViewModel> listed, LibraryItemViewModel? selected, GeoPosition position, double scale) =>
+        Candidates(listed, scale)
+            .Concat(selected?.Item.Bounds is not null && !selected.IsGroupHeader ? [selected] : [])
+            .Distinct()
+            .Where(i => CoverageGeometry.Contains(i.Item, position))
+            .OrderByDescending(i => i.Item.UsageBand ?? 0)
+            .ThenBy(i => CoverageGeometry.Area(i.Item))
+            .ToArray();
+
+    /// <summary>
+    /// The listed datasets that have an outline at <paramref name="scale"/>
+    /// (ENC cells by usage band, others by display scale), whatever the
+    /// viewport — the one candidate set both drawing and tapping use, so they
+    /// cannot drift apart. Package header rows are never candidates.
+    /// </summary>
+    internal static IEnumerable<LibraryItemViewModel> Candidates(IEnumerable<LibraryItemViewModel> listed, double scale) =>
+        listed.Where(i => !i.IsGroupHeader
+            && i.Item.Bounds is not null
+            && CoverageGeometry.IsVisibleAtScale(i.Item, scale));
 
     /// <summary>The overlay layer (for tests).</summary>
     internal MemoryLayer Layer => _layer;
@@ -157,6 +214,10 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         });
     }
 
+    /// <summary>Pans the map to a dataset (a double-clicked row) without changing the zoom.</summary>
+    private void OnCenterRequested(object? sender, GeoPosition center) =>
+        _marshal(() => _viewportController()?.CenterOn(center.Latitude, center.Longitude));
+
     private void ScheduleRebuild()
     {
         if (_rebuildPosted)
@@ -180,33 +241,37 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
         if (IsActive)
         {
-            var snapshot = _viewport.Current;
-            var view = ViewBounds(snapshot);
-            var scale = snapshot is null
-                ? double.NaN
-                : LazyCellGate.ScaleDenominator(snapshot.MercatorResolution, (snapshot.MinLatitude + snapshot.MaxLatitude) / 2);
+            var view = ViewBounds(_viewport.Current);
+            var scale = CurrentScale();
             var selected = _panel.SelectedItem;
+            var appearance = _appearance.Current;
+            var casing = new MapsuiColor(appearance.ChartBackground.R, appearance.ChartBackground.G, appearance.ChartBackground.B);
 
-            var candidates = _panel.Items
+            // While a dataset is selected, the others fade so it stands out without being thick.
+            var opacity = selected is null ? LibraryOutlineStyles.LineOpacity : LibraryOutlineStyles.DimmedLineOpacity;
+
+            var candidates = Candidates(_panel.Items, scale)
                 // Loaded datasets speak for themselves on the chart.
-                .Where(i => !ReferenceEquals(i, selected) && i.Item.Bounds is { } b
+                .Where(i => !ReferenceEquals(i, selected)
                     && i.Availability != LibraryAvailability.Loaded
-                    && (view is null || b.Intersects(view.Value))
-                    && CoverageGeometry.IsVisibleAtScale(i.Item, scale))
+                    && (view is null || i.Item.Bounds!.Value.Intersects(view.Value)))
                 // Most detailed last, so they draw on top; keep the most detailed when capping.
                 .OrderByDescending(i => CoverageGeometry.Area(i.Item))
                 .TakeLast(MaxOutlinedItems);
 
             foreach (var item in candidates)
             {
-                AddOutline(features, item, StyleFor(item.Availability));
+                AddOutline(features, item, StyleFor(item.Availability), casing, opacity);
                 OutlinedCount++;
             }
 
-            if (selected?.Item.Bounds is not null)
+            if (selected?.Item.Bounds is not null && !selected.IsGroupHeader)
             {
-                var accent = _appearance.Current.Accent;
-                AddOutline(features, selected, new OutlineStyle(new MapsuiColor(accent.R, accent.G, accent.B), 3.0, null, 0.12f));
+                var accent = appearance.Accent;
+                AddOutline(features, selected,
+                    new OutlineStyle(new MapsuiColor(accent.R, accent.G, accent.B), LibraryOutlineStyles.SelectedWidth, null,
+                        LibraryOutlineStyles.SelectedFillOpacity, RoundCap: false),
+                    casing, 1f);
                 OutlinedCount++;
             }
         }
@@ -215,7 +280,13 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _layer.DataHasChanged();
     }
 
-    private static void AddOutline(List<IFeature> features, LibraryItemViewModel item, OutlineStyle style)
+    /// <summary>
+    /// Adds a dataset's outline: an optional faint fill, a solid casing in the
+    /// chart's background colour (so thin lines stay readable over depth
+    /// contours and land), then the line itself.
+    /// </summary>
+    private static void AddOutline(
+        List<IFeature> features, LibraryItemViewModel item, OutlineStyle style, MapsuiColor casing, float opacity)
     {
         var rings = RingCache.GetValue(item.Item, static i => CoverageGeometry.ToMercatorRings(i));
         foreach (var ring in rings)
@@ -240,18 +311,33 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
                 features.Add(fill);
             }
 
+            // Outline must be null: Mapsui otherwise draws its default grey
+            // outline pen under a line string, as a heavy casing of its own.
             var line = new GeometryFeature(new LineString(coordinates));
             line.Styles.Add(new VectorStyle
             {
+                Outline = null,
+                Line = new Pen
+                {
+                    Color = casing,
+                    Width = style.Width + LibraryOutlineStyles.CasingExtraWidth,
+                    PenStyle = PenStyle.Solid,
+                    PenStrokeCap = PenStrokeCap.Butt,
+                },
+                Opacity = LibraryOutlineStyles.CasingOpacity,
+            });
+            line.Styles.Add(new VectorStyle
+            {
+                Outline = null,
                 Line = new Pen
                 {
                     Color = style.Color,
                     Width = style.Width,
                     PenStyle = style.DashArray is null ? PenStyle.Solid : PenStyle.UserDefined,
                     DashArray = style.DashArray,
-                    PenStrokeCap = PenStrokeCap.Round,
+                    PenStrokeCap = style.RoundCap ? PenStrokeCap.Round : PenStrokeCap.Butt,
                 },
-                Opacity = 0.9f,
+                Opacity = opacity,
             });
             features.Add(line);
         }
@@ -265,8 +351,14 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     {
         var style = LibraryOutlineStyles.For(LibraryOutlineStyles.Primary(availability));
         return new OutlineStyle(
-            new MapsuiColor(style.Color.R, style.Color.G, style.Color.B), style.Width, style.DashArray?.ToArray(), style.FillOpacity);
+            new MapsuiColor(style.Color.R, style.Color.G, style.Color.B), style.Width, style.DashArray?.ToArray(), style.FillOpacity,
+            style.RoundCap);
     }
+
+    /// <summary>The scale the overlay gates outlines at: the viewport's, at its middle latitude (NaN before the first viewport).</summary>
+    private double CurrentScale() => _viewport.Current is { } snapshot
+        ? LazyCellGate.ScaleDenominator(snapshot.MercatorResolution, (snapshot.MinLatitude + snapshot.MaxLatitude) / 2)
+        : double.NaN;
 
     private static GeoBounds? ViewBounds(MapViewportSnapshot? snapshot)
     {
@@ -296,6 +388,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
         _panel.PropertyChanged -= OnPanelChanged;
         _panel.ZoomRequested -= OnZoomRequested;
+        _panel.CenterRequested -= OnCenterRequested;
         _main.PropertyChanged -= OnMainChanged;
         _viewport.ViewportChanged -= OnViewportChanged;
         _appearance.Changed -= OnAppearanceChanged;
@@ -303,5 +396,5 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _marshal(() => _layers.RemoveOverlayLayer(_layer));
     }
 
-    private readonly record struct OutlineStyle(MapsuiColor Color, double Width, float[]? DashArray, float FillOpacity);
+    private readonly record struct OutlineStyle(MapsuiColor Color, double Width, float[]? DashArray, float FillOpacity, bool RoundCap);
 }

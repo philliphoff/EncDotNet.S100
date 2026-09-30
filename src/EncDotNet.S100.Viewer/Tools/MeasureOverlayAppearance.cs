@@ -14,6 +14,20 @@ public readonly record struct MeasureOverlayAppearance(
 {
     /// <summary>Default appearance — application accent placeholder, light theme.</summary>
     public static MeasureOverlayAppearance Default { get; } = new(MeasureOverlayLayer.DefaultAccent, IsDarkTheme: false);
+
+    /// <summary>
+    /// The chart's background colour for the active chart palette (S-101
+    /// <c>DEPDW</c>, deep water): what thin overlay lines are cased in so they
+    /// stay readable over depth contours and land. Day by default.
+    /// </summary>
+    public (byte R, byte G, byte B) ChartBackground { get; init; } = ChartBackgroundFor(EncDotNet.S100.Pipelines.PaletteType.Day);
+
+    /// <summary>The chart's background colour (S-101 <c>DEPDW</c>) in <paramref name="palette"/>.</summary>
+    public static (byte R, byte G, byte B) ChartBackgroundFor(EncDotNet.S100.Pipelines.PaletteType palette) => palette switch
+    {
+        EncDotNet.S100.Pipelines.PaletteType.Dusk or EncDotNet.S100.Pipelines.PaletteType.Night => (0, 0, 0),
+        _ => (201, 237, 255),
+    };
 }
 
 /// <summary>

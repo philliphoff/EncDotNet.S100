@@ -1138,4 +1138,8 @@ internal static class Strings
     public static string Button_Close => Get(nameof(Button_Close));
     public static string Button_CheckAndAdd => Get(nameof(Button_CheckAndAdd));
     public static string Button_Checking => Get(nameof(Button_Checking));
+    public static string Library_TapHereFormat => Get(nameof(Library_TapHereFormat));
+    public static string Library_TapIndexFormat => Get(nameof(Library_TapIndexFormat));
+    public static string Library_TapListThese => Get(nameof(Library_TapListThese));
+    public static string Tooltip_ClearTap => Get(nameof(Tooltip_ClearTap));
 }
