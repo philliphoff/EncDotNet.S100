@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -460,6 +461,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             }
 
             Add(source, Strings.Library_Field_Collection, _collectionName);
+            if (Item.Properties.TryGetValue(LocalManifestIndexer.GroupProperty, out var groupId))
+            {
+                var groupName = Item.Properties.GetValueOrDefault(LocalManifestIndexer.GroupNameProperty) ?? groupId;
+                Add(source, Strings.Library_Detail_Group, string.Equals(groupName, groupId, StringComparison.Ordinal)
+                    ? groupId
+                    : string.Format(c, Strings.Library_GroupValueFormat, groupName, groupId));
+            }
             if (Item.Location is RemoteItemLocation && EffectiveItem.Location is LocalItemLocation downloaded)
             {
                 var path = LibraryAvailabilityResolver.ResolvePath(downloaded);
@@ -484,7 +492,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
             foreach (var (key, value) in Item.Properties.OrderBy(p => p.Key, StringComparer.Ordinal))
             {
-                if (key != "notForNavigation")
+                if (key is not ("notForNavigation" or LocalManifestIndexer.GroupProperty or LocalManifestIndexer.GroupNameProperty))
                     Add(source, PropertyLabel(key), value);
             }
 

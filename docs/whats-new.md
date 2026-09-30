@@ -20,6 +20,11 @@ Current highlights:
 
 ### September 2026
 
+- **Local collection manifests**: a hand-written `*.s100collection.json` file
+  that names groups of local folders, such as one per producing country. Add it
+  to the viewer's Library, pick groups like an online catalogue's facets, and
+  browse, load or change each group on its own. See
+  [Local collection manifests](local-collection-manifest.md).
 - **Developer guides** for the library:
   [Loading datasets](loading-datasets.md),
   [Reading protected exchange sets](protected-exchange-sets.md),

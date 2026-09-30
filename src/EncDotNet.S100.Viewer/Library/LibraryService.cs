@@ -233,6 +233,36 @@ internal sealed class LibraryService : IDisposable
     }
 
     /// <summary>
+    /// Replaces a source's definition (for example a new group selection for
+    /// a collection manifest), keeping its id and current index, and queues it
+    /// for re-indexing.
+    /// </summary>
+    /// <returns>False when the collection or source does not exist.</returns>
+    public bool UpdateSource(Guid collectionId, CollectionSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        lock (_gate)
+        {
+            var index = _collections.FindIndex(c => c.Id == collectionId);
+            if (index < 0)
+                return false;
+            var sources = _collections[index].Sources.ToList();
+            var at = sources.FindIndex(s => s.Id == source.Id);
+            if (at < 0)
+                return false;
+            sources[at] = source;
+            _collections[index] = _collections[index] with { Sources = sources };
+            _snapshot = null;
+        }
+
+        SaveStore();
+        RaiseChanged();
+        Enqueue([source.Id]);
+        return true;
+    }
+
+    /// <summary>
     /// Removes a collection and its cached indexes. The referenced data is
     /// never touched.
     /// </summary>

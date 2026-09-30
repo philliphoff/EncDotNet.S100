@@ -1,14 +1,17 @@
 namespace EncDotNet.S100.ExchangeSets;
 
 /// <summary>
-/// The geographic bounding box of a dataset, as declared by the
+/// The geographic bounding box of a dataset, as declared by a
 /// <c>boundingBox</c> element (an ISO 19115-3 <c>gex:EX_GeographicBoundingBox</c>)
-/// of a <see cref="DatasetDiscoveryMetadata"/> record in the exchange catalogue.
+/// of a <see cref="DatasetDiscoveryMetadata"/> record in the exchange catalogue,
+/// or of one of its <see cref="DataCoverage"/> entries.
 /// </summary>
 /// <remarks>
 /// All values are in decimal degrees (WGS 84). Each bound is read from the
-/// <c>gco:Decimal</c> child of the corresponding <c>gex:*Bound*</c> element;
-/// a bound that is missing or unparseable is reported as <c>0</c>.
+/// <c>gco:Decimal</c> child of the corresponding <c>*Bound*</c> element, or
+/// from the element's own text (as some producers write it). When any bound
+/// is missing or unparseable, is not a geographic coordinate (a producer's
+/// projected metres, say), or the box is a single point, no box is reported.
 /// </remarks>
 public sealed class BoundingBox
 {

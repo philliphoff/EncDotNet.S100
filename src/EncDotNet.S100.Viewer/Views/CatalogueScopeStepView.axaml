@@ -52,7 +52,10 @@
     </UserControl.Styles>
 
     <UserControl.Resources>
-        <!-- The check box stretches over the label; the detail sits right-aligned beside it. -->
+        <FontFamily x:Key="ScopeMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+        <!-- The check box stretches over the label; the detail sits right-aligned beside it.
+             A collection-manifest group shows its first path (and "+N") instead, and "Not found"
+             when a path is missing. -->
         <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="10,0">
                 <CheckBox Classes="facet" IsChecked="{Binding IsSelected}">
@@ -60,7 +63,20 @@
                                ToolTip.Tip="{Binding Label}" />
                 </CheckBox>
                 <TextBlock Grid.Column="1" Text="{Binding Detail}" Classes="muted" FontSize="12.5"
-                           VerticalAlignment="Center" />
+                           VerticalAlignment="Center" IsVisible="{Binding !HasPaths}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                            IsVisible="{Binding HasPaths}" ToolTip.Tip="{Binding PathsTooltip}">
+                    <TextBlock Text="{Binding PathText}" Classes="muted" FontSize="12"
+                               FontFamily="{StaticResource ScopeMonoFont}" MaxWidth="220"
+                               TextTrimming="{x:Static TextTrimming.PrefixCharacterEllipsis}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding MorePathsText}" Classes="muted" FontSize="12"
+                               IsVisible="{Binding HasMorePaths}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding IsMissing}" VerticalAlignment="Center">
+                        <Ellipse Width="6" Height="6" Fill="{DynamicResource WarningColor}" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Static loc:Strings.Manifest_NotFound}" Classes="warning"
+                                   FontSize="12.5" FontWeight="Medium" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
@@ -136,12 +152,15 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                            <TextBox IsVisible="{Binding IsSearchable}" Text="{Binding ChartSearchText}"
-                                     Height="30" MinHeight="30" FontSize="13" Padding="8,0"
-                                     PlaceholderText="{x:Static loc:Strings.Wizard_FilterDownloads}" />
-                            <TextBlock IsVisible="{Binding ShowsGroupTitle}" Margin="4,0,0,0"
-                                       Text="{Binding SelectedFacetGroup.Title, FallbackValue=''}"
-                                       FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <!-- The one group's title, and (for searchable lists) the filter box beside it. -->
+                            <DockPanel IsVisible="{Binding !HasFacetTabs}">
+                                <TextBlock DockPanel.Dock="Left" IsVisible="{Binding ShowsGroupTitle}" Margin="4,0,12,0"
+                                           Text="{Binding SelectedFacetGroup.Title, FallbackValue=''}"
+                                           FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBox IsVisible="{Binding IsSearchable}" Text="{Binding ChartSearchText}"
+                                         Height="30" MinHeight="30" FontSize="13" Padding="8,0"
+                                         PlaceholderText="{Binding SearchPlaceholder}" />
+                            </DockPanel>
                             <Button Grid.Column="1" Classes="link" Content="{Binding ToggleShownText}"
                                     Command="{Binding ToggleShownCommand}" />
                         </Grid>

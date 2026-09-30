@@ -3062,7 +3062,7 @@
     <value>Charts served from another computer</value>
   </data>
   <data name="Library_DropHint" xml:space="preserve">
-    <value>Or drop a folder, .zip or CATALOG file here</value>
+    <value>Or drop a folder, .zip, CATALOG or collection manifest file here</value>
   </data>
   <data name="Library_Field_LastDownload" xml:space="preserve">
     <value>Last download</value>
@@ -3273,5 +3273,131 @@
   </data>
   <data name="Tooltip_ClearTap" xml:space="preserve">
     <value>Clear the selection</value>
+  </data>
+  <data name="Menu_AddLibraryManifest" xml:space="preserve">
+    <value>Collection manifest…</value>
+  </data>
+  <data name="FilePicker_ManifestTitle" xml:space="preserve">
+    <value>Choose a collection manifest</value>
+  </data>
+  <data name="FilePicker_ManifestType" xml:space="preserve">
+    <value>Collection manifest</value>
+  </data>
+  <data name="Manifest_DialogTitle" xml:space="preserve">
+    <value>Add collection manifest</value>
+  </data>
+  <data name="Manifest_ChooseGroupsTitle" xml:space="preserve">
+    <value>Choose groups</value>
+  </data>
+  <data name="Manifest_Change" xml:space="preserve">
+    <value>Change…</value>
+  </data>
+  <data name="Manifest_GroupsTitle" xml:space="preserve">
+    <value>Groups</value>
+  </data>
+  <data name="Manifest_FilterPlaceholder" xml:space="preserve">
+    <value>Filter by name or id</value>
+  </data>
+  <data name="Manifest_NotFound" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="Manifest_MorePathsFormat" xml:space="preserve">
+    <value>+{0}</value>
+  </data>
+  <data name="Manifest_EverythingOne" xml:space="preserve">
+    <value>1 group · follows the file</value>
+  </data>
+  <data name="Manifest_EverythingFormat" xml:space="preserve">
+    <value>{0} groups · follows the file</value>
+  </data>
+  <data name="Manifest_SelectionOfFormat" xml:space="preserve">
+    <value>{0} of {1} groups</value>
+  </data>
+  <data name="Manifest_SummaryEverything" xml:space="preserve">
+    <value>Everything is included, and groups added to the file later are too.</value>
+  </data>
+  <data name="Manifest_SummaryNothing" xml:space="preserve">
+    <value>Nothing selected. Tick at least one group.</value>
+  </data>
+  <data name="Manifest_SummaryMissingOneFormat" xml:space="preserve">
+    <value>{0} not found on disk. It shows up once the path exists.</value>
+  </data>
+  <data name="Manifest_SummaryMissingManyFormat" xml:space="preserve">
+    <value>{0} not found on disk. They show up once the path exists.</value>
+  </data>
+  <data name="Manifest_SummaryOneFormat" xml:space="preserve">
+    <value>1 group · {0}</value>
+  </data>
+  <data name="Manifest_SummaryManyFormat" xml:space="preserve">
+    <value>{0} groups · {1}</value>
+  </data>
+  <data name="Manifest_NameFollows" xml:space="preserve">
+    <value>Follows your selection until you edit it.</value>
+  </data>
+  <data name="Manifest_NameKept" xml:space="preserve">
+    <value>Your name is kept when the selection changes.</value>
+  </data>
+  <data name="Manifest_ExistingHintFormat" xml:space="preserve">
+    <value>Added as a source named “{0}”.</value>
+  </data>
+  <data name="Manifest_ErrorTitle" xml:space="preserve">
+    <value>Couldn't read this manifest</value>
+  </data>
+  <data name="Manifest_ErrorLineFormat" xml:space="preserve">
+    <value>line {0} · {1}</value>
+  </data>
+  <data name="Manifest_ErrorBody" xml:space="preserve">
+    <value>Fix the file and reload it. Nothing is added until it reads cleanly.</value>
+  </data>
+  <data name="Manifest_ReloadFile" xml:space="preserve">
+    <value>Reload file</value>
+  </data>
+  <data name="Manifest_OpenInEditor" xml:space="preserve">
+    <value>Open in editor</value>
+  </data>
+  <data name="Manifest_FooterNote" xml:space="preserve">
+    <value>Data is referenced where it is; nothing is copied.</value>
+  </data>
+  <data name="Manifest_FooterFix" xml:space="preserve">
+    <value>Fix the manifest to continue</value>
+  </data>
+  <data name="Manifest_DoneTitle" xml:space="preserve">
+    <value>Added to Library</value>
+  </data>
+  <data name="Manifest_DoneFormat" xml:space="preserve">
+    <value>“{0}” now lists {1}. Indexing runs in the background; counts appear in the tree as it goes.</value>
+  </data>
+  <data name="Manifest_DoneEveryGroupFormat" xml:space="preserve">
+    <value>every group in {0}</value>
+  </data>
+  <data name="Library_StatusLine_PathNotFound" xml:space="preserve">
+    <value>Path not found</value>
+  </data>
+  <data name="Menu_LibraryRefreshSource" xml:space="preserve">
+    <value>Refresh source</value>
+  </data>
+  <data name="Menu_LibraryChooseGroups" xml:space="preserve">
+    <value>Choose groups…</value>
+  </data>
+  <data name="Button_Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Library_Detail_Group" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="Library_GroupValueFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="Manifest_TwoFormat" xml:space="preserve">
+    <value>{0} and {1}</value>
+  </data>
+  <data name="Manifest_AndMoreFormat" xml:space="preserve">
+    <value>{0}, {1} and {2} more</value>
+  </data>
+  <data name="Library_Quick_Manifest" xml:space="preserve">
+    <value>Add a collection manifest…</value>
+  </data>
+  <data name="Library_Quick_ManifestSub" xml:space="preserve">
+    <value>Named groups of local folders, from a .s100collection.json file</value>
   </data>
 </root>

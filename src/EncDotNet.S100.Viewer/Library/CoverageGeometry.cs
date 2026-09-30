@@ -110,8 +110,11 @@ internal static class CoverageGeometry
     /// ENC cells show in a two-band window: the finest usage band suited to
     /// the scale (the band lazy loading would load) plus the next finer band,
     /// previewing what zooming in reveals while coarser, overlapping bands
-    /// drop away. Other items show down to a few times their coarsest display
-    /// scale; anything without either always shows.
+    /// drop away. Other items (S-101 and the like, gated by display scale)
+    /// show at every zoomed-out scale, so a collection's extents never vanish
+    /// when zoomed out, and drop away only when zoomed in well past their
+    /// finest display scale, as coarser bands do; anything without either
+    /// always shows.
     /// </summary>
     public static bool IsVisibleAtScale(CollectionItem item, double scaleDenominator)
     {
@@ -123,11 +126,14 @@ internal static class CoverageGeometry
             return band == finest || band == finest + 1;
         }
 
-        if (item.MinimumDisplayScale is { } coarsest && !double.IsNaN(scaleDenominator))
-            return scaleDenominator <= coarsest * 4;  // allow some zoom-out before hiding
+        if (item.MaximumDisplayScale is > 0 and var finestScale && !double.IsNaN(scaleDenominator))
+            return scaleDenominator >= finestScale / DisplayScaleZoomInAllowance;
 
         return true;
     }
+
+    /// <summary>How far past its finest display scale a band-less item stays outlined when zooming in.</summary>
+    public const double DisplayScaleZoomInAllowance = 4;
 
     /// <summary>The finest ENC usage band (1–6) suited to <paramref name="scaleDenominator"/>.</summary>
     public static int FinestEligibleBand(double scaleDenominator)

@@ -154,4 +154,23 @@ internal sealed class FileDialogService : IFileDialogService
 
         return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
     }
+
+    public async Task<string?> OpenCollectionManifestAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_ManifestTitle,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_ManifestType) { Patterns = new[] { "*.s100collection.json", "*.json" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
+    }
 }

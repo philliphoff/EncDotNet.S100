@@ -1411,6 +1411,14 @@ public partial class MainWindow : ShadUI.Window
             if (!File.Exists(path))
                 continue;
 
+            // A collection manifest (named *.s100collection.json, or JSON whose
+            // format says so) is added to the library, not opened as a dataset.
+            if (EncDotNet.S100.Collections.Manifests.CollectionManifest.IsManifestPath(path))
+            {
+                await _libraryImporter.AddPathAsync(path, targetCollectionId: null);
+                continue;
+            }
+
             // File drop: a .zip with a root-level CATALOG.XML is an
             // exchange-set ZIP, and a dropped CATALOG.031 is an S-57
             // exchange set; everything else falls through to the

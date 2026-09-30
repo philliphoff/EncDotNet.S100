@@ -114,6 +114,10 @@
             <Setter Property="MinWidth" Value="42" />
             <Setter Property="MinHeight" Value="20" />
         </Style>
+        <!-- A group node keeps the tag's width, so names line up, but shows no tag. -->
+        <Style Selector="Border.libraryKindTag.empty">
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
         <Style Selector="Border.libraryKindTag > TextBlock">
             <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
             <Setter Property="FontSize" Value="10.5" />
@@ -241,6 +245,7 @@
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryManifest}" Command="{Binding AddCollectionManifestCommand}" />
             <Separator />
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_Online}" Classes="libraryMenuHeader" IsEnabled="False" />
             <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}" />
@@ -261,17 +266,24 @@
         <ContextMenu x:Key="NodeMenu">
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeep}" Command="{Binding KeepInLibraryCommand}"
                       IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding RefreshCommand}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding RefreshCommand}"
+                      IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshSource}" Command="{Binding RefreshCommand}"
+                      IsVisible="{Binding SelectedNode.IsGroup, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryChooseGroups}" Command="{Binding ChooseGroupsCommand}"
+                      IsVisible="{Binding SelectedNode.CanChooseGroups, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"
+                      IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryCopyUrl}" Click="OnCopySourceUrl"
                       IsVisible="{Binding SelectedNode.HasSourceUrl, FallbackValue=False}" />
-            <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}" />
+            <Separator IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}"
+                      IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
         </ContextMenu>
     </UserControl.Resources>
 
     <Panel>
-        <!-- Empty state: the three most common ways in, as large targets. -->
+        <!-- Empty state: the most common ways in, as large targets. -->
         <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyTitle}" FontSize="15" FontWeight="SemiBold"
                        HorizontalAlignment="Center" />
@@ -301,6 +313,15 @@
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_Feed}" FontWeight="SemiBold" />
                         <TextBlock Text="{x:Static loc:Strings.Library_Quick_FeedSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddCollectionManifestCommand}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="JSON" /></Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_Manifest}" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Static loc:Strings.Library_Quick_ManifestSub}" FontSize="{StaticResource LibrarySecondaryFontSize}" FontWeight="Normal" Opacity="0.65" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Button>
@@ -368,11 +389,12 @@
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="vm:LibraryNodeViewModel" ItemsSource="{Binding Children}">
                         <!-- Kind tag, name, count; a second line only when something is off-normal. -->
-                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8"
+                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
                               MinHeight="20" Background="Transparent"
                               ToolTip.Tip="{Binding Tooltip}">
                             <!-- Centred on the first line (row 0), also when a status line follows. -->
-                            <Border Grid.Column="0" Classes="libraryKindTag" VerticalAlignment="Center">
+                            <Border Grid.Column="0" Classes="libraryKindTag" Classes.empty="{Binding !HasKindTag}"
+                                    VerticalAlignment="Center">
                                 <TextBlock Text="{Binding KindTag}" />
                             </Border>
                             <TextBlock Grid.Column="1" Text="{Binding Name}"
@@ -393,7 +415,13 @@
                             <TextBlock Grid.Column="2" Text="{Binding Status}"
                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
                                        Foreground="{DynamicResource ForegroundColor}" Opacity="0.6" VerticalAlignment="Center" />
-                            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6"
+                            <!-- A manifest source named like its collection shows its file name. -->
+                            <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SecondaryName}"
+                                       IsVisible="{Binding HasSecondaryName}" Margin="0,1,0,0"
+                                       FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                       Foreground="{DynamicResource ForegroundColor}" Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis" />
+                            <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6"
                                         IsVisible="{Binding HasStatusLine}" Margin="0,2,0,0">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Classes="libraryStatusDot"
                                          Classes.busy="{Binding IsStatusBusy}"

@@ -22,7 +22,21 @@ public sealed record SourceIndex(
     DateTimeOffset IndexedAt,
     string? Fingerprint,
     IReadOnlyList<CollectionItem> Items,
-    IReadOnlyList<IndexDiagnostic> Diagnostics);
+    IReadOnlyList<IndexDiagnostic> Diagnostics)
+{
+    /// <summary>
+    /// The groups the source defines, in display order, including groups
+    /// that indexed no items (for a <see cref="LocalManifestSource"/>, its
+    /// selected manifest groups); empty for sources without groups.
+    /// </summary>
+    public IReadOnlyList<SourceIndexGroup> Groups { get; init; } = [];
+}
+
+/// <summary>A group of a <see cref="SourceIndex"/>, such as one group of a collection manifest.</summary>
+/// <param name="Id">The group id, as items carry it.</param>
+/// <param name="Name">The group's display name.</param>
+/// <param name="MissingPathCount">How many of the group's paths were not found when indexed.</param>
+public sealed record SourceIndexGroup(string Id, string Name, int MissingPathCount = 0);
 
 /// <summary>A problem met while indexing a source.</summary>
 /// <param name="Severity">How serious the problem is.</param>

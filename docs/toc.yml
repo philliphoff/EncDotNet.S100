@@ -16,6 +16,8 @@
       href: catalogues-and-validation.md
     - name: S-100 feed format
       href: s100-feed-format.md
+    - name: Local collection manifests
+      href: local-collection-manifest.md
 - name: Scenario guides
   items:
     - name: Render S-102 to PNG

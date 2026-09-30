@@ -21,7 +21,6 @@ namespace EncDotNet.S100.ExchangeSets;
 public static class ExchangeCatalogueReader
 {
     private static readonly XNamespace Gco = "http://standards.iso.org/iso/19115/-3/gco/1.0";
-    private static readonly XNamespace Gex = "http://standards.iso.org/iso/19115/-3/gex/1.0";
     private static readonly XNamespace Cit = "http://standards.iso.org/iso/19115/-3/cit/2.0";
     private static readonly XNamespace Mri = "http://standards.iso.org/iso/19115/-3/mri/1.0";
     /// <summary>
@@ -463,17 +462,46 @@ public static class ExchangeCatalogueReader
         };
     }
 
+    /// <summary>
+    /// Reads a <c>boundingBox</c>. Bounds are matched by local name, so the
+    /// conformant <c>gex:westBoundLongitude/gco:Decimal</c> and the plain-text
+    /// <c>XC:westBoundLongitude</c> some producers write both work. A box with
+    /// a missing or unparseable bound is <see langword="null"/> (a partial box
+    /// would place the dataset at 0°, 0°), as is one that is not geographic
+    /// (e.g. projected metres) or is a single point.
+    /// </summary>
     private static BoundingBox? ReadBoundingBox(XElement? element)
     {
         if (element is null) return null;
 
-        return new BoundingBox
-        {
-            WestBoundLongitude = ParseDecimal(element.Element(Gex + "westBoundLongitude")),
-            EastBoundLongitude = ParseDecimal(element.Element(Gex + "eastBoundLongitude")),
-            SouthBoundLatitude = ParseDecimal(element.Element(Gex + "southBoundLatitude")),
-            NorthBoundLatitude = ParseDecimal(element.Element(Gex + "northBoundLatitude")),
-        };
+        return ReadBound(element, "westBoundLongitude") is { } west
+            && ReadBound(element, "eastBoundLongitude") is { } east
+            && ReadBound(element, "southBoundLatitude") is { } south
+            && ReadBound(element, "northBoundLatitude") is { } north
+            && south is >= -90 and <= 90 && north is >= -90 and <= 90 && south <= north
+            && west is >= -360 and <= 360 && east is >= -360 and <= 360
+            && !(south == north && west == east)
+            ? new BoundingBox
+            {
+                WestBoundLongitude = west,
+                EastBoundLongitude = east,
+                SouthBoundLatitude = south,
+                NorthBoundLatitude = north,
+            }
+            : null;
+    }
+
+    private static double? ReadBound(XElement box, string localName)
+    {
+        var bound = box.Elements().FirstOrDefault(e => e.Name.LocalName == localName);
+        if (bound is null)
+            return null;
+
+        // gco:Decimal (or gco:Real) per ISO 19115-3; otherwise the element's own text.
+        var text = bound.Elements().FirstOrDefault(e => e.Name.LocalName is "Decimal" or "Real")?.Value ?? bound.Value;
+        return double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value)
+            ? value
+            : null;
     }
 
     private static DataCoverage ReadDataCoverage(XElement element, XNamespace xc)
@@ -484,6 +512,7 @@ public static class ExchangeCatalogueReader
         return new DataCoverage
         {
             BoundingPolygon = element.Element(xc + "boundingPolygon")?.ToString(),
+            BoundingBox = ReadBoundingBox(element.Element(xc + "boundingBox")),
             MaximumDisplayScale = int.TryParse(maxStr, CultureInfo.InvariantCulture, out var max) ? max : null,
             MinimumDisplayScale = int.TryParse(minStr, CultureInfo.InvariantCulture, out var min) ? min : null,
         };
@@ -563,17 +592,6 @@ public static class ExchangeCatalogueReader
     {
         var value = (string?)parent.Element(xc + localName);
         return int.TryParse(value, CultureInfo.InvariantCulture, out var i) ? i : null;
-    }
-
-    private static double ParseDecimal(XElement? element)
-    {
-        var dec = element?.Element(Gco + "Decimal");
-        if (dec is not null && double.TryParse(dec.Value, CultureInfo.InvariantCulture, out var d))
-        {
-            return d;
-        }
-
-        return 0;
     }
 
     /// <summary>

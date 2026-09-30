@@ -54,11 +54,15 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
         var (path, recursive) = Resolve(source);
 
         return new ValueTask<SourceIndex>(Task.Run(
-            () => Index(source.Id, path, recursive, progress, cancellationToken),
+            () => IndexPath(source.Id, path, recursive, progress, cancellationToken),
             cancellationToken));
     }
 
-    private SourceIndex Index(
+    /// <summary>
+    /// Indexes the folder, exchange set, ZIP or loose dataset at <paramref name="path"/>
+    /// (shared with <see cref="LocalManifestIndexer"/>, which indexes each manifest path).
+    /// </summary>
+    internal SourceIndex IndexPath(
         Guid sourceId,
         string path,
         bool recursive,

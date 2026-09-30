@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Manifests;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using ShadUI;
 
@@ -26,6 +29,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     private readonly Func<AddOnlineCatalogueWizardViewModel> _wizardFactory;
     private readonly Func<SharedFeedDialogViewModel>? _sharedFeedFactory;
     private readonly IViewerUiControllerAccessor? _ui;
+    private readonly Notifications.INotificationService? _notifications;
 
     public LibraryImportCoordinator(
         Library.LibraryService library,
@@ -34,7 +38,8 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         Func<AddToLibraryDialogViewModel> dialogFactory,
         Func<AddOnlineCatalogueWizardViewModel> wizardFactory,
         Func<SharedFeedDialogViewModel>? sharedFeedFactory = null,
-        IViewerUiControllerAccessor? ui = null)
+        IViewerUiControllerAccessor? ui = null,
+        Notifications.INotificationService? notifications = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(fileDialogs);
@@ -48,6 +53,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         _wizardFactory = wizardFactory;
         _sharedFeedFactory = sharedFeedFactory;
         _ui = ui;
+        _notifications = notifications;
     }
 
     public async Task AddFolderAsync(Guid? targetCollectionId)
@@ -66,6 +72,19 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     {
         if (await _fileDialogs.OpenS128CatalogueAsync(MainTopLevel()) is { } path)
             ShowDialog(AddToLibraryKind.S128Catalogue, path, targetCollectionId);
+    }
+
+    public async Task AddCollectionManifestAsync(Guid? targetCollectionId)
+    {
+        if (await _fileDialogs.OpenCollectionManifestAsync(MainTopLevel()) is { } path)
+            ShowManifestDialog(path, targetCollectionId, editing: null);
+    }
+
+    public Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ShowManifestDialog(source.Path, collectionId, new EditedManifestSource(collectionId, source));
+        return Task.CompletedTask;
     }
 
     public Task AddOnlineCatalogueAsync(Guid? targetCollectionId)
@@ -131,16 +150,29 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
 
-        var kind = Directory.Exists(path)
+        var kind = Classify(path);
+        if (kind == AddToLibraryKind.LocalManifest)
+            ShowManifestDialog(path, targetCollectionId, editing: null);
+        else
+            ShowDialog(kind, path, targetCollectionId);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// What adding <paramref name="path"/> means: a folder with a catalogue is
+    /// an exchange set, any other folder is scanned; a collection manifest is
+    /// one (by its <c>.s100collection.json</c> name or its <c>format</c>); any
+    /// other file is an exchange set (a ZIP or catalogue).
+    /// </summary>
+    internal static AddToLibraryKind Classify(string path) =>
+        Directory.Exists(path)
             ? (ExchangeSetLayout.PickS100Catalogue(SafeFileNames(path)) is not null
                || SafeFileNames(path).Any(ExchangeSetLayout.IsS57CatalogueName)
                 ? AddToLibraryKind.ExchangeSet
                 : AddToLibraryKind.Folder)
-            : AddToLibraryKind.ExchangeSet;
-
-        ShowDialog(kind, path, targetCollectionId);
-        return Task.CompletedTask;
-    }
+            : CollectionManifest.IsManifestPath(path)
+                ? AddToLibraryKind.LocalManifest
+                : AddToLibraryKind.ExchangeSet;
 
     public bool IsInLibrary(string path)
     {
@@ -155,6 +187,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
                 LocalFolderSource f => IsSameOrUnder(full, Normalize(f.Path)),
                 ExchangeSetSource e => string.Equals(full, Normalize(e.Path), StringComparison.OrdinalIgnoreCase),
                 S128CatalogueSource c => string.Equals(full, Normalize(c.Path), StringComparison.OrdinalIgnoreCase),
+                LocalManifestSource m => string.Equals(full, Normalize(m.Path), StringComparison.OrdinalIgnoreCase),
                 _ => false,
             });
     }
@@ -181,6 +214,51 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
             .Dismissible()
             .WithMaxWidth(520)
             .Show();
+    }
+
+    /// <summary>
+    /// Shows the one-page collection-manifest dialog: adding
+    /// <paramref name="path"/>, or (with <paramref name="editing"/>) changing an
+    /// existing source's groups. Adding announces what was added and reveals
+    /// the Library.
+    /// </summary>
+    private void ShowManifestDialog(string path, Guid? targetCollectionId, EditedManifestSource? editing)
+    {
+        var scope = _dialogFactory();
+        if (editing is not null)
+            scope.InitializeEdit(editing.CollectionId, editing.Source);
+        else
+            scope.Initialize(AddToLibraryKind.LocalManifest, path, targetCollectionId);
+        scope.PickManifest = () => _fileDialogs.OpenCollectionManifestAsync(MainTopLevel());
+        scope.OpenManifest = OpenInEditor;
+
+        var dialog = new AddCollectionManifestDialogViewModel(scope);
+        scope.Closed += (_, confirmed) =>
+        {
+            _dialogManager.Close(dialog);
+            if (!confirmed)
+                return;
+            if (editing is null)
+            {
+                _notifications?.Create(Strings.Manifest_DoneTitle)
+                    .WithSeverity(Notifications.NotificationSeverity.Success)
+                    .WithContent(scope.DoneMessage)
+                    .Show();
+            }
+            RevealLibrary();
+        };
+
+        _dialogManager.CreateDialog(dialog)
+            .Dismissible()
+            .WithMaxWidth(640)
+            .Show();
+        _ = scope.LoadCatalogAsync();
+    }
+
+    private static void OpenInEditor(string path)
+    {
+        if (MainTopLevel()?.Launcher is { } launcher)
+            _ = launcher.LaunchFileInfoAsync(new FileInfo(path));
     }
 
     private static IEnumerable<string?> SafeFileNames(string directory)

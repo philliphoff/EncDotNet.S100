@@ -99,4 +99,62 @@ public class GmlCoverageParserTests
         Assert.Equal(32.4, polygon.Exterior[0].Latitude, 3);
         Assert.Equal(-80.1, polygon.Exterior[0].Longitude, 3);
     }
+
+    private static string LineString(string posList, string srs = "urn:ogc:def:crs:EPSG::4326") => $"""
+        <S100XC:boundingPolygon {Ns}>
+          <gex:polygon>
+            <gml:LineString gml:id="DC1" srsName="{srs}">
+              <gml:posList> {posList} </gml:posList>
+            </gml:LineString>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+        """;
+
+    [Fact]
+    public void Reads_a_line_string_outline_as_a_polygon()
+    {
+        var polygon = Assert.Single(GmlCoverageParser.Parse(
+            LineString("51.87 2.54 51.80 2.65 51.00 2.58 51.87 2.54")));
+
+        Assert.Equal(4, polygon.Exterior.Count);
+        Assert.Equal(51.87, polygon.Exterior[0].Latitude);
+        Assert.Equal(2.54, polygon.Exterior[0].Longitude);
+        Assert.Empty(polygon.Holes);
+    }
+
+    [Fact]
+    public void Longitude_first_coordinates_under_epsg4326_are_detected_with_the_dataset_box()
+    {
+        // As IC-ENC's GB and BE S-101 catalogues write them: EPSG:4326 declared, longitude first.
+        var box = new GeoBounds(50.99, 2.23, 51.88, 3.59);
+
+        var polygon = Assert.Single(GmlCoverageParser.Parse(
+            LineString("2.5461444 51.8704523 3.5820416 51.2871305 3.5820416 50.9991654 2.2369421 51.5568963 2.5461444 51.8704523"),
+            box));
+
+        Assert.Equal(51.8704523, polygon.Exterior[0].Latitude);
+        Assert.Equal(2.5461444, polygon.Exterior[0].Longitude);
+    }
+
+    [Fact]
+    public void Declared_order_is_kept_when_it_fits_the_dataset_box()
+    {
+        var box = new GeoBounds(50.99, 2.23, 51.88, 3.59);
+
+        var polygon = Assert.Single(GmlCoverageParser.Parse(
+            LineString("51.8704523 2.5461444 51.2871305 3.5820416 50.9991654 3.5820416 51.8704523 2.5461444"),
+            box));
+
+        Assert.Equal(51.8704523, polygon.Exterior[0].Latitude);
+    }
+
+    [Fact]
+    public void Impossible_latitudes_swap_the_order_without_a_box()
+    {
+        var polygon = Assert.Single(GmlCoverageParser.Parse(
+            LineString("151.2 -33.9 151.3 -33.9 151.3 -34.0 151.2 -33.9")));
+
+        Assert.Equal(-33.9, polygon.Exterior[0].Latitude);
+        Assert.Equal(151.2, polygon.Exterior[0].Longitude);
+    }
 }
