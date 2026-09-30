@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Noaa;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 
