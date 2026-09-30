@@ -14,6 +14,7 @@ public partial class AddOnlineCatalogueWizardView : UserControl
     public AddOnlineCatalogueWizardView()
     {
         InitializeComponent();
+        _ = new DialogWindowFit(this);
     }
 
     /// <summary>Derives the selection and error tints from the live theme (see <see cref="WizardTints"/>).</summary>

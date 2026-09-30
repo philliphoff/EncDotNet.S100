@@ -6,7 +6,7 @@
              xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.AddOnlineCatalogueWizardView"
              x:DataType="vm:AddOnlineCatalogueWizardViewModel"
-             Width="640">
+             Width="640" Height="600">
 
     <!-- Styles shared by the three steps (the step views are nested below, so these reach them). -->
     <UserControl.Styles>
@@ -54,7 +54,10 @@
         <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/WizardStyles.axaml" />
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,452,Auto">
+    <!-- A fixed height (the header, a 452 px body and the footer), so the footer never moves
+         between steps; in a shorter window DialogWindowFit caps it, the body shrinks, lists
+         scroll, and the footer stays visible. -->
+    <Grid RowDefinitions="Auto,*,Auto">
 
         <!-- Header: title and step navigation (the dialog host supplies the close button). -->
         <StackPanel Grid.Row="0" Margin="20,16,20,0">
@@ -94,8 +97,8 @@
             </Border>
         </StackPanel>
 
-        <!-- Body: a fixed height, so the footer never moves; lists scroll inside. -->
-        <Panel Grid.Row="1" Margin="20,14,20,12">
+        <!-- Body: the height left over (452 px when there is room); lists scroll inside. -->
+        <Panel Grid.Row="1" Margin="20,14,20,12" MinHeight="240">
             <Panel IsVisible="{Binding IsCatalogueStep}">
                 <views:CatalogueDirectoryDialogView DataContext="{Binding Directory}" />
             </Panel>

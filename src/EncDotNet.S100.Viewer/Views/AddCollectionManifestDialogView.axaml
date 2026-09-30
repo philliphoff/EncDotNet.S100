@@ -6,7 +6,7 @@
              xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.AddCollectionManifestDialogView"
              x:DataType="vm:AddCollectionManifestDialogViewModel"
-             Width="640">
+             Width="640" Height="734">
 
     <!-- Declared before the styles: static resources resolve in document order. -->
     <UserControl.Resources>
@@ -32,9 +32,10 @@
         </Style>
     </UserControl.Styles>
 
-    <!-- At most the designed height (a 600 px body); in a smaller window the body shrinks
-         (see code-behind), the group list scrolls, and the footer stays visible. -->
-    <Grid RowDefinitions="Auto,*,Auto" MaxHeight="790"
+    <!-- A fixed height (the header, a 600 px body and the footer), so the footer never moves;
+         in a shorter window DialogWindowFit caps it, the body shrinks, the group list scrolls,
+         and the footer stays visible. -->
+    <Grid RowDefinitions="Auto,*,Auto"
           DataContext="{Binding Scope}" x:DataType="vm:AddToLibraryDialogViewModel">
 
         <!-- Header: title, then the manifest file with a way to pick another (the dialog host supplies the close button). -->
