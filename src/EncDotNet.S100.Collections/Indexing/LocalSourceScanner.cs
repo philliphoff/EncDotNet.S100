@@ -31,7 +31,7 @@ internal static class LocalSourceScanner
     /// Bumped whenever indexing output changes for the same input, so indexes
     /// cached by an older build are rebuilt.
     /// </summary>
-    internal const string FingerprintVersion = "local-v1";
+    internal const string FingerprintVersion = "local-v2"; // v2: catalogue boxes in dataCoverage, plain-text bounds, LineString coverage
 
     private static readonly string[] LooseExtensions = [".000", ".h5", ".gml"];
 

@@ -109,11 +109,14 @@ internal static class ExchangeSetItemReader
         var (spec, version) = ResolveSpec(dataset.ProductSpecification ?? catalogue.ProductSpecification);
         var relativePath = dataset.RelativePath;
 
-        var coverage = GeoCoverage.FromPolygons(
-            dataset.DataCoverages.SelectMany(c => GmlCoverageParser.Parse(c.BoundingPolygon)));
-        var bounds = dataset.BoundingBox is { } box
+        // The box may be the dataset's own or only its coverages' (some catalogues
+        // give it there); it also tells the polygon parser which axis order fits.
+        GeoBounds? declared = dataset.ResolveBoundingBox() is { } box
             ? new GeoBounds(box.SouthBoundLatitude, box.WestBoundLongitude, box.NorthBoundLatitude, box.EastBoundLongitude)
-            : coverage?.ComputeBounds();
+            : null;
+        var coverage = GeoCoverage.FromPolygons(
+            dataset.DataCoverages.SelectMany(c => GmlCoverageParser.Parse(c.BoundingPolygon, declared)));
+        var bounds = declared ?? coverage?.ComputeBounds();
 
         var properties = new Dictionary<string, string>(StringComparer.Ordinal);
         AddIfPresent(properties, "producingAgency", dataset.ProducingAgency);

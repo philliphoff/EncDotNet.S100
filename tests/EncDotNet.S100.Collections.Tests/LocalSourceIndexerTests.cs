@@ -111,7 +111,7 @@ public class LocalSourceIndexerTests
 
         // Files inside an exchange set are catalogue members, never loose items.
         Assert.All(index.Items, i => Assert.NotNull(i.GroupKey));
-        Assert.StartsWith("local-v1:", index.Fingerprint);
+        Assert.StartsWith(LocalSourceScanner.FingerprintVersion + ":", index.Fingerprint);
     }
 
     [Fact]

@@ -183,6 +183,39 @@ public sealed class DatasetDiscoveryMetadata
     public IReadOnlyList<DataCoverage> DataCoverages { get; init; } = [];
 
     /// <summary>
+    /// The dataset's geographic extent: its own <see cref="BoundingBox"/>, or
+    /// else the union of its <see cref="DataCoverages"/>' bounding boxes;
+    /// <see langword="null"/> when the catalogue gives neither.
+    /// </summary>
+    /// <remarks>
+    /// Some catalogues declare the box only inside <c>dataCoverage</c>. The
+    /// union assumes the coverages do not cross the antimeridian.
+    /// </remarks>
+    public BoundingBox? ResolveBoundingBox()
+    {
+        if (BoundingBox is { } own)
+            return own;
+
+        BoundingBox? union = null;
+        foreach (var coverage in DataCoverages)
+        {
+            if (coverage.BoundingBox is not { } box)
+                continue;
+            union = union is null
+                ? box
+                : new BoundingBox
+                {
+                    WestBoundLongitude = Math.Min(union.WestBoundLongitude, box.WestBoundLongitude),
+                    EastBoundLongitude = Math.Max(union.EastBoundLongitude, box.EastBoundLongitude),
+                    SouthBoundLatitude = Math.Min(union.SouthBoundLatitude, box.SouthBoundLatitude),
+                    NorthBoundLatitude = Math.Max(union.NorthBoundLatitude, box.NorthBoundLatitude),
+                };
+        }
+
+        return union;
+    }
+
+    /// <summary>
     /// The most-permissive coarsest display-scale denominator across all
     /// <see cref="DataCoverages"/> — the <em>largest</em>
     /// <see cref="DataCoverage.MinimumDisplayScale"/> present — or

@@ -19,6 +19,13 @@ public sealed class DataCoverage
     public string? BoundingPolygon { get; init; }
 
     /// <summary>
+    /// The coverage's own <c>boundingBox</c>, which some catalogues give here
+    /// rather than on the dataset; <see langword="null"/> when absent or
+    /// incomplete. See <see cref="DatasetDiscoveryMetadata.ResolveBoundingBox"/>.
+    /// </summary>
+    public BoundingBox? BoundingBox { get; init; }
+
+    /// <summary>
     /// The <c>maximumDisplayScale</c> denominator (e.g. <c>22000</c> for 1:22 000):
     /// the most zoomed-in scale at which the coverage is intended to be displayed.
     /// <see langword="null"/> when absent or not an integer.
