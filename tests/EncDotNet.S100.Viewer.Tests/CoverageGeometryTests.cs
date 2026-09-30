@@ -14,7 +14,8 @@ public class CoverageGeometryTests
     private static CollectionItem NoaaItem(string name) =>
         NoaaEncFeedIndexer.Map(Noaa.Cells.Single(c => c.Name == name));
 
-    private static CollectionItem Item(GeoBounds? bounds, int? band = null, int? minimumDisplayScale = null) => new()
+    private static CollectionItem Item(
+        GeoBounds? bounds, int? band = null, int? minimumDisplayScale = null, int? maximumDisplayScale = null) => new()
     {
         Key = "k",
         ProductSpec = "S-57",
@@ -22,6 +23,7 @@ public class CoverageGeometryTests
         Bounds = bounds,
         UsageBand = band,
         MinimumDisplayScale = minimumDisplayScale,
+        MaximumDisplayScale = maximumDisplayScale,
         Location = NoItemLocation.Instance,
     };
 
@@ -96,12 +98,16 @@ public class CoverageGeometryTests
     }
 
     [Fact]
-    public void Non_band_items_hide_well_beyond_their_coarsest_scale()
+    public void Non_band_items_show_when_zoomed_out_and_hide_well_past_their_finest_scale()
     {
-        var item = Item(new GeoBounds(0, 0, 1, 1), minimumDisplayScale: 90_000);
+        // An S-101 approach dataset (1:180,000 – 1:90,000).
+        var item = Item(new GeoBounds(0, 0, 1, 1), minimumDisplayScale: 180_000, maximumDisplayScale: 90_000);
 
-        Assert.True(CoverageGeometry.IsVisibleAtScale(item, 300_000));
-        Assert.False(CoverageGeometry.IsVisibleAtScale(item, 1_000_000));
-        Assert.True(CoverageGeometry.IsVisibleAtScale(Item(new GeoBounds(0, 0, 1, 1)), 50_000_000));
+        Assert.True(CoverageGeometry.IsVisibleAtScale(item, 50_000_000));  // zoomed far out: still outlined
+        Assert.True(CoverageGeometry.IsVisibleAtScale(item, 1_000_000));
+        Assert.True(CoverageGeometry.IsVisibleAtScale(item, 90_000));
+        Assert.True(CoverageGeometry.IsVisibleAtScale(item, 22_500));      // 4× past its finest
+        Assert.False(CoverageGeometry.IsVisibleAtScale(item, 10_000));     // harbour detail: dropped
+        Assert.True(CoverageGeometry.IsVisibleAtScale(Item(new GeoBounds(0, 0, 1, 1)), 1_000));
     }
 }
