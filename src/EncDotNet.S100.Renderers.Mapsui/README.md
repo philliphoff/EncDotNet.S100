@@ -850,6 +850,21 @@ proportional to the part of the viewport the cell actually covers. Before this,
 every drawing cell produced a full viewport of tiles, most of them empty, which
 dominated both frame time and memory with many small cells in view.
 
+Likewise, a coarser cell's tile that a single finer, currently-drawing cell
+covers entirely is never scheduled, cached, persisted or blitted (issue #691).
+The coverage clip (`CoverageClip`) would erase every pixel of it anyway.
+`CoverageClip.GetHiddenCoverage` gives the finer coverages that are active at
+the live resolution. A tile is skipped when its core, padded by 2 DIP at the
+coarsest resolution its band is shown at, lies inside one of them. The padding
+keeps the clip's anti-aliased edge pixels drawn. The test deliberately uses one
+coverage at a time rather than their union: each finer cell is clipped
+separately, so a faint hairline of the coarser cell survives where two finer
+cells meet, and skipping across that seam would change the picture. When one
+finer coverage hides the whole viewport, the layer is treated as culled, so its
+live overlay is skipped too. Invalid coverages, whose even-odd clip can differ
+from their area, never hide anything. Counters:
+`s100.render.tile.hidden.skipped` and `s100.render.tile.layer.hidden.skipped`.
+
 #### Constant-size symbol/sounding overlay
 
 Base tiles carry **only** area fills, contours, and lines. Point symbols and
