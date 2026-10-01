@@ -127,10 +127,13 @@ Time-aware registration is derived from `ITimeAwareDatasetProcessor` when
 list, range, merged coverage segments, and the timed datasets with the span
 each covers (`Datasets`, e.g. to name the forecast runs a timeline shows). `SetCurrentTime` updates the clock
 immediately so host UI can track a drag; `RefreshTimeAsync` applies a 100 ms
-trailing debounce and cancels the preceding time refresh. S-104 selects the
-nearest sample, S-111 additionally hides files outside their forecast window
-(with one sample interval of seam tolerance), and S-411 selects the latest
-snapshot at or before the clock. `RefreshAsync` performs a latest-request-wins
+trailing debounce and cancels the preceding time refresh. A dataset never
+draws data from outside its tolerance as if current: S-111 selects the nearest
+sample within one step (the dataset's median sample interval), S-104 the latest
+sample at or before the clock held for one step, and S-411 the latest snapshot
+at or before the clock for up to 14 days. Outside its tolerance, including in
+gaps inside a dataset, the dataset hides, and its coverage segments split
+around those gaps. `RefreshAsync` performs a latest-request-wins
 full presentation refresh while preserving those gates. All render entry
 points share one session gate; hosts must call and await them from the
 map-owning synchronization context.

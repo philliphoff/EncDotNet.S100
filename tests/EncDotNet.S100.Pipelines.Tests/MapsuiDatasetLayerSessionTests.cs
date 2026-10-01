@@ -1238,6 +1238,135 @@ public sealed class MapsuiDatasetLayerSessionTests
             session.GetTimeSnapshot().Current);
     }
 
+    [Theory]
+    [InlineData(90, false)] // 1.5 steps past the run end: hidden
+    [InlineData(40, true)] // within one step: the last sample
+    public async Task S111HidesBeyondOneStepOfItsRun(int minutesPastEnd, bool drawn)
+    {
+        var first = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var run = Hourly(first, 3); // 00:00–02:00Z
+        using var timed = await TimedSessionAsync(
+            ("run", "S-111", run),
+            ("later", "S-111", Hourly(first.AddHours(6), 3)));
+        var (session, ids) = (timed.Session, timed.Ids);
+
+        session.SetCurrentTime(run[^1].AddMinutes(minutesPastEnd));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+
+        AssertDrawn(session, ids[0], drawn ? run[^1] : null);
+    }
+
+    [Theory]
+    [InlineData(5, true)] // within the 6-minute step: held
+    [InlineData(7, false)] // beyond it: hidden
+    public async Task S104DrawsTheSampleAtOrBeforeTheClockForOneStep(int minutesPastLast, bool drawn)
+    {
+        var first = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var levels = Enumerable.Range(0, 10).Select(i => first.AddMinutes(6 * i)).ToArray();
+        using var timed = await TimedSessionAsync(
+            ("levels", "S-104", levels),
+            ("currents", "S-111", Hourly(first, 3)));
+        var (session, ids) = (timed.Session, timed.Ids);
+
+        session.SetCurrentTime(levels[^1].AddMinutes(minutesPastLast));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+
+        AssertDrawn(session, ids[0], drawn ? levels[^1] : null);
+
+        // At or before: 3 minutes after a sample still draws that sample, not the next.
+        session.SetCurrentTime(levels[2].AddMinutes(4));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+        AssertDrawn(session, ids[0], levels[2]);
+    }
+
+    [Fact]
+    public async Task StaleS104NeverDrawsAtTodaysTime()
+    {
+        // Scenario 7: the NOAA S-104 Charleston pilot (December 2025) next to a current run.
+        var pilot = Hourly(new DateTime(2025, 12, 17, 12, 0, 0, DateTimeKind.Utc), 48);
+        var run = Hourly(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc), 49);
+        using var timed = await TimedSessionAsync(
+            ("charleston", "S-104", pilot),
+            ("cbofs", "S-111", run));
+        var (session, ids) = (timed.Session, timed.Ids);
+
+        session.SetCurrentTime(run[8]);
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+
+        AssertDrawn(session, ids[0], null);
+        AssertDrawn(session, ids[1], run[8]);
+    }
+
+    [Fact]
+    public async Task GapsInsideOneDatasetHideItAndSplitItsCoverage()
+    {
+        // One exchange set with two forecast windows six weeks apart.
+        var first = new DateTime(2026, 1, 12, 0, 0, 0, DateTimeKind.Utc);
+        var early = Hourly(first, 24);
+        var late = Hourly(first.AddDays(42), 24);
+        using var timed = await TimedSessionAsync(
+            ("rotterdam", "S-111", [.. early, .. late]));
+        var (session, ids) = (timed.Session, timed.Ids);
+
+        var segments = session.GetTimeSnapshot().CoverageSegments;
+        Assert.Equal(2, segments.Count);
+        Assert.Equal(early[^1].AddHours(1), segments[0].End);
+        Assert.Equal(late[0].AddHours(-1), segments[1].Start);
+
+        session.SetCurrentTime(first.AddDays(21));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+        AssertDrawn(session, ids[0], null);
+    }
+
+    [Theory]
+    [InlineData(13, true)]
+    [InlineData(15, false)]
+    public async Task S411SnapshotIsValidForFourteenDays(int daysAfter, bool drawn)
+    {
+        var issued = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+        using var timed = await TimedSessionAsync(
+            ("ice", "S-411", [issued]),
+            ("levels", "S-104", [issued, issued.AddDays(30)]));
+        var (session, ids) = (timed.Session, timed.Ids);
+
+        session.SetCurrentTime(issued.AddDays(daysAfter));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+
+        AssertDrawn(session, ids[0], drawn ? issued : null);
+    }
+
+    private static DateTime[] Hourly(DateTime start, int count) =>
+        Enumerable.Range(0, count).Select(h => start.AddHours(h)).ToArray();
+
+    private static async Task<TimedSession> TimedSessionAsync(
+        params (string Id, string ProductSpec, DateTime[] Times)[] datasets)
+    {
+        var timed = new TimedSession();
+        var ids = new List<MapDatasetId>();
+        foreach (var (name, productSpec, times) in datasets)
+        {
+            var id = new MapDatasetId(name);
+            Assert.True(timed.Owner.TryRegister(
+                id,
+                new StubProcessor(name) { ProductSpec = productSpec, AvailableTimes = times }));
+            timed.Session.SetDataset(Dataset(id, productSpec: productSpec));
+            await timed.Session.RenderAsync(id, MapPresentationState.Default);
+            ids.Add(id);
+        }
+        timed.Ids = [.. ids];
+        return timed;
+    }
+
+    private static void AssertDrawn(MapsuiDatasetLayerSession session, MapDatasetId id, DateTime? sample)
+    {
+        var dataset = session.GetDataset(id)!;
+        Assert.Equal(sample, dataset.Dataset.CurrentTime);
+        if (sample is null)
+            Assert.Empty(dataset.Layers);
+        else
+            Assert.NotEmpty(dataset.Layers);
+    }
+
     private static MapsuiDatasetLayerSession CreateSession(
         Map map,
         DatasetProcessorOwner owner,
@@ -1275,6 +1404,30 @@ public sealed class MapsuiDatasetLayerSessionTests
             isActive,
             availableTimes: availableTimes,
             currentTime: currentTime);
+
+    /// <summary>A session with time-aware stub datasets, disposed together.</summary>
+    private sealed class TimedSession : IDisposable
+    {
+        private readonly Map _map = new();
+
+        public TimedSession()
+        {
+            Session = CreateSession(_map, Owner);
+        }
+
+        public DatasetProcessorOwner Owner { get; } = new();
+
+        public MapsuiDatasetLayerSession Session { get; }
+
+        public MapDatasetId[] Ids { get; set; } = [];
+
+        public void Dispose()
+        {
+            Session.Dispose();
+            Owner.Dispose();
+            _map.Dispose();
+        }
+    }
 
     private sealed class StaticProcessor : IDatasetProcessor
     {

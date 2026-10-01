@@ -63,8 +63,9 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         };
 
         // A forecast ages by the minute: the Now marker, the readout's
-        // "forecast ended" and the Now button follow the clock (#685).
-        _clock = _time.CreateTimer(_ => dispatch(RaiseNow), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        // "forecast ended" and the Now button follow the clock (#685), and so
+        // does the view time while it follows now (#706).
+        _clock = _time.CreateTimer(_ => dispatch(OnClockTick), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 
         if (_timeFormat is not null)
         {
@@ -122,8 +123,9 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         // A forecast starts at Now, not at its first step (D6: step one of a
         // 12:00Z run is already hours old); when a run is replaced, the chosen
         // time is kept if the new run covers it, else the clock moves to Now (D5).
+        // While following now, a new or replaced run keeps following (#706).
         if (IsForecastTimeline && IsNowInCoverage
-            && (becameActive || (previous is { } kept && !IsCovered(kept))))
+            && (becameActive || _service.IsFollowingNow || (previous is { } kept && !IsCovered(kept))))
         {
             GoToNow();
         }
@@ -154,22 +156,21 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     /// <summary>
     /// True when discrete prev/next step controls should be shown — i.e.
     /// whenever the timeline has at least one sample. Stepping is always
-    /// well-defined (it walks <see cref="GlobalTimeService.AllSamples"/>),
-    /// and is especially useful for dense, clustered datasets where the
-    /// gap-collapsing slider still benefits from exact per-sample nudging.
+    /// well-defined (it walks <see cref="GlobalTimeService.AllSamples"/>,
+    /// however many there are), and is especially useful for dense,
+    /// clustered datasets where the free-running slider cannot land on an
+    /// exact sample.
     /// </summary>
     public bool AreStepButtonsVisible => _service.AllSamples.Count > 0;
 
     private bool CanStepPrevious()
     {
-        if (!IsSnapToTickEnabled) return false;
         var samples = _service.AllSamples;
         return _service.CurrentTime is { } cur && samples.Count > 0 && cur > samples[0];
     }
 
     private bool CanStepNext()
     {
-        if (!IsSnapToTickEnabled) return false;
         var samples = _service.AllSamples;
         return _service.CurrentTime is { } cur && samples.Count > 0 && cur < samples[^1];
     }
@@ -315,14 +316,18 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         set
         {
             if (Axis is not { } axis) return;
+            // The slider echoing the position it was given is not a user's
+            // choice of time and must not stop following now.
+            if (_service.CurrentTime is { } current && axis.ToPosition(current) == value) return;
             _service.SetCurrentTime(axis.ToTime(value));
         }
     }
 
     /// <summary>
     /// Jumps to the step nearest the current time (or, when the slider runs
-    /// free, to the current time itself). Available while now lies inside a
-    /// loaded window (D2).
+    /// free, to the current time itself), then follows now as the clock
+    /// advances until the user picks a time (#706). Available while now lies
+    /// inside a loaded window (D2).
     /// </summary>
     public ICommand NowCommand { get; }
 
@@ -379,13 +384,24 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     /// <summary>The coverage band's opacity: dimmed once every loaded forecast has ended.</summary>
     public double BandOpacity => IsForecastEnded ? 0.45 : 1.0;
 
+    /// <summary>
+    /// Moves the view time to now (the step nearest it while the slider snaps
+    /// to steps) and follows now from then on, until the user picks a time.
+    /// </summary>
     private void GoToNow()
     {
         var now = Now;
         var samples = _service.AllSamples;
         if (IsSnapToTickEnabled && samples.Count > 0)
             now = samples.MinBy(s => Math.Abs((s - now).Ticks));
-        _service.SetCurrentTime(now);
+        _service.FollowNow(now);
+    }
+
+    private void OnClockTick()
+    {
+        if (_service.IsFollowingNow && IsNowInCoverage)
+            GoToNow();
+        RaiseNow();
     }
 
     private void RaiseNow()

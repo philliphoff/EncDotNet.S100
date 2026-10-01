@@ -60,8 +60,35 @@ internal sealed class GlobalTimeService
             CurrentTimeChanged?.Invoke(current);
     }
 
-    /// <summary>Sets the session clock, clamped to the aggregate range.</summary>
+    /// <summary>
+    /// True while the clock follows now: set by <see cref="FollowNow"/>,
+    /// cleared by any <see cref="SetCurrentTime"/>. Loading or replacing a
+    /// dataset does not clear it (#706).
+    /// </summary>
+    public bool IsFollowingNow { get; private set; }
+
+    /// <summary>
+    /// Sets the session clock, clamped to the aggregate range. A user's
+    /// choice of time: it stops following now.
+    /// </summary>
     public void SetCurrentTime(DateTime time)
+    {
+        IsFollowingNow = false;
+        SetClock(time);
+    }
+
+    /// <summary>
+    /// Sets the session clock to <paramref name="time"/>, the time that
+    /// stands for now, and keeps <see cref="IsFollowingNow"/> set so the
+    /// timeline moves the clock on as now advances.
+    /// </summary>
+    public void FollowNow(DateTime time)
+    {
+        IsFollowingNow = true;
+        SetClock(time);
+    }
+
+    private void SetClock(DateTime time)
     {
         if (_session is not null)
         {
