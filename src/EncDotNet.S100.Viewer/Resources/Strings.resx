@@ -3519,4 +3519,166 @@
   <data name="Library_StatusLine_LocalFormat" xml:space="preserve">
     <value>{0:N0} local</value>
   </data>
+  <data name="Library_Forecast_HoursFormat" xml:space="preserve">
+    <value>{0:N0} h</value>
+    <comment>A duration in hours</comment>
+  </data>
+  <data name="Library_Forecast_DaysFormat" xml:space="preserve">
+    <value>{0:N0} d</value>
+    <comment>A duration in days</comment>
+  </data>
+  <data name="Library_Forecast_LeftFormat" xml:space="preserve">
+    <value>{0} left</value>
+    <comment>{0}: a duration, e.g. "39 h"</comment>
+  </data>
+  <data name="Library_Forecast_EndedFormat" xml:space="preserve">
+    <value>Ended {0} ago</value>
+    <comment>{0}: a duration, e.g. "9 h"</comment>
+  </data>
+  <data name="Library_Forecast_RunFormat" xml:space="preserve">
+    <value>run {0}</value>
+    <comment>{0}: a forecast run's time</comment>
+  </data>
+  <data name="Library_Forecast_ToFormat" xml:space="preserve">
+    <value>to {0}</value>
+    <comment>{0}: the end of a forecast run's valid window</comment>
+  </data>
+  <data name="Library_Forecast_TilesFormat" xml:space="preserve">
+    <value>{0:N0} tiles</value>
+  </data>
+  <data name="Library_Tag_NewRun" xml:space="preserve">
+    <value>New run</value>
+  </data>
+  <data name="Library_Tag_Expired" xml:space="preserve">
+    <value>Expired</value>
+  </data>
+  <data name="Library_Field_Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Library_Field_Valid" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="Library_Field_NewerRun" xml:space="preserve">
+    <value>Newer run</value>
+  </data>
+  <data name="Library_NewerRunOnlineFormat" xml:space="preserve">
+    <value>{0} online</value>
+    <comment>{0}: the newer run's time</comment>
+  </data>
+  <data name="Library_NewerRunNoneFormat" xml:space="preserve">
+    <value>None as of {0}</value>
+    <comment>{0}: when the catalogue was last read</comment>
+  </data>
+  <data name="Library_Group_Forecast" xml:space="preserve">
+    <value>Forecast</value>
+  </data>
+  <data name="Library_StatusLine_ForecastOfflineFormat" xml:space="preserve">
+    <value>Offline · cached {0}</value>
+    <comment>{0}: time (today) or date the catalogues were cached</comment>
+  </data>
+  <data name="Library_StatusLine_RunsOnDiskFormat" xml:space="preserve">
+    <value>{0:N0} runs on disk</value>
+  </data>
+  <data name="Library_StatusLine_CheckedFormat" xml:space="preserve">
+    <value>Checked {0}</value>
+    <comment>{0}: time (today) or date the catalogues were last checked</comment>
+  </data>
+  <data name="Library_StatusLine_NewerRunOne" xml:space="preserve">
+    <value>newer run for 1 model</value>
+  </data>
+  <data name="Library_StatusLine_NewerRunFormat" xml:space="preserve">
+    <value>newer runs for {0:N0} models</value>
+  </data>
+  <data name="Library_StatusLine_RunsExpiredFormat" xml:space="preserve">
+    <value>{0:N0} runs expired</value>
+  </data>
+  <data name="Library_StatusLine_RefreshForRuns" xml:space="preserve">
+    <value>Refresh to look for new runs</value>
+  </data>
+  <data name="Library_StatusLine_RunsLocalFormat" xml:space="preserve">
+    <value>{0:N0} of {1:N0} runs local</value>
+  </data>
+  <data name="Library_StatusLine_LatestRunsFormat" xml:space="preserve">
+    <value>Latest runs {0}</value>
+    <comment>{0}: the latest run time</comment>
+  </data>
+  <data name="Library_BulkNewRunFormat" xml:space="preserve">
+    <value>{0:N0} new run · {1}</value>
+    <comment>{1}: its download size</comment>
+  </data>
+  <data name="Library_BulkNewRunsFormat" xml:space="preserve">
+    <value>{0:N0} new runs · {1}</value>
+    <comment>{1}: their download size</comment>
+  </data>
+  <data name="Library_BulkRunExpired" xml:space="preserve">
+    <value>1 run expired</value>
+  </data>
+  <data name="Library_BulkRunsExpiredFormat" xml:space="preserve">
+    <value>{0:N0} runs expired</value>
+  </data>
+  <data name="Library_BulkRunReplacesFormat" xml:space="preserve">
+    <value>{0} {1} replaces {2}</value>
+    <comment>{0}: model; {1}: the new run's time; {2}: the downloaded run's time</comment>
+  </data>
+  <data name="Library_BulkLastCheckedFormat" xml:space="preserve">
+    <value>Last checked {0}</value>
+  </data>
+  <data name="Library_BulkCheckForRuns" xml:space="preserve">
+    <value>Check for new runs</value>
+  </data>
+  <data name="Wizard_ForecastModelsTitle" xml:space="preserve">
+    <value>Models</value>
+  </data>
+  <data name="Wizard_ForecastShapeTitle" xml:space="preserve">
+    <value>Download as</value>
+  </data>
+  <data name="Wizard_ForecastShapeTiles" xml:space="preserve">
+    <value>Tiles</value>
+  </data>
+  <data name="Wizard_ForecastShapeRegional" xml:space="preserve">
+    <value>One file per model</value>
+  </data>
+  <data name="Wizard_ForecastShapeTilesHint" xml:space="preserve">
+    <value>Tiles use the S-102 grid and can load on pan</value>
+  </data>
+  <data name="Wizard_ForecastShapeRegionalHint" xml:space="preserve">
+    <value>One file covers the model's whole water body</value>
+  </data>
+  <data name="Wizard_OverlapsFormat" xml:space="preserve">
+    <value>Overlaps {0}</value>
+    <comment>{0}: the smaller models this regional model covers, e.g. "cbofs, dbofs"</comment>
+  </data>
+  <data name="Wizard_ModelUnavailableFormat" xml:space="preserve">
+    <value>{0} · catalogue unavailable</value>
+    <comment>{0}: model code</comment>
+  </data>
+  <data name="Wizard_CadenceDaily" xml:space="preserve">
+    <value>daily</value>
+  </data>
+  <data name="Wizard_CadenceHoursFormat" xml:space="preserve">
+    <value>every {0:N0} h</value>
+  </data>
+  <data name="Wizard_OneFile" xml:space="preserve">
+    <value>one file</value>
+  </data>
+  <data name="Wizard_ModelsPerRunFormat" xml:space="preserve">
+    <value>{0:N0} models · {1} per run</value>
+    <comment>{1}: the size of one run of the chosen models</comment>
+  </data>
+  <data name="Wizard_ModelsPerRoundFormat" xml:space="preserve">
+    <value>{0:N0} models · {1} per round of runs</value>
+    <comment>{1}: the size of one run of every model</comment>
+  </data>
+  <data name="Wizard_Review_UpdatesForecast" xml:space="preserve">
+    <value>Manual. Refresh looks for a newer run, and Update downloads it and replaces the run you have. Runs past their forecast window are marked Expired.</value>
+  </data>
+  <data name="Library_Format_S100Forecast" xml:space="preserve">
+    <value>S-100 forecast</value>
+  </data>
+  <data name="Library_Chip_Forecast" xml:space="preserve">
+    <value>Forecast</value>
+  </data>
+  <data name="Library_Chip_LatestRunOnly" xml:space="preserve">
+    <value>Latest run only</value>
+  </data>
 </root>

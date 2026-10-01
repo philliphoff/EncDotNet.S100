@@ -28,6 +28,9 @@ internal enum LibraryPrimaryAvailability
     /// catalogues, where nearly every tile is reissued each quarter; #685).
     /// </summary>
     Update,
+
+    /// <summary>On disk, a forecast run whose valid window has ended (#685).</summary>
+    Expired,
 }
 
 /// <summary>A coverage outline's stroke: colour, width in pixels, dash pattern in pixels, and fill opacity.</summary>
@@ -58,6 +61,8 @@ internal static class LibraryOutlineStyles
 
     public static LibraryOutlineStyle Update { get; } = new(Color.FromRgb(0xd9, 0x77, 0x06), 1.2, null, 0);
 
+    public static LibraryOutlineStyle Expired { get; } = new(Color.FromRgb(0xb9, 0x1c, 0x1c), 1.2, null, 0);
+
     /// <summary>The selected dataset's line width (drawn in the accent colour).</summary>
     public const double SelectedWidth = 2.0;
 
@@ -83,6 +88,7 @@ internal static class LibraryOutlineStyles
         LibraryPrimaryAvailability.Online => Online,
         LibraryPrimaryAvailability.Missing => Missing,
         LibraryPrimaryAvailability.Update => Update,
+        LibraryPrimaryAvailability.Expired => Expired,
         _ => Listed,
     };
 
@@ -91,6 +97,7 @@ internal static class LibraryOutlineStyles
     {
         LibraryAvailability.Local or LibraryAvailability.Loaded
             or LibraryAvailability.Deferred or LibraryAvailability.Outdated => LibraryPrimaryAvailability.Local,
+        LibraryAvailability.Expired => LibraryPrimaryAvailability.Expired,
         LibraryAvailability.Online => LibraryPrimaryAvailability.Online,
         LibraryAvailability.Missing => LibraryPrimaryAvailability.Missing,
         _ => LibraryPrimaryAvailability.Listed,

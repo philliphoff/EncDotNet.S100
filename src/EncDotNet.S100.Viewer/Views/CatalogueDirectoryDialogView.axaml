@@ -137,11 +137,19 @@
                                                 <Border Classes="chip" Classes.limited="{Binding IsCoverageLimited}" Margin="0,0,4,0">
                                                     <TextBlock Text="{Binding CoverageChip}" />
                                                 </Border>
-                                                <Border Classes="chip" Classes.limited="{Binding IsEditionsLimited}" Margin="0,0,4,0">
+                                                <Border Classes="chip" Classes.limited="{Binding IsEditionsLimited}" Margin="0,0,4,0"
+                                                        IsVisible="{Binding HasEditionChips}">
                                                     <TextBlock Text="{Binding EditionsChip}" />
                                                 </Border>
-                                                <Border Classes="chip" Classes.limited="{Binding IsSizesLimited}" Margin="0,0,4,0">
+                                                <Border Classes="chip" Classes.limited="{Binding IsSizesLimited}" Margin="0,0,4,0"
+                                                        IsVisible="{Binding HasEditionChips}">
                                                     <TextBlock Text="{Binding SizesChip}" />
+                                                </Border>
+                                                <Border Classes="chip" Margin="0,0,4,0" IsVisible="{Binding IsForecast}">
+                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_Forecast}" />
+                                                </Border>
+                                                <Border Classes="chip" Margin="0,0,4,0" IsVisible="{Binding IsForecast}">
+                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_LatestRunOnly}" />
                                                 </Border>
                                                 <Border Classes="chip limited" IsVisible="{Binding IsNotForNavigation}">
                                                     <TextBlock Text="{x:Static loc:Strings.Library_Chip_NotForNavigation}" />

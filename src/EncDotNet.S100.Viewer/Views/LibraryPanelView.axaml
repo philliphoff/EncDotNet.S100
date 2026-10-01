@@ -564,6 +564,10 @@
                                         Content="{Binding DownloadListedText}"
                                         Command="{Binding DownloadListedCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}" />
+                                <Button Classes="Primary libraryCompact"
+                                        IsVisible="{Binding IsCheckForRuns}"
+                                        Content="{x:Static loc:Strings.Library_BulkCheckForRuns}"
+                                        Command="{Binding RefreshCommand}" />
                                 <Button Classes="Primary libraryCompact" IsEnabled="False"
                                         IsVisible="{Binding IsBulkOffline}"
                                         Content="{x:Static loc:Strings.Library_BulkUpdate}"
@@ -598,7 +602,7 @@
                                     Classes.groupHeader="{Binding IsGroupHeader}"
                                     Classes.groupChild="{Binding IsGroupChild}"
                                     Background="Transparent">
-                                <Grid ColumnDefinitions="18,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                                <Grid ColumnDefinitions="18,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                                     <!-- The swatch (or an unpacked package's chevron) sits in one 18 px column,
                                          centred on the name line. -->
                                     <views:LibrarySwatch Grid.Row="0" Grid.Column="0" State="{Binding PrimaryAvailability}"
@@ -634,6 +638,23 @@
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Summary}" Margin="0,2,0,0"
                                                FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                                TextTrimming="CharacterEllipsis" />
+                                    <!-- A forecast run (#685): its valid window — the grey part has passed, the
+                                         tinted part is ahead — and the time left (red once ended). -->
+                                    <Grid Grid.Row="4" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,5,0,0"
+                                          IsVisible="{Binding HasForecastWindow}">
+                                        <Panel Height="4" VerticalAlignment="Center">
+                                            <Border Background="{DynamicResource AccentBrush}" Opacity="0.3" CornerRadius="2" />
+                                            <ProgressBar Minimum="0" Maximum="1" Value="{Binding WindowElapsed}"
+                                                         Height="4" MinHeight="4" Background="Transparent"
+                                                         Foreground="{DynamicResource BorderColor}" />
+                                        </Panel>
+                                        <Panel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding TimeLeftText}" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                                       Opacity="0.75" IsVisible="{Binding !IsWindowEnded}" />
+                                            <TextBlock Text="{Binding TimeLeftText}" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                                       Foreground="{DynamicResource DestructiveColor}" IsVisible="{Binding IsWindowEnded}" />
+                                        </Panel>
+                                    </Grid>
                                     <!-- While downloading: a thin progress bar, how much has arrived, and Cancel. -->
                                     <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8"
                                           IsVisible="{Binding IsDownloading}" Margin="0,4,0,0">

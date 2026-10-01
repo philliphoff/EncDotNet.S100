@@ -36,6 +36,14 @@ internal enum LibraryNodeStatusKind
 /// <param name="Outdated">Those whose copy is an older edition than the catalogue's.</param>
 internal sealed record LibraryCatalogueCounts(int Total, int Local, int Outdated);
 
+/// <summary>A forecast source's models (#685): how many have a run on disk, a newer run listed, or an ended run.</summary>
+/// <param name="Models">The models the source lists.</param>
+/// <param name="Local">Models with a downloaded run.</param>
+/// <param name="NewerRun">Models whose downloaded run has a newer one listed.</param>
+/// <param name="Expired">Models whose downloaded run has ended, with nothing newer listed.</param>
+/// <param name="Left">The least time left among the current downloaded runs, if any.</param>
+internal sealed record LibraryForecastCounts(int Models, int Local, int NewerRun, int Expired, TimeSpan? Left);
+
 /// <summary>
 /// A node of the Library panel's tree: a collection, one of its sources, or
 /// (under a collection-manifest source, or a remote S-100 catalogue's areas,
@@ -51,6 +59,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private SourceIndexGroup? _group;
     private string? _downloadStatus;
     private LibraryCatalogueCounts? _catalogueCounts;
+    private LibraryForecastCounts? _forecastCounts;
     private bool _isExpanded;
     private bool _isRenaming;
     private string _renameText = string.Empty;
@@ -149,7 +158,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     {
         null => _collection.IsSession ? Icon.History : Icon.Library,
         LocalManifestSource => Icon.DocumentBulletList,
-        NoaaEncFeedSource or UsaceIencFeedSource or S100CatalogueFeedSource => Icon.Globe,
+        NoaaEncFeedSource or UsaceIencFeedSource or S100CatalogueFeedSource or S100ForecastFeedSource => Icon.Globe,
         S128CatalogueSource => Icon.BookOpen,
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => Icon.FolderZip,
         _ => Icon.Folder,
@@ -239,6 +248,20 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>A forecast source's model counts, set by the panel; <see langword="null"/> for other nodes.</summary>
+    public LibraryForecastCounts? ForecastCounts
+    {
+        get => _forecastCounts;
+        set
+        {
+            if (!Equals(_forecastCounts, value))
+            {
+                _forecastCounts = value;
+                RaiseStatus();
+            }
+        }
+    }
+
     private IReadOnlyList<LibrarySource> Sources => _source is { } s ? [s] : _collection.Sources;
 
     private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus()
@@ -261,6 +284,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return FeedStatus(feed, health, c);
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
+        if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
+            return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
             return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), _catalogueCounts, c);
         if (problems > 0)
@@ -330,6 +355,46 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         return (string.Join(" · ", parts), kind);
     }
 
+    /// <summary>
+    /// A forecast source's bookkeeping (handoff B1, 2c): "Checked 21:04 · newer
+    /// run for 1 model" (amber), "Checked 28.09 · 2 runs expired · Refresh to look
+    /// for new runs" (red), "Checked 21:04 · 1 of 2 runs local · 45 h left"
+    /// (green), "Latest runs 30.09 18:00Z · nothing local" (grey), or offline.
+    /// </summary>
+    private static (string, LibraryNodeStatusKind) ForecastStatus(
+        SourceIndex index, FeedHealth? health, LibraryForecastCounts? counts, CultureInfo c)
+    {
+        if (health is { IsReachable: false, CopyFetchedAt: { } cached })
+        {
+            var offline = string.Format(c, Strings.Library_StatusLine_ForecastOfflineFormat, FormatWhen(cached.ToLocalTime(), c));
+            if (counts is { Local: > 0 })
+                offline += " · " + string.Format(c, Strings.Library_StatusLine_RunsOnDiskFormat, counts.Local);
+            return (offline, LibraryNodeStatusKind.Info);
+        }
+
+        var checkedText = string.Format(c, Strings.Library_StatusLine_CheckedFormat,
+            FormatWhen((health?.CheckedAt ?? index.IndexedAt).ToLocalTime(), c));
+        switch (counts)
+        {
+            case { NewerRun: > 0 }:
+                return ($"{checkedText} · {string.Format(c, counts.NewerRun == 1 ? Strings.Library_StatusLine_NewerRunOne : Strings.Library_StatusLine_NewerRunFormat, counts.NewerRun)}",
+                    LibraryNodeStatusKind.Warning);
+            case { Expired: > 0 }:
+                return ($"{checkedText} · {string.Format(c, Strings.Library_StatusLine_RunsExpiredFormat, counts.Expired)} · {Strings.Library_StatusLine_RefreshForRuns}",
+                    LibraryNodeStatusKind.Error);
+            case { Local: > 0 } some:
+                var line = $"{checkedText} · {string.Format(c, Strings.Library_StatusLine_RunsLocalFormat, some.Local, some.Models)}";
+                if (some.Left is { } left)
+                    line += " · " + ForecastRuns.TimeLeft(left);
+                return (line, LibraryNodeStatusKind.Ok);
+            default:
+                var latest = index.PublishedAt is { } run
+                    ? string.Format(c, Strings.Library_StatusLine_LatestRunsFormat, ForecastRuns.FormatRun(run))
+                    : checkedText;
+                return ($"{latest} · {Strings.Library_StatusLine_NothingLocal}", LibraryNodeStatusKind.Info);
+        }
+    }
+
     /// <summary>The time when <paramref name="when"/> is today, else the date.</summary>
     private static string FormatWhen(DateTimeOffset when, CultureInfo c) =>
         when.Date == DateTime.Today ? when.ToString("t", c) : when.ToString("d", c);
@@ -349,6 +414,9 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         S100CatalogueFeedSource { CatalogUri.Host: var host }
             when host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         S100CatalogueFeedSource => "WEB",
+        S100ForecastFeedSource { ModelsUri.Host: var forecastHost }
+            when forecastHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
+        S100ForecastFeedSource => "WEB",
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
         S128CatalogueSource => "S-128",
@@ -568,6 +636,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         UsaceIencFeedSource u => u.CatalogUri,
         ChartCatalogsFeedSource c => c.CatalogUri,
         S100CatalogueFeedSource r => r.CatalogUri,
+        S100ForecastFeedSource f => f.ModelsUri,
         _ => null,
     };
 
@@ -582,6 +651,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ChartCatalogsFeedSource c => c.CatalogUri.Host,
         S100FeedSource f => f.FeedUri.Host,
         S100CatalogueFeedSource r => r.CatalogUri.Host,
+        S100ForecastFeedSource f => f.ModelsUri.Host,
         _ => source.GetType().Name,
     };
 
@@ -596,6 +666,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ChartCatalogsFeedSource c => c.CatalogUri.AbsoluteUri,
         S100FeedSource f => MaskToken(f.FeedUri),
         S100CatalogueFeedSource r => r.CatalogUri.AbsoluteUri,
+        S100ForecastFeedSource f => f.ModelsUri.AbsoluteUri,
         _ => string.Empty,
     };
 
@@ -607,6 +678,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ChartCatalogsFeedSource c => c.CatalogUri,
         S100FeedSource f => f.FeedUri,
         S100CatalogueFeedSource r => r.CatalogUri,
+        S100ForecastFeedSource f => f.ModelsUri,
         _ => null,
     };
 

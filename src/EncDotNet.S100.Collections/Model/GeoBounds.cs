@@ -57,8 +57,15 @@ public readonly record struct GeoBounds(double South, double West, double North,
 
         // Disjoint or partially overlapping arcs: the union is one of the two
         // arcs that start at one box's west edge and end at the other's east edge.
+        // An arc shorter than either box cannot hold it: boxes that touch give a
+        // zero-length arc, which is really a full turn.
+        var span = Math.Max(ArcLength(West, East), ArcLength(other.West, other.East));
         var a = ArcLength(West, other.East);
         var b = ArcLength(other.West, East);
+        if (a < span)
+            a += 360;
+        if (b < span)
+            b += 360;
         return a <= b
             ? new GeoBounds(south, West, north, other.East)
             : new GeoBounds(south, other.West, north, East);

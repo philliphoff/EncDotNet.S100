@@ -56,6 +56,37 @@
       "notForNavigation": true
     },
     {
+      "id": "noaa-s111",
+      "name": "NOAA S-111 Surface currents",
+      "provider": "NOAA Office of Coast Survey",
+      "region": ["North America", "United States"],
+      "format": "s100ForecastModels",
+      "catalogUri": "https://noaa-s111-pds.s3.amazonaws.com/ed1.0.1/model_forecast_guidance/",
+      "homepage": "https://registry.opendata.aws/noaa-s111/",
+      "coverage": "polygons",
+      "editions": true,
+      "sizes": true,
+      "note": "Current guidance from NOAA's operational forecast models, one per water body. Each run covers the next two to five days, and each model's catalogue lists only its latest run. Choose models next.",
+      "product": "S-111",
+      "notForNavigation": true,
+      "models": [
+        { "id": "cbofs", "name": "Chesapeake Bay", "cadenceHours": 6, "horizonHours": 48 },
+        { "id": "dbofs", "name": "Delaware Bay", "cadenceHours": 6, "horizonHours": 48 },
+        { "id": "gomofs", "name": "Gulf of Maine", "cadenceHours": 6, "horizonHours": 72 },
+        { "id": "leofs", "name": "Lake Erie", "cadenceHours": 6, "horizonHours": 120 },
+        { "id": "lmhofs", "name": "Lake Michigan & Lake Huron", "cadenceHours": 6, "horizonHours": 120 },
+        { "id": "loofs", "name": "Lake Ontario", "cadenceHours": 6, "horizonHours": 120 },
+        { "id": "lsofs", "name": "Lake Superior", "cadenceHours": 6, "horizonHours": 120 },
+        { "id": "ngofs2", "name": "Northern Gulf of Mexico", "cadenceHours": 6, "horizonHours": 48 },
+        { "id": "nyofs", "name": "Port of New York and New Jersey", "cadenceHours": 6, "horizonHours": 54 },
+        { "id": "rtofs_east", "name": "US East", "cadenceHours": 24, "horizonHours": 96 },
+        { "id": "rtofs_west", "name": "US West", "cadenceHours": 24, "horizonHours": 96 },
+        { "id": "sfbofs", "name": "San Francisco Bay", "cadenceHours": 6, "horizonHours": 48 },
+        { "id": "tbofs", "name": "Tampa Bay", "cadenceHours": 6, "horizonHours": 48 },
+        { "id": "wcofs", "name": "West Coast", "cadenceHours": 24, "horizonHours": 72 }
+      ]
+    },
+    {
       "id": "chartcatalogs-at-ienc",
       "name": "Inland ENC — Austria (Danube)",
       "provider": "chartcatalogs community list",

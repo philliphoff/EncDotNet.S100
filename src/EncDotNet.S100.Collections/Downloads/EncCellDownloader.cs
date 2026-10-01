@@ -34,12 +34,13 @@ public sealed record DownloadedCell(
     /// <summary>
     /// True when <paramref name="item"/> (a feed item for the same cell or
     /// package) describes a newer download: a newer edition or update, or —
-    /// for a package, which has no edition — a later publication date.
+    /// for a package, or a dataset without editions such as a forecast run
+    /// (#685) — a later publication date.
     /// </summary>
     public bool IsOlderThan(CollectionItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        if (IsPackage)
+        if (IsPackage || (Edition is null && item.Edition is null))
         {
             return item.Location is RemoteItemLocation { LastModified: { } published }
                 && PublishedAt is { } downloaded

@@ -403,6 +403,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         KnownCatalogueFormat.ChartCatalogs => Strings.Library_Format_ChartCatalogs,
         KnownCatalogueFormat.S100Feed => Strings.Library_Format_S100Feed,
         KnownCatalogueFormat.S100ExchangeCatalogue => Strings.Library_Format_S100Catalogue,
+        KnownCatalogueFormat.S100ForecastModels => Strings.Library_Format_S100Forecast,
         _ => Strings.Library_Format_NoaaEnc,
     };
 
@@ -450,6 +451,15 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     public string SizesChip => Source.Sizes ? Strings.Library_Chip_Sizes : Strings.Library_Chip_NoSizes;
 
     public bool IsSizesLimited => !Source.Sizes;
+
+    /// <summary>
+    /// True for a forecast feed (#685): its chips say "Forecast" and "Latest run
+    /// only" in place of the edition and size chips.
+    /// </summary>
+    public bool IsForecast => Source.Format == KnownCatalogueFormat.S100ForecastModels;
+
+    /// <summary>True when the edition and size chips apply (anything but a forecast feed).</summary>
+    public bool HasEditionChips => !IsForecast;
 
     /// <summary>True when the provider marks the catalogue's data as not for navigation (an amber chip).</summary>
     public bool IsNotForNavigation => Source.NotForNavigation;

@@ -39,6 +39,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(S100FeedSource), "s100Feed")]
 [JsonDerivedType(typeof(LocalManifestSource), "localManifest")]
 [JsonDerivedType(typeof(S100CatalogueFeedSource), "s100CatalogueFeed")]
+[JsonDerivedType(typeof(S100ForecastFeedSource), "s100ForecastFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -164,4 +165,20 @@ public sealed record LocalManifestSource(Guid Id, string? DisplayName, string Pa
 /// <param name="CatalogUri">The catalogue's URL; dataset file names resolve against it.</param>
 /// <param name="Filter">Which datasets to include.</param>
 public sealed record S100CatalogueFeedSource(Guid Id, string? DisplayName, Uri CatalogUri, S100CatalogueFilter Filter)
+    : CollectionSource(Id, DisplayName);
+
+/// <summary>
+/// An S-100 forecast feed (#685) — for example NOAA's S-111 surface currents
+/// on AWS Open Data — scoped to some of its models. Each model's catalogue
+/// (<c>&lt;model&gt;/CATALOG.XML</c> under <paramref name="ModelsUri"/>) lists only
+/// its latest run, so its items are that run's datasets: online
+/// (<see cref="RemoteItemLocation"/>) until downloaded, superseded by the next run.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="ModelsUri">The folder holding one folder per model (ending in <c>/</c>).</param>
+/// <param name="Models">The chosen models.</param>
+/// <param name="Shape">Whether runs download as tiles or as one file per model.</param>
+public sealed record S100ForecastFeedSource(
+    Guid Id, string? DisplayName, Uri ModelsUri, IReadOnlyList<ForecastModel> Models, ForecastShape Shape = ForecastShape.Tiles)
     : CollectionSource(Id, DisplayName);
