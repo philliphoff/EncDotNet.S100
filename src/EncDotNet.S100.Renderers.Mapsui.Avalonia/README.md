@@ -99,6 +99,11 @@ view, but it is not serialized against a concurrent live paint touching the
 shared resources, so under active repaint the result can occasionally be torn or
 partial. Hosts that never capture — most embeddings — need no subclass.
 
+`AvaloniaControlCapture` renders at 96 dpi (device scale 1) through the live
+layers. It runs inside `S100VectorTileRenderer.BeginOffscreenRender()`, so the
+capture reuses the live view's cached tiles and never schedules 1x tiles that a
+HiDPI window would go on to blit.
+
 Coordinate conversion supports Mapsui's default `EPSG:3857` map CRS and returns
 `null` for maps whose CRS requires a different projection.
 
