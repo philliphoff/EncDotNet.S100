@@ -52,6 +52,8 @@ internal static class CoverageClip
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ILayer, FinerCoverage[]> Regions = new();
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FinerCoverage[], HiddenCoverageCache> HiddenCaches = new();
+
     /// <summary>
     /// Attaches the set of finer overlapping coverages that clip
     /// <paramref name="layer"/>. Passing <see langword="null"/> or an empty set
@@ -74,6 +76,27 @@ internal static class CoverageClip
     {
         ArgumentNullException.ThrowIfNull(layer);
         return Regions.TryGetValue(layer, out var regions) ? regions : null;
+    }
+
+    /// <summary>
+    /// Gets the region of <paramref name="layer"/> that the difference clip
+    /// erases at <paramref name="resolution"/> (see <see cref="HiddenCoverage"/>),
+    /// or <see langword="null"/> when no finer coverage is active (issue #691).
+    /// Anything the layer would draw wholly inside it is clipped away, so the
+    /// renderer can skip that work. The instance stays the same while the set of
+    /// active finer coverages does, so callers can memoise answers against it.
+    /// </summary>
+    public static HiddenCoverage? GetHiddenCoverage(ILayer layer, double resolution)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+
+        var regions = Get(layer);
+        if (regions is null || regions.Length == 0)
+            return null;
+
+        return HiddenCaches
+            .GetValue(regions, static r => new HiddenCoverageCache(r))
+            .Get(resolution);
     }
 
     /// <summary>

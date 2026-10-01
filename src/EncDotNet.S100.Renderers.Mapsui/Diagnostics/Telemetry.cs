@@ -370,6 +370,27 @@ internal static class Telemetry
             description: "Speculatively-rasterised tiles that later became visible while cached (prediction hits) in the tiled TiledScene render subsystem.");
 
     /// <summary>
+    /// Count of visible tiles skipped per frame because finer, currently-drawing
+    /// coverage hides them entirely, so the coverage clip would erase them
+    /// (issue #691). Counted each frame a tile is skipped, not once per tile.
+    /// </summary>
+    public static readonly Counter<long> TileHiddenSkipped =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.hidden.skipped",
+            unit: "{tile}",
+            description: "Visible tiles per frame skipped (not scheduled, rasterised or blitted) because finer coverage hides them.");
+
+    /// <summary>
+    /// Count of layer frames skipped outright because finer, currently-drawing
+    /// coverage hides the layer across the whole viewport (issue #691).
+    /// </summary>
+    public static readonly Counter<long> TileLayerHiddenSkipped =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.layer.hidden.skipped",
+            unit: "{frame}",
+            description: "Layer frames skipped because finer coverage hides the layer across the whole viewport.");
+
+    /// <summary>
     /// Count of visible/predicted tiles served from the persistent <b>disk
     /// cache</b> (Phase&#160;4) instead of being re-rasterised — a warm tile
     /// surviving a layer rebuild (palette flip-back) or a process restart. See §3.4.
