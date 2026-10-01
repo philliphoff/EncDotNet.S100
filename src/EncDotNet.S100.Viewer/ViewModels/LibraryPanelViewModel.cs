@@ -459,7 +459,16 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                     progress.Remaining, LibraryItemViewModel.FormatBytes(progress.BytesLeft));
             }
 
+            if (IsBulkOffline)
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkOfflineFormat, LocalListedCount());
+
             var downloadable = Downloadable().ToArray();
+            if (IsUpdateMode)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkUpdatesFormat, downloadable.Length,
+                    LibraryItemViewModel.FormatBytes(downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
+            }
+
             return downloadable.Length == 0
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkListedFormat, ListedCount)
                 : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkToDownloadFormat, downloadable.Length,
@@ -481,6 +490,15 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                     Math.Min(progress.Total, progress.Completed + progress.Failed + 1), progress.Total, progress.Fraction);
             }
 
+            if (IsBulkOffline)
+                return Strings.Library_BulkOfflineScope;
+
+            if (IsUpdateMode)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkUpdatesScopeFormat,
+                    LocalListedCount(), _items.Count(i => !i.IsGroupHeader));
+            }
+
             if (DownloadableCount == 0)
                 return Strings.Library_BulkNothing;
 
@@ -497,7 +515,30 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     public int DownloadableCount => Downloadable().Count();
 
     private IEnumerable<LibraryItemViewModel> Downloadable() =>
-        _items.Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+        IsBulkOffline ? []
+        : IsUpdateMode ? _items.Where(i => i.QuietUpdates && i.Availability == LibraryAvailability.Outdated && _downloader.CanDownload(i.Item))
+        : _items.Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+
+    /// <summary>
+    /// True when listed remote-catalogue datasets have newer editions online:
+    /// the bulk bar then offers "Update downloaded (N)" for those alone (#685),
+    /// rather than mixing updates into a download of everything listed.
+    /// </summary>
+    public bool IsUpdateMode => _items.Any(i => i.QuietUpdates && i.Availability == LibraryAvailability.Outdated);
+
+    /// <summary>
+    /// True when the selected node is remote catalogues whose server could not
+    /// be reached: the cached index still lists and loads, but nothing downloads.
+    /// </summary>
+    public bool IsBulkOffline =>
+        !IsBulkDownloading
+        && _selectedNode is { } node
+        && (node.Source is { } source ? [source] : node.Collection.Sources) is { Count: > 0 } sources
+        && sources.All(s => s.Definition is S100CatalogueFeedSource && _feedHealth?.Invoke(s.Definition) is { IsReachable: false });
+
+    /// <summary>How many listed datasets have a copy on disk (current or not).</summary>
+    private int LocalListedCount() =>
+        _items.Count(i => !i.IsGroupHeader && i.PrimaryAvailability is LibraryPrimaryAvailability.Local or LibraryPrimaryAvailability.Update);
 
     /// <summary>True when some listed dataset can be downloaded (and no bulk download is running).</summary>
     public bool HasDownloadable => !IsBulkDownloading && DownloadableCount > 0;
@@ -507,7 +548,27 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     {
         get
         {
-            return string.Format(CultureInfo.CurrentCulture, Strings.Library_DownloadListedFormat, DownloadableCount);
+            return string.Format(CultureInfo.CurrentCulture,
+                IsUpdateMode ? Strings.Library_UpdateDownloadedFormat : Strings.Library_DownloadListedFormat, DownloadableCount);
+        }
+    }
+
+    /// <summary>
+    /// Selects the tree node of a remote catalogue's area (a map tap on it
+    /// when zoomed out; #685): its group node, or the source when it shows no
+    /// area nodes. The collection and source open so the node is visible.
+    /// </summary>
+    public void SelectArea(Guid sourceId, string folder)
+    {
+        foreach (var collection in Nodes)
+        {
+            if (collection.Children.FirstOrDefault(c => c.Id == sourceId) is not { } source)
+                continue;
+
+            collection.IsExpanded = true;
+            source.IsExpanded = true;
+            SelectedNode = source.Children.FirstOrDefault(c => c.GroupId == folder) ?? source;
+            return;
         }
     }
 
@@ -659,8 +720,44 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasBulkBar));
         OnPropertyChanged(nameof(BulkSummary));
         OnPropertyChanged(nameof(BulkScope));
+        OnPropertyChanged(nameof(IsBulkOffline));
+        OnPropertyChanged(nameof(DownloadListedText));
         ((RelayCommand)CancelDownloadsCommand).NotifyCanExecuteChanged();
         UpdateNodeDownloadStatus();
+    }
+
+    /// <summary>
+    /// Gives each remote S-100 catalogue node its local and update counts for
+    /// its status line ("Catalogue 30.09 · 140 updates"); a one-source
+    /// collection shows its source's.
+    /// </summary>
+    private void UpdateCatalogueCounts()
+    {
+        foreach (var collection in Nodes)
+        {
+            LibraryCatalogueCounts? only = null;
+            foreach (var child in collection.Children)
+            {
+                if (child.Source is not { Definition: S100CatalogueFeedSource, Index: { } index })
+                    continue;
+
+                int local = 0, outdated = 0;
+                foreach (var item in index.Items)
+                {
+                    if (_downloader.Localize(item).Location is not LocalItemLocation)
+                        continue;
+                    local++;
+                    if (_downloader.IsOutdated(item))
+                        outdated++;
+                }
+
+                child.CatalogueCounts = new LibraryCatalogueCounts(index.Items.Count, local, outdated);
+                if (collection.Children.Count == 1)
+                    only = child.CatalogueCounts;
+            }
+
+            collection.CatalogueCounts = only;
+        }
     }
 
     /// <summary>Sets "Downloading 2 of 5 · 4,3 MB left" on the nodes whose datasets are downloading.</summary>
@@ -720,6 +817,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             // (A row whose availability was never resolved returns at once.)
             foreach (var item in _allItems)
                 item.RefreshAvailability();
+            UpdateCatalogueCounts();
             RefreshDownloadProgress();
             // A dataset whose state changed may now belong to another segment.
             if (_stateFilter == LibraryStateFilter.All)
@@ -773,9 +871,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private async Task DownloadListedAsync()
     {
-        var items = _items
-            .Where(i => i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item))
-            .ToArray();
+        var items = Downloadable().ToArray();
         TrackDownloads(items);
         var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
         if (result.Downloaded > 0 && ReindexPackageSources(items))
@@ -931,6 +1027,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _hasSynced = true;
 
         SelectedNode ??= Nodes.FirstOrDefault();
+        UpdateCatalogueCounts();
         OnPropertyChanged(nameof(IsEmpty));
         ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
         ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
@@ -1037,6 +1134,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(ItemsSummary));
         OnPropertyChanged(nameof(HasBulkBar));
+        OnPropertyChanged(nameof(IsBulkOffline));
+        OnPropertyChanged(nameof(IsUpdateMode));
         OnPropertyChanged(nameof(BulkSummary));
         OnPropertyChanged(nameof(BulkScope));
         ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();

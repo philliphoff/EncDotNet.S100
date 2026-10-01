@@ -34,6 +34,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         var changes = 0;
         service.Changed += (_, _) => changes++;
         Assert.Same(Cell().Location.GetType(), service.Localize(Cell()).Location.GetType());
+        Assert.Null(((ILibraryDownloader)service).LocalEditionOf(Cell()));
 
         var result = await service.DownloadAsync([Cell()]);
 
@@ -44,6 +45,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         Assert.Equal(LibraryAvailability.Local, LibraryAvailabilityResolver.Resolve(service.Localize(Cell())));
         Assert.False(service.IsOutdated(Cell()));
         Assert.True(service.IsOutdated(Cell(update: 2)));
+        Assert.Equal(Cell().Edition, ((ILibraryDownloader)service).LocalEditionOf(Cell()));
     }
 
     [Fact]

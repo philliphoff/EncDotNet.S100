@@ -41,6 +41,12 @@ namespace EncDotNet.S100.Viewer.Services;
 /// is outlined clears the tap. The panel's "Zoom to" moves the map to a
 /// dataset's bounds.
 /// </para>
+/// <para>
+/// Zoomed out past <see cref="AreaScaleThreshold"/>, a remote S-100
+/// catalogue's tiles (thousands for NOAA's S-102) are drawn as one outline per
+/// area instead: solid when every listed tile is local, amber when any has a
+/// newer edition, dashed otherwise. Tapping an area selects its node in the tree.
+/// </para>
 /// </remarks>
 internal sealed class LibraryCoverageOverlayController : IDisposable
 {
@@ -48,6 +54,12 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
     /// <summary>Upper bound on outlined datasets per redraw, to keep panning smooth.</summary>
     internal const int MaxOutlinedItems = 2500;
+
+    /// <summary>
+    /// Zoomed out beyond this scale (1:1 500 000), a remote S-100 catalogue's
+    /// tiles are drawn as one outline per area (#685, handoff E2).
+    /// </summary>
+    internal const double AreaScaleThreshold = 1_500_000;
 
     private static readonly ConditionalWeakTable<CollectionItem, IReadOnlyList<(double X, double Y)[]>> RingCache = new();
 
@@ -126,6 +138,16 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         var scale = CurrentScale() is var current && !double.IsNaN(current)
             ? current
             : LazyCellGate.ScaleDenominator(tap.Resolution, tap.Position.Latitude);
+
+        // Zoomed out, a tap on an area selects its node (the list follows).
+        if (AreaHit(Areas(_panel.Items, scale), tap.Position) is { } area)
+        {
+            _lastTap = null;
+            _panel.ClearTap();
+            _panel.SelectArea(area.SourceId, area.Area.Folder);
+            return true;
+        }
+
         var hits = Hits(_panel.Items, _panel.SelectedItem, tap.Position, scale);
         if (hits.Count == 0)
         {
@@ -166,7 +188,51 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     internal static IEnumerable<LibraryItemViewModel> Candidates(IEnumerable<LibraryItemViewModel> listed, double scale) =>
         listed.Where(i => !i.IsGroupHeader
             && i.Item.Bounds is not null
-            && CoverageGeometry.IsVisibleAtScale(i.Item, scale));
+            && CoverageGeometry.IsVisibleAtScale(i.Item, scale)
+            && !IsInArea(i, scale));
+
+    /// <summary>True when <paramref name="item"/> is drawn as part of its area at <paramref name="scale"/>, not on its own.</summary>
+    private static bool IsInArea(LibraryItemViewModel item, double scale) =>
+        scale > AreaScaleThreshold
+        && item.QuietUpdates
+        && item.Source.Index is not null
+        && item.Item.Properties.ContainsKey(EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderProperty);
+
+    /// <summary>
+    /// The areas drawn at <paramref name="scale"/>: one per folder of a remote
+    /// catalogue among the <paramref name="listed"/> datasets (none when zoomed
+    /// in), with the listed tiles in each.
+    /// </summary>
+    internal static IReadOnlyList<(Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)> Areas(
+        IEnumerable<LibraryItemViewModel> listed, double scale) =>
+        listed.Where(i => !i.IsGroupHeader && IsInArea(i, scale))
+            .GroupBy(i => (i.Source, Folder: EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderOf(i.Item)))
+            .Select(g => (g.Key.Source.Id, Area: CoverageAreas.Get(g.Key.Source.Index!, g.Key.Folder),
+                Items: (IReadOnlyList<LibraryItemViewModel>)g.ToArray()))
+            .Where(a => a.Area is not null)
+            .Select(a => (a.Id, a.Area!, a.Items))
+            .ToArray();
+
+    /// <summary>The smallest area containing <paramref name="position"/>, if any.</summary>
+    private static (Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)? AreaHit(
+        IReadOnlyList<(Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)> areas, GeoPosition position)
+    {
+        if (areas.Count == 0)
+            return null;
+        var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
+        return areas.Where(a => a.Area.Contains(x, y)).OrderBy(a => a.Area.Shape.Area)
+            .Select(a => ((Guid, LibraryArea, IReadOnlyList<LibraryItemViewModel>)?)a)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// An area's outline (handoff E2): amber when any listed tile has a newer
+    /// edition, solid when every listed tile is local, dashed otherwise.
+    /// </summary>
+    internal static LibraryPrimaryAvailability AreaState(IReadOnlyList<LibraryItemViewModel> items) =>
+        items.Any(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Update) ? LibraryPrimaryAvailability.Update
+        : items.All(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local) ? LibraryPrimaryAvailability.Local
+        : LibraryPrimaryAvailability.Online;
 
     /// <summary>The overlay layer (for tests).</summary>
     internal MemoryLayer Layer => _layer;
@@ -250,6 +316,15 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             // While a dataset is selected, the others fade so it stands out without being thick.
             var opacity = selected is null ? LibraryOutlineStyles.LineOpacity : LibraryOutlineStyles.DimmedLineOpacity;
 
+            var mercatorView = view is { } v ? MercatorView(v) : null;
+            foreach (var (_, area, items) in Areas(_panel.Items, scale))
+            {
+                if (mercatorView is { } mv && !mv.Intersects(area.Extent))
+                    continue;
+                AddRings(features, area.Rings, StyleFor(AreaState(items)), casing, opacity);
+                OutlinedCount++;
+            }
+
             var candidates = Candidates(_panel.Items, scale)
                 // Loaded datasets speak for themselves on the chart.
                 .Where(i => !ReferenceEquals(i, selected)
@@ -261,7 +336,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
             foreach (var item in candidates)
             {
-                AddOutline(features, item, StyleFor(item.Availability), casing, opacity);
+                AddOutline(features, item, StyleFor(item.PrimaryAvailability), casing, opacity);
                 OutlinedCount++;
             }
 
@@ -286,9 +361,13 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// contours and land), then the line itself.
     /// </summary>
     private static void AddOutline(
-        List<IFeature> features, LibraryItemViewModel item, OutlineStyle style, MapsuiColor casing, float opacity)
+        List<IFeature> features, LibraryItemViewModel item, OutlineStyle style, MapsuiColor casing, float opacity) =>
+        AddRings(features, RingCache.GetValue(item.Item, static i => CoverageGeometry.ToMercatorRings(i)), style, casing, opacity);
+
+    /// <summary>Adds outline rings (Web Mercator metres) with a casing and an optional fill.</summary>
+    private static void AddRings(
+        List<IFeature> features, IReadOnlyList<(double X, double Y)[]> rings, OutlineStyle style, MapsuiColor casing, float opacity)
     {
-        var rings = RingCache.GetValue(item.Item, static i => CoverageGeometry.ToMercatorRings(i));
         foreach (var ring in rings)
         {
             if (ring.Length < 2)
@@ -347,9 +426,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// The outline for a dataset's primary availability (where its data is),
     /// shared with the Library panel's row swatches so the list is the map's legend.
     /// </summary>
-    private static OutlineStyle StyleFor(LibraryAvailability availability)
+    private static OutlineStyle StyleFor(LibraryPrimaryAvailability availability)
     {
-        var style = LibraryOutlineStyles.For(LibraryOutlineStyles.Primary(availability));
+        var style = LibraryOutlineStyles.For(availability);
         return new OutlineStyle(
             new MapsuiColor(style.Color.R, style.Color.G, style.Color.B), style.Width, style.DashArray?.ToArray(), style.FillOpacity,
             style.RoundCap);
@@ -359,6 +438,15 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     private double CurrentScale() => _viewport.Current is { } snapshot
         ? LazyCellGate.ScaleDenominator(snapshot.MercatorResolution, (snapshot.MinLatitude + snapshot.MaxLatitude) / 2)
         : double.NaN;
+
+    /// <summary>The view in Web Mercator metres (for area extents).</summary>
+    private static Envelope MercatorView(GeoBounds view)
+    {
+        var east = view.CrossesAntimeridian ? view.East + 360 : view.East;
+        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(view.West, Math.Max(view.South, -85));
+        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(east, Math.Min(view.North, 85));
+        return new Envelope(minX, maxX, minY, maxY);
+    }
 
     private static GeoBounds? ViewBounds(MapViewportSnapshot? snapshot)
     {

@@ -30,6 +30,12 @@ internal enum LibraryNodeStatusKind
     Info,
 }
 
+/// <summary>How many of a remote catalogue's datasets are on disk, and how many of those have a newer edition online.</summary>
+/// <param name="Total">The datasets the source lists.</param>
+/// <param name="Local">Those with a downloaded copy.</param>
+/// <param name="Outdated">Those whose copy is an older edition than the catalogue's.</param>
+internal sealed record LibraryCatalogueCounts(int Total, int Local, int Outdated);
+
 /// <summary>
 /// A node of the Library panel's tree: a collection, one of its sources, or
 /// (under a collection-manifest source, or a remote S-100 catalogue's areas,
@@ -44,6 +50,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private LibrarySource? _source;
     private SourceIndexGroup? _group;
     private string? _downloadStatus;
+    private LibraryCatalogueCounts? _catalogueCounts;
     private bool _isExpanded;
     private bool _isRenaming;
     private string _renameText = string.Empty;
@@ -215,6 +222,23 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// A remote S-100 catalogue's local and update counts, set by the panel;
+    /// <see langword="null"/> for other nodes (and group nodes).
+    /// </summary>
+    public LibraryCatalogueCounts? CatalogueCounts
+    {
+        get => _catalogueCounts;
+        set
+        {
+            if (!Equals(_catalogueCounts, value))
+            {
+                _catalogueCounts = value;
+                RaiseStatus();
+            }
+        }
+    }
+
     private IReadOnlyList<LibrarySource> Sources => _source is { } s ? [s] : _collection.Sources;
 
     private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus()
@@ -238,7 +262,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
-            return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), c);
+            return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), _catalogueCounts, c);
         if (problems > 0)
             return (string.Format(c, Strings.Library_StatusLine_ProblemsFormat, problems), LibraryNodeStatusKind.Warning);
         if (_collection.IsSession)
@@ -263,25 +287,47 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// A remote S-100 catalogue's bookkeeping: "Catalogue 30.09.2026 · not for
-    /// navigation", or "Offline · catalogue cached 30.09.2026" while its server
-    /// cannot be reached (handoff B1).
+    /// A remote S-100 catalogue's bookkeeping (handoff B1): "Catalogue
+    /// 30.09.2026 · 140 updates · not for navigation" (amber), "… · 152 of 307
+    /// local …" (green) or "… · nothing local …" (grey); or "Offline ·
+    /// catalogue cached 30.09.2026 · 152 local" while its server cannot be reached.
     /// </summary>
-    private static (string, LibraryNodeStatusKind) CatalogueStatus(SourceIndex index, FeedHealth? health, CultureInfo c)
+    private static (string, LibraryNodeStatusKind) CatalogueStatus(
+        SourceIndex index, FeedHealth? health, LibraryCatalogueCounts? counts, CultureInfo c)
     {
         var notForNavigation = index.Items.Count > 0
             && index.Items.All(i => i.Properties.GetValueOrDefault("notForNavigation") == "true");
         if (health is { IsReachable: false, CopyFetchedAt: { } cached })
         {
-            return (string.Format(c, Strings.Library_StatusLine_CatalogueOfflineFormat, FormatWhen(cached.ToLocalTime(), c)),
-                LibraryNodeStatusKind.Info);
+            var offline = string.Format(c, Strings.Library_StatusLine_CatalogueOfflineFormat, FormatWhen(cached.ToLocalTime(), c));
+            if (counts is { Local: > 0 })
+                offline += " · " + string.Format(c, Strings.Library_StatusLine_LocalFormat, counts.Local);
+            return (offline, LibraryNodeStatusKind.Info);
         }
 
         var dated = (index.PublishedAt ?? index.IndexedAt).ToLocalTime();
-        var line = string.Format(c, Strings.Library_StatusLine_CatalogueFormat, dated.ToString("d", c));
+        var parts = new List<string>(3) { string.Format(c, Strings.Library_StatusLine_CatalogueFormat, dated.ToString("d", c)) };
+        var kind = LibraryNodeStatusKind.Info;
+        switch (counts)
+        {
+            case { Outdated: > 0 }:
+                parts.Add(string.Format(c, Strings.Library_StatusLine_UpdatesFormat, counts.Outdated));
+                kind = LibraryNodeStatusKind.Warning;
+                break;
+            case { Local: 0 }:
+                parts.Add(Strings.Library_StatusLine_NothingLocal);
+                break;
+            case { } some:
+                parts.Add(some.Local == some.Total
+                    ? string.Format(c, Strings.Library_StatusLine_AllLocalFormat, some.Total)
+                    : string.Format(c, Strings.Library_StatusLine_SomeLocalFormat, some.Local, some.Total));
+                kind = LibraryNodeStatusKind.Ok;
+                break;
+        }
+
         if (notForNavigation)
-            line += " · " + Strings.Library_StatusLine_NotForNavigation;
-        return (line, LibraryNodeStatusKind.Info);
+            parts.Add(Strings.Library_StatusLine_NotForNavigation);
+        return (string.Join(" · ", parts), kind);
     }
 
     /// <summary>The time when <paramref name="when"/> is today, else the date.</summary>

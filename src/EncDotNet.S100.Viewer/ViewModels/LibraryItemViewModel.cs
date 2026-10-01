@@ -224,6 +224,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                     : string.Format(CultureInfo.CurrentCulture, Strings.Library_PackagePublishedFormat, Item.Name, published);
             }
 
+            if (QuietUpdates)
+                return RemoteCatalogueSummary();
+
             var parts = new List<string>(4) { Item.ProductSpec };
             if (Item.UsageBand is { } band)
                 parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Library_BandFormat, band));
@@ -239,6 +242,43 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 parts.Add(FormatBytes(size));
             return string.Join(" · ", parts);
         }
+    }
+
+    /// <summary>
+    /// True for a dataset from a remote S-100 catalogue (#685): a newer edition
+    /// is shown by an amber swatch and "Ed 2 → Ed 3 online" rather than a tag,
+    /// since nearly every tile is reissued each quarter; the source node and
+    /// bulk bar carry the count and the action.
+    /// </summary>
+    public bool QuietUpdates => Source.Definition is S100CatalogueFeedSource && !IsGroupHeader;
+
+    /// <summary>
+    /// "S-102 · Port 4 m · Ed 3 · 2026-08-14 · 3,1 MB", or, with a newer
+    /// edition online, "S-102 · Port 4 m · Ed 2 → Ed 3 online · 2,8 MB".
+    /// </summary>
+    private string RemoteCatalogueSummary()
+    {
+        var c = CultureInfo.CurrentCulture;
+        var parts = new List<string>(5) { Item.ProductSpec };
+        if (Library.NavigationPurposes.Of(Item) is { } purpose)
+            parts.Add(purpose);
+        if (Availability == LibraryAvailability.Outdated && Item.Edition is { } online)
+        {
+            parts.Add(_downloader?.LocalEditionOf(Item) is { } local
+                ? string.Format(c, Strings.Library_EditionNewerOnlineFormat, local, online)
+                : string.Format(c, Strings.Library_EditionOnlineFormat, online));
+        }
+        else
+        {
+            if (Item.Edition is { } edition)
+                parts.Add(string.Format(c, Strings.Library_EditionFormat, edition));
+            if (Item.IssueDate is { } issued)
+                parts.Add(issued.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        }
+
+        if (Item.Location is RemoteItemLocation { SizeBytes: { } size })
+            parts.Add(FormatBytes(size));
+        return string.Join(" · ", parts);
     }
 
     /// <summary>Where the data can be had now (resolved on first access).</summary>
@@ -271,6 +311,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(PrimaryAvailability));
         OnPropertyChanged(nameof(PrimaryStateText));
         OnPropertyChanged(nameof(Tags));
+        if (QuietUpdates)
+            OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(CanLoadAfterDownload));
         OnPropertyChanged(nameof(LoadTooltip));
         RefreshDownload();
@@ -283,7 +325,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// Where the data is — exactly one state, drawn as the row swatch exactly
     /// like the map outline.
     /// </summary>
-    public LibraryPrimaryAvailability PrimaryAvailability => LibraryOutlineStyles.Primary(Availability);
+    public LibraryPrimaryAvailability PrimaryAvailability => QuietUpdates && Availability == LibraryAvailability.Outdated
+        ? LibraryPrimaryAvailability.Update
+        : LibraryOutlineStyles.Primary(Availability);
 
     /// <summary>
     /// What is happening to the dataset — zero or more sentence-case tags
@@ -314,7 +358,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
             switch (Availability)
             {
-                case LibraryAvailability.Outdated:
+                case LibraryAvailability.Outdated when !QuietUpdates:
                     tags.Add(new LibraryItemTag(UpdateText(), LibraryItemTagKind.Update));
                     break;
                 case LibraryAvailability.Loaded:
@@ -347,12 +391,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 LibraryPrimaryAvailability.Local => Strings.Library_Availability_Local,
                 LibraryPrimaryAvailability.Online => Strings.Library_Availability_Online,
                 LibraryPrimaryAvailability.Missing => Strings.Library_Availability_Missing,
+                LibraryPrimaryAvailability.Update => Strings.Library_Availability_Outdated,
                 _ => Strings.Library_Availability_Listed,
             };
             var size = PrimaryAvailability switch
             {
                 LibraryPrimaryAvailability.Online => (Item.Location as RemoteItemLocation)?.SizeBytes,
-                LibraryPrimaryAvailability.Local => LocalSize(),
+                LibraryPrimaryAvailability.Local or LibraryPrimaryAvailability.Update => LocalSize(),
                 _ => null,
             };
             return size is { } bytes

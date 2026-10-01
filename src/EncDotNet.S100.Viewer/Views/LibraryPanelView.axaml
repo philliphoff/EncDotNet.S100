@@ -564,6 +564,10 @@
                                         Content="{Binding DownloadListedText}"
                                         Command="{Binding DownloadListedCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}" />
+                                <Button Classes="Primary libraryCompact" IsEnabled="False"
+                                        IsVisible="{Binding IsBulkOffline}"
+                                        Content="{x:Static loc:Strings.Library_BulkUpdate}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_BulkOffline}" />
                                 <Button Classes="Primary libraryCompact"
                                         IsVisible="{Binding IsBulkDownloading}"
                                         Content="{x:Static loc:Strings.Button_Cancel}"

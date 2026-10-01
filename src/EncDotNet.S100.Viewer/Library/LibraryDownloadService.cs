@@ -96,6 +96,9 @@ internal interface ILibraryDownloader
     /// <summary>True when the downloaded copy of <paramref name="item"/> is an older edition or update.</summary>
     bool IsOutdated(CollectionItem item);
 
+    /// <summary>The edition of <paramref name="item"/>'s downloaded copy, or <see langword="null"/> when not downloaded (or unknown).</summary>
+    int? LocalEditionOf(CollectionItem item) => null;
+
     /// <summary>True when <paramref name="item"/> can be downloaded.</summary>
     bool CanDownload(CollectionItem item);
 
@@ -182,6 +185,8 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
 
     public bool IsOutdated(CollectionItem item) =>
         item.Location is RemoteItemLocation && Downloaded(item) is { } cell && cell.IsOlderThan(item);
+
+    public int? LocalEditionOf(CollectionItem item) => Downloaded(item)?.Edition;
 
     public bool CanDownload(CollectionItem item) =>
         item.Location is RemoteItemLocation remote
