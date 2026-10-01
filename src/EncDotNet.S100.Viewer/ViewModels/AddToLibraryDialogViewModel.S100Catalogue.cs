@@ -112,7 +112,8 @@ internal sealed partial class AddToLibraryDialogViewModel
             _facetGroups = regions.Select(r =>
             {
                 var group = new FacetGroupViewModel(r.Name, [.. r.Areas.Select(a => new FacetOptionViewModel(
-                    a.Value, RemoteS100Catalogue.FolderName(a.Value), string.Empty))]) { Key = r.Folder };
+                    a.Value, RemoteS100Catalogue.FolderName(a.Value), string.Empty))])
+                { Key = r.Folder };
                 foreach (var option in group.Options)
                     option.PropertyChanged += OnFacetChanged;
                 return group;
