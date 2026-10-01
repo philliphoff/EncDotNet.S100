@@ -25,6 +25,12 @@ internal enum LibraryAvailability
 
     /// <summary>Downloaded, but the feed now lists a newer edition or update.</summary>
     Outdated,
+
+    /// <summary>
+    /// A downloaded forecast run whose valid window has ended, with no newer
+    /// run known (#685); it still loads, for looking back.
+    /// </summary>
+    Expired,
 }
 
 /// <summary>Computes a <see cref="LibraryAvailability"/> from an item's location.</summary>

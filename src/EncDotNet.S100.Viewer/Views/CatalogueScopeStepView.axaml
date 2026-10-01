@@ -71,7 +71,6 @@
         <!-- Facet rows: 32 px, the detail right-aligned. -->
         <Style Selector="CheckBox.facet">
             <Setter Property="MinHeight" Value="32" />
-            <Setter Property="Height" Value="32" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="8,0,0,0" />
@@ -86,8 +85,11 @@
         <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="10,0">
                 <CheckBox Classes="facet" IsChecked="{Binding IsSelected}">
-                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                               ToolTip.Tip="{Binding Label}" />
+                    <StackPanel VerticalAlignment="Center" Margin="0,4">
+                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
+                        <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" Classes="muted" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
                 </CheckBox>
                 <TextBlock Grid.Column="1" Text="{Binding Detail}" Classes="muted" FontSize="12.5"
                            VerticalAlignment="Center" IsVisible="{Binding !HasPaths}" />
@@ -153,6 +155,28 @@
                     </StackPanel>
                 </Border>
             </Grid>
+
+            <!-- A forecast feed: how runs download, for every model. -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsS100Forecast}">
+                <TextBlock Text="{x:Static loc:Strings.Wizard_ForecastShapeTitle}" FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="8" Padding="3">
+                    <ListBox Classes="facetTabs" ItemsSource="{Binding ForecastShapes}" SelectedItem="{Binding SelectedForecastShape}">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ResolutionOptionViewModel">
+                                <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+                <TextBlock Text="{Binding ForecastShapeHint}" Classes="muted" FontSize="12" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
 
             <!-- A remote catalogue's resolution: applies to every area. -->
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasResolutions}">

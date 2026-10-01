@@ -15,6 +15,7 @@ Key types:
   - `NoaaEncFeedSource`
   - `UsaceIencFeedSource`
   - `S100CatalogueFeedSource`
+  - `S100ForecastFeedSource`
 - **`CollectionIndexer`** — indexes any supported source. It reuses a previous `SourceIndex` when the source's fingerprint is unchanged.
 - **`LocalSourceIndexer`** — handles folders and exchange sets:
   - S-100 exchange sets (`CATALOG.XML`), including their GML coverage polygons.
@@ -38,6 +39,11 @@ Key types:
   - Each dataset's folder below the exchange set's root (for NOAA's S-102, `Region/Area`) is its group. `S100CatalogueFilter` scopes a source by folder and navigation purpose, and `S100CatalogueFacets` summarises the regions, areas and purposes.
   - S-100 catalogues carry no sizes. When the catalogue is in an S3 bucket, `S3ObjectListing` lists the selected folders for sizes and dates.
   - Gzip-encoded catalogues are read as they are. Caching is the same as for the NOAA feed.
+- **`S100ForecastFeedIndexer`** — handles S-100 forecast feeds: one folder per forecast model, each with a catalogue of its latest run only, such as NOAA's S-111 surface currents on AWS:
+  - A source names its models (`ForecastModel`: id, water body, cadence, forecast horizon) and whether runs download as tiles or as one file per model (`ForecastShape`).
+  - Each item is stamped with its run time and valid window (`run`, `validTo`). Runs have no editions, so a downloaded run is outdated once a later run is listed. Items keep their identity across runs, so a new run replaces the old one on download.
+  - `GetModelsAsync` summarises each model's latest run (tiles, sizes, footprint) for choosing models.
+  - Catalogues are revalidated after a minute, since each model's catalogue is overwritten with every run.
 - **`EncCellDownloader`** — downloads a cell's zip into a managed folder:
   - The zip is first written to a `.partial` file, then extracted to a staging folder.
   - The new copy replaces any old one only once it is complete.
@@ -58,13 +64,14 @@ To add a catalogue:
 
 - **Point at the provider's own catalogue URL.** Don't copy entries or data from other projects' source lists, and never from GPL-licensed ones such as OpenCPN's.
 - **Check the licence** of any third-party list you reference. For example, the community `chartcatalogs/catalogs` lists are CC0.
-- **Use a supported `format`** (`noaaEnc`, `usaceIenc`, `chartCatalogs`, `s100Feed` or `s100ExchangeCatalogue`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
+- **Use a supported `format`** (`noaaEnc`, `usaceIenc`, `chartCatalogs`, `s100Feed`, `s100ExchangeCatalogue` or `s100ForecastModels`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
 - **Describe what the catalogue provides honestly:**
   - `coverage`: `polygons`, `boundingBoxes` or `none`
   - `editions`: whether it lists editions and updates
   - `sizes`: whether it lists download sizes (or, for an S-100 catalogue in an S3 bucket, whether they can be listed)
   - `product` (optional): the one product the catalogue publishes, e.g. `S-102`
   - `notForNavigation` (optional): `true` when the provider marks all its data as not for navigation
+  - `models` (for `s100ForecastModels`): each model's `id`, `name` (water body), `cadenceHours` and `horizonHours`, measured from the published runs
 
   These drive the quality chips users see.
 

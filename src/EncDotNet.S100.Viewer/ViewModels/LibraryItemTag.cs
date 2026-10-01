@@ -22,6 +22,9 @@ internal enum LibraryItemTagKind
 
     /// <summary>A neutral fact, e.g. a community-list package (outline).</summary>
     Neutral,
+
+    /// <summary>A forecast run whose valid window has ended (red tint, like a failure; #685).</summary>
+    Expired,
 }
 
 /// <summary>
@@ -41,7 +44,7 @@ internal sealed record LibraryItemTag(string Text, LibraryItemTagKind Kind, ICom
 
     public bool IsQueued => Kind == LibraryItemTagKind.Queued;
 
-    public bool IsFailed => Kind == LibraryItemTagKind.Failed;
+    public bool IsFailed => Kind is LibraryItemTagKind.Failed or LibraryItemTagKind.Expired;
 
     public bool IsClickable => Command is not null;
 }

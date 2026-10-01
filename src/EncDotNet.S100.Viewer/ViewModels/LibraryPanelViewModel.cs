@@ -47,6 +47,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
     private readonly Services.Notifications.INotificationService? _notifications;
     private readonly Action<Action> _dispatch;
+    private readonly TimeProvider _time;
+    private readonly ITimer? _clock;
 
     private LibraryNodeViewModel? _selectedNode;
     private bool _hasSynced;
@@ -84,8 +86,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryDownloader downloader,
         Action<Action> dispatch,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
-        Services.Notifications.INotificationService? notifications = null)
+        Services.Notifications.INotificationService? notifications = null,
+        TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _feedHealth = feedHealth;
         _notifications = notifications;
         ArgumentNullException.ThrowIfNull(downloader);
@@ -133,6 +137,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _downloader.ProgressChanged += OnDownloadProgress;
 
         _library.Changed += OnLibraryChanged;
+
+        // Forecast runs age by the minute: time left, and Expired (#685).
+        _clock = _time.CreateTimer(_ => _dispatch(OnClockTick), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
         Sync();
     }
 
@@ -462,6 +469,16 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             if (IsBulkOffline)
                 return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkOfflineFormat, LocalListedCount());
 
+            var c = CultureInfo.CurrentCulture;
+            if (NewRunModels() is { Count: > 0 } newRuns)
+            {
+                var bytes = LibraryItemViewModel.FormatBytes(Downloadable().Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0));
+                return string.Format(c, newRuns.Count == 1 ? Strings.Library_BulkNewRunFormat : Strings.Library_BulkNewRunsFormat, newRuns.Count, bytes);
+            }
+
+            if (ExpiredModels() is { Count: > 0 } expired)
+                return string.Format(c, expired.Count == 1 ? Strings.Library_BulkRunExpired : Strings.Library_BulkRunsExpiredFormat, expired.Count);
+
             var downloadable = Downloadable().ToArray();
             if (IsUpdateMode)
             {
@@ -493,6 +510,22 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             if (IsBulkOffline)
                 return Strings.Library_BulkOfflineScope;
 
+            if (NewRunModels() is { Count: > 0 } newRuns)
+            {
+                // "cbofs 18:00Z replaces 12:00Z" for one model; the models otherwise.
+                var first = ListedDatasets().First(i => i.IsForecast && i.Availability == LibraryAvailability.Outdated);
+                return newRuns.Count == 1
+                    && EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer.RunOf(first.Item) is { } onlineRun
+                    && _downloader.LocalPublishedAtOf(first.Item) is { } localRun
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkRunReplacesFormat, newRuns[0],
+                        onlineRun.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z",
+                        localRun.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z")
+                    : string.Join(", ", newRuns);
+            }
+
+            if (ExpiredModels() is { Count: > 0 })
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkLastCheckedFormat, LastChecked());
+
             if (IsUpdateMode)
             {
                 return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkUpdatesScopeFormat,
@@ -503,7 +536,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 return Strings.Library_BulkNothing;
 
             var scope = IsFiltered ? Strings.Library_BulkScopeFiltered : Strings.Library_BulkScopeAll;
-            var local = _items.Count(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local && !_downloader.IsOutdated(i.Item));
+            var local = ListedDatasets().Count(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local && !_downloader.IsOutdated(i.Item));
             return local == 0 ? scope : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkAlreadyLocalFormat, scope, local);
         }
     }
@@ -516,15 +549,60 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private IEnumerable<LibraryItemViewModel> Downloadable() =>
         IsBulkOffline ? []
-        : IsUpdateMode ? _items.Where(i => i.QuietUpdates && i.Availability == LibraryAvailability.Outdated && _downloader.CanDownload(i.Item))
-        : _items.Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+        : NewRunModels().Count > 0
+            ? ListedDatasets().Where(i => i.IsForecast && i.Availability == LibraryAvailability.Outdated && _downloader.CanDownload(i.Item))
+        : ExpiredModels().Count > 0 ? []
+        : IsUpdateMode ? ListedDatasets().Where(i => i.QuietUpdates && i.Availability == LibraryAvailability.Outdated && _downloader.CanDownload(i.Item))
+        : ListedDatasets().Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+
+    /// <summary>
+    /// The listed datasets, including the tiles under a collapsed forecast
+    /// model's row (an unpacked package's rows are local already).
+    /// </summary>
+    private IEnumerable<LibraryItemViewModel> ListedDatasets() =>
+        _items.SelectMany(i => i.IsModelHeader ? i.Members : i.IsGroupHeader ? [] : [i]).Distinct();
+
+    /// <summary>The listed forecast models with a newer run than the one downloaded (#685).</summary>
+    private IReadOnlyList<string> NewRunModels() => ForecastModelsIn(LibraryAvailability.Outdated);
+
+    /// <summary>The listed forecast models whose downloaded run has ended, with nothing newer known.</summary>
+    private IReadOnlyList<string> ExpiredModels() => ForecastModelsIn(LibraryAvailability.Expired);
+
+    private IReadOnlyList<string> ForecastModelsIn(LibraryAvailability state) =>
+        ListedDatasets()
+            .Where(i => i.IsForecast && i.Availability == state)
+            .Select(i => ForecastRuns.ModelOf(i.Item))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// True when listed forecast runs have ended and no newer run is known:
+    /// the bulk bar offers "Check for new runs" (Refresh) instead of a download.
+    /// </summary>
+    public bool IsCheckForRuns => !IsBulkDownloading && !IsBulkOffline && NewRunModels().Count == 0 && ExpiredModels().Count > 0;
+
+    /// <summary>When the selected node's catalogues were last checked ("21:04" today, else the date).</summary>
+    private string LastChecked()
+    {
+        var sources = _selectedNode is { } node ? node.Source is { } s ? [s] : node.Collection.Sources : [];
+        var checkedAt = sources
+            .Select(x => _feedHealth?.Invoke(x.Definition)?.CheckedAt ?? x.Index?.IndexedAt)
+            .OfType<DateTimeOffset>()
+            .DefaultIfEmpty(_time.GetUtcNow())
+            .Max()
+            .ToLocalTime();
+        return checkedAt.Date == _time.GetLocalNow().Date
+            ? checkedAt.ToString("t", CultureInfo.CurrentCulture)
+            : checkedAt.ToString("d", CultureInfo.CurrentCulture);
+    }
 
     /// <summary>
     /// True when listed remote-catalogue datasets have newer editions online:
     /// the bulk bar then offers "Update downloaded (N)" for those alone (#685),
     /// rather than mixing updates into a download of everything listed.
     /// </summary>
-    public bool IsUpdateMode => _items.Any(i => i.QuietUpdates && i.Availability == LibraryAvailability.Outdated);
+    public bool IsUpdateMode => ListedDatasets().Any(i => i.QuietUpdates && !i.IsForecast && i.Availability == LibraryAvailability.Outdated);
 
     /// <summary>
     /// True when the selected node is remote catalogues whose server could not
@@ -534,11 +612,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         !IsBulkDownloading
         && _selectedNode is { } node
         && (node.Source is { } source ? [source] : node.Collection.Sources) is { Count: > 0 } sources
-        && sources.All(s => s.Definition is S100CatalogueFeedSource && _feedHealth?.Invoke(s.Definition) is { IsReachable: false });
+        && sources.All(s => s.Definition is S100CatalogueFeedSource or S100ForecastFeedSource
+            && _feedHealth?.Invoke(s.Definition) is { IsReachable: false });
 
     /// <summary>How many listed datasets have a copy on disk (current or not).</summary>
     private int LocalListedCount() =>
-        _items.Count(i => !i.IsGroupHeader && i.PrimaryAvailability is LibraryPrimaryAvailability.Local or LibraryPrimaryAvailability.Update);
+        ListedDatasets().Count(i => i.PrimaryAvailability is LibraryPrimaryAvailability.Local
+            or LibraryPrimaryAvailability.Update or LibraryPrimaryAvailability.Expired);
 
     /// <summary>True when some listed dataset can be downloaded (and no bulk download is running).</summary>
     public bool HasDownloadable => !IsBulkDownloading && DownloadableCount > 0;
@@ -548,6 +628,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     {
         get
         {
+            if (NewRunModels() is { Count: > 0 } newRuns)
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_UpdateDownloadedFormat, newRuns.Count);
             return string.Format(CultureInfo.CurrentCulture,
                 IsUpdateMode ? Strings.Library_UpdateDownloadedFormat : Strings.Library_DownloadListedFormat, DownloadableCount);
         }
@@ -687,6 +769,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _clock?.Dispose();
         _library.Changed -= OnLibraryChanged;
         _loader.Changed -= OnLoaderChanged;
         _downloader.Changed -= OnLoaderChanged;
@@ -721,9 +804,34 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(BulkSummary));
         OnPropertyChanged(nameof(BulkScope));
         OnPropertyChanged(nameof(IsBulkOffline));
+        OnPropertyChanged(nameof(IsCheckForRuns));
         OnPropertyChanged(nameof(DownloadListedText));
         ((RelayCommand)CancelDownloadsCommand).NotifyCanExecuteChanged();
         UpdateNodeDownloadStatus();
+    }
+
+    /// <summary>
+    /// Every minute: forecast runs lose time and may expire (#685), so their
+    /// rows, the counts, the status lines and the bulk bar are re-evaluated.
+    /// </summary>
+    private void OnClockTick()
+    {
+        var forecasts = _allItems.Where(i => i.IsForecast).ToArray();
+        if (forecasts.Length == 0)
+            return;
+
+        foreach (var item in forecasts)
+            item.RefreshClock();
+        foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
+            header.Members = header.Members;
+        UpdateCatalogueCounts();
+        if (_stateFilter == LibraryStateFilter.All)
+            Recount();
+        else
+            ApplyFilter();
+        RefreshDownloadProgress();
+        ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(HasDownloadable));
     }
 
     /// <summary>
@@ -736,8 +844,17 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         foreach (var collection in Nodes)
         {
             LibraryCatalogueCounts? only = null;
+            LibraryForecastCounts? onlyForecast = null;
             foreach (var child in collection.Children)
             {
+                if (child.Source is { Definition: S100ForecastFeedSource, Index: { } runs })
+                {
+                    child.ForecastCounts = ForecastCountsOf(runs);
+                    if (collection.Children.Count == 1)
+                        onlyForecast = child.ForecastCounts;
+                    continue;
+                }
+
                 if (child.Source is not { Definition: S100CatalogueFeedSource, Index: { } index })
                     continue;
 
@@ -757,7 +874,42 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             }
 
             collection.CatalogueCounts = only;
+            collection.ForecastCounts = onlyForecast;
         }
+    }
+
+    /// <summary>
+    /// Per model of a forecast source: whether a run is on disk, whether a
+    /// newer run is listed, whether the downloaded run has ended, and the least
+    /// time left among the downloaded runs.
+    /// </summary>
+    private LibraryForecastCounts ForecastCountsOf(SourceIndex index)
+    {
+        var now = _time.GetUtcNow();
+        int models = 0, local = 0, newer = 0, expired = 0;
+        TimeSpan? left = null;
+        foreach (var model in index.Items.GroupBy(i => ForecastRuns.ModelOf(i) ?? i.Name, StringComparer.Ordinal))
+        {
+            models++;
+            var downloaded = model.FirstOrDefault(i => _downloader.LocalPublishedAtOf(i) is not null);
+            if (downloaded is null)
+                continue;
+
+            local++;
+            if (model.Any(_downloader.IsOutdated))
+            {
+                newer++;
+                continue;
+            }
+
+            var end = _downloader.LocalPublishedAtOf(downloaded) + ForecastRuns.Horizon(downloaded);
+            if (end is { } e && e <= now)
+                expired++;
+            else if (end is { } e2 && (left is null || e2 - now < left))
+                left = e2 - now;
+        }
+
+        return new LibraryForecastCounts(models, local, newer, expired, left);
     }
 
     /// <summary>Sets "Downloading 2 of 5 · 4,3 MB left" on the nodes whose datasets are downloading.</summary>
@@ -817,6 +969,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             // (A row whose availability was never resolved returns at once.)
             foreach (var item in _allItems)
                 item.RefreshAvailability();
+            foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
+                header.Members = header.Members;
             UpdateCatalogueCounts();
             RefreshDownloadProgress();
             // A dataset whose state changed may now belong to another segment.
@@ -842,7 +996,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _selectedItem is { } item ? _loader.LoadAsync([item.EffectiveItem], defer: false) : Task.CompletedTask;
 
     private Task LoadListedAsYouPanAsync() =>
-        _loader.LoadAsync(_items.Where(i => !i.IsGroupHeader).Select(i => i.EffectiveItem).ToArray(), defer: true);
+        _loader.LoadAsync(ListedDatasets().Select(i => i.EffectiveItem).ToArray(), defer: true);
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 
@@ -1062,7 +1216,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             .Where(p => CoverageGeometry.Contains(p.Item, position))
             .OrderByDescending(p => p.Item.UsageBand ?? 0)
             .ThenBy(p => CoverageGeometry.Area(p.Item))
-            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, CollectionNameOf(p.Source.Id), RetryDownloadAsync))
+            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, CollectionNameOf(p.Source.Id), RetryDownloadAsync, _time))
             .ToList();
 
     private string? CollectionNameOf(Guid sourceId) =>
@@ -1072,7 +1226,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         node is null
             ? []
             : node.EnumerateItems()
-                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name, RetryDownloadAsync))
+                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name, RetryDownloadAsync, _time))
                 .ToArray();
 
     private Task RetryDownloadAsync(LibraryItemViewModel item) => DownloadItemAsync(item, load: false);
@@ -1136,6 +1290,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasBulkBar));
         OnPropertyChanged(nameof(IsBulkOffline));
         OnPropertyChanged(nameof(IsUpdateMode));
+        OnPropertyChanged(nameof(IsCheckForRuns));
         OnPropertyChanged(nameof(BulkSummary));
         OnPropertyChanged(nameof(BulkScope));
         ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
@@ -1189,6 +1344,30 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
             var members = groups[key];
             var expanded = expandAll || _expandedPackages.Contains(key);
+            if (row.IsForecast)
+            {
+                if (!_packageHeaders.TryGetValue(key, out var model) || !ReferenceEquals(model.Source, row.Source))
+                {
+                    _packageHeaders[key] = model = LibraryItemViewModel.ForModelGroup(
+                        row.Source, members, expanded, TogglePackage, _loader.StateOf, _downloader, _time);
+                }
+                else
+                {
+                    model.Members = members;
+                }
+
+                model.IsExpanded = expanded;
+                result.Add(model);
+                if (expanded)
+                {
+                    foreach (var member in members)
+                        member.IsGroupChild = true;
+                    result.AddRange(members);
+                }
+
+                continue;
+            }
+
             if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, row.Source))
             {
                 _packageHeaders[key] = header = LibraryItemViewModel.ForPackageGroup(
@@ -1210,9 +1389,16 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         return result;
     }
 
-    /// <summary>The unpacked package a community-list dataset came from, if any.</summary>
+    /// <summary>
+    /// The row a dataset is listed under: the unpacked package a community-list
+    /// dataset came from, or the model of a forecast run's tile (#685); else
+    /// <see langword="null"/>.
+    /// </summary>
     private static (Guid, string)? PackageOf(LibraryItemViewModel item) =>
-        item.Source.Definition is ChartCatalogsFeedSource
+        item.IsForecast && item.Source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Tiles }
+            && ForecastRuns.ModelOf(item.Item) is { } model
+            ? (item.Source.Id, "model:" + model)
+        : item.Source.Definition is ChartCatalogsFeedSource
         && item.Item.Properties.TryGetValue("package", out var package)
         && item.Item.Key != package
             ? (item.Source.Id, package)
@@ -1230,6 +1416,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private static bool InState(LibraryItemViewModel item, LibraryStateFilter state) => state switch
     {
         LibraryStateFilter.Local => item.Availability is LibraryAvailability.Local or LibraryAvailability.Loaded or LibraryAvailability.Deferred,
+        LibraryStateFilter.Updates when item.IsForecast => item.Availability is LibraryAvailability.Outdated or LibraryAvailability.Expired,
         LibraryStateFilter.Online => item.Availability == LibraryAvailability.Online,
         LibraryStateFilter.Updates => item.Availability == LibraryAvailability.Outdated,
         _ => true,

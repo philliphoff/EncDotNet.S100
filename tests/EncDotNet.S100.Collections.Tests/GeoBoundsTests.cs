@@ -14,6 +14,17 @@ public class GeoBoundsTests
     }
 
     [Fact]
+    public void Union_with_a_box_touching_its_west_edge_extends_west()
+    {
+        // NOAA's rtofs_east tiles: a union reaching east to -62.4 meets a tile ending at its west edge.
+        var union = new GeoBounds(24, -96, 43.2, -62.4);
+        var tile = new GeoBounds(24, -100.8, 28.8, -96);
+
+        Assert.Equal(new GeoBounds(24, -100.8, 43.2, -62.4), union.Union(tile));
+        Assert.Equal(new GeoBounds(24, -100.8, 43.2, -62.4), tile.Union(union));
+    }
+
+    [Fact]
     public void Union_takes_the_short_way_across_the_antimeridian()
     {
         var west = new GeoBounds(51, 172, 53, 179);

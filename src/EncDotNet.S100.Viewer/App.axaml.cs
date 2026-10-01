@@ -392,6 +392,10 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer(
             new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        // S-100 forecast feeds, e.g. NOAA's S-111 on AWS (issue #685).
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp =>
         {
             // Community lists index downloaded packages' cells from the downloads folder.
@@ -415,6 +419,7 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.ChartCatalogsFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>(),
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>(),
                 ]);
         });
         services.AddSingleton<Library.LibraryService>();
@@ -452,6 +457,7 @@ public partial class App : Application
             var community = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.ChartCatalogsFeedIndexer>();
             var s100Feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
             var s100Catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
+            var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             return new AddToLibraryDialogViewModel(
                 sp.GetRequiredService<Library.LibraryService>(),
                 (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
@@ -459,7 +465,8 @@ public partial class App : Application
                 loadCommunityCatalog: (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct),
                 loadS100Feed: (uri, ct) => s100Feeds.GetFeedAsync(uri, cancellationToken: ct),
                 loadS100Catalogue: (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
-                listS100Folders: (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct));
+                listS100Folders: (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
+                loadForecastModels: (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct));
         });
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
         services.AddTransient(sp =>
@@ -884,6 +891,7 @@ public partial class App : Application
             // A shared feed's status line reports whether its server was reachable.
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
             var catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
+            var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             return new LibraryPanelViewModel(
                 sp.GetRequiredService<Library.LibraryService>(),
                 sp.GetRequiredService<ILibraryImporter>(),
@@ -893,6 +901,7 @@ public partial class App : Application
                 {
                     EncDotNet.S100.Collections.S100FeedSource feed => feeds.HealthOf(feed.FeedUri),
                     EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
+                    EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
                     _ => null,
                 });
         });

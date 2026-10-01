@@ -20,6 +20,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private LibraryDownloadItemStatus? _lastDownloadStatus;
     private LibraryAvailability? _availability;
     private CollectionItem? _effective;
+    private readonly TimeProvider _time;
+    private IReadOnlyList<LibraryItemViewModel> _members = [];
 
     public LibraryItemViewModel(
         CollectionItem item,
@@ -27,7 +29,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         Func<CollectionItem, LibraryLoadState>? loadState = null,
         ILibraryDownloader? downloader = null,
         string? collectionName = null,
-        Func<LibraryItemViewModel, Task>? download = null)
+        Func<LibraryItemViewModel, Task>? download = null,
+        TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
@@ -37,6 +40,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         _downloader = downloader;
         _collectionName = collectionName;
         _download = download;
+        _time = time ?? TimeProvider.System;
         RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
             () => _download?.Invoke(this) ?? Task.CompletedTask);
         CancelDownloadCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => _downloader?.Cancel(Item));
@@ -102,16 +106,19 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
     /// (or its group, once unpacked) is named by its description instead.
     /// </summary>
-    public string Name => IsPackageEntry || IsGroupHeader
+    public string Name => IsModelHeader ? Item.Name
+        : IsPackageEntry || IsGroupHeader
         ? Item.Title is { } title ? PackageTitles.Clean(title) : Item.Name
         : Item.Name;
 
     /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
-    public bool IsNameMono => !IsPackageEntry && !IsGroupHeader;
+    public bool IsNameMono => IsModelHeader || (!IsPackageEntry && !IsGroupHeader);
 
     /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
     /// <remarks>A dataset under an unpacked package drops a title that only repeats the package's.</remarks>
     public string? Subtitle => IsPackageEntry ? Strings.Library_PackageHint
+        : IsModelHeader ? Item.Title
+        : IsForecastTile ? null
         : IsGroupHeader ? null
         : _isGroupChild && Item.Title is { } title && Item.Properties.TryGetValue("packageTitle", out var package) && title == package ? null
         : Item.Title;
@@ -203,11 +210,192 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         return header;
     }
 
+    /// <summary>
+    /// Creates the row of a forecast model (#685): named by its code, its
+    /// water body below, its run and time left, expandable to its tiles (which
+    /// carry no tags of their own — the run is updated as a whole).
+    /// </summary>
+    internal static LibraryItemViewModel ForModelGroup(
+        LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle,
+        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider? time)
+    {
+        var first = members[0].Item;
+        var model = ForecastRuns.ModelOf(first) ?? first.Name;
+        var item = first with
+        {
+            Key = "model:" + model,
+            Name = model,
+            Location = NoItemLocation.Instance,
+            Coverage = null,
+            Bounds = GeoBounds.UnionAll(members.Select(m => m.Item.Bounds).OfType<GeoBounds>()),
+        };
+        LibraryItemViewModel? header = null;
+        header = new LibraryItemViewModel(item, source, loadState, downloader, time: time)
+        {
+            IsGroupHeader = true,
+            IsModelHeader = true,
+            GroupKey = (source.Id, "model:" + model),
+            ToggleCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => toggle(header!)),
+        };
+        header._members = members;
+        header._groupCount = members.Count;
+        header._isExpanded = isExpanded;
+        return header;
+    }
+
+    /// <summary>For a model row, its tiles (in the latest run listed).</summary>
+    internal IReadOnlyList<LibraryItemViewModel> Members
+    {
+        get => _members;
+        set
+        {
+            _members = value;
+            _groupCount = value.Count;
+            _availability = null;
+            RaiseForecast();
+        }
+    }
+
+    /// <summary>True for a forecast model's row (tiles download shape), which groups its tiles.</summary>
+    public bool IsModelHeader { get; private init; }
+
+    /// <summary>True for a dataset of one forecast run (#685).</summary>
+    public bool IsForecast => ForecastRuns.IsForecast(Item);
+
+    /// <summary>
+    /// True for a row that stands for a whole forecast run: a model's row, or a
+    /// model's one file when runs download as one file per model.
+    /// </summary>
+    public bool IsForecastRunRow => IsModelHeader
+        || (IsForecast && Source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Regional });
+
+    /// <summary>True for one tile of a forecast run (listed under its model's row).</summary>
+    private bool IsForecastTile => IsForecast && !IsForecastRunRow;
+
+    /// <summary>The run of this row's downloaded copy (a model's: of its first downloaded tile), if any.</summary>
+    private DateTimeOffset? LocalRun => IsModelHeader
+        ? _members.Select(m => m.LocalRun).FirstOrDefault(r => r is not null)
+        : _downloader?.LocalPublishedAtOf(Item);
+
+    /// <summary>The run shown: the downloaded copy's, else the catalogue's latest.</summary>
+    private DateTimeOffset? ShownRun => LocalRun ?? S100ForecastFeedIndexer.RunOf(Item);
+
+    /// <summary>The end of the shown run's valid window.</summary>
+    private DateTimeOffset? ShownValidTo => ShownRun is { } run && ForecastRuns.Horizon(Item) is { } horizon ? run + horizon : null;
+
+    /// <summary>True when the downloaded copy's run has ended (whatever is online).</summary>
+    private bool IsRunEnded => LocalRun is not null && ShownValidTo is { } end && end <= _time.GetUtcNow();
+
+    /// <summary>True when a forecast run row shows its valid window as a bar.</summary>
+    public bool HasForecastWindow => IsForecastRunRow && ShownValidTo is not null;
+
+    /// <summary>How much of the shown run's window has passed (0–1).</summary>
+    public double WindowElapsed => ShownRun is { } start && ShownValidTo is { } end && end > start
+        ? Math.Clamp((_time.GetUtcNow() - start) / (end - start), 0, 1)
+        : 0;
+
+    /// <summary>How much of the shown run's window is left (0–1).</summary>
+    public double WindowRemaining => 1 - WindowElapsed;
+
+    /// <summary>"39 h left", or "Ended 9 h ago".</summary>
+    public string? TimeLeftText => ShownValidTo is { } end ? ForecastRuns.TimeLeft(end, _time.GetUtcNow()) : null;
+
+    /// <summary>True when the shown run's window has ended.</summary>
+    public bool IsWindowEnded => ShownValidTo is { } end && end <= _time.GetUtcNow();
+
+    /// <summary>Re-evaluates what depends on the clock (time left, Expired); called every minute for forecasts.</summary>
+    public void RefreshClock()
+    {
+        if (!IsForecast)
+            return;
+        if (_availability is not null)
+        {
+            _availability = null;
+            _effective = null;
+            OnPropertyChanged(nameof(Availability));
+            OnPropertyChanged(nameof(PrimaryAvailability));
+            OnPropertyChanged(nameof(Tags));
+        }
+
+        RaiseForecast();
+    }
+
+    private void RaiseForecast()
+    {
+        OnPropertyChanged(nameof(HasForecastWindow));
+        OnPropertyChanged(nameof(WindowElapsed));
+        OnPropertyChanged(nameof(WindowRemaining));
+        OnPropertyChanged(nameof(TimeLeftText));
+        OnPropertyChanged(nameof(IsWindowEnded));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Tags));
+        OnPropertyChanged(nameof(PrimaryAvailability));
+    }
+
+    /// <summary>"S-111 · run 30.09.2026 12:00Z · to 02.10.2026 12:00Z · 23 tiles · 12 MB" (a tile: its size).</summary>
+    private string ForecastSummary()
+    {
+        var c = CultureInfo.CurrentCulture;
+        var parts = new List<string>(5) { Item.ProductSpec };
+        if (IsForecastRunRow)
+        {
+            if (ShownRun is { } run)
+                parts.Add(string.Format(c, Strings.Library_Forecast_RunFormat, ForecastRuns.FormatRun(run)));
+            if (ShownValidTo is { } end)
+                parts.Add(string.Format(c, Strings.Library_Forecast_ToFormat, ForecastRuns.FormatRun(end)));
+            if (IsModelHeader)
+                parts.Add(string.Format(c, Strings.Library_Forecast_TilesFormat, _members.Count));
+        }
+
+        var bytes = IsModelHeader
+            ? _members.Sum(m => (m.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)
+            : (Item.Location as RemoteItemLocation)?.SizeBytes ?? 0;
+        if (bytes > 0)
+            parts.Add(FormatBytes(bytes));
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>The tags of a forecast run row: Loaded / On pan, then New run or Expired.</summary>
+    private void AddForecastTags(List<LibraryItemTag> tags)
+    {
+        var states = IsModelHeader
+            ? _members.Select(m => _loadState?.Invoke(m.EffectiveItem)).ToArray()
+            : [_loadState?.Invoke(EffectiveItem)];
+        if (states.Contains(LibraryLoadState.Loaded))
+            tags.Add(new LibraryItemTag(Strings.Library_Availability_Loaded, LibraryItemTagKind.Loaded));
+        else if (states.Contains(LibraryLoadState.Deferred))
+            tags.Add(new LibraryItemTag(Strings.Library_Availability_Deferred, LibraryItemTagKind.OnPan));
+
+        switch (Availability)
+        {
+            case LibraryAvailability.Outdated:
+                tags.Add(new LibraryItemTag(Strings.Library_Tag_NewRun, LibraryItemTagKind.Update));
+                break;
+            case LibraryAvailability.Expired:
+                tags.Add(new LibraryItemTag(Strings.Library_Tag_Expired, LibraryItemTagKind.Expired));
+                break;
+        }
+    }
+
+    /// <summary>A model row's state: the most pressing of its tiles'.</summary>
+    private static LibraryAvailability Aggregate(IEnumerable<LibraryItemViewModel> members)
+    {
+        LibraryAvailability[] order =
+        [
+            LibraryAvailability.Outdated, LibraryAvailability.Expired, LibraryAvailability.Loaded, LibraryAvailability.Deferred,
+            LibraryAvailability.Local, LibraryAvailability.Missing, LibraryAvailability.Online,
+        ];
+        var states = members.Select(m => m.Availability).ToHashSet();
+        return order.FirstOrDefault(states.Contains, LibraryAvailability.Listed);
+    }
+
     /// <summary>A compact one-line summary: spec, band, edition/update, issue date, and download size.</summary>
     public string Summary
     {
         get
         {
+            if (IsForecast)
+                return ForecastSummary();
             if (IsGroupHeader)
             {
                 // "116 datasets · published 23.10.2025 15:17" — the package number is already in its name.
@@ -250,7 +438,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// since nearly every tile is reissued each quarter; the source node and
     /// bulk bar carry the count and the action.
     /// </summary>
-    public bool QuietUpdates => Source.Definition is S100CatalogueFeedSource && !IsGroupHeader;
+    public bool QuietUpdates => Source.Definition is S100CatalogueFeedSource or S100ForecastFeedSource && !IsGroupHeader;
 
     /// <summary>
     /// "S-102 · Port 4 m · Ed 3 · 2026-08-14 · 3,1 MB", or, with a newer
@@ -282,17 +470,22 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     }
 
     /// <summary>Where the data can be had now (resolved on first access).</summary>
-    public LibraryAvailability Availability => _availability ??= IsGroupHeader ? LibraryAvailability.Local : (_loadState?.Invoke(EffectiveItem)) switch
-    {
-        LibraryLoadState.Loaded => LibraryAvailability.Loaded,
-        LibraryLoadState.Deferred => LibraryAvailability.Deferred,
-        _ when _downloader?.IsOutdated(Item) == true => LibraryAvailability.Outdated,
-        _ => LibraryAvailabilityResolver.Resolve(EffectiveItem),
-    };
+    public LibraryAvailability Availability => _availability ??=
+        IsModelHeader ? Aggregate(_members)
+        : IsGroupHeader ? LibraryAvailability.Local
+        : IsForecast && _downloader?.IsOutdated(Item) == true ? LibraryAvailability.Outdated
+        : IsForecast && IsRunEnded ? LibraryAvailability.Expired
+        : (_loadState?.Invoke(EffectiveItem)) switch
+        {
+            LibraryLoadState.Loaded => LibraryAvailability.Loaded,
+            LibraryLoadState.Deferred => LibraryAvailability.Deferred,
+            _ when _downloader?.IsOutdated(Item) == true => LibraryAvailability.Outdated,
+            _ => LibraryAvailabilityResolver.Resolve(EffectiveItem),
+        };
 
     /// <summary>True when the item can be opened from disk (local, not already loaded).</summary>
     public bool CanLoad => !IsGroupHeader
-        && Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated;
+        && Availability is LibraryAvailability.Local or LibraryAvailability.Deferred or LibraryAvailability.Outdated or LibraryAvailability.Expired;
 
     /// <summary>True when the item can be downloaded (online, or a newer edition is available).</summary>
     public bool CanDownload =>
@@ -313,6 +506,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(Tags));
         if (QuietUpdates)
             OnPropertyChanged(nameof(Summary));
+        if (IsForecast)
+            RaiseForecast();
         OnPropertyChanged(nameof(CanLoadAfterDownload));
         OnPropertyChanged(nameof(LoadTooltip));
         RefreshDownload();
@@ -325,7 +520,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// Where the data is — exactly one state, drawn as the row swatch exactly
     /// like the map outline.
     /// </summary>
-    public LibraryPrimaryAvailability PrimaryAvailability => QuietUpdates && Availability == LibraryAvailability.Outdated
+    public LibraryPrimaryAvailability PrimaryAvailability => (QuietUpdates || IsModelHeader) && Availability == LibraryAvailability.Outdated
         ? LibraryPrimaryAvailability.Update
         : LibraryOutlineStyles.Primary(Availability);
 
@@ -346,6 +541,14 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 case LibraryDownloadItemState.Failed:
                     tags.Add(new LibraryItemTag(Strings.Library_Tag_FailedRetry, LibraryItemTagKind.Failed, _download is null ? null : RetryCommand));
                     break;
+            }
+
+            if (IsForecastTile)
+                return tags;  // a run's tiles are updated together; the model's row carries its state
+            if (IsForecastRunRow)
+            {
+                AddForecastTags(tags);
+                return tags;
             }
 
             if (IsPackageEntry)
@@ -391,13 +594,14 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 LibraryPrimaryAvailability.Local => Strings.Library_Availability_Local,
                 LibraryPrimaryAvailability.Online => Strings.Library_Availability_Online,
                 LibraryPrimaryAvailability.Missing => Strings.Library_Availability_Missing,
-                LibraryPrimaryAvailability.Update => Strings.Library_Availability_Outdated,
+                LibraryPrimaryAvailability.Update => IsForecast ? Strings.Library_Tag_NewRun : Strings.Library_Availability_Outdated,
+                LibraryPrimaryAvailability.Expired => Strings.Library_Tag_Expired,
                 _ => Strings.Library_Availability_Listed,
             };
             var size = PrimaryAvailability switch
             {
                 LibraryPrimaryAvailability.Online => (Item.Location as RemoteItemLocation)?.SizeBytes,
-                LibraryPrimaryAvailability.Local or LibraryPrimaryAvailability.Update => LocalSize(),
+                LibraryPrimaryAvailability.Local or LibraryPrimaryAvailability.Update or LibraryPrimaryAvailability.Expired => LocalSize(),
                 _ => null,
             };
             return size is { } bytes
@@ -443,7 +647,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LibraryAvailability.Missing => Strings.Library_Availability_Missing,
         LibraryAvailability.Deferred => Strings.Library_Availability_Deferred,
         LibraryAvailability.Loaded => Strings.Library_Availability_Loaded,
-        LibraryAvailability.Outdated => Strings.Library_Availability_Outdated,
+        LibraryAvailability.Outdated => IsForecast ? Strings.Library_Tag_NewRun : Strings.Library_Availability_Outdated,
+        LibraryAvailability.Expired => Strings.Library_Tag_Expired,
         _ => Strings.Library_Availability_Listed,
     };
 
@@ -476,13 +681,28 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                     fields.Add(new LibraryDetailField(label, value, mono, copy));
             }
 
-            if (IsGroupHeader)
+            if (IsGroupHeader && !IsModelHeader)
             {
                 // An unpacked package: where it came from and what it held.
                 Add(source, Strings.Library_Field_Collection, _collectionName);
                 Add(source, PropertyLabel("package"), Item.Name);
                 Add(source, Strings.Library_Field_Datasets, GroupCount.ToString("N0", c));
                 return [new LibraryDetailGroup(Strings.Library_Group_Source, source)];
+            }
+
+            var forecast = new List<LibraryDetailField>();
+            if (IsForecast)
+            {
+                if (ShownRun is { } shown)
+                    Add(forecast, Strings.Library_Field_Run, ForecastRuns.FormatRun(shown), mono: true);
+                if (ShownRun is { } from && ShownValidTo is { } to)
+                    Add(forecast, Strings.Library_Field_Valid, $"{ForecastRuns.FormatRun(from)} → {ForecastRuns.FormatRun(to)}", mono: true);
+                Add(forecast, Strings.Library_Field_NewerRun, Availability == LibraryAvailability.Outdated
+                        && S100ForecastFeedIndexer.RunOf(Item) is { } newer
+                    ? string.Format(c, Strings.Library_NewerRunOnlineFormat, ForecastRuns.FormatRun(newer))
+                    : Source.Index is { } index
+                        ? string.Format(c, Strings.Library_NewerRunNoneFormat, index.IndexedAt.ToLocalTime().ToString("g", c))
+                        : null);
             }
 
             Add(product, Strings.Library_Field_Spec, ProductText());
@@ -543,6 +763,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
             return new[]
             {
+                new LibraryDetailGroup(Strings.Library_Group_Forecast, forecast),
                 new LibraryDetailGroup(Strings.Library_Group_Product, product),
                 new LibraryDetailGroup(Strings.Library_Group_Coverage, coverage),
                 new LibraryDetailGroup(Strings.Library_Group_Source, source),

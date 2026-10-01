@@ -99,6 +99,12 @@ internal interface ILibraryDownloader
     /// <summary>The edition of <paramref name="item"/>'s downloaded copy, or <see langword="null"/> when not downloaded (or unknown).</summary>
     int? LocalEditionOf(CollectionItem item) => null;
 
+    /// <summary>
+    /// When <paramref name="item"/>'s downloaded copy was published (for a
+    /// forecast, its run time), or <see langword="null"/> when not downloaded (or unknown).
+    /// </summary>
+    DateTimeOffset? LocalPublishedAtOf(CollectionItem item) => null;
+
     /// <summary>True when <paramref name="item"/> can be downloaded.</summary>
     bool CanDownload(CollectionItem item);
 
@@ -187,6 +193,8 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
         item.Location is RemoteItemLocation && Downloaded(item) is { } cell && cell.IsOlderThan(item);
 
     public int? LocalEditionOf(CollectionItem item) => Downloaded(item)?.Edition;
+
+    public DateTimeOffset? LocalPublishedAtOf(CollectionItem item) => Downloaded(item)?.PublishedAt;
 
     public bool CanDownload(CollectionItem item) =>
         item.Location is RemoteItemLocation remote

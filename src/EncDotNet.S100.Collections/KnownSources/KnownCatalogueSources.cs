@@ -23,6 +23,13 @@ public enum KnownCatalogueFormat
     /// beside it, such as NOAA's S-102 on AWS (issue #685); see <see cref="S100CatalogueFeedSource"/>.
     /// </summary>
     S100ExchangeCatalogue,
+
+    /// <summary>
+    /// An S-100 forecast feed: one folder per forecast model, each with a
+    /// catalogue of its latest run, such as NOAA's S-111 on AWS (issue #685);
+    /// see <see cref="S100ForecastFeedSource"/>. The entry lists the models.
+    /// </summary>
+    S100ForecastModels,
 }
 
 /// <summary>What coverage a catalogue publishes for its cells.</summary>
@@ -55,6 +62,7 @@ public enum KnownCatalogueCoverage
 /// <param name="Note">A short description shown with the entry, if any.</param>
 /// <param name="Product">The one product specification the catalogue publishes (e.g. <c>S-102</c>), if it says.</param>
 /// <param name="NotForNavigation">True when the provider marks all of the catalogue's data as not for navigation.</param>
+/// <param name="Models">For a forecast feed, its models (curated: names, cadence and forecast horizon); otherwise empty.</param>
 public sealed record KnownCatalogueSource(
     string Id,
     string Name,
@@ -68,7 +76,12 @@ public sealed record KnownCatalogueSource(
     bool Sizes,
     string? Note = null,
     string? Product = null,
-    bool NotForNavigation = false);
+    bool NotForNavigation = false,
+    IReadOnlyList<ForecastModel>? Models = null)
+{
+    /// <summary>For a forecast feed, its models; otherwise empty.</summary>
+    public IReadOnlyList<ForecastModel> Models { get; init; } = Models ?? [];
+}
 
 /// <summary>
 /// The curated list of known online chart catalogues (issue #670), maintained
@@ -122,7 +135,12 @@ public static class KnownCatalogueSources
                 s.Sizes,
                 s.Note,
                 string.IsNullOrWhiteSpace(s.Product) ? null : s.Product.Trim(),
-                s.NotForNavigation))
+                s.NotForNavigation,
+                (s.Models ?? [])
+                    .Where(m => m.Id is { Length: > 0 } && m.Name is { Length: > 0 } && m.CadenceHours > 0 && m.HorizonHours > 0)
+                    .Select(m => new ForecastModel(m.Id!, m.Name!, m.CadenceHours, m.HorizonHours))
+                    .ToArray()))
+            .Where(s => s.Format != KnownCatalogueFormat.S100ForecastModels || s.Models.Count > 0)
             .ToArray();
     }
 
@@ -137,7 +155,8 @@ public static class KnownCatalogueSources
 
         var document = new Document(1, sources.Select(s => new Entry(
             s.Id, s.Name, s.Provider, s.Region, s.Format, s.CatalogUri, s.Homepage, s.Coverage, s.Editions, s.Sizes, s.Note,
-            s.Product, s.NotForNavigation))
+            s.Product, s.NotForNavigation,
+            s.Models.Count == 0 ? null : s.Models.Select(m => new ModelEntry(m.Id, m.Name, m.CadenceHours, m.HorizonHours)).ToArray()))
             .ToArray());
         JsonSerializer.Serialize(stream, document, WriteOptions);
     }
@@ -203,7 +222,10 @@ public static class KnownCatalogueSources
         bool Sizes,
         string? Note,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Product = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NotForNavigation = false);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NotForNavigation = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ModelEntry>? Models = null);
+
+    private sealed record ModelEntry(string? Id, string? Name, int CadenceHours, int HorizonHours);
 
     /// <summary>Reads camelCase enum names; an unknown name reads as <see langword="null"/> so the entry can be skipped.</summary>
     private sealed class LenientEnumConverter<T> : JsonConverter<T?>
