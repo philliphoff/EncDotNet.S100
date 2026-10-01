@@ -9,7 +9,12 @@ namespace EncDotNet.S100.Collections;
 /// <param name="Name">The water body it covers (e.g. "Chesapeake Bay").</param>
 /// <param name="CadenceHours">How often a new run is published, in hours.</param>
 /// <param name="HorizonHours">How far ahead of its run time a run forecasts, in hours (its valid window).</param>
-public sealed record ForecastModel(string Id, string Name, int CadenceHours, int HorizonHours);
+/// <param name="CataloguePath">
+/// The model's catalogue relative to the feed's folder, when it is not
+/// <c>&lt;id&gt;/CATALOG.XML</c> (NOAA's S-104 pilot keeps its one catalogue in
+/// <c>_CATALOG/CATALOG.XML</c>); <see langword="null"/> for the usual place.
+/// </param>
+public sealed record ForecastModel(string Id, string Name, int CadenceHours, int HorizonHours, string? CataloguePath = null);
 
 /// <summary>How a forecast feed's runs are downloaded.</summary>
 public enum ForecastShape

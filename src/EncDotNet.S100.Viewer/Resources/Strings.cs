@@ -1158,6 +1158,7 @@ internal static class Strings
     public static string Wizard_ModelsPerRunFormat => Get(nameof(Wizard_ModelsPerRunFormat));
     public static string Wizard_ModelsPerRoundFormat => Get(nameof(Wizard_ModelsPerRoundFormat));
     public static string Wizard_Review_UpdatesForecast => Get(nameof(Wizard_Review_UpdatesForecast));
+    public static string Wizard_ForecastEndedFormat => Get(nameof(Wizard_ForecastEndedFormat));
     public static string Library_DirectorySearchWatermark => Get(nameof(Library_DirectorySearchWatermark));
     public static string Library_DirectoryCountFormat => Get(nameof(Library_DirectoryCountFormat));
     public static string Library_DirectoryNoMatches => Get(nameof(Library_DirectoryNoMatches));
@@ -1218,6 +1219,7 @@ internal static class Strings
     public static string Library_StatusLine_PathNotFound => Get(nameof(Library_StatusLine_PathNotFound));
     public static string Menu_LibraryRefreshSource => Get(nameof(Menu_LibraryRefreshSource));
     public static string Menu_LibraryChooseGroups => Get(nameof(Menu_LibraryChooseGroups));
+    public static string Menu_LibraryAddCurrents => Get(nameof(Menu_LibraryAddCurrents));
     public static string Button_Save => Get(nameof(Button_Save));
     public static string Library_Detail_Group => Get(nameof(Library_Detail_Group));
     public static string Library_GroupValueFormat => Get(nameof(Library_GroupValueFormat));
@@ -1279,4 +1281,8 @@ internal static class Strings
     public static string Library_Format_S100Forecast => Get(nameof(Library_Format_S100Forecast));
     public static string Library_Chip_Forecast => Get(nameof(Library_Chip_Forecast));
     public static string Library_Chip_LatestRunOnly => Get(nameof(Library_Chip_LatestRunOnly));
+    public static string Library_Chip_Pilot => Get(nameof(Library_Chip_Pilot));
+    public static string Library_Pairing_Bathymetry => Get(nameof(Library_Pairing_Bathymetry));
+    public static string Library_Pairing_SameCell => Get(nameof(Library_Pairing_SameCell));
+    public static string Library_Pairing_Get => Get(nameof(Library_Pairing_Get));
 }

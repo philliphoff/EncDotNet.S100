@@ -132,6 +132,9 @@
                 </Grid>
                 <TextBlock Text="{x:Static loc:Strings.Wizard_SingleEntryNote}" Classes="muted" FontSize="12.5"
                            TextWrapping="Wrap" />
+                <!-- A forecast whose only run has ended (the S-104 pilot, handoff A4). -->
+                <TextBlock Text="{Binding ForecastEndedNote}" IsVisible="{Binding HasForecastEndedNote}"
+                           Classes="warning" FontSize="12.5" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
 
@@ -157,7 +160,7 @@
             </Grid>
 
             <!-- A forecast feed: how runs download, for every model. -->
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsS100Forecast}">
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasForecastShapes}">
                 <TextBlock Text="{x:Static loc:Strings.Wizard_ForecastShapeTitle}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center" />
                 <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="8" Padding="3">

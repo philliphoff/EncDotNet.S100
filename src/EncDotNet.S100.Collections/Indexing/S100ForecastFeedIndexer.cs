@@ -285,7 +285,9 @@ public sealed partial class S100ForecastFeedIndexer : ICollectionSourceIndexer
         ArgumentNullException.ThrowIfNull(modelsUri);
         ArgumentNullException.ThrowIfNull(model);
         var folder = modelsUri.AbsoluteUri.EndsWith('/') ? modelsUri : new Uri(modelsUri.AbsoluteUri + "/");
-        return new Uri(folder, Uri.EscapeDataString(model.Id) + "/CATALOG.XML");
+        return new Uri(folder, model.CataloguePath is { Length: > 0 } path
+            ? string.Join('/', path.TrimStart('/').Split('/').Select(Uri.EscapeDataString))
+            : Uri.EscapeDataString(model.Id) + "/CATALOG.XML");
     }
 
     /// <summary>
@@ -402,7 +404,7 @@ public sealed partial class S100ForecastFeedIndexer : ICollectionSourceIndexer
     }
 
     private static string Fingerprint(S100ForecastFeedSource feed, IEnumerable<string> versions) =>
-        $"{FingerprintVersion}:{feed.Shape}:{string.Join(',', feed.Models.Select(m => $"{m.Id}/{m.HorizonHours}"))}:{string.Join('|', versions)}";
+        $"{FingerprintVersion}:{feed.Shape}:{string.Join(',', feed.Models.Select(m => $"{m.Id}/{m.HorizonHours}/{m.CataloguePath}"))}:{string.Join('|', versions)}";
 
     private static S100ForecastFeedSource AsFeed(CollectionSource source) => source switch
     {

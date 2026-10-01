@@ -110,6 +110,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         AddSharedFeedCommand = new AsyncRelayCommand(() => _importer.AddSharedFeedAsync(TargetCollectionId));
         AddCollectionManifestCommand = new AsyncRelayCommand(() => _importer.AddCollectionManifestAsync(TargetCollectionId));
         ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
+        AddCurrentsForAreaCommand = new AsyncRelayCommand(AddCurrentsForAreaAsync, () => CanAddCurrentsForArea);
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
@@ -162,6 +163,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanAddCurrentsForArea));
                 EndTap();
                 if (_location is not null)
                     SetLocation(null);
@@ -202,8 +205,85 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
+                UpdatePairing();
             }
         }
+    }
+
+    /// <summary>
+    /// For a selected S-102 area node: opens the S-111 wizard at its models
+    /// step with the models covering the area ticked (#685, handoff B8).
+    /// </summary>
+    public ICommand AddCurrentsForAreaCommand { get; }
+
+    /// <summary>True when the selected node is an area of a remote S-100 catalogue (S-102).</summary>
+    public bool CanAddCurrentsForArea => _selectedNode is { IsGroup: true, Source.Definition: S100CatalogueFeedSource };
+
+    private Task AddCurrentsForAreaAsync()
+    {
+        if (!CanAddCurrentsForArea
+            || GeoBounds.UnionAll(_selectedNode!.EnumerateItems().Select(p => p.Item.Bounds).OfType<GeoBounds>()) is not { } area)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _importer.AddCurrentsForAreaAsync(area, targetCollectionId: null);
+    }
+
+    private LibraryPairing? _pairing;
+
+    /// <summary>
+    /// For a selected S-111 tile, its S-102 twin in the same grid cell, when an
+    /// S-102 collection lists it (#685, handoff B7); otherwise <see langword="null"/>.
+    /// </summary>
+    public LibraryPairing? Pairing
+    {
+        get => _pairing;
+        private set
+        {
+            if (SetProperty(ref _pairing, value))
+                OnPropertyChanged(nameof(HasPairing));
+        }
+    }
+
+    /// <summary>True when <see cref="Pairing"/> is shown.</summary>
+    public bool HasPairing => _pairing is not null;
+
+    private void UpdatePairing()
+    {
+        if (_selectedItem is not { IsForecast: true, IsModelHeader: false } tile
+            || ForecastRuns.BathymetryTwinOf(tile.Item.Name) is not { } twin)
+        {
+            Pairing = null;
+            return;
+        }
+
+        var match = _library.Collections
+            .SelectMany(c => c.Sources)
+            .Where(s => s.Definition is S100CatalogueFeedSource && s.Index is not null)
+            .SelectMany(s => s.Index!.Items)
+            .FirstOrDefault(i => string.Equals(i.Name, twin, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+        {
+            Pairing = null;
+            return;
+        }
+
+        var local = _downloader.Localize(match).Location is LocalItemLocation;
+        var size = (match.Location as RemoteItemLocation)?.SizeBytes;
+        var detail = string.Join(" · ", new[]
+        {
+            $"{match.ProductSpec} {match.Name}",
+            Strings.Library_Pairing_SameCell,
+            local ? Strings.Library_Availability_Local : Strings.Library_Availability_Online,
+            size is { } bytes && !local ? LibraryItemViewModel.FormatBytes(bytes) : null,
+        }.OfType<string>());
+        Pairing = new LibraryPairing(Strings.Library_Pairing_Bathymetry, detail, local,
+            new AsyncRelayCommand(async () =>
+            {
+                await _downloader.DownloadAsync([match]).ConfigureAwait(true);
+                UpdatePairing();
+            }, () => !local && _downloader.CanDownload(match)));
     }
 
     /// <summary>True when a dataset is selected.</summary>
@@ -655,6 +735,23 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Lists what covers a tapped point inside forecast model domains (#685,
+    /// handoff E1): the list is filtered to the point, so each model there shows
+    /// with its tiles, and the smallest domain's model (listed first in
+    /// <paramref name="smallestFirst"/>) is selected.
+    /// </summary>
+    public void ListModelsAt(GeoPosition position, IReadOnlyList<(Guid SourceId, string Model)> smallestFirst)
+    {
+        ArgumentNullException.ThrowIfNull(smallestFirst);
+        EndTap();
+        SetLocation(position);
+        SelectedItem = smallestFirst
+            .Select(m => _items.FirstOrDefault(i => i.Source.Id == m.SourceId && i.IsForecast
+                && (i.IsModelHeader || i.IsForecastRunRow) && ForecastRuns.ModelOf(i.Item) == m.Model))
+            .FirstOrDefault(i => i is not null) ?? _selectedItem;
+    }
+
+    /// <summary>
     /// Handles a map tap that hit <paramref name="hits"/> (listed, outlined
     /// datasets, most detailed first): selects the first, or — when the same
     /// spot was tapped again — the one after the current selection. The list
@@ -972,6 +1069,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
                 header.Members = header.Members;
             UpdateCatalogueCounts();
+            UpdatePairing();
             RefreshDownloadProgress();
             // A dataset whose state changed may now belong to another segment.
             if (_stateFilter == LibraryStateFilter.All)
@@ -1542,6 +1640,12 @@ internal interface ILibraryImporter
 
     /// <summary>Reopens a collection manifest's group picker to change an existing source's selection.</summary>
     Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source);
+
+    /// <summary>
+    /// Opens the S-111 surface-currents catalogue at its models step with the
+    /// models covering <paramref name="area"/> ticked (#685, handoff B8).
+    /// </summary>
+    Task AddCurrentsForAreaAsync(GeoBounds area, Guid? targetCollectionId) => Task.CompletedTask;
 
     /// <summary>Adds a known path (for example a dropped folder), confirming the target collection.</summary>
     Task AddPathAsync(string path, Guid? targetCollectionId);

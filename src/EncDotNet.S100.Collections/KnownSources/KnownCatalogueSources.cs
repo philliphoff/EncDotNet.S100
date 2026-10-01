@@ -63,6 +63,7 @@ public enum KnownCatalogueCoverage
 /// <param name="Product">The one product specification the catalogue publishes (e.g. <c>S-102</c>), if it says.</param>
 /// <param name="NotForNavigation">True when the provider marks all of the catalogue's data as not for navigation.</param>
 /// <param name="Models">For a forecast feed, its models (curated: names, cadence and forecast horizon); otherwise empty.</param>
+/// <param name="Pilot">True for a pilot service, which may cover little and lapse (shown with a "Pilot" chip).</param>
 public sealed record KnownCatalogueSource(
     string Id,
     string Name,
@@ -77,7 +78,8 @@ public sealed record KnownCatalogueSource(
     string? Note = null,
     string? Product = null,
     bool NotForNavigation = false,
-    IReadOnlyList<ForecastModel>? Models = null)
+    IReadOnlyList<ForecastModel>? Models = null,
+    bool Pilot = false)
 {
     /// <summary>For a forecast feed, its models; otherwise empty.</summary>
     public IReadOnlyList<ForecastModel> Models { get; init; } = Models ?? [];
@@ -138,8 +140,10 @@ public static class KnownCatalogueSources
                 s.NotForNavigation,
                 (s.Models ?? [])
                     .Where(m => m.Id is { Length: > 0 } && m.Name is { Length: > 0 } && m.CadenceHours > 0 && m.HorizonHours > 0)
-                    .Select(m => new ForecastModel(m.Id!, m.Name!, m.CadenceHours, m.HorizonHours))
-                    .ToArray()))
+                    .Select(m => new ForecastModel(m.Id!, m.Name!, m.CadenceHours, m.HorizonHours,
+                        string.IsNullOrWhiteSpace(m.Catalogue) ? null : m.Catalogue.Trim()))
+                    .ToArray(),
+                s.Pilot))
             .Where(s => s.Format != KnownCatalogueFormat.S100ForecastModels || s.Models.Count > 0)
             .ToArray();
     }
@@ -156,7 +160,8 @@ public static class KnownCatalogueSources
         var document = new Document(1, sources.Select(s => new Entry(
             s.Id, s.Name, s.Provider, s.Region, s.Format, s.CatalogUri, s.Homepage, s.Coverage, s.Editions, s.Sizes, s.Note,
             s.Product, s.NotForNavigation,
-            s.Models.Count == 0 ? null : s.Models.Select(m => new ModelEntry(m.Id, m.Name, m.CadenceHours, m.HorizonHours)).ToArray()))
+            s.Models.Count == 0 ? null : s.Models.Select(m => new ModelEntry(m.Id, m.Name, m.CadenceHours, m.HorizonHours, m.CataloguePath)).ToArray(),
+            s.Pilot))
             .ToArray());
         JsonSerializer.Serialize(stream, document, WriteOptions);
     }
@@ -223,9 +228,15 @@ public static class KnownCatalogueSources
         string? Note,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Product = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NotForNavigation = false,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ModelEntry>? Models = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ModelEntry>? Models = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Pilot = false);
 
-    private sealed record ModelEntry(string? Id, string? Name, int CadenceHours, int HorizonHours);
+    private sealed record ModelEntry(
+        string? Id,
+        string? Name,
+        int CadenceHours,
+        int HorizonHours,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Catalogue = null);
 
     /// <summary>Reads camelCase enum names; an unknown name reads as <see langword="null"/> so the entry can be skipped.</summary>
     private sealed class LenientEnumConverter<T> : JsonConverter<T?>
