@@ -57,7 +57,7 @@ online on first launch. If a copied binary is still quarantined, clear the
 attribute with `xattr -d com.apple.quarantine ./s100`. The Windows `s100.exe`
 is Authenticode-signed via Azure Trusted Signing.
 
-The same `s100` executable also ships inside the S-100 Viewer application
+The same `s100` executable also ships inside the SoundCharts application
 bundle (under `cli/`); see the project README for that layout.
 
 ## Quick start

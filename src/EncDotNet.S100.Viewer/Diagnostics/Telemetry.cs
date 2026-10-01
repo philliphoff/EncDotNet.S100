@@ -13,11 +13,19 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// </summary>
 internal static class Telemetry
 {
+    /// <summary>
+    /// Source / meter / service name. Pinned rather than derived from the
+    /// assembly name: the viewer ships as <c>SoundCharts</c>, but keeps its
+    /// historical telemetry identity (which also matches the
+    /// <c>EncDotNet.S100.*</c> subscription wildcard).
+    /// </summary>
+    public const string Name = "EncDotNet.S100.Viewer";
+
     public static readonly ActivitySource ActivitySource =
-        S100Telemetry.CreateActivitySource(typeof(Telemetry));
+        S100Telemetry.CreateActivitySource(typeof(Telemetry), Name);
 
     public static readonly Meter Meter =
-        S100Telemetry.CreateMeter(typeof(Telemetry));
+        S100Telemetry.CreateMeter(typeof(Telemetry), Name);
 
     public static readonly Histogram<double> CommandDuration =
         Meter.CreateHistogram<double>(

@@ -58,7 +58,7 @@
 
             <!-- Icon + product name -->
             <StackPanel Orientation="Horizontal" Spacing="14">
-                <Image Source="avares://EncDotNet.S100.Viewer/Branding/AppIcon.png"
+                <Image Source="avares://SoundCharts/Branding/AppIcon.png"
                        Width="56" Height="56"
                        VerticalAlignment="Center" />
                 <StackPanel VerticalAlignment="Center" Spacing="2">

@@ -154,7 +154,7 @@ call — there is no one-shot `--screenshot` CLI flag (it was removed in favour 
 the MCP tools):
 
 ```bash
-VIEW=src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer
+VIEW=src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/SoundCharts
 CELL=tests/datasets/S101/S-101/DATASET_FILES/101AA0000DS0009.000
 mkdir -p /tmp/eval
 

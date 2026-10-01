@@ -113,7 +113,7 @@ Run the built binary (not `dotnet run`, so the PID you trace is the app
 itself) and let it pick a free port, writing the bound URL to a file:
 
 ```
-src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
+src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/SoundCharts \
   --ephemeral --mcp --mcp-port-file /tmp/perfrun/mcp.url
 ```
 
@@ -171,7 +171,7 @@ times, timing each `set_palette` + `await_render_idle` round-trip.
 - Profile with `dotnet-trace collect -p <viewer-pid>` (omit
   `--profile`; the default works — `cpu-sampling` is rejected by
   `collect`). The PID to attach is the
-  `…/<rid>/EncDotNet.S100.Viewer` process, not a `dotnet` host.
+  `…/<rid>/SoundCharts` process, not a `dotnet` host.
   Export with `dotnet-trace convert --format speedscope`; the export
   is *evented* (open/close), so compute inclusive time by walking
   stacks.

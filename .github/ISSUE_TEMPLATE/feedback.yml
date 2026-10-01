@@ -1,5 +1,5 @@
 name: Viewer feedback
-description: Send feedback from the S-100 Viewer (prefilled by the app's "Report Feedback" command).
+description: Send feedback from SoundCharts (prefilled by the app's "Report Feedback" command).
 title: "[Feedback]: "
 labels: ["feedback"]
 body:

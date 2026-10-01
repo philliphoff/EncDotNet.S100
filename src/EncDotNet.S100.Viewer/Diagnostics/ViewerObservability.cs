@@ -24,7 +24,7 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// </remarks>
 internal static class ViewerObservability
 {
-    private const string ServiceName = "EncDotNet.S100.Viewer";
+    private const string ServiceName = Telemetry.Name;
     private const string SourceWildcard = "EncDotNet.S100.*";
 
     private static ILogger _commandLogger = NullLogger.Instance;

@@ -2,6 +2,14 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <!--
+      Shipped product name. The executable, the macOS .app bundle and the
+      avares:// resource URIs all use the assembly name; the project and
+      namespaces stay EncDotNet.S100.Viewer (RootNamespace pinned so embedded
+      resource names such as EncDotNet.S100.Viewer.Resources.Strings are stable).
+    -->
+    <AssemblyName>SoundCharts</AssemblyName>
+    <RootNamespace>EncDotNet.S100.Viewer</RootNamespace>
     <IsPackable>false</IsPackable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>

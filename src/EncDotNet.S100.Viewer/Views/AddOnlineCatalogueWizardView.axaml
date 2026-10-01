@@ -51,7 +51,7 @@
             <Setter Property="Foreground" Value="{DynamicResource PrimaryForegroundColor}" />
         </Style>
 
-        <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/WizardStyles.axaml" />
+        <StyleInclude Source="avares://SoundCharts/Views/WizardStyles.axaml" />
     </UserControl.Styles>
 
     <!-- A fixed height (the header, a 452 px body and the footer), so the footer never moves

@@ -14,7 +14,7 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
-        <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/WizardStyles.axaml" />
+        <StyleInclude Source="avares://SoundCharts/Views/WizardStyles.axaml" />
         <Style Selector="Border.fileTag">
             <Setter Property="Height" Value="20" />
             <Setter Property="Padding" Value="6,0" />

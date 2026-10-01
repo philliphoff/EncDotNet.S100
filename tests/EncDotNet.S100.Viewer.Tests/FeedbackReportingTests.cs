@@ -15,7 +15,7 @@ public class FeedbackReportingTests
         new()
         {
             GeneratedUtc = new DateTimeOffset(2026, 6, 14, 12, 0, 0, TimeSpan.Zero),
-            Application = new FeedbackAppInfo("S-100 Viewer", "1.2.3", "Dark", "Day"),
+            Application = new FeedbackAppInfo("SoundCharts", "1.2.3", "Dark", "Day"),
             Runtime = new FeedbackRuntimeInfo("macOS 15", "Arm64", ".NET 10.0", "en-US"),
             Viewport = withViewport
                 ? new FeedbackViewportInfo(50.0, -5.0, 51.0, -4.0)

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
   <!--
-    UI strings for the S-100 Viewer. Every user-visible string in the viewer
+    UI strings for SoundCharts (the S-100 viewer). Every user-visible string in the viewer
     must live here so that future translations are mechanical. Keys use a
     "Section_PurposeOrControl" naming convention.
   -->
@@ -20,7 +20,7 @@
 
   <!-- Window -->
   <data name="Window_Title" xml:space="preserve">
-    <value>S-100 Viewer</value>
+    <value>SoundCharts</value>
   </data>
 
   <!-- Activity / pane titles -->
@@ -2294,7 +2294,7 @@
     <value>Alter course 5° to starboard</value>
   </data>
   <data name="Menu_About" xml:space="preserve">
-    <value>About S-100 Viewer</value>
+    <value>About SoundCharts</value>
   </data>
   <data name="About_Title" xml:space="preserve">
     <value>About</value>
@@ -2303,10 +2303,10 @@
     <value>Close</value>
   </data>
   <data name="About_ProductName" xml:space="preserve">
-    <value>S-100 Viewer</value>
+    <value>SoundCharts</value>
   </data>
   <data name="About_ProductSubtitle" xml:space="preserve">
-    <value>S-100 and related spec dataset viewer</value>
+    <value>S-100 Viewer</value>
   </data>
   <data name="About_CopyrightFormat" xml:space="preserve">
     <value>© {0} EncDotNet</value>

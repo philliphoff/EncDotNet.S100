@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 380" width="540" height="380">
   <!--
-    DMG window background for the S-100 Viewer installer.
+    DMG window background for the SoundCharts installer.
     Layout (matches the AppleScript geometry in CI):
       - Window inner size: 540x380 px
       - App icon position:      (140, 200)
@@ -44,7 +44,7 @@
   <!-- Wordmark -->
   <text x="270" y="345" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif"
         font-size="14" fill="#0B3A67" text-anchor="middle" font-weight="500" letter-spacing="0.5">
-    S-100 Viewer
+    SoundCharts: S-100 Viewer
   </text>
   <text x="270" y="362" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif"
         font-size="10" fill="#0B3A67" text-anchor="middle" opacity="0.7">

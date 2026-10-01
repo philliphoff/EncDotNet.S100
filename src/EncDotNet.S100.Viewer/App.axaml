@@ -4,7 +4,7 @@
              xmlns:converters="using:Avalonia.Controls.Converters"
              xmlns:services="using:EncDotNet.S100.Viewer.Services"
              x:Class="EncDotNet.S100.Viewer.App"
-             Name="S-100 Viewer"
+             Name="SoundCharts"
              RequestedThemeVariant="Default">
 
     <Application.Resources>
@@ -15,7 +15,7 @@
                   ShadUI nor any included base theme templates ProgressBar; see
                   the file header for details.
                 -->
-                <ResourceInclude Source="avares://EncDotNet.S100.Viewer/Resources/ProgressBarTheme.axaml" />
+                <ResourceInclude Source="avares://SoundCharts/Resources/ProgressBarTheme.axaml" />
             </ResourceDictionary.MergedDictionaries>
             <ResourceDictionary.ThemeDictionaries>
                 <!--
@@ -145,7 +145,7 @@
         <themes:ShadTheme />
 
         <!-- Generic ApplicationPanel control template (title bar + content). -->
-        <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/ApplicationPanel.axaml" />
+        <StyleInclude Source="avares://SoundCharts/Views/ApplicationPanel.axaml" />
 
         <!--
           App-wide Slider accent colour. ShadUI's Slider template sets

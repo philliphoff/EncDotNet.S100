@@ -90,7 +90,7 @@ command's session is torn down — the GUI window dies seconds later.
   *not* rely on `& disown` in a sync command for hand-off runs.
 - The process survives session shutdown; stop it explicitly with
   `kill -9 <pid>` (never name-based kills) when the user is done.
-- Confirm it stayed up (`pgrep -f EncDotNet.S100.Viewer/bin`) before
+- Confirm it stayed up (`pgrep -f EncDotNet.S100.Viewer/bin/.*/SoundCharts`) before
   telling the user it's ready.
 
 ## Procedure: launch, then drive over MCP
@@ -102,7 +102,7 @@ a `dotnet` host:
 ```bash
 dotnet build -c Release src/EncDotNet.S100.Viewer
 mkdir -p /tmp/eval
-nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
+nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/SoundCharts \
   --data-dir /tmp/eval/data --mcp --mcp-port-file /tmp/eval/mcp.url \
   >/tmp/eval/viewer.log 2>&1 & disown
 ```
@@ -183,7 +183,7 @@ Always `await_render_idle` **before** `render_to_image` or
 read `get_render_stats` for per-style cost. Palette/display/time-step
 wall time is dominated by fixed settle latency — to attribute CPU,
 profile with `dotnet-trace collect -p <viewer-pid>` (default profile;
-attach the `…/<rid>/EncDotNet.S100.Viewer` PID, not a `dotnet` host).
+attach the `…/<rid>/SoundCharts` PID, not a `dotnet` host).
 See the cartography skill for the rendering cost model.
 
 ## Turning a finding into a test

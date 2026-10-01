@@ -4,9 +4,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>EncDotNet.S100.Viewer</string>
+    <string>SoundCharts</string>
     <key>CFBundleDisplayName</key>
-    <string>S-100 Viewer</string>
+    <string>SoundCharts</string>
     <key>CFBundleIdentifier</key>
     <string>com.philliphoff.encdotnet.s100.viewer</string>
     <key>CFBundleVersion</key>
@@ -14,7 +14,7 @@
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleExecutable</key>
-    <string>EncDotNet.S100.Viewer</string>
+    <string>SoundCharts</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
