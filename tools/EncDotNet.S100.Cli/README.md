@@ -108,14 +108,14 @@ embedded fallback font even with no fontconfig or system fonts installed.
 
 ### Inside the Viewer application bundle
 
-The `s100` executable also ships **inside the S-100 Viewer application bundle**
+The `s100` executable also ships **inside the SoundCharts (viewer) application bundle**
 so a single viewer download provides both the GUI and the command-line tool. CI
 publishes it self-contained (per platform RID) into a `cli/` subfolder of the
 viewer's publish output:
 
 | Platform | Location of `s100` |
 |---|---|
-| macOS | `EncDotNet.S100.Viewer.app/Contents/MacOS/cli/s100` (code-signed, notarized, and hardened-runtime alongside the viewer) |
+| macOS | `SoundCharts.app/Contents/MacOS/cli/s100` (code-signed, notarized, and hardened-runtime alongside the viewer) |
 | Windows | `cli/s100.exe` next to the published viewer |
 | Linux | `cli/s100` next to the published viewer |
 

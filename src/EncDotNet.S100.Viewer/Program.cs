@@ -9,7 +9,7 @@ internal sealed class Program
     public static int Main(string[] args)
     {
         var app = new CommandApp<ViewerCommand>();
-        app.Configure(config => config.SetApplicationName("EncDotNet.S100.Viewer"));
+        app.Configure(config => config.SetApplicationName("SoundCharts"));
         return app.Run(args);
     }
 

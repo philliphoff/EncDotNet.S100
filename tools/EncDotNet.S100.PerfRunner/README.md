@@ -70,7 +70,7 @@ the tiled render subsystem, MCP, and file telemetry:
 mkdir -p /tmp/viewer-stress
 ENC_DOTNET_OTEL_FILE=/tmp/viewer-stress/tiles.jsonl \
 S100_RENDER_SUBSYSTEM=B \
-src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
+src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/SoundCharts \
   --data-dir /tmp/viewer-stress/data \
   --mcp --mcp-port-file /tmp/viewer-stress/mcp.url \
   /path/to/exchange-set

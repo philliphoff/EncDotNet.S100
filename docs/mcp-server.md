@@ -1,6 +1,6 @@
 # MCP server (viewer-hosted)
 
-The S-100 Viewer can host a Model Context Protocol (MCP) server so
+The viewer (SoundCharts) can host a Model Context Protocol (MCP) server so
 external agents — `mcp-inspector`, Claude Desktop, IDE assistants —
 can query the datasets you have loaded in the viewer.
 

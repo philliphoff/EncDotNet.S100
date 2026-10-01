@@ -79,6 +79,38 @@ public static class S100Telemetry
         return new Meter(GetName(assembly), GetVersion(assembly));
     }
 
+    /// <summary>
+    /// Builds an <see cref="ActivitySource"/> with an explicit
+    /// <paramref name="name"/> (for assemblies whose file name differs from
+    /// their telemetry identity, such as a renamed application executable)
+    /// and the informational version of <paramref name="markerType"/>'s
+    /// assembly.
+    /// </summary>
+    /// <param name="markerType">A type from the assembly that owns the
+    /// new source; supplies the version.</param>
+    /// <param name="name">The source name to publish under.</param>
+    public static ActivitySource CreateActivitySource(Type markerType, string name)
+    {
+        ArgumentNullException.ThrowIfNull(markerType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return new ActivitySource(name, GetVersion(markerType.Assembly));
+    }
+
+    /// <summary>
+    /// Builds a <see cref="Meter"/> with an explicit <paramref name="name"/>
+    /// and the informational version of <paramref name="markerType"/>'s
+    /// assembly. See <see cref="CreateActivitySource(Type, string)"/>.
+    /// </summary>
+    /// <param name="markerType">A type from the assembly that owns the
+    /// new meter; supplies the version.</param>
+    /// <param name="name">The meter name to publish under.</param>
+    public static Meter CreateMeter(Type markerType, string name)
+    {
+        ArgumentNullException.ThrowIfNull(markerType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return new Meter(name, GetVersion(markerType.Assembly));
+    }
+
     private static string GetName(Assembly assembly) =>
         assembly.GetName().Name ?? "EncDotNet.S100";
 

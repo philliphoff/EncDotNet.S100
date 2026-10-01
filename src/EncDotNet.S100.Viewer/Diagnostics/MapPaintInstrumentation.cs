@@ -68,7 +68,7 @@ internal static class MapPaintInstrumentation
     private static long _vectorSplitCalls;
 
     private static readonly Meter Meter =
-        S100Telemetry.CreateMeter(typeof(MapPaintInstrumentation));
+        S100Telemetry.CreateMeter(typeof(MapPaintInstrumentation), Telemetry.Name);
 
     private static readonly Histogram<long> StyleCallsPerPaint =
         Meter.CreateHistogram<long>(

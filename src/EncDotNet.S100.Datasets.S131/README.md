@@ -13,7 +13,7 @@ Infrastructure** datasets (GML encoding, S-100 Part 10b).
 
 ## Screenshot
 
-S-131 Halifax Harbour sample rendered in the S-100 Viewer:
+S-131 Halifax Harbour sample rendered in the SoundCharts viewer:
 
 ![S-131 Halifax Harbour](../../readme/s131-viewer.png)
 

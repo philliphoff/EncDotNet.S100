@@ -36,7 +36,7 @@ Expected result: `out.png` appears in your working directory.
 
 ## Desktop app
 
-The **S-100 Viewer** is a cross-platform desktop application that loads any
+**SoundCharts: S-100 Viewer** is a cross-platform desktop application that loads any
 combination of supported products and renders them, time-aligned, on an
 interactive map over a bundled offline basemap (Natural Earth land;
 OpenStreetMap optional). It needs no .NET installation

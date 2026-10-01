@@ -163,10 +163,10 @@ jobs:
         include:
           - os: macos-latest
             rid: osx-arm64
-            artifact: Viewer-osx-arm64
+            artifact: SoundCharts-osx-arm64
           - os: windows-latest
             rid: win-x64
-            artifact: Viewer-win-x64
+            artifact: SoundCharts-win-x64
           # win-arm64 is cross-published on the x64 runner (not windows-11-arm)
           # because azure/trusted-signing-action does not support ARM64 runners
           # — its x64 signing dlib fails under emulation with "SignTool failed
@@ -176,13 +176,13 @@ jobs:
           # arm64 build/test coverage is retained by the separate test-arm64 job.
           - os: windows-latest
             rid: win-arm64
-            artifact: Viewer-win-arm64
+            artifact: SoundCharts-win-arm64
           - os: ubuntu-latest
             rid: linux-x64
-            artifact: Viewer-linux-x64
+            artifact: SoundCharts-linux-x64
           - os: ubuntu-22.04-arm
             rid: linux-arm64
-            artifact: Viewer-linux-arm64
+            artifact: SoundCharts-linux-arm64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -291,7 +291,7 @@ jobs:
         run: |
           $publish = "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
           $targets = @(
-            "$publish/EncDotNet.S100.Viewer.exe",
+            "$publish/SoundCharts.exe",
             "$publish/cli/s100.exe"
           )
           foreach ($exe in $targets) {
@@ -325,7 +325,7 @@ jobs:
         if: matrix.rid == 'osx-arm64'
         run: |
           PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish"
-          APP="EncDotNet.S100.Viewer.app"
+          APP="SoundCharts.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp src/EncDotNet.S100.Viewer/Info.plist "$APP/Contents/"
           # AppIcon.icns is referenced from Info.plist via CFBundleIconFile.
@@ -353,9 +353,9 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          APP="EncDotNet.S100.Viewer.app"
+          APP="SoundCharts.app"
           ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
-          MAIN_EXE="EncDotNet.S100.Viewer"
+          MAIN_EXE="SoundCharts"
           # Sign all subcomponents individually before sealing the bundle.
           # Exclude the main executable — it will be signed when we sign
           # the bundle itself, which also validates all subcomponents.
@@ -388,9 +388,9 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           ditto -c -k --keepParent \
-            EncDotNet.S100.Viewer.app \
-            Viewer.zip
-          xcrun notarytool submit Viewer.zip \
+            SoundCharts.app \
+            SoundCharts.zip
+          xcrun notarytool submit SoundCharts.zip \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" \
@@ -415,7 +415,7 @@ jobs:
           # CloudKit. Stapling is optional — Gatekeeper will verify the
           # notarization online on first launch if the ticket is absent.
           for i in 1 2 3 4 5; do
-            if xcrun stapler staple EncDotNet.S100.Viewer.app; then
+            if xcrun stapler staple SoundCharts.app; then
               exit 0
             fi
             echo "Staple attempt $i failed, waiting 30s..."
@@ -507,14 +507,14 @@ jobs:
           # `Finder got an error: Can't get disk (-1728)` failure that
           # bare `osascript` hits on GitHub-hosted macOS runners.
           # Geometry must match src/EncDotNet.S100.Viewer/Branding/dmg-background.svg.
-          DMG_NAME="EncDotNet.S100.Viewer-${VERSION}.dmg"
+          DMG_NAME="SoundCharts-${VERSION}.dmg"
           STAGING="$(mktemp -d)/dmg"
           BG="src/EncDotNet.S100.Viewer/Branding/dmg-background.png"
           VOLICON="src/EncDotNet.S100.Viewer/Branding/AppIcon.icns"
-          VOLNAME="S-100 Viewer"
+          VOLNAME="SoundCharts"
 
           mkdir -p "$STAGING"
-          cp -R EncDotNet.S100.Viewer.app "$STAGING/"
+          cp -R SoundCharts.app "$STAGING/"
 
           brew install create-dmg
 
@@ -525,7 +525,7 @@ jobs:
             --window-pos 200 120 \
             --window-size 540 380 \
             --icon-size 96 \
-            --icon "EncDotNet.S100.Viewer.app" 140 200 \
+            --icon "SoundCharts.app" 140 200 \
             --app-drop-link 400 200 \
             --hdiutil-quiet \
             "$DMG_NAME" \
@@ -583,7 +583,7 @@ jobs:
 
       - name: Archive macOS .app bundle
         if: matrix.rid == 'osx-arm64'
-        run: tar -czf "${{ matrix.artifact }}.tar.gz" EncDotNet.S100.Viewer.app
+        run: tar -czf "${{ matrix.artifact }}.tar.gz" SoundCharts.app
 
       - name: Archive published app (Linux)
         if: startsWith(matrix.rid, 'linux-')
@@ -655,8 +655,8 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/nupkgs/*.nupkg
-            artifacts/Viewer-*/*.tar.gz
-            artifacts/Viewer-*/*.zip
+            artifacts/SoundCharts-*/*.tar.gz
+            artifacts/SoundCharts-*/*.zip
             artifacts/s100-cli-*/*.tar.gz
             artifacts/s100-cli-*/*.zip
-            artifacts/Viewer-*-dmg/*.dmg
+            artifacts/SoundCharts-*-dmg/*.dmg

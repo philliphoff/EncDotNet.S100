@@ -107,7 +107,8 @@ public class S100MapsuiRenderingTests
 
         Assert.DoesNotContain(
             references,
-            name => name.StartsWith("EncDotNet.S100.Viewer", StringComparison.Ordinal));
+            name => name.StartsWith("EncDotNet.S100.Viewer", StringComparison.Ordinal)
+                || name == "SoundCharts");
         Assert.DoesNotContain(
             references,
             name => name.StartsWith("Avalonia", StringComparison.Ordinal));

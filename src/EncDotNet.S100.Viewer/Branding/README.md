@@ -1,6 +1,6 @@
 # Viewer branding assets
 
-This folder contains the master art for the S-100 Viewer application and
+This folder contains the master art for the SoundCharts (S-100 Viewer) application and
 all generated icon / installer assets that the build and CI pipeline
 consume.
 
@@ -25,9 +25,9 @@ consume.
 
 ## How it is wired in
 
-- **Avalonia window icon** — `src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj` declares `Branding/AppIcon.png` as an `AvaloniaResource`, and `MainWindow.axaml` sets `Icon="avares://EncDotNet.S100.Viewer/Branding/AppIcon.png"`.
+- **Avalonia window icon** — `src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj` declares `Branding/AppIcon.png` as an `AvaloniaResource`, and `MainWindow.axaml` sets `Icon="avares://SoundCharts/Branding/AppIcon.png"`.
 - **Windows .exe icon** — the same csproj sets `<ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>`, so `dotnet publish --runtime win-…` embeds the icon into the executable resource.
-- **macOS .app icon** — `Info.plist` sets `CFBundleIconFile=AppIcon`. The CI build copies `Branding/AppIcon.icns` into `EncDotNet.S100.Viewer.app/Contents/Resources/`.
+- **macOS .app icon** — `Info.plist` sets `CFBundleIconFile=AppIcon`. The CI build copies `Branding/AppIcon.icns` into `SoundCharts.app/Contents/Resources/`.
 - **macOS DMG** — the CI workflow builds the DMG read-write, stages `Branding/dmg-background.png` into a hidden `.background/` folder, then uses AppleScript to set the window bounds, icon size, icon positions, and background image before converting to compressed UDZO.
 
 ## Regenerating
