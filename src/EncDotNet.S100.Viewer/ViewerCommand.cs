@@ -37,6 +37,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Write the bound MCP endpoint URI to this file once the server is listening, so an agent can discover an ephemeral port. Implies --mcp.")]
     public string? McpPortFile { get; set; }
 
+    [CommandOption("--mcp-test-hooks")]
+    [Description("Register test-only MCP tools such as set_test_clock, which moves or freezes the viewer's notion of now. For scripted testing only. Implies --mcp.")]
+    public bool McpTestHooks { get; set; }
+
     // ── Settings isolation ───────────────────────────────────────────
 
     [CommandOption("--settings <PATH>")]
@@ -127,7 +131,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
     /// bound port back to the user's settings file.
     /// </summary>
     public bool McpRequested =>
-        Mcp || McpPort.HasValue || McpBind is not null || McpPortFile is not null;
+        Mcp || McpPort.HasValue || McpBind is not null || McpPortFile is not null || McpTestHooks;
 
     /// <summary>
     /// True when the user supplied an explicit viewport (center+zoom or

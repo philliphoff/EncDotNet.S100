@@ -6,105 +6,10 @@ using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 
-/// <summary>
-/// Shared JSON options and result-translation helpers for the route MCP
-/// adapters. Centralises the success / failure / internal-error wire shapes
-/// so every <c>Route*McpAdapter</c> emits an identical payload contract.
-/// </summary>
-internal static class RouteAdapterShared
-{
-    /// <summary>
-    /// The serializer options every route adapter uses. A configured
-    /// <c>TypeInfoResolver</c> is required so the MCP SDK can call
-    /// <see cref="JsonSerializerOptions.MakeReadOnly()"/> in the published
-    /// (reflection-disabled) viewer without throwing.
-    /// </summary>
-    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
-
-    /// <summary>Runs <paramref name="resultFactory"/> and translates its outcome.</summary>
-    public static async Task<CallToolResult> DispatchAsync<T>(Func<Task<ToolResult<T>>> resultFactory)
-    {
-        try
-        {
-            var result = await resultFactory().ConfigureAwait(false);
-            return Translate(result);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return InternalError(ex);
-        }
-    }
-
-    /// <summary>Translates a completed <see cref="ToolResult{T}"/> to a wire result.</summary>
-    public static CallToolResult Translate<T>(ToolResult<T> result)
-    {
-        if (result.TryGetValue(out var value))
-            return Success(value);
-        result.TryGetError(out var err);
-        return Failure(err!);
-    }
-
-    private static CallToolResult Success<T>(T value)
-    {
-        var node = JsonSerializer.SerializeToNode(value, Options) ?? new JsonObject();
-        return new CallToolResult
-        {
-            Content = [new TextContentBlock { Text = node.ToJsonString(Options) }],
-            IsError = false,
-        };
-    }
-
-    private static CallToolResult Failure(ToolError error)
-    {
-        var details = JsonSerializer.SerializeToNode(error, error.GetType(), Options) as JsonObject
-            ?? new JsonObject();
-        details.Remove("code");
-        details.Remove("message");
-        details.Remove("Code");
-        details.Remove("Message");
-
-        var payload = new JsonObject
-        {
-            ["code"] = error.Code,
-            ["message"] = error.Message,
-            ["details"] = details,
-        };
-        return new CallToolResult
-        {
-            Content = [new TextContentBlock { Text = payload.ToJsonString(Options) }],
-            IsError = true,
-        };
-    }
-
-    private static CallToolResult InternalError(Exception ex)
-    {
-        var payload = new JsonObject
-        {
-            ["code"] = "internal_error",
-            ["message"] = ex.Message,
-            ["details"] = new JsonObject { ["exceptionType"] = ex.GetType().FullName },
-        };
-        return new CallToolResult
-        {
-            Content = [new TextContentBlock { Text = payload.ToJsonString(Options) }],
-            IsError = true,
-        };
-    }
-}
-
 /// <summary>Wraps <see cref="CreateRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class CreateRouteMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Creates a new, empty editable route in the live viewer and makes it the active route. " +
@@ -118,7 +23,7 @@ internal static class CreateRouteMcpAdapter
             [System.ComponentModel.Description("Optional route name.")] string? name = null,
             [System.ComponentModel.Description("Optional stable route id; a GUID is generated when omitted. Must be unique.")] string? id = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(new CreateRouteRequest(name, id), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new CreateRouteRequest(name, id), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -130,13 +35,13 @@ internal static class CreateRouteMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="ListRoutesTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class ListRoutesMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Lists every editable route in the live viewer with its id, name, waypoint/leg counts, " +
@@ -147,7 +52,7 @@ internal static class ListRoutesMcpAdapter
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(new ListRoutesRequest(), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new ListRoutesRequest(), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -159,13 +64,13 @@ internal static class ListRoutesMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<ListRoutesResult> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="GetRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class GetRouteMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Returns the full state of one route in the live viewer: identity, metadata, ordered " +
@@ -179,7 +84,7 @@ internal static class GetRouteMcpAdapter
         var del = (
             [System.ComponentModel.Description("Id of the route to return; omit to use the active route.")] string? routeId = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(new GetRouteRequest(routeId), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new GetRouteRequest(routeId), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -191,13 +96,13 @@ internal static class GetRouteMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="DeleteRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class DeleteRouteMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Removes a route from the live viewer's collection. Omit routeId to delete the active route. " +
@@ -210,7 +115,7 @@ internal static class DeleteRouteMcpAdapter
         var del = (
             [System.ComponentModel.Description("Id of the route to delete; omit to delete the active route.")] string? routeId = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(new DeleteRouteRequest(routeId), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new DeleteRouteRequest(routeId), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -222,13 +127,13 @@ internal static class DeleteRouteMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<DeleteRouteResult> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="AppendWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class AppendWaypointMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Appends a waypoint to the end of a route in the live viewer. Omit routeId to use the active " +
@@ -247,7 +152,7 @@ internal static class AppendWaypointMcpAdapter
             [System.ComponentModel.Description("Optional flag pinning the waypoint so it must not be moved.")] bool? @fixed = null,
             [System.ComponentModel.Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? turnRadiusNm = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new AppendWaypointRequest(lat, lon, routeId, number, name, @fixed, turnRadiusNm), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -260,13 +165,13 @@ internal static class AppendWaypointMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="InsertWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class InsertWaypointMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Inserts a waypoint at a given index of a route in the live viewer, splitting the affected " +
@@ -287,7 +192,7 @@ internal static class InsertWaypointMcpAdapter
             [System.ComponentModel.Description("Optional flag pinning the waypoint so it must not be moved.")] bool? @fixed = null,
             [System.ComponentModel.Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? turnRadiusNm = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new InsertWaypointRequest(index, lat, lon, routeId, number, name, @fixed, turnRadiusNm), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -300,13 +205,13 @@ internal static class InsertWaypointMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="MoveWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class MoveWaypointMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Moves an existing waypoint of a route in the live viewer to a new position. Omit routeId to " +
@@ -323,7 +228,7 @@ internal static class MoveWaypointMcpAdapter
             [System.ComponentModel.Description("New WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
             [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new MoveWaypointRequest(index, lat, lon, routeId), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -336,13 +241,13 @@ internal static class MoveWaypointMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="DeleteWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class DeleteWaypointMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Removes a waypoint from a route in the live viewer, merging the adjacent legs. Omit routeId " +
@@ -357,7 +262,7 @@ internal static class DeleteWaypointMcpAdapter
             [System.ComponentModel.Description("Index of the waypoint to remove in [0, waypointCount).")] int index,
             [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new DeleteWaypointRequest(index, routeId), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -370,13 +275,13 @@ internal static class DeleteWaypointMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetLegAttributesTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class SetLegAttributesMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Updates one leg of a route in the live viewer: its geometry type (loxodrome|geodesic) and/or " +
@@ -408,7 +313,7 @@ internal static class SetLegAttributesMcpAdapter
             [System.ComponentModel.Description("Safety margin in metres.")] double? safetyMarginMeters = null,
             [System.ComponentModel.Description("Free-text note for the leg.")] string? note = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new SetLegAttributesRequest(
                     legIndex, routeId, geometryType,
                     starboardCrossTrackDistanceLimitMeters, portCrossTrackDistanceLimitMeters,
@@ -430,13 +335,13 @@ internal static class SetLegAttributesMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetRouteInfoTool"/> as an <see cref="McpServerTool"/>.</summary>
 internal static class SetRouteInfoMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = RouteAdapterShared.Options;
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Updates a route's metadata in the live viewer (name, author, description, departure/arrival " +
@@ -464,7 +369,7 @@ internal static class SetRouteInfoMcpAdapter
             [System.ComponentModel.Description("Vessel overall length in metres (creates the vessel block when supplied).")] double? vesselLengthMeters = null,
             [System.ComponentModel.Description("Vessel beam in metres (creates the vessel block when supplied).")] double? vesselBeamMeters = null,
             CancellationToken ct = default) =>
-            RouteAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new SetRouteInfoRequest(
                     routeId, name, author, description, departurePortId, arrivalPortId,
                     validityStart, validityEnd,
@@ -481,5 +386,5 @@ internal static class SetRouteInfoMcpAdapter
 
     /// <summary>Test seam mirroring the production translation.</summary>
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => RouteAdapterShared.Translate(result);
+        => McpAdapterShared.Translate(result);
 }

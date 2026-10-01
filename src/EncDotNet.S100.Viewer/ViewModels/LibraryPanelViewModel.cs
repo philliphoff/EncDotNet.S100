@@ -74,8 +74,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryLoader loader,
         ILibraryDownloader downloader,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
-        Services.Notifications.INotificationService? notifications = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications)
+        Services.Notifications.INotificationService? notifications = null,
+        TimeProvider? time = null)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time)
     {
     }
 

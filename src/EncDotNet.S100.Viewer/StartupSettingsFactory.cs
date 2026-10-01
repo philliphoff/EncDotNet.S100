@@ -63,6 +63,7 @@ internal static class StartupSettingsFactory
                 settings.McpBindAddress = bind;
             if (options.McpPortFile is { } portFile && !string.IsNullOrWhiteSpace(portFile))
                 settings.McpPortFilePath = portFile;
+            settings.McpTestHooks = options.McpTestHooks;
         }
 
         // ── Render state ─────────────────────────────────────────────

@@ -170,6 +170,11 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `close_dataset {id}` / `close_all_datasets` | Unload (retention loops without restarting). |
 | `list_panels` | Read-only — enumerate activity panels (left/right/bottom dock tabs) + `available`/`selected`/`dockOpen`/`showing` state. |
 | `set_panel {panel, visible?}` | Show/hide a panel by id (`Datasets`, `LayerStack`, `PickReport`, `Timeline`, …) to drive & verify non-render UX. |
+| `get_timeline_state` | Read-only — Timeline mode (`live`/`pinned`), now, view time, coverage gaps, runs, and per layer the sample it draws (null = hidden, no data near the view time). |
+| `set_view_time {time, snap?}` | `now`, an ISO-8601 time, or an offset (`+6h`); `snap: exact` (default) can land between samples, unlike `set_time_step`. `await_render_idle` before reading layer times. |
+| `set_dataset_state {datasetId, visible?, opacity?}` | Show/hide a loaded dataset (e.g. gridded S-104, which loads hidden). |
+| `list_notifications` / `dismiss_notification {id?}` | Read or clear notifications, e.g. before a screenshot. |
+| `set_test_clock {now?, advance?, freeze?, reset?}` | Only with `--mcp-test-hooks`: move or freeze "now" to test Live, ageing forecasts and Expired runs without waiting. |
 
 **Canonical visual-eval loop:**
 `open_dataset` → `set_viewport` → `await_render_idle` →
