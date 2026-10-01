@@ -23,13 +23,13 @@ public class CatalogueFormatDetectorTests
     }
 
     [Fact]
-    public void An_S100_exchange_catalogue_is_recognised_but_not_supported()
+    public void An_S100_exchange_catalogue_is_recognised()
     {
         using var stream = File.OpenRead(TestPaths.Fixture("noaa-s104-catalog.xml"));
 
         var probe = CatalogueFormatDetector.Probe(stream);
 
-        Assert.Null(probe.Format);
+        Assert.Equal(KnownCatalogueFormat.S100ExchangeCatalogue, probe.Format);
         Assert.True(probe.IsS100ExchangeCatalogue);
     }
 

@@ -38,4 +38,11 @@ public sealed class DataCoverage
     /// <see langword="null"/> when absent or not an integer.
     /// </summary>
     public int? MinimumDisplayScale { get; init; }
+
+    /// <summary>
+    /// The <c>approximateGridResolution</c> of a gridded (coverage) dataset,
+    /// in metres (e.g. <c>4.0</c> for an S-102 port tile); <see langword="null"/>
+    /// when absent or not a number.
+    /// </summary>
+    public double? ApproximateGridResolution { get; init; }
 }

@@ -962,7 +962,6 @@ internal static class Strings
     public static string Library_DirectoryUrlInvalid => Get(nameof(Library_DirectoryUrlInvalid));
     public static string Library_DirectoryUrlUnsupportedFormat => Get(nameof(Library_DirectoryUrlUnsupportedFormat));
     public static string Library_DirectoryUrlNotXml => Get(nameof(Library_DirectoryUrlNotXml));
-    public static string Library_DirectoryUrlS100 => Get(nameof(Library_DirectoryUrlS100));
     public static string Library_FeedProducts => Get(nameof(Library_FeedProducts));
     public static string Library_FeedSelectionAllFormat => Get(nameof(Library_FeedSelectionAllFormat));
     public static string Library_FeedSelectionFormat => Get(nameof(Library_FeedSelectionFormat));
@@ -1119,6 +1118,20 @@ internal static class Strings
     public static string Wizard_Review_UpdatesDetected => Get(nameof(Wizard_Review_UpdatesDetected));
     public static string Wizard_Review_UpdatesNotDetected => Get(nameof(Wizard_Review_UpdatesNotDetected));
     public static string Wizard_OnlineNote => Get(nameof(Wizard_OnlineNote));
+    public static string Wizard_RegionsHeaderFormat => Get(nameof(Wizard_RegionsHeaderFormat));
+    public static string Wizard_AreasHeaderFormat => Get(nameof(Wizard_AreasHeaderFormat));
+    public static string Wizard_ResolutionTitle => Get(nameof(Wizard_ResolutionTitle));
+    public static string Wizard_ResolutionAll => Get(nameof(Wizard_ResolutionAll));
+    public static string Wizard_JoinAndFormat => Get(nameof(Wizard_JoinAndFormat));
+    public static string Wizard_PurposeResolutionFormat => Get(nameof(Wizard_PurposeResolutionFormat));
+    public static string Wizard_TilesFormat => Get(nameof(Wizard_TilesFormat));
+    public static string Wizard_TilesSizeFormat => Get(nameof(Wizard_TilesSizeFormat));
+    public static string Wizard_TilesSizingFormat => Get(nameof(Wizard_TilesSizingFormat));
+    public static string Wizard_TilesOnlineFormat => Get(nameof(Wizard_TilesOnlineFormat));
+    public static string Wizard_AreasTilesFormat => Get(nameof(Wizard_AreasTilesFormat));
+    public static string Wizard_NothingDownloadsFormat => Get(nameof(Wizard_NothingDownloadsFormat));
+    public static string Wizard_Review_Use => Get(nameof(Wizard_Review_Use));
+    public static string Wizard_Review_NotForNavigation => Get(nameof(Wizard_Review_NotForNavigation));
     public static string Library_DirectorySearchWatermark => Get(nameof(Library_DirectorySearchWatermark));
     public static string Library_DirectoryCountFormat => Get(nameof(Library_DirectoryCountFormat));
     public static string Library_DirectoryNoMatches => Get(nameof(Library_DirectoryNoMatches));
@@ -1184,4 +1197,11 @@ internal static class Strings
     public static string Manifest_AndMoreFormat => Get(nameof(Manifest_AndMoreFormat));
     public static string Library_Quick_Manifest => Get(nameof(Library_Quick_Manifest));
     public static string Library_Quick_ManifestSub => Get(nameof(Library_Quick_ManifestSub));
+    public static string Library_StatusLine_CatalogueFormat => Get(nameof(Library_StatusLine_CatalogueFormat));
+    public static string Library_StatusLine_CatalogueOfflineFormat => Get(nameof(Library_StatusLine_CatalogueOfflineFormat));
+    public static string Library_StatusLine_NotForNavigation => Get(nameof(Library_StatusLine_NotForNavigation));
+    public static string Library_Host_Aws => Get(nameof(Library_Host_Aws));
+    public static string Library_Host_Web => Get(nameof(Library_Host_Web));
+    public static string Library_Format_S100Catalogue => Get(nameof(Library_Format_S100Catalogue));
+    public static string Library_Chip_NotForNavigation => Get(nameof(Library_Chip_NotForNavigation));
 }

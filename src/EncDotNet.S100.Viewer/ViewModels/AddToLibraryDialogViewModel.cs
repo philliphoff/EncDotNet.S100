@@ -10,6 +10,7 @@ using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.Collections.Usace;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
@@ -42,6 +43,9 @@ internal enum AddToLibraryKind
 
     /// <summary>Some or all groups of a local collection manifest (<c>*.s100collection.json</c>).</summary>
     LocalManifest,
+
+    /// <summary>Some regions and areas of a remote S-100 exchange catalogue, e.g. NOAA's S-102 on AWS (issue #685).</summary>
+    S100Catalogue,
 }
 
 /// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
@@ -63,6 +67,9 @@ internal sealed class FacetGroupViewModel : ViewModelBase
 
     /// <summary>The group title (e.g. "States", "Rivers").</summary>
     public string Title { get; }
+
+    /// <summary>What the group stands for, when it is a value itself (a remote catalogue's region folder).</summary>
+    public string? Key { get; init; }
 
     /// <summary>The group's values as shown.</summary>
     public ObservableCollection<FacetOptionViewModel> Options { get; }
@@ -131,7 +138,9 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null,
         TimeProvider? timeProvider = null,
         Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? loadCommunityCatalog = null,
-        Func<Uri, CancellationToken, Task<S100FeedDocument>>? loadS100Feed = null)
+        Func<Uri, CancellationToken, Task<S100FeedDocument>>? loadS100Feed = null,
+        Func<Uri, CancellationToken, Task<RemoteS100Catalogue>>? loadS100Catalogue = null,
+        Func<RemoteS100Catalogue, IReadOnlyList<string>, CancellationToken, Task<IReadOnlyDictionary<Uri, S3Object>?>>? listS100Folders = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
@@ -139,6 +148,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         _loadUsaceCatalog = loadUsaceCatalog;
         _loadCommunityCatalog = loadCommunityCatalog;
         _loadS100Feed = loadS100Feed;
+        _loadS100Catalogue = loadS100Catalogue;
+        _listS100Folders = listS100Folders;
         _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
@@ -161,7 +172,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 
     /// <summary>True when adding a scope of an online feed (NOAA, USACE or a community list).</summary>
     public bool IsOnlineFeed => _kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed
-        or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed;
+        or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed or AddToLibraryKind.S100Catalogue;
 
     /// <summary>True when the feed's values can be filtered by text (community lists).</summary>
     public bool IsSearchable => _kind is AddToLibraryKind.CommunityFeed or AddToLibraryKind.LocalManifest;
@@ -172,8 +183,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>The facet tabs for the current feed.</summary>
     public IReadOnlyList<FacetGroupViewModel> FacetGroups => _facetGroups;
 
-    /// <summary>True when the feed has more than one facet group (shown as tabs).</summary>
-    public bool HasFacetTabs => _facetGroups.Count > 1;
+    /// <summary>True when the feed has more than one facet group, shown as tabs (a remote catalogue's regions are a list instead).</summary>
+    public bool HasFacetTabs => _facetGroups.Count > 1 && !IsS100Catalogue;
 
     /// <summary>True when the one facet group's title stands in for tabs (a community list shows its filter instead).</summary>
     public bool ShowsGroupTitle => _facetGroups.Count == 1 && (!IsSearchable || IsManifest);
@@ -185,7 +196,10 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _selectedFacetGroup, value))
+            {
                 OnPropertyChanged(nameof(ToggleShownText));
+                OnRegionShown();
+            }
         }
     }
 
@@ -217,6 +231,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     public string SourceDescription => _kind switch
     {
         AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed
+            or AddToLibraryKind.S100Catalogue
             => CatalogUri.AbsoluteUri,
         _ => _path ?? string.Empty,
     };
@@ -407,6 +422,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.CommunityFeed => _communityCatalog is not null,
         AddToLibraryKind.S100Feed => _s100Feed is not null,
         AddToLibraryKind.LocalManifest => _manifest is not null,
+        AddToLibraryKind.S100Catalogue => _s100Catalogue is not null,
         _ => false,
     };
 
@@ -443,6 +459,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
                 AddToLibraryKind.CommunityFeed when _communityCatalog is not null && _allCharts is [var chart] => chart,
                 AddToLibraryKind.S100Feed when _s100Feed?.Items is [var item] =>
                     new(item.Key, item.Name ?? item.Key, Size((item.Location as RemoteItemLocation)?.SizeBytes)),
+                AddToLibraryKind.S100Catalogue when _s100Catalogue?.Items is [var item] =>
+                    new(item.Key, item.Title ?? item.Name, string.Empty),
                 _ => null,
             };
         }
@@ -467,6 +485,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
                     return string.Format(CultureInfo.CurrentCulture, Strings.Wizard_EverythingDownloadsFormat, _allCharts.Count);
                 case AddToLibraryKind.LocalManifest when _manifest is not null:
                     return ManifestEverythingSummary;
+                case AddToLibraryKind.S100Catalogue when _s100Catalogue is not null:
+                    return S100EverythingSummary;
                 default:
                     return string.Empty;
             }
@@ -482,6 +502,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>The summary under the facet list.</summary>
     public string ScopeSummary =>
         IsManifest ? ManifestScopeSummary
+        : IsS100Catalogue && (_includeAll || HasSelection)
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_NothingDownloadsFormat, _selectionSummary)
         : _includeAll
             ? HasSelection
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_KeptPicksFormat, SelectedCount)
@@ -544,6 +566,9 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>True when new editions are not detected.</summary>
     public bool IsReviewUpdatesWarning => !HasEditions;
 
+    /// <summary>True when the review shows a "Use" row: the provider marks the data as not for navigation.</summary>
+    public bool HasReviewUse => _known?.NotForNavigation == true;
+
     /// <summary>"Select all", "Select shown" (when filtered) or "Deselect shown", for the shown tab.</summary>
     public string ToggleShownText =>
         _selectedFacetGroup is { Options.Count: > 0 } group && group.Options.All(o => o.IsSelected)
@@ -580,6 +605,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             KnownCatalogueFormat.UsaceIenc => AddToLibraryKind.UsaceFeed,
             KnownCatalogueFormat.ChartCatalogs => AddToLibraryKind.CommunityFeed,
             KnownCatalogueFormat.S100Feed => AddToLibraryKind.S100Feed,
+            KnownCatalogueFormat.S100ExchangeCatalogue => AddToLibraryKind.S100Catalogue,
             _ => AddToLibraryKind.NoaaFeed,
         };
         Initialize(kind, null, targetCollectionId, known);
@@ -591,6 +617,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         _path = path;
         _known = known;
         ResetManifest();
+        ResetS100Catalogue();
         _catalogueDate = null;
         _includeAll = true;
         _nameEdited = false;
@@ -631,6 +658,12 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.LocalManifest)
         {
             await LoadManifestAsync(cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.S100Catalogue)
+        {
+            await LoadS100CatalogueAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 
@@ -826,6 +859,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.UsaceFeed => _usaceCatalog is not null && !_isLoading,
             AddToLibraryKind.CommunityFeed => _communityCatalog is not null && !_isLoading,
             AddToLibraryKind.S100Feed => _s100Feed is not null && !_isLoading,
+            AddToLibraryKind.S100Catalogue => _s100Catalogue is not null && !_isLoading,
             _ => !string.IsNullOrEmpty(_path),
         };
 
@@ -871,6 +905,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.S100Feed => _includeAll
                 ? new S100FeedSource(id, FeedName, CatalogUri, new S100FeedFilter())
                 : new S100FeedSource(id, DescribeProducts(CurrentS100FeedFilter) ?? FeedName, CatalogUri, CurrentS100FeedFilter),
+            AddToLibraryKind.S100Catalogue => new S100CatalogueFeedSource(
+                id, DescribeS100Selection(CurrentS100CatalogueFilter) ?? FeedName, CatalogUri, CurrentS100CatalogueFilter),
             _ => _includeAll
                 ? new NoaaEncFeedSource(id, FeedName, CatalogUri, new NoaaEncFilter())
                 : new NoaaEncFeedSource(id, DescribeFilter(CurrentFilter) ?? FeedName, CatalogUri, CurrentFilter),
@@ -885,6 +921,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.CommunityFeed => DescribeCommunitySelection(),
         AddToLibraryKind.S100Feed => DescribeProducts(CurrentS100FeedFilter),
         AddToLibraryKind.LocalManifest => DescribeManifestSelection(),
+        AddToLibraryKind.S100Catalogue => DescribeS100Selection(CurrentS100CatalogueFilter),
         _ => null,
     };
 
@@ -922,8 +959,11 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 
     private void ClearFacetSelection()
     {
-        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products).Concat(_allGroups))
+        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products)
+            .Concat(_allGroups).Concat(IsS100Catalogue ? AllOptions.ToArray() : []))
+        {
             option.IsSelected = false;
+        }
     }
 
     private void ToggleShown()
@@ -983,6 +1023,12 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.LocalManifest)
         {
             UpdateManifestSelection();
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.S100Catalogue)
+        {
+            UpdateS100CatalogueSelection();
             return;
         }
 
@@ -1117,6 +1163,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 internal sealed class FacetOptionViewModel : ViewModelBase
 {
     private bool _isSelected;
+    private string _detail;
 
     public FacetOptionViewModel(CatalogFacetValue value, string label)
         : this(value.Value, label, string.Format(CultureInfo.CurrentCulture, Strings.Library_FacetDetailFormat,
@@ -1128,7 +1175,7 @@ internal sealed class FacetOptionViewModel : ViewModelBase
     {
         Value = value;
         Label = label;
-        Detail = detail;
+        _detail = detail;
     }
 
     /// <summary>The facet value (state code, district/region number, or river name).</summary>
@@ -1137,8 +1184,12 @@ internal sealed class FacetOptionViewModel : ViewModelBase
     /// <summary>The display label.</summary>
     public string Label { get; }
 
-    /// <summary>"N cells · X MB", or other detail (a community entry's publication date).</summary>
-    public string Detail { get; }
+    /// <summary>"N cells · X MB", or other detail (a community entry's publication date; a remote area's size once listed).</summary>
+    public string Detail
+    {
+        get => _detail;
+        set => SetProperty(ref _detail, value ?? string.Empty);
+    }
 
     /// <summary>A collection-manifest group's first path, as written in the manifest; otherwise <see langword="null"/>.</summary>
     public string? PathText { get; init; }

@@ -55,7 +55,7 @@
         <!-- Review (not for a collection manifest, whose dialog is one page). -->
         <Border IsVisible="{Binding !IsManifest}" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderColor}"
                 Background="{DynamicResource MutedBackgroundColor}" Padding="14,10">
-            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
                 <TextBlock Grid.Row="0" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Catalogue}" />
                 <TextBlock Grid.Row="0" Grid.Column="1" Classes="reviewValue" Text="{Binding CatalogueName}" />
 
@@ -69,6 +69,11 @@
                 <TextBlock Grid.Row="3" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Updates}" />
                 <TextBlock Grid.Row="3" Grid.Column="1" Classes="reviewValue" Text="{Binding ReviewUpdates}"
                            Classes.warning="{Binding IsReviewUpdatesWarning}" />
+
+                <TextBlock Grid.Row="4" Classes="reviewKey" Text="{x:Static loc:Strings.Wizard_Review_Use}"
+                           IsVisible="{Binding HasReviewUse}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Classes="reviewValue warning"
+                           Text="{x:Static loc:Strings.Wizard_Review_NotForNavigation}" IsVisible="{Binding HasReviewUse}" />
             </Grid>
         </Border>
 

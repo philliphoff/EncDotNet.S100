@@ -48,6 +48,55 @@ public sealed class LibraryNodeViewModelTests
     }
 
     [Theory]
+    [InlineData("https://noaa-s102-pds.s3.amazonaws.com/ed3.0.0/S100_ROOT/CATALOG.XML", "AWS")]
+    [InlineData("https://charts.example.test/s102/CATALOG.XML", "WEB")]
+    public void Remote_S100_catalogues_are_tagged_by_host(string url, string tag)
+    {
+        var source = new S100CatalogueFeedSource(Guid.NewGuid(), null, new Uri(url), S100CatalogueFilter.All);
+
+        Assert.Equal(tag, Node(source, Index(1)).KindTag);
+    }
+
+    [Fact]
+    public void A_remote_S100_catalogue_shows_its_areas_and_its_date()
+    {
+        CollectionItem Tile(string name, string folder) => new()
+        {
+            Key = folder + "/" + name,
+            ProductSpec = "S-102",
+            Name = name,
+            Location = NoItemLocation.Instance,
+            Properties = new Dictionary<string, string> { [LocalManifestIndexer.GroupProperty] = folder, ["notForNavigation"] = "true" },
+        };
+        var published = new DateTimeOffset(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
+        var index = new SourceIndex(
+            Guid.NewGuid(), DateTimeOffset.UnixEpoch, "fp",
+            [Tile("A", "Northeast/Boston"), Tile("B", "Northeast/Boston"), Tile("C", "Southeast/Wilmington")], [])
+        {
+            Groups = [new SourceIndexGroup("Northeast/Boston", "Boston"), new SourceIndexGroup("Southeast/Wilmington", "Wilmington")],
+            PublishedAt = published,
+        };
+        var source = new S100CatalogueFeedSource(
+            Guid.NewGuid(), null, new Uri("https://noaa-s102-pds.s3.amazonaws.com/ed3.0.0/S100_ROOT/CATALOG.XML"), S100CatalogueFilter.All);
+
+        var node = Node(source, index);
+
+        Assert.Equal("NOAA S-102 Bathymetry", node.Name);
+        Assert.Equal(["Boston", "Wilmington"], node.Children.Select(c => c.Name));
+        Assert.Equal(["2", "1"], node.Children.Select(c => c.Status));
+        Assert.All(node.Children, c => Assert.Equal("AWS", c.KindTag));
+        Assert.Equal(LibraryNodeStatusKind.Info, node.StatusKind);
+        Assert.Equal(
+            $"Catalogue {published.ToLocalTime().ToString("d", System.Globalization.CultureInfo.CurrentCulture)} · not for navigation",
+            node.StatusLine);
+
+        // Offline with a cached catalogue.
+        var offline = Node(source, index, health: _ => new FeedHealth(
+            DateTimeOffset.UtcNow, "Connection refused", DateTimeOffset.UtcNow, new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero)));
+        Assert.StartsWith("Offline · catalogue cached ", offline.StatusLine, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("All downloads")]
     [InlineData("C")]  // the collection's name
     [InlineData(null)]

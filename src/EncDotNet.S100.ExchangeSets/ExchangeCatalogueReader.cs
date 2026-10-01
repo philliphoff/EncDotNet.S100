@@ -508,6 +508,7 @@ public static class ExchangeCatalogueReader
     {
         var maxStr = (string?)element.Element(xc + "maximumDisplayScale");
         var minStr = (string?)element.Element(xc + "minimumDisplayScale");
+        var resolutionStr = (string?)element.Element(xc + "approximateGridResolution");
 
         return new DataCoverage
         {
@@ -515,6 +516,9 @@ public static class ExchangeCatalogueReader
             BoundingBox = ReadBoundingBox(element.Element(xc + "boundingBox")),
             MaximumDisplayScale = int.TryParse(maxStr, CultureInfo.InvariantCulture, out var max) ? max : null,
             MinimumDisplayScale = int.TryParse(minStr, CultureInfo.InvariantCulture, out var min) ? min : null,
+            ApproximateGridResolution = double.TryParse(resolutionStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var resolution)
+                ? resolution
+                : null,
         };
     }
 

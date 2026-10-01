@@ -32,7 +32,8 @@ internal enum LibraryNodeStatusKind
 
 /// <summary>
 /// A node of the Library panel's tree: a collection, one of its sources, or
-/// (under a collection-manifest source with two or more groups) one group.
+/// (under a collection-manifest source, or a remote S-100 catalogue's areas,
+/// with two or more groups) one group.
 /// Nodes are updated in place from new <see cref="LibraryService"/> snapshots
 /// so tree expansion and selection survive background indexing.
 /// </summary>
@@ -141,7 +142,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     {
         null => _collection.IsSession ? Icon.History : Icon.Library,
         LocalManifestSource => Icon.DocumentBulletList,
-        NoaaEncFeedSource or UsaceIencFeedSource => Icon.Globe,
+        NoaaEncFeedSource or UsaceIencFeedSource or S100CatalogueFeedSource => Icon.Globe,
         S128CatalogueSource => Icon.BookOpen,
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => Icon.FolderZip,
         _ => Icon.Folder,
@@ -149,11 +150,14 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
     /// <summary>
     /// A small mono tag naming the kind of source: <c>DIR</c>, <c>ZIP</c>,
-    /// <c>WEB</c> (an online catalogue), <c>LIST</c> (a community list),
+    /// <c>WEB</c> (an online catalogue), <c>AWS</c> (a catalogue on AWS Open
+    /// Data, also on its area nodes), <c>LIST</c> (a community list),
     /// <c>FEED</c> (a shared feed) or <c>S-128</c>. A collection shows its
     /// sources' kind.
     /// </summary>
-    public string KindTag => IsGroup ? string.Empty : _source is { } s
+    public string KindTag => IsGroup
+        ? _source?.Definition is S100CatalogueFeedSource catalogue ? KindOf(catalogue) : string.Empty
+        : _source is { } s
         ? KindOf(s.Definition)
         : _collection.IsSession ? "S-128" : _collection.Sources.Select(x => KindOf(x.Definition)).FirstOrDefault() ?? "DIR";
 
@@ -233,6 +237,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return FeedStatus(feed, health, c);
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
+        if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
+            return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), c);
         if (problems > 0)
             return (string.Format(c, Strings.Library_StatusLine_ProblemsFormat, problems), LibraryNodeStatusKind.Warning);
         if (_collection.IsSession)
@@ -256,6 +262,32 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         return (string.Format(c, Strings.Library_StatusLine_UnreachableNoCopyFormat, health.Failure), LibraryNodeStatusKind.Error);
     }
 
+    /// <summary>
+    /// A remote S-100 catalogue's bookkeeping: "Catalogue 30.09.2026 · not for
+    /// navigation", or "Offline · catalogue cached 30.09.2026" while its server
+    /// cannot be reached (handoff B1).
+    /// </summary>
+    private static (string, LibraryNodeStatusKind) CatalogueStatus(SourceIndex index, FeedHealth? health, CultureInfo c)
+    {
+        var notForNavigation = index.Items.Count > 0
+            && index.Items.All(i => i.Properties.GetValueOrDefault("notForNavigation") == "true");
+        if (health is { IsReachable: false, CopyFetchedAt: { } cached })
+        {
+            return (string.Format(c, Strings.Library_StatusLine_CatalogueOfflineFormat, FormatWhen(cached.ToLocalTime(), c)),
+                LibraryNodeStatusKind.Info);
+        }
+
+        var dated = (index.PublishedAt ?? index.IndexedAt).ToLocalTime();
+        var line = string.Format(c, Strings.Library_StatusLine_CatalogueFormat, dated.ToString("d", c));
+        if (notForNavigation)
+            line += " · " + Strings.Library_StatusLine_NotForNavigation;
+        return (line, LibraryNodeStatusKind.Info);
+    }
+
+    /// <summary>The time when <paramref name="when"/> is today, else the date.</summary>
+    private static string FormatWhen(DateTimeOffset when, CultureInfo c) =>
+        when.Date == DateTime.Today ? when.ToString("t", c) : when.ToString("d", c);
+
     /// <summary>"12 min", "2 h", "3 days".</summary>
     internal static string FormatAge(TimeSpan age) => age switch
     {
@@ -268,6 +300,9 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     {
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => "ZIP",
         NoaaEncFeedSource or UsaceIencFeedSource => "WEB",
+        S100CatalogueFeedSource { CatalogUri.Host: var host }
+            when host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
+        S100CatalogueFeedSource => "WEB",
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
         S128CatalogueSource => "S-128",
@@ -383,14 +418,14 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Brings a collection-manifest source's group children in line with its
-    /// index (in manifest order, matched by group id so expansion and selection
+    /// Brings a collection-manifest source's group children (or a remote S-100
+    /// catalogue's area children) in line with its index (in index order, matched by group id so expansion and selection
     /// survive). Groups are shown only when there are two or more; none while
     /// the manifest cannot be read.
     /// </summary>
     private void SyncGroups()
     {
-        var groups = _source is { Definition: LocalManifestSource, Index.Groups: { Count: >= 2 } g } ? g : [];
+        var groups = _source is { Definition: LocalManifestSource or S100CatalogueFeedSource, Index.Groups: { Count: >= 2 } g } ? g : [];
 
         for (var i = Children.Count - 1; i >= 0; i--)
         {
@@ -486,6 +521,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         NoaaEncFeedSource n => n.CatalogUri,
         UsaceIencFeedSource u => u.CatalogUri,
         ChartCatalogsFeedSource c => c.CatalogUri,
+        S100CatalogueFeedSource r => r.CatalogUri,
         _ => null,
     };
 
@@ -499,6 +535,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         UsaceIencFeedSource => Strings.Library_UsaceFeed,
         ChartCatalogsFeedSource c => c.CatalogUri.Host,
         S100FeedSource f => f.FeedUri.Host,
+        S100CatalogueFeedSource r => r.CatalogUri.Host,
         _ => source.GetType().Name,
     };
 
@@ -512,6 +549,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         UsaceIencFeedSource u => u.CatalogUri.AbsoluteUri,
         ChartCatalogsFeedSource c => c.CatalogUri.AbsoluteUri,
         S100FeedSource f => MaskToken(f.FeedUri),
+        S100CatalogueFeedSource r => r.CatalogUri.AbsoluteUri,
         _ => string.Empty,
     };
 
@@ -522,6 +560,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         UsaceIencFeedSource u => u.CatalogUri,
         ChartCatalogsFeedSource c => c.CatalogUri,
         S100FeedSource f => f.FeedUri,
+        S100CatalogueFeedSource r => r.CatalogUri,
         _ => null,
     };
 

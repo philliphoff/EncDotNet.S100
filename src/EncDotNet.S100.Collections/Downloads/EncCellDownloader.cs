@@ -75,7 +75,9 @@ public sealed record DownloadedCell(
 /// An item whose <see cref="RemoteItemLocation.Package"/> is set is a
 /// <em>package</em> (community chart lists, issue #670): it is saved under
 /// <c>&lt;root&gt;/&lt;package&gt;/</c> and every <c>.000</c> it holds is
-/// recorded. A download that is not a zip is kept as a bare cell file.
+/// recorded. A download that is not a zip is kept as a bare cell file, or as
+/// a bare dataset file when its <see cref="RemoteItemLocation.Layout"/> names
+/// that file (remote S-100 catalogues, issue #685).
 /// </para>
 /// </remarks>
 public sealed class EncCellDownloader
@@ -209,9 +211,14 @@ public sealed class EncCellDownloader
             }
             else
             {
-                // A bare cell (some community lists link .000 files directly).
-                var fileName = Path.GetFileName(remote.Uri.AbsolutePath);
-                if (!string.Equals(Path.GetExtension(fileName), ".000", StringComparison.OrdinalIgnoreCase))
+                // A bare cell (some community lists link .000 files directly), or a
+                // bare dataset whose stated layout is the file itself (remote S-100
+                // catalogues: one HDF5 file per dataset).
+                var fileName = Path.GetFileName(Uri.UnescapeDataString(remote.Uri.AbsolutePath));
+                var isStatedFile = remote.Layout is { UpdateRelativePaths.Count: 0 } stated
+                    && string.Equals(stated.RelativePath, fileName, StringComparison.Ordinal)
+                    && IsSafeName(fileName);
+                if (!isStatedFile && !string.Equals(Path.GetExtension(fileName), ".000", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException($"The download for {folderName} is neither a zip nor a .000 cell.");
                 Directory.CreateDirectory(staging);
                 File.Move(zipPath, Path.Combine(staging, fileName));

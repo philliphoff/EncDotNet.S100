@@ -41,6 +41,21 @@
       "note": "A single overlay cell of inland buoy positions, updated frequently."
     },
     {
+      "id": "noaa-s102",
+      "name": "NOAA S-102 Bathymetry",
+      "provider": "NOAA Office of Coast Survey",
+      "region": ["North America", "United States"],
+      "format": "s100ExchangeCatalogue",
+      "catalogUri": "https://noaa-s102-pds.s3.amazonaws.com/ed3.0.0/S100_ROOT/CATALOG.XML",
+      "homepage": "https://registry.opendata.aws/noaa-s102/",
+      "coverage": "polygons",
+      "editions": true,
+      "sizes": true,
+      "note": "High-resolution bathymetry tiles from AWS Open Data, in port (4 m) and transit (16 m) resolutions. The catalogue is regenerated daily. Choose regions and areas next.",
+      "product": "S-102",
+      "notForNavigation": true
+    },
+    {
       "id": "chartcatalogs-at-ienc",
       "name": "Inland ENC — Austria (Danube)",
       "provider": "chartcatalogs community list",
