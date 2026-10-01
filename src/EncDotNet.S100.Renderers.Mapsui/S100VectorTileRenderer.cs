@@ -86,13 +86,13 @@ public static class S100VectorTileRenderer
             MaxImageDimension);
 
     [ThreadStatic]
-    private static int t_offscreenDepth;
+    private static int _offscreenDepth;
 
     /// <summary>
     /// Whether the calling thread is inside a
     /// <see cref="BeginOffscreenRender"/> scope.
     /// </summary>
-    public static bool IsOffscreenRender => t_offscreenDepth > 0;
+    public static bool IsOffscreenRender => _offscreenDepth > 0;
 
     /// <summary>
     /// Marks every <see cref="Render"/> call on the calling thread, until the
@@ -113,7 +113,7 @@ public static class S100VectorTileRenderer
     /// <returns>A scope that ends the off-screen render when disposed.</returns>
     public static IDisposable BeginOffscreenRender()
     {
-        t_offscreenDepth++;
+        _offscreenDepth++;
         return new OffscreenRenderScope();
     }
 
@@ -126,7 +126,7 @@ public static class S100VectorTileRenderer
             if (!_disposed)
             {
                 _disposed = true;
-                t_offscreenDepth--;
+                _offscreenDepth--;
             }
         }
     }
