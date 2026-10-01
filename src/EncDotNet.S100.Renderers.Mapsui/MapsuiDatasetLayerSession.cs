@@ -2038,58 +2038,41 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
+    /// <summary>
+    /// Per-product time policy: which sample a time-aware dataset draws for
+    /// the clock, and when it draws nothing. A dataset never draws data from
+    /// outside its tolerance as if current (#706, handoff D1).
+    /// </summary>
     private sealed class TimePolicy
     {
+        /// <summary>Tolerance when a dataset has a single sample and so no step.</summary>
+        private static readonly TimeSpan SingleSampleTolerance = TimeSpan.FromHours(1);
+
+        /// <summary>An S-411 ice snapshot is valid until the next one, for at most this long.</summary>
+        private static readonly TimeSpan IceSnapshotValidity = TimeSpan.FromDays(14);
+
         private readonly TimePolicyKind _kind;
-        private readonly DateTime _minimum;
-        private readonly DateTime _maximum;
+        private readonly DateTime[] _times;
         private readonly TimeSpan _tolerance;
 
         private TimePolicy(
             TimePolicyKind kind,
-            IReadOnlyList<DateTime> availableTimes)
+            DateTime[] times,
+            TimeSpan tolerance)
         {
             _kind = kind;
-            AvailableTimes = availableTimes
-                .Distinct()
-                .OrderBy(time => time)
-                .ToArray();
-            if (AvailableTimes.Count == 0)
-                return;
-
-            _minimum = AvailableTimes[0];
-            _maximum = AvailableTimes[^1];
-            _tolerance = kind == TimePolicyKind.RangeGatedNearest
-                && AvailableTimes.Count >= 2
-                    ? TimeSpan.FromTicks(
-                        (_maximum - _minimum).Ticks
-                        / (AvailableTimes.Count - 1))
-                    : TimeSpan.Zero;
-
-            CoverageSegments = kind switch
-            {
-                TimePolicyKind.RangeGatedNearest =>
-                [
-                    new MapsuiMapTimeSegment(
-                        AddClamped(_minimum, -_tolerance),
-                        AddClamped(_maximum, _tolerance)),
-                ],
-                TimePolicyKind.SnapshotAtOrBefore =>
-                [
-                    new MapsuiMapTimeSegment(
-                        _minimum,
-                        DateTime.MaxValue),
-                ],
-                _ =>
-                [
-                    new MapsuiMapTimeSegment(_minimum, _maximum),
-                ],
-            };
+            _times = times;
+            _tolerance = tolerance;
+            CoverageSegments = ComputeSegments();
         }
 
-        public IReadOnlyList<DateTime> AvailableTimes { get; }
+        public IReadOnlyList<DateTime> AvailableTimes => _times;
 
-        public IReadOnlyList<MapsuiMapTimeSegment> CoverageSegments { get; } = [];
+        /// <summary>
+        /// The windows in which the dataset draws: one per cluster of
+        /// samples, so gaps inside a dataset are gaps on the timeline too.
+        /// </summary>
+        public IReadOnlyList<MapsuiMapTimeSegment> CoverageSegments { get; }
 
         public static TimePolicy? TryCreate(
             string productSpec,
@@ -2097,56 +2080,90 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(productSpec);
             ArgumentNullException.ThrowIfNull(availableTimes);
-            if (availableTimes.Count == 0)
+            var times = availableTimes
+                .Distinct()
+                .Order()
+                .ToArray();
+            if (times.Length == 0)
                 return null;
 
-            var kind = productSpec.ToUpperInvariant() switch
+            // S-104 is treated as a forecast until the reader exposes
+            // dataDynamicity; observations would hold their last value 30 min.
+            return productSpec.ToUpperInvariant() switch
             {
-                "S-111" => TimePolicyKind.RangeGatedNearest,
-                "S-411" => TimePolicyKind.SnapshotAtOrBefore,
-                _ => TimePolicyKind.Nearest,
+                "S-104" => new TimePolicy(TimePolicyKind.AtOrBefore, times, TypicalStep(times)),
+                "S-411" => new TimePolicy(TimePolicyKind.AtOrBefore, times, IceSnapshotValidity),
+                _ => new TimePolicy(TimePolicyKind.Nearest, times, TypicalStep(times)),
             };
-            return new TimePolicy(kind, availableTimes);
         }
 
+        /// <summary>
+        /// The sample to draw at <paramref name="time"/>, or <c>null</c>
+        /// when no sample lies within the tolerance and the dataset hides.
+        /// </summary>
         public DateTime? SnapTo(DateTime time)
         {
-            if (AvailableTimes.Count == 0)
-                return null;
+            var index = Array.BinarySearch(_times, time);
+            if (index >= 0)
+                return _times[index];
 
-            if (_kind == TimePolicyKind.SnapshotAtOrBefore)
+            // ~index is the first sample after the clock.
+            var next = ~index;
+            if (_kind == TimePolicyKind.AtOrBefore)
             {
-                DateTime? selected = null;
-                foreach (var sample in AvailableTimes)
+                if (next == 0)
+                    return null;
+                var previous = _times[next - 1];
+                return time - previous <= _tolerance ? previous : null;
+            }
+
+            DateTime? nearest = null;
+            if (next > 0)
+                nearest = _times[next - 1];
+            if (next < _times.Length
+                && (nearest is not { } before || _times[next] - time < time - before))
+            {
+                nearest = _times[next];
+            }
+            return nearest is { } sample && (sample - time).Duration() <= _tolerance
+                ? sample
+                : null;
+        }
+
+        private IReadOnlyList<MapsuiMapTimeSegment> ComputeSegments()
+        {
+            var before = _kind == TimePolicyKind.Nearest ? _tolerance : TimeSpan.Zero;
+            var segments = new List<MapsuiMapTimeSegment>();
+            var start = AddClamped(_times[0], -before);
+            var end = AddClamped(_times[0], _tolerance);
+            for (var index = 1; index < _times.Length; index++)
+            {
+                var sampleStart = AddClamped(_times[index], -before);
+                if (sampleStart > end)
                 {
-                    if (sample <= time)
-                        selected = sample;
-                    else
-                        break;
+                    segments.Add(new MapsuiMapTimeSegment(start, end));
+                    start = sampleStart;
                 }
-                return selected;
+                end = AddClamped(_times[index], _tolerance);
             }
+            segments.Add(new MapsuiMapTimeSegment(start, end));
+            return segments;
+        }
 
-            if (_kind == TimePolicyKind.RangeGatedNearest
-                && AvailableTimes.Count >= 2
-                && (time < AddClamped(_minimum, -_tolerance)
-                    || time > AddClamped(_maximum, _tolerance)))
-            {
-                return null;
-            }
-
-            var nearest = AvailableTimes[0];
-            var nearestDistance = (nearest - time).Duration();
-            for (var index = 1; index < AvailableTimes.Count; index++)
-            {
-                var distance = (AvailableTimes[index] - time).Duration();
-                if (distance < nearestDistance)
-                {
-                    nearest = AvailableTimes[index];
-                    nearestDistance = distance;
-                }
-            }
-            return nearest;
+        /// <summary>
+        /// The median interval between samples: robust to the long gaps of
+        /// multi-window exchange sets, which an average would turn into a
+        /// tolerance of weeks.
+        /// </summary>
+        private static TimeSpan TypicalStep(DateTime[] times)
+        {
+            if (times.Length < 2)
+                return SingleSampleTolerance;
+            var steps = new TimeSpan[times.Length - 1];
+            for (var index = 1; index < times.Length; index++)
+                steps[index - 1] = times[index] - times[index - 1];
+            Array.Sort(steps);
+            return steps[steps.Length / 2];
         }
 
         private static DateTime AddClamped(DateTime value, TimeSpan delta)
@@ -2167,9 +2184,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     private enum TimePolicyKind
     {
+        /// <summary>The nearest sample, within the tolerance either side (S-111).</summary>
         Nearest,
-        RangeGatedNearest,
-        SnapshotAtOrBefore,
+
+        /// <summary>The latest sample at or before the clock, held for the tolerance (S-104, S-411).</summary>
+        AtOrBefore,
     }
 
     private sealed class Entry(MapDataset dataset)

@@ -120,6 +120,74 @@ public sealed class TimelineNowTests
     }
 
     [Fact]
+    public void Now_keeps_following_the_clock_until_the_user_picks_a_time()
+    {
+        var (service, timeline, clock) = Create(Run.AddHours(9).AddMinutes(10));
+        service.ApplySnapshot(RunSnapshot(Run, current: null));
+        Assert.True(service.IsFollowingNow);
+
+        // An hour later the view has moved on with no user action (#706).
+        clock.Advance(TimeSpan.FromHours(1));
+        Assert.Equal(Run.AddHours(10), service.CurrentTime);
+
+        // The slider echoing its own position is not a choice of time.
+        timeline.SliderValue = timeline.SliderValue;
+        Assert.True(service.IsFollowingNow);
+
+        timeline.PreviousStepCommand.Execute(null);
+        Assert.False(service.IsFollowingNow);
+        clock.Advance(TimeSpan.FromHours(2));
+        Assert.Equal(Run.AddHours(9), service.CurrentTime);
+
+        // Now resumes following.
+        timeline.NowCommand.Execute(null);
+        clock.Advance(TimeSpan.FromHours(1));
+        Assert.Equal(Run.AddHours(13), service.CurrentTime);
+        Assert.True(service.IsFollowingNow);
+    }
+
+    [Fact]
+    public void A_replaced_run_keeps_following_now()
+    {
+        var (service, timeline, clock) = Create(Run.AddHours(9));
+        service.ApplySnapshot(RunSnapshot(Run, current: null));
+        clock.Advance(TimeSpan.FromHours(6));
+
+        // The 18:00Z run arrives with the session clamped to its first step.
+        service.ApplySnapshot(RunSnapshot(Run.AddHours(6), current: Run.AddHours(6)));
+
+        Assert.Equal(Run.AddHours(15), service.CurrentTime);
+        Assert.True(service.IsFollowingNow);
+    }
+
+    [Fact]
+    public void Steps_work_however_many_samples_there_are()
+    {
+        // 6-minute water levels over two days: far more than the 50 the slider snaps to.
+        var samples = Enumerable.Range(0, 480).Select(i => Run.AddMinutes(6 * i)).ToArray();
+        var (service, timeline, _) = Create(Run.AddHours(9));
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[100],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("104US00_levels", samples[0], samples[^1])],
+        });
+        Assert.False(timeline.IsSnapToTickEnabled);
+
+        Assert.True(timeline.NextStepCommand.CanExecute(null));
+        timeline.NextStepCommand.Execute(null);
+        Assert.Equal(samples[101], service.CurrentTime);
+
+        Assert.True(timeline.PreviousStepCommand.CanExecute(null));
+        timeline.PreviousStepCommand.Execute(null);
+        timeline.PreviousStepCommand.Execute(null);
+        Assert.Equal(samples[99], service.CurrentTime);
+    }
+
+    [Fact]
     public void Timelines_without_forecast_runs_show_no_Now()
     {
         var (service, timeline, _) = Create(Run.AddHours(9));
