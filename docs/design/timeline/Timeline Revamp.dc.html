@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>body{margin:0;background:#FAFAFA;} *{box-sizing:border-box;} a{color:#2563EB;} a:hover{color:#1D4ED8;}</style>
+</helmet>
+
+<div style="font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; color:#09090B; width:2180px; padding:40px 48px 96px;">
+
+  <div style="max-width:1180px; margin-bottom:28px;">
+    <div style="font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#2563EB; margin-bottom:8px;">Timeline · time, now and collections · brief of 01.10.2026</div>
+    <h1 style="margin:0 0 10px; font-size:27px; font-weight:600; letter-spacing:-.02em;">Time and the Timeline at collection scale</h1>
+    <p style="margin:0; font-size:14.5px; line-height:1.65; color:#52525B; text-wrap:pretty;">Three directions from the brief, each drawn from the same data model against scenarios 2–5 and in five states. Pick a scenario below; every frame recomputes its axis, gaps, layer times and messages. Now is fixed at Thu 01.10.2026 20:30Z. Model codes are NOAA OFS names; station and exchange-set dataset names are illustrative. The maps are placeholders.</p>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:28px; max-width:1500px;">
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+        <span onClick="{{ t.onClick }}" style="cursor:pointer; display:inline-flex; align-items:center; height:32px; padding:0 14px; border-radius:6px; border:1px solid {{ t.bd }}; background:{{ t.bg }}; color:{{ t.fg }}; font-size:13px; font-weight:500;">{{ t.label }}</span>
+      </sc-for>
+    </div>
+    <div style="font-size:13px; color:#3F3F46; line-height:1.55; max-width:1100px; text-wrap:pretty;">{{ scDesc }}</div>
+  </div>
+
+  <section data-screen-label="0 · Vocabulary" style="margin-bottom:56px; max-width:1500px;">
+    <h2 style="margin:0 0 14px; font-size:18px; font-weight:600;">Vocabulary and where each term shows</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;">
+      <sc-for list="{{ vocab }}" as="v" hint-placeholder-count="9">
+        <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:4px;">
+          <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:13.5px; font-weight:600;">{{ v.t }}</span><span style="font-size:11px; color:#71717A; letter-spacing:.04em; text-transform:uppercase;">{{ v.k }}</span></div>
+          <div style="font-size:12.5px; color:#3F3F46; line-height:1.5; text-wrap:pretty;">{{ v.d }}</div>
+          <div style="font-size:12px; color:#2563EB; line-height:1.5;">{{ v.w }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section data-screen-label="1 · Evolved strip" style="margin-bottom:64px;">
+    <h2 style="margin:0 0 4px; font-size:18px; font-weight:600;">1 · Evolved strip</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#52525B; max-width:1000px; line-height:1.55; text-wrap:pretty;">One track, as today, with: an explicit Live mode, a readout with offset and data-area time, step buttons that work at any sample count with a granularity menu, previous/next data, size-honest labelled gaps, an overview strip for zoom, and layer time in the layer list. Smallest change.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start;">
+      <sc-for list="{{ d1 }}" as="f" hint-placeholder-count="5">
+        <div id="{{ f.id }}" style="width:1000px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">{{ f.id }}</span><span style="font-size:13.5px; font-weight:600;">{{ f.title }}</span></div>
+          <div style="font-size:12.5px; color:#71717A; line-height:1.5; min-height:38px; max-width:920px; text-wrap:pretty;">{{ f.note }}</div>
+          <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; box-shadow:0 4px 6px -1px rgba(9,9,11,.10),0 2px 4px -2px rgba(9,9,11,.08); overflow:hidden;">
+            <div style="position:relative; height:150px; background:repeating-linear-gradient(135deg,#EEF2F5 0 10px,#E9EEF2 10px 20px); border-bottom:1px solid #E4E4E7;">
+              <span style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:'JetBrains Mono',monospace; font-size:11px; color:#94A3B8;">map · {{ f.area }}</span>
+              <div style="position:absolute; left:10px; top:10px; display:flex; gap:6px; align-items:center; background:rgba(255,255,255,.72); backdrop-filter:blur(8px); border-radius:6px; padding:3px 8px; font-family:'JetBrains Mono',monospace; font-size:11.5px;"><span style="width:7px; height:7px; border-radius:50%; background:{{ f.modeDot }};"></span><span>{{ f.stamp }}</span></div>
+              <div style="position:absolute; right:10px; bottom:10px; display:flex; flex-direction:column; gap:3px; align-items:flex-end;">
+                <sc-for list="{{ f.badges }}" as="b" hint-placeholder-count="2">
+                  <div style="display:flex; align-items:center; gap:6px; height:22px; padding:0 8px; border-radius:5px; background:{{ b.bg }}; border:1px solid {{ b.bd }}; font-size:11.5px; color:{{ b.fg }};"><span style="width:3px; height:12px; border-radius:1px; background:{{ b.color }};"></span><span style="font-weight:600;">{{ b.name }}</span><span style="font-family:'JetBrains Mono',monospace;">{{ b.time }}</span><span style="color:{{ b.offFg }};">{{ b.off }}</span></div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; height:30px; padding:0 12px; border-bottom:1px solid #E4E4E7; font-size:11.5px; font-weight:500; letter-spacing:.08em;"><span style="flex:1;">TIMELINE</span><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"></path></svg></div>
+            <div style="padding:10px 12px 10px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <sc-if value="{{ f.isLive }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px; border-radius:999px; background:#18181B; color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.06em;"><span style="width:6px; height:6px; border-radius:50%; background:#4ADE80;"></span>LIVE</span></sc-if>
+                <sc-if value="{{ f.isPinned }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:999px; border:1px solid #D4D4D8; color:#3F3F46; font-size:10.5px; font-weight:700; letter-spacing:.06em;">PINNED</span></sc-if>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600;">{{ f.readout }}</span>
+                <span style="font-size:12.5px; font-weight:500; color:#2563EB;">{{ f.rel }}</span>
+                <span style="font-size:11.5px; color:#71717A;">{{ f.local }}</span>
+                <span style="flex:1;"></span>
+                <div style="display:flex; align-items:center; gap:2px;">
+                  <span title="Previous data" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; opacity:{{ f.prevOp }};"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 2.5v5M7 2.5L4.5 5 7 7.5"></path></svg></span>
+                  <span style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2.5L3.5 5 6 7.5"></path></svg></span>
+                  <span style="display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 8px; border-radius:6px; border:1px solid #E4E4E7; font-size:12px;">{{ f.step }}<span style="color:#71717A;">▾</span></span>
+                  <span style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5L6.5 5 4 7.5"></path></svg></span>
+                  <span title="Next data" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; opacity:{{ f.nextOp }};"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7.5 2.5v5M3 2.5L5.5 5 3 7.5"></path></svg></span>
+                </div>
+                <span style="width:1px; height:18px; background:#E4E4E7;"></span>
+                <sc-if value="{{ f.isPinned }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; height:28px; padding:0 10px; border-radius:6px; background:#18181B; color:#fff; font-size:12px; font-weight:500;">Go live</span></sc-if>
+                <sc-if value="{{ f.isLive }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex; align-items:center; height:28px; padding:0 10px; border-radius:6px; border:1px solid #E4E4E7; color:#A1A1AA; font-size:12px; font-weight:500;">Live</span></sc-if>
+                <span style="display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 8px; border-radius:6px; border:1px solid #E4E4E7; font-size:12px;">{{ f.zoom }}<span style="color:#71717A;">▾</span></span>
+              </div>
+              <div style="position:relative; height:6px; border-radius:3px; background:#F4F4F5; margin:0 2px;">
+                <sc-for list="{{ f.ovBands }}" as="o" hint-placeholder-count="1"><div style="position:absolute; left:{{ o.x }}; width:{{ o.w }}; top:0; bottom:0; background:#A1A1AA; border-radius:3px;"></div></sc-for>
+                <div style="position:absolute; left:{{ f.ovX }}; width:{{ f.ovW }}; top:-3px; bottom:-3px; border:1.5px solid #18181B; border-radius:3px;"></div>
+              </div>
+              <div style="position:relative; padding-top:14px; margin:0 2px;">
+                <div style="position:absolute; left:{{ f.nowX }}; top:0; bottom:0; width:0; z-index:2;">
+                  <span style="position:absolute; top:0; left:0; transform:translateX(-50%); font-size:10.5px; font-weight:600; letter-spacing:.04em;">NOW</span>
+                  <span style="position:absolute; top:13px; bottom:0; left:-0.5px; border-left:1px dashed #09090B;"></span>
+                </div>
+                <div style="position:relative; height:20px;">
+                  <div style="position:absolute; left:0; right:0; top:8px; height:4px; border-radius:999px; background:#E4E4E7;"></div>
+                  <div style="position:absolute; left:0; top:8px; height:4px; width:{{ f.thumbX }}; border-radius:999px; background:#2563EB;"></div>
+                  <sc-for list="{{ f.gapsCol }}" as="g" hint-placeholder-count="0"><div style="position:absolute; left:{{ g.x }}; width:{{ g.w }}; top:4px; height:12px; background:#fff; border-left:1.5px solid #A1A1AA; border-right:1.5px solid #A1A1AA; transform:skewX(-14deg);"></div></sc-for>
+                  <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; left:{{ f.drawnX }}; top:4px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:#fff; border:1.5px dashed #71717A;"></div></sc-if>
+                  <div style="position:absolute; left:{{ f.thumbX }}; top:2px; width:16px; height:16px; margin-left:-8px; border-radius:50%; background:#fff; border:2px solid #2563EB; box-shadow:0 1px 2px rgba(9,9,11,.1);"></div>
+                </div>
+                <div style="position:relative; height:14px; margin-top:2px;">
+                  <div style="position:absolute; left:0; right:0; top:4px; bottom:0; border-radius:2px; background:#E4E4E7;"></div>
+                  <sc-for list="{{ f.gapsCol }}" as="g" hint-placeholder-count="0"><div style="position:absolute; left:{{ g.x }}; width:{{ g.w }}; top:0; bottom:0; background:repeating-linear-gradient(135deg,#fff 0 3px,#F4F4F5 3px 6px);"></div></sc-for>
+                  <sc-for list="{{ f.bands }}" as="d" hint-placeholder-count="1"><div style="position:absolute; left:{{ d.x }}; width:{{ d.w }}; top:4px; bottom:0; border-radius:2px; background:#2563EB; opacity:{{ f.bandOp }}; box-shadow:-1.5px -4px 0 -0px #2563EB;"></div></sc-for>
+                  <sc-for list="{{ f.ticks }}" as="t" hint-placeholder-count="0"><div style="position:absolute; left:{{ t.x }}; top:6px; bottom:0; width:1px; background:rgba(255,255,255,.75);"></div></sc-for>
+                </div>
+                <div style="position:relative; height:16px; margin-top:4px;">
+                  <sc-for list="{{ f.labels }}" as="l" hint-placeholder-count="3"><span style="position:absolute; left:{{ l.x }}; transform:translateX(-50%); font-size:10.5px; color:{{ l.fg }}; font-weight:{{ l.fw }}; font-style:{{ l.fs }}; white-space:nowrap;">{{ l.t }}</span></sc-for>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; font-size:11.5px; min-height:16px;">
+                <span style="flex:1; color:#71717A; min-width:0;">{{ f.range }}</span>
+                <sc-if value="{{ f.hasMsg }}" hint-placeholder-val="{{ false }}"><span style="display:flex; gap:10px;"><span style="color:{{ f.msgFg }}; font-weight:500;">{{ f.msgText }}</span><span style="color:#2563EB; font-weight:500;">{{ f.msgAction }}</span></span></sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section data-screen-label="2 · Lanes" style="margin-bottom:64px;">
+    <h2 style="margin:0 0 4px; font-size:18px; font-weight:600;">2 · Lanes timeline</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#52525B; max-width:1000px; line-height:1.55; text-wrap:pretty;">The direction 1 strip becomes the summary row of an expandable Gantt: product → model, station or dataset. Solid bands are loaded; dashed bands are known to the Library and not loaded (same styles as the map outlines). The lane label carries the layer time. With "In map view" on, only lanes whose footprint intersects the map are listed and they set the axis; the rest fold into one row.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start;">
+      <sc-for list="{{ d2 }}" as="f" hint-placeholder-count="5">
+        <div id="{{ f.id }}" style="width:1000px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">{{ f.id }}</span><span style="font-size:13.5px; font-weight:600;">{{ f.title }}</span></div>
+          <div style="font-size:12.5px; color:#71717A; line-height:1.5; min-height:38px; max-width:920px; text-wrap:pretty;">{{ f.note }}</div>
+          <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; box-shadow:0 4px 6px -1px rgba(9,9,11,.10),0 2px 4px -2px rgba(9,9,11,.08); overflow:hidden;">
+            <div style="position:relative; height:110px; background:repeating-linear-gradient(135deg,#EEF2F5 0 10px,#E9EEF2 10px 20px); border-bottom:1px solid #E4E4E7;">
+              <span style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:'JetBrains Mono',monospace; font-size:11px; color:#94A3B8;">map · {{ f.area }}</span>
+              <div style="position:absolute; left:10px; top:10px; display:flex; gap:6px; align-items:center; background:rgba(255,255,255,.72); backdrop-filter:blur(8px); border-radius:6px; padding:3px 8px; font-family:'JetBrains Mono',monospace; font-size:11.5px;"><span style="width:7px; height:7px; border-radius:50%; background:{{ f.modeDot }};"></span><span>{{ f.stamp }}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; height:30px; padding:0 12px; border-bottom:1px solid #E4E4E7; font-size:11.5px; font-weight:500; letter-spacing:.08em;"><span style="flex:1;">TIMELINE</span><span style="font-size:11px; letter-spacing:0; color:#71717A; margin-right:10px;">Collapse to strip ▾</span><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"></path></svg></div>
+            <div style="padding:10px 12px 12px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <sc-if value="{{ f.isLive }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px; border-radius:999px; background:#18181B; color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.06em;"><span style="width:6px; height:6px; border-radius:50%; background:#4ADE80;"></span>LIVE</span></sc-if>
+                <sc-if value="{{ f.isPinned }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:999px; border:1px solid #D4D4D8; color:#3F3F46; font-size:10.5px; font-weight:700; letter-spacing:.06em;">PINNED</span></sc-if>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600;">{{ f.readout }}</span>
+                <span style="font-size:12.5px; font-weight:500; color:#2563EB;">{{ f.rel }}</span>
+                <span style="font-size:11.5px; color:#71717A;">{{ f.local }}</span>
+                <span style="flex:1;"></span>
+                <div style="display:flex; align-items:center; gap:2px;">
+                  <span style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; opacity:{{ f.prevOp }};"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 2.5v5M7 2.5L4.5 5 7 7.5"></path></svg></span>
+                  <span style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2.5L3.5 5 6 7.5"></path></svg></span>
+                  <span style="display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 8px; border-radius:6px; border:1px solid #E4E4E7; font-size:12px;">{{ f.step }}<span style="color:#71717A;">▾</span></span>
+                  <span style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5L6.5 5 4 7.5"></path></svg></span>
+                  <span style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; opacity:{{ f.nextOp }};"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7.5 2.5v5M3 2.5L5.5 5 3 7.5"></path></svg></span>
+                </div>
+                <span style="width:1px; height:18px; background:#E4E4E7;"></span>
+                <sc-if value="{{ f.isPinned }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; height:28px; padding:0 10px; border-radius:6px; background:#18181B; color:#fff; font-size:12px; font-weight:500;">Go live</span></sc-if>
+                <sc-if value="{{ f.isLive }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex; align-items:center; height:28px; padding:0 10px; border-radius:6px; border:1px solid #E4E4E7; color:#A1A1AA; font-size:12px; font-weight:500;">Live</span></sc-if>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <sc-for list="{{ presets }}" as="p" hint-placeholder-count="5"><span style="display:inline-flex; align-items:center; height:24px; padding:0 9px; border-radius:6px; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.fg }}; font-size:12px;">{{ p.t }}</span></sc-for>
+                <span style="flex:1;"></span>
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px;"><span style="width:14px; height:14px; border-radius:3px; border:1px solid {{ f.filterBd }}; background:{{ f.filterBg }}; color:#fff; font-size:10px; display:inline-flex; align-items:center; justify-content:center;">✓</span>In map view</span>
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; margin-left:8px;"><span style="width:14px; height:14px; border-radius:3px; background:#18181B; color:#fff; font-size:10px; display:inline-flex; align-items:center; justify-content:center;">✓</span>Show online</span>
+              </div>
+              <div style="position:relative;">
+                <div style="position:absolute; left:248px; right:0; top:58px; bottom:0; pointer-events:none;">
+                  <sc-for list="{{ f.gapsCol }}" as="g" hint-placeholder-count="0"><div style="position:absolute; left:{{ g.x }}; width:{{ g.w }}; top:0; bottom:0; background:repeating-linear-gradient(135deg,#fff 0 3px,#F4F4F5 3px 6px);"></div></sc-for>
+                </div>
+                <div style="display:grid; grid-template-columns:248px minmax(0,1fr); align-items:center; height:38px;">
+                  <span style="font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#71717A;">{{ f.summaryLabel }}</span>
+                  <div style="position:relative; height:38px;">
+                    <div style="position:absolute; left:0; right:0; top:10px; height:4px; border-radius:999px; background:#E4E4E7;"></div>
+                    <div style="position:absolute; left:0; top:10px; height:4px; width:{{ f.thumbX }}; border-radius:999px; background:#2563EB;"></div>
+                    <sc-for list="{{ f.gapsCol }}" as="g" hint-placeholder-count="0"><div style="position:absolute; left:{{ g.x }}; width:{{ g.w }}; top:6px; height:12px; background:#fff; border-left:1.5px solid #A1A1AA; border-right:1.5px solid #A1A1AA; transform:skewX(-14deg);"></div></sc-for>
+                    <div style="position:absolute; left:0; right:0; top:24px; height:10px; border-radius:2px; background:#E4E4E7;"></div>
+                    <sc-for list="{{ f.gapsCol }}" as="g" hint-placeholder-count="0"><div style="position:absolute; left:{{ g.x }}; width:{{ g.w }}; top:24px; height:10px; background:repeating-linear-gradient(135deg,#fff 0 3px,#F4F4F5 3px 6px);"></div></sc-for>
+                    <sc-for list="{{ f.bands }}" as="d" hint-placeholder-count="1"><div style="position:absolute; left:{{ d.x }}; width:{{ d.w }}; top:24px; height:10px; border-radius:2px; background:#2563EB; opacity:{{ f.bandOp }};"></div></sc-for>
+                    <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; left:{{ f.drawnX }}; top:6px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:#fff; border:1.5px dashed #71717A;"></div></sc-if>
+                    <div style="position:absolute; left:{{ f.thumbX }}; top:4px; width:16px; height:16px; margin-left:-8px; border-radius:50%; background:#fff; border:2px solid #2563EB; box-shadow:0 1px 2px rgba(9,9,11,.1); z-index:3;"></div>
+                  </div>
+                </div>
+                <div style="display:grid; grid-template-columns:248px minmax(0,1fr); height:20px;">
+                  <span></span>
+                  <div style="position:relative;">
+                    <sc-for list="{{ f.labels }}" as="l" hint-placeholder-count="3"><span style="position:absolute; left:{{ l.x }}; top:2px; transform:translateX(-50%); font-size:10.5px; color:{{ l.fg }}; font-weight:{{ l.fw }}; font-style:{{ l.fs }}; white-space:nowrap;">{{ l.t }}</span></sc-for>
+                  </div>
+                </div>
+                <sc-for list="{{ f.rows }}" as="r" hint-placeholder-count="4">
+                  <div style="display:grid; grid-template-columns:248px minmax(0,1fr); height:{{ r.h }}; border-top:1px solid #F4F4F5;">
+                    <div style="display:flex; align-items:center; gap:6px; padding-right:10px; min-width:0;">
+                      <sc-if value="{{ r.isGroup }}" hint-placeholder-val="{{ false }}"><span style="display:flex; gap:6px; align-items:baseline;"><span style="font-size:11.5px; font-weight:600;">▾ {{ r.label }}</span><span style="font-size:11px; color:#71717A;">{{ r.count }}</span></span></sc-if>
+                      <sc-if value="{{ r.isLane }}" hint-placeholder-val="{{ true }}">
+                        <span style="display:flex; align-items:center; gap:7px; min-width:0; flex:1; padding-left:12px;">
+                          <span style="flex:none; width:3px; height:22px; border-radius:1px; background:{{ r.color }};"></span>
+                          <span style="display:flex; flex-direction:column; min-width:0; flex:1; gap:1px;">
+                            <span style="display:flex; gap:6px; align-items:center; min-width:0;"><span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;">{{ r.code }}</span><span style="font-size:11px; color:#71717A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">{{ r.sub }}</span><sc-if value="{{ r.hasTag }}" hint-placeholder-val="{{ false }}"><span style="flex:none; display:inline-flex; align-items:center; height:18px; padding:0 6px; border-radius:999px; font-size:10.5px; font-weight:500; color:{{ r.tagFg }}; background:{{ r.tagBg }}; border:1px solid {{ r.tagBd }};">{{ r.tag }}</span></sc-if></span>
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:{{ r.ltFg }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.lt }}</span>
+                          </span>
+                        </span>
+                      </sc-if>
+                      <sc-if value="{{ r.isMore }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px; color:#52525B;">▸ {{ r.label }}</span></sc-if>
+                    </div>
+                    <div style="position:relative;">
+                      <sc-for list="{{ r.segs }}" as="s" hint-placeholder-count="1"><div style="position:absolute; left:{{ s.x }}; width:{{ s.w }}; top:{{ s.top }}; height:{{ s.h }}; background:{{ s.bg }}; border:{{ s.bd }}; border-radius:3px;"></div></sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+                <div style="position:absolute; left:248px; right:0; top:0; bottom:0; pointer-events:none;">
+                  <div style="position:absolute; left:{{ f.nowX }}; top:40px; bottom:0; border-left:1px dashed #09090B;"></div>
+                  <span style="position:absolute; left:{{ f.nowX }}; top:-2px; transform:translateX(-50%); font-size:10px; font-weight:600; letter-spacing:.04em; background:#fff; padding:0 2px;">NOW</span>
+                  <div style="position:absolute; left:{{ f.thumbX }}; top:40px; bottom:0; width:2px; margin-left:-1px; background:#2563EB; opacity:.55;"></div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; font-size:11.5px; min-height:16px; border-top:1px solid #F4F4F5; padding-top:8px;">
+                <span style="flex:1; color:#71717A; min-width:0;">{{ f.range }}</span>
+                <sc-if value="{{ f.hasMsg }}" hint-placeholder-val="{{ false }}"><span style="display:flex; gap:10px;"><span style="color:{{ f.msgFg }}; font-weight:500;">{{ f.msgText }}</span><span style="color:#2563EB; font-weight:500;">{{ f.msgAction }}</span></span></sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section data-screen-label="3 · Time HUD" style="margin-bottom:64px;">
+    <h2 style="margin:0 0 4px; font-size:18px; font-weight:600;">3 · Time HUD</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#52525B; max-width:1000px; line-height:1.55; text-wrap:pretty;">A bar at the bottom centre of the map whenever time-aware data is loaded: mode, view time, offset, step, Live, and a button that opens the dock Timeline. It uses the same see-through surface as the map tools and stays clear of the scale bar (top centre) and the tool column (right). There is no separate picker over the map; presets, zoom and lanes live in the dock.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start;">
+      <sc-for list="{{ d3 }}" as="f" hint-placeholder-count="5">
+        <div id="{{ f.id }}" style="width:1000px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">{{ f.id }}</span><span style="font-size:13.5px; font-weight:600;">{{ f.title }}</span></div>
+          <div style="font-size:12.5px; color:#71717A; line-height:1.5; min-height:38px; max-width:920px; text-wrap:pretty;">{{ f.note }}</div>
+          <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; box-shadow:0 4px 6px -1px rgba(9,9,11,.10),0 2px 4px -2px rgba(9,9,11,.08); overflow:hidden;">
+            <div style="position:relative; height:{{ f.mapH }}; background:repeating-linear-gradient(135deg,#EEE8DE 0 14px,#E8E1D6 14px 28px);">
+              <span style="position:absolute; left:50%; top:45%; transform:translate(-50%,-50%); font-family:'JetBrains Mono',monospace; font-size:11px; color:#A8A29E;">map · {{ f.area }}</span>
+              <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:3px; width:300px;">
+                <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700;"><span>0</span><span>100</span><span>200</span><span>300</span><span>400 nm</span></div>
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); height:6px; border:1px solid #0A72C9;"><span style="background:#0A72C9;"></span><span></span><span style="background:#0A72C9;"></span><span></span></div>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#A8A29E; text-align:center;">existing scale bar</span>
+              </div>
+              <div style="position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:6px;">
+                <span style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.55);"></span>
+                <span style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.55);"></span>
+                <span style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.55);"></span>
+                <span style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.55);"></span>
+                <span style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.55); margin-top:8px;"></span>
+                <span style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.55);"></span>
+              </div>
+              <sc-if value="{{ f.hasMsg }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; bottom:62px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:10px; height:28px; padding:0 12px; border-radius:8px; background:{{ f.msgGlass }}; backdrop-filter:blur(8px); font-size:12px; white-space:nowrap;"><span style="color:{{ f.msgFg }}; font-weight:500;">{{ f.msgText }}</span><span style="color:#1D4ED8; font-weight:600;">{{ f.msgAction }}</span></div>
+              </sc-if>
+              <div style="position:absolute; bottom:14px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:6px; height:40px; padding:0 6px; background:rgba(255,255,255,.72); backdrop-filter:blur(8px); border-radius:10px; white-space:nowrap;">
+                <sc-if value="{{ f.isLive }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px; border-radius:6px; background:#18181B; color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.06em;"><span style="width:6px; height:6px; border-radius:50%; background:#4ADE80;"></span>LIVE</span></sc-if>
+                <sc-if value="{{ f.isPinned }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; height:26px; padding:0 9px; border-radius:6px; border:1px solid rgba(9,9,11,.25); color:#27272A; font-size:10.5px; font-weight:700; letter-spacing:.06em;">PINNED</span></sc-if>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; padding-left:2px;">{{ f.readout }}</span>
+                <span style="font-size:12px; font-weight:600; color:#1D4ED8;">{{ f.rel }}</span>
+                <sc-if value="{{ f.loading }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px; color:#52525B;">drawing…</span></sc-if>
+                <span style="width:1px; height:20px; background:rgba(9,9,11,.15); margin:0 2px;"></span>
+                <span title="Previous step" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2.5L3.5 5 6 7.5"></path></svg></span>
+                <span title="Next step" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px;"><svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5L6.5 5 4 7.5"></path></svg></span>
+                <sc-if value="{{ f.isPinned }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; height:28px; padding:0 11px; border-radius:6px; background:#18181B; color:#fff; font-size:12px; font-weight:500;">Live</span></sc-if>
+                <span style="width:1px; height:20px; background:rgba(9,9,11,.15); margin:0 2px;"></span>
+                <span title="Open timeline" style="width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; background:{{ f.dockBg }}; color:{{ f.dockFg }};"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2" width="11" height="10" rx="1.5"></rect><path d="M1.5 8.5h11"></path></svg></span>
+              </div>
+              <div style="position:absolute; left:12px; bottom:14px; width:230px; display:flex; flex-direction:column; gap:3px; align-items:flex-start;">
+                <sc-for list="{{ f.badges }}" as="b" hint-placeholder-count="2">
+                  <div title="{{ b.off }}" style="display:flex; align-items:center; gap:6px; height:22px; max-width:100%; padding:0 8px; border-radius:6px; background:{{ b.bg }}; backdrop-filter:blur(8px); font-size:11.5px; color:{{ b.fg }}; white-space:nowrap;"><span style="flex:none; width:3px; height:12px; border-radius:1px; background:{{ b.color }};"></span><span style="flex:none; font-weight:600;">{{ b.name }}</span><span style="flex:none; font-family:'JetBrains Mono',monospace;">{{ b.time }}</span><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; color:{{ b.offFg }};">{{ b.off }}</span></div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:28px; max-width:1000px; display:flex; flex-direction:column; gap:10px;">
+      <sc-for list="{{ hudNotes }}" as="n" hint-placeholder-count="4">
+        <div style="display:flex; gap:12px;"><span style="flex:none; width:6px; height:6px; margin-top:8px; border-radius:50%; background:#A1A1AA;"></span><div style="font-size:13px; line-height:1.6; color:#3F3F46; text-wrap:pretty;"><b style="color:#09090B;">{{ n.t }}</b> {{ n.b }}</div></div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section data-screen-label="4 · Details" style="margin-bottom:64px; max-width:2080px;">
+    <h2 style="margin:0 0 18px; font-size:18px; font-weight:600;">4 · Details shared by all three directions</h2>
+    <div style="display:grid; grid-template-columns:1000px 1000px; gap:40px; align-items:start;">
+      <div id="4a" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">4a</span><span style="font-size:13.5px; font-weight:600;">Gaps: three treatments of the Rotterdam set</span></div>
+        <div style="font-size:12.5px; color:#71717A; line-height:1.5; text-wrap:pretty;">Same data, same width. Log-width breaks keep the clusters readable while a 3-hour and an 8-month gap stay distinguishable; the label carries the exact size. Gaps shorter than 15 % of the data time (min 6 h) are drawn to scale with no break.</div>
+        <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; padding:6px 16px 10px;">
+          <sc-for list="{{ gapRows }}" as="g" hint-placeholder-count="3">
+            <div style="display:grid; grid-template-columns:170px minmax(0,1fr); gap:16px; padding:12px 0; border-bottom:1px solid #F4F4F5; align-items:start;">
+              <div style="display:flex; flex-direction:column; gap:2px;"><span style="font-size:12.5px; font-weight:600;">{{ g.t }}</span><span style="font-size:11.5px; color:{{ g.fg }};">{{ g.d }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <div style="position:relative; height:12px;">
+                  <div style="position:absolute; left:0; right:0; top:2px; bottom:0; border-radius:2px; background:#E4E4E7;"></div>
+                  <sc-for list="{{ g.gaps }}" as="x" hint-placeholder-count="0"><div style="position:absolute; left:{{ x.x }}; width:{{ x.w }}; top:0; bottom:0; background:repeating-linear-gradient(135deg,#fff 0 3px,#F4F4F5 3px 6px); border-left:1.5px solid #A1A1AA; border-right:1.5px solid #A1A1AA;"></div></sc-for>
+                  <sc-for list="{{ g.bands }}" as="d" hint-placeholder-count="2"><div style="position:absolute; left:{{ d.x }}; width:{{ d.w }}; top:2px; bottom:0; border-radius:2px; background:#2563EB;"></div></sc-for>
+                  <div style="position:absolute; left:{{ g.nowX }}; top:-4px; bottom:-2px; border-left:1px dashed #09090B;"></div>
+                </div>
+                <div style="position:relative; height:14px;">
+                  <sc-for list="{{ g.labels }}" as="l" hint-placeholder-count="3"><span style="position:absolute; left:{{ l.x }}; transform:translateX(-50%); font-size:10.5px; color:{{ l.fg }}; font-weight:{{ l.fw }}; font-style:{{ l.fs }}; white-space:nowrap;">{{ l.t }}</span></sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div id="4b" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">4b</span><span style="font-size:13.5px; font-weight:600;">Step menu and keyboard</span></div>
+        <div style="font-size:12.5px; color:#71717A; line-height:1.5; text-wrap:pretty;">‹ › always work. The step is either a fixed interval or "sample of" a driver layer; the default driver is the forecast with the coarsest cadence in view, so a 6-minute station does not turn every click into 6 minutes.</div>
+        <div style="display:flex; gap:24px; align-items:flex-start;">
+          <div style="width:280px; background:#fff; border:1px solid #E4E4E7; border-radius:8px; box-shadow:0 10px 30px -8px rgba(9,9,11,.22),0 2px 6px rgba(9,9,11,.06); padding:6px;">
+            <sc-for list="{{ stepMenu }}" as="m" hint-placeholder-count="9">
+              <div style="display:flex; align-items:center; gap:8px; height:{{ m.h }}; padding:0 8px; border-radius:5px; background:{{ m.bg }}; font-size:{{ m.fs }}; color:{{ m.fg }}; font-weight:{{ m.fw }}; letter-spacing:{{ m.ls }};"><span style="width:12px; color:#2563EB;">{{ m.check }}</span><span style="flex:1;">{{ m.t }}</span><span style="color:#A1A1AA; font-size:11px;">{{ m.r }}</span></div>
+            </sc-for>
+          </div>
+          <div style="flex:1; background:#fff; border:1px solid #E4E4E7; border-radius:8px; padding:6px 14px;">
+            <sc-for list="{{ keys }}" as="k" hint-placeholder-count="8">
+              <div style="display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; padding:7px 0; border-bottom:1px solid #F4F4F5; font-size:12.5px;"><span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:600;">{{ k.k }}</span><span style="color:#3F3F46;">{{ k.d }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div id="4c" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">4c</span><span style="font-size:13.5px; font-weight:600;">Per-product time policy (replaces unbounded Nearest)</span></div>
+        <div style="font-size:12.5px; color:#71717A; line-height:1.5; text-wrap:pretty;">When a layer has nothing within its tolerance it hides; it never draws far-away data as if current. Its layer-list row says what is nearest; clicking the time jumps there. Scenario 7 (S-104 Charleston, Dec 2025) is covered by the S-104 row.</div>
+        <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; padding:2px 14px 4px;">
+          <div style="display:grid; grid-template-columns:140px repeat(3,minmax(0,1fr)); gap:14px; padding:9px 0; border-bottom:1px solid #E4E4E7; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#71717A;"><span>Product</span><span>Inside data</span><span>Outside tolerance</span><span>Layer list text</span></div>
+          <sc-for list="{{ policy }}" as="p" hint-placeholder-count="6">
+            <div style="display:grid; grid-template-columns:140px repeat(3,minmax(0,1fr)); gap:14px; padding:9px 0; border-bottom:1px solid #F4F4F5; font-size:12.5px; line-height:1.5;"><span style="font-weight:600;">{{ p.k }}</span><span style="color:#3F3F46; text-wrap:pretty;">{{ p.a }}</span><span style="color:#3F3F46; text-wrap:pretty;">{{ p.b }}</span><span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#3F3F46; text-wrap:pretty;">{{ p.c }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div id="4d" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; background:#18181B; color:#fff; padding:2px 6px; border-radius:4px;">4d</span><span style="font-size:13.5px; font-weight:600;">Layer time in the layer list</span></div>
+        <div style="font-size:12.5px; color:#71717A; line-height:1.5; text-wrap:pretty;">Each time-aware row in the layer list gets a second line with its layer time; the dock lanes use the same text. Nothing is added to the map. When any layer has no data, the HUD chip counts them and opens this list. State is carried by words and the Hidden tag, with colour as a second cue.</div>
+        <div style="width:520px; background:#fff; border:1px solid #E4E4E7; border-radius:8px; box-shadow:0 4px 6px -1px rgba(9,9,11,.10),0 2px 4px -2px rgba(9,9,11,.08); overflow:hidden;">
+          <div style="display:flex; align-items:center; height:34px; padding:0 12px; border-bottom:1px solid #E4E4E7; font-size:12px; font-weight:500; letter-spacing:.08em;">LAYERS</div>
+          <sc-for list="{{ badgeStates }}" as="b" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; gap:10px; min-height:46px; padding:6px 12px; border-bottom:1px solid #F4F4F5;">
+              <span style="flex:none; width:3px; height:26px; border-radius:1px; background:{{ b.color }};"></span>
+              <div style="display:flex; flex-direction:column; gap:2px; flex:1; min-width:0;">
+                <span style="font-size:12.5px; font-weight:600;">{{ b.name }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:{{ b.ltFg }};">{{ b.time }} {{ b.off }}</span>
+              </div>
+              <sc-if value="{{ b.hasTag }}" hint-placeholder-val="{{ false }}"><span style="flex:none; display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:999px; font-size:11px; font-weight:500; color:#B45309; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.35);">Hidden</span></sc-if>
+              <span style="flex:none; width:170px; font-size:11.5px; color:#71717A; text-wrap:pretty;">{{ b.note }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="5 · Answers" style="margin-bottom:24px; max-width:1500px;">
+    <h2 style="margin:0 0 6px; font-size:18px; font-weight:600;">5 · Recommendations for the brief's questions</h2>
+    <p style="margin:0 0 16px; font-size:13.5px; color:#52525B; max-width:1000px; line-height:1.55;">Recommended combination: <a href="#3b">3</a> as the everyday surface, <a href="#2b">2</a> as the dock panel, which collapses to <a href="#1b">1</a>.</p>
+    <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; padding:2px 18px 6px; margin-bottom:28px;">
+      <sc-for list="{{ answers }}" as="a" hint-placeholder-count="10">
+        <div style="display:grid; grid-template-columns:28px 230px minmax(0,1.2fr) minmax(0,1fr); gap:18px; padding:12px 0; border-bottom:1px solid #F4F4F5; font-size:13px; line-height:1.55;">
+          <span style="color:#A1A1AA; font-weight:600;">{{ a.n }}</span>
+          <span style="font-weight:600;">{{ a.q }}</span>
+          <span style="color:#09090B; text-wrap:pretty;">{{ a.rec }}</span>
+          <span style="color:#71717A; text-wrap:pretty;">{{ a.why }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <h3 style="margin:0 0 10px; font-size:15px; font-weight:600;">Slices</h3>
+    <div style="background:#fff; border:1px solid #E4E4E7; border-radius:8px; padding:2px 18px 6px;">
+      <sc-for list="{{ slices }}" as="s" hint-placeholder-count="7">
+        <div style="display:grid; grid-template-columns:110px minmax(0,1fr); gap:18px; padding:10px 0; border-bottom:1px solid #F4F4F5; font-size:13px; line-height:1.55;"><span style="font-weight:600;">{{ s.k }}</span><span style="color:#3F3F46; text-wrap:pretty;">{{ s.v }}</span></div>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;underway&quot;,&quot;rotterdam&quot;,&quot;mixed&quot;,&quot;nationwide&quot;],&quot;default&quot;:&quot;underway&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mapViewFilter&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;primaryZone&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;UTC&quot;,&quot;Data-area local&quot;],&quot;default&quot;:&quot;UTC&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mapBadges&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Off&quot;,&quot;Exceptions only&quot;],&quot;default&quot;:&quot;Off&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { sc: null };
+  renderVals() {
+    const sc = this.state.sc || this.props.scenario || 'underway';
+    const filterOn = this.props.mapViewFilter ?? true;
+    const zl = (this.props.primaryZone ?? 'UTC') !== 'UTC';
+    const exc = (this.props.mapBadges ?? 'Off') !== 'Off';
+    const H = 3600e3, T0 = Date.UTC(2026, 9, 1, 20, 30);
+    const at = (mo, d, h = 0, mi = 0) => (Date.UTC(2026, mo - 1, d, h, mi) - T0) / H;
+    const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const p2 = n => String(n).padStart(2, '0');
+    const D = h => new Date(T0 + Math.round(h * 60) * 60e3);
+    const hm = h => { const d = D(h); return p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + 'Z'; };
+    const dm = h => { const d = D(h); return p2(d.getUTCDate()) + '.' + p2(d.getUTCMonth() + 1); };
+    const fmt = (h, off, suf, day) => { const d = new Date(T0 + Math.round(h * 60) * 60e3 + off * H); return (day ? DOW[d.getUTCDay()] + ' ' + p2(d.getUTCDate()) + '.' + p2(d.getUTCMonth() + 1) + ' ' : '') + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + suf; };
+    const dur = h => { h = Math.abs(h); if (h < 1) return Math.round(h * 60) + ' min'; if (h < 24) { let a = Math.floor(h), m = Math.round((h - a) * 60); if (m === 60) { a++; m = 0; } return m ? a + ' h ' + m : a + ' h'; } const dd = h / 24; if (dd < 14) return Math.round(dd) + ' d'; if (dd < 61) return Math.round(dd / 7) + ' wk'; return Math.round(dd / 30.4) + ' mo'; };
+    const rel = dt => Math.abs(dt) < 0.01 ? 'now' : dt > 0 ? 'in ' + dur(dt) : dur(dt) + ' ago';
+    const sgn = dt => Math.abs(dt) < 0.01 ? '' : '(' + (dt > 0 ? '+' : '−') + dur(dt) + ')';
+    const pc = v => v.toFixed(2) + '%';
+
+    const C111 = '#2563EB', C104 = '#0E7490', CLIVE = '#52525B';
+    const R = (a, len, step, label, kind) => ({ a, b: a + len, step, run: a, label, kind: kind || 'loaded' });
+    const L = o => Object.assign({ policy: 'step', color: C111, product: 'S-111 Surface currents', inView: true, fc: true, segs: [] }, o);
+    const us = () => ({ off: -4, name: 'EDT' });
+    const nl = h => { const m = D(h).getUTCMonth() + 1; return m >= 4 && m <= 10 ? { off: 2, name: 'CEST' } : { off: 1, name: 'CET' }; };
+    const live = [L({ code: 'AIS', sub: 'live targets', product: 'Live sources', color: CLIVE, policy: 'live', fc: false }), L({ code: 'Own ship', sub: 'GNSS', product: 'Live sources', color: CLIVE, policy: 'live', fc: false })];
+    const SCN = {
+      underway: { tab: '2 · Underway, live', area: 'Chesapeake Bay', tz: us,
+        desc: 'Scenario 2. cbofs 12:00Z and an S-104 water-level forecast are loaded, with AIS and own ship. Refresh has found the cbofs 18:00Z run online (dashed in the lanes). Expired moves now 50 h on: every run has ended mid-trip.',
+        lanes: [L({ code: 'cbofs', sub: 'Chesapeake Bay', segs: [R(-8.5, 48, 1, '12:00Z'), R(-2.5, 48, 1, '18:00Z', 'online')] }), L({ code: 'Baltimore', sub: 'water level · 6 min', product: 'S-104 Water level', color: C104, policy: 'tol', tol: 0.1, segs: [R(-14.5, 48, 0.1, '06:00Z')] })].concat(live),
+        st: { live: { now: 0, view: 0 }, pinned: { now: 0, view: 11.5 }, gap: { now: 0, view: 52 }, expired: { now: 50, view: 50 }, loading: { now: 0, view: 27, drawn: 11.5 } } },
+      rotterdam: { tab: '3 · Rotterdam exchange set', area: 'Rotterdam', tz: nl,
+        desc: 'Scenario 3. An NL S-111 exchange set: four clusters between January and August 2026, separated by 6 to 12 weeks, and now 5 weeks after the last one. Nothing in it can be refreshed, so Expired behaves like Live.',
+        lanes: [[1, 12, 1, 19], [3, 2, 3, 6], [5, 15, 5, 29], [8, 20, 8, 27]].map((c, i) => { const a = at(c[0], c[1]), b = at(c[2], c[3]); return L({ code: '111NL00RTM0' + (i + 1), sub: dm(a) + '–' + dm(b), product: 'S-111 · NL exchange set', fc: false, segs: [{ a, b, step: 1, run: a, label: dm(a), kind: 'loaded' }] }); }),
+        st: { live: { now: 0, view: 0 }, pinned: { now: 0, view: at(5, 20, 6) }, gap: { now: 0, view: at(7, 10, 12) }, expired: { now: 0, view: 0 }, loading: { now: 0, view: at(8, 20, 0), drawn: at(5, 20, 6) } } },
+      mixed: { tab: '4 · Mixed cadences', area: 'Chesapeake Bay', tz: us,
+        desc: 'Scenario 4. Hourly cbofs 18:00Z plus 6-minute S-104 observations with a 3-hour station outage. Step follows cbofs, not the densest layer. Pinned and gap states each leave one layer without data.',
+        lanes: [L({ code: 'cbofs', sub: 'Chesapeake Bay · 1 h', segs: [R(-2.5, 48, 1, '18:00Z')] }), L({ code: 'Baltimore', sub: 'observations · 6 min', product: 'S-104 Water level', color: C104, policy: 'tol', tol: 0.5, fc: false, segs: [{ a: -30, b: -6.2, step: 0.1, run: -30, label: 'obs', kind: 'loaded' }, { a: -3.1, b: -0.4, step: 0.1, run: -3.1, label: 'obs', kind: 'loaded' }] })],
+        st: { live: { now: 0, view: 0 }, pinned: { now: 0, view: 3.5 }, gap: { now: 0, view: -4.5 }, expired: { now: 46.5, view: 46.5 }, loading: { now: 0, view: 8, drawn: 3.5 } } },
+      nationwide: { tab: '5 · Nationwide, viewing Chesapeake', area: 'Chesapeake Bay', tz: us,
+        desc: 'Scenario 5. All 14 S-111 models are loaded while the map shows Chesapeake Bay. With In map view on (tweak), only cbofs and dbofs are listed and set the axis; the overview strip still shows everything. lsofs is an expired run from 27.09.',
+        lanes: [['cbofs', 'Chesapeake Bay', -2.5, 48, 1], ['dbofs', 'Delaware Bay', -2.5, 48, 1], ['nyofs', 'Port of NY and NJ', -2.5, 48], ['gomofs', 'Gulf of Maine', -8.5, 72], ['ngofs2', 'Northern Gulf of Mexico', -2.5, 48], ['tbofs', 'Tampa Bay', -2.5, 48], ['sfbofs', 'San Francisco Bay', -8.5, 48], ['wcofs', 'West Coast', -17.5, 72], ['ciofs', 'Cook Inlet', -8.5, 48], ['sscofs', 'Salish Sea', -8.5, 72], ['leofs', 'Lake Erie', -2.5, 120], ['lmhofs', 'Lakes Michigan and Huron', -2.5, 120], ['loofs', 'Lake Ontario', -2.5, 120], ['lsofs', 'Lake Superior', at(9, 27, 6), 48]].map(([c, s, a, len, v]) => L({ code: c, sub: s, inView: !!v, segs: [R(a, len, 1, (a < -24 ? dm(a) + ' ' : '') + hm(a))] })),
+        st: { live: { now: 0, view: 0 }, pinned: { now: 0, view: 11.5 }, gap: { now: 0, view: 60 }, expired: { now: 50, view: 50 }, loading: { now: 0, view: 27, drawn: 11.5 } } },
+    };
+    const S = SCN[sc];
+    const primary = h => zl ? fmt(h, S.tz(h).off, ' ' + S.tz(h).name, true) : fmt(h, 0, 'Z', true);
+    const secondary = h => zl ? fmt(h, 0, 'Z', false) : fmt(h, S.tz(h).off, ' ' + S.tz(h).name, false) + ' local';
+
+    const union = segs => { const v = segs.map(s => [s.a, s.b]).sort((p, q) => p[0] - q[0]); const m = []; for (const x of v) { const l = m[m.length - 1]; if (l && x[0] <= l[1] + 1e-6) l[1] = Math.max(l[1], x[1]); else m.push([x[0], x[1]]); } return m; };
+    const ext = (segs, pts) => { const xs = segs.flatMap(s => [s.a, s.b]).concat(pts); const a = Math.min(...xs), b = Math.max(...xs); const pad = Math.min(6, (b - a) * 0.015); return [a - pad, b + pad]; };
+    const axis = (ivs, pts, a, b, mode) => {
+      const e = Math.min((b - a) * 0.012, 36);
+      const iv = ivs.concat(pts.map(p => [p - e, p + e])).map(([x, y]) => [Math.max(a, x), Math.min(b, y)]).filter(([x, y]) => y > x).sort((p, q) => p[0] - q[0]);
+      const m = []; for (const v of iv) { const l = m[m.length - 1]; if (l && v[0] <= l[1] + 1e-6) l[1] = Math.max(l[1], v[1]); else m.push([v[0], v[1]]); }
+      const P = []; let cur = a;
+      for (const [x, y] of m) { if (x > cur) P.push({ gap: true, a: cur, b: x }); P.push({ gap: false, a: x, b: y }); cur = y; }
+      if (cur < b) P.push({ gap: true, a: cur, b });
+      const dataH = P.filter(p => !p.gap).reduce((s, p) => s + p.b - p.a, 0);
+      const thr = Math.max(6, dataH * 0.15);
+      let fixed = 0;
+      P.forEach(p => { p.len = p.b - p.a; p.col = mode !== 'true' && p.gap && (mode === 'equal' ? p.len > 1 : p.len > thr); if (p.col) { p.w = mode === 'equal' ? 4 : Math.min(11, Math.max(3.5, 3.5 + 1.25 * Math.log(p.len / 6))); fixed += p.w; } });
+      const linH = P.filter(p => !p.col).reduce((s, p) => s + p.len, 0);
+      const k = (100 - fixed) / linH; let x = 0;
+      P.forEach(p => { if (!p.col) p.w = p.len * k; p.x = x; x += p.w; });
+      const pos = h => { if (h <= a) return 0; if (h >= b) return 100; for (const p of P) if (h <= p.b) return p.x + (h - p.a) / p.len * p.w; return 100; };
+      return { P, pos, k, a, b };
+    };
+    const labelsOf = ax => {
+      const c = [];
+      const long = ax.k * 24 >= 9;
+      for (const p of ax.P) {
+        if (p.col) { c.push({ x: p.x + p.w / 2, t: '⋯ ' + dur(p.len) + ' ⋯', pr: 3, fg: '#71717A', fw: 400, fs: 'italic' }); continue; }
+        for (let mm = Math.ceil((p.a + 20.5) / 24) * 24 - 20.5; mm <= p.b; mm += 24) c.push({ x: ax.pos(mm), t: long ? DOW[D(mm).getUTCDay()] + ' ' + dm(mm) : dm(mm), pr: 2, fg: '#09090B', fw: 500, fs: 'normal' });
+        if (ax.k * 6 >= 5) for (let hh = Math.ceil((p.a + 20.5) / 6) * 6 - 20.5; hh <= p.b; hh += 6) c.push({ x: ax.pos(hh), t: hm(hh).slice(0, 5), pr: 1, fg: '#A1A1AA', fw: 400, fs: 'normal' });
+      }
+      const placed = [];
+      c.sort((u, v) => v.pr - u.pr).forEach(l => { const w = l.pr === 1 ? 4.5 : long ? 8 : 5.5; if (l.x < 2.5 || l.x > 97.5) return; if (placed.every(q => Math.abs(q.x - l.x) >= Math.max(w, q.pr === 1 ? 4.5 : 6))) placed.push(l); });
+      return placed.sort((u, v) => u.x - v.x).map(l => Object.assign({}, l, { x: pc(l.x) }));
+    };
+    const ltOf = (l, view, now) => {
+      if (l.policy === 'live') return Math.abs(view - now) < 0.01 ? { kind: 'ok', time: 'live', off: '' } : { kind: 'muted', time: 'live · not at view time', off: '' };
+      const segs = l.segs.filter(s => s.kind === 'loaded');
+      for (const s of segs) {
+        const half = l.policy === 'step' ? s.step : 0;
+        if (view >= s.a - half && view <= s.b + half) {
+          const n = l.policy === 'step' ? Math.round((view - s.a) / s.step - 1e-9) : Math.floor((view - s.a) / s.step + 1e-6);
+          const t = Math.min(s.b, Math.max(s.a, s.a + n * s.step));
+          return { kind: 'ok', time: hm(t) + (l.fc ? ' · T+' + Math.round(t - s.run) + ' h' : ''), off: sgn(t - view) };
+        }
+        if (l.policy === 'tol' && view > s.b && view - s.b <= l.tol) return { kind: 'ok', time: hm(s.b), off: sgn(s.b - view) };
+      }
+      const prev = segs.filter(s => s.b < view).sort((x, y) => y.b - x.b)[0], next = segs.filter(s => s.a > view).sort((x, y) => x.a - y.a)[0];
+      const fd = h => (Math.abs(h - view) > 20 ? dm(h) + ' ' : '') + hm(h);
+      const near = prev && (!next || view - prev.b <= next.a - view) ? 'last ' + fd(prev.b) + ', ' + dur(view - prev.b) + ' earlier' : next ? 'next ' + fd(next.a) + ', ' + dur(next.a - view) + ' later' : '';
+      return { kind: 'none', time: 'no data', off: near };
+    };
+
+    const core = (key) => {
+      const st = S.st[key], now = st.now, view = st.view, isLive = key === 'live' || key === 'expired', loading = key === 'loading';
+      const lanes = S.lanes.filter(l => !filterOn || l.inView), outside = S.lanes.filter(l => !l.inView);
+      const dataLanes = lanes.filter(l => l.policy !== 'live');
+      const loaded = dataLanes.flatMap(l => l.segs.filter(s => s.kind === 'loaded'));
+      const all = dataLanes.flatMap(l => l.segs);
+      const pts = [now, view].concat(st.drawn != null ? [st.drawn] : []);
+      const [a, b] = ext(all, pts);
+      const ax = axis(all.map(s => [s.a, s.b]), pts, a, b);
+      const U = union(loaded);
+      const allS = S.lanes.filter(l => l.policy !== 'live').flatMap(l => l.segs);
+      const [oa, ob] = ext(allS, pts);
+      const ov = axis(allS.map(s => [s.a, s.b]), pts, oa, ob);
+      const prevD = U.filter(u => u[1] < view - 0.01).map(u => u[1]).pop();
+      const nextD = U.filter(u => u[0] > view + 0.01).map(u => u[0])[0];
+      const lts = lanes.map((l, i) => (loading && i > 0 && l.policy !== 'live') ? { kind: 'loading', time: 'drawing…', off: '' } : ltOf(l, view, now));
+      const none = lts.filter(r => r.kind === 'none').length, nData = dataLanes.length;
+      const fcl = dataLanes.filter(l => l.fc);
+      const fcEnd = fcl.length ? Math.max(...fcl.flatMap(l => l.segs.filter(s => s.kind === 'loaded').map(s => s.b))) : null;
+      let msg = null;
+      if (loading) msg = { fg: '#52525B', bg: '#FFFFFF', bd: '#E4E4E7', text: 'Drawing ' + hm(view) + ' · 1 of ' + nData + ' layers ready', action: 'Cancel' };
+      else if (key === 'expired' && fcEnd != null && now > fcEnd) msg = { fg: '#B91C1C', bg: '#FEF2F2', bd: 'rgba(220,38,38,.3)', text: 'Every forecast ended ' + dur(now - fcEnd) + ' ago', action: 'Check for new runs' };
+      else if (none > 0) msg = { fg: '#92400E', bg: '#FFFBEB', bd: '#FCD34D', text: (isLive ? 'No data now' : 'No data at this time') + ' for ' + none + ' of ' + nData + ' layers', action: nextD != null && (prevD == null || nextD - view < view - prevD) ? 'Next data ›' : prevD != null ? '‹ Previous data' : '' };
+      const badges = lanes.map((l, i) => { const r = lts[i], no = r.kind === 'none'; return { name: l.code, color: l.color, time: r.time, off: r.off, fg: no ? '#92400E' : r.kind === 'ok' ? '#09090B' : '#71717A', offFg: no ? '#92400E' : '#71717A', bg: no ? '#FFFBEB' : 'rgba(255,255,255,.72)', bd: no ? '#FCD34D' : '#E4E4E7', kind: r.kind }; }).filter(x => exc && x.kind === 'none');
+      const stamp = loading ? primary(st.drawn) + ' · drawing ' + hm(view).slice(0, 5) + '…' : isLive ? 'LIVE · ' + primary(view) : primary(view) + ' · ' + rel(view - now);
+      const step = '1 h';
+      const driver = (fcl[0] || dataLanes[0] || {}).code || '—';
+      const runs = dataLanes.slice(0, 3).map(l => l.code + ' ' + ((l.segs.find(s => s.kind === 'loaded') || {}).label || '')).join(' · ') + (dataLanes.length > 3 ? ' · +' + (dataLanes.length - 3) : '');
+      const range = (filterOn && outside.length ? nData + ' of ' + S.lanes.length + ' models in map view · ' : '') + runs + ' · step follows ' + driver + ' (1 h)' + (sc === 'mixed' ? '; densest is Baltimore (6 min)' : '');
+      const ticksL = (fcl[0] || dataLanes[0]);
+      const ticks = [];
+      if (ticksL) ticksL.segs.filter(s => s.kind === 'loaded').forEach(s => { if (ax.k * s.step < 0.7) return; for (let t = s.a; t <= s.b + 1e-6; t += s.step) if (t > a && t < b) ticks.push({ x: pc(ax.pos(t)) }); });
+      const tagOf = l => { const ld = l.segs.filter(s => s.kind === 'loaded'), on = l.segs.filter(s => s.kind === 'online'); if (ld.length && l.fc && Math.max(...ld.map(s => s.b)) < now) return { t: 'Expired', fg: '#B91C1C', bg: 'rgba(220,38,38,.07)', bd: 'rgba(220,38,38,.3)' }; if (on.length && on.some(o => o.b > now)) return { t: 'New run', fg: '#B45309', bg: 'rgba(245,158,11,.10)', bd: 'rgba(245,158,11,.35)' }; return null; };
+      const segPos = (s, color, expd) => { const x0 = Math.max(a, s.a), x1 = Math.min(b, s.b); if (x1 <= x0) return null; const x = ax.pos(x0), w = Math.max(0.4, ax.pos(x1) - x); if (s.kind === 'online') return { x: pc(x), w: pc(w), bg: color + '10', bd: '1px dashed ' + color, top: '7px', h: '18px' }; return { x: pc(x), w: pc(w), bg: expd ? '#A1A1AA' : color, bd: '1px solid transparent', top: '10px', h: '12px' }; };
+      const rows = [];
+      [...new Set(lanes.map(l => l.product))].forEach(g => {
+        const gl = lanes.filter(l => l.product === g);
+        rows.push({ isGroup: true, isLane: false, isMore: false, label: g, count: String(gl.length), segs: [], h: '24px' });
+        gl.forEach(l => {
+          const r = lts[lanes.indexOf(l)], tg = tagOf(l), expd = !!(tg && tg.t === 'Expired');
+          const segs = l.policy === 'live' ? [{ x: pc(ax.pos(now) - 0.35), w: '0.7%', bg: CLIVE, bd: 'none', top: '8px', h: '16px' }] : l.segs.map(s => segPos(s, l.color, expd)).filter(Boolean);
+          rows.push({ isGroup: false, isLane: true, isMore: false, code: l.code, sub: l.sub, color: l.color, hasTag: !!tg, tag: tg ? tg.t : '', tagFg: tg ? tg.fg : '', tagBg: tg ? tg.bg : '', tagBd: tg ? tg.bd : '', lt: r.time + (r.off ? ' ' + r.off : ''), ltFg: r.kind === 'none' ? '#B45309' : r.kind === 'ok' ? '#3F3F46' : '#A1A1AA', segs, h: '34px' });
+        });
+      });
+      if (filterOn && outside.length) rows.push({ isGroup: false, isLane: false, isMore: true, label: outside.length + ' more outside the map view', segs: union(outside.flatMap(l => l.segs.filter(s => s.kind === 'loaded'))).map(([x, y]) => segPos({ a: x, b: y, kind: 'loaded' }, '#D4D4D8', false)).filter(Boolean), h: '30px' });
+      const gapsCol = ax.P.filter(p => p.col).map(p => ({ x: pc(p.x), w: pc(p.w) }));
+      const tz = S.tz(view);
+      return {
+        area: S.area, isLive, isPinned: !isLive, loading, readout: primary(view), rel: isLive ? 'now' : rel(view - now), local: secondary(view),
+        modeDot: loading ? '#A1A1AA' : isLive ? '#16A34A' : '#2563EB', stamp, badges, step, driver, zoom: filterOn && outside.length ? 'In view' : 'All loaded',
+        prevOp: prevD != null ? 1 : 0.3, nextOp: nextD != null ? 1 : 0.3,
+        prevTxt: prevD != null ? primary(prevD) + ' · ' + rel(prevD - now) : '—', nextTxt: nextD != null ? primary(nextD) + ' · ' + rel(nextD - now) : '—',
+        ovBands: union(allS.filter(s => s.kind === 'loaded')).map(([x, y]) => ({ x: pc(ov.pos(x)), w: pc(Math.max(0.4, ov.pos(y) - ov.pos(x))) })), ovX: pc(ov.pos(a)), ovW: pc(ov.pos(b) - ov.pos(a)),
+        nowX: pc(ax.pos(now)), thumbX: pc(ax.pos(view)), drawnX: pc(ax.pos(st.drawn != null ? st.drawn : view)),
+        gapsCol, bands: U.map(([x, y]) => ({ x: pc(ax.pos(x)), w: pc(Math.max(0.3, ax.pos(y) - ax.pos(x))) })), bandOp: key === 'expired' && msg && msg.fg === '#B91C1C' ? 0.45 : 1,
+        ticks: ticks.slice(0, 300), labels: labelsOf(ax), range,
+        hasMsg: !!msg, msgFg: msg ? msg.fg : '', msgBg: msg ? msg.bg : '', msgBd: msg ? msg.bd : '', msgText: msg ? msg.text : '', msgAction: msg ? msg.action : '',
+        rows, summaryLabel: filterOn && outside.length ? 'In map view' : 'All loaded', filterBg: filterOn ? '#18181B' : '#fff', filterBd: filterOn ? '#18181B' : '#D4D4D8',
+        timeBg: 'transparent', mapH: '300px', showPop: false, cal: { title: '', cells: [], months: [] },
+        _U: U, _Uall: union(all), _view: view, _now: now,
+      };
+    };
+    const KEYS = [['live', 'Live'], ['pinned', 'Pinned in data'], ['gap', 'Pinned in a gap'], ['expired', 'Every forecast expired'], ['loading', 'Loading after a scrub']];
+    const NOTES = {
+      1: { live: 'Live is a mode, not a jump. The thumb follows now every minute and the map stamp reads LIVE. Any scrub, step, preset or jump leaves it; Live, N or the stamp returns.', pinned: 'Pinned shows the absolute time, the offset from now and the data-area local time. ‹ › step by the chosen granularity at any sample count; the overview strip shows where the zoomed axis sits.', gap: 'Each layer applies its own tolerance. Layers with nothing close hide; the layer list says what each last had and how far away it is. Previous/next data jump over the gap.', expired: 'Still Live, but now is past every loaded forecast. Layers hide rather than draw stale currents, the band dims, and the message offers Check for new runs (the Library Refresh for those sources).', loading: 'The thumb and readout move immediately. The map stamp keeps the time actually drawn until every layer has caught up; the dashed ghost marks that frame on the axis.' },
+      2: { live: 'Lanes group by product, then model, station or dataset. Solid bands are loaded, dashed are known to the Library and not loaded; clicking one offers Get or Load with its size. The lane label is the layer time.', pinned: 'The blue line is view time through every lane, so you can read which model covers the moment and which sample each one draws.', gap: 'Lanes with no data at view time say so in their label, with the nearest data and its distance.', expired: 'Expired runs turn grey and carry the Library’s red Expired tag. A dashed newer run, when Refresh found one, is fetched from its band.', loading: 'Lanes still drawing show “drawing…” in place of their layer time.' },
+      3: { live: 'The everyday surface: mode, time and stepping, clear of the scale bar and tools. Complete on its own at any window width.', pinned: 'Pinned: the bar shows the offset from now and a Live button. ‹ › use the step chosen in the dock (default 1 h).', gap: 'A chip above the bar names how many layers have no data and offers the nearer of previous/next data.', expired: 'Live with nothing to show: a red chip and Check for new runs.', loading: 'The bar reads “drawing…” until the frame is complete. The layer list shows which layers are still behind.' },
+    };
+    const mk = (dir, letterBase) => KEYS.map(([k, t], i) => Object.assign(core(k), { id: dir + 'abcdef'[i], title: t, note: NOTES[dir][k] }));
+    const d1 = mk(1), d2 = mk(2), d3 = mk(3);
+    d3.forEach(f => { f.mapH = '340px'; f.dockBg = 'transparent'; f.dockFg = '#09090B'; f.msgGlass = f.msgFg === '#B91C1C' ? 'rgba(254,242,242,.82)' : f.msgFg === '#92400E' ? 'rgba(255,251,235,.82)' : 'rgba(255,255,255,.72)'; });
+    const hudNotes = [
+      { t: 'Placement.', b: 'Bottom centre, 14 px above the map edge. The scale bar keeps the top centre and the tools keep the right edge. Layer time is not drawn on the map; with the opt-in exceptions badges (tweak), only layers with no data get a badge, bottom left in a column capped at 230 px. Under about 640 px the bar drops the offset text, then the PINNED label (the Live button still says it).' },
+      { t: 'Surface.', b: 'White at 72 % with an 8 px backdrop blur and no border or shadow, matching the map tool buttons. Message chips use the same surface tinted amber or red. Text stays full-opacity ink for contrast.' },
+      { t: 'Opening the dock.', b: 'The rightmost button toggles the dock Timeline (direction 2, or the strip if collapsed). While the dock is open the HUD hides, because the dock header carries the same mode pill, readout and step controls; closing the dock brings it back. Shortcut: T.' },
+      { t: 'No picker.', b: 'Clicking the time does nothing beyond focusing the bar for keyboard stepping. Presets, zoom, the step menu and next/previous data are in the dock, so nothing larger than this bar ever sits over the map.' },
+    ];
+
+
+    const tabs = Object.keys(SCN).map(k => ({ label: SCN[k].tab, onClick: () => this.setState({ sc: k }), bg: k === sc ? '#18181B' : '#fff', fg: k === sc ? '#fff' : '#09090B', bd: k === sc ? '#18181B' : '#E4E4E7' }));
+    const presets = ['Now ± 6 h', 'Today', 'Next 48 h', 'This run', 'All loaded'].map(t => ({ t, bg: t === 'All loaded' ? '#F4F4F5' : '#fff', fg: t === 'All loaded' ? '#09090B' : '#3F3F46', bd: t === 'All loaded' ? '#D4D4D8' : '#E4E4E7' }));
+    const R3 = SCN.rotterdam.lanes.flatMap(l => l.segs);
+    const [ra, rb] = ext(R3, [0]);
+    const gapRows = [['equal', 'Today', 'Every gap the same width', '#B91C1C'], ['log', 'Recommended', 'Log width, labelled, break glyph', '#16A34A'], ['true', 'To scale', 'Clusters become slivers', '#71717A']].map(([mode, t, d, fg]) => {
+      const ax = axis(R3.map(s => [s.a, s.b]), [0], ra, rb, mode);
+      const labels = mode === 'log' ? labelsOf(ax) : labelsOf(ax).filter(l => l.fs !== 'italic');
+      return { t, d, fg, bands: union(R3).map(([x, y]) => ({ x: pc(ax.pos(x)), w: pc(Math.max(0.3, ax.pos(y) - ax.pos(x))) })), gaps: mode === 'true' ? [] : ax.P.filter(p => p.col).map(p => ({ x: pc(p.x), w: pc(p.w) })), nowX: pc(ax.pos(0)), labels };
+    });
+
+    const stepMenu = [
+      { t: 'BY TIME', h: '24px', fs: '10.5px', fg: '#71717A', fw: 600, ls: '.06em' },
+      { t: '10 min', r: '' }, { t: '1 h', r: 'default', check: '✓', bg: '#F4F4F5' }, { t: '6 h', r: '' }, { t: '1 day', r: '' },
+      { t: 'BY DATA', h: '24px', fs: '10.5px', fg: '#71717A', fw: 600, ls: '.06em' },
+      { t: 'Sample of…', r: 'cbofs ▸' }, { t: 'Dataset or run boundary', r: '' }, { t: 'Data, skipping gaps', r: '⌥ ← →' },
+    ].map(m => Object.assign({ h: '30px', fs: '12.5px', fg: '#09090B', fw: 400, ls: '0', check: '', bg: 'transparent', r: '' }, m));
+    const keys = [
+      { k: '← / →', d: 'Step by the chosen granularity. Leaves Live.' },
+      { k: 'Shift ← / →', d: 'Coarse step: the next unit up (1 h → 6 h, 6 h → 1 day).' },
+      { k: '⌥ ← / →', d: 'Previous / next data, skipping gaps.' },
+      { k: 'Home / End', d: 'Start / end of the visible range.' },
+      { k: 'N', d: 'Go live (or Now, when now has no data).' },
+      { k: '+ / −  ·  0', d: 'Zoom the axis around view time · fit all loaded.' },
+      { k: 'T', d: 'Open / close the dock Timeline.' },
+      { k: 'Space', d: 'Reserved for play / pause (later slice).' },
+    ];
+    const policy = [
+      { k: 'S-111', a: 'Nearest sample', b: 'Hide beyond one step of the run window', c: 'cbofs · no data · last 18:00Z, 6 h earlier' },
+      { k: 'S-104 forecast', a: 'Sample at or before', b: 'Hide beyond one step (6 min)', c: 'Baltimore · no data · next 06:00Z, 2 h later' },
+      { k: 'S-104 observations', a: 'Sample at or before', b: 'Hold the last value up to 30 min, then hide', c: 'Charleston · no data · last 14.12.2025 18:00Z, 9 mo earlier' },
+      { k: 'S-411 ice', a: 'Snapshot at or before', b: 'Valid until the next one, capped at 14 days after the last', c: 'Ice · 28.09 12:00Z (3 d earlier)' },
+      { k: 'S-124, S-122/127, S-57/101 dates', a: 'Not on the clock by default', b: 'Opt-in: Apply view time to charts and notices', c: 'Charts · as of today' },
+      { k: 'AIS, own ship', a: 'Always now', b: 'Not at view time: drawn at 50 %', c: 'AIS · live · not at view time' },
+    ];
+    const bs = (name, color, time, off, kind, note) => ({ name, color, time, off: kind === 'none' ? '· ' + off : off, note, hasTag: kind === 'none', ltFg: kind === 'none' ? '#B45309' : kind === 'muted' ? '#71717A' : '#3F3F46', fg: kind === 'none' ? '#92400E' : kind === 'muted' ? '#71717A' : '#09090B', offFg: kind === 'none' ? '#92400E' : '#71717A', bg: kind === 'none' ? '#FFFBEB' : 'rgba(255,255,255,.72)', bd: kind === 'none' ? '#FCD34D' : '#E4E4E7' });
+    const badgeStates = [
+      bs('cbofs', C111, '08:00Z · T+20 h', '', 'ok', 'Exact: draws the view time.'),
+      bs('Baltimore', C104, '20:06Z', '(−24 min)', 'ok', 'Within tolerance: offset from view time.'),
+      bs('cbofs', C111, 'no data', 'last 18:00Z, 6 h earlier', 'none', 'Outside tolerance: not drawn.'),
+      bs('111NL00RTM03', C111, 'no data', 'next 20.08 00:00Z, 6 wk later', 'none', 'In a gap: says where the data is.'),
+      bs('cbofs', C111, 'drawing…', '', 'muted', 'Loading after a scrub.'),
+      bs('AIS', CLIVE, 'live · not at view time', '', 'muted', 'Live source while pinned.'),
+    ];
+    const vocab = [
+      { t: 'Now', k: 'wall clock', d: 'The current time. Shown on every timeline, not only forecasts.', w: 'Dashed NOW line · relative offsets are measured from it' },
+      { t: 'View time', k: 'what the map shows', d: 'The time the map is set to. One per map session.', w: 'Readout · map stamp · thumb · blue line in lanes' },
+      { t: 'Layer time', k: 'what a layer drew', d: 'The sample each layer actually drew for the view time; may be snapped, held or missing.', w: 'Layer list · dock lane labels · HUD chip counts the missing' },
+      { t: 'Valid time', k: 'when a sample applies', d: 'Written as a time plus T+ from the run.', w: '08:00Z · T+20 h' },
+      { t: 'Run / issue time', k: 'when it was produced', d: 'Names a forecast run.', w: 'cbofs 12:00Z in range label and lanes' },
+      { t: 'Edition', k: 'freshness, not validity', d: 'Publication of a chart or dataset. Stays in the Library; not on the Timeline.', w: 'Library rows only' },
+      { t: 'Live', k: 'mode', d: 'View time follows now. Left by any scrub, step, preset or jump. Re-entered with Live, N or the map stamp.', w: 'Dark LIVE pill, green dot' },
+      { t: 'Pinned', k: 'mode', d: 'The user chose a time and it stays there as now moves on.', w: 'Outline PINNED pill + Go live' },
+      { t: 'Playing', k: 'mode (later)', d: 'Animating across a loop range. Leaves Live; returns to Pinned when stopped.', w: 'Reserved: Space, play slot left of ‹' },
+    ];
+    const answers = [
+      { n: '1', q: 'Is Live a mode, and what exits it?', rec: 'Yes. A dark LIVE pill in the strip, the HUD and the map stamp. Any user change of view time exits it: scrub, step, preset, calendar, next/previous data, clicking a chart. Loading or replacing a run does not.', why: 'Predictable: one rule. Leaving Live on step would surprise; staying Live while stepping is impossible.' },
+      { n: '2', q: 'Honest gaps; map inside a gap', rec: 'Gaps longer than max(6 h, 15 % of data time) collapse to a labelled break whose width grows with log(duration), 3.5–11 %. Shorter gaps are drawn to scale. Inside a gap each layer follows its product policy (4c) and hides past its tolerance; its layer-list row names the nearest data.', why: 'Hiding is the safe default next to navigation data. Ghosted frames read as current in screenshots.' },
+      { n: '3', q: 'Loaded vs Library-available', rec: 'Both, with Show online on by default in the lanes view. Loaded: solid. Online: dashed outline. On disk, not loaded: solid outline, no fill. Clicking a hollow band opens a small popover: run, window, size, Get / Load, Reveal in Library.', why: 'Same language as the map outlines (dashed online, solid local), so no new legend.' },
+      { n: '4', q: 'Follow the map viewport?', rec: 'Lane list yes, axis range yes, through the In map view filter. On by default once more than 6 lanes are loaded. Lanes outside fold into one row. Panning re-filters, but view time never moves.', why: 'Scenario 5 is unreadable without it; with few lanes it adds nothing.' },
+      { n: '5', q: 'Where layer time lives', rec: 'The layer list row and the dock lane label, with the same text. On the map only the view time (HUD or stamp) and, when layers are missing, the chip “No data at this time for 1 of 2 layers”, which opens the layer list. Opt-in setting: exception badges on the map for layers with no data.', why: 'Per-layer state already lives in the layer list; with 14 models, per-layer badges would cover the map.' },
+      { n: '6', q: 'Clock drives charts and notices?', rec: 'Opt-in setting "Apply view time to charts and notices", off by default. When on, S-124 and date-dependent features show as validity intervals in a Charts and notices lane group.', why: 'Mariners expect charts as of today while scrubbing tomorrow’s currents.' },
+      { n: '7', q: 'AIS and own ship when not live', rec: 'Stay at now, drawn at 50 % opacity, layer list reads "live · not at view time". Own ship is never hidden. Replay is later.', why: 'Hiding own ship is unsafe; moving it is impossible without history.' },
+      { n: '8', q: 'Dock, HUD or both; auto-open', rec: 'Both, never at once. The HUD appears whenever time data is loaded. The dock does not auto-open; it opens from the HUD button, T or the View menu, remembers lanes vs strip, and hides the HUD while open. Under 900 px wide, HUD only.', why: 'Only one small bar ever sits over the map; the dock is for planning.' },
+      { n: '9', q: 'Playback in the first pass?', rec: 'No. Reserve the slot left of ‹ and Space. Build after layer-time and loading states exist, because playback depends on them.', why: 'Debounced async rendering needs the catching-up state first.' },
+      { n: '10', q: 'Local time', rec: 'Primary in the user’s Local/UTC preference; secondary in the data-area zone when it differs (the zone of the map centre’s dataset). The tweak shows both orders.', why: 'Port-local thinking without hiding UTC.' },
+    ];
+    const slices = [
+      { k: 'Slice 0', v: '#706 quick wins: ‹ › above 50 samples; per-product tolerance replaces unbounded Nearest (4c); Now follows the clock.' },
+      { k: 'Slice 1', v: 'Live / Pinned modes, readout with offset and data-area time, Now for every timeline, map view-time stamp included in exports.' },
+      { k: 'Slice 2', v: 'Axis: zoom and pan, overview strip, size-honest gaps (4a), step menu and driver, previous/next data, keyboard (4b).' },
+      { k: 'Slice 3', v: 'Layer time in the layer list (4d), HUD chip opens it, loading state with ghost thumb. Opt-in exception badges on the map.' },
+      { k: 'Slice 4', v: 'Lanes view for loaded data, grouping product → model/station, In map view filter, Expired grey + tag.' },
+      { k: 'Slice 5', v: 'Library ↔ Timeline: online and on-disk bands from cached indexes, Get / Load / Reveal, Valid at view time facet in the Library.' },
+      { k: 'Slice 6', v: 'Time HUD: bottom-centre bar, dock toggle, message chip.' },
+      { k: 'Later', v: 'Playback and loop range, run comparison and older runs, charts and notices on the clock, chart-as-scrubber in the pick panel, voyage time.' },
+    ];
+    return { tabs, scDesc: S.desc, vocab, d1, d2, d3, presets, hudNotes, dows: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], gapRows, stepMenu, keys, policy, badgeStates, answers, slices };
+  }
+}
+</script>
+</body>
+</html>
