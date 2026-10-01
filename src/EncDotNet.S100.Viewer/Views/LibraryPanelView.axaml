@@ -272,6 +272,8 @@
                       IsVisible="{Binding SelectedNode.IsGroup, FallbackValue=False}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryChooseGroups}" Command="{Binding ChooseGroupsCommand}"
                       IsVisible="{Binding SelectedNode.CanChooseGroups, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryAddCurrents}" Command="{Binding AddCurrentsForAreaCommand}"
+                      IsVisible="{Binding CanAddCurrentsForArea}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"
                       IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryCopyUrl}" Click="OnCopySourceUrl"
@@ -783,6 +785,24 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!-- The S-102 tile in the same grid cell as an S-111 tile (#685, B7). -->
+                        <Border IsVisible="{Binding HasPairing}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                CornerRadius="6" Padding="10,8">
+                            <Grid ColumnDefinitions="18,*,Auto" ColumnSpacing="10">
+                                <views:LibrarySwatch Grid.Column="0" State="Online" Width="18" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Pairing.Title, FallbackValue=''}" FontWeight="SemiBold"
+                                               FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                    <TextBlock Text="{Binding Pairing.Detail, FallbackValue=''}" Opacity="0.65" TextWrapping="Wrap"
+                                               FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="Outline libraryCompact" VerticalAlignment="Center"
+                                        Content="{x:Static loc:Strings.Library_Pairing_Get}"
+                                        Command="{Binding Pairing.GetCommand, FallbackValue={x:Null}}"
+                                        IsVisible="{Binding Pairing.CanGet, FallbackValue=False}" />
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>

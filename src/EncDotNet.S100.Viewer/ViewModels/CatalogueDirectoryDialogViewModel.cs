@@ -461,6 +461,9 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     /// <summary>True when the edition and size chips apply (anything but a forecast feed).</summary>
     public bool HasEditionChips => !IsForecast;
 
+    /// <summary>True for a pilot service (#685, NOAA's S-104): an amber "Pilot" chip.</summary>
+    public bool IsPilot => Source.Pilot;
+
     /// <summary>True when the provider marks the catalogue's data as not for navigation (an amber chip).</summary>
     public bool IsNotForNavigation => Source.NotForNavigation;
 

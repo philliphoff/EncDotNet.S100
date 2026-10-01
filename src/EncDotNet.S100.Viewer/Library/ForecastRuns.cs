@@ -22,6 +22,20 @@ internal static class ForecastRuns
     public static TimeSpan? Horizon(CollectionItem item) =>
         S100ForecastFeedIndexer.RunOf(item) is { } run && S100ForecastFeedIndexer.ValidToOf(item) is { } to ? to - run : null;
 
+    /// <summary>
+    /// The S-102 tile in the same grid cell as an S-111 tile (#685): NOAA names
+    /// both on one tile grid, so <c>111US00_CBOFS_US4VA1DD</c> pairs with
+    /// <c>102US004VA1DD</c>. <see langword="null"/> for a name with no tile cell.
+    /// </summary>
+    public static string? BathymetryTwinOf(string tileName)
+    {
+        ArgumentNullException.ThrowIfNull(tileName);
+        var cell = tileName[(tileName.LastIndexOf('_') + 1)..];
+        return cell.Length == 8 && cell.StartsWith("US", StringComparison.Ordinal) && char.IsAsciiDigit(cell[2])
+            ? "102US00" + cell[2..]
+            : null;
+    }
+
     /// <summary>"30.09.2026 12:00Z" (UTC).</summary>
     public static string FormatRun(DateTimeOffset time) =>
         time.UtcDateTime.ToString("d", CultureInfo.CurrentCulture) + " " + time.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z";

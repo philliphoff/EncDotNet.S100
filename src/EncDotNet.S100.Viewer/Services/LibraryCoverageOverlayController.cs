@@ -139,12 +139,21 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             ? current
             : LazyCellGate.ScaleDenominator(tap.Resolution, tap.Position.Latitude);
 
-        // Zoomed out, a tap on an area selects its node (the list follows).
-        if (AreaHit(Areas(_panel.Items, scale), tap.Position) is { } area)
+        // A forecast model's domain (E1): list everything under the point, the
+        // smallest domain's model selected. Zoomed out, an S-102 area selects its node.
+        var areaHits = AreaHits(Areas(_panel.Items, scale), tap.Position);
+        if (areaHits.Where(a => a.Area.Model is not null).ToArray() is { Length: > 0 } models)
+        {
+            _lastTap = null;
+            _panel.ListModelsAt(tap.Position, models.Select(m => (m.SourceId, m.Area.Model!)).ToArray());
+            return true;
+        }
+
+        if (areaHits.FirstOrDefault() is { Area: { } area } hit)
         {
             _lastTap = null;
             _panel.ClearTap();
-            _panel.SelectArea(area.SourceId, area.Area.Folder);
+            _panel.SelectArea(hit.SourceId, area.Folder);
             return true;
         }
 
@@ -191,12 +200,17 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             && CoverageGeometry.IsVisibleAtScale(i.Item, scale)
             && !IsInArea(i, scale));
 
-    /// <summary>True when <paramref name="item"/> is drawn as part of its area at <paramref name="scale"/>, not on its own.</summary>
+    /// <summary>
+    /// True when <paramref name="item"/> is drawn as part of an area at
+    /// <paramref name="scale"/>, not on its own: a forecast model's tile (its
+    /// domain, at every scale), or — zoomed out — a remote catalogue's tile (its area).
+    /// </summary>
     private static bool IsInArea(LibraryItemViewModel item, double scale) =>
-        scale > AreaScaleThreshold
-        && item.QuietUpdates
-        && item.Source.Index is not null
-        && item.Item.Properties.ContainsKey(EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderProperty);
+        item.Source.Index is not null
+        && (item.IsForecast && ForecastRuns.ModelOf(item.Item) is not null
+            || (scale > AreaScaleThreshold
+                && item.QuietUpdates
+                && item.Item.Properties.ContainsKey(EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderProperty)));
 
     /// <summary>
     /// The areas drawn at <paramref name="scale"/>: one per folder of a remote
@@ -205,24 +219,30 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// </summary>
     internal static IReadOnlyList<(Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)> Areas(
         IEnumerable<LibraryItemViewModel> listed, double scale) =>
-        listed.Where(i => !i.IsGroupHeader && IsInArea(i, scale))
-            .GroupBy(i => (i.Source, Folder: EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderOf(i.Item)))
-            .Select(g => (g.Key.Source.Id, Area: CoverageAreas.Get(g.Key.Source.Index!, g.Key.Folder),
+        listed
+            // A collapsed forecast model lists only its row: its tiles make its domain.
+            .SelectMany(i => i.IsModelHeader ? i.Members : i.IsGroupHeader ? [] : [i])
+            .Distinct()
+            .Where(i => IsInArea(i, scale))
+            .GroupBy(i => (i.Source, Model: i.IsForecast ? ForecastRuns.ModelOf(i.Item) : null,
+                Folder: EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderOf(i.Item)))
+            .Select(g => (g.Key.Source.Id,
+                Area: g.Key.Model is { } model
+                    ? CoverageAreas.GetModel(g.Key.Source.Index!, model)
+                    : CoverageAreas.Get(g.Key.Source.Index!, g.Key.Folder),
                 Items: (IReadOnlyList<LibraryItemViewModel>)g.ToArray()))
             .Where(a => a.Area is not null)
             .Select(a => (a.Id, a.Area!, a.Items))
             .ToArray();
 
-    /// <summary>The smallest area containing <paramref name="position"/>, if any.</summary>
-    private static (Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)? AreaHit(
+    /// <summary>The areas containing <paramref name="position"/>, smallest first.</summary>
+    private static IReadOnlyList<(Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)> AreaHits(
         IReadOnlyList<(Guid SourceId, LibraryArea Area, IReadOnlyList<LibraryItemViewModel> Items)> areas, GeoPosition position)
     {
         if (areas.Count == 0)
-            return null;
+            return [];
         var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
-        return areas.Where(a => a.Area.Contains(x, y)).OrderBy(a => a.Area.Shape.Area)
-            .Select(a => ((Guid, LibraryArea, IReadOnlyList<LibraryItemViewModel>)?)a)
-            .FirstOrDefault();
+        return areas.Where(a => a.Area.Contains(x, y)).OrderBy(a => a.Area.Shape.Area).ToArray();
     }
 
     /// <summary>
@@ -231,6 +251,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// </summary>
     internal static LibraryPrimaryAvailability AreaState(IReadOnlyList<LibraryItemViewModel> items) =>
         items.Any(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Update) ? LibraryPrimaryAvailability.Update
+        : items.Any(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Expired) ? LibraryPrimaryAvailability.Expired
         : items.All(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local) ? LibraryPrimaryAvailability.Local
         : LibraryPrimaryAvailability.Online;
 

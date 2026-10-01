@@ -87,6 +87,25 @@
       ]
     },
     {
+      "id": "noaa-s104",
+      "name": "NOAA S-104 Water level",
+      "provider": "NOAA Office of Coast Survey",
+      "region": ["North America", "United States"],
+      "format": "s100ForecastModels",
+      "catalogUri": "https://noaa-s104-pds.s3.amazonaws.com/ed2.0.0/",
+      "homepage": "https://registry.opendata.aws/noaa-s104/",
+      "coverage": "polygons",
+      "editions": true,
+      "sizes": true,
+      "note": "Pilot · Charleston only. Water level forecasts from NOAA's S-104 pilot; the catalogue lists one forecast run, which may be long past.",
+      "product": "S-104",
+      "notForNavigation": true,
+      "pilot": true,
+      "models": [
+        { "id": "charleston", "name": "Charleston Harbor", "cadenceHours": 24, "horizonHours": 180, "catalogue": "_CATALOG/CATALOG.XML" }
+      ]
+    },
+    {
       "id": "chartcatalogs-at-ienc",
       "name": "Inland ENC — Austria (Danube)",
       "provider": "chartcatalogs community list",

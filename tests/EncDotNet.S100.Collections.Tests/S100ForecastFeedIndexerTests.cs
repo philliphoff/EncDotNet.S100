@@ -126,6 +126,43 @@ public sealed class S100ForecastFeedIndexerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_model_may_keep_its_catalogue_elsewhere_like_the_S104_pilot()
+    {
+        var s104 = KnownCatalogueSources.Find("noaa-s104")!;
+        var charleston = Assert.Single(s104.Models);
+        Assert.True(s104.Pilot);
+        Assert.Equal("_CATALOG/CATALOG.XML", charleston.CataloguePath);
+        Assert.Equal(new Uri("https://noaa-s104-pds.s3.amazonaws.com/ed2.0.0/_CATALOG/CATALOG.XML"),
+            S100ForecastFeedIndexer.CatalogUri(s104.CatalogUri, charleston));
+
+        var indexer = new S100ForecastFeedIndexer(new HttpClient(new PilotServer()), _temp.Path);
+        var index = await indexer.IndexAsync(new S100ForecastFeedSource(Guid.NewGuid(), null, s104.CatalogUri, [charleston]),
+            null, CancellationToken.None);
+
+        Assert.DoesNotContain(index.Diagnostics, d => d.Severity >= IndexDiagnosticSeverity.Warning);
+        Assert.Equal(["104US004SC1BO", "104US004SC1BP"], index.Items.Select(i => i.Name).Order());  // the fixture's two of four
+        var tile = index.Items.Single(i => i.Name == "104US004SC1BO");
+        Assert.Equal("charleston/104US004SC1BO", tile.Key);
+        Assert.Equal("S-104", tile.ProductSpec);
+        var run = new DateTimeOffset(2025, 12, 17, 12, 0, 0, TimeSpan.Zero);
+        Assert.Equal(run, S100ForecastFeedIndexer.RunOf(tile));
+        // The catalogue's own temporal extent ends 180 h after the run.
+        Assert.Equal(new DateTimeOffset(2025, 12, 25, 0, 0, 0, TimeSpan.Zero), S100ForecastFeedIndexer.ValidToOf(tile));
+    }
+
+    /// <summary>Serves the S-104 pilot's catalogue (bucket listings are refused).</summary>
+    private sealed class PilotServer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("/_CATALOG/CATALOG.XML", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(File.ReadAllBytes(TestPaths.Fixture("noaa-s104-catalog.xml"))),
+                }
+                : new HttpResponseMessage(HttpStatusCode.Forbidden));
+    }
+
+    [Fact]
     public void A_forecast_feed_without_models_is_skipped()
     {
         var json = """

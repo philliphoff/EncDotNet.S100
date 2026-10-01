@@ -145,6 +145,9 @@
                                                         IsVisible="{Binding HasEditionChips}">
                                                     <TextBlock Text="{Binding SizesChip}" />
                                                 </Border>
+                                                <Border Classes="chip limited" Margin="0,0,4,0" IsVisible="{Binding IsPilot}">
+                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_Pilot}" />
+                                                </Border>
                                                 <Border Classes="chip" Margin="0,0,4,0" IsVisible="{Binding IsForecast}">
                                                     <TextBlock Text="{x:Static loc:Strings.Library_Chip_Forecast}" />
                                                 </Border>

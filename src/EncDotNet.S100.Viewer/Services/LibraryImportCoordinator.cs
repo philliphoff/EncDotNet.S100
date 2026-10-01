@@ -125,6 +125,21 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         await load;
     }
 
+    public async Task AddCurrentsForAreaAsync(GeoBounds area, Guid? targetCollectionId)
+    {
+        if (KnownCatalogueSources.All.FirstOrDefault(s => s.Format == KnownCatalogueFormat.S100ForecastModels && s.Product == "S-111")
+            is not { } currents)
+        {
+            return;
+        }
+
+        var wizard = _wizardFactory();
+        var load = wizard.StartAtIncludeAsync(currents, targetCollectionId);
+        ShowWizard(wizard);
+        await load;
+        wizard.Scope?.PreselectModelsCovering(area);
+    }
+
     private void ShowWizard(AddOnlineCatalogueWizardViewModel wizard)
     {
         wizard.Closed += (_, added) =>

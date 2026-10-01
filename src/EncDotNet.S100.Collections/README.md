@@ -71,7 +71,8 @@ To add a catalogue:
   - `sizes`: whether it lists download sizes (or, for an S-100 catalogue in an S3 bucket, whether they can be listed)
   - `product` (optional): the one product the catalogue publishes, e.g. `S-102`
   - `notForNavigation` (optional): `true` when the provider marks all its data as not for navigation
-  - `models` (for `s100ForecastModels`): each model's `id`, `name` (water body), `cadenceHours` and `horizonHours`, measured from the published runs
+  - `models` (for `s100ForecastModels`): each model's `id`, `name` (water body), `cadenceHours` and `horizonHours`, measured from the published runs, and its `catalogue` path when it is not `<id>/CATALOG.XML`
+  - `pilot` (optional): `true` for a pilot service, which may cover little and lapse
 
   These drive the quality chips users see.
 

@@ -50,6 +50,35 @@ internal sealed partial class AddToLibraryDialogViewModel
         }
     }
 
+    /// <summary>True when there is a download shape to choose (more than one model; S-104's pilot has one, as tiles).</summary>
+    public bool HasForecastShapes => IsS100Forecast && _forecastModels is { Count: > 1 };
+
+    /// <summary>
+    /// "Forecast ended 25.12.2025; no newer run published …" when every model's
+    /// latest run has ended (handoff A4, the S-104 pilot); otherwise <see langword="null"/>.
+    /// </summary>
+    public string? ForecastEndedNote
+    {
+        get
+        {
+            if (!IsS100Forecast || _forecastModels is not { Count: > 0 } models
+                || models.Any(m => m.Run is null))
+            {
+                return null;
+            }
+
+            var ends = models.Select(m => m.Run!.Value.AddHours(m.Model.HorizonHours)).ToArray();
+            var last = ends.Max();
+            return last > _time.GetUtcNow()
+                ? null
+                : string.Format(CultureInfo.CurrentCulture, Strings.Wizard_ForecastEndedFormat,
+                    last.UtcDateTime.ToString("d", CultureInfo.CurrentCulture));
+        }
+    }
+
+    /// <summary>True when <see cref="ForecastEndedNote"/> is shown.</summary>
+    public bool HasForecastEndedNote => ForecastEndedNote is not null;
+
     /// <summary>What the chosen shape means.</summary>
     public string ForecastShapeHint => IsRegional ? Strings.Wizard_ForecastShapeRegionalHint : Strings.Wizard_ForecastShapeTilesHint;
 
@@ -85,6 +114,9 @@ internal sealed partial class AddToLibraryDialogViewModel
 
             RefreshForecastDetails();
             UpdateSelection();
+            OnPropertyChanged(nameof(HasForecastShapes));
+            OnPropertyChanged(nameof(ForecastEndedNote));
+            OnPropertyChanged(nameof(HasForecastEndedNote));
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
         {
@@ -166,6 +198,22 @@ internal sealed partial class AddToLibraryDialogViewModel
             <= 3 => string.Join(", ", names),
             _ => string.Format(CultureInfo.CurrentCulture, Strings.Library_AndMoreFormat, string.Join(", ", names.Take(2)), names.Length - 2),
         };
+    }
+
+    /// <summary>
+    /// Ticks the models whose tiles reach into <paramref name="area"/> (an S-102
+    /// area, handoff B8), leaving out a regional model when a smaller ticked one
+    /// already covers the area's tiles.
+    /// </summary>
+    public void PreselectModelsCovering(GeoBounds area)
+    {
+        if (_forecastModels is null)
+            return;
+
+        var reaching = _forecastModels.Where(m => m.TileBounds.Any(t => t.Intersects(area))).ToArray();
+        var chosen = reaching.Where(m => !reaching.Any(other => other != m && m.Covers(other))).ToArray();
+        foreach (var option in ForecastModels)
+            option.IsSelected = chosen.Any(m => m.Model.Id == option.Value);
     }
 
     /// <summary>The source for the chosen models and shape.</summary>

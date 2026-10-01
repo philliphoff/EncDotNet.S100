@@ -16,6 +16,9 @@ namespace EncDotNet.S100.Viewer.Library;
 /// <param name="Rings">The shape's rings (exteriors and holes), for drawing.</param>
 internal sealed record LibraryArea(string Folder, Geometry Shape, IReadOnlyList<(double X, double Y)[]> Rings)
 {
+    /// <summary>For a forecast model's domain (#685, handoff E1), the model (e.g. <c>cbofs</c>); otherwise <see langword="null"/>.</summary>
+    public string? Model { get; init; }
+
     /// <summary>True when the Web Mercator point (<paramref name="x"/>, <paramref name="y"/>) lies in the area.</summary>
     public bool Contains(double x, double y) => Shape.Contains(Shape.Factory.CreatePoint(new Coordinate(x, y)));
 
@@ -39,15 +42,31 @@ internal static class CoverageAreas
     {
         ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(folder);
+        return Get(index, "folder:" + folder, folder, null, i => RemoteS100Catalogue.FolderOf(i) == folder);
+    }
 
+    /// <summary>
+    /// The domain of the forecast <paramref name="model"/> in <paramref name="index"/>:
+    /// the union of its tiles (or of its one file's coverage). <see langword="null"/>
+    /// when nothing in it has coverage.
+    /// </summary>
+    public static LibraryArea? GetModel(SourceIndex index, string model)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+        ArgumentNullException.ThrowIfNull(model);
+        return Get(index, "model:" + model, model, model, i => ForecastRuns.ModelOf(i) == model);
+    }
+
+    private static LibraryArea? Get(SourceIndex index, string cacheKey, string folder, string? model, Func<CollectionItem, bool> member)
+    {
         var areas = Cache.GetValue(index, static _ => new Dictionary<string, LibraryArea>(StringComparer.Ordinal));
         lock (areas)
         {
-            if (areas.TryGetValue(folder, out var cached))
+            if (areas.TryGetValue(cacheKey, out var cached))
                 return cached;
 
             var polygons = index.Items
-                .Where(i => RemoteS100Catalogue.FolderOf(i) == folder)
+                .Where(member)
                 .SelectMany(Exteriors)
                 .ToArray();
             if (polygons.Length == 0)
@@ -63,8 +82,8 @@ internal static class CoverageAreas
                 shape = Factory.BuildGeometry(polygons).Buffer(0);
             }
 
-            var area = new LibraryArea(folder, shape, RingsOf(shape));
-            areas[folder] = area;
+            var area = new LibraryArea(folder, shape, RingsOf(shape)) { Model = model };
+            areas[cacheKey] = area;
             return area;
         }
     }

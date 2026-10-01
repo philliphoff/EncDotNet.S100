@@ -469,6 +469,14 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
                     new(item.Key, item.Name ?? item.Key, Size((item.Location as RemoteItemLocation)?.SizeBytes)),
                 AddToLibraryKind.S100Catalogue when _s100Catalogue?.Items is [var item] =>
                     new(item.Key, item.Title ?? item.Name, string.Empty),
+                AddToLibraryKind.S100Forecast when _forecastModels is [var model] => new(
+                    model.Model.Id,
+                    model.Model.Name,
+                    string.Join(" · ", new[]
+                    {
+                        string.Format(CultureInfo.CurrentCulture, Strings.Wizard_TilesFormat, model.TileCount),
+                        model.TileBytes is { } bytes ? LibraryItemViewModel.FormatBytes(bytes) : null,
+                    }.OfType<string>())),
                 _ => null,
             };
         }

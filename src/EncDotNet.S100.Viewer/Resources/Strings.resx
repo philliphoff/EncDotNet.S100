@@ -3723,4 +3723,23 @@
   <data name="TimelinePanel_EveryMinutesFormat" xml:space="preserve">
     <value>every {0:N0} min</value>
   </data>
+  <data name="Library_Chip_Pilot" xml:space="preserve">
+    <value>Pilot</value>
+  </data>
+  <data name="Wizard_ForecastEndedFormat" xml:space="preserve">
+    <value>Forecast ended {0}; no newer run published. Once downloaded, it shows as Expired until NOAA publishes a new run, which Refresh will find.</value>
+    <comment>{0}: the date the latest run's forecast window ended</comment>
+  </data>
+  <data name="Menu_LibraryAddCurrents" xml:space="preserve">
+    <value>Add currents for this area</value>
+  </data>
+  <data name="Library_Pairing_Bathymetry" xml:space="preserve">
+    <value>Bathymetry for this tile</value>
+  </data>
+  <data name="Library_Pairing_SameCell" xml:space="preserve">
+    <value>same grid cell</value>
+  </data>
+  <data name="Library_Pairing_Get" xml:space="preserve">
+    <value>Get</value>
+  </data>
 </root>
