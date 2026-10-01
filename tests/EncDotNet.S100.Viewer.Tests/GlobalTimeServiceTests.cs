@@ -71,6 +71,7 @@ public class GlobalTimeServiceTests
         Assert.Equal(1, rangeChanged);
         Assert.Equal(time, currentChanged);
         Assert.Equal(time, service.CurrentTime);
+        Assert.Equal([new MapsuiMapTimedDataset("timed", time, time)], service.TimedDatasets);
     }
 
     [Fact]

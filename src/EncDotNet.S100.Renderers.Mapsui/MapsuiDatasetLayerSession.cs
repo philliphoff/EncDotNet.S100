@@ -1771,6 +1771,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
 
         var segments = ComputeCoverageSegments(minimum, maximum);
+        var datasets = _entries.Values
+            .Where(entry => entry.TimePolicy is { AvailableTimes.Count: > 0 })
+            .Select(entry => new MapsuiMapTimedDataset(
+                entry.Dataset.Name,
+                entry.TimePolicy!.AvailableTimes.Min(),
+                entry.TimePolicy.AvailableTimes.Max()))
+            .ToArray();
         _time = new MapsuiMapTimeSnapshot
         {
             Minimum = minimum,
@@ -1778,11 +1785,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             Current = current,
             Samples = samples,
             CoverageSegments = segments,
+            Datasets = datasets,
         };
         var rangeChanged = previous.Minimum != minimum
             || previous.Maximum != maximum
             || !previous.Samples.SequenceEqual(samples)
-            || !previous.CoverageSegments.SequenceEqual(segments);
+            || !previous.CoverageSegments.SequenceEqual(segments)
+            || !previous.Datasets.SequenceEqual(datasets);
         return (rangeChanged, previous.Current != current ? current : null);
     }
 
@@ -1842,6 +1851,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             Current = current,
             Samples = source.Samples,
             CoverageSegments = source.CoverageSegments,
+            Datasets = source.Datasets,
         };
 
     private void RaiseTimeEvents(bool rangeChanged, DateTime? changedCurrent)

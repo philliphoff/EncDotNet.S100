@@ -18,7 +18,10 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
 {
     private readonly GlobalTimeService _service;
     private readonly ITimeFormatProvider? _timeFormat;
+    private readonly TimeProvider _time;
+    private readonly ITimer? _clock;
     private TimelineAxisMap? _axis;
+    private DateTime? _lastCurrent;
 
     public TimelineViewModel(GlobalTimeService service)
         : this(service, timeFormat: null)
@@ -26,23 +29,42 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     }
 
     public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat)
+        : this(service, timeFormat, TimeProvider.System)
+    {
+    }
+
+    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time)
+        : this(service, timeFormat, time, PostToUiThread)
+    {
+    }
+
+    internal TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, Action<Action> dispatch)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _service = service;
         _timeFormat = timeFormat;
+        _time = time;
 
         PreviousStepCommand = new RelayCommand(StepPrevious, CanStepPrevious);
         NextStepCommand = new RelayCommand(StepNext, CanStepNext);
+        NowCommand = new RelayCommand(GoToNow, () => IsNowInCoverage);
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
 
         _service.RangeChanged += OnRangeChanged;
         _service.CurrentTimeChanged += _ =>
         {
+            _lastCurrent = _service.CurrentTime;
             OnPropertyChanged(nameof(SliderValue));
             OnPropertyChanged(nameof(CurrentTimeLabel));
             ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
             ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
         };
+
+        // A forecast ages by the minute: the Now marker, the readout's
+        // "forecast ended" and the Now button follow the clock (#685).
+        _clock = _time.CreateTimer(_ => dispatch(RaiseNow), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 
         if (_timeFormat is not null)
         {
@@ -71,6 +93,7 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
 
     private void OnRangeChanged()
     {
+        var previous = _lastCurrent;
         // Rebuild the gap-collapsing axis from the new aggregate range and
         // coverage segments before notifying slider/band bindings.
         _axis = _service.MinTime is { } min && _service.MaxTime is { } max
@@ -94,6 +117,18 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         OnPropertyChanged(nameof(CoverageBands));
         ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
         ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
+        RaiseNow();
+
+        // A forecast starts at Now, not at its first step (D6: step one of a
+        // 12:00Z run is already hours old); when a run is replaced, the chosen
+        // time is kept if the new run covers it, else the clock moves to Now (D5).
+        if (IsForecastTimeline && IsNowInCoverage
+            && (becameActive || (previous is { } kept && !IsCovered(kept))))
+        {
+            GoToNow();
+        }
+
+        _lastCurrent = _service.CurrentTime;
 
         if (becameActive)
         {
@@ -284,6 +319,121 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         }
     }
 
+    /// <summary>
+    /// Jumps to the step nearest the current time (or, when the slider runs
+    /// free, to the current time itself). Available while now lies inside a
+    /// loaded window (D2).
+    /// </summary>
+    public ICommand NowCommand { get; }
+
+    /// <summary>
+    /// True when the timeline spans forecast runs (a loaded dataset's name
+    /// carries a run time, e.g. <c>111US00_CBOFS_20260930T18Z_…</c>): the Now
+    /// marker, the Now button and run names are shown (#685).
+    /// </summary>
+    public bool IsForecastTimeline => Runs.Count > 0;
+
+    /// <summary>The forecast runs loaded, by model, e.g. "cbofs 12:00Z".</summary>
+    public IReadOnlyList<string> Runs => _service.TimedDatasets
+        .Select(d => ForecastRunNames.Describe(d.Name))
+        .OfType<string>()
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+
+    private DateTime Now => _time.GetUtcNow().UtcDateTime;
+
+    /// <summary>True when now lies inside a loaded window (a coverage segment).</summary>
+    public bool IsNowInCoverage => IsForecastTimeline && IsCovered(Now);
+
+    private bool IsCovered(DateTime time) =>
+        _service.CoverageSegments.Count > 0
+            ? _service.CoverageSegments.Any(s => time >= s.Start && time <= s.End)
+            : _service.MinTime is { } min && _service.MaxTime is { } max && time >= min && time <= max;
+
+    /// <summary>True when the Now marker is drawn on the axis (now lies within the range).</summary>
+    public bool IsNowInRange =>
+        IsForecastTimeline && _service.MinTime is { } min && _service.MaxTime is { } max && Now >= min && Now <= max;
+
+    /// <summary>The Now marker's position on the axis (0–1); NaN when not drawn.</summary>
+    public double NowPosition => IsNowInRange && Axis is { } axis ? axis.ToPosition(Now) : double.NaN;
+
+    /// <summary>True when now lies after every loaded window: every loaded forecast has ended (D3).</summary>
+    public bool IsForecastEnded => IsForecastTimeline && _service.MaxTime is { } max && Now > max;
+
+    /// <summary>True when now lies before the loaded range (data from the future, e.g. a run not yet valid).</summary>
+    public bool IsNowBeforeRange => IsForecastTimeline && _service.MinTime is { } min && Now < min;
+
+    /// <summary>"NOW 3 H LATER ›" (past the range) or "‹ NOW 2 H EARLIER" (before it); empty when in range.</summary>
+    public string NowEdgeLabel =>
+        IsForecastEnded && _service.MaxTime is { } max
+            ? string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_NowLaterFormat, Duration(Now - max)).ToUpper(CultureInfo.CurrentCulture)
+        : IsNowBeforeRange && _service.MinTime is { } min
+            ? string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_NowEarlierFormat, Duration(min - Now)).ToUpper(CultureInfo.CurrentCulture)
+        : string.Empty;
+
+    /// <summary>"forecast ended 3 h ago", after the readout, once every loaded run has ended.</summary>
+    public string ForecastEndedText => IsForecastEnded && _service.MaxTime is { } max
+        ? string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_ForecastEndedFormat, Duration(Now - max))
+        : string.Empty;
+
+    /// <summary>The coverage band's opacity: dimmed once every loaded forecast has ended.</summary>
+    public double BandOpacity => IsForecastEnded ? 0.45 : 1.0;
+
+    private void GoToNow()
+    {
+        var now = Now;
+        var samples = _service.AllSamples;
+        if (IsSnapToTickEnabled && samples.Count > 0)
+            now = samples.MinBy(s => Math.Abs((s - now).Ticks));
+        _service.SetCurrentTime(now);
+    }
+
+    private void RaiseNow()
+    {
+        OnPropertyChanged(nameof(IsForecastTimeline));
+        OnPropertyChanged(nameof(IsNowInRange));
+        OnPropertyChanged(nameof(NowPosition));
+        OnPropertyChanged(nameof(IsForecastEnded));
+        OnPropertyChanged(nameof(IsNowBeforeRange));
+        OnPropertyChanged(nameof(NowEdgeLabel));
+        OnPropertyChanged(nameof(ForecastEndedText));
+        OnPropertyChanged(nameof(BandOpacity));
+        OnPropertyChanged(nameof(RangeLabel));
+        ((RelayCommand)NowCommand).NotifyCanExecuteChanged();
+    }
+
+    /// <summary>"3 h", "2 d", "45 min".</summary>
+    private static string Duration(TimeSpan span)
+    {
+        var c = CultureInfo.CurrentCulture;
+        return span.TotalHours >= 72 ? string.Format(c, Strings.TimelinePanel_DaysFormat, (int)span.TotalDays)
+            : span.TotalHours >= 1 ? string.Format(c, Strings.TimelinePanel_HoursFormat, (int)span.TotalHours)
+            : string.Format(c, Strings.TimelinePanel_MinutesFormat, Math.Max(1, (int)span.TotalMinutes));
+    }
+
+    /// <summary>"hourly", "every 3 h", "every 10 min": the most common step between samples.</summary>
+    private string? StepText()
+    {
+        var samples = _service.AllSamples;
+        if (samples.Count < 2)
+            return null;
+        var step = samples.Zip(samples.Skip(1), (a, b) => b - a)
+            .GroupBy(d => d).OrderByDescending(g => g.Count()).First().Key;
+        var c = CultureInfo.CurrentCulture;
+        return step == TimeSpan.FromHours(1) ? Strings.TimelinePanel_Hourly
+            : step.TotalHours >= 1 && step.TotalHours == Math.Floor(step.TotalHours)
+                ? string.Format(c, Strings.TimelinePanel_EveryHoursFormat, (int)step.TotalHours)
+            : string.Format(c, Strings.TimelinePanel_EveryMinutesFormat, Math.Max(1, (int)step.TotalMinutes));
+    }
+
+    private static void PostToUiThread(Action action)
+    {
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            action();
+        else
+            Avalonia.Threading.Dispatcher.UIThread.Post(action);
+    }
+
     /// <summary>Display text for the currently selected time, formatted via <see cref="TimeFormatting"/>.</summary>
     public string CurrentTimeLabel =>
         _service.CurrentTime is { } t
@@ -299,6 +449,25 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
             if (samples.Count == 0 || _service.MinTime is null || _service.MaxTime is null)
                 return Strings.TimelinePanel_NoData;
             var fmt = ActiveFormat;
+            if (IsForecastTimeline)
+            {
+                // D4: "30.09 12:00 → 02.10 18:00 UTC · 55 h · cbofs 12:00Z, nyofs 18:00Z · hourly".
+                var runs = Runs;
+                var parts = new List<string>(5)
+                {
+                    $"{TimeFormatting.Format(_service.MinTime.Value, fmt)} → {TimeFormatting.Format(_service.MaxTime.Value, fmt)}",
+                    Duration(_service.MaxTime.Value - _service.MinTime.Value),
+                    runs.Count <= 3
+                        ? string.Join(", ", runs)
+                        : string.Format(CultureInfo.CurrentCulture, Strings.Library_AndMoreFormat, string.Join(", ", runs.Take(2)), runs.Count - 2),
+                };
+                if (StepText() is { } step)
+                    parts.Add(step);
+                if (IsForecastEnded)
+                    parts.Add(Strings.TimelinePanel_RefreshForRuns);
+                return string.Join(" · ", parts);
+            }
+
             return string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.TimelinePanel_Range,

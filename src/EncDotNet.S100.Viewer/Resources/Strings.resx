@@ -3681,4 +3681,46 @@
   <data name="Library_Chip_LatestRunOnly" xml:space="preserve">
     <value>Latest run only</value>
   </data>
+  <data name="TimelinePanel_NowLaterFormat" xml:space="preserve">
+    <value>Now {0} later ›</value>
+    <comment>Edge label when now lies after the timeline; {0}: a duration, e.g. "3 h". Shown upper case.</comment>
+  </data>
+  <data name="TimelinePanel_NowEarlierFormat" xml:space="preserve">
+    <value>‹ Now {0} earlier</value>
+    <comment>Edge label when now lies before the timeline; {0}: a duration. Shown upper case.</comment>
+  </data>
+  <data name="TimelinePanel_Now" xml:space="preserve">
+    <value>Now</value>
+  </data>
+  <data name="TimelinePanel_NowLabel" xml:space="preserve">
+    <value>NOW</value>
+  </data>
+  <data name="Tooltip_TimelineNow" xml:space="preserve">
+    <value>Go to the step nearest the current time</value>
+  </data>
+  <data name="TimelinePanel_ForecastEndedFormat" xml:space="preserve">
+    <value>forecast ended {0} ago</value>
+    <comment>{0}: a duration, e.g. "3 h"</comment>
+  </data>
+  <data name="TimelinePanel_RefreshForRuns" xml:space="preserve">
+    <value>Refresh the Library to look for newer runs</value>
+  </data>
+  <data name="TimelinePanel_HoursFormat" xml:space="preserve">
+    <value>{0:N0} h</value>
+  </data>
+  <data name="TimelinePanel_DaysFormat" xml:space="preserve">
+    <value>{0:N0} d</value>
+  </data>
+  <data name="TimelinePanel_MinutesFormat" xml:space="preserve">
+    <value>{0:N0} min</value>
+  </data>
+  <data name="TimelinePanel_Hourly" xml:space="preserve">
+    <value>hourly</value>
+  </data>
+  <data name="TimelinePanel_EveryHoursFormat" xml:space="preserve">
+    <value>every {0:N0} h</value>
+  </data>
+  <data name="TimelinePanel_EveryMinutesFormat" xml:space="preserve">
+    <value>every {0:N0} min</value>
+  </data>
 </root>

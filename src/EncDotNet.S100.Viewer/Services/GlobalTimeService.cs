@@ -32,6 +32,9 @@ internal sealed class GlobalTimeService
     /// </summary>
     public IReadOnlyList<CoverageSegment> CoverageSegments { get; private set; } = [];
 
+    /// <summary>The registered datasets with time samples, and the span each covers.</summary>
+    public IReadOnlyList<MapsuiMapTimedDataset> TimedDatasets => _snapshot.Datasets;
+
     /// <summary>Raised whenever the aggregate timeline range changes.</summary>
     public event Action? RangeChanged;
 
@@ -86,6 +89,7 @@ internal sealed class GlobalTimeService
             Current = clamped,
             Samples = _snapshot.Samples,
             CoverageSegments = _snapshot.CoverageSegments,
+            Datasets = _snapshot.Datasets,
         };
         CurrentTimeChanged?.Invoke(clamped);
     }
