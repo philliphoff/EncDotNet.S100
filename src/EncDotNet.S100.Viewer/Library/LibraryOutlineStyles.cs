@@ -21,6 +21,13 @@ internal enum LibraryPrimaryAvailability
 
     /// <summary>The referenced file has moved or been deleted.</summary>
     Missing,
+
+    /// <summary>
+    /// On disk, with a newer edition online — drawn in amber for sources whose
+    /// updates are summarised rather than tagged on each dataset (remote S-100
+    /// catalogues, where nearly every tile is reissued each quarter; #685).
+    /// </summary>
+    Update,
 }
 
 /// <summary>A coverage outline's stroke: colour, width in pixels, dash pattern in pixels, and fill opacity.</summary>
@@ -49,6 +56,8 @@ internal static class LibraryOutlineStyles
 
     public static LibraryOutlineStyle Missing { get; } = new(Color.FromRgb(0xc0, 0x50, 0x4d), 1.2, [3f, 2f], 0);
 
+    public static LibraryOutlineStyle Update { get; } = new(Color.FromRgb(0xd9, 0x77, 0x06), 1.2, null, 0);
+
     /// <summary>The selected dataset's line width (drawn in the accent colour).</summary>
     public const double SelectedWidth = 2.0;
 
@@ -73,6 +82,7 @@ internal static class LibraryOutlineStyles
         LibraryPrimaryAvailability.Local => Local,
         LibraryPrimaryAvailability.Online => Online,
         LibraryPrimaryAvailability.Missing => Missing,
+        LibraryPrimaryAvailability.Update => Update,
         _ => Listed,
     };
 

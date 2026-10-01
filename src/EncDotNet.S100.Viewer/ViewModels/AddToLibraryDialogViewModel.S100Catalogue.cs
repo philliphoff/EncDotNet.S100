@@ -309,13 +309,10 @@ internal sealed partial class AddToLibraryDialogViewModel
     }
 
     /// <summary>"Port 4 m": the purpose and its usual grid resolution.</summary>
-    private static string PurposeLabel(S100CataloguePurpose purpose) => purpose.GridResolution is { } metres
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_PurposeResolutionFormat, PurposeName(purpose.Value), metres)
-        : PurposeName(purpose.Value);
+    private static string PurposeLabel(S100CataloguePurpose purpose) =>
+        Library.NavigationPurposes.Label(purpose.Value, purpose.GridResolution);
 
-    /// <summary>The catalogue's purpose code as a name ("port" → "Port").</summary>
-    private static string PurposeName(string value) =>
-        value.Length == 0 ? value : char.ToUpper(value[0], CultureInfo.CurrentCulture) + value[1..];
+    private static string PurposeName(string value) => Library.NavigationPurposes.Name(value);
 
     private static string JoinAnd(IReadOnlyList<string> parts) => parts.Count switch
     {

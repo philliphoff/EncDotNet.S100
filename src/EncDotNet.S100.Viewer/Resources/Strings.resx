@@ -3474,4 +3474,49 @@
   <data name="Wizard_Review_NotForNavigation" xml:space="preserve">
     <value>Not for navigation</value>
   </data>
+  <data name="Library_EditionNewerOnlineFormat" xml:space="preserve">
+    <value>Ed {0} → Ed {1} online</value>
+    <comment>{0}: the downloaded edition; {1}: the newer edition online</comment>
+  </data>
+  <data name="Library_EditionOnlineFormat" xml:space="preserve">
+    <value>Ed {0} online</value>
+    <comment>A newer edition {0} is online (the downloaded edition is unknown)</comment>
+  </data>
+  <data name="Library_BulkUpdatesFormat" xml:space="preserve">
+    <value>{0:N0} updates · {1}</value>
+    <comment>{0}: downloaded datasets with a newer edition online; {1}: their download size</comment>
+  </data>
+  <data name="Library_BulkUpdatesScopeFormat" xml:space="preserve">
+    <value>{0:N0} of {1:N0} local · newer editions online</value>
+  </data>
+  <data name="Library_UpdateDownloadedFormat" xml:space="preserve">
+    <value>Update {0:N0}</value>
+  </data>
+  <data name="Library_BulkOfflineFormat" xml:space="preserve">
+    <value>Offline · {0:N0} local</value>
+  </data>
+  <data name="Library_BulkOfflineScope" xml:space="preserve">
+    <value>Cached catalogue · local datasets still load</value>
+  </data>
+  <data name="Library_BulkUpdate" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="Tooltip_BulkOffline" xml:space="preserve">
+    <value>The catalogue can't be reached; updates are checked when it is back</value>
+  </data>
+  <data name="Library_StatusLine_UpdatesFormat" xml:space="preserve">
+    <value>{0:N0} updates</value>
+  </data>
+  <data name="Library_StatusLine_NothingLocal" xml:space="preserve">
+    <value>nothing local</value>
+  </data>
+  <data name="Library_StatusLine_SomeLocalFormat" xml:space="preserve">
+    <value>{0:N0} of {1:N0} local</value>
+  </data>
+  <data name="Library_StatusLine_AllLocalFormat" xml:space="preserve">
+    <value>all {0:N0} local</value>
+  </data>
+  <data name="Library_StatusLine_LocalFormat" xml:space="preserve">
+    <value>{0:N0} local</value>
+  </data>
 </root>

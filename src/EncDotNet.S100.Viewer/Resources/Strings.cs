@@ -1155,6 +1155,7 @@ internal static class Strings
     public static string Library_TapIndexFormat => Get(nameof(Library_TapIndexFormat));
     public static string Library_TapListThese => Get(nameof(Library_TapListThese));
     public static string Tooltip_ClearTap => Get(nameof(Tooltip_ClearTap));
+    public static string Tooltip_BulkOffline => Get(nameof(Tooltip_BulkOffline));
     public static string Menu_AddLibraryManifest => Get(nameof(Menu_AddLibraryManifest));
     public static string FilePicker_ManifestTitle => Get(nameof(FilePicker_ManifestTitle));
     public static string FilePicker_ManifestType => Get(nameof(FilePicker_ManifestType));
@@ -1204,4 +1205,17 @@ internal static class Strings
     public static string Library_Host_Web => Get(nameof(Library_Host_Web));
     public static string Library_Format_S100Catalogue => Get(nameof(Library_Format_S100Catalogue));
     public static string Library_Chip_NotForNavigation => Get(nameof(Library_Chip_NotForNavigation));
+    public static string Library_EditionNewerOnlineFormat => Get(nameof(Library_EditionNewerOnlineFormat));
+    public static string Library_EditionOnlineFormat => Get(nameof(Library_EditionOnlineFormat));
+    public static string Library_BulkUpdatesFormat => Get(nameof(Library_BulkUpdatesFormat));
+    public static string Library_BulkUpdatesScopeFormat => Get(nameof(Library_BulkUpdatesScopeFormat));
+    public static string Library_UpdateDownloadedFormat => Get(nameof(Library_UpdateDownloadedFormat));
+    public static string Library_BulkOfflineFormat => Get(nameof(Library_BulkOfflineFormat));
+    public static string Library_BulkOfflineScope => Get(nameof(Library_BulkOfflineScope));
+    public static string Library_BulkUpdate => Get(nameof(Library_BulkUpdate));
+    public static string Library_StatusLine_UpdatesFormat => Get(nameof(Library_StatusLine_UpdatesFormat));
+    public static string Library_StatusLine_NothingLocal => Get(nameof(Library_StatusLine_NothingLocal));
+    public static string Library_StatusLine_SomeLocalFormat => Get(nameof(Library_StatusLine_SomeLocalFormat));
+    public static string Library_StatusLine_AllLocalFormat => Get(nameof(Library_StatusLine_AllLocalFormat));
+    public static string Library_StatusLine_LocalFormat => Get(nameof(Library_StatusLine_LocalFormat));
 }
