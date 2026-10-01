@@ -101,14 +101,23 @@ internal sealed class TileCache : IDisposable
         }
     }
 
-    internal SKImage? TryCreateSnapshot(TileKey key, long expectedGeneration)
+    /// <summary>
+    /// Copies the resident tile for <paramref name="key"/> into an independent
+    /// raster snapshot (for a deferred disk write), or returns
+    /// <see langword="null"/> when the cache has been cleared since
+    /// <paramref name="expectedGeneration"/>, the tile is absent, or it is no
+    /// longer <paramref name="expectedPixelSize"/> pixels wide (it was replaced
+    /// at another raster scale, so it would land in the wrong disk namespace).
+    /// </summary>
+    internal SKImage? TryCreateSnapshot(TileKey key, long expectedGeneration, int expectedPixelSize)
     {
         SKBitmap? pixels;
         lock (_sync)
         {
             if (_disposed
                 || _generation != expectedGeneration
-                || !_map.TryGetValue(key, out var node))
+                || !_map.TryGetValue(key, out var node)
+                || node.Value.Image.Width != expectedPixelSize)
             {
                 return null;
             }
@@ -129,12 +138,38 @@ internal sealed class TileCache : IDisposable
         }
     }
 
-    /// <summary>True when a tile for <paramref name="key"/> is resident.</summary>
+    /// <summary>
+    /// True when a tile for <paramref name="key"/> is resident, at any raster
+    /// scale. Use this to decide whether something is <i>drawable</i>; use
+    /// <see cref="Contains(TileKey, int)"/> to decide whether a frame's tile is
+    /// already warm.
+    /// </summary>
     public bool Contains(TileKey key)
     {
         lock (_sync)
         {
             return !_disposed && _map.ContainsKey(key);
+        }
+    }
+
+    /// <summary>
+    /// True when a tile for <paramref name="key"/> is resident <b>and</b> was
+    /// rasterised at <paramref name="pixelSize"/> device pixels per edge.
+    /// </summary>
+    /// <remarks>
+    /// A tile's pixel width is its raster-scale tag (see
+    /// <c>S100VectorTileRenderer.TilePixelSize</c>): a 1x tile is a miss for a
+    /// 2x frame, so the frame schedules a replacement instead of blitting an
+    /// upscaled, soft tile forever. The mismatched tile stays resident (and
+    /// drawable) until the replacement's <see cref="Put"/> supersedes it.
+    /// </remarks>
+    public bool Contains(TileKey key, int pixelSize)
+    {
+        lock (_sync)
+        {
+            return !_disposed
+                && _map.TryGetValue(key, out var node)
+                && node.Value.Image.Width == pixelSize;
         }
     }
 

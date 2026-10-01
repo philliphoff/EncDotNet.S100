@@ -127,6 +127,23 @@ public class TileDiskCacheTests : IDisposable
     }
 
     [Fact]
+    public void TryRead_OtherPixelSizeNamespace_DoesNotSeeTile()
+    {
+        // A 1x (384 px) tile is never served to a 2x (768 px) frame.
+        using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);
+        var style = TileDiskCache.NamespaceFor("cell", "day");
+        var oneX = TileDiskCache.NamespaceFor(style, 384);
+        var twoX = TileDiskCache.NamespaceFor(style, 768);
+        using var image = NoiseImage(32, seed: 7);
+
+        cache.Write(oneX, Key(5, 1, 1), image);
+
+        Assert.NotEqual(oneX, twoX);
+        Assert.NotNull(cache.TryRead(oneX, Key(5, 1, 1)));
+        Assert.Null(cache.TryRead(twoX, Key(5, 1, 1)));
+    }
+
+    [Fact]
     public void TryRead_NullOrEmptyNamespace_ReturnsNull()
     {
         using var cache = new TileDiskCache(_root, 64L * 1024 * 1024);

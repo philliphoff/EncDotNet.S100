@@ -104,7 +104,16 @@ public static class AvaloniaControlCapture
         }
 
         using var bitmap = new RenderTargetBitmap(pixelSize);
-        bitmap.Render(target);
+
+        // RenderTargetBitmap renders at 96 dpi (device scale 1) through the same
+        // live layers, synchronously on this thread. Mark it off-screen so the
+        // tile renderer composites the live view's cached tiles instead of
+        // scheduling 1x tiles that a 2x window would then keep blitting.
+        using (S100VectorTileRenderer.BeginOffscreenRender())
+        {
+            bitmap.Render(target);
+        }
+
         using var stream = new MemoryStream();
         bitmap.Save(stream);
         return stream.ToArray();

@@ -813,6 +813,26 @@ clip-to-core join and the cross-band backdrop/target boundary in the clean
 axis-aligned space, so a non-north-up zoom transition no longer reveals
 banding/seams between tiles and bands (issue #330). See design Appendix F.8.
 
+**Device scale.** Tiles are rasterised at the frame's device scale
+(`canvas.TotalMatrix.ScaleX`): a 256-DIP tile plus its two gutters is 384 px at
+1x and 768 px at 2x. A cached tile's pixel size is its raster-scale tag, so a
+tile of another size is drawn only as a placeholder while a replacement at the
+frame's scale rasterises; it never counts as a hit. Moving a window between a
+retina and a non-retina display therefore re-rasterises once instead of
+blitting soft or over-sized tiles indefinitely. The disk tier is split by pixel
+size in the same way (see below).
+
+**Off-screen renders.** A host that renders the live layers to an image at a
+different scale (an Avalonia `RenderTargetBitmap` capture at 96 dpi, a print
+preview) wraps the call in `S100VectorTileRenderer.BeginOffscreenRender()`.
+Inside that per-thread scope `Render` composites only the cached tiles, scaled
+to the target, and the live overlay. It never schedules tiles, changes the
+pending device scale, viewport or velocity the live workers use, re-pins the
+eviction set, or touches GPU residency. `AvaloniaControlCapture` (and so the
+viewer's MCP `capture_app_screenshot`) does this. Before this change, a capture
+taken right after a pan cached 1x tiles that the 2x window then kept blitting,
+so line and edge pixels depended on the capture history.
+
 **Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs` stayed
 bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are zoom-out
 backdrop blits) — versus the Mapsui arm's ~409 ms; pans held ~3–8 ms with no
@@ -1004,6 +1024,10 @@ namespace, so **a tile is never served from disk for a different mariner/palette
 state** — old tiles are orphaned and reclaimed by the byte-budget LRU sweep. The
 in-memory tier is already fresh per layer (a settings change rebuilds the layer),
 so this extends the no-stale-portrayal guarantee to the persistent tier.
+The renderer appends the tile's pixel size to that namespace
+(`TileDiskCache.NamespaceFor(ns, tilePixelSize)`, e.g. `…-768px`), so a 1x tile
+is never served to a 2x frame or vice versa. Format v3 introduced this split;
+older v2 directories mixed scales and are deleted at startup.
 
 > **Palette fingerprint (design doc Appendix F.9).** The palette is folded via
 > `DescribePalette` — its `Name` plus its ordered colour entries — **not**

@@ -27,11 +27,14 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <para>
 /// <b>Correctness.</b> The cache is correct only because the namespace fully
 /// captures the style state: the caller passes <c>(productLayerSet,
-/// styleStateHash)</c> to <see cref="NamespaceFor"/>, and the renderer derives
+/// styleStateHash)</c> to <see cref="NamespaceFor(string, string)"/>, and the renderer derives
 /// <c>styleStateHash</c> from the resolved drawing instructions plus the palette
 /// and symbol/text scales (see <c>MapsuiDisplayListRenderer</c>). A change to any
 /// of those yields a different namespace — old tiles are simply orphaned and
-/// reclaimed by the byte-budget LRU sweep, never served stale.
+/// reclaimed by the byte-budget LRU sweep, never served stale. The renderer
+/// further splits that namespace by the tile's raster pixel size
+/// (<see cref="NamespaceFor(string, int)"/>), so a tile rasterised at one device
+/// scale is never served to a frame at another.
 /// </para>
 /// <para>
 /// <b>Robustness</b> mirrors <c>DiskPortrayalInstructionCache</c>: any IO error,
@@ -59,8 +62,12 @@ internal sealed class TileDiskCache : IDisposable
     /// tiled base plane into a live screen-space overlay, so base tiles no
     /// longer contain symbol/text pixels. Reusing a v1 tile (symbols baked in)
     /// alongside the new overlay would double-draw every symbol.
+    /// v3: the renderer folds the tile's raster pixel size into the namespace
+    /// (<see cref="NamespaceFor(string, int)"/>). v2 namespaces mixed tiles
+    /// rasterised at different device scales (a 1x off-screen capture's tiles
+    /// were served to a 2x window), so they are discarded.
     /// </remarks>
-    public const int FormatVersion = 2;
+    public const int FormatVersion = 3;
 
     private const string FileExtension = ".png";
 
@@ -160,6 +167,27 @@ internal sealed class TileDiskCache : IDisposable
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(productLayerSet + "|" + styleStateHash));
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Derives the per-raster-scale namespace for tiles of
+    /// <paramref name="tilePixelSize"/> device pixels per edge from a
+    /// <see cref="NamespaceFor(string, string)"/> namespace. A tile rasterised at
+    /// one device scale is never served to a frame at another (a 384&#160;px 1x
+    /// tile blitted into a 2x window is visibly soft), so each scale gets its own
+    /// subdirectory; the byte budget spans them all.
+    /// </summary>
+    /// <param name="baseNamespace">The style-state namespace.</param>
+    /// <param name="tilePixelSize">The tile's edge length in device pixels.</param>
+    /// <returns>A safe subdirectory name unique to the namespace and pixel size.</returns>
+    public static string NamespaceFor(string baseNamespace, int tilePixelSize)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(baseNamespace);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tilePixelSize);
+
+        return string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"{baseNamespace}-{tilePixelSize}px");
     }
 
     /// <summary>

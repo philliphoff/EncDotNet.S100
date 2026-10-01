@@ -163,15 +163,43 @@ public class TileCacheTests
     {
         using var cache = new TileCache(TileCache.MinBudgetBytes);
         cache.Put(Key(0), MakeImage(32));
-        using var firstGeneration = cache.TryCreateSnapshot(Key(0), expectedGeneration: 0);
+        using var firstGeneration = cache.TryCreateSnapshot(Key(0), expectedGeneration: 0, expectedPixelSize: 32);
         Assert.NotNull(firstGeneration);
 
         cache.Clear();
         cache.Put(Key(0), MakeImage(32));
 
-        Assert.Null(cache.TryCreateSnapshot(Key(0), expectedGeneration: 0));
-        using var secondGeneration = cache.TryCreateSnapshot(Key(0), expectedGeneration: 1);
+        Assert.Null(cache.TryCreateSnapshot(Key(0), expectedGeneration: 0, expectedPixelSize: 32));
+        using var secondGeneration = cache.TryCreateSnapshot(Key(0), expectedGeneration: 1, expectedPixelSize: 32);
         Assert.NotNull(secondGeneration);
+    }
+
+    [Fact]
+    public void ContainsAtPixelSize_TreatsOtherRasterScaleAsMiss()
+    {
+        using var cache = new TileCache(TileCache.MinBudgetBytes);
+        cache.Put(Key(0), MakeImage(384));
+
+        Assert.True(cache.Contains(Key(0), 384));
+        Assert.False(cache.Contains(Key(0), 768));
+        // Still drawable as a placeholder until the 2x replacement lands.
+        Assert.True(cache.Contains(Key(0)));
+
+        cache.Put(Key(0), MakeImage(768));
+        Assert.True(cache.Contains(Key(0), 768));
+        Assert.False(cache.Contains(Key(0), 384));
+        Assert.Equal(1, cache.Count);
+    }
+
+    [Fact]
+    public void TryCreateSnapshot_RejectsTileReplacedAtOtherPixelSize()
+    {
+        using var cache = new TileCache(TileCache.MinBudgetBytes);
+        cache.Put(Key(0), MakeImage(64));
+
+        Assert.Null(cache.TryCreateSnapshot(Key(0), expectedGeneration: 0, expectedPixelSize: 32));
+        using var snapshot = cache.TryCreateSnapshot(Key(0), expectedGeneration: 0, expectedPixelSize: 64);
+        Assert.NotNull(snapshot);
     }
 
     [Fact]

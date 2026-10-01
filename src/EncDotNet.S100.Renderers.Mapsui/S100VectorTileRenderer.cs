@@ -73,6 +73,65 @@ public static class S100VectorTileRenderer
     public static double GutterDip => RenderingOptimizations.TileGutterDip;
 
     /// <summary>
+    /// The edge length, in device pixels, of a tile (core + gutter on both
+    /// sides) rasterised at <paramref name="deviceScale"/>. The cached image's
+    /// width is this value, so it doubles as the tile's raster-scale tag: the hot
+    /// and warm caches only count a tile as a hit for a frame whose own scale
+    /// maps to the same pixel size.
+    /// </summary>
+    internal static int TilePixelSize(float deviceScale) =>
+        Math.Clamp(
+            (int)Math.Round((TileGrid.TileSizeDip + 2 * GutterDip) * deviceScale),
+            1,
+            MaxImageDimension);
+
+    [ThreadStatic]
+    private static int t_offscreenDepth;
+
+    /// <summary>
+    /// Whether the calling thread is inside a
+    /// <see cref="BeginOffscreenRender"/> scope.
+    /// </summary>
+    public static bool IsOffscreenRender => t_offscreenDepth > 0;
+
+    /// <summary>
+    /// Marks every <see cref="Render"/> call on the calling thread, until the
+    /// returned scope is disposed, as an <b>off-screen</b> render of the live
+    /// layers (for example an Avalonia <c>RenderTargetBitmap</c> capture or a
+    /// print preview) rather than a live frame.
+    /// </summary>
+    /// <remarks>
+    /// An off-screen frame is read-only with respect to tile scheduling: it
+    /// composites whatever tiles are already cached (scaling them to its own
+    /// device scale) and the live symbol/text overlay, but it never enqueues
+    /// rasterisation, never changes the pending device scale, viewport or
+    /// velocity the live view's workers use, and never touches GPU residency
+    /// or the visible-tile eviction pins. A capture at 1x of a 2x window
+    /// therefore cannot leave 1x tiles behind for the live view to blit. Scopes
+    /// nest and are per thread.
+    /// </remarks>
+    /// <returns>A scope that ends the off-screen render when disposed.</returns>
+    public static IDisposable BeginOffscreenRender()
+    {
+        t_offscreenDepth++;
+        return new OffscreenRenderScope();
+    }
+
+    private sealed class OffscreenRenderScope : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                t_offscreenDepth--;
+            }
+        }
+    }
+
+    /// <summary>
     /// Hot-cache native-byte budget per layer. Sourced from
     /// <see cref="RenderingOptimizations.TileBudgetMb"/> (seeded from
     /// <c>S100_VECTOR_TILE_BUDGET_MB</c>, default 256&#160;MB); captured per layer
@@ -671,9 +730,14 @@ public static class S100VectorTileRenderer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(layer);
 
+        var offscreen = IsOffscreenRender;
         if (!viewport.HasSize())
         {
-            InvalidateViewport(layer);
+            if (!offscreen)
+            {
+                InvalidateViewport(layer);
+            }
+
             return;
         }
 
@@ -685,7 +749,11 @@ public static class S100VectorTileRenderer
                 DiagBail($"resolution={resolution:F3}");
             }
 
-            InvalidateViewport(layer);
+            if (!offscreen)
+            {
+                InvalidateViewport(layer);
+            }
+
             return;
         }
 
@@ -694,6 +762,11 @@ public static class S100VectorTileRenderer
         {
             deviceScale = 1f;
         }
+
+        // The device-pixel edge of a tile rasterised for this frame. A cached
+        // tile of another size (rasterised at another device scale) is still
+        // drawn as a placeholder but counts as a miss, so it is replaced.
+        var tilePx = TilePixelSize(deviceScale);
 
         // Skip a cell whose data extent lies entirely outside the viewport.
         // Mapsui invokes this custom renderer for every enabled, in-resolution
@@ -707,7 +780,7 @@ public static class S100VectorTileRenderer
         var state = States.GetValue(layer, static l => new TileState(l));
         if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, CullMarginPx))
         {
-            if (InvalidateViewport(state))
+            if (!offscreen && InvalidateViewport(state))
             {
                 VectorLayerRepaint.Request(layer);
             }
@@ -719,7 +792,10 @@ public static class S100VectorTileRenderer
         // software/CPU surface or when residency is disabled). Phase 5: warm
         // tiles are promoted to GPU-resident textures so identical pixels are
         // not re-uploaded every frame (Appendix F).
-        var grContext = GpuResidencyEnabled ? (canvas.Context as GRContext) : null;
+        // An off-screen frame never touches GPU residency: its surface (if GPU
+        // at all) is not the live context, and a CPU surface would otherwise
+        // drop the live view's resident textures. It blits the raster tiles.
+        var grContext = GpuResidencyEnabled && !offscreen ? (canvas.Context as GRContext) : null;
 
         var band = TileGrid.BandForResolution(resolution);
         var centerX = viewport.CenterX;
@@ -768,239 +844,248 @@ public static class S100VectorTileRenderer
             // the part of the viewport this cell covers.
             visible = WithContent(state, visible);
 
-            var currentViewport = new TileViewport(
-                centerX,
-                centerY,
-                coverWidth,
-                coverHeight,
-                resolution,
-                deviceScale);
-            state.ViewportEpoch = NextViewportEpoch(
-                state.ViewportEpoch,
-                state.CurrentViewport,
-                currentViewport);
-            state.CurrentViewport = currentViewport;
-
-            UpdateVelocity(state, centerX, centerY);
-
-            // Enqueue visible misses at high priority (replace the pending set
-            // every frame so tiles panned out of view are dropped — cancellation).
-            state.PendingVisible.Clear();
-            var frameTicks = Stopwatch.GetTimestamp();
-            var visibleSet = new HashSet<TileKey>(visible.Count);
-            state.CurrentVisible.Clear();
-            foreach (var key in visible)
+            // An off-screen render (BeginOffscreenRender: a capture or print
+            // through the live layers, typically at another device scale) only
+            // composites what is cached. Scheduling would enqueue tiles at its
+            // scale and overwrite the live view's pending scale, viewport and
+            // velocity, leaving off-scale tiles for the live view to blit.
+            if (!offscreen)
             {
-                visibleSet.Add(key);
-                state.CurrentVisible.Add(key);
-                if (state.Cache.Contains(key))
+                var currentViewport = new TileViewport(
+                    centerX,
+                    centerY,
+                    coverWidth,
+                    coverHeight,
+                    resolution,
+                    deviceScale);
+                state.ViewportEpoch = NextViewportEpoch(
+                    state.ViewportEpoch,
+                    state.CurrentViewport,
+                    currentViewport);
+                state.CurrentViewport = currentViewport;
+
+                UpdateVelocity(state, centerX, centerY);
+
+                // Enqueue visible misses at high priority (replace the pending set
+                // every frame so tiles panned out of view are dropped — cancellation).
+                state.PendingVisible.Clear();
+                var frameTicks = Stopwatch.GetTimestamp();
+                var visibleSet = new HashSet<TileKey>(visible.Count);
+                state.CurrentVisible.Clear();
+                foreach (var key in visible)
                 {
-                    // A tile we rasterised speculatively is now actually visible:
-                    // a prediction hit. Count it once.
-                    if (state.PredictedInCache.Remove(key))
+                    visibleSet.Add(key);
+                    state.CurrentVisible.Add(key);
+                    if (state.Cache.Contains(key, tilePx))
                     {
-                        predictionHits++;
-                        if (state.DiskNamespace is not null)
+                        // A tile we rasterised speculatively is now actually visible:
+                        // a prediction hit. Count it once.
+                        if (state.PredictedInCache.Remove(key))
                         {
-                            (predictionHitsToPersist ??= []).Add(
-                                (state.DiskNamespace, state.Generation, key));
+                            predictionHits++;
+                            if (state.DiskNamespace is not null)
+                            {
+                                (predictionHitsToPersist ??= []).Add(
+                                    (TileDiskCache.NamespaceFor(state.DiskNamespace, tilePx),
+                                        state.Generation, key));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        coldExposure++;
+                        // Stamp the first frame this tile was seen cold-visible so the
+                        // worker can report end-to-end cold latency (queue wait +
+                        // rasterise) on publish, not just raster CPU cost.
+                        if (!state.VisibleEnqueueTicks.ContainsKey(key))
+                        {
+                            state.VisibleEnqueueTicks[key] = frameTicks;
+                        }
+
+                        if (!state.InFlight.Contains(key))
+                        {
+                            state.PendingVisible.Add(key);
                         }
                     }
                 }
-                else
-                {
-                    coldExposure++;
-                    // Stamp the first frame this tile was seen cold-visible so the
-                    // worker can report end-to-end cold latency (queue wait +
-                    // rasterise) on publish, not just raster CPU cost.
-                    if (!state.VisibleEnqueueTicks.ContainsKey(key))
-                    {
-                        state.VisibleEnqueueTicks[key] = frameTicks;
-                    }
 
-                    if (!state.InFlight.Contains(key))
-                    {
-                        state.PendingVisible.Add(key);
-                    }
-                }
-            }
+                visibleQueueDepth = state.PendingVisible.Count;
 
-            visibleQueueDepth = state.PendingVisible.Count;
-
-            // Refresh this layer's active-visible-layer registry entry and read the
-            // worker reservation owed to OTHER layers that currently have visible
-            // cold work, so the worker-start block below lends only leftover global
-            // capacity to this layer (issue #432 fairness floor). A layer counts as
-            // active-visible whenever it has visible cold tiles (pending OR already
-            // in flight), so a layer mid-raster of its visible burst still keeps its
-            // reservation; the reservation is each sibling's shortfall to its floor,
-            // so siblings already running their share owe nothing.
-            var reservedForOtherLayers = RefreshActiveVisibleLayers(
-                state,
-                coldExposure > 0,
-                state.ActiveWorkers,
-                frameTicks,
-                out requestAdmissionRetry);
-
-            // Drop enqueue stamps for tiles no longer visible (panned away before
-            // they landed) so the dictionary stays bounded by the visible set.
-            if (state.VisibleEnqueueTicks.Count > visibleSet.Count)
-            {
-                state.EnqueuePruneScratch.Clear();
-                foreach (var k in state.VisibleEnqueueTicks.Keys)
-                {
-                    if (!visibleSet.Contains(k))
-                    {
-                        state.EnqueuePruneScratch.Add(k);
-                    }
-                }
-
-                foreach (var k in state.EnqueuePruneScratch)
-                {
-                    state.VisibleEnqueueTicks.Remove(k);
-                }
-            }
-
-            // Enqueue the prediction warm set at low priority (visible-first in
-            // the worker). Excludes visible / cached / in-flight tiles. Skipped
-            // entirely when prediction is disabled (Phase-2 A/B baseline).
-            state.PendingPredicted.Clear();
-            state.CurrentSpeculative.Clear();
-            if (PredictionEnabled)
-            {
-                var predicted = TileGrid.PredictedTiles(
-                    centerX, centerY, coverWidth, coverHeight, resolution, band,
-                    state.VelocityX, state.VelocityY);
-                foreach (var key in predicted)
-                {
-                    if (!TileHasContent(state, key))
-                    {
-                        continue;
-                    }
-
-                    state.CurrentSpeculative.Add(key);
-                    if (!visibleSet.Contains(key)
-                        && !state.Cache.Contains(key)
-                        && !state.InFlight.Contains(key))
-                    {
-                        state.PendingPredicted.Add(key);
-                    }
-                }
-            }
-
-            // Enqueue the idle cross-band (±1) pre-warm set at the lowest priority
-            // (issue #428). Only when the layer is otherwise idle — no cold
-            // visible misses this frame — so pre-warm never competes with an
-            // on-screen fill; and only with cache headroom to spare so its
-            // speculative inserts cannot evict the current working set. The warm
-            // set covers the whole viewport footprint of band ± 1 (centre-first,
-            // capped), so a subsequent zoom starts warm. Drained strictly behind
-            // PendingVisible and PendingPredicted in the worker, so even though it
-            // is enqueued in the same frame as the same-band predicted set it only
-            // rasterises once that has drained. Excludes cached / in-flight tiles.
-            //
-            // The idle gate keys on coldExposure (every cold visible tile this
-            // frame, pending OR already in flight), not PendingVisible.Count:
-            // PendingVisible excludes cold tiles already handed to a worker, so a
-            // PendingVisible.Count == 0 test would let pre-warm start while the
-            // viewport still had cold holes mid-raster and steal a worker from
-            // finishing the on-screen fill — breaking the guarantee above.
-            state.PendingCrossBand.Clear();
-            if (CrossBandPrewarmEnabled
-                && coldExposure == 0
-                && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
-            {
-                var crossBand = TileGrid.CrossBandPrewarmTiles(
-                    centerX, centerY, coverWidth, coverHeight, resolution, band,
-                    CrossBandPrewarmMaxTiles);
-                foreach (var key in crossBand)
-                {
-                    if (!TileHasContent(state, key))
-                    {
-                        continue;
-                    }
-
-                    state.CurrentSpeculative.Add(key);
-                    // Also exclude keys already queued in a higher tier this frame:
-                    // the band ± 1 centre tiles overlap TileGrid.PredictedTiles, so
-                    // without this guard the same key would sit in both PendingPredicted
-                    // and PendingCrossBand and be rasterised twice (predicted tier first,
-                    // then cross-band), double-counting TilePredictionRasterized and
-                    // wasting CPU / disk writes (issue #428 review follow-up).
-                    if (!state.Cache.Contains(key)
-                        && !state.InFlight.Contains(key)
-                        && !state.PendingVisible.Contains(key)
-                        && !state.PendingPredicted.Contains(key))
-                    {
-                        state.PendingCrossBand.Add(key);
-                    }
-                }
-            }
-
-            if (state.PendingVisible.Count > 0 || state.PendingPredicted.Count > 0
-                || state.PendingCrossBand.Count > 0)
-            {
-                state.PendingDeviceScale = deviceScale;
-                state.PendingGeneration = state.Generation;
-                state.PendingCenterX = centerX;
-                state.PendingCenterY = centerY;
-                // Spin up workers to cover the pending tiles. The per-layer
-                // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
-                // a layer with a visible backlog may borrow idle global capacity
-                // toward MaxTotalWorkers (issue #432), but only for *visible*
-                // work — predicted/speculative tiles (including the idle cross-band
-                // ±1 pre-warm, issue #428) never justify borrowing, so a busy
-                // layer's prewarm can't occupy cores a sibling wants for on-screen
-                // tiles. On a LowEnd (single-worker) host there is nothing to
-                // borrow, so the elastic ceiling collapses to the floor and this
-                // reduces to the pre-elastic behaviour. A per-layer floor is
-                // reserved for every other active-visible layer before any elastic
-                // extra is granted, so a dense bottom-of-z-order layer can't starve
-                // siblings that paint later in the frame.
-                var baseline = RenderingOptimizations.TileWorkerCount;
-                var elasticCeiling = RenderingOptimizations.ResolvedProfile == PerformanceProfile.LowEnd
-                    ? baseline
-                    : MaxTotalWorkers;
-                var pendingSpeculative =
-                    state.PendingPredicted.Count + state.PendingCrossBand.Count;
-                if (state.PendingVisible.Count == 0
-                    && HasActiveVisibleWork(frameTicks))
-                {
-                    pendingSpeculative = 0;
-                }
-
-                workersToStart = ComputeWorkersToStart(
-                    baseline,
-                    elasticCeiling,
-                    MaxTotalWorkers,
-                    Volatile.Read(ref _activeWorkerTotal),
+                // Refresh this layer's active-visible-layer registry entry and read the
+                // worker reservation owed to OTHER layers that currently have visible
+                // cold work, so the worker-start block below lends only leftover global
+                // capacity to this layer (issue #432 fairness floor). A layer counts as
+                // active-visible whenever it has visible cold tiles (pending OR already
+                // in flight), so a layer mid-raster of its visible burst still keeps its
+                // reservation; the reservation is each sibling's shortfall to its floor,
+                // so siblings already running their share owe nothing.
+                var reservedForOtherLayers = RefreshActiveVisibleLayers(
+                    state,
+                    coldExposure > 0,
                     state.ActiveWorkers,
-                    state.PendingVisible.Count,
-                    pendingSpeculative,
-                    reservedForOtherLayers);
+                    frameTicks,
+                    out requestAdmissionRetry);
 
-                if (workersToStart > 0)
+                // Drop enqueue stamps for tiles no longer visible (panned away before
+                // they landed) so the dictionary stays bounded by the visible set.
+                if (state.VisibleEnqueueTicks.Count > visibleSet.Count)
                 {
-                    state.ActiveWorkers += workersToStart;
-                    Interlocked.Add(ref _activeWorkerTotal, workersToStart);
-
-                    // Publish the post-grant worker count so a sibling painting later
-                    // in this same frame sees this layer's true share and reserves
-                    // only its own shortfall against it.
-                    if (coldExposure > 0)
+                    state.EnqueuePruneScratch.Clear();
+                    foreach (var k in state.VisibleEnqueueTicks.Keys)
                     {
-                        RecordActiveVisibleLayerWorkers(state, state.ActiveWorkers, frameTicks);
+                        if (!visibleSet.Contains(k))
+                        {
+                            state.EnqueuePruneScratch.Add(k);
+                        }
+                    }
+
+                    foreach (var k in state.EnqueuePruneScratch)
+                    {
+                        state.VisibleEnqueueTicks.Remove(k);
                     }
                 }
-            }
 
-            // Bound the prediction-hit bookkeeping: a tile predicted then
-            // evicted before it was ever shown would otherwise linger. When the
-            // set grows past the cache's own capacity, drop keys no longer
-            // resident (those can never score a hit).
-            if (state.PredictedInCache.Count > state.Cache.Count + 256)
-            {
-                state.PredictedInCache.RemoveWhere(k => !state.Cache.Contains(k));
+                // Enqueue the prediction warm set at low priority (visible-first in
+                // the worker). Excludes visible / cached / in-flight tiles. Skipped
+                // entirely when prediction is disabled (Phase-2 A/B baseline).
+                state.PendingPredicted.Clear();
+                state.CurrentSpeculative.Clear();
+                if (PredictionEnabled)
+                {
+                    var predicted = TileGrid.PredictedTiles(
+                        centerX, centerY, coverWidth, coverHeight, resolution, band,
+                        state.VelocityX, state.VelocityY);
+                    foreach (var key in predicted)
+                    {
+                        if (!TileHasContent(state, key))
+                        {
+                            continue;
+                        }
+
+                        state.CurrentSpeculative.Add(key);
+                        if (!visibleSet.Contains(key)
+                            && !state.Cache.Contains(key, tilePx)
+                            && !state.InFlight.Contains(key))
+                        {
+                            state.PendingPredicted.Add(key);
+                        }
+                    }
+                }
+
+                // Enqueue the idle cross-band (±1) pre-warm set at the lowest priority
+                // (issue #428). Only when the layer is otherwise idle — no cold
+                // visible misses this frame — so pre-warm never competes with an
+                // on-screen fill; and only with cache headroom to spare so its
+                // speculative inserts cannot evict the current working set. The warm
+                // set covers the whole viewport footprint of band ± 1 (centre-first,
+                // capped), so a subsequent zoom starts warm. Drained strictly behind
+                // PendingVisible and PendingPredicted in the worker, so even though it
+                // is enqueued in the same frame as the same-band predicted set it only
+                // rasterises once that has drained. Excludes cached / in-flight tiles.
+                //
+                // The idle gate keys on coldExposure (every cold visible tile this
+                // frame, pending OR already in flight), not PendingVisible.Count:
+                // PendingVisible excludes cold tiles already handed to a worker, so a
+                // PendingVisible.Count == 0 test would let pre-warm start while the
+                // viewport still had cold holes mid-raster and steal a worker from
+                // finishing the on-screen fill — breaking the guarantee above.
+                state.PendingCrossBand.Clear();
+                if (CrossBandPrewarmEnabled
+                    && coldExposure == 0
+                    && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
+                {
+                    var crossBand = TileGrid.CrossBandPrewarmTiles(
+                        centerX, centerY, coverWidth, coverHeight, resolution, band,
+                        CrossBandPrewarmMaxTiles);
+                    foreach (var key in crossBand)
+                    {
+                        if (!TileHasContent(state, key))
+                        {
+                            continue;
+                        }
+
+                        state.CurrentSpeculative.Add(key);
+                        // Also exclude keys already queued in a higher tier this frame:
+                        // the band ± 1 centre tiles overlap TileGrid.PredictedTiles, so
+                        // without this guard the same key would sit in both PendingPredicted
+                        // and PendingCrossBand and be rasterised twice (predicted tier first,
+                        // then cross-band), double-counting TilePredictionRasterized and
+                        // wasting CPU / disk writes (issue #428 review follow-up).
+                        if (!state.Cache.Contains(key, tilePx)
+                            && !state.InFlight.Contains(key)
+                            && !state.PendingVisible.Contains(key)
+                            && !state.PendingPredicted.Contains(key))
+                        {
+                            state.PendingCrossBand.Add(key);
+                        }
+                    }
+                }
+
+                if (state.PendingVisible.Count > 0 || state.PendingPredicted.Count > 0
+                    || state.PendingCrossBand.Count > 0)
+                {
+                    state.PendingDeviceScale = deviceScale;
+                    state.PendingGeneration = state.Generation;
+                    state.PendingCenterX = centerX;
+                    state.PendingCenterY = centerY;
+                    // Spin up workers to cover the pending tiles. The per-layer
+                    // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
+                    // a layer with a visible backlog may borrow idle global capacity
+                    // toward MaxTotalWorkers (issue #432), but only for *visible*
+                    // work — predicted/speculative tiles (including the idle cross-band
+                    // ±1 pre-warm, issue #428) never justify borrowing, so a busy
+                    // layer's prewarm can't occupy cores a sibling wants for on-screen
+                    // tiles. On a LowEnd (single-worker) host there is nothing to
+                    // borrow, so the elastic ceiling collapses to the floor and this
+                    // reduces to the pre-elastic behaviour. A per-layer floor is
+                    // reserved for every other active-visible layer before any elastic
+                    // extra is granted, so a dense bottom-of-z-order layer can't starve
+                    // siblings that paint later in the frame.
+                    var baseline = RenderingOptimizations.TileWorkerCount;
+                    var elasticCeiling = RenderingOptimizations.ResolvedProfile == PerformanceProfile.LowEnd
+                        ? baseline
+                        : MaxTotalWorkers;
+                    var pendingSpeculative =
+                        state.PendingPredicted.Count + state.PendingCrossBand.Count;
+                    if (state.PendingVisible.Count == 0
+                        && HasActiveVisibleWork(frameTicks))
+                    {
+                        pendingSpeculative = 0;
+                    }
+
+                    workersToStart = ComputeWorkersToStart(
+                        baseline,
+                        elasticCeiling,
+                        MaxTotalWorkers,
+                        Volatile.Read(ref _activeWorkerTotal),
+                        state.ActiveWorkers,
+                        state.PendingVisible.Count,
+                        pendingSpeculative,
+                        reservedForOtherLayers);
+
+                    if (workersToStart > 0)
+                    {
+                        state.ActiveWorkers += workersToStart;
+                        Interlocked.Add(ref _activeWorkerTotal, workersToStart);
+
+                        // Publish the post-grant worker count so a sibling painting later
+                        // in this same frame sees this layer's true share and reserves
+                        // only its own shortfall against it.
+                        if (coldExposure > 0)
+                        {
+                            RecordActiveVisibleLayerWorkers(state, state.ActiveWorkers, frameTicks);
+                        }
+                    }
+                }
+
+                // Bound the prediction-hit bookkeeping: a tile predicted then
+                // evicted before it was ever shown would otherwise linger. When the
+                // set grows past the cache's own capacity, drop keys no longer
+                // resident (those can never score a hit).
+                if (state.PredictedInCache.Count > state.Cache.Count + 256)
+                {
+                    state.PredictedInCache.RemoveWhere(k => !state.Cache.Contains(k));
+                }
             }
 
             // Phase 5 GPU residency (render thread only): first dispose any
@@ -1026,7 +1111,11 @@ public static class S100VectorTileRenderer
                     ReconcileGpuCaches(grContext);
                 }
 
-                ManageGpuResidency(state, grContext, layer);
+                if (!offscreen)
+                {
+                    ManageGpuResidency(state, grContext, layer);
+                }
+
                 compositeGpuEnd = Stopwatch.GetTimestamp();
 
                 // Cross-cell overlap suppression (issue #438 Phase 2): remove
@@ -1051,7 +1140,7 @@ public static class S100VectorTileRenderer
                             canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
                     }
 
-                    Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+                    Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext, pinVisible: !offscreen);
                     compositeBaseEnd = Stopwatch.GetTimestamp();
 
                     // Draw point symbols + soundings live, on top of the composited
@@ -1139,14 +1228,19 @@ public static class S100VectorTileRenderer
                     () => TryCreateVisibleTileSnapshot(
                         state,
                         item.Key,
-                        item.Generation),
+                        item.Generation,
+                        tilePx),
                     () => IsTileVisible(
                         state,
                         item.Key,
                         item.Generation));
             }
         }
-        S100Diag.Telemetry.TileColdExposure.Record(coldExposure);
+        if (!offscreen)
+        {
+            S100Diag.Telemetry.TileColdExposure.Record(coldExposure);
+        }
+
         if (visibleQueueDepth > 0)
         {
             S100Diag.Telemetry.TileVisibleQueueDepth.Record(visibleQueueDepth);
@@ -1342,14 +1436,33 @@ public static class S100VectorTileRenderer
     private static SKImage? TryCreateVisibleTileSnapshot(
         TileState state,
         TileKey key,
-        long generation)
+        long generation,
+        int pixelSize)
     {
         lock (state.Sync)
         {
             return GetTileRelevance(state, key, generation) == TileRelevance.Visible
-                ? state.Cache.TryCreateSnapshot(key, generation)
+                ? state.Cache.TryCreateSnapshot(key, generation, pixelSize)
                 : null;
         }
+    }
+
+    /// <summary>
+    /// Whether publishing <paramref name="image"/> for <paramref name="key"/>
+    /// would replace a resident tile that already matches the live view's
+    /// device scale with one that does not (a job queued before the live scale
+    /// changed, landing late). Such a result is stale and is discarded. Call
+    /// under <c>state.Sync</c>.
+    /// </summary>
+    private static bool SupersededByLiveScale(TileState state, TileKey key, SKImage image)
+    {
+        if (state.CurrentViewport is not { } live)
+        {
+            return false;
+        }
+
+        var livePx = TilePixelSize(live.DeviceScale);
+        return image.Width != livePx && state.Cache.Contains(key, livePx);
     }
 
     /// <summary>
@@ -1390,13 +1503,15 @@ public static class S100VectorTileRenderer
     /// tile <i>selection</i> uses the enlarged <paramref name="coverWidth"/> ×
     /// <paramref name="coverHeight"/> so rotated corners stay covered, while the
     /// <i>projection</i> keeps the real <paramref name="widthDip"/> ×
-    /// <paramref name="heightDip"/>.
+    /// <paramref name="heightDip"/>. An off-screen frame passes
+    /// <paramref name="pinVisible"/> <see langword="false"/> so it does not
+    /// replace the live view's eviction pins with its own viewport's tiles.
     /// </summary>
     private static void Composite(
         SKCanvas canvas, TileState state, int band,
         double centerX, double centerY, double widthDip, double heightDip,
         double coverWidth, double coverHeight, double resolution, double rotationDeg,
-        GRContext? grContext)
+        GRContext? grContext, bool pinVisible = true)
     {
         var gpuCache = grContext is not null ? state.GpuTextures : null;
 
@@ -1433,8 +1548,11 @@ public static class S100VectorTileRenderer
         // tile that is on screen this frame, no matter how small the budget is:
         // a tile in active use must never be evicted by speculative/predicted
         // inserts, or it would flicker between rendered and blank.
-        state.Cache.Protect(target);
-        gpuCache?.Protect(target);
+        if (pinVisible)
+        {
+            state.Cache.Protect(target);
+            gpuCache?.Protect(target);
+        }
 
         // An empty target (no tile in view intersects this cell's content) is
         // trivially complete: there is nothing to draw and no gap to backfill.
@@ -1517,7 +1635,7 @@ public static class S100VectorTileRenderer
 
         if (DiagEnabled)
         {
-            DiagComposite(state, band, centerX, centerY, coverWidth, coverHeight, resolution, fallback);
+            DiagComposite(state, band, centerX, centerY, coverWidth, coverHeight, resolution, fallback, offscreen: !pinVisible);
         }
     }
 
@@ -1642,12 +1760,15 @@ public static class S100VectorTileRenderer
     /// Diagnostic-only (~1&#160;Hz rate-limited) per-frame composite summary, gated
     /// by <see cref="DiagEnabled"/>. Reports target-band tile completeness, the
     /// fallback bands actually drawn, and cache/GPU residency so multi-scale
-    /// ghosting and zoom-out blanking can be root-caused from the log.
+    /// ghosting and zoom-out blanking can be root-caused from the log. The
+    /// <c>targetPx</c> histogram (resident target tiles by pixel width) and the
+    /// <c>frame=live|offscreen</c> tag expose tiles blitted at the wrong device
+    /// scale.
     /// </summary>
     private static void DiagComposite(
         TileState state, int band,
         double centerX, double centerY, double widthDip, double heightDip, double resolution,
-        List<TileKey> fallback)
+        List<TileKey> fallback, bool offscreen)
     {
         var now = Environment.TickCount64;
         var last = Interlocked.Read(ref _diagLastTick);
@@ -1663,6 +1784,7 @@ public static class S100VectorTileRenderer
 
         int targetTotal = 0, targetPresent = 0;
         var present = new HashSet<TileKey>(state.Cache.SnapshotKeys());
+        var targetPx = new SortedDictionary<int, int>();
         var bandHist = new SortedDictionary<int, int>();
         foreach (var key in present)
         {
@@ -1676,6 +1798,11 @@ public static class S100VectorTileRenderer
             if (present.Contains(key))
             {
                 targetPresent++;
+                if (state.Cache.TryGet(key) is { } image)
+                {
+                    targetPx.TryGetValue(image.Width, out var n);
+                    targetPx[image.Width] = n + 1;
+                }
             }
         }
 
@@ -1690,7 +1817,9 @@ public static class S100VectorTileRenderer
         Console.Error.WriteLine(
             $"[S100.DIAG] band={band} res={resolution:F2} target={targetPresent}/{targetTotal} " +
             $"fallbackBands={fb} cache={state.Cache.Count}tiles/{state.Cache.ResidentBytes / (1024 * 1024)}MB " +
-            $"gpu={(state.GpuTextures?.Count.ToString() ?? "-")} bandHist=[{hist}]");
+            $"gpu={(state.GpuTextures?.Count.ToString() ?? "-")} bandHist=[{hist}] " +
+            $"targetPx=[{string.Join(",", targetPx.Select(kv => $"{kv.Key}:{kv.Value}"))}] " +
+            $"frame={(offscreen ? "offscreen" : "live")}");
     }
 
     /// <summary>
@@ -1857,6 +1986,28 @@ public static class S100VectorTileRenderer
     /// </summary>
     internal static void ReconcileGpuCachesForTest(object context) => ReconcileGpuCaches(context);
 
+    /// <summary>
+    /// Test-only seam: the pixel width of every tile resident in
+    /// <paramref name="layer"/>'s hot cache, keyed by tile, so a test can assert
+    /// which raster scale is being blitted. Empty when the layer has no state.
+    /// </summary>
+    internal static IReadOnlyDictionary<TileKey, int> CachedTilePixelSizesForTest(ILayer layer)
+    {
+        var sizes = new Dictionary<TileKey, int>();
+        if (States.TryGetValue(layer, out var state))
+        {
+            foreach (var key in state.Cache.SnapshotKeys())
+            {
+                if (state.Cache.TryGet(key) is { } image)
+                {
+                    sizes[key] = image.Width;
+                }
+            }
+        }
+
+        return sizes;
+    }
+
     /// <summary>Test-only seam: the current GPU-registry entry count.</summary>
     internal static int GpuRegistryEntryCountForTest
     {
@@ -1913,6 +2064,14 @@ public static class S100VectorTileRenderer
         if (grContext is not null && gpuCache is not null)
         {
             var gpu = gpuCache.TryGet(key);
+
+            // The raster tile can be replaced in place at another device scale;
+            // a texture twin of the old size is stale, so re-upload it.
+            if (gpu is not null && (gpu.Width != image.Width || gpu.Height != image.Height))
+            {
+                gpu = null;
+            }
+
             if (gpu is null)
             {
                 try
@@ -2322,7 +2481,11 @@ public static class S100VectorTileRenderer
                                 "Scene became null after ShouldWorkerExit returned false."),
                             state.BaseIndex,
                             priority,
-                            state.DiskNamespace,
+                            state.DiskNamespace is { } diskNamespace
+                                ? TileDiskCache.NamespaceFor(
+                                    diskNamespace,
+                                    TilePixelSize(state.PendingDeviceScale))
+                                : null,
                             queueWaitMs,
                             state.ActiveWorkers,
                             Volatile.Read(ref _activeWorkerTotal));
@@ -2400,11 +2563,20 @@ public static class S100VectorTileRenderer
             {
                 using var diskReadActivity = S100Diag.Telemetry.ActivitySource.StartActivity(
                     "s100.render.tile.stage.disk_read", ActivityKind.Internal);
+                var tilePx = TilePixelSize(job.DeviceScale);
                 foreach (var key in activeKeys)
                 {
                     var image = disk.TryRead(job.DiskNamespace, key);
                     if (image is null)
                     {
+                        continue;
+                    }
+
+                    // The namespace is per pixel size; a tile of another size
+                    // (a corrupt or foreign file) is a miss, never blitted soft.
+                    if (image.Width != tilePx || image.Height != tilePx)
+                    {
+                        image.Dispose();
                         continue;
                     }
 
@@ -2532,7 +2704,8 @@ public static class S100VectorTileRenderer
                         key,
                         job.Generation);
                     if (images.Remove(key, out var image)
-                        && relevance != TileRelevance.Irrelevant)
+                        && relevance != TileRelevance.Irrelevant
+                        && !SupersededByLiveScale(state, key, image))
                     {
                         state.Cache.Put(key, image);
                         published++;
@@ -2582,7 +2755,8 @@ public static class S100VectorTileRenderer
                     () => TryCreateVisibleTileSnapshot(
                         state,
                         key,
-                        job.Generation),
+                        job.Generation,
+                        TilePixelSize(job.DeviceScale)),
                     () => IsTileVisible(
                         state,
                         key,
@@ -3022,9 +3196,7 @@ public static class S100VectorTileRenderer
         var (minLon, minLat) = WebMercator.ToLonLat(fullMinX, fullMinY, clampLatitude: false);
         var (maxLon, maxLat) = WebMercator.ToLonLat(fullMaxX, fullMaxY, clampLatitude: false);
 
-        var sizeDip = TileGrid.TileSizeDip + 2 * GutterDip;
-        var px = (int)Math.Round(sizeDip * deviceScale);
-        px = Math.Clamp(px, 1, MaxImageDimension);
+        var px = TilePixelSize(deviceScale);
         activity?.SetTag("s100.render.tile.width_px", px);
         activity?.SetTag("s100.render.tile.height_px", px);
 
