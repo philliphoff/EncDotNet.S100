@@ -94,6 +94,15 @@ public static class S100VectorTileRenderer
     private const double CullMarginPx = TileGrid.TileSizeDip;
 
     /// <summary>
+    /// Padding, in DIP at the displayed resolution, around a rectangle tested
+    /// against a layer's <see cref="HiddenCoverage"/> (issue #691). The coverage
+    /// clip is anti-aliased, so a pixel straddling a finer coverage's edge keeps
+    /// part of the coarser layer; padding by a couple of pixels keeps every such
+    /// edge pixel drawn, so skipping hidden work stays pixel-identical.
+    /// </summary>
+    private const double HiddenMarginDip = 2.0;
+
+    /// <summary>
     /// How many bands away from the target a cached tile may be and still be
     /// drawn as a fill-the-gap backdrop. Bounding this is both correctness and
     /// safety: it stops tiles from many zoom levels stacking up at different
@@ -715,6 +724,22 @@ public static class S100VectorTileRenderer
             return;
         }
 
+        // Skip a coarser cell that a finer, currently-drawing cell hides across
+        // the whole viewport (issue #691). Its coverage-clip difference would
+        // erase every pixel it draws (tiles and live overlay alike), so treat it
+        // as culled. Null (no finer coverage active) skips nothing.
+        var hidden = CoverageClip.GetHiddenCoverage(layer, resolution);
+        if (hidden is not null && IsViewportHidden(hidden, viewport, resolution))
+        {
+            S100Diag.Telemetry.TileLayerHiddenSkipped.Add(1);
+            if (InvalidateViewport(state))
+            {
+                VectorLayerRepaint.Request(layer);
+            }
+
+            return;
+        }
+
         // Resolve the live GPU context from the compositor canvas (null on a
         // software/CPU surface or when residency is disabled). Phase 5: warm
         // tiles are promoted to GPU-resident textures so identical pixels are
@@ -765,8 +790,10 @@ public static class S100VectorTileRenderer
             // Only tiles that intersect this cell's base content can draw
             // anything; the rest would rasterise to pure transparency. Dropping
             // them keeps raster, cache, disk and per-frame blit work bounded by
-            // the part of the viewport this cell covers.
-            visible = WithContent(state, visible);
+            // the part of the viewport this cell covers. Tiles wholly under
+            // finer, currently-drawing coverage are dropped too: the coverage
+            // clip would erase them (issue #691).
+            visible = WithContent(state, visible, hidden);
 
             var currentViewport = new TileViewport(
                 centerX,
@@ -873,7 +900,7 @@ public static class S100VectorTileRenderer
                     state.VelocityX, state.VelocityY);
                 foreach (var key in predicted)
                 {
-                    if (!TileHasContent(state, key))
+                    if (!TileHasContent(state, key) || IsTileHidden(state, key, hidden))
                     {
                         continue;
                     }
@@ -915,7 +942,11 @@ public static class S100VectorTileRenderer
                     CrossBandPrewarmMaxTiles);
                 foreach (var key in crossBand)
                 {
-                    if (!TileHasContent(state, key))
+                    // Zooming in only adds active finer coverages, so a tile of a
+                    // finer band hidden now stays hidden there. Zooming out can
+                    // drop them, so coarser-band tiles are never skipped.
+                    if (!TileHasContent(state, key)
+                        || (key.Band > band && IsTileHidden(state, key, hidden)))
                     {
                         continue;
                     }
@@ -1051,7 +1082,7 @@ public static class S100VectorTileRenderer
                             canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
                     }
 
-                    Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+                    Composite(canvas, state, band, visible, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
                     compositeBaseEnd = Stopwatch.GetTimestamp();
 
                     // Draw point symbols + soundings live, on top of the composited
@@ -1254,17 +1285,87 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Filters <paramref name="keys"/> to the tiles that intersect base content
-    /// (see <see cref="TileHasContent"/>), returning the input list unchanged
-    /// when every tile qualifies. Call under <c>state.Sync</c>.
+    /// Whether <paramref name="key"/>'s tile core, padded by
+    /// <see cref="HiddenMarginDip"/>, lies wholly inside
+    /// <paramref name="hidden"/>, so the coverage clip would erase every pixel
+    /// it blits (issue #691). The padding uses the coarsest resolution the tile's
+    /// band is displayed at, so the answer holds across the band and is memoised
+    /// per tile until the hidden region changes. Call under <c>state.Sync</c>.
     /// </summary>
-    private static IReadOnlyList<TileKey> WithContent(TileState state, IReadOnlyList<TileKey> keys)
+    private static bool IsTileHidden(TileState state, TileKey key, HiddenCoverage? hidden)
+    {
+        if (hidden is null)
+        {
+            return false;
+        }
+
+        if (!ReferenceEquals(state.HiddenMemoOwner, hidden)
+            || state.HiddenMemo.Count >= HiddenMemoCapacity)
+        {
+            state.HiddenMemo.Clear();
+            state.HiddenMemoOwner = hidden;
+        }
+
+        if (state.HiddenMemo.TryGetValue(key, out var memo))
+        {
+            return memo;
+        }
+
+        var isHidden = IsTileCoreHidden(hidden, key);
+        state.HiddenMemo[key] = isHidden;
+        return isHidden;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="key"/>'s tile core, padded by
+    /// <see cref="HiddenMarginDip"/> at the coarsest resolution its band is
+    /// displayed at, lies wholly inside <paramref name="hidden"/>.
+    /// </summary>
+    internal static bool IsTileCoreHidden(HiddenCoverage hidden, TileKey key)
+    {
+        // BandForResolution picks the log-nearest band, so the live resolution
+        // is at most √2 coarser than the band's own.
+        var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
+        var margin = HiddenMarginDip * Math.Sqrt(2.0) * TileGrid.ResolutionForBand(key.Band);
+        return hidden.Covers(minX - margin, minY - margin, maxX + margin, maxY + margin);
+    }
+
+    private const int HiddenMemoCapacity = 4096;
+
+    /// <summary>
+    /// Whether the whole (rotation-aware) viewport, padded by
+    /// <see cref="HiddenMarginDip"/>, lies inside <paramref name="hidden"/>.
+    /// </summary>
+    internal static bool IsViewportHidden(HiddenCoverage hidden, Viewport viewport, double resolution)
+    {
+        var extent = viewport.ToExtent();
+        var margin = HiddenMarginDip * resolution;
+        return hidden.Covers(
+            extent.MinX - margin, extent.MinY - margin,
+            extent.MaxX + margin, extent.MaxY + margin);
+    }
+
+    /// <summary>
+    /// Filters <paramref name="keys"/> to the tiles that intersect base content
+    /// (see <see cref="TileHasContent"/>) and are not wholly hidden by finer
+    /// coverage (see <see cref="IsTileHidden"/>), returning the input list
+    /// unchanged when every tile qualifies. Call under <c>state.Sync</c>.
+    /// </summary>
+    private static IReadOnlyList<TileKey> WithContent(TileState state, IReadOnlyList<TileKey> keys, HiddenCoverage? hidden)
     {
         List<TileKey>? filtered = null;
+        var skippedHidden = 0;
         for (var i = 0; i < keys.Count; i++)
         {
             var key = keys[i];
-            if (TileHasContent(state, key))
+            var hasContent = TileHasContent(state, key);
+            var keep = hasContent && !IsTileHidden(state, key, hidden);
+            if (hasContent && !keep)
+            {
+                skippedHidden++;
+            }
+
+            if (keep)
             {
                 filtered?.Add(key);
             }
@@ -1276,6 +1377,11 @@ public static class S100VectorTileRenderer
                     filtered.Add(keys[j]);
                 }
             }
+        }
+
+        if (skippedHidden > 0)
+        {
+            S100Diag.Telemetry.TileHiddenSkipped.Add(skippedHidden);
         }
 
         return (IReadOnlyList<TileKey>?)filtered ?? keys;
@@ -1393,7 +1499,7 @@ public static class S100VectorTileRenderer
     /// <paramref name="heightDip"/>.
     /// </summary>
     private static void Composite(
-        SKCanvas canvas, TileState state, int band,
+        SKCanvas canvas, TileState state, int band, IReadOnlyList<TileKey> target,
         double centerX, double centerY, double widthDip, double heightDip,
         double coverWidth, double coverHeight, double resolution, double rotationDeg,
         GRContext? grContext)
@@ -1423,12 +1529,9 @@ public static class S100VectorTileRenderer
             entryAtStart.RotationSurface = null;
         }
 
-        // Target band visible tiles, and whether the band fully covers the
-        // viewport (every visible tile already cached).
-        var target = WithContent(
-            state,
-            TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band));
-
+        // The target-band visible tiles (with content and not hidden, as
+        // scheduled this frame).
+        //
         // Pin the visible set so neither the hot nor the GPU cache can evict a
         // tile that is on screen this frame, no matter how small the budget is:
         // a tile in active use must never be evicted by speculative/predicted
@@ -1436,8 +1539,10 @@ public static class S100VectorTileRenderer
         state.Cache.Protect(target);
         gpuCache?.Protect(target);
 
-        // An empty target (no tile in view intersects this cell's content) is
-        // trivially complete: there is nothing to draw and no gap to backfill.
+        // Whether the band fully covers the viewport (every visible tile
+        // already cached). An empty target (no tile in view intersects this
+        // cell's content) is trivially complete: there is nothing to draw and
+        // no gap to backfill.
         var targetComplete = true;
         foreach (var key in target)
         {
@@ -3383,6 +3488,11 @@ public static class S100VectorTileRenderer
 
         public readonly TileCache Cache = new(BudgetBytes);
         public readonly HashSet<TileKey> InFlight = new();
+
+        // Memoised IsTileHidden answers for the layer's current hidden region
+        // (issue #691); cleared when the region changes. Render thread, under Sync.
+        public HiddenCoverage? HiddenMemoOwner;
+        public readonly Dictionary<TileKey, bool> HiddenMemo = new();
 
         // Phase 5 GPU residency: GPU-resident texture twins of blitted tiles,
         // touched ONLY on the render thread (created/disposed on the GPU-context

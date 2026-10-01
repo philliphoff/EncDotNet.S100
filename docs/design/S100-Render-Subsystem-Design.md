@@ -518,6 +518,13 @@ Three instruments (Meter `EncDotNet.S100.Renderers.Mapsui`):
 - `s100.render.tile.prediction.rasterized` (Counter) — speculative tiles built;
 - `s100.render.tile.prediction.hits` (Counter) — speculative tiles later shown.
 
+Two counters record work skipped under finer coverage (issue #691):
+
+- `s100.render.tile.hidden.skipped` (Counter) — visible tiles per frame that a
+  finer, drawing cell hides entirely, so they are not scheduled or blitted;
+- `s100.render.tile.layer.hidden.skipped` (Counter) — layer frames skipped
+  because a finer cell hides the whole viewport.
+
 Two cold-path latency instruments quantify the user-felt cost of a cold
 gesture (zoom/pan starting from an empty cache):
 

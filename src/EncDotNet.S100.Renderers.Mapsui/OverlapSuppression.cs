@@ -79,7 +79,10 @@ public static class OverlapSuppression
 
         foreach (var cell in cells)
         {
-            var finer = CollectFinerCoverages(cell, cells);
+            // One array shared by all of the cell's layers, so the prepared
+            // hidden-region geometries (CoverageClip.GetHiddenCoverage) are
+            // built once per cell rather than once per layer.
+            FinerCoverage[]? finer = CollectFinerCoverages(cell, cells) is { } list ? [.. list] : null;
             foreach (var layer in cell.Layers)
                 CoverageClip.Set(layer, finer);
         }
