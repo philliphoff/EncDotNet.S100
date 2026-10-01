@@ -2734,9 +2734,6 @@
   <data name="Library_DirectoryUrlNotXml" xml:space="preserve">
     <value>Not a catalogue: the URL did not return XML.</value>
   </data>
-  <data name="Library_DirectoryUrlS100" xml:space="preserve">
-    <value>Online S-100 exchange catalogues are not supported yet.</value>
-  </data>
   <data name="Library_FeedProducts" xml:space="preserve">
     <value>Products</value>
   </data>
@@ -2910,6 +2907,9 @@
   </data>
   <data name="Library_Property_packageTitle" xml:space="preserve">
     <value>Package title</value>
+  </data>
+  <data name="Library_Property_gridResolution" xml:space="preserve">
+    <value>Grid resolution (m)</value>
   </data>
   <data name="Library_Property_encodingFormat" xml:space="preserve">
     <value>Encoding format</value>
@@ -3399,5 +3399,79 @@
   </data>
   <data name="Library_Quick_ManifestSub" xml:space="preserve">
     <value>Named groups of local folders, from a .s100collection.json file</value>
+  </data>
+  <data name="Library_StatusLine_CatalogueFormat" xml:space="preserve">
+    <value>Catalogue {0}</value>
+    <comment>{0}: the date the remote catalogue was generated</comment>
+  </data>
+  <data name="Library_StatusLine_CatalogueOfflineFormat" xml:space="preserve">
+    <value>Offline · catalogue cached {0}</value>
+    <comment>{0}: time (today) or date the cached catalogue was fetched</comment>
+  </data>
+  <data name="Library_StatusLine_NotForNavigation" xml:space="preserve">
+    <value>not for navigation</value>
+  </data>
+  <data name="Library_Host_Aws" xml:space="preserve">
+    <value>AWS</value>
+    <comment>Where a catalogue is hosted: Amazon Web Services (AWS Open Data)</comment>
+  </data>
+  <data name="Library_Host_Web" xml:space="preserve">
+    <value>Web</value>
+    <comment>Where a catalogue is hosted: an ordinary web server</comment>
+  </data>
+  <data name="Library_Format_S100Catalogue" xml:space="preserve">
+    <value>S-100 catalogue</value>
+  </data>
+  <data name="Library_Chip_NotForNavigation" xml:space="preserve">
+    <value>Not for navigation</value>
+  </data>
+  <data name="Wizard_RegionsHeaderFormat" xml:space="preserve">
+    <value>Regions · {0:N0}</value>
+  </data>
+  <data name="Wizard_AreasHeaderFormat" xml:space="preserve">
+    <value>{0} · {1:N0} areas</value>
+    <comment>{0}: region name; {1}: number of areas</comment>
+  </data>
+  <data name="Wizard_ResolutionTitle" xml:space="preserve">
+    <value>Resolution</value>
+  </data>
+  <data name="Wizard_ResolutionAll" xml:space="preserve">
+    <value>All resolutions</value>
+  </data>
+  <data name="Wizard_JoinAndFormat" xml:space="preserve">
+    <value>{0} and {1}</value>
+    <comment>Joins a list: {0}: the items but the last, comma-separated; {1}: the last item</comment>
+  </data>
+  <data name="Wizard_PurposeResolutionFormat" xml:space="preserve">
+    <value>{0} {1:0.##} m</value>
+    <comment>{0}: navigation purpose (Port); {1}: grid resolution in metres</comment>
+  </data>
+  <data name="Wizard_TilesFormat" xml:space="preserve">
+    <value>{0:N0} tiles</value>
+  </data>
+  <data name="Wizard_TilesSizeFormat" xml:space="preserve">
+    <value>{0:N0} tiles · {1}</value>
+    <comment>{1}: download size</comment>
+  </data>
+  <data name="Wizard_TilesSizingFormat" xml:space="preserve">
+    <value>{0:N0} tiles · sizing…</value>
+    <comment>Shown while the download size is being looked up</comment>
+  </data>
+  <data name="Wizard_TilesOnlineFormat" xml:space="preserve">
+    <value>{0:N0} tiles · {1} online</value>
+    <comment>{1}: total download size</comment>
+  </data>
+  <data name="Wizard_AreasTilesFormat" xml:space="preserve">
+    <value>{0:N0} areas · {1}</value>
+    <comment>{1}: Wizard_TilesSizeFormat or similar</comment>
+  </data>
+  <data name="Wizard_NothingDownloadsFormat" xml:space="preserve">
+    <value>{0} · nothing downloads yet</value>
+  </data>
+  <data name="Wizard_Review_Use" xml:space="preserve">
+    <value>Use</value>
+  </data>
+  <data name="Wizard_Review_NotForNavigation" xml:space="preserve">
+    <value>Not for navigation</value>
   </data>
 </root>

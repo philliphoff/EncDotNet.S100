@@ -288,6 +288,81 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task S102_regions_list_their_areas_sized_when_opened_and_build_a_scoped_source()
+    {
+        var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("noaa-s102")!;
+        var listed = new List<string>();
+        var vm = new AddToLibraryDialogViewModel(
+            _library,
+            null,
+            loadS100Catalogue: (uri, _) =>
+            {
+                using var stream = File.OpenRead(LibraryTestContext.RepoFile(
+                    "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-s102-catalog.xml"));
+                return Task.FromResult(EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100CatalogueReader.Read(stream, uri));
+            },
+            listS100Folders: (catalogue, folders, _) =>
+            {
+                listed.AddRange(folders);
+                IReadOnlyDictionary<Uri, EncDotNet.S100.Collections.RemoteCatalogues.S3Object>? sizes = catalogue.Items
+                    .Where(i => folders.Any(f => EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100Catalogue.FolderOf(i).StartsWith(f, StringComparison.Ordinal)))
+                    .Select(i => ((RemoteItemLocation)i.Location).Uri)
+                    .ToDictionary(u => u, u => new EncDotNet.S100.Collections.RemoteCatalogues.S3Object(u, 3_000_000, null));
+                return Task.FromResult<IReadOnlyDictionary<Uri, EncDotNet.S100.Collections.RemoteCatalogues.S3Object>?>(sizes);
+            });
+
+        var one = LibraryItemViewModel.FormatBytes(3_000_000);
+        var two = LibraryItemViewModel.FormatBytes(6_000_000);
+        vm.Initialize(known, targetCollectionId: null);
+        Assert.Equal(AddToLibraryKind.S100Catalogue, vm.Kind);
+        Assert.True(vm.IsOnlineFeed);
+        Assert.True(vm.HasReviewUse);
+
+        await vm.LoadCatalogAsync();
+
+        Assert.True(vm.IsRegionPicker);
+        Assert.False(vm.HasFacetTabs);
+        Assert.Equal(["California", "Northeast", "Oregon", "Southeast"], vm.FacetGroups.Select(g => g.Title));
+        Assert.Equal(["Port and Transit", "Port 4 m", "Transit 16 m"], vm.Resolutions.Select(r => r.Label));
+        Assert.True(vm.HasResolutions);
+        Assert.Contains("2026-09-30", vm.CatalogueDateText);
+        Assert.Equal("5 tiles", vm.EverythingSummary);
+
+        // The first region is listed on load; the others say so until opened.
+        Assert.Equal(["California"], listed);
+        Assert.Equal($"1 tiles · {one}", vm.FacetGroups[0].Options.Single().Detail);
+        var northeast = vm.FacetGroups[1];
+        Assert.Equal("2 tiles · sizing…", northeast.Options.Single().Detail);
+
+        vm.SelectedFacetGroup = northeast;
+        await Task.Yield();
+        Assert.Equal(["California", "Northeast"], listed);
+        Assert.Equal($"2 tiles · {two}", northeast.Options.Single().Detail);
+        Assert.Equal("NORTHEAST · 1 AREAS", vm.AreasHeader);
+
+        northeast.Options.Single().IsSelected = true;
+        Assert.False(vm.IncludeAll);
+        Assert.Equal(1, northeast.SelectedCount);
+        Assert.Equal($"1 areas · 2 tiles · {two}", vm.SelectionSummary);
+        Assert.Equal($"1 areas · 2 tiles · {two} · nothing downloads yet", vm.ScopeSummary);
+        Assert.Equal("NOAA S-102 Bathymetry — Boston", vm.NewCollectionName);
+
+        vm.SelectedResolution = vm.Resolutions[1];
+        Assert.Equal($"1 areas · 1 tiles · {one}", vm.SelectionSummary);
+        Assert.Equal($"1 tiles · {one}", northeast.Options.Single().Detail);
+        Assert.Equal("NOAA S-102 Bathymetry — Boston · Port 4 m", vm.NewCollectionName);
+        Assert.True(vm.CanContinueFromScope);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<S100CatalogueFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(known.CatalogUri, source.CatalogUri);
+        Assert.Equal(["Northeast/Boston"], source.Filter.Folders);
+        Assert.Equal(["port"], source.Filter.NavigationPurposes);
+        Assert.Equal("Boston · Port 4 m", source.DisplayName);
+    }
+
+    [Fact]
     public async Task Ticking_a_value_chooses_only_what_is_selected()
     {
         var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);

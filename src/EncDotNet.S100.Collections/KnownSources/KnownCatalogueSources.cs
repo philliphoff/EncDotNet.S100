@@ -17,6 +17,12 @@ public enum KnownCatalogueFormat
 
     /// <summary>An S-100 feed (<c>encdotnet-s100-feed</c> JSON); see <see cref="S100FeedSource"/>.</summary>
     S100Feed,
+
+    /// <summary>
+    /// A remote S-100 exchange catalogue (<c>CATALOG.XML</c>) with its datasets
+    /// beside it, such as NOAA's S-102 on AWS (issue #685); see <see cref="S100CatalogueFeedSource"/>.
+    /// </summary>
+    S100ExchangeCatalogue,
 }
 
 /// <summary>What coverage a catalogue publishes for its cells.</summary>
@@ -47,6 +53,8 @@ public enum KnownCatalogueCoverage
 /// <param name="Editions">True when the catalogue lists editions and updates (so UPDATE can be detected).</param>
 /// <param name="Sizes">True when the catalogue lists download sizes.</param>
 /// <param name="Note">A short description shown with the entry, if any.</param>
+/// <param name="Product">The one product specification the catalogue publishes (e.g. <c>S-102</c>), if it says.</param>
+/// <param name="NotForNavigation">True when the provider marks all of the catalogue's data as not for navigation.</param>
 public sealed record KnownCatalogueSource(
     string Id,
     string Name,
@@ -58,7 +66,9 @@ public sealed record KnownCatalogueSource(
     KnownCatalogueCoverage Coverage,
     bool Editions,
     bool Sizes,
-    string? Note = null);
+    string? Note = null,
+    string? Product = null,
+    bool NotForNavigation = false);
 
 /// <summary>
 /// The curated list of known online chart catalogues (issue #670), maintained
@@ -110,7 +120,9 @@ public static class KnownCatalogueSources
                 s.Coverage ?? KnownCatalogueCoverage.None,
                 s.Editions,
                 s.Sizes,
-                s.Note))
+                s.Note,
+                string.IsNullOrWhiteSpace(s.Product) ? null : s.Product.Trim(),
+                s.NotForNavigation))
             .ToArray();
     }
 
@@ -124,7 +136,8 @@ public static class KnownCatalogueSources
         ArgumentNullException.ThrowIfNull(sources);
 
         var document = new Document(1, sources.Select(s => new Entry(
-            s.Id, s.Name, s.Provider, s.Region, s.Format, s.CatalogUri, s.Homepage, s.Coverage, s.Editions, s.Sizes, s.Note))
+            s.Id, s.Name, s.Provider, s.Region, s.Format, s.CatalogUri, s.Homepage, s.Coverage, s.Editions, s.Sizes, s.Note,
+            s.Product, s.NotForNavigation))
             .ToArray());
         JsonSerializer.Serialize(stream, document, WriteOptions);
     }
@@ -143,6 +156,7 @@ public static class KnownCatalogueSources
             KnownCatalogueFormat.NoaaEnc => (KnownCatalogueCoverage.Polygons, true, true),
             KnownCatalogueFormat.UsaceIenc => (KnownCatalogueCoverage.BoundingBoxes, true, true),
             KnownCatalogueFormat.S100Feed => (KnownCatalogueCoverage.Polygons, true, true),
+            KnownCatalogueFormat.S100ExchangeCatalogue => (KnownCatalogueCoverage.Polygons, true, false),
             _ => (KnownCatalogueCoverage.None, false, false),
         };
         return new KnownCatalogueSource(
@@ -187,7 +201,9 @@ public static class KnownCatalogueSources
         KnownCatalogueCoverage? Coverage,
         bool Editions,
         bool Sizes,
-        string? Note);
+        string? Note,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Product = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NotForNavigation = false);
 
     /// <summary>Reads camelCase enum names; an unknown name reads as <see langword="null"/> so the entry can be skipped.</summary>
     private sealed class LenientEnumConverter<T> : JsonConverter<T?>

@@ -14,6 +14,7 @@ Key types:
   - `S128CatalogueSource`
   - `NoaaEncFeedSource`
   - `UsaceIencFeedSource`
+  - `S100CatalogueFeedSource`
 - **`CollectionIndexer`** — indexes any supported source. It reuses a previous `SourceIndex` when the source's fingerprint is unchanged.
 - **`LocalSourceIndexer`** — handles folders and exchange sets:
   - S-100 exchange sets (`CATALOG.XML`), including their GML coverage polygons.
@@ -31,10 +32,17 @@ Key types:
   - USACE's `edition` value (e.g. `22.16`) is read as edition 22, update 16.
   - `UsaceIencFilter` scopes a source by river, and `UsaceIencFeedIndexer.Rivers` gives cell counts and sizes per river.
   - Caching is the same as for the NOAA feed.
+- **`S100CatalogueFeedIndexer`** — handles remote S-100 exchange catalogues (`CATALOG.XML`) published over HTTP with their datasets beside them, such as NOAA's S-102 bathymetry on AWS Open Data:
+  - Dataset file names (including `file:../…`) resolve against the catalogue URL. Each dataset becomes an online item with its coverage polygons and edition, downloading as its own file.
+  - Items keep their identity across editions: NOAA's version suffixes are dropped from tile names (`102US004SC1EV262247` → `102US004SC1EV`).
+  - Each dataset's folder below the exchange set's root (for NOAA's S-102, `Region/Area`) is its group. `S100CatalogueFilter` scopes a source by folder and navigation purpose, and `S100CatalogueFacets` summarises the regions, areas and purposes.
+  - S-100 catalogues carry no sizes. When the catalogue is in an S3 bucket, `S3ObjectListing` lists the selected folders for sizes and dates.
+  - Gzip-encoded catalogues are read as they are. Caching is the same as for the NOAA feed.
 - **`EncCellDownloader`** — downloads a cell's zip into a managed folder:
   - The zip is first written to a `.partial` file, then extracted to a staging folder.
   - The new copy replaces any old one only once it is complete.
   - It finds the cell's layout itself, so NOAA, USACE and bare-`.000` zips all work.
+  - A download that is not a zip is kept as a bare file when the item states its layout (remote S-100 datasets).
 - **`KnownCatalogueSources`** — the curated list of known online chart catalogues. See the next section.
 - **`CollectionJson`** — JSON persistence:
   - collection definitions are written as indented JSON
@@ -50,11 +58,13 @@ To add a catalogue:
 
 - **Point at the provider's own catalogue URL.** Don't copy entries or data from other projects' source lists, and never from GPL-licensed ones such as OpenCPN's.
 - **Check the licence** of any third-party list you reference. For example, the community `chartcatalogs/catalogs` lists are CC0.
-- **Use a supported `format`** (`noaaEnc` or `usaceIenc`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
+- **Use a supported `format`** (`noaaEnc`, `usaceIenc`, `chartCatalogs`, `s100Feed` or `s100ExchangeCatalogue`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
 - **Describe what the catalogue provides honestly:**
   - `coverage`: `polygons`, `boundingBoxes` or `none`
   - `editions`: whether it lists editions and updates
-  - `sizes`: whether it lists download sizes
+  - `sizes`: whether it lists download sizes (or, for an S-100 catalogue in an S3 bucket, whether they can be listed)
+  - `product` (optional): the one product the catalogue publishes, e.g. `S-102`
+  - `notForNavigation` (optional): `true` when the provider marks all its data as not for navigation
 
   These drive the quality chips users see.
 

@@ -31,6 +31,38 @@ public class KnownCatalogueSourcesTests
     }
 
     [Fact]
+    public void NOAA_S102_is_a_remote_S100_catalogue_not_for_navigation()
+    {
+        var s102 = KnownCatalogueSources.Find("noaa-s102")!;
+
+        Assert.Equal(KnownCatalogueFormat.S100ExchangeCatalogue, s102.Format);
+        Assert.Equal("S-102", s102.Product);
+        Assert.True(s102.NotForNavigation);
+        Assert.Equal("noaa-s102-pds.s3.amazonaws.com", s102.CatalogUri.Host);
+    }
+
+    [Fact]
+    public void Product_and_not_for_navigation_round_trip_and_default_when_absent()
+    {
+        var sources = new[]
+        {
+            new KnownCatalogueSource("a", "A", "P", ["R"], KnownCatalogueFormat.S100ExchangeCatalogue,
+                new Uri("https://example.test/CATALOG.XML"), null, KnownCatalogueCoverage.Polygons, true, false,
+                Product: "S-104", NotForNavigation: true),
+            new KnownCatalogueSource("b", "B", "P", ["R"], KnownCatalogueFormat.NoaaEnc,
+                new Uri("https://example.test/b.xml"), null, KnownCatalogueCoverage.Polygons, true, true),
+        };
+        using var stream = new MemoryStream();
+        KnownCatalogueSources.Write(stream, sources);
+        Assert.DoesNotContain("\"product\": null", Encoding.UTF8.GetString(stream.ToArray()), StringComparison.Ordinal);
+        stream.Position = 0;
+
+        var read = KnownCatalogueSources.Read(stream);
+        Assert.Equal(["S-104", null], read.Select(s => s.Product));
+        Assert.Equal([true, false], read.Select(s => s.NotForNavigation));
+    }
+
+    [Fact]
     public void Community_lists_are_known_with_no_coverage_editions_or_sizes()
     {
         var community = KnownCatalogueSources.All.Where(s => s.Format == KnownCatalogueFormat.ChartCatalogs).ToArray();

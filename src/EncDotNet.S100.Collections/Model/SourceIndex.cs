@@ -30,6 +30,13 @@ public sealed record SourceIndex(
     /// selected manifest groups); empty for sources without groups.
     /// </summary>
     public IReadOnlyList<SourceIndexGroup> Groups { get; init; } = [];
+
+    /// <summary>
+    /// When the publisher last generated the source's catalogue (for example a
+    /// remote exchange catalogue's own date-time), if it says; otherwise
+    /// <see langword="null"/>.
+    /// </summary>
+    public DateTimeOffset? PublishedAt { get; init; }
 }
 
 /// <summary>A group of a <see cref="SourceIndex"/>, such as one group of a collection manifest.</summary>

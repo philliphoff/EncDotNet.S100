@@ -14,25 +14,30 @@ namespace EncDotNet.S100.Collections.KnownSources;
 /// <param name="Machine">For an S-100 feed, the publishing computer's name, when the feed gives it.</param>
 public sealed record CatalogueProbe(string? RootElement, KnownCatalogueFormat? Format, string? Title, bool IsJson = false, string? Machine = null)
 {
-    /// <summary>True when the document is an S-100 exchange catalogue, recognised but not yet supported online.</summary>
-    public bool IsS100ExchangeCatalogue => RootElement == "S100_ExchangeCatalogue";
+    /// <summary>True when the document is an S-100 exchange catalogue (<c>CATALOG.XML</c>).</summary>
+    public bool IsS100ExchangeCatalogue => RootElement == CatalogueFormatDetector.S100ExchangeCatalogueRoot;
 }
 
 /// <summary>
 /// Recognises an online chart catalogue's format from its root element
 /// (issue #670): <c>EncProductCatalog</c> (NOAA), <c>IENC…ProductCatalog</c>
-/// (USACE) and <c>RncProductCatalogChartCatalogs</c> (community lists) — and
+/// (USACE), <c>RncProductCatalogChartCatalogs</c> (community lists) and
+/// <c>S100_ExchangeCatalogue</c> (remote S-100 catalogues, issue #685) — and
 /// S-100 feeds, JSON whose <c>format</c> is <c>encdotnet-s100-feed</c>
 /// (issue #680). Only the start of the document is read.
 /// </summary>
 public static class CatalogueFormatDetector
 {
+    /// <summary>The root element of an S-100 exchange catalogue (<c>CATALOG.XML</c>).</summary>
+    public const string S100ExchangeCatalogueRoot = "S100_ExchangeCatalogue";
+
     /// <summary>The format a root element names, or <see langword="null"/> when it is not a supported catalogue.</summary>
     public static KnownCatalogueFormat? FromRootElement(string? localName) => localName switch
     {
         "EncProductCatalog" => KnownCatalogueFormat.NoaaEnc,
         ChartCatalogsProductCatalogReader.RootElementName => KnownCatalogueFormat.ChartCatalogs,
         { } name when UsaceIencProductCatalogReader.IsCatalogueRoot(name) => KnownCatalogueFormat.UsaceIenc,
+        S100ExchangeCatalogueRoot => KnownCatalogueFormat.S100ExchangeCatalogue,
         _ => null,
     };
 

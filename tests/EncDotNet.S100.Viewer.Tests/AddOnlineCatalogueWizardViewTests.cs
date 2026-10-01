@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.VisualTree;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 
@@ -43,6 +44,49 @@ public sealed class AddOnlineCatalogueWizardViewTests
             wizard.NextCommand.Execute(null);
             Assert.Equal(2, wizard.CurrentStep);
             wizard.Scope!.States[0].IsSelected = true;
+            Layout(window);
+
+            wizard.NextCommand.Execute(null);
+            Assert.Equal(3, wizard.CurrentStep);
+            Layout(window);
+
+            Assert.Equal(640, view.Bounds.Width);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public void View_LoadsAndLaysOut_with_the_S102_region_picker()
+    {
+        using var context = new LibraryTestContext();
+        using var library = context.CreateService();
+
+        HeadlessTest.Run(() =>
+        {
+            var wizard = new AddOnlineCatalogueWizardViewModel(
+                new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
+                    Task.FromResult(new CatalogueProbe(null, null, null))),
+                () => new AddToLibraryDialogViewModel(library, null,
+                    loadS100Catalogue: (uri, _) =>
+                    {
+                        using var stream = File.OpenRead(LibraryTestContext.RepoFile(
+                            "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-s102-catalog.xml"));
+                        return Task.FromResult(RemoteS100CatalogueReader.Read(stream, uri));
+                    }));
+            wizard.Start(null);
+
+            var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
+            var window = new Window { Content = view, Width = 640, Height = 760 };
+            window.Show();
+            wizard.Directory.SelectedEntry = wizard.Directory.Entries.Single(e => e.Source.Id == "noaa-s102");
+            Layout(window);
+
+            wizard.NextCommand.Execute(null);
+            Assert.Equal(2, wizard.CurrentStep);
+            Assert.True(wizard.Scope!.IsRegionPicker);
+            wizard.Scope.SelectedFacetGroup = wizard.Scope.FacetGroups[1];
+            wizard.Scope.FacetGroups[1].Options[0].IsSelected = true;
+            wizard.Scope.SelectedResolution = wizard.Scope.Resolutions[1];
             Layout(window);
 
             wizard.NextCommand.Execute(null);

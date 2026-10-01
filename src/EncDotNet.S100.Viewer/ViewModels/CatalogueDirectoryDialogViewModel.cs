@@ -219,8 +219,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             var probe = await _probe!(uri, CancellationToken.None).ConfigureAwait(true);
             if (probe.Format is not { } format)
             {
-                UrlError = probe.IsS100ExchangeCatalogue ? Strings.Library_DirectoryUrlS100
-                    : probe.IsJson ? Strings.Library_DirectoryUrlJson
+                UrlError = probe.IsJson ? Strings.Library_DirectoryUrlJson
                     : probe.RootElement is { } root ? string.Format(CultureInfo.CurrentCulture, Strings.Library_DirectoryUrlUnsupportedFormat, root)
                     : Strings.Library_DirectoryUrlNotXml;
                 return;
@@ -385,8 +384,17 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     /// <summary>The known source.</summary>
     public KnownCatalogueSource Source { get; }
 
-    /// <summary>"NOAA ENC", "USACE IENC", "chartcatalogs" or "S-100 feed".</summary>
-    public string FormatText => FormatLabel(Source.Format);
+    /// <summary>
+    /// "NOAA ENC", "USACE IENC", "chartcatalogs" or "S-100 feed"; for a
+    /// catalogue of one product, the product and where it is hosted ("S-102 · AWS").
+    /// </summary>
+    public string FormatText => Source.Product is { } product
+        ? $"{product} · {HostLabel(Source.CatalogUri)}"
+        : FormatLabel(Source.Format);
+
+    /// <summary>"AWS" for Amazon Web Services (AWS Open Data); otherwise "Web".</summary>
+    private static string HostLabel(Uri uri) =>
+        uri.Host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) ? Strings.Library_Host_Aws : Strings.Library_Host_Web;
 
     /// <summary>The label for a catalogue format.</summary>
     public static string FormatLabel(KnownCatalogueFormat format) => format switch
@@ -394,6 +402,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         KnownCatalogueFormat.UsaceIenc => Strings.Library_Format_UsaceIenc,
         KnownCatalogueFormat.ChartCatalogs => Strings.Library_Format_ChartCatalogs,
         KnownCatalogueFormat.S100Feed => Strings.Library_Format_S100Feed,
+        KnownCatalogueFormat.S100ExchangeCatalogue => Strings.Library_Format_S100Catalogue,
         _ => Strings.Library_Format_NoaaEnc,
     };
 
@@ -441,6 +450,9 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     public string SizesChip => Source.Sizes ? Strings.Library_Chip_Sizes : Strings.Library_Chip_NoSizes;
 
     public bool IsSizesLimited => !Source.Sizes;
+
+    /// <summary>True when the provider marks the catalogue's data as not for navigation (an amber chip).</summary>
+    public bool IsNotForNavigation => Source.NotForNavigation;
 
     public string CatalogUrl => Source.CatalogUri.AbsoluteUri;
 

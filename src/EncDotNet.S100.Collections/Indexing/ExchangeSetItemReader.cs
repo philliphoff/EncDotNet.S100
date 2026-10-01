@@ -124,6 +124,8 @@ internal static class ExchangeSetItemReader
         AddIfPresent(properties, "navigationPurpose", dataset.NavigationPurpose);
         AddIfPresent(properties, "encodingFormat", dataset.EncodingFormat);
         AddIfPresent(properties, "purpose", dataset.Purpose);
+        if (dataset.DataCoverages.Select(c => c.ApproximateGridResolution).FirstOrDefault(r => r is > 0) is { } resolution)
+            properties["gridResolution"] = resolution.ToString("0.###", CultureInfo.InvariantCulture);
         if (dataset.DataProtection)
             properties["dataProtection"] = "true";
         if (dataset.NotForNavigation)

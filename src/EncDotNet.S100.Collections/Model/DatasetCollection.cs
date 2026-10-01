@@ -38,6 +38,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(ChartCatalogsFeedSource), "chartCatalogsFeed")]
 [JsonDerivedType(typeof(S100FeedSource), "s100Feed")]
 [JsonDerivedType(typeof(LocalManifestSource), "localManifest")]
+[JsonDerivedType(typeof(S100CatalogueFeedSource), "s100CatalogueFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -149,4 +150,18 @@ public sealed record S100FeedSource(Guid Id, string? DisplayName, Uri FeedUri, S
 /// <param name="Path">The absolute path of the manifest file.</param>
 /// <param name="Filter">Which groups to include.</param>
 public sealed record LocalManifestSource(Guid Id, string? DisplayName, string Path, LocalManifestFilter Filter)
+    : CollectionSource(Id, DisplayName);
+
+/// <summary>
+/// A remote S-100 exchange catalogue (<c>CATALOG.XML</c>) published over HTTP
+/// with its datasets beside it — for example NOAA's S-102 bathymetry on AWS
+/// Open Data (issue #685) — optionally scoped to some of its folders and
+/// navigation purposes. Its items carry the catalogue's coverage and are
+/// online (<see cref="RemoteItemLocation"/>) until downloaded.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="CatalogUri">The catalogue's URL; dataset file names resolve against it.</param>
+/// <param name="Filter">Which datasets to include.</param>
+public sealed record S100CatalogueFeedSource(Guid Id, string? DisplayName, Uri CatalogUri, S100CatalogueFilter Filter)
     : CollectionSource(Id, DisplayName);
