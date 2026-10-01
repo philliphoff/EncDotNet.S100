@@ -8,6 +8,7 @@ public sealed class MapsuiMapTimeSnapshot
 {
     private IReadOnlyList<DateTime> _samples = [];
     private IReadOnlyList<MapsuiMapTimeSegment> _coverageSegments = [];
+    private IReadOnlyList<MapsuiMapTimedDataset> _datasets = [];
 
     /// <summary>Gets an empty time snapshot.</summary>
     public static MapsuiMapTimeSnapshot Empty { get; } = new();
@@ -46,6 +47,27 @@ public sealed class MapsuiMapTimeSnapshot
         }
     }
 
+    /// <summary>
+    /// Gets the registered datasets that have time samples, with the first and
+    /// last of them, in registration order — for example to name the forecast
+    /// runs the timeline spans.
+    /// </summary>
+    public IReadOnlyList<MapsuiMapTimedDataset> Datasets
+    {
+        get => _datasets;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _datasets = Array.AsReadOnly(value.ToArray());
+        }
+    }
+
     /// <summary>Gets whether at least one time sample is registered.</summary>
     public bool IsActive => Samples.Count > 0;
 }
+
+/// <summary>A registered dataset that has time samples, and the span they cover.</summary>
+/// <param name="Name">The dataset's name (usually its file name without extension).</param>
+/// <param name="First">Its earliest time sample.</param>
+/// <param name="Last">Its latest time sample.</param>
+public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime Last);

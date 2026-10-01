@@ -497,6 +497,18 @@ internal static class Strings
     public static string TimelinePanel_NoData => Get(nameof(TimelinePanel_NoData));
     public static string TimelinePanel_EmptyTitle => Get(nameof(TimelinePanel_EmptyTitle));
     public static string TimelinePanel_EmptyDescription => Get(nameof(TimelinePanel_EmptyDescription));
+    public static string TimelinePanel_NowLaterFormat => Get(nameof(TimelinePanel_NowLaterFormat));
+    public static string TimelinePanel_NowEarlierFormat => Get(nameof(TimelinePanel_NowEarlierFormat));
+    public static string TimelinePanel_Now => Get(nameof(TimelinePanel_Now));
+    public static string TimelinePanel_NowLabel => Get(nameof(TimelinePanel_NowLabel));
+    public static string TimelinePanel_ForecastEndedFormat => Get(nameof(TimelinePanel_ForecastEndedFormat));
+    public static string TimelinePanel_RefreshForRuns => Get(nameof(TimelinePanel_RefreshForRuns));
+    public static string TimelinePanel_HoursFormat => Get(nameof(TimelinePanel_HoursFormat));
+    public static string TimelinePanel_DaysFormat => Get(nameof(TimelinePanel_DaysFormat));
+    public static string TimelinePanel_MinutesFormat => Get(nameof(TimelinePanel_MinutesFormat));
+    public static string TimelinePanel_Hourly => Get(nameof(TimelinePanel_Hourly));
+    public static string TimelinePanel_EveryHoursFormat => Get(nameof(TimelinePanel_EveryHoursFormat));
+    public static string TimelinePanel_EveryMinutesFormat => Get(nameof(TimelinePanel_EveryMinutesFormat));
 
     // Measure Mode
     public static string Tooltip_MeasureMode => Get(nameof(Tooltip_MeasureMode));
@@ -1170,6 +1182,7 @@ internal static class Strings
     public static string Library_TapListThese => Get(nameof(Library_TapListThese));
     public static string Tooltip_ClearTap => Get(nameof(Tooltip_ClearTap));
     public static string Tooltip_BulkOffline => Get(nameof(Tooltip_BulkOffline));
+    public static string Tooltip_TimelineNow => Get(nameof(Tooltip_TimelineNow));
     public static string Menu_AddLibraryManifest => Get(nameof(Menu_AddLibraryManifest));
     public static string FilePicker_ManifestTitle => Get(nameof(FilePicker_ManifestTitle));
     public static string FilePicker_ManifestType => Get(nameof(FilePicker_ManifestType));
