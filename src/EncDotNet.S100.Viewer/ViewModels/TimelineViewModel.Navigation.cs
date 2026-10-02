@@ -56,6 +56,7 @@ internal sealed partial class TimelineViewModel
     private static readonly TimeSpan MinimumZoomSpan = TimeSpan.FromHours(1);
 
     private bool _scrubbing;
+    private bool _rebuilding;
     private TimelineStepKind _stepKind = TimelineStepKind.Hour;
     private string? _driverName;
     private (DateTime Start, DateTime End)? _zoom;
@@ -91,12 +92,17 @@ internal sealed partial class TimelineViewModel
 
     // ── axis ────────────────────────────────────────────────────────────
 
-    /// <summary>The axis for the visible window, built on first use.</summary>
+    /// <summary>
+    /// The axis for the visible window, built on first use while data is
+    /// loaded. A rebuild raises the axis properties, whose getters come back
+    /// here, so building is skipped while one is under way (and while nothing
+    /// is loaded, when there is nothing to build).
+    /// </summary>
     private TimelineAxisMap? Axis
     {
         get
         {
-            if (_axis is null)
+            if (_axis is null && !_rebuilding && _service.IsActive)
                 RebuildAxis();
             return _axis;
         }
@@ -128,6 +134,22 @@ internal sealed partial class TimelineViewModel
     /// </summary>
     private void RebuildAxis()
     {
+        if (_rebuilding)
+            return;
+        _rebuilding = true;
+        try
+        {
+            RebuildAxisCore();
+        }
+        finally
+        {
+            _rebuilding = false;
+        }
+        RaiseAxis();
+    }
+
+    private void RebuildAxisCore()
+    {
         if (FullWindow is not { } full)
         {
             _axis = null;
@@ -135,7 +157,6 @@ internal sealed partial class TimelineViewModel
             _ticks = [];
             _gaps = [];
             _labels = [];
-            RaiseAxis();
             return;
         }
 
@@ -158,7 +179,6 @@ internal sealed partial class TimelineViewModel
                 TimeFormatting.Format(g.To, ActiveFormat))))];
         _labels = TimelineAxisLabels.Layout(_axis, Zone, culture);
         _ticks = DriverTicks(_axis);
-        RaiseAxis();
     }
 
     private void RaiseAxis()
