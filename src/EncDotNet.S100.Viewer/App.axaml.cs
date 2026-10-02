@@ -667,7 +667,12 @@ public partial class App : Application
             return state;
         });
         services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
-        services.AddSingleton(TimeProvider.System);
+        // One clock for every clock-driven view model; with --mcp-test-hooks it
+        // is adjustable so set_test_clock can age forecasts and Live (#715).
+        services.AddSingleton<TimeProvider>(sp =>
+            sp.GetRequiredService<ViewerSettings>().McpTestHooks
+                ? new AdjustableTimeProvider()
+                : TimeProvider.System);
         services.AddSingleton<INotificationService, NotificationService>();
 
         // Feedback reporting: diagnostics capture + modal dialog plumbing.
@@ -877,7 +882,16 @@ public partial class App : Application
             sp.GetRequiredService<IGeographicPickPresenter>(),
             sp.GetRequiredService<IViewerUiControllerAccessor>(),
             sp.GetRequiredService<IAppScreenshotProvider>(),
-            sp.GetRequiredService<MapPresentationStateProjection>()));
+            sp.GetRequiredService<MapPresentationStateProjection>(),
+            new ViewerTimelineController(
+                sp.GetRequiredService<GlobalTimeService>(),
+                sp.GetRequiredService<TimelineViewModel>(),
+                sp.GetRequiredService<DatasetsViewModel>(),
+                sp.GetRequiredService<TimeProvider>()),
+            new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>()),
+            new ViewerNotificationController(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>()),
+            sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
@@ -903,7 +917,8 @@ public partial class App : Application
                     EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
                     EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
                     _ => null,
-                });
+                },
+                time: sp.GetRequiredService<TimeProvider>());
         });
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();

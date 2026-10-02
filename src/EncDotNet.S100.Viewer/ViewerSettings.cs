@@ -47,6 +47,15 @@ internal sealed class ViewerSettings
     [JsonIgnore]
     public string? McpPortFilePath { get; set; }
 
+    /// <summary>
+    /// When <see langword="true"/> (set from <c>--mcp-test-hooks</c>), the MCP
+    /// host registers test-only tools such as <c>set_test_clock</c>, and the
+    /// viewer's clock is an <see cref="Services.AdjustableTimeProvider"/>.
+    /// Never persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool McpTestHooks { get; set; }
+
     /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
     public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

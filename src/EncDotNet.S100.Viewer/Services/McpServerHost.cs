@@ -39,6 +39,10 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IGeographicPickPresenter? _pickPresenter;
     private readonly IViewerUiControllerAccessor? _uiControllerAccessor;
     private readonly IAppScreenshotProvider? _appScreenshot;
+    private readonly IViewerTimelineController? _timeline;
+    private readonly IViewerDatasetStateController? _datasetState;
+    private readonly IViewerNotificationController? _notifications;
+    private readonly AdjustableTimeProvider? _testClock;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -61,7 +65,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         IGeographicPickPresenter? pickPresenter = null,
         IViewerUiControllerAccessor? uiControllerAccessor = null,
         IAppScreenshotProvider? appScreenshot = null,
-        MapPresentationStateProjection? presentationProjection = null)
+        MapPresentationStateProjection? presentationProjection = null,
+        IViewerTimelineController? timeline = null,
+        IViewerDatasetStateController? datasetState = null,
+        IViewerNotificationController? notifications = null,
+        AdjustableTimeProvider? testClock = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -80,6 +88,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         _pickPresenter = pickPresenter;
         _uiControllerAccessor = uiControllerAccessor;
         _appScreenshot = appScreenshot;
+        _timeline = timeline;
+        _datasetState = datasetState;
+        _notifications = notifications;
+        _testClock = testClock;
         _loggers = loggers;
     }
 
@@ -322,6 +334,26 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_appScreenshot is not null)
         {
             tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(_appScreenshot)));
+        }
+        if (_timeline is not null)
+        {
+            tools.Add(ViewerStateMcpAdapters.Create(new GetTimelineStateTool(_timeline)));
+            tools.Add(ViewerStateMcpAdapters.Create(new SetViewTimeTool(_timeline)));
+        }
+        if (_datasetState is not null)
+        {
+            tools.Add(ViewerStateMcpAdapters.Create(new SetDatasetStateTool(_datasetState)));
+        }
+        if (_notifications is not null)
+        {
+            tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
+            tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
+        }
+        // Test hooks only: set_test_clock exists only when the viewer was
+        // started with --mcp-test-hooks, which makes its clock adjustable.
+        if (_testClock is not null && _settings.McpTestHooks)
+        {
+            tools.Add(ViewerStateMcpAdapters.Create(new SetTestClockTool(_testClock)));
         }
         if (_routesService is not null)
         {
