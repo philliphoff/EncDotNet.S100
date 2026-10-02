@@ -187,7 +187,7 @@ public sealed class TimelineNowTests
         Assert.Equal(Run, service.CurrentTime);
         Assert.True(timeline.IsNowInRange);
         Assert.Equal(1.0, timeline.NowPosition, 3);
-        Assert.Equal("30 d ago", timeline.OffsetText);
+        Assert.Equal("4 wk ago", timeline.OffsetText);
         Assert.True(timeline.NowCommand.CanExecute(null));
         Assert.DoesNotContain("cbofs", timeline.RangeLabel, StringComparison.Ordinal);
     }
@@ -199,13 +199,14 @@ public sealed class TimelineNowTests
     [InlineData(-5 * 3600, "5 h ago")]
     [InlineData(52 * 3600, "in 2 d 4 h")]
     [InlineData(-25 * 60, "25 min ago")]
+    [InlineData(-289 * 24 * 3600, "9 mo ago")]
     public void Offsets_read_naturally(int seconds, string expected) =>
         Assert.Equal(expected, TimelineViewModel.Offset(TimeSpan.FromSeconds(seconds)));
 
     [Fact]
     public void Steps_work_however_many_samples_there_are()
     {
-        // 6-minute water levels over two days: far more than the 50 the slider snaps to.
+        // 6-minute water levels over two days.
         var samples = Enumerable.Range(0, 480).Select(i => Run.AddMinutes(6 * i)).ToArray();
         var (service, timeline, _) = Create(Run.AddDays(30));
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
@@ -215,18 +216,21 @@ public sealed class TimelineNowTests
             Current = samples[100],
             Samples = samples,
             CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
-            Datasets = [new MapsuiMapTimedDataset("104US00_levels", samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("104US00_levels", samples[0], samples[^1]) { Samples = samples }],
         });
-        Assert.False(timeline.IsSnapToTickEnabled);
 
+        // The default 1 h step lands on whole hours.
         Assert.True(timeline.NextStepCommand.CanExecute(null));
         timeline.NextStepCommand.Execute(null);
-        Assert.Equal(samples[101], service.CurrentTime);
+        Assert.Equal(Run.AddHours(11), service.CurrentTime);
 
-        Assert.True(timeline.PreviousStepCommand.CanExecute(null));
+        // "Sample of" walks the 6-minute samples.
+        timeline.SetStepCommand.Execute(nameof(TimelineStepKind.Sample));
+        timeline.NextStepCommand.Execute(null);
+        Assert.Equal(samples[111], service.CurrentTime);
         timeline.PreviousStepCommand.Execute(null);
         timeline.PreviousStepCommand.Execute(null);
-        Assert.Equal(samples[99], service.CurrentTime);
+        Assert.Equal(samples[109], service.CurrentTime);
     }
 
     [Theory]

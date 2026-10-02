@@ -45,18 +45,64 @@ public sealed class TimelineAxisMapTests
     [Fact]
     public void Gap_is_compressed_so_clusters_expand()
     {
-        // Two 2h clusters with a 6h gap. Linearly the gap would be 60% of the
-        // axis; collapsed it must be far smaller and the clusters far larger.
-        var map = Map(T0, T0.AddHours(10),
+        // Two 2h clusters with a 30h gap. Linearly the gap would be 88% of the
+        // axis; collapsed it gets a log-scaled width and the clusters expand.
+        var map = Map(T0, T0.AddHours(34),
             (T0, T0.AddHours(2)),
-            (T0.AddHours(8), T0.AddHours(10)));
+            (T0.AddHours(32), T0.AddHours(34)));
 
         Assert.Equal(2, map.CoverageBands.Count);
-        double clusterWidth = map.CoverageBands[0].Width;
-        double gap = map.CoverageBands[1].Start - (map.CoverageBands[0].Start + map.CoverageBands[0].Width);
+        var gap = Assert.Single(map.Gaps);
+        Assert.Equal(TimelineAxisMap.GapWidth(TimeSpan.FromHours(30)), gap.Width, 6);
+        Assert.Equal((1 - gap.Width) / 2, map.CoverageBands[0].Width, 6);
+        Assert.Equal(TimeSpan.FromHours(30), gap.Length);
+    }
 
-        Assert.True(clusterWidth > 0.4, $"cluster width was {clusterWidth}");
-        Assert.True(gap is > 0.0 and < 0.2, $"gap was {gap}");
+    [Fact]
+    public void Rotterdam_gaps_widen_with_their_length_within_the_limits()
+    {
+        // Four week-long clusters separated by gaps of 6, 8, 10 and 12 weeks
+        // (the last one up to a clusterless stretch before now).
+        var week = TimeSpan.FromDays(7);
+        var starts = new[] { T0, T0 + 7 * week, T0 + 16 * week, T0 + 27 * week };
+        var segments = starts.Select(s => (s, s + week)).ToArray();
+        var map = Map(T0, starts[^1] + 13 * week, segments);
+
+        Assert.Equal(4, map.CoverageBands.Count);
+        Assert.Equal(4, map.Gaps.Count);
+        var widths = map.Gaps.Select(g => g.Width).ToArray();
+        Assert.All(widths, w => Assert.InRange(w, TimelineAxisMap.MinimumGapWidth, TimelineAxisMap.MaximumGapWidth));
+        Assert.Equal(widths.OrderBy(w => w), widths);
+        Assert.True(widths.Zip(widths.Skip(1)).All(p => p.Second > p.First), "widths increase with duration");
+    }
+
+    [Fact]
+    public void A_short_gap_is_drawn_to_scale()
+    {
+        // A 3h gap in an 80h range is under max(6 h, 15 % of 77 h): not collapsed.
+        var map = Map(T0, T0.AddHours(80), (T0, T0.AddHours(40)), (T0.AddHours(43), T0.AddHours(80)));
+
+        Assert.Empty(map.Gaps);
+        Assert.Equal(40 / 80.0, map.CoverageBands[0].Width, 6);
+        Assert.Equal(43 / 80.0, map.CoverageBands[1].Start, 6);
+    }
+
+    [Fact]
+    public void A_focus_time_in_a_gap_keeps_a_stretch_to_scale()
+    {
+        var now = T0.AddDays(60);
+        var segments = new List<CoverageSegment> { new(T0, T0.AddDays(2)), new(T0.AddDays(100), T0.AddDays(102)) };
+
+        var map = new TimelineAxisMap(T0, T0.AddDays(102), segments, [now]);
+
+        Assert.False(map.IsInCollapsedGap(now));
+        Assert.Equal(2, map.Gaps.Count);
+        Assert.True(map.Gaps[0].To <= now && map.Gaps[1].From >= now);
+        // The stretch around now is to scale: an hour either side is a measurable, symmetric distance.
+        var before = map.ToPosition(now.AddHours(-1));
+        var after = map.ToPosition(now.AddHours(1));
+        Assert.True(after - before > 0);
+        Assert.Equal(map.ToPosition(now) - before, after - map.ToPosition(now), 9);
     }
 
     [Fact]

@@ -345,6 +345,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(ViewerStateMcpAdapters.Create(new GetTimelineStateTool(_timeline)));
             tools.Add(ViewerStateMcpAdapters.Create(new SetViewTimeTool(_timeline)));
+            tools.Add(ViewerStateMcpAdapters.Create(new StepTimeTool(_timeline)));
+            tools.Add(ViewerStateMcpAdapters.Create(new SetTimelineViewTool(_timeline)));
         }
         if (_datasetState is not null)
         {

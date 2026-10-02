@@ -1762,6 +1762,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             {
                 ProductSpec = entry.Dataset.Metadata.Spec.Name,
                 Coverage = entry.TimePolicy.CoverageSegments,
+                Samples = entry.TimePolicy.AvailableTimes,
             })
             .ToArray();
         _time = new MapsuiMapTimeSnapshot

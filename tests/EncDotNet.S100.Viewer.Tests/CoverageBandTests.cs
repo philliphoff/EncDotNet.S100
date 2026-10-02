@@ -95,24 +95,20 @@ public sealed class CoverageBandTests
     {
         var s = new GlobalTimeService();
         s.Register(NewEntry(), new Stub(new[] { T0, T0.AddHours(2) }));
-        s.Register(NewEntry(), new Stub(new[] { T0.AddHours(8), T0.AddHours(10) }));
+        s.Register(NewEntry(), new Stub(new[] { T0.AddHours(32), T0.AddHours(34) }));
 
         // Now inside the data, so the axis (which always includes now) is just the data.
         var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(T0.AddHours(1))));
         var bands = vm.CoverageBands;
 
-        // Two equal 2h data clusters separated by a 6h gap. On a linear axis
-        // each cluster would be 0.2 wide; the gap-collapsing axis compresses
-        // the gap (to 12% of data width) so each cluster expands to ~0.446
-        // and they stay selectable.
+        // Two equal 2h data clusters separated by a 30h gap: the gap is
+        // collapsed to a log-scaled width, so each cluster takes about half.
         Assert.Equal(2, bands.Count);
         Assert.Equal(0.0, bands[0].Start, 3);
-        Assert.Equal(0.446, bands[0].Width, 3);
-        Assert.Equal(0.554, bands[1].Start, 3);
-        Assert.Equal(0.446, bands[1].Width, 3);
-        // The compressed gap between the clusters is thin but non-zero.
         double gap = bands[1].Start - (bands[0].Start + bands[0].Width);
-        Assert.True(gap is > 0.0 and < 0.2, $"gap was {gap}");
+        Assert.Equal(TimelineAxisMap.GapWidth(TimeSpan.FromHours(30)), gap, 3);
+        Assert.Equal(bands[0].Width, bands[1].Width, 3);
+        Assert.Equal(1.0, bands[1].Start + bands[1].Width, 3);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
@@ -121,6 +122,10 @@ public partial class MainWindow : ShadUI.Window
         _fileDialog = fileDialog;
         _exchangeSetService = exchangeSetService;
         _updateNotificationCoordinator = updateNotificationCoordinator;
+
+        // Timeline keys (#708 C8): ←/→ step, Home/End, N, +/−/0 and T, while
+        // the map, the Timeline or nothing has focus (never while typing).
+        AddHandler(KeyDownEvent, OnTimelineKeyDown, RoutingStrategies.Tunnel);
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
@@ -1471,5 +1476,37 @@ public partial class MainWindow : ShadUI.Window
     {
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePath));
         return ExchangeSetDetection.IsS57CataloguePath(full) ? Path.GetDirectoryName(full)! : full;
+    }
+
+    private void OnTimelineKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || !IsTimelineKeyScope(FocusManager?.GetFocusedElement() as Visual))
+            return;
+        if (e.Key == Key.T && e.KeyModifiers == KeyModifiers.None)
+        {
+            _viewModel.ToggleTimelineCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+        if (_viewModel.Timeline.HandleKey(e.Key, e.KeyModifiers))
+            e.Handled = true;
+    }
+
+    /// <summary>
+    /// True when the Timeline's keys apply: focus is on nothing, the map or
+    /// the Timeline, and not in a text box (lists and trees keep their keys).
+    /// </summary>
+    private bool IsTimelineKeyScope(Visual? focused)
+    {
+        if (focused is null || ReferenceEquals(focused, this))
+            return true;
+        for (var visual = focused; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Avalonia.Controls.TextBox)
+                return false;
+            if (visual is Views.TimelineView || ReferenceEquals(visual, MapControl))
+                return true;
+        }
+        return false;
     }
 }

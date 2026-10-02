@@ -3779,4 +3779,89 @@
   <data name="TimelinePanel_PreviousData" xml:space="preserve">
     <value>‹ Previous data</value>
   </data>
+  <data name="TimelinePanel_GapFormat" xml:space="preserve">
+    <value>⋯ {0} ⋯</value>
+    <comment>Label of a collapsed gap on the Timeline axis; {0}: its length, e.g. "6 wk".</comment>
+  </data>
+  <data name="TimelinePanel_GapTooltipFormat" xml:space="preserve">
+    <value>{0} with no data · {1} → {2}</value>
+    <comment>{0}: the gap length; {1}, {2}: its start and end times.</comment>
+  </data>
+  <data name="TimelinePanel_WeeksFormat" xml:space="preserve">
+    <value>{0:N0} wk</value>
+  </data>
+  <data name="TimelinePanel_MonthsFormat" xml:space="preserve">
+    <value>{0:N0} mo</value>
+  </data>
+  <data name="TimelinePanel_StepByTime" xml:space="preserve">
+    <value>BY TIME</value>
+    <comment>Step menu section header. Upper case.</comment>
+  </data>
+  <data name="TimelinePanel_StepByData" xml:space="preserve">
+    <value>BY DATA</value>
+    <comment>Step menu section header. Upper case.</comment>
+  </data>
+  <data name="TimelinePanel_Step10Min" xml:space="preserve">
+    <value>10 min</value>
+  </data>
+  <data name="TimelinePanel_Step1H" xml:space="preserve">
+    <value>1 h</value>
+  </data>
+  <data name="TimelinePanel_Step6H" xml:space="preserve">
+    <value>6 h</value>
+  </data>
+  <data name="TimelinePanel_Step1Day" xml:space="preserve">
+    <value>1 day</value>
+  </data>
+  <data name="TimelinePanel_StepSampleOf" xml:space="preserve">
+    <value>Sample of</value>
+  </data>
+  <data name="TimelinePanel_StepBoundary" xml:space="preserve">
+    <value>Dataset or run boundary</value>
+  </data>
+  <data name="TimelinePanel_StepBoundaryShort" xml:space="preserve">
+    <value>Boundary</value>
+    <comment>Step menu button when stepping by dataset or run boundary.</comment>
+  </data>
+  <data name="TimelinePanel_StepData" xml:space="preserve">
+    <value>Data, skipping gaps</value>
+  </data>
+  <data name="TimelinePanel_StepDataShort" xml:space="preserve">
+    <value>Data</value>
+    <comment>Step menu button when stepping by data.</comment>
+  </data>
+  <data name="TimelinePanel_StepFollowsFormat" xml:space="preserve">
+    <value>step follows {0} ({1})</value>
+    <comment>{0}: a layer, e.g. "cbofs"; {1}: its cadence, e.g. "1 h".</comment>
+  </data>
+  <data name="TimelinePanel_PresetNowSixHours" xml:space="preserve">
+    <value>Now ± 6 h</value>
+  </data>
+  <data name="TimelinePanel_PresetToday" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="TimelinePanel_PresetNext48Hours" xml:space="preserve">
+    <value>Next 48 h</value>
+  </data>
+  <data name="TimelinePanel_PresetThisRun" xml:space="preserve">
+    <value>This run</value>
+  </data>
+  <data name="TimelinePanel_PresetAllLoaded" xml:space="preserve">
+    <value>All loaded</value>
+  </data>
+  <data name="TimelinePanel_PresetCustom" xml:space="preserve">
+    <value>Custom</value>
+  </data>
+  <data name="Tooltip_TimelinePreviousData" xml:space="preserve">
+    <value>Previous data, skipping gaps (⌥←)</value>
+  </data>
+  <data name="Tooltip_TimelineNextData" xml:space="preserve">
+    <value>Next data, skipping gaps (⌥→)</value>
+  </data>
+  <data name="Tooltip_TimelineStep" xml:space="preserve">
+    <value>What ‹ › step by</value>
+  </data>
+  <data name="Tooltip_TimelinePreset" xml:space="preserve">
+    <value>Window of the timeline (+ / − zoom, 0 all loaded)</value>
+  </data>
 </root>

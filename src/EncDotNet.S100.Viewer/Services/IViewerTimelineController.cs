@@ -25,7 +25,26 @@ internal interface IViewerTimelineController
     /// <param name="ct">A cancellation token.</param>
     /// <returns>Whether the time was applied, why not, and the resulting state.</returns>
     Task<ViewTimeOutcome> SetViewTimeAsync(DateTime? time, bool snapToNearestSample, CancellationToken ct = default);
+
+    /// <summary>
+    /// Steps <paramref name="count"/> times by <paramref name="kind"/> (the
+    /// Timeline's current step when null) in <paramref name="direction"/>, as
+    /// ‹ › and the arrow keys do; it pins the time.
+    /// </summary>
+    Task<ViewTimeOutcome> StepAsync(TimelineStepKind? kind, int direction, int count, CancellationToken ct = default);
+
+    /// <summary>Changes what the axis shows: a preset, a zoom step, or a window.</summary>
+    Task<ViewTimeOutcome> SetViewAsync(TimelineViewChange change, CancellationToken ct = default);
 }
+
+/// <summary>A change to the Timeline's window (#708 C5): exactly one of the members is set.</summary>
+/// <param name="Preset">A preset to apply.</param>
+/// <param name="Zoom">+1 zooms in (half the span), −1 out (double), around the view time.</param>
+/// <param name="Window">A window to show.</param>
+internal sealed record TimelineViewChange(
+    EncDotNet.S100.Viewer.ViewModels.TimelinePreset? Preset,
+    int? Zoom,
+    (DateTime Start, DateTime End)? Window);
 
 /// <summary>The Timeline as the user sees it, plus the time each layer draws.</summary>
 /// <param name="Active">True when at least one time-aware dataset is loaded.</param>
@@ -66,6 +85,24 @@ internal sealed record ViewerTimelineState(
 
     /// <summary>The message's action as displayed ("Check for new runs", "Next data ›", …), or null.</summary>
     public string? MessageAction { get; init; }
+
+    /// <summary>The first time on the axis.</summary>
+    public DateTime? WindowStart { get; init; }
+
+    /// <summary>The last time on the axis.</summary>
+    public DateTime? WindowEnd { get; init; }
+
+    /// <summary>The window's preset as displayed ("All loaded", "Now ± 6 h", "Custom").</summary>
+    public string Preset { get; init; } = string.Empty;
+
+    /// <summary>What ‹ › step by.</summary>
+    public TimelineStepKind Step { get; init; }
+
+    /// <summary>The layer "Sample of" follows (and whose ticks show), or null.</summary>
+    public string? StepDriver { get; init; }
+
+    /// <summary>The collapsed gaps on the axis.</summary>
+    public IReadOnlyList<AxisGap> Gaps { get; init; } = [];
 }
 
 /// <summary>What one time-aware layer draws at the view time.</summary>

@@ -157,25 +157,25 @@ public class GlobalTimeServiceTests
     }
 
     [Fact]
-    public void TimelineViewModel_falls_back_to_evenly_spaced_ticks_when_dense()
+    public void TimelineViewModel_shows_no_ticks_when_samples_are_too_dense()
     {
         var s = new GlobalTimeService();
         var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var samples = new DateTime[100];
+        var samples = new DateTime[2000];
         for (var i = 0; i < samples.Length; i++) samples[i] = t0.AddMinutes(i);
         s.Register(NewEntry(), new StubTimeAware(samples));
 
-        var vm = new TimelineViewModel(s);
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t0.AddHours(1))));
 
-        Assert.Equal(11, vm.Ticks.Count); // EvenlySpacedTickCount + 1 endpoints
+        // Samples under 0.7 % of the axis apart: no ticks, no snapping; the
+        // band reads as solid data (#708 C4). Stepping still works.
+        Assert.Empty(vm.Ticks);
         Assert.False(vm.IsSnapToTickEnabled);
-        // Step buttons are available whenever there are samples (decoupled
-        // from snap-to-tick) so dense, clustered timelines can still nudge.
         Assert.True(vm.AreStepButtonsVisible);
     }
 
     [Fact]
-    public void TimelineViewModel_step_commands_advance_through_samples()
+    public void TimelineViewModel_step_commands_advance_by_the_chosen_step()
     {
         var s = new GlobalTimeService();
         var t1 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -186,18 +186,19 @@ public class GlobalTimeServiceTests
         // Now inside the data, so the axis (which always includes now) is just the data.
         var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)));
 
-        // Initial state: at t1; only Next is enabled.
+        // The default step is 1 h (#708 C6).
         Assert.Equal(t1, s.CurrentTime);
-        Assert.True(vm.AreStepButtonsVisible);
         Assert.False(vm.PreviousStepCommand.CanExecute(null));
-        Assert.True(vm.NextStepCommand.CanExecute(null));
+        vm.NextStepCommand.Execute(null);
+        Assert.Equal(t1.AddHours(1), s.CurrentTime);
 
+        // "Sample of" the layer walks its samples.
+        vm.SetStepCommand.Execute(nameof(TimelineStepKind.Sample));
         vm.NextStepCommand.Execute(null);
         Assert.Equal(t2, s.CurrentTime);
         vm.NextStepCommand.Execute(null);
         Assert.Equal(t3, s.CurrentTime);
         Assert.False(vm.NextStepCommand.CanExecute(null));
-
         vm.PreviousStepCommand.Execute(null);
         Assert.Equal(t2, s.CurrentTime);
     }

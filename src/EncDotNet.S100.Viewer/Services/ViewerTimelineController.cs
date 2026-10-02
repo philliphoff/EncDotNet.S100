@@ -57,6 +57,53 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
         return new ViewTimeOutcome(reason is null, reason, state!);
     }
 
+    /// <inheritdoc />
+    public async Task<ViewTimeOutcome> StepAsync(TimelineStepKind? kind, int direction, int count, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        string? reason = null;
+        ViewerTimelineState? state = null;
+        await _dispatch(() =>
+        {
+            if (!_time.IsActive)
+            {
+                reason = "no time-aware dataset is loaded";
+            }
+            else
+            {
+                var moved = 0;
+                for (; moved < count && _timeline.StepTarget(kind ?? _timeline.StepKind, direction) is not null; moved++)
+                    _timeline.StepBy(direction, kind);
+                if (moved == 0)
+                    reason = direction > 0 ? "there is nothing later to step to" : "there is nothing earlier to step to";
+            }
+            state = Snapshot();
+        }).ConfigureAwait(false);
+        return new ViewTimeOutcome(reason is null, reason, state!);
+    }
+
+    /// <inheritdoc />
+    public async Task<ViewTimeOutcome> SetViewAsync(TimelineViewChange change, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        ct.ThrowIfCancellationRequested();
+        string? reason = null;
+        ViewerTimelineState? state = null;
+        await _dispatch(() =>
+        {
+            if (!_time.IsActive)
+                reason = "no time-aware dataset is loaded";
+            else if (change.Preset is { } preset)
+                _timeline.ApplyPreset(preset);
+            else if (change.Zoom is { } zoom)
+                _timeline.ZoomBy(zoom > 0 ? 0.5 : 2);
+            else if (change.Window is { } window)
+                _timeline.SetWindow(window.Start, window.End);
+            state = Snapshot();
+        }).ConfigureAwait(false);
+        return new ViewTimeOutcome(reason is null, reason, state!);
+    }
+
     private string? Apply(DateTime? time, bool snapToNearestSample)
     {
         if (!_time.IsActive)
@@ -102,6 +149,12 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Summary: _timeline.RangeLabel,
             Layers: layers)
         {
+            WindowStart = _timeline.VisibleStart,
+            WindowEnd = _timeline.VisibleEnd,
+            Preset = _timeline.PresetLabel,
+            Step = _timeline.StepKind,
+            StepDriver = _timeline.Driver?.Name,
+            Gaps = _timeline.AxisGaps,
             Offset = _timeline.OffsetText,
             Message = _timeline.HasStatusMessage ? _timeline.StatusMessage : null,
             MessageAction = _timeline.HasStatusAction ? _timeline.StatusActionText : null,

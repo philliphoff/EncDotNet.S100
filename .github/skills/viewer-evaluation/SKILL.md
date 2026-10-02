@@ -172,6 +172,7 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `set_panel {panel, visible?}` | Show/hide a panel by id (`Datasets`, `LayerStack`, `PickReport`, `Timeline`, …) to drive & verify non-render UX. |
 | `get_timeline_state` | Read-only — Timeline mode (`live`/`pinned`), now, view time, coverage gaps, runs, and per layer the sample it draws (null = hidden, no data near the view time). |
 | `set_view_time {time, snap?}` | `now`, an ISO-8601 time, or an offset (`+6h`); `snap: exact` (default) can land between samples, unlike `set_time_step`. `await_render_idle` before reading layer times. |
+| `step_time {direction, unit?, count?}` / `set_timeline_view {preset|zoom|start,end}` | Step the Timeline by 10min/1h/6h/1d, driver samples, boundaries or data clusters; change the axis window (presets, zoom, custom). |
 | `set_dataset_state {datasetId, visible?, opacity?}` | Show/hide a loaded dataset (e.g. gridded S-104, which loads hidden). |
 | `list_notifications` / `dismiss_notification {id?}` | Read or clear notifications, e.g. before a screenshot. |
 | `set_test_clock {now?, advance?, freeze?, reset?}` | Only with `--mcp-test-hooks`: move or freeze "now" to test Live, ageing forecasts and Expired runs without waiting. |

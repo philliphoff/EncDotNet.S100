@@ -74,8 +74,21 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
 {
     private IReadOnlyList<MapsuiMapTimeSegment> _coverage = [];
 
+    private IReadOnlyList<DateTime> _samples = [];
+
     /// <summary>The dataset's product specification (e.g. <c>S-111</c>), when known.</summary>
     public string? ProductSpec { get; init; }
+
+    /// <summary>The dataset's own time samples, ascending; empty when not computed.</summary>
+    public IReadOnlyList<DateTime> Samples
+    {
+        get => _samples;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _samples = Array.AsReadOnly(value.ToArray());
+        }
+    }
 
     /// <summary>
     /// The windows in which this dataset draws under its product's time
@@ -103,7 +116,8 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && First == other.First
         && Last == other.Last
         && ProductSpec == other.ProductSpec
-        && Coverage.SequenceEqual(other.Coverage);
+        && Coverage.SequenceEqual(other.Coverage)
+        && Samples.SequenceEqual(other.Samples);
 
     /// <inheritdoc />
     public override int GetHashCode() => HashCode.Combine(Name, First, Last, Coverage.Count);
