@@ -92,15 +92,37 @@
                                 Spacing="2"
                                 VerticalAlignment="Center"
                                 IsVisible="{Binding AreStepButtonsVisible}">
+                        <!-- C7: previous / next data, flanking the step controls. -->
+                        <Button Classes="Icon"
+                                Command="{Binding PreviousDataCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousData}">
+                            <ic:FluentIcon Icon="Previous" IconVariant="Regular" FontSize="14" />
+                        </Button>
                         <Button Classes="Icon"
                                 Command="{Binding PreviousStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
                             <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
                         </Button>
+                        <!-- C6: the step menu (built in code-behind: "Sample of ▸" lists the layers). -->
+                        <Button x:Name="StepMenuButton"
+                                Classes="Outline"
+                                Height="28" MinHeight="0" Padding="8,0"
+                                FontSize="12"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineStep}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{Binding StepLabel}" VerticalAlignment="Center" />
+                                <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button Classes="Icon"
                                 Command="{Binding NextStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
                             <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                        <Button Classes="Icon"
+                                Command="{Binding NextDataCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextData}">
+                            <ic:FluentIcon Icon="Next" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <!-- Go live (A1): shown while pinned. -->
                         <Button Classes="Primary"
@@ -110,6 +132,17 @@
                                 Content="{x:Static loc:Strings.TimelinePanel_GoLive}"
                                 Command="{Binding NowCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
+                        <!-- C5: the window presets. -->
+                        <Button x:Name="PresetMenuButton"
+                                Classes="Outline"
+                                Height="28" MinHeight="0" Padding="8,0" Margin="6,0,0,0"
+                                FontSize="12"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreset}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{Binding PresetLabel}" VerticalAlignment="Center" />
+                                <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Grid>
 
@@ -117,11 +150,22 @@
                 <DockPanel LastChildFill="False"
                            VerticalAlignment="Top">
 
-                    <Grid DockPanel.Dock="Top"
-                          RowDefinitions="Auto,Auto,Auto">
+                    <Grid x:Name="AxisArea"
+                          DockPanel.Dock="Top"
+                          Background="Transparent"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                        <!-- C5: the overview strip: everything loaded, and the shown window. -->
+                        <views:OverviewStripControl Grid.Row="0"
+                                                    Height="6"
+                                                    Margin="2,0,2,4"
+                                                    Bands="{Binding OverviewBands}"
+                                                    WindowStart="{Binding OverviewWindowStart}"
+                                                    WindowWidth="{Binding OverviewWindowWidth}"
+                                                    Fill="#59A1A1AA"
+                                                    Bracket="{DynamicResource ForegroundColor}" />
                         <!-- A strip for the NOW label (every timeline, A2). -->
-                        <Panel Grid.Row="0" Height="14" />
-                        <Slider Grid.Row="1"
+                        <Panel Grid.Row="1" Height="14" />
+                        <Slider Grid.Row="2"
                                 Foreground="{DynamicResource AccentBrush}"
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"
@@ -133,24 +177,40 @@
                                 IsSnapToTickEnabled="{Binding IsSnapToTickEnabled, Mode=OneWay}"
                                 TickPlacement="BottomRight"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
-                        <!-- Data-coverage band: shows which parts of the
-                             timeline have data (filled) vs. no data (the
-                             compressed gaps). Inset by 2px to line up with the
-                             slider's colored track. Boundary ticks rise above
-                             each filled section to set it apart from the gaps. -->
-                        <views:CoverageBandControl Grid.Row="2"
+                        <!-- C2: the slider's track breaks at each collapsed gap. -->
+                        <views:GapBreakControl Grid.Row="2"
+                                               Margin="2,0,2,0"
+                                               Height="12"
+                                               VerticalAlignment="Center"
+                                               Gaps="{Binding Gaps}"
+                                               Fill="{DynamicResource BackgroundColor}"
+                                               Edge="#A1A1AA" />
+                        <!-- Data-coverage band: data filled, collapsed gaps
+                             hatched (with their length and ends on hover).
+                             Inset by 2px to line up with the slider's track. -->
+                        <views:CoverageBandControl x:Name="Band"
+                                                   Grid.Row="3"
                                                    Opacity="{Binding BandOpacity}"
                                                    Height="12"
                                                    Margin="2,2,2,0"
                                                    Fill="{DynamicResource AccentBrush}"
                                                    TrackBrush="#33808080"
+                                                   HatchBrush="#59A1A1AA"
                                                    TickBrush="{DynamicResource AccentBrush}"
                                                    TickThickness="1.5"
                                                    TickRise="4"
                                                    Bands="{Binding CoverageBands, Mode=OneWay}"
+                                                   Gaps="{Binding Gaps, Mode=OneWay}"
                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCoverageBand}" />
+                        <!-- C3: gap, day and 6-hour labels. -->
+                        <views:AxisLabelsControl Grid.Row="4"
+                                                 Height="14"
+                                                 Margin="2,3,2,0"
+                                                 Labels="{Binding AxisLabels}"
+                                                 Foreground="{DynamicResource ForegroundColor}"
+                                                 Muted="#A1A1AA" />
                         <!-- The NOW line: a dashed line through the slider and the band. -->
-                        <views:NowMarkerControl Grid.Row="0"
+                        <views:NowMarkerControl Grid.Row="1"
                                                 Grid.RowSpan="3"
                                                 Margin="2,0,2,0"
                                                 Position="{Binding NowPosition}"

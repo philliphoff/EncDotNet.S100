@@ -60,11 +60,54 @@ internal sealed class CoverageBandControl : Control
     public static readonly StyledProperty<double> TickRiseProperty =
         AvaloniaProperty.Register<CoverageBandControl, double>(nameof(TickRise), 4d);
 
+    /// <summary>The collapsed gaps, drawn hatched with their tooltip on hover (#708 C2).</summary>
+    public static readonly StyledProperty<IReadOnlyList<NormalizedGap>?> GapsProperty =
+        AvaloniaProperty.Register<CoverageBandControl, IReadOnlyList<NormalizedGap>?>(nameof(Gaps));
+
+    /// <summary>The brush of a gap's hatch lines.</summary>
+    public static readonly StyledProperty<IBrush?> HatchBrushProperty =
+        AvaloniaProperty.Register<CoverageBandControl, IBrush?>(nameof(HatchBrush));
+
     static CoverageBandControl()
     {
         AffectsRender<CoverageBandControl>(
             BandsProperty, FillProperty, TrackBrushProperty, BandCornerRadiusProperty,
-            TickBrushProperty, TickThicknessProperty, TickRiseProperty);
+            TickBrushProperty, TickThicknessProperty, TickRiseProperty, GapsProperty, HatchBrushProperty);
+    }
+
+    /// <inheritdoc cref="GapsProperty"/>
+    public IReadOnlyList<NormalizedGap>? Gaps
+    {
+        get => GetValue(GapsProperty);
+        set => SetValue(GapsProperty, value);
+    }
+
+    /// <inheritdoc cref="HatchBrushProperty"/>
+    public IBrush? HatchBrush
+    {
+        get => GetValue(HatchBrushProperty);
+        set => SetValue(HatchBrushProperty, value);
+    }
+
+    /// <summary>Shows the hovered gap's length and ends as the tooltip.</summary>
+    protected override void OnPointerMoved(Avalonia.Input.PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        var width = Bounds.Width;
+        if (width <= 0)
+            return;
+        var x = e.GetPosition(this).X / width;
+        var gap = Gaps?.FirstOrDefault(g => x >= g.Start && x <= g.Start + g.Width);
+        ToolTip.SetTip(this, gap is { } hovered ? hovered.Tooltip : _defaultTip);
+    }
+
+    private object? _defaultTip;
+
+    /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _defaultTip ??= ToolTip.GetTip(this);
     }
 
     public IReadOnlyList<NormalizedCoverageBand>? Bands
@@ -127,6 +170,21 @@ internal sealed class CoverageBandControl : Control
         // "No data" track behind the coverage bands.
         if (TrackBrush is { } track)
             context.DrawRectangle(track, null, new Rect(0, bandTop, width, bandHeight), radius, radius);
+
+        // Collapsed gaps: a 135° hatch over the track.
+        if (Gaps is { Count: > 0 } gaps && HatchBrush is { } hatch)
+        {
+            var pen = new Pen(hatch, 1);
+            foreach (var gap in gaps)
+            {
+                var gapRect = new Rect(gap.Start * width, bandTop, gap.Width * width, bandHeight);
+                using (context.PushClip(gapRect))
+                {
+                    for (var hx = gapRect.Left - bandHeight; hx < gapRect.Right; hx += 4)
+                        context.DrawLine(pen, new Point(hx, gapRect.Bottom), new Point(hx + bandHeight, gapRect.Top));
+                }
+            }
+        }
 
         var bands = Bands;
         if (bands is null || bands.Count == 0) return;

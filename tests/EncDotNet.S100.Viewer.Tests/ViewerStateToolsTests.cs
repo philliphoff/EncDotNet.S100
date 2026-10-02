@@ -145,6 +145,44 @@ public sealed class ViewerStateToolsTests
         Assert.DoesNotContain("previousSample", json, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Step_time_steps_by_a_unit_and_reports_the_step()
+    {
+        var (time, controller, _) = Timeline(Run.AddDays(10));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new StepTimeTool(controller);
+
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("next", "6h", 2))).TryGetValue(out var stepped));
+        Assert.Equal(Run.AddHours(12), stepped!.ViewTime);
+        Assert.Equal("pinned", stepped.Mode);
+        Assert.Equal("hour", stepped.Step);
+
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null))).TryGetValue(out var boundary));
+        Assert.Equal(Run, boundary!.ViewTime);
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null))).TryGetError(out var none));
+        Assert.Equal("view_time_not_applied", none!.Code);
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("sideways", null, null))).TryGetError(out var bad));
+        Assert.Equal("direction", Assert.IsType<InvalidArgument>(bad).Parameter);
+    }
+
+    [Fact]
+    public async Task Set_timeline_view_zooms_and_reports_the_window()
+    {
+        var (time, controller, _) = Timeline(Run.AddHours(9));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new SetTimelineViewTool(controller);
+
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("now_6h", null, null, null))).TryGetValue(out var zoomed));
+        Assert.Equal("Now ± 6 h", zoomed!.Preset);
+        Assert.Equal(new TimeWindowDto(Run.AddHours(3), Run.AddHours(15)), zoomed.Window);
+
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, "2026-09-30T12:00:00Z", "2026-10-01T00:00:00Z"))).TryGetValue(out var custom));
+        Assert.Equal("Custom", custom!.Preset);
+
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("all_loaded", "in", null, null))).TryGetError(out var both));
+        Assert.Equal("preset", Assert.IsType<InvalidArgument>(both).Parameter);
+    }
+
     // ── set_dataset_state ──────────────────────────────────────────────
 
     [Fact]
@@ -270,6 +308,8 @@ public sealed class ViewerStateToolsTests
         {
             ViewerStateMcpAdapters.Create(new GetTimelineStateTool(timeline)),
             ViewerStateMcpAdapters.Create(new SetViewTimeTool(timeline)),
+            ViewerStateMcpAdapters.Create(new StepTimeTool(timeline)),
+            ViewerStateMcpAdapters.Create(new SetTimelineViewTool(timeline)),
             ViewerStateMcpAdapters.Create(new SetDatasetStateTool(new ViewerDatasetStateController(
                 new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
             ViewerStateMcpAdapters.Create(new ListNotificationsTool(notifications)),
@@ -278,7 +318,7 @@ public sealed class ViewerStateToolsTests
         };
 
         Assert.Equal(
-            ["get_timeline_state", "set_view_time", "set_dataset_state", "list_notifications", "dismiss_notification", "set_test_clock"],
+            ["get_timeline_state", "set_view_time", "step_time", "set_timeline_view", "set_dataset_state", "list_notifications", "dismiss_notification", "set_test_clock"],
             tools.Select(tool => tool.ProtocolTool.Name));
     }
 }

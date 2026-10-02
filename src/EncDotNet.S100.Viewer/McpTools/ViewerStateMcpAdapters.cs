@@ -45,6 +45,41 @@ internal static class ViewerStateMcpAdapters
             + "viewer-injected tool.");
     }
 
+    /// <summary>Creates <c>step_time</c>.</summary>
+    public static McpServerTool Create(StepTimeTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("'next' or 'previous'.")] string direction,
+            [Description("What to step by: 10min, 1h, 6h, 1d, sample (of the step driver layer), boundary (dataset or run start/end), data (next cluster, skipping gaps), or current (the Timeline's chosen step, the default).")] string? unit = null,
+            [Description("How many steps, 1–1000 (default 1); stops early at the end of the data.")] int? count = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new StepTimeRequest(direction, unit, count), ct));
+        return Tool(del, StepTimeTool.Name,
+            "Steps the live viewer's Timeline as its ‹ › buttons and arrow keys do: by a fixed interval (landing on "
+            + "whole units), by the samples of the step driver layer, by dataset/run boundaries, or to the next / "
+            + "previous cluster of data skipping gaps. Stepping pins the time (leaves Live). Returns the Timeline state; "
+            + "view_time_not_applied when nothing is loaded or there is nothing further in that direction. Mutating; "
+            + "viewer-injected tool.");
+    }
+
+    /// <summary>Creates <c>set_timeline_view</c>.</summary>
+    public static McpServerTool Create(SetTimelineViewTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("A window preset: now_6h, today, next_48h, this_run (the run holding the view time) or all_loaded.")] string? preset = null,
+            [Description("'in' halves the window around the view time; 'out' doubles it, up to all loaded.")] string? zoom = null,
+            [Description("Start of a custom window, ISO-8601 (with end).")] string? start = null,
+            [Description("End of a custom window, ISO-8601 (with start).")] string? end = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetTimelineViewRequest(preset, zoom, start, end), ct));
+        return Tool(del, SetTimelineViewTool.Name,
+            "Changes the window the live viewer's Timeline axis shows, as its preset menu, mouse wheel and drag do: "
+            + "a preset, a zoom step, or a custom start/end. Supply exactly one. The view time is not changed. Returns "
+            + "the Timeline state, whose 'window', 'preset' and 'gaps' describe the axis. Mutating; viewer-injected tool.");
+    }
+
     /// <summary>Creates <c>set_dataset_state</c>.</summary>
     public static McpServerTool Create(SetDatasetStateTool inner)
     {

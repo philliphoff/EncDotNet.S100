@@ -22,6 +22,13 @@ internal sealed record TimeWindowDto(
     [property: Description("Start of the window, UTC ISO-8601.")] DateTime Start,
     [property: Description("End of the window, UTC ISO-8601.")] DateTime End);
 
+/// <summary>A gap collapsed on the Timeline's axis.</summary>
+[Description("A stretch with no data, collapsed on the Timeline's axis.")]
+internal sealed record TimelineGapDto(
+    [property: Description("Start of the gap, UTC ISO-8601.")] DateTime From,
+    [property: Description("End of the gap, UTC ISO-8601.")] DateTime To,
+    [property: Description("Its length as the axis labels it, e.g. '6 wk'.")] string Length);
+
 /// <summary>What one time-aware layer draws at the view time.</summary>
 [Description("What one time-aware layer draws at the view time.")]
 internal sealed record TimelineLayerDto(
@@ -54,6 +61,11 @@ internal sealed record TimelineStateDto(
     [property: Description("The view time's offset from now as displayed: 'now', 'in 11 h 30', '5 h ago'.")] string Offset,
     [property: Description("The status line's message, e.g. 'Every forecast ended 10 h ago' or 'No data at this time for 1 of 2 layers'; null when all is well.")] string? Message,
     [property: Description("The message's action as displayed: 'Check for new runs', 'Next data ›' or '‹ Previous data'; null for none.")] string? MessageAction,
+    [property: Description("The window the axis shows (set_timeline_view changes it).")] TimeWindowDto? Window,
+    [property: Description("The window's preset as displayed: 'All loaded', 'Now ± 6 h', 'Today', 'Next 48 h', 'This run' or 'Custom'.")] string Preset,
+    [property: Description("What the Timeline's ‹ › step by: 'ten_minutes', 'hour', 'six_hours', 'day', 'sample', 'boundary' or 'data'.")] string Step,
+    [property: Description("The layer whose samples 'sample' steps follow and whose ticks show, or null.")] string? StepDriver,
+    [property: Description("The gaps collapsed on the axis, with their length as labelled ('6 wk').")] IReadOnlyList<TimelineGapDto> Gaps,
     [property: Description("The time-aware layers in Datasets-list order. Layer times settle after the map's time refresh; call await_render_idle after set_view_time before reading them.")] IReadOnlyList<TimelineLayerDto> Layers);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
@@ -123,6 +135,14 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
     public async Task<ToolResult<TimelineStateDto>> InvokeAsync(CancellationToken ct = default) =>
         ToolResult<TimelineStateDto>.Ok(ToDto(await _timeline.GetStateAsync(ct).ConfigureAwait(false)));
 
+    /// <summary>The wire name of a step kind: "hour", "ten_minutes", "sample", ….</summary>
+    internal static string StepName(TimelineStepKind kind) => kind switch
+    {
+        TimelineStepKind.TenMinutes => "ten_minutes",
+        TimelineStepKind.SixHours => "six_hours",
+        _ => kind.ToString().ToLowerInvariant(),
+    };
+
     internal static TimelineStateDto ToDto(ViewerTimelineState state) => new(
         state.Active,
         state.FollowingNow ? "live" : "pinned",
@@ -140,6 +160,11 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.Offset,
         state.Message,
         state.MessageAction,
+        state.WindowStart is { } ws && state.WindowEnd is { } we ? new TimeWindowDto(ws, we) : null,
+        state.Preset,
+        StepName(state.Step),
+        state.StepDriver,
+        [.. state.Gaps.Select(g => new TimelineGapDto(g.From, g.To, TimelineAxisLabels.GapLength(g.Length, CultureInfo.InvariantCulture)))],
         [.. state.Layers.Select(layer => new TimelineLayerDto(
             layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount))]);
 }
@@ -376,4 +401,118 @@ internal sealed class SetTestClockTool(AdjustableTimeProvider clock)
         return ToolResult<TestClockDto>.Ok(new TestClockDto(
             _clock.GetUtcNow(), _clock.FrozenAt is not null, _clock.Offset.TotalSeconds));
     }
+}
+
+// ---------------------------------------------------------------------------
+// step_time / set_timeline_view (#708, #715)
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="StepTimeTool"/>.</summary>
+internal sealed record StepTimeRequest(string Direction, string? Unit, int? Count);
+
+/// <summary>Steps the Timeline as ‹ › and the arrow keys do (MCP <c>step_time</c>).</summary>
+internal sealed class StepTimeTool(IViewerTimelineController timeline)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "step_time";
+
+    private readonly IViewerTimelineController _timeline = timeline ?? throw new ArgumentNullException(nameof(timeline));
+
+    /// <summary>Applies the request.</summary>
+    public async Task<ToolResult<TimelineStateDto>> InvokeAsync(StepTimeRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var direction = request.Direction?.Trim().ToLowerInvariant() switch
+        {
+            "next" or "forward" or "+1" => +1,
+            "previous" or "prev" or "back" or "-1" => -1,
+            _ => 0,
+        };
+        if (direction == 0)
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("direction", "expected 'next' or 'previous'"));
+
+        TimelineStepKind? kind = request.Unit?.Trim().ToLowerInvariant() switch
+        {
+            null or "" or "current" => null,
+            "10min" or "ten_minutes" => TimelineStepKind.TenMinutes,
+            "1h" or "hour" => TimelineStepKind.Hour,
+            "6h" or "six_hours" => TimelineStepKind.SixHours,
+            "1d" or "day" => TimelineStepKind.Day,
+            "sample" => TimelineStepKind.Sample,
+            "boundary" => TimelineStepKind.Boundary,
+            "data" => TimelineStepKind.Data,
+            _ => (TimelineStepKind)(-1),
+        };
+        if (kind is (TimelineStepKind)(-1))
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("unit", "expected 10min, 1h, 6h, 1d, sample, boundary, data or current"));
+
+        var count = request.Count ?? 1;
+        if (count is < 1 or > 1000)
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("count", "must be between 1 and 1000"));
+
+        var outcome = await _timeline.StepAsync(kind, direction, count, ct).ConfigureAwait(false);
+        return outcome.Applied
+            ? ToolResult<TimelineStateDto>.Ok(GetTimelineStateTool.ToDto(outcome.State))
+            : ToolResult<TimelineStateDto>.Err(new ViewTimeNotApplied(outcome.Reason ?? "unknown"));
+    }
+}
+
+/// <summary>Request for <see cref="SetTimelineViewTool"/>.</summary>
+internal sealed record SetTimelineViewRequest(string? Preset, string? Zoom, string? Start, string? End);
+
+/// <summary>Changes the window the Timeline's axis shows (MCP <c>set_timeline_view</c>).</summary>
+internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "set_timeline_view";
+
+    private readonly IViewerTimelineController _timeline = timeline ?? throw new ArgumentNullException(nameof(timeline));
+
+    /// <summary>Applies the request.</summary>
+    public async Task<ToolResult<TimelineStateDto>> InvokeAsync(SetTimelineViewRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var hasWindow = !string.IsNullOrWhiteSpace(request.Start) || !string.IsNullOrWhiteSpace(request.End);
+        var given = (string.IsNullOrWhiteSpace(request.Preset) ? 0 : 1) + (string.IsNullOrWhiteSpace(request.Zoom) ? 0 : 1) + (hasWindow ? 1 : 0);
+        if (given != 1)
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "supply exactly one of preset, zoom, or start and end"));
+
+        TimelineViewChange change;
+        if (!string.IsNullOrWhiteSpace(request.Preset))
+        {
+            EncDotNet.S100.Viewer.ViewModels.TimelinePreset? preset = request.Preset.Trim().ToLowerInvariant() switch
+            {
+                "now_6h" or "now" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.NowSixHours,
+                "today" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.Today,
+                "next_48h" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.Next48Hours,
+                "this_run" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.ThisRun,
+                "all_loaded" or "all" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.AllLoaded,
+                _ => null,
+            };
+            if (preset is null)
+                return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "expected now_6h, today, next_48h, this_run or all_loaded"));
+            change = new TimelineViewChange(preset, null, null);
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Zoom))
+        {
+            var zoom = request.Zoom.Trim().ToLowerInvariant() switch { "in" => +1, "out" => -1, _ => 0 };
+            if (zoom == 0)
+                return ToolResult<TimelineStateDto>.Err(new InvalidArgument("zoom", "expected 'in' or 'out'"));
+            change = new TimelineViewChange(null, zoom, null);
+        }
+        else
+        {
+            if (!TryParseUtc(request.Start, out var start) || !TryParseUtc(request.End, out var end) || end <= start)
+                return ToolResult<TimelineStateDto>.Err(new InvalidArgument("start", "supply ISO-8601 start and end, end after start"));
+            change = new TimelineViewChange(null, null, (start, end));
+        }
+
+        var outcome = await _timeline.SetViewAsync(change, ct).ConfigureAwait(false);
+        return outcome.Applied
+            ? ToolResult<TimelineStateDto>.Ok(GetTimelineStateTool.ToDto(outcome.State))
+            : ToolResult<TimelineStateDto>.Err(new ViewTimeNotApplied(outcome.Reason ?? "unknown"));
+    }
+
+    private static bool TryParseUtc(string? text, out DateTime value) =>
+        DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out value);
 }

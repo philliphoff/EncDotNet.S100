@@ -408,6 +408,26 @@ internal sealed partial class TimelineViewModel
         RaiseSteps();
     }
 
+    /// <summary>The first time on the axis, or null while inactive.</summary>
+    internal DateTime? VisibleStart => Axis?.Start;
+
+    /// <summary>The last time on the axis, or null while inactive.</summary>
+    internal DateTime? VisibleEnd => Axis?.End;
+
+    /// <summary>The collapsed gaps on the axis, with their real extent.</summary>
+    internal IReadOnlyList<AxisGap> AxisGaps => Axis?.Gaps ?? [];
+
+    /// <summary>Shows exactly <paramref name="start"/>..<paramref name="end"/> on the axis (a custom window).</summary>
+    internal void SetWindow(DateTime start, DateTime end)
+    {
+        if (end - start < MinimumZoomSpan)
+            end = start + MinimumZoomSpan;
+        _zoom = (start, end);
+        _preset = TimelinePreset.Custom;
+        RebuildAxis();
+        RaiseSteps();
+    }
+
     /// <summary>Pans a zoomed window by <paramref name="fraction"/> of its width (positive: later).</summary>
     internal void PanBy(double fraction)
     {
