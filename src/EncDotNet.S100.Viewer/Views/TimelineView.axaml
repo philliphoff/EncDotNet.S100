@@ -23,7 +23,23 @@
         <Style Selector="Border.ModePill.live TextBlock">
             <Setter Property="Foreground" Value="White" />
         </Style>
-        <!-- Status messages (#713 B3). -->
+        <!-- Status messages (#713 B3; loading #709). -->
+        <Style Selector="Button.StatusText">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="11.5" />
+        </Style>
+        <Style Selector="Button.StatusText /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.StatusText.warning">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.StatusText.drawing">
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
         <Style Selector="TextBlock.error">
             <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
         </Style>
@@ -234,11 +250,16 @@
                                     Spacing="6"
                                     Margin="12,0,0,0"
                                     IsVisible="{Binding HasStatusMessage}">
-                            <TextBlock Text="{Binding StatusMessage}"
-                                       FontSize="11.5"
-                                       Classes.error="{Binding IsStatusError}"
-                                       Classes.warning="{Binding IsStatusWarning}"
-                                       VerticalAlignment="Center" />
+                            <!-- D4: "No data … for N of M layers" opens the layer list on the first hidden layer. -->
+                            <Button Classes="StatusText"
+                                    Content="{Binding StatusMessage}"
+                                    Command="{Binding ShowLayersCommand}"
+                                    IsHitTestVisible="{Binding IsStatusWarning}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineShowLayers}"
+                                    Classes.error="{Binding IsStatusError}"
+                                    Classes.warning="{Binding IsStatusWarning}"
+                                    Classes.drawing="{Binding IsDrawing}"
+                                    VerticalAlignment="Center" />
                             <Button Classes="Ghost"
                                     IsVisible="{Binding HasStatusAction}"
                                     Content="{Binding StatusActionText}"

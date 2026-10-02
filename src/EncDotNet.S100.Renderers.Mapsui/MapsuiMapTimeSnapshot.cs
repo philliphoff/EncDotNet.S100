@@ -79,6 +79,22 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
     /// <summary>The dataset's product specification (e.g. <c>S-111</c>), when known.</summary>
     public string? ProductSpec { get; init; }
 
+    /// <summary>The session's id for the dataset (the value of its <c>MapDatasetId</c>), when known.</summary>
+    public string? DatasetId { get; init; }
+
+    /// <summary>How the dataset picks the sample it draws.</summary>
+    public MapsuiTimeSelectionKind Selection { get; init; } = MapsuiTimeSelectionKind.Nearest;
+
+    /// <summary>How far from the clock a sample may be and still be drawn.</summary>
+    public TimeSpan Tolerance { get; init; } = TimeSpan.MaxValue;
+
+    /// <summary>
+    /// The sample the dataset draws at <paramref name="time"/> under its time
+    /// rule, or <see langword="null"/> when it has no data near that time and hides.
+    /// </summary>
+    /// <param name="time">The clock value.</param>
+    public DateTime? SampleAt(DateTime time) => MapsuiTimeSelection.Select(Samples, Selection, Tolerance, time);
+
     /// <summary>The dataset's own time samples, ascending; empty when not computed.</summary>
     public IReadOnlyList<DateTime> Samples
     {
@@ -116,6 +132,9 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && First == other.First
         && Last == other.Last
         && ProductSpec == other.ProductSpec
+        && DatasetId == other.DatasetId
+        && Selection == other.Selection
+        && Tolerance == other.Tolerance
         && Coverage.SequenceEqual(other.Coverage)
         && Samples.SequenceEqual(other.Samples);
 

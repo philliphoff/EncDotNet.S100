@@ -516,14 +516,18 @@
                     <StackPanel Orientation="Horizontal"
                                 Spacing="6"
                                 Margin="8,4">
-                        <Ellipse Width="7" Height="7"
-                                 VerticalAlignment="Center"
-                                 IsVisible="{Binding Timeline.IsLive}"
-                                 Fill="{DynamicResource SuccessColor}" />
-                        <Ellipse Width="7" Height="7"
-                                 VerticalAlignment="Center"
-                                 IsVisible="{Binding !Timeline.IsLive}"
-                                 Fill="{DynamicResource AccentBrush}" />
+                        <Panel VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding Timeline.IsLive}"
+                                     Fill="{DynamicResource SuccessColor}" />
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding !Timeline.IsLive}"
+                                     Fill="{DynamicResource AccentBrush}" />
+                            <!-- Grey while the map is still drawing the new time (#709). -->
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding Timeline.IsDrawing}"
+                                     Fill="#A1A1AA" />
+                        </Panel>
                         <TextBlock Text="{Binding Timeline.StampText}"
                                    FontFamily="Menlo, Consolas, monospace"
                                    FontSize="11.5"

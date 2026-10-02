@@ -30,6 +30,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly IRecentFilesService _recentFiles;
     private readonly Library.LibraryService _library;
     private readonly GlobalTimeService _globalTime;
+    private readonly TimeRefreshProgress? _timeProgress;
     private readonly INotificationService _notifications;
     private readonly DatasetProcessorOwner _processorOwner;
     /// <summary>
@@ -72,7 +73,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         INotificationService notifications,
         DatasetProcessorOwner processorOwner,
         IMapViewportNotifier viewportNotifier,
-        IRenderActivityMonitor? renderActivityMonitor = null)
+        IRenderActivityMonitor? renderActivityMonitor = null,
+        TimeRefreshProgress? timeProgress = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -88,6 +90,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ArgumentNullException.ThrowIfNull(viewportNotifier);
 
         _settings = settings;
+        _timeProgress = timeProgress;
         _catalogueManager = catalogueManager;
         _catalogueSeeder = catalogueSeeder;
         _fcOverrides = fcOverrides;
@@ -228,6 +231,24 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 "The map layer collection must provide a Mapsui dataset session.");
         _mapSession.LayersChanged += OnSessionLayersChanged;
         _mapSession.DatasetRenderFailed += OnDatasetRenderFailed;
+        if (_timeProgress is { } progress)
+        {
+            _mapSession.DatasetRenderStarted += (_, e) =>
+            {
+                if (e.Kind == MapSessionRenderKind.TimeRefresh)
+                    progress.Started(e.DatasetId.Value);
+            };
+            _mapSession.DatasetRenderCompleted += (_, e) =>
+            {
+                if (e.Kind == MapSessionRenderKind.TimeRefresh)
+                    progress.Finished(e.DatasetId.Value);
+            };
+            _mapSession.DatasetRenderFailed += (_, e) =>
+            {
+                if (e.Kind == MapSessionRenderKind.TimeRefresh)
+                    progress.Finished(e.DatasetId.Value);
+            };
+        }
         _mapSession.SetMarinerSettings(CurrentPresentation.Mariner);
         _globalTime.AttachTo(_mapSession);
         _globalTime.CurrentTimeChanged +=
@@ -816,9 +837,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _mapSession?.SetCurrentTime(t);
         if (_mapSession is not null)
         {
-            await _mapSession.RefreshTimeAsync(
-                CurrentPresentation,
-                cancellationToken).ConfigureAwait(true);
+            // The Timeline shows "Drawing … · N of M layers ready" until the
+            // latest refresh returns (#709); a superseded one returns quietly.
+            var generation = _timeProgress?.Begin(t);
+            try
+            {
+                await _mapSession.RefreshTimeAsync(
+                    CurrentPresentation,
+                    cancellationToken).ConfigureAwait(true);
+            }
+            finally
+            {
+                if (generation is { } g)
+                    _timeProgress!.End(g);
+            }
         }
     }
 

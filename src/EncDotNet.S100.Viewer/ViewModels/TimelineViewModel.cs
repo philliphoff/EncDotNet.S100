@@ -20,6 +20,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     private readonly TimeProvider _time;
     private readonly ITimer? _clock;
     private readonly IForecastRunRefresher? _refresher;
+    private readonly TimeRefreshProgress? _progress;
     private TimelineAxisMap? _axis;
 
     public TimelineViewModel(GlobalTimeService service)
@@ -42,12 +43,18 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     {
     }
 
+    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher, TimeRefreshProgress progress)
+        : this(service, timeFormat, time, PostToUiThread, refresher, progress)
+    {
+    }
+
     internal TimelineViewModel(
         GlobalTimeService service,
         ITimeFormatProvider? timeFormat,
         TimeProvider time,
         Action<Action> dispatch,
-        IForecastRunRefresher? refresher = null)
+        IForecastRunRefresher? refresher = null,
+        TimeRefreshProgress? progress = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(time);
@@ -56,6 +63,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         _timeFormat = timeFormat;
         _time = time;
         _refresher = refresher;
+        _progress = progress;
 
         PreviousStepCommand = new RelayCommand(() => StepBy(-1), () => CanStep(StepKind, -1));
         NextStepCommand = new RelayCommand(() => StepBy(+1), () => CanStep(StepKind, +1));
@@ -64,6 +72,22 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
         CheckForNewRunsCommand = new RelayCommand(() => _refresher?.RefreshForecastSources(), () => _refresher?.HasForecastSources == true);
         JumpToDataCommand = new RelayCommand(JumpToData, () => NearestData() is not null);
+        CancelDrawingCommand = new RelayCommand(
+            () =>
+            {
+                if (_progress?.Drawn is { } drawn)
+                    _service.SetCurrentTime(drawn);
+            },
+            () => IsDrawing && _progress?.Drawn is not null);
+        ShowLayersCommand = new RelayCommand(
+            () =>
+            {
+                if (FirstEmptyDatasetId() is { } id)
+                    ShowLayerRequested?.Invoke(id);
+            },
+            () => FirstEmptyDatasetId() is not null);
+        if (_progress is not null)
+            _progress.Changed += () => dispatch(RaiseNow);
 
         _service.RangeChanged += OnRangeChanged;
         _service.CurrentTimeChanged += _ =>
@@ -280,7 +304,9 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// (top left of the map while the Timeline is open; #713 B4).
     /// </summary>
     public string StampText => _service.CurrentTime is { } t
-        ? IsLive
+        ? IsDrawing && _progress?.Drawn is { } drawn && _progress.Target is { } target
+            ? string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_StampDrawingFormat, TimeFormatting.Format(drawn, ActiveFormat), TimeFormatting.Format(target, ActiveFormat))
+        : IsLive
             ? $"{Strings.TimelinePanel_Live} · {TimeFormatting.Format(t, ActiveFormat)}"
             : $"{TimeFormatting.Format(t, ActiveFormat)} · {OffsetText}"
         : string.Empty;
@@ -294,6 +320,8 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     {
         get
         {
+            if (IsDrawing && _progress?.Target is { } target)
+                return string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_DrawingFormat, TimeFormatting.Format(target, ActiveFormat), _progress.Ready, _progress.Total);
             if (IsLive && IsForecastEnded && _service.MaxTime is { } max)
                 return string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_EveryForecastEndedFormat, Duration(Now - max));
             var (empty, total) = EmptyLayerCount();
@@ -310,15 +338,32 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// <summary>True when <see cref="StatusMessage"/> is shown.</summary>
     public bool HasStatusMessage => StatusMessage.Length > 0;
 
+    /// <summary>
+    /// True while the map is drawing a new view time and some layer is still
+    /// drawing it (#709 B3): the status line says how far it has got.
+    /// </summary>
+    public bool IsDrawing => _progress?.IsDrawing == true;
+
+    /// <summary>Goes back to the view time the map last finished drawing (the loading message's Cancel).</summary>
+    public ICommand CancelDrawingCommand { get; }
+
+    /// <summary>Opens the layer list on the first layer without data (clicking "No data … for N of M layers", handoff D4).</summary>
+    public ICommand ShowLayersCommand { get; }
+
+    /// <summary>Raised with a dataset id when the layer list should show that layer.</summary>
+    public event Action<string>? ShowLayerRequested;
+
     /// <summary>True when the message is "every forecast ended" (shown in red).</summary>
-    public bool IsStatusError => IsLive && IsForecastEnded;
+    public bool IsStatusError => !IsDrawing && IsLive && IsForecastEnded;
 
     /// <summary>True when the message is about layers without data (shown in amber).</summary>
-    public bool IsStatusWarning => HasStatusMessage && !IsStatusError;
+    public bool IsStatusWarning => HasStatusMessage && !IsStatusError && !IsDrawing;
 
     /// <summary>The message's action: "Check for new runs", "Next data ›" or "‹ Previous data"; empty for none.</summary>
     public string StatusActionText =>
-        IsStatusError
+        IsDrawing
+            ? CancelDrawingCommand.CanExecute(null) ? Strings.TimelinePanel_Cancel : string.Empty
+        : IsStatusError
             ? CheckForNewRunsCommand.CanExecute(null) ? Strings.TimelinePanel_CheckForNewRuns : string.Empty
         : IsStatusWarning && NearestData() is { } target && _service.CurrentTime is { } t
             ? target > t ? Strings.TimelinePanel_NextData : Strings.TimelinePanel_PreviousData
@@ -328,7 +373,8 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     public bool HasStatusAction => StatusActionText.Length > 0;
 
     /// <summary>The command behind <see cref="StatusActionText"/>.</summary>
-    public ICommand? StatusActionCommand => IsStatusError ? CheckForNewRunsCommand : IsStatusWarning ? JumpToDataCommand : null;
+    public ICommand? StatusActionCommand =>
+        IsDrawing ? CancelDrawingCommand : IsStatusError ? CheckForNewRunsCommand : IsStatusWarning ? JumpToDataCommand : null;
 
     /// <summary>How many time-aware layers have no data within their tolerance of the view time, of how many.</summary>
     private (int Empty, int Total) EmptyLayerCount()
@@ -339,8 +385,17 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         return (datasets.Count(d => !Covers(d, t)), datasets.Count);
     }
 
+    /// <summary>True when the dataset draws something at <paramref name="time"/>, by the renderer's own time rule.</summary>
     private static bool Covers(EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset dataset, DateTime time) =>
-        dataset.Coverage.Count > 0 ? dataset.Covers(time) : time >= dataset.First && time <= dataset.Last;
+        dataset.Samples.Count > 0 ? dataset.SampleAt(time) is not null
+        : dataset.Coverage.Count > 0 ? dataset.Covers(time)
+        : time >= dataset.First && time <= dataset.Last;
+
+    /// <summary>The id of the first layer without data at the view time, or null.</summary>
+    private string? FirstEmptyDatasetId() =>
+        _service.CurrentTime is { } t
+            ? _service.TimedDatasets.FirstOrDefault(d => d.DatasetId is not null && !Covers(d, t))?.DatasetId
+            : null;
 
     /// <summary>
     /// The loaded sample nearest the view time, before or after it, at which
@@ -411,6 +466,9 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         OnPropertyChanged(nameof(StatusActionText));
         OnPropertyChanged(nameof(HasStatusAction));
         OnPropertyChanged(nameof(StatusActionCommand));
+        OnPropertyChanged(nameof(IsDrawing));
+        ((RelayCommand)CancelDrawingCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)ShowLayersCommand).NotifyCanExecuteChanged();
         ((RelayCommand)NowCommand).NotifyCanExecuteChanged();
         ((RelayCommand)CheckForNewRunsCommand).NotifyCanExecuteChanged();
         ((RelayCommand)JumpToDataCommand).NotifyCanExecuteChanged();

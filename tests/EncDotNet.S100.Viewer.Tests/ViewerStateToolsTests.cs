@@ -137,7 +137,7 @@ public sealed class ViewerStateToolsTests
         time.ApplySnapshot(RunSnapshot());
         var tool = new GetTimelineStateTool(controller);
         Assert.True((await tool.InvokeAsync()).TryGetValue(out var state));
-        var layer = new TimelineLayerDto("levels.h5", "S-104", true, null, null, null, 0);
+        var layer = new TimelineLayerDto("levels.h5", "S-104", true, null, null, null, 0, null, false, false);
 
         var json = System.Text.Json.JsonSerializer.Serialize(state! with { Layers = [layer] }, McpAdapterShared.Options);
 

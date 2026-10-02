@@ -3864,4 +3864,48 @@
   <data name="Tooltip_TimelinePreset" xml:space="preserve">
     <value>Window of the timeline (+ / − zoom, 0 all loaded)</value>
   </data>
+  <data name="LayerTime_Drawing" xml:space="preserve">
+    <value>drawing…</value>
+    <comment>A layer whose new view time is being drawn.</comment>
+  </data>
+  <data name="LayerTime_ForecastHourFormat" xml:space="preserve">
+    <value>{0} · T+{1} h</value>
+    <comment>{0}: the time drawn, e.g. "08:00Z"; {1}: hours since the forecast run.</comment>
+  </data>
+  <data name="LayerTime_OffsetFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>{0}: the sample drawn; {1}: its offset from the view time, e.g. "−24 min".</comment>
+  </data>
+  <data name="LayerTime_NoData" xml:space="preserve">
+    <value>no data</value>
+  </data>
+  <data name="LayerTime_NoDataLastFormat" xml:space="preserve">
+    <value>no data · last {0}, {1} earlier</value>
+    <comment>{0}: when the nearest earlier sample is; {1}: how far, e.g. "6 h".</comment>
+  </data>
+  <data name="LayerTime_NoDataNextFormat" xml:space="preserve">
+    <value>no data · next {0}, {1} later</value>
+    <comment>{0}: when the nearest later sample is; {1}: how far, e.g. "6 wk".</comment>
+  </data>
+  <data name="LayerTime_Hidden" xml:space="preserve">
+    <value>Hidden</value>
+    <comment>Tag on a layer that has no data at the view time.</comment>
+  </data>
+  <data name="Tooltip_LayerTimeJump" xml:space="preserve">
+    <value>Go to this layer’s nearest data</value>
+  </data>
+  <data name="TimelinePanel_DrawingFormat" xml:space="preserve">
+    <value>Drawing {0} · {1} of {2} layers ready</value>
+    <comment>{0}: the time being drawn; {1}: layers done; {2}: layers being drawn.</comment>
+  </data>
+  <data name="TimelinePanel_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="TimelinePanel_StampDrawingFormat" xml:space="preserve">
+    <value>{0} · drawing {1}…</value>
+    <comment>Map stamp while drawing: {0}: the time on the map; {1}: the time being drawn.</comment>
+  </data>
+  <data name="Tooltip_TimelineShowLayers" xml:space="preserve">
+    <value>Show the layers without data</value>
+  </data>
 </root>

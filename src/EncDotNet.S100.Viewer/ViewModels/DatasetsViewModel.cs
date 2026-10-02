@@ -388,6 +388,44 @@ internal sealed class DatasetEntry : ViewModelBase
         }
     }
 
+    private EncDotNet.S100.Viewer.Services.LayerTime? _layerTime;
+    private Action<DateTime>? _jumpToLayerData;
+
+    /// <summary>
+    /// What this time-aware layer draws at the view time (#709, handoff D3),
+    /// or null for a layer without time. Set by the layer-time coordinator.
+    /// </summary>
+    public EncDotNet.S100.Viewer.Services.LayerTime? LayerTime => _layerTime;
+
+    /// <summary>True when the row shows a layer time.</summary>
+    public bool HasLayerTime => _layerTime is not null;
+
+    /// <summary>The layer time as shown: "08:00Z · T+20 h", "no data · last 18:00Z, 6 h earlier", "drawing…".</summary>
+    public string LayerTimeText => _layerTime?.Text ?? string.Empty;
+
+    /// <summary>True when the layer has no data near the view time and hides (the amber Hidden tag).</summary>
+    public bool IsLayerHidden => _layerTime?.IsHidden == true;
+
+    /// <summary>True while the layer is drawing the view time.</summary>
+    public bool IsLayerDrawing => _layerTime?.State == EncDotNet.S100.Viewer.Services.LayerTimeState.Drawing;
+
+    /// <summary>Jumps the view time to this layer's nearest data (clicking a "no data" layer time).</summary>
+    public ICommand JumpToLayerDataCommand { get; }
+
+    /// <summary>Sets the layer time and what a click on it jumps with.</summary>
+    internal void SetLayerTime(EncDotNet.S100.Viewer.Services.LayerTime? layerTime, Action<DateTime>? jump)
+    {
+        _jumpToLayerData = jump;
+        if (Equals(_layerTime, layerTime))
+            return;
+        _layerTime = layerTime;
+        OnPropertyChanged(nameof(LayerTime));
+        OnPropertyChanged(nameof(HasLayerTime));
+        OnPropertyChanged(nameof(LayerTimeText));
+        OnPropertyChanged(nameof(IsLayerHidden));
+        OnPropertyChanged(nameof(IsLayerDrawing));
+    }
+
     /// <summary>
     /// Display label for <see cref="CurrentTime"/>, or empty when no
     /// time has been assigned. Formatted via
@@ -586,6 +624,11 @@ internal sealed class DatasetEntry : ViewModelBase
             ? Services.LazyLoading.CellUsageBand.TryParse(DisplayName)
                 ?? Services.LazyLoading.CellUsageBand.TryParse(relativePath)
             : null;
+        JumpToLayerDataCommand = new RelayCommand(() =>
+        {
+            if (_layerTime?.Nearest is { } nearest)
+                _jumpToLayerData?.Invoke(nearest);
+        });
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
 
         _subLayers.CollectionChanged += (_, _) =>
