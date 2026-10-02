@@ -74,24 +74,37 @@ internal static class TimelineStepper
             {
                 TimelineStepKind.Sample => Adjacent(driver?.Samples ?? [], time, direction),
                 TimelineStepKind.Boundary => Adjacent(Boundaries(datasets), time, direction),
-                _ => DataStep(coverage, time, direction),
+                _ => DataStep(coverage, time, direction, [.. datasets.SelectMany(d => d.Samples).Distinct().Order()]),
             };
         return target is { } t && t >= limits.Start && t <= limits.End && t != time ? t : null;
     }
 
-    /// <summary>The start of the next cluster of data (or the previous one's), skipping gaps (handoff C7).</summary>
-    public static DateTime? DataStep(IReadOnlyList<CoverageSegment> coverage, DateTime time, int direction)
+    /// <summary>
+    /// The first sample of the next cluster of data (or of the previous one),
+    /// skipping gaps (handoff C7). A cluster's window starts up to a step
+    /// before its first sample (the time policy's tolerance), so the jump
+    /// lands on the sample itself when there is one.
+    /// </summary>
+    public static DateTime? DataStep(IReadOnlyList<CoverageSegment> coverage, DateTime time, int direction, IReadOnlyList<DateTime>? samples = null)
     {
+        CoverageSegment? target;
         if (direction > 0)
-            return coverage.Where(s => s.Start > time).Select(s => (DateTime?)s.Start).FirstOrDefault();
-
-        // Back: the start of the cluster before the one holding the time (or
-        // before the gap it is in).
-        var containing = coverage.Select((s, i) => (s, i)).FirstOrDefault(p => time >= p.s.Start && time <= p.s.End);
-        var before = containing.s != default
-            ? coverage.Take(containing.i)
-            : coverage.Where(s => s.End < time);
-        return before.Select(s => (DateTime?)s.Start).LastOrDefault();
+        {
+            target = coverage.Where(s => s.Start > time).Select(s => (CoverageSegment?)s).FirstOrDefault();
+        }
+        else
+        {
+            // Back: the cluster before the one holding the time (or before the gap it is in).
+            var containing = coverage.Select((s, i) => (s, i)).FirstOrDefault(p => time >= p.s.Start && time <= p.s.End);
+            var before = containing.s != default
+                ? coverage.Take(containing.i)
+                : coverage.Where(s => s.End < time);
+            target = before.Select(s => (CoverageSegment?)s).LastOrDefault();
+        }
+        if (target is not { } cluster)
+            return null;
+        var first = samples?.FirstOrDefault(s => s >= cluster.Start && s <= cluster.End);
+        return first is { } sample && sample != default ? sample : cluster.Start;
     }
 
     /// <summary>

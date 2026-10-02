@@ -75,6 +75,16 @@ public sealed class TimelineNavigationTests
     }
 
     [Fact]
+    public void A_data_jump_lands_on_the_first_sample_not_the_tolerance_before_it()
+    {
+        var coverage = new[] { new CoverageSegment(T0.AddHours(-1), T0.AddHours(10)), new CoverageSegment(T0.AddDays(9), T0.AddDays(10)) };
+        var samples = new[] { T0, T0.AddHours(9), T0.AddDays(9).AddHours(1) };
+
+        Assert.Equal(T0.AddDays(9).AddHours(1), TimelineStepper.DataStep(coverage, T0.AddHours(3), +1, samples));
+        Assert.Equal(T0, TimelineStepper.DataStep(coverage, T0.AddDays(9).AddHours(5), -1, samples));
+    }
+
+    [Fact]
     public void The_default_driver_is_the_coarsest_forecast()
     {
         var hourly = Dataset("111US00_CBOFS_20260112T00Z_A", "S-111", Hourly(T0, 49));

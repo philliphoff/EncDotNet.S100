@@ -141,7 +141,12 @@ internal sealed class AxisLabelsControl : Control
         if (Labels is not { Count: > 0 } labels)
             return;
         var width = Bounds.Width;
-        foreach (var label in labels)
+
+        // Labels are laid out by priority (gaps, then days, then hours); one
+        // that would touch a label already placed is dropped, so text never
+        // overlaps whatever the panel's width.
+        var placed = new List<(double Left, double Right)>();
+        foreach (var label in labels.OrderBy(l => l.Kind))
         {
             var isGap = label.Kind == AxisLabelKind.Gap;
             var text = new FormattedText(
@@ -152,6 +157,10 @@ internal sealed class AxisLabelsControl : Control
                 10.5,
                 (isGap ? Muted : Foreground) ?? Brushes.Gray);
             var x = Math.Clamp(label.Position * width - text.Width / 2, 0, Math.Max(0, width - text.Width));
+            const double padding = 8;
+            if (placed.Any(p => x < p.Right + padding && x + text.Width > p.Left - padding))
+                continue;
+            placed.Add((x, x + text.Width));
             context.DrawText(text, new Point(x, 0));
         }
     }

@@ -423,7 +423,9 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             return Strings.TimelinePanel_OffsetNow;
         var span = delta.Duration();
         var c = CultureInfo.CurrentCulture;
-        var text = span.TotalHours < 1
+        var text = span.TotalDays >= 14
+            ? TimelineAxisLabels.GapLength(span, c)
+            : span.TotalHours < 1
             ? string.Format(c, Strings.TimelinePanel_MinutesFormat, (int)span.TotalMinutes)
             : span.TotalHours < 48
                 ? span.Minutes == 0

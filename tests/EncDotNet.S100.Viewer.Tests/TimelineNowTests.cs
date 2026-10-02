@@ -187,7 +187,7 @@ public sealed class TimelineNowTests
         Assert.Equal(Run, service.CurrentTime);
         Assert.True(timeline.IsNowInRange);
         Assert.Equal(1.0, timeline.NowPosition, 3);
-        Assert.Equal("30 d ago", timeline.OffsetText);
+        Assert.Equal("4 wk ago", timeline.OffsetText);
         Assert.True(timeline.NowCommand.CanExecute(null));
         Assert.DoesNotContain("cbofs", timeline.RangeLabel, StringComparison.Ordinal);
     }
@@ -199,6 +199,7 @@ public sealed class TimelineNowTests
     [InlineData(-5 * 3600, "5 h ago")]
     [InlineData(52 * 3600, "in 2 d 4 h")]
     [InlineData(-25 * 60, "25 min ago")]
+    [InlineData(-289 * 24 * 3600, "9 mo ago")]
     public void Offsets_read_naturally(int seconds, string expected) =>
         Assert.Equal(expected, TimelineViewModel.Offset(TimeSpan.FromSeconds(seconds)));
 
