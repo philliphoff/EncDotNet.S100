@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Windows.Input;
-using Avalonia.Collections;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
