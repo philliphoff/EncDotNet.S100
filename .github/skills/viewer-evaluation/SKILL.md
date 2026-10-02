@@ -175,6 +175,7 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `set_dataset_state {datasetId, visible?, opacity?}` | Show/hide a loaded dataset (e.g. gridded S-104, which loads hidden). |
 | `list_notifications` / `dismiss_notification {id?}` | Read or clear notifications, e.g. before a screenshot. |
 | `set_test_clock {now?, advance?, freeze?, reset?}` | Only with `--mcp-test-hooks`: move or freeze "now" to test Live, ageing forecasts and Expired runs without waiting. |
+| `list_library_sources` / `query_library_items` / `describe_library_item` / `list_known_sources` | Read the Library as its panel shows it: sources, item states (`online`, `local`, `loaded`, `update`, `expired`, …), what covers a point, details, and the Online Catalogue directory. |
 
 **Canonical visual-eval loop:**
 `open_dataset` → `set_viewport` → `await_render_idle` →
