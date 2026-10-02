@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <see cref="GlobalTimeService"/> and forwards user scrubs back to
 /// the service via <see cref="GlobalTimeService.SetCurrentTime"/>.
 /// </summary>
-internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.ViewModels.Activities.IActivityTabContentSignal
+internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.ViewModels.Activities.IActivityTabContentSignal
 {
     private readonly GlobalTimeService _service;
     private readonly ITimeFormatProvider? _timeFormat;
@@ -22,8 +22,6 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     private readonly ITimer? _clock;
     private readonly IForecastRunRefresher? _refresher;
     private TimelineAxisMap? _axis;
-    private DateTime _axisStart;
-    private DateTime _axisEnd;
 
     public TimelineViewModel(GlobalTimeService service)
         : this(service, timeFormat: null)
@@ -60,8 +58,9 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         _time = time;
         _refresher = refresher;
 
-        PreviousStepCommand = new RelayCommand(StepPrevious, CanStepPrevious);
-        NextStepCommand = new RelayCommand(StepNext, CanStepNext);
+        PreviousStepCommand = new RelayCommand(() => StepBy(-1), () => CanStep(StepKind, -1));
+        NextStepCommand = new RelayCommand(() => StepBy(+1), () => CanStep(StepKind, +1));
+        InitializeNavigation();
         NowCommand = new RelayCommand(GoLive, () => IsActive && !IsLive);
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
         CheckForNewRunsCommand = new RelayCommand(() => _refresher?.RefreshForecastSources(), () => _refresher?.HasForecastSources == true);
@@ -70,13 +69,17 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         _service.RangeChanged += OnRangeChanged;
         _service.CurrentTimeChanged += _ =>
         {
-            // A pinned or live time outside the window widens it (#713).
-            if (_service.CurrentTime is { } current && (current < _axisStart || current > _axisEnd))
+            // A time outside the window or inside a collapsed gap rebuilds the
+            // axis around it (#713, #708), but not under a scrub, which would
+            // move the axis under the pointer.
+            if (!_scrubbing && _service.CurrentTime is { } current && NeedsAxisFor(current))
+            {
+                KeepInView(current);
                 RebuildAxis();
+            }
             OnPropertyChanged(nameof(SliderValue));
             OnPropertyChanged(nameof(CurrentTimeLabel));
-            ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
-            ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
+            RaiseSteps();
             RaiseNow();
         };
         _service.ModeChanged += _ => RaiseNow();
@@ -154,175 +157,17 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     /// <inheritdoc />
     public event EventHandler? ContentBecameAvailable;
 
-    /// <summary>
-    /// Steps backward to the previous discrete sample. Only
-    /// available when <see cref="AreStepButtonsVisible"/> is true.
-    /// </summary>
+    /// <summary>Steps back by the chosen step (handoff C6).</summary>
     public ICommand PreviousStepCommand { get; }
 
-    /// <summary>Steps forward to the next discrete sample.</summary>
+    /// <summary>Steps forward by the chosen step.</summary>
     public ICommand NextStepCommand { get; }
 
-    /// <summary>
-    /// True when discrete prev/next step controls should be shown — i.e.
-    /// whenever the timeline has at least one sample. Stepping is always
-    /// well-defined (it walks <see cref="GlobalTimeService.AllSamples"/>,
-    /// however many there are), and is especially useful for dense,
-    /// clustered datasets where the free-running slider cannot land on an
-    /// exact sample.
-    /// </summary>
-    public bool AreStepButtonsVisible => _service.AllSamples.Count > 0;
-
-    private bool CanStepPrevious()
-    {
-        var samples = _service.AllSamples;
-        return _service.CurrentTime is { } cur && samples.Count > 0 && cur > samples[0];
-    }
-
-    private bool CanStepNext()
-    {
-        var samples = _service.AllSamples;
-        return _service.CurrentTime is { } cur && samples.Count > 0 && cur < samples[^1];
-    }
-
-    private void StepPrevious()
-    {
-        var samples = _service.AllSamples;
-        if (_service.CurrentTime is not { } cur || samples.Count == 0) return;
-        // Largest sample strictly less than current.
-        DateTime? target = null;
-        foreach (var s in samples)
-            if (s < cur && (target is null || s > target.Value)) target = s;
-        if (target is { } t) _service.SetCurrentTime(t);
-    }
-
-    private void StepNext()
-    {
-        var samples = _service.AllSamples;
-        if (_service.CurrentTime is not { } cur || samples.Count == 0) return;
-        // Smallest sample strictly greater than current.
-        DateTime? target = null;
-        foreach (var s in samples)
-            if (s > cur && (target is null || s < target.Value)) target = s;
-        if (target is { } t) _service.SetCurrentTime(t);
-    }
-
-    /// <summary>
-    /// Maximum number of distinct samples for which we still render
-    /// one tick per real sample. Beyond this threshold we fall back
-    /// to <see cref="EvenlySpacedTickCount"/> evenly distributed
-    /// stoppers between <see cref="SliderMinimum"/> and
-    /// <see cref="SliderMaximum"/>.
-    /// </summary>
-    private const int SampleTickThreshold = 50;
-
-    /// <summary>
-    /// Number of evenly-spaced ticks rendered when the dataset
-    /// timelines are dense and/or unaligned.
-    /// </summary>
-    private const int EvenlySpacedTickCount = 10;
-
-    /// <summary>
-    /// Tick stops painted along the slider, in normalized <c>[0,1]</c>
-    /// axis positions. When all loaded datasets share a small set of
-    /// timestamps, ticks correspond 1:1 to real sample times (mapped
-    /// through the gap-collapsing axis) and the slider snaps to them.
-    /// Otherwise, ticks are evenly spaced visual landmarks and the
-    /// slider runs free (each adapter still snaps the value to its
-    /// nearest real sample at render time).
-    /// </summary>
-    public AvaloniaList<double> Ticks
-    {
-        get
-        {
-            var samples = _service.AllSamples;
-            var list = new AvaloniaList<double>();
-            if (samples.Count == 0) return list;
-
-            if (samples.Count <= SampleTickThreshold)
-            {
-                var axis = Axis;
-                if (axis is not null)
-                    foreach (var s in samples) list.Add(axis.ToPosition(s));
-            }
-            else
-            {
-                for (var i = 0; i <= EvenlySpacedTickCount; i++)
-                    list.Add(i / (double)EvenlySpacedTickCount);
-            }
-            return list;
-        }
-    }
-
-    /// <summary>
-    /// Spacing between minor ticks in normalized axis units. Mirrors the
-    /// even-spacing stride when the timeline is dense; <c>0</c> when the
-    /// slider snaps to the explicit per-sample <see cref="Ticks"/>.
-    /// </summary>
-    public double TickFrequency
-    {
-        get
-        {
-            var samples = _service.AllSamples;
-            if (samples.Count == 0) return 0;
-            if (samples.Count <= SampleTickThreshold) return 0;
-            return 1.0 / EvenlySpacedTickCount;
-        }
-    }
-
-    /// <summary>
-    /// Snap the slider value to a tick only when ticks correspond
-    /// to real samples; otherwise let the user scrub freely and
-    /// rely on per-dataset adapters to snap at render time.
-    /// </summary>
-    public bool IsSnapToTickEnabled =>
-        _service.AllSamples.Count is > 0 and <= SampleTickThreshold;
+    /// <summary>True when the step controls are shown: whenever the timeline is active.</summary>
+    public bool AreStepButtonsVisible => IsActive;
 
     /// <summary>True when the timeline panel should be visible.</summary>
     public bool IsActive => _service.IsActive;
-
-    /// <summary>
-    /// The gap-collapsing axis map for the current aggregate range, built
-    /// lazily so property getters invoked before the first
-    /// <see cref="OnRangeChanged"/> still resolve correctly.
-    /// </summary>
-    private TimelineAxisMap? Axis
-    {
-        get
-        {
-            if (_axis is null)
-                RebuildAxis();
-            return _axis;
-        }
-    }
-
-    /// <summary>
-    /// Builds the axis over the loaded range widened to include now and the
-    /// view time, so the NOW line and a time in a gap or past the data are
-    /// always on it (#713).
-    /// </summary>
-    private void RebuildAxis()
-    {
-        if (_service.MinTime is not { } min || _service.MaxTime is not { } max)
-        {
-            _axis = null;
-            return;
-        }
-        var now = Now;
-        _axisStart = min < now ? min : now;
-        _axisEnd = max > now ? max : now;
-        if (_service.CurrentTime is { } current)
-        {
-            if (current < _axisStart)
-                _axisStart = current;
-            if (current > _axisEnd)
-                _axisEnd = current;
-        }
-        _axis = new TimelineAxisMap(_axisStart, _axisEnd, _service.CoverageSegments);
-        OnPropertyChanged(nameof(CoverageBands));
-        OnPropertyChanged(nameof(Ticks));
-        OnPropertyChanged(nameof(SliderValue));
-    }
 
     /// <summary>
     /// Data-coverage ranges expressed as fractions of the slider extent
@@ -357,7 +202,15 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
             // The slider echoing the position it was given is not a user's
             // choice of time and must not leave Live.
             if (_service.CurrentTime is { } current && axis.ToPosition(current) == value) return;
-            _service.SetCurrentTime(axis.ToTime(value));
+            _scrubbing = true;
+            try
+            {
+                _service.SetCurrentTime(axis.ToTime(value));
+            }
+            finally
+            {
+                _scrubbing = false;
+            }
         }
     }
 
@@ -534,7 +387,9 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     {
         if (IsLive)
             GoLive();
+        KeepInView(Now);
         RebuildAxis();
+        RaiseSteps();
         RaiseNow();
     }
 
@@ -645,6 +500,8 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
                 }
                 if (StepText() is { } step)
                     parts.Add(step);
+                if (StepKind == TimelineStepKind.Sample && Driver is { } driver)
+                    parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_StepFollowsFormat, DriverLabel(driver), Duration(TimelineStepper.Cadence(driver.Samples))));
                 return string.Join(" · ", parts);
             }
 

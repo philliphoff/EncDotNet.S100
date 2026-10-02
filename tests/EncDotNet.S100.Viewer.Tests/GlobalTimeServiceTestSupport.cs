@@ -80,6 +80,12 @@ internal static class GlobalTimeServiceTestSupport
                 datasets,
                 minimum,
                 maximum),
+            Datasets = [.. datasets
+                .Where(dataset => dataset.AvailableTimes.Count > 0)
+                .Select((dataset, i) => new MapsuiMapTimedDataset($"dataset{i}", dataset.AvailableTimes.Min(), dataset.AvailableTimes.Max())
+                {
+                    Samples = [.. dataset.AvailableTimes.Order()],
+                })],
         });
     }
 

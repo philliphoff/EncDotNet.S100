@@ -205,7 +205,7 @@ public sealed class TimelineNowTests
     [Fact]
     public void Steps_work_however_many_samples_there_are()
     {
-        // 6-minute water levels over two days: far more than the 50 the slider snaps to.
+        // 6-minute water levels over two days.
         var samples = Enumerable.Range(0, 480).Select(i => Run.AddMinutes(6 * i)).ToArray();
         var (service, timeline, _) = Create(Run.AddDays(30));
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
@@ -215,18 +215,21 @@ public sealed class TimelineNowTests
             Current = samples[100],
             Samples = samples,
             CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
-            Datasets = [new MapsuiMapTimedDataset("104US00_levels", samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("104US00_levels", samples[0], samples[^1]) { Samples = samples }],
         });
-        Assert.False(timeline.IsSnapToTickEnabled);
 
+        // The default 1 h step lands on whole hours.
         Assert.True(timeline.NextStepCommand.CanExecute(null));
         timeline.NextStepCommand.Execute(null);
-        Assert.Equal(samples[101], service.CurrentTime);
+        Assert.Equal(Run.AddHours(11), service.CurrentTime);
 
-        Assert.True(timeline.PreviousStepCommand.CanExecute(null));
+        // "Sample of" walks the 6-minute samples.
+        timeline.SetStepCommand.Execute(nameof(TimelineStepKind.Sample));
+        timeline.NextStepCommand.Execute(null);
+        Assert.Equal(samples[111], service.CurrentTime);
         timeline.PreviousStepCommand.Execute(null);
         timeline.PreviousStepCommand.Execute(null);
-        Assert.Equal(samples[99], service.CurrentTime);
+        Assert.Equal(samples[109], service.CurrentTime);
     }
 
     [Theory]
