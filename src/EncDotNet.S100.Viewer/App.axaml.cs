@@ -891,7 +891,10 @@ public partial class App : Application
             new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>()),
             new ViewerNotificationController(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>()),
-            sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider));
+            sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider,
+            new ViewerLibraryController(
+                sp.GetRequiredService<LibraryPanelViewModel>(),
+                () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources)));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(

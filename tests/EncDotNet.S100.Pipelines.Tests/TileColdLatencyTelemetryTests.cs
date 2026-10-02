@@ -18,7 +18,10 @@ public class TileColdLatencyTelemetryTests
     [Fact]
     public void ColdLatencyAndQueueDepth_PublishExpectedInstruments()
     {
-        var seen = new Dictionary<string, (string Unit, double Value)>();
+        // The instruments are process-wide, so tiles rendered by tests running
+        // in parallel record into them too: collect every measurement (from
+        // any thread) and look for ours rather than taking the last one.
+        var seen = new System.Collections.Concurrent.ConcurrentBag<(string Name, string Unit, double Value)>();
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, l) =>
         {
@@ -29,21 +32,16 @@ public class TileColdLatencyTelemetryTests
             }
         };
         listener.SetMeasurementEventCallback<double>((inst, value, _, _) =>
-            seen[inst.Name] = (inst.Unit ?? string.Empty, value));
+            seen.Add((inst.Name, inst.Unit ?? string.Empty, value)));
         listener.SetMeasurementEventCallback<int>((inst, value, _, _) =>
-            seen[inst.Name] = (inst.Unit ?? string.Empty, value));
+            seen.Add((inst.Name, inst.Unit ?? string.Empty, value)));
         listener.Start();
 
         Telemetry.TileColdLatency.Record(42.5);
         Telemetry.TileVisibleQueueDepth.Record(9);
 
-        Assert.True(seen.TryGetValue("s100.render.tile.cold.latency", out var latency));
-        Assert.Equal("ms", latency.Unit);
-        Assert.Equal(42.5, latency.Value);
-
-        Assert.True(seen.TryGetValue("s100.render.tile.visible.queue.depth", out var depth));
-        Assert.Equal("{tile}", depth.Unit);
-        Assert.Equal(9, depth.Value);
+        Assert.Contains(("s100.render.tile.cold.latency", "ms", 42.5), seen);
+        Assert.Contains(("s100.render.tile.visible.queue.depth", "{tile}", 9.0), seen);
     }
 
     [Fact]

@@ -43,6 +43,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IViewerDatasetStateController? _datasetState;
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
+    private readonly IViewerLibraryController? _library;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -69,7 +70,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         IViewerTimelineController? timeline = null,
         IViewerDatasetStateController? datasetState = null,
         IViewerNotificationController? notifications = null,
-        AdjustableTimeProvider? testClock = null)
+        AdjustableTimeProvider? testClock = null,
+        IViewerLibraryController? library = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -92,6 +94,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _datasetState = datasetState;
         _notifications = notifications;
         _testClock = testClock;
+        _library = library;
         _loggers = loggers;
     }
 
@@ -348,6 +351,13 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
             tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
+        }
+        if (_library is not null)
+        {
+            tools.Add(LibraryMcpAdapters.Create(new ListLibrarySourcesTool(_library)));
+            tools.Add(LibraryMcpAdapters.Create(new QueryLibraryItemsTool(_library)));
+            tools.Add(LibraryMcpAdapters.Create(new DescribeLibraryItemTool(_library)));
+            tools.Add(LibraryMcpAdapters.Create(new ListKnownSourcesTool(_library)));
         }
         // Test hooks only: set_test_clock exists only when the viewer was
         // started with --mcp-test-hooks, which makes its clock adjustable.

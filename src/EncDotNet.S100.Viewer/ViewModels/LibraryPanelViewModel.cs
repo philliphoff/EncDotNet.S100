@@ -1308,15 +1308,26 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// Every library dataset covering <paramref name="position"/>, most
     /// detailed (highest usage band, then smallest extent) first.
     /// </summary>
-    private List<LibraryItemViewModel> HitsAt(GeoPosition position) =>
+    internal List<LibraryItemViewModel> HitsAt(GeoPosition position) =>
         _library.Collections
             .SelectMany(c => c.Sources)
             .SelectMany(s => (s.Index?.Items ?? []).Select(i => (Item: i, Source: s)))
             .Where(p => CoverageGeometry.Contains(p.Item, position))
             .OrderByDescending(p => p.Item.UsageBand ?? 0)
             .ThenBy(p => CoverageGeometry.Area(p.Item))
-            .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, CollectionNameOf(p.Source.Id), RetryDownloadAsync, _time))
+            .Select(p => CreateItem(p.Item, p.Source))
             .ToList();
+
+    /// <summary>The collections the Library holds now, sources and indexes included.</summary>
+    internal IReadOnlyList<LibraryCollection> Collections => _library.Collections;
+
+    /// <summary>
+    /// A row view model for <paramref name="item"/>, wired exactly as the
+    /// panel's own rows are, so its state, tags and details match what the
+    /// user sees (used by the MCP Library tools, #715).
+    /// </summary>
+    internal LibraryItemViewModel CreateItem(CollectionItem item, LibrarySource source) =>
+        new(item, source, _loader.StateOf, _downloader, CollectionNameOf(source.Id), RetryDownloadAsync, _time);
 
     private string? CollectionNameOf(Guid sourceId) =>
         _library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == sourceId))?.Definition.Name;
