@@ -210,40 +210,8 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
         LibraryItemPage? page = null;
         await _dispatch(() =>
         {
-            if (Scope(query.SourceId) is not { } scope)
+            if (FindRows(query) is not { } matched)
                 return;
-
-            IEnumerable<LibraryItemViewModel> rows;
-            if (query.Point is { } point)
-            {
-                rows = _panel.HitsAt(point).Where(row => scope.Contains(row.Source.Id));
-                if (query.Spec is { } hitSpec)
-                    rows = rows.Where(row => string.Equals(row.Item.ProductSpec, hitSpec, StringComparison.OrdinalIgnoreCase));
-                if (query.Bounds is { } hitBox)
-                    rows = rows.Where(row => row.Item.Bounds is { } bounds && bounds.Intersects(hitBox));
-            }
-            else
-            {
-                // Cheap filters on the raw items first: a row view model
-                // resolves its state (file checks, load state), so only the
-                // survivors get one.
-                var pairs = _panel.Collections
-                    .SelectMany(c => c.Sources)
-                    .Where(source => scope.Contains(source.Id))
-                    .SelectMany(source => (source.Index?.Items ?? []).Select(item => (Item: item, Source: source)));
-                if (query.Spec is { } spec)
-                    pairs = pairs.Where(p => string.Equals(p.Item.ProductSpec, spec, StringComparison.OrdinalIgnoreCase));
-                if (query.Bounds is { } box)
-                    pairs = pairs.Where(p => p.Item.Bounds is { } bounds && bounds.Intersects(box));
-                rows = pairs.Select(p => _panel.CreateItem(p.Item, p.Source));
-            }
-
-            if (!string.IsNullOrWhiteSpace(query.Text))
-                rows = rows.Where(row => row.Matches(query.Text));
-            if (query.States is { Count: > 0 } states)
-                rows = rows.Where(row => states.Contains(StateName(row.Availability)));
-
-            var matched = rows.ToList();
             var items = matched
                 .Skip(query.Page * query.PageSize)
                 .Take(query.PageSize)
@@ -252,6 +220,49 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
             page = new LibraryItemPage(matched.Count, query.Page, query.PageSize, (query.Page + 1) * query.PageSize < matched.Count, items);
         }).ConfigureAwait(false);
         return page;
+    }
+
+    /// <summary>
+    /// Every row matching <paramref name="query"/>'s filters (ignoring its
+    /// page), or <see langword="null"/> when its source id matches nothing.
+    /// Call on the UI thread.
+    /// </summary>
+    internal List<LibraryItemViewModel>? FindRows(LibraryItemQuery query)
+    {
+        if (Scope(query.SourceId) is not { } scope)
+            return null;
+
+        IEnumerable<LibraryItemViewModel> rows;
+        if (query.Point is { } point)
+        {
+            rows = _panel.HitsAt(point).Where(row => scope.Contains(row.Source.Id));
+            if (query.Spec is { } hitSpec)
+                rows = rows.Where(row => string.Equals(row.Item.ProductSpec, hitSpec, StringComparison.OrdinalIgnoreCase));
+            if (query.Bounds is { } hitBox)
+                rows = rows.Where(row => row.Item.Bounds is { } bounds && bounds.Intersects(hitBox));
+        }
+        else
+        {
+            // Cheap filters on the raw items first: a row view model
+            // resolves its state (file checks, load state), so only the
+            // survivors get one.
+            var pairs = _panel.Collections
+                .SelectMany(c => c.Sources)
+                .Where(source => scope.Contains(source.Id))
+                .SelectMany(source => (source.Index?.Items ?? []).Select(item => (Item: item, Source: source)));
+            if (query.Spec is { } spec)
+                pairs = pairs.Where(p => string.Equals(p.Item.ProductSpec, spec, StringComparison.OrdinalIgnoreCase));
+            if (query.Bounds is { } box)
+                pairs = pairs.Where(p => p.Item.Bounds is { } bounds && bounds.Intersects(box));
+            rows = pairs.Select(p => _panel.CreateItem(p.Item, p.Source));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Text))
+            rows = rows.Where(row => row.Matches(query.Text));
+        if (query.States is { Count: > 0 } states)
+            rows = rows.Where(row => states.Contains(StateName(row.Availability)));
+
+        return rows.ToList();
     }
 
     /// <inheritdoc />
@@ -348,7 +359,7 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
             tally);
     }
 
-    private static LibraryItemInfo Info(LibraryItemViewModel row)
+    internal static LibraryItemInfo Info(LibraryItemViewModel row)
     {
         var item = row.Item;
         var run = S100ForecastFeedIndexer.RunOf(item);
