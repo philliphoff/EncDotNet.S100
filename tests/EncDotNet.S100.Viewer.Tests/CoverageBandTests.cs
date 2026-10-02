@@ -97,7 +97,8 @@ public sealed class CoverageBandTests
         s.Register(NewEntry(), new Stub(new[] { T0, T0.AddHours(2) }));
         s.Register(NewEntry(), new Stub(new[] { T0.AddHours(8), T0.AddHours(10) }));
 
-        var vm = new TimelineViewModel(s);
+        // Now inside the data, so the axis (which always includes now) is just the data.
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(T0.AddHours(1))));
         var bands = vm.CoverageBands;
 
         // Two equal 2h data clusters separated by a 6h gap. On a linear axis

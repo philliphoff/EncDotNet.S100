@@ -70,4 +70,41 @@ public sealed class MapsuiMapTimeSnapshot
 /// <param name="Name">The dataset's name (usually its file name without extension).</param>
 /// <param name="First">Its earliest time sample.</param>
 /// <param name="Last">Its latest time sample.</param>
-public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime Last);
+public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime Last)
+{
+    private IReadOnlyList<MapsuiMapTimeSegment> _coverage = [];
+
+    /// <summary>The dataset's product specification (e.g. <c>S-111</c>), when known.</summary>
+    public string? ProductSpec { get; init; }
+
+    /// <summary>
+    /// The windows in which this dataset draws under its product's time
+    /// policy; outside them it has no data near the clock and hides. Empty
+    /// when not computed.
+    /// </summary>
+    public IReadOnlyList<MapsuiMapTimeSegment> Coverage
+    {
+        get => _coverage;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _coverage = Array.AsReadOnly(value.ToArray());
+        }
+    }
+
+    /// <summary>True when the dataset has data within its tolerance of <paramref name="time"/>.</summary>
+    /// <param name="time">The clock value.</param>
+    public bool Covers(DateTime time) => Coverage.Any(window => time >= window.Start && time <= window.End);
+
+    /// <inheritdoc />
+    public bool Equals(MapsuiMapTimedDataset? other) =>
+        other is not null
+        && Name == other.Name
+        && First == other.First
+        && Last == other.Last
+        && ProductSpec == other.ProductSpec
+        && Coverage.SequenceEqual(other.Coverage);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(Name, First, Last, Coverage.Count);
+}

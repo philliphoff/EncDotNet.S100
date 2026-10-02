@@ -71,7 +71,10 @@ public class GlobalTimeServiceTests
         Assert.Equal(1, rangeChanged);
         Assert.Equal(time, currentChanged);
         Assert.Equal(time, service.CurrentTime);
-        Assert.Equal([new MapsuiMapTimedDataset("timed", time, time)], service.TimedDatasets);
+        var timed = Assert.Single(service.TimedDatasets);
+        Assert.Equal(("timed", time, time), (timed.Name, timed.First, timed.Last));
+        // One S-104 sample: at or before, held for an hour.
+        Assert.Equal(new MapsuiMapTimeSegment(time, time.AddHours(1)), Assert.Single(timed.Coverage));
     }
 
     [Fact]
@@ -92,7 +95,7 @@ public class GlobalTimeServiceTests
     }
 
     [Fact]
-    public void SetCurrentTime_clamps_to_range_and_raises_event()
+    public void SetCurrentTime_is_not_clamped_and_pins_the_time()
     {
         var s = new GlobalTimeService();
         var t1 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -104,12 +107,15 @@ public class GlobalTimeServiceTests
         DateTime? observed = null;
         s.CurrentTimeChanged += t => observed = t;
 
-        s.SetCurrentTime(t2.AddHours(99)); // clamps to t2
-        Assert.Equal(t2, observed);
-        Assert.Equal(t2, s.CurrentTime);
+        // The view time can sit past the data (#713 A3).
+        s.SetCurrentTime(t2.AddHours(99));
+        Assert.Equal(t2.AddHours(99), observed);
+        Assert.Equal(t2.AddHours(99), s.CurrentTime);
+        Assert.Equal(TimeMode.Pinned, s.Mode);
 
-        s.SetCurrentTime(t1.AddHours(-1)); // clamps to t1
-        Assert.Equal(t1, observed);
+        s.GoLive(t1.AddHours(-1));
+        Assert.Equal(t1.AddHours(-1), observed);
+        Assert.Equal(TimeMode.Live, s.Mode);
     }
 
     [Fact]
@@ -138,7 +144,8 @@ public class GlobalTimeServiceTests
         var t3 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         s.Register(NewEntry(), new StubTimeAware(t1, t2, t3));
 
-        var vm = new TimelineViewModel(s);
+        // Now inside the data, so the axis (which always includes now) is just the data.
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)));
 
         Assert.Equal(3, vm.Ticks.Count);
         Assert.True(vm.IsSnapToTickEnabled);
@@ -176,7 +183,8 @@ public class GlobalTimeServiceTests
         var t3 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         s.Register(NewEntry(), new StubTimeAware(t1, t2, t3));
 
-        var vm = new TimelineViewModel(s);
+        // Now inside the data, so the axis (which always includes now) is just the data.
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(t2)));
 
         // Initial state: at t1; only Next is enabled.
         Assert.Equal(t1, s.CurrentTime);
@@ -200,13 +208,49 @@ public class GlobalTimeServiceTests
             IdentityCrsTransform.Instance;
     }
 
-    private sealed class SessionTimeProcessor(DateTime time) :
+    [Fact]
+    public void Loading_a_forecast_that_covers_now_stays_live_at_now_in_a_real_session()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = new MapsuiDatasetLayerSession(
+            new MapsuiLayerBands(map),
+            owner,
+            new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),
+            new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()));
+        var run = new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc);
+        var now = run.AddHours(4).AddMinutes(34);
+        var service = new GlobalTimeService();
+        service.AttachTo(session);
+        // As DatasetLoaderService does: every clock change is re-applied to the session.
+        service.CurrentTimeChanged += time => session.SetCurrentTime(time);
+        _ = new TimelineViewModel(service, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(now)), action => action());
+        var id = new MapDatasetId("111US00_CBOFS_US4MD1DD");
+        Assert.True(owner.TryRegister(id, new SessionTimeProcessor([.. Enumerable.Range(0, 49).Select(h => run.AddHours(h))], "S-111")));
+
+        session.SetDataset(new MapDataset(
+            id,
+            id.Value,
+            new DatasetMetadata { Spec = new SpecRef("S-111", new SpecVersion(1, 0, 0)) }));
+
+        // The range change's trailing clock event must not put the first step back (#713).
+        Assert.Equal(TimeMode.Live, service.Mode);
+        Assert.Equal(now, service.CurrentTime);
+        Assert.Equal(now, session.GetTimeSnapshot().Current);
+    }
+
+    private sealed class SessionTimeProcessor(IReadOnlyList<DateTime> times, string spec = "S-104") :
         IDatasetProcessor,
         ITimeAwareDatasetProcessor
     {
-        public SpecRef Spec => new("S-104", new SpecVersion(1, 0, 0));
+        public SessionTimeProcessor(DateTime time)
+            : this([time])
+        {
+        }
 
-        public IReadOnlyList<DateTime> AvailableTimes { get; } = [time];
+        public SpecRef Spec => new(spec, new SpecVersion(1, 0, 0));
+
+        public IReadOnlyList<DateTime> AvailableTimes { get; } = times;
 
         public FeatureInfo? GetFeatureInfo(string featureRef) => null;
     }

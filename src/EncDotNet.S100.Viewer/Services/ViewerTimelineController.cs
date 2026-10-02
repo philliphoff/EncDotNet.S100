@@ -64,10 +64,10 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
 
         if (time is null)
         {
-            // The Now button's own command, so following now starts as it does for the user.
-            if (!_timeline.NowCommand.CanExecute(null))
-                return "now lies outside every loaded window";
-            _timeline.NowCommand.Execute(null);
+            // Go live through the Timeline's own command, as the user does;
+            // already live is already there.
+            if (_timeline.NowCommand.CanExecute(null))
+                _timeline.NowCommand.Execute(null);
             return null;
         }
 
@@ -90,7 +90,7 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Active: _time.IsActive,
             Now: _clock.GetUtcNow().UtcDateTime,
             ViewTime: viewTime,
-            FollowingNow: _time.IsFollowingNow,
+            FollowingNow: _time.Mode == TimeMode.Live,
             Minimum: _time.MinTime,
             Maximum: _time.MaxTime,
             SampleCount: _time.AllSamples.Count,
@@ -100,7 +100,12 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             ForecastEnded: _timeline.IsForecastEnded,
             Readout: _timeline.CurrentTimeLabel,
             Summary: _timeline.RangeLabel,
-            Layers: layers);
+            Layers: layers)
+        {
+            Offset = _timeline.OffsetText,
+            Message = _timeline.HasStatusMessage ? _timeline.StatusMessage : null,
+            MessageAction = _timeline.HasStatusAction ? _timeline.StatusActionText : null,
+        };
     }
 
     private static TimelineLayerState Layer(DatasetEntry entry, DateTime? viewTime)

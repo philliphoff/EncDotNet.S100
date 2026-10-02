@@ -886,7 +886,7 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
-    public void RangeRecomputeRaisesCurrentTimeChangedWhenClockIsClamped()
+    public void RemovingADatasetKeepsTheClockOutsideTheNewRange()
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
@@ -919,8 +919,30 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         Assert.True(session.RemoveDataset(lateId));
 
-        Assert.Equal([first], observed);
-        Assert.Equal(first, session.GetTimeSnapshot().Current);
+        // The clock is not clamped (#713): a pinned or live time stays put and
+        // the remaining dataset's policy decides whether it draws.
+        Assert.Empty(observed);
+        Assert.Equal(first.AddHours(6), session.GetTimeSnapshot().Current);
+    }
+
+    [Fact]
+    public async Task TheClockCanSitPastAllDataAndEachDatasetReportsItsCoverage()
+    {
+        var first = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        var run = Hourly(first, 3);
+        using var timed = await TimedSessionAsync(("run", "S-111", run));
+        var (session, ids) = (timed.Session, timed.Ids);
+
+        session.SetCurrentTime(first.AddDays(2));
+        await session.RefreshTimeAsync(MapPresentationState.Default);
+
+        var time = session.GetTimeSnapshot();
+        Assert.Equal(first.AddDays(2), time.Current);
+        AssertDrawn(session, ids[0], null);
+        var dataset = Assert.Single(time.Datasets);
+        Assert.Equal(new MapsuiMapTimeSegment(first.AddHours(-1), first.AddHours(3)), Assert.Single(dataset.Coverage));
+        Assert.True(dataset.Covers(first.AddHours(2).AddMinutes(30)));
+        Assert.False(dataset.Covers(first.AddDays(2)));
     }
 
     [Fact]

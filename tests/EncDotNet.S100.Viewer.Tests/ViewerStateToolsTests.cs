@@ -60,7 +60,8 @@ public sealed class ViewerStateToolsTests
 
         Assert.True(result.TryGetValue(out var state));
         Assert.Equal("live", state!.Mode);
-        Assert.Equal(Run.AddHours(9), state.ViewTime);
+        Assert.Equal(Run.AddHours(9).AddMinutes(10), state.ViewTime);
+        Assert.Equal("now", state.Offset);
         Assert.Equal(["cbofs 12:00Z"], state.Runs);
     }
 
@@ -80,10 +81,24 @@ public sealed class ViewerStateToolsTests
     }
 
     [Fact]
-    public async Task Now_outside_every_window_is_not_applied()
+    public async Task Now_past_every_window_goes_live_and_says_the_forecast_ended()
     {
         var (time, controller, _) = Timeline(Run.AddDays(5));
         time.ApplySnapshot(RunSnapshot());
+
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null));
+
+        Assert.True(result.TryGetValue(out var state));
+        Assert.Equal("live", state!.Mode);
+        Assert.Equal(Run.AddDays(5), state.ViewTime);
+        Assert.Equal("now", state.Offset);
+        Assert.StartsWith("Every forecast ended", state.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Nothing_loaded_is_not_applied()
+    {
+        var (_, controller, _) = Timeline(Run);
 
         var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null));
 
@@ -237,7 +252,7 @@ public sealed class ViewerStateToolsTests
         var clock = new AdjustableTimeProvider(new FakeTimeProvider(new DateTimeOffset(Run.AddHours(9))));
         _ = new TimelineViewModel(time, timeFormat: null, clock, action => action());
         time.ApplySnapshot(RunSnapshot());
-        Assert.True(time.IsFollowingNow);
+        Assert.Equal(TimeMode.Live, time.Mode);
 
         new SetTestClockTool(clock).Invoke(new SetTestClockRequest(null, "+3h", null, null));
 

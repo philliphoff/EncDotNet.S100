@@ -497,6 +497,40 @@
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Top"
                                     Margin="0,4,0,0" />
+                <!-- Map stamp (#713 B4): the view time over the map while the
+                     Timeline is open, so the map (and any screenshot of it)
+                     says which time it shows. Green dot Live, accent Pinned. -->
+                <Panel HorizontalAlignment="Left"
+                       VerticalAlignment="Top"
+                       Margin="12,12,0,0"
+                       IsHitTestVisible="False">
+                    <Panel.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Timeline.IsActive" />
+                            <Binding Path="IsBottomDockOpen" />
+                        </MultiBinding>
+                    </Panel.IsVisible>
+                    <Border Background="{DynamicResource BackgroundColor}"
+                            Opacity="0.78"
+                            CornerRadius="6" />
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                Margin="8,4">
+                        <Ellipse Width="7" Height="7"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding Timeline.IsLive}"
+                                 Fill="{DynamicResource SuccessColor}" />
+                        <Ellipse Width="7" Height="7"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding !Timeline.IsLive}"
+                                 Fill="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Timeline.StampText}"
+                                   FontFamily="Menlo, Consolas, monospace"
+                                   FontSize="11.5"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Panel>
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
                             HorizontalAlignment="Right"

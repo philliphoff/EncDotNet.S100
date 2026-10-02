@@ -20,7 +20,7 @@ internal static class ViewerStateMcpAdapters
         return Tool(del, GetTimelineStateTool.Name,
             "Reads the live viewer's Timeline as the user sees it: mode ('live' while the view time follows now, else "
             + "'pinned'), now, the view time, the loaded range and its coverage windows (gaps lie between them), the "
-            + "forecast runs, the readout and summary text, and for each time-aware layer the sample it draws (null when "
+            + "forecast runs, the readout, offset ('in 11 h 30') and summary text, the status message and its action, and for each time-aware layer the sample it draws (null when "
             + "it has no data near the view time and hides) with its previous and next samples. Use it to explain why a "
             + "layer isn't drawn, or to check Timeline behaviour. Layer times settle after the map's time refresh: call "
             + "await_render_idle after set_view_time before reading them. Read-only; viewer-injected tool.");
@@ -40,7 +40,8 @@ internal static class ViewerStateMcpAdapters
             + "set_time_step it can show an exact time between samples. Choosing a time leaves Live mode; 'now' enters "
             + "it. The view time is clamped to the loaded range. Returns the Timeline state (see get_timeline_state); "
             + "call await_render_idle before relying on layer times. Fails with view_time_not_applied when no "
-            + "time-aware dataset is loaded or, for 'now', when now lies outside every loaded window. Mutating; "
+            + "time-aware dataset is loaded. 'now' works past every loaded window too: Live follows the clock and "
+            + "layers without data hide (get_timeline_state's message says so). Mutating; "
             + "viewer-injected tool.");
     }
 
