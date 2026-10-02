@@ -951,6 +951,7 @@ public partial class App : Application
             sp.GetService<IMarinerSettingsProvider>(),
             sp.GetService<IUrlOpener>(),
             sp.GetService<IS100ExaminerLinkBuilder>()));
+        services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<Library.LibraryService>()));
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();

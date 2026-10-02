@@ -8,11 +8,34 @@
              x:DataType="vm:TimelineViewModel">
 
     <UserControl.Styles>
-        <!--
-          Slider accent styling now lives app-wide in App.axaml so every
-          slider in the viewer matches. No Timeline-specific styles
-          required here.
-        -->
+        <!-- Slider accent styling lives app-wide in App.axaml. -->
+        <!-- Mode pill (#713 B1): outlined when pinned, filled when live. -->
+        <Style Selector="Border.ModePill">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!-- Live: a dark pill with white text in both themes (handoff B1). -->
+        <Style Selector="Border.ModePill.live">
+            <Setter Property="BorderBrush" Value="#18181B" />
+            <Setter Property="Background" Value="#18181B" />
+        </Style>
+        <Style Selector="Border.ModePill.live TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <!-- Status messages (#713 B3). -->
+        <Style Selector="TextBlock.error">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="Button.error /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="TextBlock.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Button.warning /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
     </UserControl.Styles>
 
     <Border Background="{DynamicResource BackgroundColor}"
@@ -28,52 +51,77 @@
             <DockPanel LastChildFill="True"
                        IsVisible="{Binding IsActive}">
 
-                <!-- Title row — PR-M4: the title + close button are owned by
-                     the bottom-dock chrome bar in MainWindow. We keep the
-                     current-time readout, aligned right, when active. -->
+                <!-- Readout (#713 B1, B2): the mode pill, the view time and its
+                     offset from now; Go live and the step buttons on the right. -->
                 <Grid DockPanel.Dock="Top"
-                      ColumnDefinitions="*,Auto"
+                      ColumnDefinitions="Auto,Auto,Auto,*,Auto"
                       Margin="0,0,0,4">
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,0,8,0">
-                        <TextBlock Text="{Binding CurrentTimeLabel}"
-                                   FontSize="12"
-                                   FontFamily="Menlo, Consolas, monospace"
-                                   VerticalAlignment="Center" />
-                        <!-- Every loaded forecast run has ended (D3). -->
-                        <TextBlock Text="{Binding ForecastEndedText}"
-                                   IsVisible="{Binding IsForecastEnded}"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource DestructiveColor}"
-                                   VerticalAlignment="Center" />
+                    <Border Grid.Column="0"
+                            Classes="ModePill"
+                            Classes.live="{Binding IsLive}"
+                            CornerRadius="6"
+                            Padding="7,2"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding IsLive}"
+                                     Fill="{DynamicResource SuccessColor}"
+                                     VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ModeLabel}"
+                                       FontSize="10.5"
+                                       FontWeight="Bold"
+                                       LetterSpacing="0.6"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding CurrentTimeLabel}"
+                               Margin="10,0,0,0"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               FontFamily="Menlo, Consolas, monospace"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding OffsetText}"
+                               Margin="8,0,0,0"
+                               FontSize="12"
+                               Foreground="{DynamicResource AccentBrush}"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="4"
+                                Orientation="Horizontal"
+                                Spacing="2"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding AreStepButtonsVisible}">
+                        <Button Classes="Icon"
+                                Command="{Binding PreviousStepCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
+                            <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                        <Button Classes="Icon"
+                                Command="{Binding NextStepCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
+                            <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                        <!-- Go live (A1): shown while pinned. -->
+                        <Button Classes="Primary"
+                                IsVisible="{Binding !IsLive}"
+                                Height="28" MinHeight="0" Padding="12,0" Margin="6,0,0,0"
+                                FontSize="12"
+                                Content="{x:Static loc:Strings.TimelinePanel_GoLive}"
+                                Command="{Binding NowCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
                     </StackPanel>
                 </Grid>
 
-                <!-- Body: the slider/range readout. -->
+                <!-- Body: the slider, coverage band and status line. -->
                 <DockPanel LastChildFill="False"
                            VerticalAlignment="Top">
 
-                    <!-- Slider plus prev/next step buttons grouped at the right.
-                         Buttons surface only when ticks correspond to real
-                         sample times (discrete-stop mode). -->
                     <Grid DockPanel.Dock="Top"
-                          ColumnDefinitions="*,Auto"
                           RowDefinitions="Auto,Auto,Auto">
-                        <!-- Forecasts (#685): a strip for the NOW label, or the edge label
-                             when now lies outside the loaded runs (D1). -->
-                        <Panel Grid.Column="0" Grid.Row="0" Height="14" IsVisible="{Binding IsForecastTimeline}">
-                            <TextBlock Text="{Binding NowEdgeLabel}"
-                                       IsVisible="{Binding IsForecastEnded}"
-                                       HorizontalAlignment="Right"
-                                       FontSize="10.5" FontWeight="SemiBold" LetterSpacing="0.4"
-                                       Foreground="{DynamicResource DestructiveColor}" />
-                            <TextBlock Text="{Binding NowEdgeLabel}"
-                                       IsVisible="{Binding IsNowBeforeRange}"
-                                       HorizontalAlignment="Left"
-                                       FontSize="10.5" FontWeight="SemiBold" LetterSpacing="0.4"
-                                       Opacity="0.7" />
-                        </Panel>
-                        <Slider Grid.Column="0"
-                                Grid.Row="1"
+                        <!-- A strip for the NOW label (every timeline, A2). -->
+                        <Panel Grid.Row="0" Height="14" />
+                        <Slider Grid.Row="1"
                                 Foreground="{DynamicResource AccentBrush}"
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"
@@ -86,14 +134,11 @@
                                 TickPlacement="BottomRight"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
                         <!-- Data-coverage band: shows which parts of the
-                             aggregate timeline have data (filled) vs. no
-                             data (the compressed gaps). Inset by 2px to line
-                             up left/right with the slider's colored track
-                             (ShadUI insets it by a 1px border + 1px track
-                             button margin). Boundary ticks rise above each
-                             filled section to set it apart from the gaps. -->
-                        <views:CoverageBandControl Grid.Column="0"
-                                                   Grid.Row="2"
+                             timeline have data (filled) vs. no data (the
+                             compressed gaps). Inset by 2px to line up with the
+                             slider's colored track. Boundary ticks rise above
+                             each filled section to set it apart from the gaps. -->
+                        <views:CoverageBandControl Grid.Row="2"
                                                    Opacity="{Binding BandOpacity}"
                                                    Height="12"
                                                    Margin="2,2,2,0"
@@ -104,48 +149,48 @@
                                                    TickRise="4"
                                                    Bands="{Binding CoverageBands, Mode=OneWay}"
                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCoverageBand}" />
-                        <!-- The Now marker: a dashed line through the slider and the band (D1). -->
-                        <views:NowMarkerControl Grid.Column="0"
-                                                Grid.Row="0"
+                        <!-- The NOW line: a dashed line through the slider and the band. -->
+                        <views:NowMarkerControl Grid.Row="0"
                                                 Grid.RowSpan="3"
                                                 Margin="2,0,2,0"
                                                 Position="{Binding NowPosition}"
                                                 Label="{x:Static loc:Strings.TimelinePanel_NowLabel}"
                                                 Stroke="{DynamicResource ForegroundColor}" />
-                        <StackPanel Grid.Column="1"
-                                    Grid.Row="1"
-                                    Orientation="Horizontal"
-                                    Spacing="2"
-                                    Margin="8,0,0,0"
-                                    VerticalAlignment="Center"
-                                    IsVisible="{Binding AreStepButtonsVisible}">
-                            <!-- Now (D2): the step nearest the current time. -->
-                            <Button Classes="Outline"
-                                    IsVisible="{Binding IsForecastTimeline}"
-                                    Height="28" MinHeight="0" Padding="10,0" Margin="0,0,4,0"
-                                    FontSize="12"
-                                    Content="{x:Static loc:Strings.TimelinePanel_Now}"
-                                    Command="{Binding NowCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
-                            <Button Classes="Icon"
-                                    Command="{Binding PreviousStepCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
-                                <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
-                            </Button>
-                            <Button Classes="Icon"
-                                    Command="{Binding NextStepCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
-                                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
-                            </Button>
-                        </StackPanel>
                     </Grid>
 
-                    <!-- Range summary -->
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="{Binding RangeLabel}"
-                               FontSize="11"
-                               Opacity="0.6"
-                               Margin="0,4,0,0" />
+                    <!-- Status line (B3): the range on the left; one message
+                         with its action on the right. -->
+                    <Grid DockPanel.Dock="Top"
+                          ColumnDefinitions="*,Auto"
+                          Margin="0,4,0,0">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding RangeLabel}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="12,0,0,0"
+                                    IsVisible="{Binding HasStatusMessage}">
+                            <TextBlock Text="{Binding StatusMessage}"
+                                       FontSize="11.5"
+                                       Classes.error="{Binding IsStatusError}"
+                                       Classes.warning="{Binding IsStatusWarning}"
+                                       VerticalAlignment="Center" />
+                            <Button Classes="Ghost"
+                                    IsVisible="{Binding HasStatusAction}"
+                                    Content="{Binding StatusActionText}"
+                                    Command="{Binding StatusActionCommand}"
+                                    Padding="6,0" Height="22" MinHeight="0"
+                                    FontSize="11.5"
+                                    FontWeight="SemiBold"
+                                    Classes.error="{Binding IsStatusError}"
+                                    Classes.warning="{Binding IsStatusWarning}"
+                                    VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
                 </DockPanel>
             </DockPanel>
 

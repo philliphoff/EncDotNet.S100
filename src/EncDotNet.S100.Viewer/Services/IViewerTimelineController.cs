@@ -14,8 +14,8 @@ internal interface IViewerTimelineController
     Task<ViewerTimelineState> GetStateAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Moves the view time to now (as the Timeline's Now button does, which
-    /// then follows now) or to <paramref name="time"/>.
+    /// Moves the view time to now (as the Timeline's Go live does, which
+    /// then follows now) or to <paramref name="time"/>, which pins it.
     /// </summary>
     /// <param name="time">The time to show; <see langword="null"/> for now.</param>
     /// <param name="snapToNearestSample">
@@ -56,7 +56,17 @@ internal sealed record ViewerTimelineState(
     bool ForecastEnded,
     string Readout,
     string Summary,
-    IReadOnlyList<TimelineLayerState> Layers);
+    IReadOnlyList<TimelineLayerState> Layers)
+{
+    /// <summary>The view time's offset from now as displayed: "now", "in 11 h 30", "5 h ago".</summary>
+    public string Offset { get; init; } = string.Empty;
+
+    /// <summary>The status line's message, or null when all is well.</summary>
+    public string? Message { get; init; }
+
+    /// <summary>The message's action as displayed ("Check for new runs", "Next data ›", …), or null.</summary>
+    public string? MessageAction { get; init; }
+}
 
 /// <summary>What one time-aware layer draws at the view time.</summary>
 /// <param name="Id">The dataset id, as <c>list_datasets</c> reports it.</param>

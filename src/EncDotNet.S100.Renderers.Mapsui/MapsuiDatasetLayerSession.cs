@@ -405,30 +405,22 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     /// <summary>
     /// Updates the global map clock without rendering. Hosts should then call
     /// <see cref="RefreshTimeAsync"/> to apply the new time to dataset layers.
+    /// The clock is not clamped to the loaded range: it can sit in a gap or
+    /// past all data (a live timeline after every forecast has ended), where
+    /// each dataset's time policy hides it (#713).
     /// </summary>
-    /// <param name="time">Requested global clock value.</param>
+    /// <param name="time">Requested global clock value; ignored while no dataset has time samples.</param>
     public void SetCurrentTime(DateTime time)
     {
         DateTime? changedCurrent = null;
         lock (_sync)
         {
             ThrowIfDisposed();
-            if (_time.Minimum is not { } minimum
-                || _time.Maximum is not { } maximum)
-            {
-                return;
-            }
-
-            var clamped = time < minimum
-                ? minimum
-                : time > maximum
-                    ? maximum
-                    : time;
-            if (_time.Current == clamped)
+            if (!_time.IsActive || _time.Current == time)
                 return;
 
-            _time = CopyTimeSnapshot(_time, clamped);
-            changedCurrent = clamped;
+            _time = CopyTimeSnapshot(_time, time);
+            changedCurrent = time;
         }
 
         if (changedCurrent is { } current)
@@ -1756,19 +1748,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             .ToArray();
         var minimum = samples.Length > 0 ? samples[0] : (DateTime?)null;
         var maximum = samples.Length > 0 ? samples[^1] : (DateTime?)null;
-        var current = previous.Current;
-        if (minimum is null || maximum is null)
-        {
-            current = null;
-        }
-        else if (current is null || current < minimum)
-        {
-            current = minimum;
-        }
-        else if (current > maximum)
-        {
-            current = maximum;
-        }
+        // The clock starts at the first sample and is kept as datasets come
+        // and go, even outside the new range (#713).
+        var current = minimum is null ? null : previous.Current ?? minimum;
 
         var segments = ComputeCoverageSegments(minimum, maximum);
         var datasets = _entries.Values
@@ -1776,7 +1758,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             .Select(entry => new MapsuiMapTimedDataset(
                 entry.Dataset.Name,
                 entry.TimePolicy!.AvailableTimes.Min(),
-                entry.TimePolicy.AvailableTimes.Max()))
+                entry.TimePolicy.AvailableTimes.Max())
+            {
+                ProductSpec = entry.Dataset.Metadata.Spec.Name,
+                Coverage = entry.TimePolicy.CoverageSegments,
+            })
             .ToArray();
         _time = new MapsuiMapTimeSnapshot
         {

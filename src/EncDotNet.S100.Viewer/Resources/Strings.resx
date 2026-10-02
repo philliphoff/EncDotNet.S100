@@ -3681,14 +3681,6 @@
   <data name="Library_Chip_LatestRunOnly" xml:space="preserve">
     <value>Latest run only</value>
   </data>
-  <data name="TimelinePanel_NowLaterFormat" xml:space="preserve">
-    <value>Now {0} later ›</value>
-    <comment>Edge label when now lies after the timeline; {0}: a duration, e.g. "3 h". Shown upper case.</comment>
-  </data>
-  <data name="TimelinePanel_NowEarlierFormat" xml:space="preserve">
-    <value>‹ Now {0} earlier</value>
-    <comment>Edge label when now lies before the timeline; {0}: a duration. Shown upper case.</comment>
-  </data>
   <data name="TimelinePanel_Now" xml:space="preserve">
     <value>Now</value>
   </data>
@@ -3696,14 +3688,7 @@
     <value>NOW</value>
   </data>
   <data name="Tooltip_TimelineNow" xml:space="preserve">
-    <value>Go to the step nearest the current time</value>
-  </data>
-  <data name="TimelinePanel_ForecastEndedFormat" xml:space="preserve">
-    <value>forecast ended {0} ago</value>
-    <comment>{0}: a duration, e.g. "3 h"</comment>
-  </data>
-  <data name="TimelinePanel_RefreshForRuns" xml:space="preserve">
-    <value>Refresh the Library to look for newer runs</value>
+    <value>Go live: show now and keep up with it</value>
   </data>
   <data name="TimelinePanel_HoursFormat" xml:space="preserve">
     <value>{0:N0} h</value>
@@ -3741,5 +3726,57 @@
   </data>
   <data name="Library_Pairing_Get" xml:space="preserve">
     <value>Get</value>
+  </data>
+  <data name="TimelinePanel_Live" xml:space="preserve">
+    <value>LIVE</value>
+    <comment>Mode pill while the view time follows now. Upper case.</comment>
+  </data>
+  <data name="TimelinePanel_Pinned" xml:space="preserve">
+    <value>PINNED</value>
+    <comment>Mode pill while the user chose a time. Upper case.</comment>
+  </data>
+  <data name="TimelinePanel_GoLive" xml:space="preserve">
+    <value>Go live</value>
+  </data>
+  <data name="TimelinePanel_OffsetNow" xml:space="preserve">
+    <value>now</value>
+    <comment>Offset of the view time from now when they match.</comment>
+  </data>
+  <data name="TimelinePanel_InFormat" xml:space="preserve">
+    <value>in {0}</value>
+    <comment>{0}: a duration, e.g. "11 h 30".</comment>
+  </data>
+  <data name="TimelinePanel_AgoFormat" xml:space="preserve">
+    <value>{0} ago</value>
+    <comment>{0}: a duration, e.g. "5 h".</comment>
+  </data>
+  <data name="TimelinePanel_HoursMinutesFormat" xml:space="preserve">
+    <value>{0:N0} h {1:00}</value>
+    <comment>{0}: hours, {1}: minutes, e.g. "11 h 30".</comment>
+  </data>
+  <data name="TimelinePanel_DaysHoursFormat" xml:space="preserve">
+    <value>{0:N0} d {1:N0} h</value>
+    <comment>{0}: days, {1}: hours, e.g. "2 d 4 h".</comment>
+  </data>
+  <data name="TimelinePanel_EveryForecastEndedFormat" xml:space="preserve">
+    <value>Every forecast ended {0} ago</value>
+    <comment>{0}: a duration, e.g. "10 h 30".</comment>
+  </data>
+  <data name="TimelinePanel_NoDataNowFormat" xml:space="preserve">
+    <value>No data now for {0} of {1} layers</value>
+    <comment>{0}: layers without data, {1}: time-aware layers.</comment>
+  </data>
+  <data name="TimelinePanel_NoDataAtTimeFormat" xml:space="preserve">
+    <value>No data at this time for {0} of {1} layers</value>
+    <comment>{0}: layers without data, {1}: time-aware layers.</comment>
+  </data>
+  <data name="TimelinePanel_CheckForNewRuns" xml:space="preserve">
+    <value>Check for new runs</value>
+  </data>
+  <data name="TimelinePanel_NextData" xml:space="preserve">
+    <value>Next data ›</value>
+  </data>
+  <data name="TimelinePanel_PreviousData" xml:space="preserve">
+    <value>‹ Previous data</value>
   </data>
 </root>

@@ -125,8 +125,11 @@ render cannot replace newer output or reinstall a removed dataset.
 Time-aware registration is derived from `ITimeAwareDatasetProcessor` when
 `SetDataset` is called. `GetTimeSnapshot` exposes the aggregate clock, sample
 list, range, merged coverage segments, and the timed datasets with the span
-each covers (`Datasets`, e.g. to name the forecast runs a timeline shows). `SetCurrentTime` updates the clock
-immediately so host UI can track a drag; `RefreshTimeAsync` applies a 100 ms
+each covers (`Datasets`, e.g. to name the forecast runs a timeline shows, with each dataset's own `Coverage`
+windows and `Covers(time)`). `SetCurrentTime` updates the clock
+immediately so host UI can track a drag. The clock is not clamped to the loaded range, so a live timeline can sit in a
+gap or past all data, where each dataset's policy hides it; it starts at the first sample and is kept as datasets come
+and go; `RefreshTimeAsync` applies a 100 ms
 trailing debounce and cancels the preceding time refresh. A dataset never
 draws data from outside its tolerance as if current: S-111 selects the nearest
 sample within one step (the dataset's median sample interval), S-104 the latest

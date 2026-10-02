@@ -61,31 +61,44 @@ internal sealed class GlobalTimeService
     }
 
     /// <summary>
-    /// True while the clock follows now: set by <see cref="FollowNow"/>,
-    /// cleared by any <see cref="SetCurrentTime"/>. Loading or replacing a
-    /// dataset does not clear it (#706).
+    /// Whether the view time follows now (<see cref="TimeMode.Live"/>, set by
+    /// <see cref="GoLive"/>) or stays where it was put
+    /// (<see cref="TimeMode.Pinned"/>, set by any <see cref="SetCurrentTime"/>).
+    /// Loading or replacing a dataset does not change it (#706, #713).
     /// </summary>
-    public bool IsFollowingNow { get; private set; }
+    public TimeMode Mode { get; private set; } = TimeMode.Pinned;
+
+    /// <summary>Raised when <see cref="Mode"/> changes.</summary>
+    public event Action<TimeMode>? ModeChanged;
 
     /// <summary>
-    /// Sets the session clock, clamped to the aggregate range. A user's
-    /// choice of time: it stops following now.
+    /// Sets the view time. A user's choice of time (scrub, step, a jump to
+    /// data, an agent's set_view_time): it pins the time, leaving Live. The
+    /// time is not clamped to the loaded range.
     /// </summary>
     public void SetCurrentTime(DateTime time)
     {
-        IsFollowingNow = false;
+        SetMode(TimeMode.Pinned);
         SetClock(time);
     }
 
     /// <summary>
-    /// Sets the session clock to <paramref name="time"/>, the time that
-    /// stands for now, and keeps <see cref="IsFollowingNow"/> set so the
-    /// timeline moves the clock on as now advances.
+    /// Sets the view time to <paramref name="now"/> and enters
+    /// <see cref="TimeMode.Live"/>, so the timeline moves it on as now
+    /// advances, even past every loaded window.
     /// </summary>
-    public void FollowNow(DateTime time)
+    public void GoLive(DateTime now)
     {
-        IsFollowingNow = true;
-        SetClock(time);
+        SetMode(TimeMode.Live);
+        SetClock(now);
+    }
+
+    private void SetMode(TimeMode mode)
+    {
+        if (Mode == mode)
+            return;
+        Mode = mode;
+        ModeChanged?.Invoke(mode);
     }
 
     private void SetClock(DateTime time)
@@ -95,30 +108,19 @@ internal sealed class GlobalTimeService
             _session.SetCurrentTime(time);
             return;
         }
-        if (_snapshot.Minimum is not { } minimum
-            || _snapshot.Maximum is not { } maximum)
-        {
-            return;
-        }
-
-        var clamped = time < minimum
-            ? minimum
-            : time > maximum
-                ? maximum
-                : time;
-        if (_snapshot.Current == clamped)
+        if (!_snapshot.IsActive || _snapshot.Current == time)
             return;
 
         _snapshot = new MapsuiMapTimeSnapshot
         {
             Minimum = _snapshot.Minimum,
             Maximum = _snapshot.Maximum,
-            Current = clamped,
+            Current = time,
             Samples = _snapshot.Samples,
             CoverageSegments = _snapshot.CoverageSegments,
             Datasets = _snapshot.Datasets,
         };
-        CurrentTimeChanged?.Invoke(clamped);
+        CurrentTimeChanged?.Invoke(time);
     }
 
     internal void ApplySnapshot(MapsuiMapTimeSnapshot snapshot)
@@ -144,7 +146,12 @@ internal sealed class GlobalTimeService
     private void OnCurrentTimeChanged(object? sender, MapSessionCurrentTimeEventArgs e)
     {
         UpdateSnapshot();
-        CurrentTimeChanged?.Invoke(e.CurrentTime);
+        // Forward the session's clock as it is now, not the event's value: a
+        // range change raises its clock event after RangeChanged handlers ran,
+        // and one of them may already have moved the clock (the Timeline going
+        // Live on load). Re-applying the stale value would undo that (#713).
+        if (_snapshot.Current is { } current)
+            CurrentTimeChanged?.Invoke(current);
     }
 
     private void UpdateSnapshot()
@@ -160,3 +167,13 @@ internal sealed class GlobalTimeService
 /// A single contiguous time range over which the global timeline has data.
 /// </summary>
 internal readonly record struct CoverageSegment(DateTime Start, DateTime End);
+
+/// <summary>Whether the view time follows now or stays where it was put (#713).</summary>
+internal enum TimeMode
+{
+    /// <summary>The view time was chosen (scrub, step, jump) and stays there.</summary>
+    Pinned,
+
+    /// <summary>The view time is now and moves on with the clock.</summary>
+    Live,
+}

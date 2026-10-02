@@ -47,10 +47,13 @@ internal sealed record TimelineStateDto(
     [property: Description("Number of distinct loaded samples across all layers.")] int SampleCount,
     [property: Description("Merged windows in which some layer draws; the spaces between them are gaps.")] IReadOnlyList<TimeWindowDto> Coverage,
     [property: Description("Forecast runs loaded, e.g. 'cbofs 12:00Z'.")] IReadOnlyList<string> Runs,
-    [property: Description("True when now lies inside a loaded window, so set_view_time 'now' can be applied.")] bool NowInCoverage,
+    [property: Description("True when now lies inside a loaded window (some layer has data now).")] bool NowInCoverage,
     [property: Description("True when every loaded forecast has ended.")] bool ForecastEnded,
     [property: Description("The Timeline's time readout as displayed (user's Local/UTC setting).")] string Readout,
     [property: Description("The Timeline's range summary as displayed.")] string Summary,
+    [property: Description("The view time's offset from now as displayed: 'now', 'in 11 h 30', '5 h ago'.")] string Offset,
+    [property: Description("The status line's message, e.g. 'Every forecast ended 10 h ago' or 'No data at this time for 1 of 2 layers'; null when all is well.")] string? Message,
+    [property: Description("The message's action as displayed: 'Check for new runs', 'Next data ›' or '‹ Previous data'; null for none.")] string? MessageAction,
     [property: Description("The time-aware layers in Datasets-list order. Layer times settle after the map's time refresh; call await_render_idle after set_view_time before reading them.")] IReadOnlyList<TimelineLayerDto> Layers);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
@@ -93,7 +96,7 @@ internal sealed record TestClockDto(
     [property: Description("Offset from the real clock in seconds while running (0 when frozen or reset).")] double OffsetSeconds);
 
 /// <summary>set_view_time could not apply the requested time.</summary>
-[Description("Raised when set_view_time cannot apply the requested time, e.g. no time-aware dataset is loaded or now lies outside every loaded window.")]
+[Description("Raised when set_view_time cannot apply the requested time, e.g. no time-aware dataset is loaded.")]
 internal sealed record ViewTimeNotApplied(
     [property: Description("Why the time was not applied.")] string Reason)
     : ToolError("view_time_not_applied", $"The view time was not changed: {Reason}.");
@@ -134,6 +137,9 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.ForecastEnded,
         state.Readout,
         state.Summary,
+        state.Offset,
+        state.Message,
+        state.MessageAction,
         [.. state.Layers.Select(layer => new TimelineLayerDto(
             layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount))]);
 }
