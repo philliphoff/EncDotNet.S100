@@ -892,9 +892,17 @@ public partial class App : Application
             new ViewerNotificationController(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>()),
             sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider,
-            new ViewerLibraryController(
+            sp.GetRequiredService<ViewerLibraryController>(),
+            new ViewerLibraryEditor(
                 sp.GetRequiredService<LibraryPanelViewModel>(),
+                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<ViewerLibraryController>(),
+                sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
+                sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
                 () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources)));
+        services.AddSingleton(sp => new ViewerLibraryController(
+            sp.GetRequiredService<LibraryPanelViewModel>(),
+            () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(

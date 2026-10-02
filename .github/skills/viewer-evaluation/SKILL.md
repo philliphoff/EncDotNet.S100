@@ -176,6 +176,7 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `list_notifications` / `dismiss_notification {id?}` | Read or clear notifications, e.g. before a screenshot. |
 | `set_test_clock {now?, advance?, freeze?, reset?}` | Only with `--mcp-test-hooks`: move or freeze "now" to test Live, ageing forecasts and Expired runs without waiting. |
 | `list_library_sources` / `query_library_items` / `describe_library_item` / `list_known_sources` | Read the Library as its panel shows it: sources, item states (`online`, `local`, `loaded`, `update`, `expired`, …), what covers a point, details, and the Online Catalogue directory. |
+| `add_library_source {knownSourceId|path|url, preview?, choices?, includeAll?, collectionId?}` / `refresh_library_source` / `library_action {action, itemIds|filters, dryRun?, maxBytes?}` / `remove_library_source {id, confirm}` / `await_library_idle` | Change the Library as its dialogs and buttons do: preview then add a source, refresh, load / download / update / cancel items (dry run first for downloads), remove, and wait for indexing and downloads. |
 
 **Canonical visual-eval loop:**
 `open_dataset` → `set_viewport` → `await_render_idle` →

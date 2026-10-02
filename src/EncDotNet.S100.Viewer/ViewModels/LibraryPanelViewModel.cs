@@ -1103,24 +1103,38 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _selectedItem is { } item ? DownloadItemAsync(item, load) : Task.CompletedTask;
 
     /// <summary>Downloads one row (the details' Download, "Load after download", or a retry), then optionally loads it.</summary>
-    private async Task DownloadItemAsync(LibraryItemViewModel item, bool load)
+    private Task DownloadItemAsync(LibraryItemViewModel item, bool load) => DownloadRowsAsync([item], load);
+
+    /// <summary>
+    /// Downloads <paramref name="rows"/> as the details' Download does, then
+    /// optionally loads them (also used by the MCP <c>library_action</c> tool, #715).
+    /// </summary>
+    internal async Task DownloadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
     {
-        TrackDownloads([item]);
-        var result = await _downloader.DownloadAsync([item.Item]).ConfigureAwait(true);
+        TrackDownloads(rows);
+        var result = await _downloader.DownloadAsync(rows.Select(row => row.Item).ToArray()).ConfigureAwait(true);
         if (result.Downloaded == 0)
             return;
 
         // A package's cells (and their coverage) appear once its source re-indexes.
-        if (ReindexPackageSources([item]))
+        if (ReindexPackageSources(rows))
         {
-            await AnnouncePackagesAsync([item]).ConfigureAwait(true);
+            await AnnouncePackagesAsync(rows).ConfigureAwait(true);
             return;
         }
 
-        item.RefreshAvailability();
+        foreach (var row in rows)
+            row.RefreshAvailability();
         if (load)
-            await _loader.LoadAsync([item.EffectiveItem], defer: false).ConfigureAwait(true);
+            await _loader.LoadAsync(rows.Select(row => row.EffectiveItem).ToArray(), defer: false).ConfigureAwait(true);
     }
+
+    /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
+    internal Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
+        _loader.LoadAsync(rows.Select(row => row.EffectiveItem).ToArray(), defer);
+
+    /// <summary>The downloader behind the panel, for download progress and cancelling.</summary>
+    internal ILibraryDownloader Downloader => _downloader;
 
     private async Task DownloadListedAsync()
     {

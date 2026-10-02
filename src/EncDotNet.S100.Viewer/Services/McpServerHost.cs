@@ -44,6 +44,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
     private readonly IViewerLibraryController? _library;
+    private readonly IViewerLibraryEditor? _libraryEditor;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -71,7 +72,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         IViewerDatasetStateController? datasetState = null,
         IViewerNotificationController? notifications = null,
         AdjustableTimeProvider? testClock = null,
-        IViewerLibraryController? library = null)
+        IViewerLibraryController? library = null,
+        IViewerLibraryEditor? libraryEditor = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -95,6 +97,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _notifications = notifications;
         _testClock = testClock;
         _library = library;
+        _libraryEditor = libraryEditor;
         _loggers = loggers;
     }
 
@@ -358,6 +361,14 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(LibraryMcpAdapters.Create(new QueryLibraryItemsTool(_library)));
             tools.Add(LibraryMcpAdapters.Create(new DescribeLibraryItemTool(_library)));
             tools.Add(LibraryMcpAdapters.Create(new ListKnownSourcesTool(_library)));
+        }
+        if (_libraryEditor is not null)
+        {
+            tools.Add(LibraryEditMcpAdapters.Create(new AddLibrarySourceTool(_libraryEditor)));
+            tools.Add(LibraryEditMcpAdapters.Create(new RefreshLibrarySourceTool(_libraryEditor)));
+            tools.Add(LibraryEditMcpAdapters.Create(new LibraryActionTool(_libraryEditor)));
+            tools.Add(LibraryEditMcpAdapters.Create(new RemoveLibrarySourceTool(_libraryEditor)));
+            tools.Add(LibraryEditMcpAdapters.Create(new AwaitLibraryIdleTool(_libraryEditor)));
         }
         // Test hooks only: set_test_clock exists only when the viewer was
         // started with --mcp-test-hooks, which makes its clock adjustable.

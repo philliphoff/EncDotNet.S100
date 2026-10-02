@@ -78,12 +78,27 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
     public async Task<ToolResult<LibraryItemPage>> InvokeAsync(QueryLibraryItemsRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        var (query, error) = Parse(request);
+        if (error is not null)
+            return ToolResult<LibraryItemPage>.Err(error);
 
+        var result = await _library.QueryItemsAsync(query!, ct).ConfigureAwait(false);
+        return result is null
+            ? ToolResult<LibraryItemPage>.Err(new LibrarySourceNotFound(request.SourceId!.Trim()))
+            : ToolResult<LibraryItemPage>.Ok(result);
+    }
+
+    /// <summary>
+    /// Validates the filters and page of <paramref name="request"/> (shared
+    /// with library_action, which selects items the same way).
+    /// </summary>
+    internal static (LibraryItemQuery? Query, ToolError? Error) Parse(QueryLibraryItemsRequest request)
+    {
         Guid? sourceId = null;
         if (!string.IsNullOrWhiteSpace(request.SourceId))
         {
             if (!Guid.TryParse(request.SourceId.Trim(), out var parsed))
-                return ToolResult<LibraryItemPage>.Err(new InvalidArgument("sourceId", "expected a collection or source id from list_library_sources"));
+                return (null, new InvalidArgument("sourceId", "expected a collection or source id from list_library_sources"));
             sourceId = parsed;
         }
 
@@ -101,7 +116,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
                 };
                 if (!ViewerLibraryController.StateNames.Contains(state))
                 {
-                    return ToolResult<LibraryItemPage>.Err(new InvalidArgument(
+                    return (null, new InvalidArgument(
                         "states", $"unknown state '{raw}'; expected {string.Join(", ", ViewerLibraryController.StateNames.Order())}"));
                 }
                 states.Add(state);
@@ -113,7 +128,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
         if (boxValues.Any(v => v is not null))
         {
             if (boxValues.Any(v => v is null))
-                return ToolResult<LibraryItemPage>.Err(new InvalidArgument("south", "supply all of south, west, north and east, or none"));
+                return (null, new InvalidArgument("south", "supply all of south, west, north and east, or none"));
             bounds = new GeoBounds(request.South!.Value, request.West!.Value, request.North!.Value, request.East!.Value);
         }
 
@@ -121,18 +136,18 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
         if (request.Lat is not null || request.Lon is not null)
         {
             if (request.Lat is not { } lat || request.Lon is not { } lon)
-                return ToolResult<LibraryItemPage>.Err(new InvalidArgument("lat", "supply both lat and lon, or neither"));
+                return (null, new InvalidArgument("lat", "supply both lat and lon, or neither"));
             point = new GeoPosition(lat, lon);
         }
 
         var page = request.Page ?? 0;
         if (page < 0)
-            return ToolResult<LibraryItemPage>.Err(new InvalidArgument("page", "must be 0 or more"));
+            return (null, new InvalidArgument("page", "must be 0 or more"));
         var pageSize = request.PageSize ?? DefaultPageSize;
         if (pageSize is < 1 or > MaxPageSize)
-            return ToolResult<LibraryItemPage>.Err(new InvalidArgument("pageSize", $"must be between 1 and {MaxPageSize}"));
+            return (null, new InvalidArgument("pageSize", $"must be between 1 and {MaxPageSize}"));
 
-        var result = await _library.QueryItemsAsync(new LibraryItemQuery(
+        return (new LibraryItemQuery(
             sourceId,
             states,
             string.IsNullOrWhiteSpace(request.Spec) ? null : request.Spec.Trim(),
@@ -140,11 +155,17 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
             bounds,
             point,
             page,
-            pageSize), ct).ConfigureAwait(false);
-        return result is null
-            ? ToolResult<LibraryItemPage>.Err(new LibrarySourceNotFound(request.SourceId!.Trim()))
-            : ToolResult<LibraryItemPage>.Ok(result);
+            pageSize), null);
     }
+
+    /// <summary>True when <paramref name="request"/> sets any filter (not just a page).</summary>
+    internal static bool HasFilter(QueryLibraryItemsRequest request) =>
+        !string.IsNullOrWhiteSpace(request.SourceId)
+        || request.States is { Count: > 0 }
+        || !string.IsNullOrWhiteSpace(request.Spec)
+        || !string.IsNullOrWhiteSpace(request.Text)
+        || request.South is not null || request.West is not null || request.North is not null || request.East is not null
+        || request.Lat is not null || request.Lon is not null;
 }
 
 /// <summary>Describes one Library item as its details pane does (MCP <c>describe_library_item</c>).</summary>
