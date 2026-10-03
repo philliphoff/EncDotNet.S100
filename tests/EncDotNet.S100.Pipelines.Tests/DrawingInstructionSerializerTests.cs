@@ -19,6 +19,7 @@ public class DrawingInstructionSerializerTests
         FeatureReference = "feat-point",
         Plane = DisplayPlane.OverRadar,
         ViewingGroup = 26010,
+        AdditionalViewingGroups = [90020, 90021],
         DrawingPriority = 7,
         ScaleMinimum = 1000.0,
         ScaleMaximum = 90000.0,
@@ -67,6 +68,7 @@ public class DrawingInstructionSerializerTests
         FeatureReference = "feat-text",
         Plane = DisplayPlane.OverRadar,
         ViewingGroup = 28010,
+        AdditionalViewingGroups = [90020],
         DrawingPriority = 9,
         ScaleMinimum = 100.0,
         ScaleMaximum = 12000.0,
@@ -166,6 +168,7 @@ public class DrawingInstructionSerializerTests
         Assert.Equal(expected.FeatureReference, actual.FeatureReference);
         Assert.Equal(expected.Plane, actual.Plane);
         Assert.Equal(expected.ViewingGroup, actual.ViewingGroup);
+        Assert.Equal(expected.AdditionalViewingGroups, actual.AdditionalViewingGroups);
         Assert.Equal(expected.DrawingPriority, actual.DrawingPriority);
         Assert.Equal(expected.ScaleMinimum, actual.ScaleMinimum);
         Assert.Equal(expected.ScaleMaximum, actual.ScaleMaximum);

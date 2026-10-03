@@ -246,6 +246,38 @@ public sealed class ViewingGroupController
 
         return _modeMembership is null || _modeMembership.Contains(viewingGroup);
     }
+
+    /// <summary>
+    /// Returns whether <paramref name="instruction"/> is visible: every viewing
+    /// group assigned to it — <see cref="DrawingInstruction.ViewingGroup"/> and
+    /// each of <see cref="DrawingInstruction.AdditionalViewingGroups"/> — must be
+    /// visible per <see cref="IsVisible(int)"/>.
+    /// </summary>
+    /// <remarks>
+    /// S-100 Ed 5.2 Part 9 §9-11.1.3: "A drawing instruction which has multiple
+    /// Viewing Groups is disabled when any assigned Viewing Group is disabled"
+    /// (restated for the Lua <c>ViewingGroup</c> command in Part 9a
+    /// §9a-11.2.2.1). This is what lets a secondary group act as an
+    /// independent toggle — e.g. S-101's <c>90020</c>/<c>90021</c> switch off
+    /// the INFORM01 "additional information" marker without hiding the
+    /// feature's own symbology in its primary group.
+    /// </remarks>
+    /// <param name="instruction">The drawing instruction to test.</param>
+    public bool IsVisible(DrawingInstruction instruction)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+
+        if (!IsVisible(instruction.ViewingGroup))
+            return false;
+
+        foreach (var viewingGroup in instruction.AdditionalViewingGroups)
+        {
+            if (!IsVisible(viewingGroup))
+                return false;
+        }
+
+        return true;
+    }
 }
 
 /// <summary>

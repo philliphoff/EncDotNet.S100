@@ -58,7 +58,11 @@ public static class Part9DisplayListReader
             ?? element.Attribute("featureReference")?.Value
             ?? "";
 
-        var viewingGroup = ParseInt(element.Element("viewingGroup")?.Value);
+        // viewingGroup is 1..* (S-100 Part 9 §9-11.1.3): keep every id so the
+        // pipeline can disable the instruction when any of them is hidden.
+        DrawingInstructionParser.TrySplitViewingGroups(
+            element.Elements("viewingGroup").Select(e => e.Value),
+            out var viewingGroup, out var additionalViewingGroups);
         var drawingPriority = ParseInt(element.Element("drawingPriority")?.Value);
         var plane = ParsePlane(element.Element("displayPlane")?.Value);
         var scaleMin = ParseNullableInt(element.Element("scaleMinimum")?.Value);
@@ -67,20 +71,20 @@ public static class Part9DisplayListReader
         switch (element.Name.LocalName)
         {
             case "pointInstruction":
-                return ReadPoint(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+                return ReadPoint(element, featureReference, viewingGroup, additionalViewingGroups, drawingPriority, plane, scaleMin, scaleMax);
             case "lineInstruction":
-                return ReadLine(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+                return ReadLine(element, featureReference, viewingGroup, additionalViewingGroups, drawingPriority, plane, scaleMin, scaleMax);
             case "areaInstruction":
-                return ReadArea(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+                return ReadArea(element, featureReference, viewingGroup, additionalViewingGroups, drawingPriority, plane, scaleMin, scaleMax);
             case "textInstruction":
-                return ReadText(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+                return ReadText(element, featureReference, viewingGroup, additionalViewingGroups, drawingPriority, plane, scaleMin, scaleMax);
             default:
                 return null;
         }
     }
 
     private static PointInstruction? ReadPoint(
-        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        XElement element, string featureReference, int viewingGroup, IReadOnlyList<int> additionalViewingGroups, int drawingPriority,
         DisplayPlane plane, int? scaleMin, int? scaleMax)
     {
         var symbolEl = element.Element("symbol");
@@ -104,6 +108,7 @@ public static class Part9DisplayListReader
         {
             FeatureReference = featureReference,
             ViewingGroup = viewingGroup,
+            AdditionalViewingGroups = additionalViewingGroups,
             DrawingPriority = drawingPriority,
             Plane = plane,
             ScaleMinimum = scaleMin,
@@ -118,7 +123,7 @@ public static class Part9DisplayListReader
     }
 
     private static LineInstruction? ReadLine(
-        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        XElement element, string featureReference, int viewingGroup, IReadOnlyList<int> additionalViewingGroups, int drawingPriority,
         DisplayPlane plane, int? scaleMin, int? scaleMax)
     {
         string? lineStyleRef = null;
@@ -159,6 +164,7 @@ public static class Part9DisplayListReader
         {
             FeatureReference = featureReference,
             ViewingGroup = viewingGroup,
+            AdditionalViewingGroups = additionalViewingGroups,
             DrawingPriority = drawingPriority,
             Plane = plane,
             ScaleMinimum = scaleMin,
@@ -171,7 +177,7 @@ public static class Part9DisplayListReader
     }
 
     private static AreaInstruction? ReadArea(
-        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        XElement element, string featureReference, int viewingGroup, IReadOnlyList<int> additionalViewingGroups, int drawingPriority,
         DisplayPlane plane, int? scaleMin, int? scaleMax)
     {
         string? areaFillRef = null;
@@ -202,6 +208,7 @@ public static class Part9DisplayListReader
         {
             FeatureReference = featureReference,
             ViewingGroup = viewingGroup,
+            AdditionalViewingGroups = additionalViewingGroups,
             DrawingPriority = drawingPriority,
             Plane = plane,
             ScaleMinimum = scaleMin,
@@ -213,7 +220,7 @@ public static class Part9DisplayListReader
     }
 
     private static TextInstruction? ReadText(
-        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        XElement element, string featureReference, int viewingGroup, IReadOnlyList<int> additionalViewingGroups, int drawingPriority,
         DisplayPlane plane, int? scaleMin, int? scaleMax)
     {
         // Text content can appear at <textPoint><element><text>...</text></element></textPoint>,
@@ -315,6 +322,7 @@ public static class Part9DisplayListReader
         {
             FeatureReference = featureReference,
             ViewingGroup = viewingGroup,
+            AdditionalViewingGroups = additionalViewingGroups,
             DrawingPriority = drawingPriority,
             Plane = plane,
             ScaleMinimum = scaleMin,

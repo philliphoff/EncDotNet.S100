@@ -54,8 +54,27 @@ public abstract class DrawingInstruction
     /// <summary>Whether the instruction renders under or over the radar overlay.</summary>
     public DisplayPlane Plane { get; init; } = DisplayPlane.UnderRadar;
 
-    /// <summary>Viewing group controlling visibility of this instruction.</summary>
+    /// <summary>
+    /// Primary viewing group controlling visibility of this instruction — the
+    /// first id the portrayal assigned. See <see cref="AdditionalViewingGroups"/>
+    /// for any further ids.
+    /// </summary>
     public int ViewingGroup { get; init; }
+
+    /// <summary>
+    /// Viewing groups assigned to this instruction after
+    /// <see cref="ViewingGroup"/>, in emission order (e.g. the <c>90020</c> of an
+    /// S-101 <c>ViewingGroup:27070,90020</c> command). Empty when the instruction
+    /// has a single viewing group.
+    /// </summary>
+    /// <remarks>
+    /// S-100 Ed 5.2 Part 9 §9-11.1.3 (and Part 9a §9a-11.2.2.1, the
+    /// <c>ViewingGroup:vg1[,vg2[,…]]</c> command): "A drawing instruction which
+    /// has multiple Viewing Groups is disabled when any assigned Viewing Group
+    /// is disabled". <see cref="ViewingGroupController.IsVisible(DrawingInstruction)"/>
+    /// applies that rule over <see cref="ViewingGroup"/> and every id here.
+    /// </remarks>
+    public IReadOnlyList<int> AdditionalViewingGroups { get; init; } = [];
 
     /// <summary>
     /// Drawing priority within the display plane (ascending, back-to-front).

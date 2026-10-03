@@ -153,6 +153,7 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
                 {
                     FeatureReference = area.FeatureReference,
                     ViewingGroup = area.ViewingGroup,
+                    AdditionalViewingGroups = area.AdditionalViewingGroups,
                     DrawingPriority = area.DrawingPriority,
                     Plane = area.Plane,
                     ScaleMinimum = area.ScaleMinimum,

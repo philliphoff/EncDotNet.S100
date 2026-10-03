@@ -199,12 +199,18 @@ public class VectorPipeline
 
     // ── Post-processing: Viewing group filtering and sort ──────────────
 
+    /// <summary>
+    /// Removes instructions with any hidden viewing group — an instruction
+    /// assigned several groups is drawn only when all of them are visible
+    /// (S-100 Part 9 §9-11.1.3; see
+    /// <see cref="ViewingGroupController.IsVisible(DrawingInstruction)"/>).
+    /// </summary>
     private static IReadOnlyList<DrawingInstruction> ApplyViewingGroups(
         IReadOnlyList<DrawingInstruction> instructions,
         ViewingGroupController viewingGroups)
     {
         return instructions
-            .Where(i => viewingGroups.IsVisible(i.ViewingGroup))
+            .Where(viewingGroups.IsVisible)
             .ToList();
     }
 
