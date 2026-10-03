@@ -144,6 +144,14 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;
 
+    /// <inheritdoc />
+    public DateTime? IssueTime => _data switch
+    {
+        S111DatasetData.GriddedCoverage g => S100IssueTime.Parse(g.Dataset.IssueDate, g.Dataset.IssueTime),
+        S111DatasetData.StationSeries s => S100IssueTime.Parse(s.Dataset.IssueDate, s.Dataset.IssueTime),
+        _ => null,
+    };
+
     /// <summary>
     /// Initializes a new <see cref="S111DatasetProcessor"/> from the HDF5
     /// dataset file at <paramref name="path"/>. For a regular-grid (dcf2)

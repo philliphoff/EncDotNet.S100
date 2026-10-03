@@ -17,6 +17,7 @@ internal sealed class LayerTimeCoordinator
     private readonly ITimeFormatProvider? _format;
     private readonly TimeProvider _clock;
     private readonly Action<Action> _dispatch;
+    private readonly Func<ILibraryTimeSource?>? _library;
 
     public LayerTimeCoordinator(
         GlobalTimeService time,
@@ -24,7 +25,8 @@ internal sealed class LayerTimeCoordinator
         TimeRefreshProgress progress,
         TimeProvider clock,
         ITimeFormatProvider? format = null,
-        Action<Action>? dispatch = null)
+        Action<Action>? dispatch = null,
+        Func<ILibraryTimeSource?>? library = null)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(datasets);
@@ -36,6 +38,7 @@ internal sealed class LayerTimeCoordinator
         _clock = clock;
         _format = format;
         _dispatch = dispatch ?? PostToUiThread;
+        _library = library;
 
         _time.CurrentTimeChanged += _ => Update();
         _time.RangeChanged += Update;
@@ -60,7 +63,10 @@ internal sealed class LayerTimeCoordinator
         {
             if (view is { } at && timed.TryGetValue(entry.Id.Value, out var dataset))
             {
-                var layerTime = LayerTimes.Describe(dataset, at, _progress.IsDatasetDrawing(entry.Id.Value), format, zone);
+                // The Library knows the run of a tile it loaded (#720); resolved
+                // only once a layer needs it, so startup stays as it was.
+                var run = ForecastRunNames.RunOf(dataset, _library?.Invoke()?.Entries);
+                var layerTime = LayerTimes.Describe(dataset, at, _progress.IsDatasetDrawing(entry.Id.Value), format, zone, run);
                 entry.SetLayerTime(layerTime, _time.SetCurrentTime);
             }
             else
