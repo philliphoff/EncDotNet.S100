@@ -207,10 +207,11 @@ public sealed class S111ArrowRenderingTests : IDisposable
         };
 
         var renderer = CreateRenderer();
-        var result = renderer.Render(layer, BuildViewport());
+        var result = renderer.Render(layer);
 
-        var memory = Assert.IsType<MemoryLayer>(result);
-        var features = (memory.Features ?? Enumerable.Empty<Mapsui.IFeature>())
+        // Zoomed in far enough (1 m/px) that the 1° cells never need thinning.
+        var thinned = Assert.IsType<ThinnedSymbolLayer>(result);
+        var features = thinned.GetFeatures(thinned.Extent!.Grow(1000), resolution: 1.0)
             .OfType<PointFeature>()
             .OrderBy(f => f.Point.X)
             .ToList();
@@ -251,9 +252,100 @@ public sealed class S111ArrowRenderingTests : IDisposable
         };
 
         var renderer = CreateRenderer();
-        var result = renderer.Render(layer, BuildViewport());
+        var result = renderer.Render(layer);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void Symbol_scheme_carries_the_spec_arrow_length_and_thinning_ratio()
+    {
+        var scheme = _catalogue.ResolveSymbolScheme(new MarinerSettings());
+
+        // S-111 Ed 2.0.0 Figure 9-1: the arrow spans y = -5 … +5 mm.
+        Assert.Equal(10.0, scheme.NominalSymbolLengthMillimetres);
+        // S-111 §9.3.2 / S-98 Appendix G-1.1: Rmax = 0.5.
+        Assert.Equal(0.5, scheme.MaxSymbolToSpacingRatio);
+    }
+
+    [Theory]
+    [InlineData(0.25f, 4.0)]   // below Slow (2 kn): 10 mm × 2 / 5
+    [InlineData(2.0f, 4.0)]    // at Slow
+    [InlineData(5.0f, 10.0)]   // at Sref: Href
+    [InlineData(10.0f, 20.0)]
+    [InlineData(13.0f, 26.0)]  // at Shigh
+    [InlineData(20.0f, 26.0)]  // above Shigh: capped
+    public void Arrow_length_follows_Eqn_9_1(float speed, double expectedMillimetres)
+    {
+        // H = Href · min(max(Slow, S), Shigh) / Sref with Href = 10 mm,
+        // Sref = 5 kn, Slow = 2 kn, Shigh = 13 kn (S-111 Ed 2.0.0 Eqn 9.1).
+        var scheme = _catalogue.ResolveSymbolScheme(new MarinerSettings());
+        var band = scheme.Resolve(speed);
+        Assert.NotNull(band);
+
+        double length = scheme.NominalSymbolLengthMillimetres * band!.ScaleFor(speed);
+        Assert.Equal(expectedMillimetres, length, precision: 4);
+    }
+
+    [Fact]
+    public void Zooming_out_thins_the_grid_by_the_S98_increment()
+    {
+        // 40×40 cells 0.01° apart at the equator, all 0.25 kn (band 1, scale 0.40).
+        var layer = BuildUniformLayer(rows: 40, cols: 40, spacingDegrees: 0.01, speed: 0.25f);
+        var thinned = Assert.IsType<ThinnedSymbolLayer>(CreateRenderer().Render(layer));
+        var everything = thinned.Extent!.Grow(10_000);
+
+        // At 1 m/px every cell is ~1113 px apart: nothing is thinned.
+        Assert.Equal(1600, thinned.GetFeatures(everything, resolution: 1.0).Count());
+
+        // At 100 m/px: D ≈ 1574 m / 100 = 15.7 px; Lsmax = 10 mm × 0.40 × 2.0
+        // (BaseSymbolScale) = 8 mm ≈ 30.2 px. Lsmax/D ≥ 0.5, so
+        // n = 1 + fix(30.2 / (15.7 × 0.5)) = 4: every 4th row and column.
+        var features = thinned.GetFeatures(everything, resolution: 100.0).OfType<PointFeature>().ToList();
+        Assert.Equal(10 * 10, features.Count);
+
+        // Eqn 9.2 bounds the drawn cell diagonal: nD > Lsmax / Rmax = 2 × arrow
+        // length. Along an axis that is nD / √2 — still clear of the arrow
+        // length, so neighbouring arrows cannot overlap.
+        double minSpacing = MinPairDistance(features) / 100.0;
+        Assert.True(minSpacing * Math.Sqrt(2) >= 2 * 30.2, $"spacing {minSpacing:F1} px");
+        Assert.True(minSpacing > 30.2, $"spacing {minSpacing:F1} px");
+    }
+
+    [Fact]
+    public void Layer_extent_is_the_grid_extent_even_when_only_one_column_has_data()
+    {
+        // A mostly-land tile: only column 3 has currents. The layer extent must
+        // still be the grid's, or fit-to-extent collapses to a zero-width line.
+        var layer = BuildUniformLayer(rows: 5, cols: 5, spacingDegrees: 0.01, speed: float.NaN);
+        var speeds = layer.Coverage.Values["surfaceCurrentSpeed"];
+        for (int r = 0; r < 5; r++)
+            speeds[(r * 5) + 3] = 0.5f;
+
+        var thinned = Assert.IsType<ThinnedSymbolLayer>(CreateRenderer().Render(layer));
+
+        Assert.True(thinned.Extent!.Width > 0.03 * 111_000, $"extent width {thinned.Extent.Width}");
+        Assert.Equal(5, thinned.GetFeatures(thinned.Extent.Grow(1000), resolution: 1.0).Count());
+    }
+
+    [Fact]
+    public void Panning_keeps_the_lattice_anchored_on_the_fastest_current()
+    {
+        // A slow field (every arrow at the Slow size) with one faster cell
+        // that stays in view: the lattice is seeded on it, so a small pan
+        // does not shift which cells are drawn.
+        var layer = BuildUniformLayer(rows: 40, cols: 40, spacingDegrees: 0.01, speed: 0.25f, fastCell: (21, 18));
+        var thinned = Assert.IsType<ThinnedSymbolLayer>(CreateRenderer().Render(layer));
+        var view = new Mapsui.MRect(10_000, 10_000, 40_000, 40_000);
+
+        var before = thinned.GetFeatures(view, resolution: 100.0).OfType<PointFeature>()
+            .Select(f => (f.Point.X, f.Point.Y)).ToHashSet();
+        var after = thinned.GetFeatures(new Mapsui.MRect(10_500, 10_300, 40_500, 40_300), resolution: 100.0)
+            .OfType<PointFeature>().Select(f => (f.Point.X, f.Point.Y)).ToHashSet();
+
+        Assert.NotEmpty(before);
+        var common = before.Intersect(after).Count();
+        Assert.True(common >= before.Count - 12, $"only {common} of {before.Count} arrows stayed put");
     }
 
     private MapsuiCoverageArrowRenderer CreateRenderer() =>
@@ -267,16 +359,55 @@ public sealed class S111ArrowRenderingTests : IDisposable
             BaseSymbolScale = 2.0,
         };
 
-    private static Viewport BuildViewport() => new()
+    private StyledCoverageLayer BuildUniformLayer(
+        int rows, int cols, double spacingDegrees, float speed, (int Row, int Col)? fastCell = null)
     {
-        MinLatitude = -1.0,
-        MaxLatitude = 1.0,
-        MinLongitude = -1.0,
-        MaxLongitude = 4.0,
-        WidthPixels = 100,
-        HeightPixels = 100,
-        ScaleDenominator = 1_000_000,
-    };
+        var metadata = new GridMetadata
+        {
+            NumRows = rows,
+            NumColumns = cols,
+            OriginLongitude = 0.0,
+            OriginLatitude = 0.0,
+            SpacingLongitudinal = spacingDegrees,
+            SpacingLatitudinal = spacingDegrees,
+        };
+
+        var speeds = Enumerable.Repeat(speed, rows * cols).ToArray();
+        if (fastCell is { } fast)
+            speeds[fast.Row * cols + fast.Col] = speed + 0.1f;
+
+        return new StyledCoverageLayer
+        {
+            Coverage = new SampledCoverage
+            {
+                Region = GridRegion.Full,
+                Metadata = metadata,
+                Values = new Dictionary<string, float[]>
+                {
+                    ["surfaceCurrentSpeed"] = speeds,
+                    ["surfaceCurrentDirection"] = new float[rows * cols],
+                },
+            },
+            Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
+            SymbolScheme = _catalogue.ResolveSymbolScheme(new MarinerSettings()),
+            NoDataValue = float.NaN,
+        };
+    }
+
+    private static double MinPairDistance(IReadOnlyList<PointFeature> features)
+    {
+        double min = double.PositiveInfinity;
+        for (int i = 0; i < features.Count; i++)
+        {
+            for (int j = i + 1; j < features.Count; j++)
+            {
+                double dx = features[i].Point.X - features[j].Point.X;
+                double dy = features[i].Point.Y - features[j].Point.Y;
+                min = Math.Min(min, Math.Sqrt(dx * dx + dy * dy));
+            }
+        }
+        return min;
+    }
 
     private static void AssertImageStyle(
         PointFeature feature,

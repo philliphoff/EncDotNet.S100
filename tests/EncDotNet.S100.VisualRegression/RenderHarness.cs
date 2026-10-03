@@ -266,6 +266,15 @@ public sealed class RenderHarness : IDisposable
         // waiting for a redraw that never arrives.
         if (instrumented.Length == 0)
         {
+            // Mapsui loads ImageStyle sources (e.g. the S-111 SCAROW arrow SVGs)
+            // asynchronously: the first frame only registers them. Run the
+            // pending image fetches to completion and draw the frame again, so
+            // point symbols are in the image rather than missing.
+            var first = RenderFrame(map);
+            if (!DrainImageFetches(map))
+                return first;
+
+            first.Dispose();
             return RenderFrame(map);
         }
 
@@ -306,6 +315,27 @@ public sealed class RenderHarness : IDisposable
                 instrumented[i].RequestRedraw = priorSinks[i];
             }
         }
+    }
+
+    /// <summary>
+    /// Runs the map's pending image-fetch jobs synchronously. Returns
+    /// <see langword="true"/> when any job ran, i.e. a re-render will draw
+    /// images the previous frame could not.
+    /// </summary>
+    private static bool DrainImageFetches(Map map)
+    {
+        var cache = map.RenderService.ImageSourceCache;
+        bool ran = false;
+        for (int round = 0; round < 16; round++)
+        {
+            var jobs = cache.GetFetchJobs(0, 256);
+            if (jobs.Length == 0)
+                break;
+            foreach (var job in jobs)
+                job.FetchFunc().GetAwaiter().GetResult();
+            ran = true;
+        }
+        return ran;
     }
 
     private static Mapsui.Styles.Color MapsuiColorFromUInt(uint argb)

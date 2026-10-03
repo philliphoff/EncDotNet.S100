@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -11,7 +12,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Pipeline-level tests for the S-111 dcf8 station-series branch of
 /// <see cref="S111DatasetProcessor"/>. Verifies that the processor
-/// emits a <see cref="MemoryLayer"/> tagged with one feature per
+/// emits a <see cref="ThinnedSymbolLayer"/> with one feature per
 /// station and that each feature carries the
 /// <c>"station:&lt;id&gt;"</c> ref recognised by the pick router.
 /// </summary>
@@ -65,23 +66,22 @@ public class S111Dcf8ProcessorTests
     }
 
     [Fact]
-    public async Task Render_Dcf8_EmitsMemoryLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
+    public async Task Render_Dcf8_EmitsThinnedLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
     {
         var path = WriteFixture();
         try
         {
-            // dcf8 path doesn't consult the portrayal catalogue manager,
-            // so an empty manager is fine.
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
             var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
 
             Assert.Single(result.Layers);
-            var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
+            var layer = Assert.IsType<ThinnedSymbolLayer>(result.Layers[0]);
 
-            var features = memoryLayer.Features?.ToList()
-                ?? throw new InvalidOperationException("MemoryLayer must expose features.");
+            // Zoomed in far enough (identity "projection", so units are
+            // degrees) that the two stations 0.1° apart are both drawn.
+            var features = layer.GetFeatures(layer.Extent!.Grow(1), resolution: 1e-6).ToList();
             Assert.Equal(2, features.Count);
 
             var refs = features
@@ -98,12 +98,68 @@ public class S111Dcf8ProcessorTests
     }
 
     [Fact]
+    public async Task BuildPortrayal_WithCatalogue_UsesTheSpecArrowForEveryStation()
+    {
+        // S-111 Ed 2.0.0 §9.2.4: the arrow for a given speed is the same
+        // regardless of the source of the data, so dcf8 stations get the
+        // catalogue's SCAROW symbol and Eqn 9.1 scale, exactly like dcf2 cells.
+        var path = WriteFixture();
+        try
+        {
+            using var catalogues = S111TestCatalogues.Create();
+            using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
+
+            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext { SymbolScale = 1.5 });
+
+            var sub = Assert.IsType<GlyphCoverageSubLayer>(Assert.Single(result.SubLayers));
+            Assert.Equal(2, sub.Glyphs.Count);
+            Assert.All(sub.Glyphs, g =>
+            {
+                Assert.Equal(PointGlyphSymbol.Svg, g.Symbol);
+                Assert.StartsWith("svg-content://", g.SvgSource);
+                // Bands 1–3 (< 2 kn) use the catalogue's scaleFloor 0.40,
+                // times the user's symbol scale — no clamping, no extra factor.
+                Assert.Equal(0.40 * 1.5, g.SymbolScale, precision: 5);
+                // Degrees true, clockwise — Mapsui's SymbolRotation convention.
+                Assert.Equal((float)g.Attributes["DirectionDegreesTrue"], g.Rotation, precision: 3);
+                Assert.Equal((float)g.Attributes["SpeedKnots"], g.ThinningPriority, precision: 5);
+            });
+
+            var thinning = Assert.IsType<GlyphThinning>(sub.Thinning);
+            Assert.Equal(10.0 * 96.0 / 25.4, thinning.SymbolLengthPixelsPerScale, precision: 6);
+            Assert.Equal(0.5, thinning.MaxSymbolToSpacingRatio);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Constructor_WithoutS111Catalogue_Throws()
+    {
+        // Station series are portrayed with the catalogue's arrows, like dcf2,
+        // so there is no catalogue-less fallback.
+        var path = WriteFixture();
+        try
+        {
+            using var catalogues = new PortrayalCatalogueManager();
+            Assert.Throws<InvalidOperationException>(
+                () => new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task RenderHeadless_Dcf8_PaintsStationGlyphs()
     {
         var path = WriteFixture();
         try
         {
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
             using var bitmap = await processor.RenderHeadlessAsync(256, 256);
@@ -125,7 +181,7 @@ public class S111Dcf8ProcessorTests
         var path = WriteFixture();
         try
         {
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
             var report = Assert.IsType<ValidationReport>(processor.Validate());
@@ -145,7 +201,7 @@ public class S111Dcf8ProcessorTests
         var path = WriteFixture();
         try
         {
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
             // Render at the second time-step; expected S1 speed = 0.6, dir = 50.
@@ -182,7 +238,7 @@ public class S111Dcf8ProcessorTests
         var path = WriteFixture();
         try
         {
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
             _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
 
@@ -201,7 +257,7 @@ public class S111Dcf8ProcessorTests
         var path = WriteFixture();
         try
         {
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
             var metadata = p.Metadata;

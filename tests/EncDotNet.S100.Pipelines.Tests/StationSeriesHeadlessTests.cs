@@ -45,7 +45,7 @@ public class StationSeriesHeadlessTests
                     new() { TimePoint = "20240101T010000Z", Values = [new() { SurfaceCurrentSpeed = 0.7f, SurfaceCurrentDirection = 50f }, new() { SurfaceCurrentSpeed = 1.2f, SurfaceCurrentDirection = 95f }] },
                 ],
                 lastDateTime: "20240101T010000Z");
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
             using var bitmap = await processor.RenderHeadlessAsync(256, 256);
@@ -115,7 +115,7 @@ public class StationSeriesHeadlessTests
                     S111Station("SC1", CentreLat, CentreLon),
                     S111Station("SC2", FarLat, FarLon),
                 });
-                return (new S111DatasetProcessor(path, new PortrayalCatalogueManager(), new ProjNetCrsTransformFactory()), new S111RenderContext());
+                return (new S111DatasetProcessor(path, S111TestCatalogues.Create(), new ProjNetCrsTransformFactory()), new S111RenderContext());
 
             default:
                 S111Dcf3FixtureBuilder.WriteFile(
@@ -128,7 +128,7 @@ public class StationSeriesHeadlessTests
                         new() { TimePoint = "20240101T000000Z", Values = [new() { SurfaceCurrentSpeed = 0.5f, SurfaceCurrentDirection = 45f }, new() { SurfaceCurrentSpeed = 1.5f, SurfaceCurrentDirection = 90f }] },
                     ],
                     lastDateTime: "20240101T000000Z");
-                return (new S111DatasetProcessor(path, new PortrayalCatalogueManager(), new ProjNetCrsTransformFactory()), new S111RenderContext());
+                return (new S111DatasetProcessor(path, S111TestCatalogues.Create(), new ProjNetCrsTransformFactory()), new S111RenderContext());
         }
     }
 

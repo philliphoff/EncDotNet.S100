@@ -119,6 +119,33 @@ public sealed class GlyphCoverageSubLayer : CoverageSubLayerBase
     /// The EPSG:3857 extent of the glyphs, or null when there are no glyphs.
     /// </summary>
     public MercatorBounds? Extent { get; init; }
+
+    /// <summary>
+    /// Optional zoom-dependent thinning. When set, the renderers draw only the
+    /// glyphs that <see cref="SymbolThinning.ThinPoints"/> keeps for the scale
+    /// the layer is drawn at (S-111 §9.3.2 point-by-point method); when
+    /// <see langword="null"/>, every glyph is drawn.
+    /// </summary>
+    public GlyphThinning? Thinning { get; init; }
+}
+
+/// <summary>
+/// Zoom-dependent thinning parameters for a <see cref="GlyphCoverageSubLayer"/>.
+/// </summary>
+public sealed class GlyphThinning
+{
+    /// <summary>
+    /// On-screen length, in device-independent pixels, of a glyph drawn at
+    /// <see cref="PointGlyph.SymbolScale"/> 1 — the dimension glyphs are spaced by.
+    /// </summary>
+    public required double SymbolLengthPixelsPerScale { get; init; }
+
+    /// <summary>
+    /// The thinning ratio <c>Rmax</c> between a glyph's length and the spacing it
+    /// clears around itself. Defaults to
+    /// <see cref="SymbolThinning.DefaultMaxSymbolToSpacingRatio"/>.
+    /// </summary>
+    public double MaxSymbolToSpacingRatio { get; init; } = SymbolThinning.DefaultMaxSymbolToSpacingRatio;
 }
 
 /// <summary>
@@ -129,7 +156,7 @@ public enum PointGlyphSymbol
     /// <summary>Filled ellipse with an outline (S-104 water-level stations).</summary>
     Ellipse,
 
-    /// <summary>Filled triangle with an outline (S-111 station arrow fallback).</summary>
+    /// <summary>Filled triangle with an outline.</summary>
     Triangle,
 
     /// <summary>SVG image symbol (S-111 PC arrow symbol).</summary>
@@ -186,8 +213,19 @@ public sealed class PointGlyph
     /// <summary>The final symbol scale to apply to the style.</summary>
     public double SymbolScale { get; init; } = 1.0;
 
-    /// <summary>The final symbol rotation (degrees) to apply to the style.</summary>
+    /// <summary>
+    /// The final symbol rotation, in degrees clockwise on screen (Mapsui's
+    /// <c>SymbolRotation</c> convention). A current direction in degrees true
+    /// maps to this unchanged on a north-up Mercator display.
+    /// </summary>
     public double Rotation { get; init; }
+
+    /// <summary>
+    /// Priority when the sub-layer is thinned (see
+    /// <see cref="GlyphCoverageSubLayer.Thinning"/>): higher is kept first. For
+    /// S-111, the current speed.
+    /// </summary>
+    public double ThinningPriority { get; init; }
 }
 
 /// <summary>

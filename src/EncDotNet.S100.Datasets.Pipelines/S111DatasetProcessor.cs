@@ -280,16 +280,16 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     _stationsById[station.Identifier] = station;
                 }
 
-                // DCF 3 (ungeorectified grid) uses the portrayal catalogue
-                // for PC-faithful color/symbol rendering. DCF 8 (time series
-                // at fixed stations) uses inline arrow glyphs — no PC required.
-                if (s.Dataset.DataCodingFormat == 3
-                    && catalogueManager.HasCatalogue("S-111"))
-                {
-                    _provider = catalogueManager.GetProvider("S-111");
-                    _catalogue = new S111PortrayalCatalogue(_provider);
-                    Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
-                }
+                // Every station-series DCF (1, 3, 8) is portrayed with the
+                // catalogue's SCAROW arrows, exactly like dcf2 (S-111 Ed 2.0.0
+                // §9.2.4, §9.2.9, §9.3.3), so the catalogue is required.
+                _provider = catalogueManager.HasCatalogue("S-111")
+                    ? catalogueManager.GetProvider("S-111")
+                    : throw new InvalidOperationException(
+                        "S-111 portrayal catalogue is not registered. " +
+                        "Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
+                _catalogue = new S111PortrayalCatalogue(_provider);
+                Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
                 break;
         }
 
@@ -357,9 +357,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         var metadata = source.Metadata;
 
-        // Full-grid WGS-84 frame for the sub-layer (the Mapsui arrow renderer
-        // derives its arrow stride from it). The grid extent is native CRS
-        // units, so it must be reprojected for a projected grid.
+        // Full-grid WGS-84 frame for the sub-layer's extent. The grid extent is
+        // native CRS units, so it must be reprojected for a projected grid.
+        // Arrow thinning does not use it: the renderers thin per frame for the
+        // scale they draw at (SymbolThinning).
         var viewport = CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
 
         var pipeline = new PortrayalPipeline();
@@ -399,10 +400,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // a single arrow sub-layer; rendering a synthetic colour-band heatmap
         // on top of S-101 ENC was removed because it obscured the base chart.
         //
-        // The bundled portrayal catalogue (S-111 Ed 2.0.0, select_arrow.xsl)
-        // declares the arrow sub-layer with intra-product
-        // displayPlane="OverRadar"; S-98 Annex A §A-6.9.1 maps current arrows
-        // to the DynamicArrows plane.
+        // The bundled portrayal catalogue (S-111 Ed 2.0.0, SurfaceCurrent.xsl)
+        // declares the arrows with viewing group 33060, intra-product
+        // displayPlane="UnderRadar" and drawing priority 10; S-98 Annex A
+        // §A-6.9.1 maps current arrows to the DynamicArrows plane.
         return new CoveragePortrayalResult
         {
             SubLayers = new CoverageSubLayerBase[]
@@ -527,11 +528,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <summary>
     /// Projects each station/node to a single point feature with an arrow
-    /// glyph oriented along <c>DirectionsDegreesTrue</c> and scaled by
-    /// speed magnitude. When the portrayal catalogue is loaded (DCF 3),
-    /// colors and scale factors are resolved from the PC's speed-band
-    /// table; otherwise (DCF 8) a hardcoded palette is used.
-    /// Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
+    /// glyph oriented along <c>DirectionsDegreesTrue</c> (clockwise from true
+    /// north) and scaled by speed. Every DCF uses the catalogue's SCAROW symbol
+    /// and scale for the speed band — the same arrows as the dcf2 grid path.
+    /// Nodes with a null speed or direction
+    /// get no glyph (Annex H Rule 2). The sub-layer carries point-by-point
+    /// thinning parameters so the renderers draw a legible, non-overlapping
+    /// subset at every zoom. Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
     /// </summary>
     private async Task<CoveragePortrayalResult> BuildStationSeriesAsync(S111StationSeriesDataset ds, RenderContext? context, CancellationToken cancellationToken)
     {
@@ -547,21 +550,17 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         _stationSelectedTime = selectedTime;
 
-        // Resolve PC schemes if available (DCF 3 with catalogue loaded)
-        CoverageColorScheme? colorScheme = null;
-        CoverageSymbolScheme? symbolScheme = null;
-        Dictionary<string, string>? svgCache = null;
-        Dictionary<string, string>? prewarmedSvgs = null;
-        if (_catalogue is not null && _provider is not null)
-        {
-            await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
-            var mariner = context?.Mariner ?? MarinerSettings.Default;
-            colorScheme = _catalogue.ResolveColorScheme(mariner);
-            symbolScheme = _catalogue.ResolveSymbolScheme(mariner);
-            svgCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            prewarmedSvgs = await PreWarmProviderSymbolsAsync(_provider, cancellationToken).ConfigureAwait(false);
-        }
+        // Every DCF uses the catalogue's SCAROW arrows: S-111 Ed 2.0.0 §9.2.4
+        // requires the same arrow for the same speed "regardless of the source
+        // of the data", and the 2.0.0 portrayal catalogue treats every DCF as a
+        // coverage (select_arrow.xsl header).
+        var catalogue = _catalogue!;
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+        var symbolScheme = catalogue.ResolveSymbolScheme(context?.Mariner ?? MarinerSettings.Default);
+        var resolvedSvgs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var prewarmedSvgs = await PreWarmProviderSymbolsAsync(_provider!, cancellationToken).ConfigureAwait(false);
 
+        double baseSymbolScale = context?.SymbolScale ?? 1.0;
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
 
         var glyphs = new List<PointGlyph>(ds.Stations.Count);
@@ -590,6 +589,11 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             var speed = station.SpeedsKnots[idx];
             var direction = station.DirectionsDegreesTrue[idx];
 
+            // S-111 Annex H Rule 2: no arrow where speed or direction is null
+            // (the -9999 fill value, or NaN).
+            if (!(speed >= 0) || !(direction >= 0) || float.IsInfinity(speed))
+                continue;
+
             var attributes = new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["StationId"] = station.Identifier,
@@ -600,102 +604,37 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 ["Longitude"] = station.Longitude,
             };
 
-            RgbaColor arrowColour;
-            double symbolScale;
-            string? svgSource = null;
-            string? symbolRef = null;
+            // PC-faithful arrow: the band's SCAROW symbol, scaled exactly as
+            // the catalogue says (0.40 / 0.20 × speed / 2.60, i.e. Eqn 9.1)
+            // times the user's symbol scale — the same as the dcf2 grid path.
+            var band = symbolScheme.Resolve(speed);
+            if (band is null)
+                continue;
 
-            if (colorScheme is not null)
+            if (!resolvedSvgs.TryGetValue(band.SymbolRef, out var svgSource))
             {
-                // PC-faithful rendering: resolve color from speed bands
-                var hex = colorScheme.Resolve(speed);
-                arrowColour = hex is not null
-                    ? ParseHexColor(hex)
-                    : new RgbaColor(0x80, 0x80, 0x80); // grey fallback for out-of-range
-
-                // Use PC symbol scheme for scaling and SVG symbol if available
-                if (symbolScheme is not null)
-                {
-                    var band = symbolScheme.Resolve(speed);
-                    if (band is not null)
-                    {
-                        symbolRef = band.SymbolRef;
-                        symbolScale = band.ScaleByValue
-                            ? band.ScaleFactor * speed
-                            : band.ScaleFactor;
-                        // Clamp to reasonable visual range
-                        symbolScale = Math.Clamp(symbolScale, 0.20, 2.0);
-                    }
-                    else
-                    {
-                        symbolScale = 0.30; // minimum visible
-                    }
-                }
-                else
-                {
-                    symbolScale = SymbolScaleForSpeed(speed);
-                }
-
-                // Load SVG from PC if symbol ref resolved
-                if (symbolRef is not null && svgCache is not null && _provider is not null)
-                {
-                    if (!svgCache.TryGetValue(symbolRef, out svgSource))
-                    {
-                        if (prewarmedSvgs is not null && prewarmedSvgs.TryGetValue(symbolRef, out var rawSvg))
-                        {
-                            // Process SVG through palette color resolver and
-                            // wrap with the svg-content:// URI scheme that
-                            // Mapsui's ImageStyle expects.
-                            var processed = SvgProcessor.Process(rawSvg, _catalogue!.ActivePalette);
-                            svgSource = "svg-content://" + processed;
-                        }
-                        svgCache[symbolRef] = svgSource ?? "";
-                    }
-                    if (string.IsNullOrEmpty(svgSource))
-                        svgSource = null;
-                }
-            }
-            else
-            {
-                // Fallback (DCF 8): hardcoded palette
-                arrowColour = ColorByMagnitude(speed);
-                symbolScale = SymbolScaleForSpeed(speed);
+                svgSource = prewarmedSvgs.TryGetValue(band.SymbolRef, out var rawSvg)
+                    ? "svg-content://" + SvgProcessor.Process(rawSvg, catalogue.ActivePalette)
+                    : null;
+                resolvedSvgs[band.SymbolRef] = svgSource;
             }
 
-            // Symbol orientation: Mapsui rotation is counter-clockwise from
-            // east; compass bearing is clockwise from north. Negate to convert.
-            if (svgSource is not null)
+            if (svgSource is null)
+                continue;
+
+            glyphs.Add(new PointGlyph
             {
-                // PC SVG arrow symbol
-                glyphs.Add(new PointGlyph
-                {
-                    MercatorX = mx,
-                    MercatorY = my,
-                    FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
-                    Attributes = attributes,
-                    Symbol = PointGlyphSymbol.Svg,
-                    SvgSource = svgSource,
-                    SymbolScale = symbolScale * 0.6,
-                    Rotation = -direction,
-                });
-            }
-            else
-            {
-                // Triangle fallback
-                glyphs.Add(new PointGlyph
-                {
-                    MercatorX = mx,
-                    MercatorY = my,
-                    FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
-                    Attributes = attributes,
-                    Symbol = PointGlyphSymbol.Triangle,
-                    FillColor = arrowColour,
-                    OutlineColor = arrowColour,
-                    OutlineWidth = 1.0,
-                    SymbolScale = symbolScale,
-                    Rotation = -direction,
-                });
-            }
+                MercatorX = mx,
+                MercatorY = my,
+                FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
+                Attributes = attributes,
+                Symbol = PointGlyphSymbol.Svg,
+                SvgSource = svgSource,
+                SymbolScale = band.ScaleFor(speed) * baseSymbolScale,
+                // Degrees true is clockwise from north, as is PointGlyph.Rotation.
+                Rotation = direction,
+                ThinningPriority = speed,
+            });
         }
 
         var extent = ds.Stations.Count == 0
@@ -721,42 +660,22 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     SourceFeatureType = "s111.stations",
                     Glyphs = glyphs,
                     Extent = extent,
+                    // Point-by-point thinning (S-111 §9.3.2, allowed for
+                    // ungeorectified grids by §9.3.3) with the same arrow
+                    // length and Rmax as the dcf2 grid path, so a mesh and a
+                    // grid of the same density read the same.
+                    Thinning = new GlyphThinning
+                    {
+                        SymbolLengthPixelsPerScale =
+                            symbolScheme.NominalSymbolLengthMillimetres * SymbolThinning.PixelsPerMillimetre,
+                        MaxSymbolToSpacingRatio = symbolScheme.MaxSymbolToSpacingRatio,
+                    },
                 },
             },
             Spec = new SpecRef("S-111", default),
             SourceDatasetId = _fileName,
             Info = info,
         };
-    }
-
-    /// <summary>
-    /// Parses a hex color string (e.g. "#RRGGBB" or "#AARRGGBB") into
-    /// an <see cref="RgbaColor"/>.
-    /// </summary>
-    private static RgbaColor ParseHexColor(string hex)
-    {
-        var span = hex.AsSpan();
-        if (span.Length > 0 && span[0] == '#')
-            span = span[1..];
-
-        if (span.Length == 6)
-        {
-            byte r = byte.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            byte g = byte.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            byte b = byte.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            return new RgbaColor(r, g, b);
-        }
-
-        if (span.Length == 8)
-        {
-            byte a = byte.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            byte r = byte.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            byte g = byte.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            byte b = byte.Parse(span[6..8], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            return new RgbaColor(r, g, b, a);
-        }
-
-        return new RgbaColor(0x80, 0x80, 0x80);
     }
 
     private static IReadOnlyList<DateTime> ComputeStationUnionTimes(S111StationSeriesDataset ds)
@@ -770,36 +689,6 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             }
         }
         return set.ToArray();
-    }
-
-    /// <summary>
-    /// Graduated Beaufort-style palette across 0..2.0 knots with a hot
-    /// overflow above 2.0 knots.
-    /// </summary>
-    private static RgbaColor ColorByMagnitude(float speedKnots)
-    {
-        if (float.IsNaN(speedKnots) || speedKnots < 0.25f)
-            return new RgbaColor(0xcf, 0xe2, 0xf3); // very pale blue
-        if (speedKnots < 0.50f) return new RgbaColor(0x6f, 0xa8, 0xdc);
-        if (speedKnots < 1.00f) return new RgbaColor(0x3d, 0x85, 0xc6);
-        if (speedKnots < 1.50f) return new RgbaColor(0x1c, 0x45, 0x87);
-        if (speedKnots < 2.00f) return new RgbaColor(0xa6, 0x4d, 0x79);
-        return new RgbaColor(0xc1, 0x12, 0x1f);
-    }
-
-    /// <summary>
-    /// Maps a current speed to a Mapsui <c>SymbolStyle.SymbolScale</c>
-    /// with a visible floor (~6 px) and ceiling (~24 px at 2 knots, the
-    /// S-111 arrow-size threshold).
-    /// </summary>
-    private static double SymbolScaleForSpeed(float speedKnots)
-    {
-        const double minScale = 0.30; // ~6 px at default symbol size
-        const double maxScale = 1.20; // ~24 px
-        const double fastReference = 2.0;
-        if (float.IsNaN(speedKnots) || speedKnots <= 0) return minScale;
-        var t = Math.Clamp(speedKnots / fastReference, 0.0, 1.0);
-        return minScale + (maxScale - minScale) * t;
     }
 
     /// <summary>

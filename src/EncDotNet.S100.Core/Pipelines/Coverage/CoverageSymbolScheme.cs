@@ -16,6 +16,21 @@ public sealed class CoverageSymbolScheme
     public required IReadOnlyList<SymbolBand> Bands { get; init; }
 
     /// <summary>
+    /// The length, in millimetres, of a symbol drawn at scale 1 — the symbol's
+    /// largest dimension, which <see cref="SymbolThinning"/> spaces symbols by.
+    /// Defaults to 10 mm, the nominal S-111 arrow height (S-111 Ed 2.0.0
+    /// Figure 9-1).
+    /// </summary>
+    public double NominalSymbolLengthMillimetres { get; init; } = 10.0;
+
+    /// <summary>
+    /// The thinning ratio <c>Rmax</c> between the largest symbol's length and the
+    /// displayed symbol spacing (see <see cref="SymbolThinning"/>). Defaults to
+    /// <see cref="SymbolThinning.DefaultMaxSymbolToSpacingRatio"/>.
+    /// </summary>
+    public double MaxSymbolToSpacingRatio { get; init; } = SymbolThinning.DefaultMaxSymbolToSpacingRatio;
+
+    /// <summary>
     /// Resolves a value to its matching symbol band, or <c>null</c> for no-data / out-of-range.
     /// </summary>
     public SymbolBand? Resolve(float value)
@@ -57,6 +72,14 @@ public sealed class SymbolBand
     /// (depending on <see cref="ScaleByValue"/>).
     /// </summary>
     public float ScaleFactor { get; init; } = 1.0f;
+
+    /// <summary>
+    /// The symbol scale for <paramref name="value"/>: <see cref="ScaleFactor"/> ×
+    /// <paramref name="value"/> when <see cref="ScaleByValue"/> is set, otherwise
+    /// <see cref="ScaleFactor"/>.
+    /// </summary>
+    /// <param name="value">The value that selected this band.</param>
+    public double ScaleFor(float value) => ScaleByValue ? (double)ScaleFactor * value : ScaleFactor;
 
     /// <summary>Optional legend label for the band, or <c>null</c>.</summary>
     public string? Label { get; init; }

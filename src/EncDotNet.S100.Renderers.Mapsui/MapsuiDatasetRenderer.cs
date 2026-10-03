@@ -290,7 +290,7 @@ public sealed class MapsuiDatasetRenderer
                             BaseSymbolScale = arrow.BaseSymbolScale,
                             SymbolProvider = arrow.SymbolProvider,
                         };
-                        layer = renderer.Render(arrow.Coverage, arrow.Viewport);
+                        layer = renderer.Render(arrow.Coverage);
                         fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
                         break;
                     }
@@ -355,62 +355,46 @@ public sealed class MapsuiDatasetRenderer
         return renderer.Render(grid.Coverage, grid.Viewport);
     }
 
-    private static MemoryLayer BuildGlyphLayer(GlyphCoverageSubLayer sub)
+    private static ILayer BuildGlyphLayer(GlyphCoverageSubLayer sub)
     {
-        var features = new List<IFeature>(sub.Glyphs.Count);
-
-        foreach (var glyph in sub.Glyphs)
+        if (sub.Thinning is { } thinning)
         {
-            var feature = new GeometryFeature
+            // Zoom-dependent thinning (S-111 §9.3.2 point-by-point method): the
+            // layer keeps every glyph and draws the ones SymbolThinning keeps
+            // for the resolution of each frame.
+            int count = sub.Glyphs.Count;
+            var x = new double[count];
+            var y = new double[count];
+            var scale = new float[count];
+            var priority = new float[count];
+            for (int i = 0; i < count; i++)
             {
-                Geometry = new Point(glyph.MercatorX, glyph.MercatorY),
-            };
-            feature[MapsuiDisplayListRenderer.FeatureRefKey] = glyph.FeatureRefTag;
-            foreach (var (key, value) in glyph.Attributes)
-                feature[key] = value;
-
-            switch (glyph.Symbol)
-            {
-                case PointGlyphSymbol.Svg when glyph.SvgSource is not null:
-                    feature.Styles.Add(new ImageStyle
-                    {
-                        Image = new Image { Source = glyph.SvgSource, RasterizeSvg = true },
-                        SymbolScale = glyph.SymbolScale,
-                        SymbolRotation = glyph.Rotation,
-                        // A direction on the ground: turns with a rotated map.
-                        RotateWithMap = true,
-                    });
-                    break;
-
-                case PointGlyphSymbol.Triangle:
-                    feature.Styles.Add(new SymbolStyle
-                    {
-                        SymbolType = SymbolType.Triangle,
-                        Fill = new Brush(ToMapsuiColor(glyph.FillColor)),
-                        Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
-                        SymbolScale = glyph.SymbolScale,
-                        SymbolRotation = glyph.Rotation,
-                        // A direction on the ground: turns with a rotated map.
-                        RotateWithMap = true,
-                    });
-                    break;
-
-                default:
-                    feature.Styles.Add(new SymbolStyle
-                    {
-                        SymbolType = SymbolType.Ellipse,
-                        Fill = new Brush(ToMapsuiColor(glyph.FillColor)),
-                        Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
-                        SymbolScale = glyph.SymbolScale,
-                        SymbolRotation = glyph.Rotation,
-                        // A direction on the ground: turns with a rotated map.
-                        RotateWithMap = true,
-                    });
-                    break;
+                var glyph = sub.Glyphs[i];
+                x[i] = glyph.MercatorX;
+                y[i] = glyph.MercatorY;
+                scale[i] = (float)glyph.SymbolScale;
+                priority[i] = (float)glyph.ThinningPriority;
             }
 
-            features.Add(feature);
+            return new ThinnedSymbolLayer(
+                rows: 0,
+                cols: 0,
+                x,
+                y,
+                scale,
+                priority,
+                thinning.SymbolLengthPixelsPerScale,
+                thinning.MaxSymbolToSpacingRatio,
+                i => BuildGlyphFeature(sub.Glyphs[i]))
+            {
+                Name = sub.LayerName,
+                Style = null,
+            };
         }
+
+        var features = new List<IFeature>(sub.Glyphs.Count);
+        foreach (var glyph in sub.Glyphs)
+            features.Add(BuildGlyphFeature(glyph));
 
         return new MemoryLayer
         {
@@ -418,6 +402,61 @@ public sealed class MapsuiDatasetRenderer
             Features = features,
             Style = null,
         };
+    }
+
+    private static GeometryFeature BuildGlyphFeature(PointGlyph glyph)
+    {
+        var feature = new GeometryFeature
+        {
+            Geometry = new Point(glyph.MercatorX, glyph.MercatorY),
+        };
+        feature[MapsuiDisplayListRenderer.FeatureRefKey] = glyph.FeatureRefTag;
+        foreach (var (key, value) in glyph.Attributes)
+            feature[key] = value;
+
+        // PointGlyph.Rotation is clockwise on screen, Mapsui's SymbolRotation
+        // convention, so it is passed through unchanged.
+        switch (glyph.Symbol)
+        {
+            case PointGlyphSymbol.Svg when glyph.SvgSource is not null:
+                feature.Styles.Add(new ImageStyle
+                {
+                    Image = new Image { Source = glyph.SvgSource, RasterizeSvg = true },
+                    SymbolScale = glyph.SymbolScale,
+                    SymbolRotation = glyph.Rotation,
+                    // A direction on the ground: turns with a rotated map.
+                    RotateWithMap = true,
+                });
+                break;
+
+            case PointGlyphSymbol.Triangle:
+                feature.Styles.Add(new SymbolStyle
+                {
+                    SymbolType = SymbolType.Triangle,
+                    Fill = new Brush(ToMapsuiColor(glyph.FillColor)),
+                    Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
+                    SymbolScale = glyph.SymbolScale,
+                    SymbolRotation = glyph.Rotation,
+                    // A direction on the ground: turns with a rotated map.
+                    RotateWithMap = true,
+                });
+                break;
+
+            default:
+                feature.Styles.Add(new SymbolStyle
+                {
+                    SymbolType = SymbolType.Ellipse,
+                    Fill = new Brush(ToMapsuiColor(glyph.FillColor)),
+                    Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
+                    SymbolScale = glyph.SymbolScale,
+                    SymbolRotation = glyph.Rotation,
+                    // A direction on the ground: turns with a rotated map.
+                    RotateWithMap = true,
+                });
+                break;
+        }
+
+        return feature;
     }
 
     /// <summary>

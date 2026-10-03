@@ -41,35 +41,73 @@ has been removed. Per-band colour now travels with the arrow SVG itself via its
 `fSCBN{N}` CSS class; `MapsuiCoverageArrowRenderer` resolves that token via the
 active palette.
 
-### Per-feature arrow rendering
+### Arrow rendering
 
-`MapsuiCoverageArrowRenderer` emits **one Mapsui `PointFeature` per selected
-grid cell** carrying an `ImageStyle` that wraps the bundled SCAROW SVG via the
-`svg-content://` URI scheme. Mapsui re-rasterises the symbol on every viewport
-change so arrows stay **sharp at every zoom** and at a **stable on-screen
-size** — the convention used by ECDIS-style symbology in S-100 Part 9 §11.
-A previous implementation rasterised every arrow into a single georeferenced
-PNG sized to the dataset extent; that bitmap was downscaled at low zoom
-(arrows shrank to a few pixels and were hard to read) and upscaled at high
-zoom (arrows pixelated). Per-feature symbols avoid both pathologies.
+Every data coding format is drawn with the catalogue's SCAROW arrows. That
+covers the dcf2 regular grid and the dcf1/dcf3/dcf8 station series and
+ungeorectified meshes alike: the grid path goes through
+`MapsuiCoverageArrowRenderer` (viewer) / `SkiaCoverageArrowRenderer` (headless
+`s100 render`), the station/mesh path through `S111DatasetProcessor`'s glyph
+sub-layer. Both draw one point symbol per kept node, re-rasterised at screen
+DPI so arrows stay sharp and keep a stable on-screen size at every zoom
+(S-111 §9.2.4 sizes arrows in millimetres on the display). Opening an S-111
+dataset requires the S-111 portrayal catalogue; there is no catalogue-less
+fallback symbology.
 
-Per-band scaling follows the bundled catalogue
-(`content/S111/pc/Rules/select_arrow.xsl`): bands 1-3 share
-`scaleFloor = 0.40`; bands 4-8 use `scaleFactorIntermediate = 0.20`
-multiplied by `surfaceCurrentSpeed`; band 9 uses `scaleCeiling = 2.60`.
-Those per-band factors multiply the renderer's `BaseSymbolScale` (default
-`1.0` — which `S111DatasetProcessor` overrides with the user's
-`RenderContext.SymbolScale` so the viewer's Symbol Scale slider tunes
-arrow size) to produce each feature's `ImageStyle.SymbolScale`.
+### Spec conformance
 
-### Viewport-aware arrow decimation
+What S-111 Edition 2.0.0, its portrayal catalogue and S-98 Edition 2.0.0
+define, and how this library follows them:
 
-`MapsuiCoverageArrowRenderer` decimates arrows two ways: a grid cap
-(`MaxArrowsPerAxis`) and a screen-spacing floor (`MinArrowSpacingPixels`,
-default 14 px). When the render viewport projects adjacent cells closer
-than the floor, the subsampling stride widens so dense grids — or wide
-extents spanning many overlapping datasets — do not emit illegible,
-overlapping arrows that are also expensive to redraw on every pan frame.
+| Rule | Source | Implementation |
+|---|---|---|
+| Arrow shape, pivot at the symbol's centre, black border | §9.2.1, Figure 9-1, Annex H Rule 1 | Bundled `SCAROW01`–`09.svg`, drawn centred on the node. |
+| Direction: towards which the current flows, clockwise from true north | §9.2.2, Rule 7 | Rotation = `surfaceCurrentDirection` (clockwise) on a north-up Mercator display; turns with a rotated map. |
+| 9 speed bands, one symbol and colour token `SCBN1`–`9` per band | §9.2.3, Rules 3 and 5, `select_arrow.xsl` | Bands parsed from `select_arrow.xsl`; colours from the active palette in `colorProfile.xml`. |
+| Day / dusk / night colours from the portrayal catalogue | Rule 4, Annex F | `SwitchPaletteAsync`; the composite (`--layer`) path now passes the palette too. Before, it drew every arrow black. |
+| Size `H = Href · min(max(Slow, S), Shigh) / Sref` (Href 10 mm, Sref 5 kn, Slow 2 kn, Shigh 13 kn), the same for every data source | §9.2.4, Eqn 9.1, Rule 6 | Catalogue scale factors 0.40 / 0.20 × S / 2.60 times the 10 mm arrow, for every DCF. Station series used to clamp the scale to 0.2–2.0 and multiply it by 0.6. |
+| No arrow for null speed or direction | Rule 2 | Fill values and NaN are skipped on every path. |
+| Thinning must reduce symbol density when zooming out | S-98 §13.1, S-111 §9.3.2 | Zoom-dependent thinning on every path (below). |
+| Regular grids: every n-th row and column, `n = 1 + fix(Lsmax / (D · Rmax))`, seeded so the maximum vector is drawn | §9.3.2 Eqn 9.2/9.3, Annex H Rule 11, S-98 Appendix G-1.1 | `SymbolThinning.ThinGrid` with `D` the on-screen cell diagonal and `Lsmax` the largest arrow in the displayed field. |
+| Irregular data and ungeorectified grids: point-by-point overlap elimination (or an implementer heuristic) | §9.3.2, §9.3.3 | `SymbolThinning.ThinPoints`. |
+| No spatial interpolation when zoomed in | §9.3.1 | Arrows are drawn only at nodes; zooming in shows fewer arrows. |
+| Viewing group 33060, display plane UnderRadar, drawing priority 10 | `SurfaceCurrent.xsl` | Grid arrows go to the S-98 `DynamicArrows` plane (S-98 Annex A §A-6.9.1). |
+
+### Implementation choices
+
+Where the specifications leave a choice to the implementer, we chose:
+
+- **`Rmax` = 0.5** (`SymbolThinning.DefaultMaxSymbolToSpacingRatio`) for
+  grids and points: S-111's and S-98's recommended value. The drawn grid-cell
+  diagonal is then at least twice the largest arrow, so arrows never overlap.
+- **Seed point.** The lattice is seeded at the fastest current among the
+  largest arrows in view, not at the first largest arrow in row-major order.
+  The two differ only in tie-breaking: below 2 kn every arrow has the `Slow`
+  size, so a row-major seed would make the drawn lattice jump whenever
+  panning changed the top-left cell. S-98 G-1.1 allows adapting the seed.
+- **Displayed field.** `Lsmax` and the seed are taken over the view grown by
+  half the largest arrow, so arrows whose pivot is just off screen still show.
+- **Point-by-point clearance.** S-111 §9.3.2 does not define "overlap". A kept
+  arrow of length `L` (the longer of the pair) clears a radius of
+  `L / (Rmax · √2)`: the nearest-neighbour spacing of a thinned square grid.
+  Meshes and grids therefore thin to the same minimum spacing, about 1.41
+  arrow lengths, and drawn arrows never overlap. Points are visited fastest
+  first. Thinning runs over every node, not just the visible ones, so the
+  selection changes only with zoom and stays put while panning.
+- **Millimetres to pixels.** Arrow lengths are converted at 96 DPI
+  (`SymbolThinning.PixelsPerMillimetre`), the scale at which Mapsui and
+  Svg.Skia rasterise the millimetre-dimensioned SVGs.
+- **User symbol scale.** `RenderContext.SymbolScale` (the viewer's Symbol
+  Scale slider, `--symbol-scale` on the CLI) multiplies `Href`. Annex H
+  Rule 12 suggests making `Href`/`Sref` user-selectable. Thinning uses the
+  scaled length, so bigger arrows are also spaced further apart.
+- **No extra transparency.** §9.2.6 asks for alpha 0.4 (dusk) and 0.2 (night)
+  over an ENC. The catalogue's dusk and night colours already carry Annex F's
+  luminance reduction, and Rule 4 says to use the catalogue colours, so no
+  further alpha is applied. Doing both would make night arrows all but
+  invisible.
+- **Speed 0.** Band 1 is `[0.00, 0.50)` in `select_arrow.xsl`, so a node with
+  speed exactly 0 is drawn with the band-1 arrow (direction as encoded).
 
 ## Lazy reads
 
