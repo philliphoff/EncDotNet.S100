@@ -48,13 +48,19 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     {
     }
 
+    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher, TimeRefreshProgress progress, ITimelineMapScope scope)
+        : this(service, timeFormat, time, PostToUiThread, refresher, progress, scope)
+    {
+    }
+
     internal TimelineViewModel(
         GlobalTimeService service,
         ITimeFormatProvider? timeFormat,
         TimeProvider time,
         Action<Action> dispatch,
         IForecastRunRefresher? refresher = null,
-        TimeRefreshProgress? progress = null)
+        TimeRefreshProgress? progress = null,
+        ITimelineMapScope? scope = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(time);
@@ -68,6 +74,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         PreviousStepCommand = new RelayCommand(() => StepBy(-1), () => CanStep(StepKind, -1));
         NextStepCommand = new RelayCommand(() => StepBy(+1), () => CanStep(StepKind, +1));
         InitializeNavigation();
+        InitializeLanes(scope);
         NowCommand = new RelayCommand(GoLive, () => IsActive && !IsLive);
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
         CheckForNewRunsCommand = new RelayCommand(() => _refresher?.RefreshForecastSources(), () => _refresher?.HasForecastSources == true);
@@ -158,6 +165,8 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         OnPropertyChanged(nameof(TickFrequency));
         OnPropertyChanged(nameof(AreStepButtonsVisible));
         OnPropertyChanged(nameof(CoverageBands));
+        OnPropertyChanged(nameof(ShowLanes));
+        OnPropertyChanged(nameof(IsInMapView));
         ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
         ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
         RaiseNow();
@@ -166,7 +175,12 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         // already hours old); loading or replacing a run keeps the mode, and a
         // pinned time stays put even when the new data does not cover it (#713).
         if ((becameActive && IsNowInCoverage) || (nowActive && IsLive))
+        {
+            // The axis was laid out around the loaded view time; going live
+            // moves it, so lay it out again around now.
             GoLive();
+            RebuildAxis();
+        }
 
         if (becameActive)
         {
@@ -472,6 +486,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         ((RelayCommand)NowCommand).NotifyCanExecuteChanged();
         ((RelayCommand)CheckForNewRunsCommand).NotifyCanExecuteChanged();
         ((RelayCommand)JumpToDataCommand).NotifyCanExecuteChanged();
+        UpdateLaneTimes();
     }
 
     /// <summary>"now", "in 11 h 30", "5 h ago", "in 2 d 4 h", "25 min ago".</summary>
@@ -546,7 +561,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             {
                 // D4: "30.09 12:00 → 02.10 18:00 UTC · 55 h · cbofs 12:00Z, nyofs 18:00Z · hourly".
                 var runs = Runs;
-                var parts = new List<string>(5)
+                var parts = new List<string>(6)
                 {
                     $"{TimeFormatting.Format(_service.MinTime.Value, fmt)} → {TimeFormatting.Format(_service.MaxTime.Value, fmt)}",
                     Duration(_service.MaxTime.Value - _service.MinTime.Value),
@@ -559,17 +574,20 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
                 }
                 if (StepText() is { } step)
                     parts.Add(step);
+                if (InMapViewCount is { } inView)
+                    parts.Insert(0, inView);
                 if (StepKind == TimelineStepKind.Sample && Driver is { } driver)
                     parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_StepFollowsFormat, DriverLabel(driver), Duration(TimelineStepper.Cadence(driver.Samples))));
                 return string.Join(" · ", parts);
             }
 
-            return string.Format(
+            var range = string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.TimelinePanel_Range,
                 samples.Count,
                 TimeFormatting.Format(_service.MinTime.Value, fmt),
                 TimeFormatting.Format(_service.MaxTime.Value, fmt));
+            return InMapViewCount is { } count ? $"{count} · {range}" : range;
         }
     }
 

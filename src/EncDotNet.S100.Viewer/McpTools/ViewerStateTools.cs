@@ -69,7 +69,21 @@ internal sealed record TimelineStateDto(
     [property: Description("What the Timeline's ‹ › step by: 'ten_minutes', 'hour', 'six_hours', 'day', 'sample', 'boundary' or 'data'.")] string Step,
     [property: Description("The layer whose samples 'sample' steps follow and whose ticks show, or null.")] string? StepDriver,
     [property: Description("The gaps collapsed on the axis, with their length as labelled ('6 wk').")] IReadOnlyList<TimelineGapDto> Gaps,
-    [property: Description("The time-aware layers in Datasets-list order. Layer times settle after the map's time refresh; call await_render_idle after set_view_time before reading them.")] IReadOnlyList<TimelineLayerDto> Layers);
+    [property: Description("The time-aware layers in Datasets-list order. Layer times settle after the map's time refresh; call await_render_idle after set_view_time before reading them.")] IReadOnlyList<TimelineLayerDto> Layers,
+    [property: Description("True while the In map view filter is on: only the layers in the map view are listed and set the axis (set_timeline_view inMapView changes it).")] bool InMapView,
+    [property: Description("'lanes' (one lane per layer) or 'strip' (the single strip); set_timeline_view layout changes it.")] string Layout,
+    [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes);
+
+/// <summary>One lane of the Timeline.</summary>
+[Description("One lane of the Timeline: a time-aware layer on the shared axis.")]
+internal sealed record TimelineLaneDto(
+    [property: Description("Dataset id, as list_datasets reports it.")] string Id,
+    [property: Description("The lane's code, e.g. 'cbofs'.")] string Label,
+    [property: Description("The product group, e.g. 'S-111 Surface currents'.")] string Group,
+    [property: Description("True when listed; false when folded into 'N more outside the map view'.")] bool Listed,
+    [property: Description("Whether the layer's footprint intersects the map view; null when not known yet.")] bool? InMapView,
+    [property: Description("True for a forecast that has ended (grey, Expired tag).")] bool Expired,
+    [property: Description("The layer time as the lane shows it.")] string Time);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
 [Description("A loaded dataset's display state before and after a change.")]
@@ -169,7 +183,10 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.StepDriver,
         [.. state.Gaps.Select(g => new TimelineGapDto(g.From, g.To, TimelineAxisLabels.GapLength(g.Length, CultureInfo.InvariantCulture)))],
         [.. state.Layers.Select(layer => new TimelineLayerDto(
-            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing))]);
+            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing))],
+        state.InMapView,
+        state.CollapsedToStrip ? "strip" : "lanes",
+        [.. state.Lanes.Select(lane => new TimelineLaneDto(lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time))]);
 }
 
 /// <summary>Request for <see cref="SetViewTimeTool"/>.</summary>
@@ -461,7 +478,7 @@ internal sealed class StepTimeTool(IViewerTimelineController timeline)
 }
 
 /// <summary>Request for <see cref="SetTimelineViewTool"/>.</summary>
-internal sealed record SetTimelineViewRequest(string? Preset, string? Zoom, string? Start, string? End);
+internal sealed record SetTimelineViewRequest(string? Preset, string? Zoom, string? Start, string? End, bool? InMapView = null, string? Layout = null);
 
 /// <summary>Changes the window the Timeline's axis shows (MCP <c>set_timeline_view</c>).</summary>
 internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
@@ -477,11 +494,25 @@ internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
         ArgumentNullException.ThrowIfNull(request);
         var hasWindow = !string.IsNullOrWhiteSpace(request.Start) || !string.IsNullOrWhiteSpace(request.End);
         var given = (string.IsNullOrWhiteSpace(request.Preset) ? 0 : 1) + (string.IsNullOrWhiteSpace(request.Zoom) ? 0 : 1) + (hasWindow ? 1 : 0);
-        if (given != 1)
-            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "supply exactly one of preset, zoom, or start and end"));
+        if (given > 1 || (given == 0 && request.InMapView is null && string.IsNullOrWhiteSpace(request.Layout)))
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "supply at most one of preset, zoom, or start and end, and/or inMapView or layout"));
+
+        bool? strip = request.Layout?.Trim().ToLowerInvariant() switch
+        {
+            null or "" => null,
+            "lanes" => false,
+            "strip" => true,
+            _ => (bool?)null,
+        };
+        if (strip is null && !string.IsNullOrWhiteSpace(request.Layout))
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("layout", "expected 'lanes' or 'strip'"));
 
         TimelineViewChange change;
-        if (!string.IsNullOrWhiteSpace(request.Preset))
+        if (given == 0)
+        {
+            change = new TimelineViewChange(null, null, null);
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Preset))
         {
             EncDotNet.S100.Viewer.ViewModels.TimelinePreset? preset = request.Preset.Trim().ToLowerInvariant() switch
             {
@@ -489,11 +520,12 @@ internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
                 "today" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.Today,
                 "next_48h" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.Next48Hours,
                 "this_run" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.ThisRun,
+                "in_view" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.InView,
                 "all_loaded" or "all" => EncDotNet.S100.Viewer.ViewModels.TimelinePreset.AllLoaded,
                 _ => null,
             };
             if (preset is null)
-                return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "expected now_6h, today, next_48h, this_run or all_loaded"));
+                return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "expected now_6h, today, next_48h, this_run, in_view or all_loaded"));
             change = new TimelineViewChange(preset, null, null);
         }
         else if (!string.IsNullOrWhiteSpace(request.Zoom))
@@ -510,6 +542,7 @@ internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
             change = new TimelineViewChange(null, null, (start, end));
         }
 
+        change = change with { InMapView = request.InMapView, CollapsedToStrip = strip };
         var outcome = await _timeline.SetViewAsync(change, ct).ConfigureAwait(false);
         return outcome.Applied
             ? ToolResult<TimelineStateDto>.Ok(GetTimelineStateTool.ToDto(outcome.State))

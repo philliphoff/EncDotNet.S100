@@ -68,16 +68,20 @@ internal static class ViewerStateMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("A window preset: now_6h, today, next_48h, this_run (the run holding the view time) or all_loaded.")] string? preset = null,
+            [Description("A window preset: now_6h, today, next_48h, this_run (the run holding the view time), in_view (the data of the layers in the map view) or all_loaded.")] string? preset = null,
             [Description("'in' halves the window around the view time; 'out' doubles it, up to all loaded.")] string? zoom = null,
             [Description("Start of a custom window, ISO-8601 (with end).")] string? start = null,
             [Description("End of a custom window, ISO-8601 (with start).")] string? end = null,
+            [Description("True lists only the layers whose footprint intersects the map view (they also set the axis; the rest fold into one row); false lists every layer. Omit to leave it.")] bool? inMapView = null,
+            [Description("'lanes' (one lane per layer, grouped by product) or 'strip' (the single strip), as the dock header's Collapse to strip does. Omit to leave it.")] string? layout = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetTimelineViewRequest(preset, zoom, start, end), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetTimelineViewRequest(preset, zoom, start, end, inMapView, layout), ct));
         return Tool(del, SetTimelineViewTool.Name,
-            "Changes the window the live viewer's Timeline axis shows, as its preset menu, mouse wheel and drag do: "
-            + "a preset, a zoom step, or a custom start/end. Supply exactly one. The view time is not changed. Returns "
-            + "the Timeline state, whose 'window', 'preset' and 'gaps' describe the axis. Mutating; viewer-injected tool.");
+            "Changes what the live viewer's Timeline shows, as its preset menu, mouse wheel, drag, In map view checkbox "
+            + "and Collapse to strip do: at most one of a preset, a zoom step or a custom start/end, and/or the In map "
+            + "view filter and the lanes/strip layout (applied first, so a preset follows the filter). The view time is "
+            + "not changed. Returns the Timeline state, whose 'window', 'preset', 'gaps', 'inMapView', 'layout' and "
+            + "'lanes' describe it. Mutating; viewer-injected tool.");
     }
 
     /// <summary>Creates <c>set_dataset_state</c>.</summary>

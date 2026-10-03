@@ -1091,6 +1091,15 @@ internal sealed class MainViewModel : ViewModelBase
         Timeline.CloseRequested += () => IsBottomDockOpen = false;
         // "No data … for N of M layers" opens the dataset list on that layer (#709, handoff D4).
         Timeline.ShowLayerRequested += ShowLayer;
+        // The dock remembers lanes vs strip (#710, handoff E6).
+        Timeline.IsCollapsedToStrip = settings.IsTimelineCollapsedToStrip;
+        Timeline.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(TimelineViewModel.IsCollapsedToStrip) || _settings.IsTimelineCollapsedToStrip == Timeline.IsCollapsedToStrip)
+                return;
+            _settings.IsTimelineCollapsedToStrip = Timeline.IsCollapsedToStrip;
+            _settings.Save();
+        };
 
         // Activity tab registry — partitioned by Dock, ordered by
         // IActivityTab.Order ascending. Left-dock tabs further split into

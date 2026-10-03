@@ -960,6 +960,10 @@ public partial class App : Application
             sp.GetService<IUrlOpener>(),
             sp.GetService<IS100ExaminerLinkBuilder>()));
         services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<Library.LibraryService>()));
+        services.AddSingleton<TimelineMapScope>(sp => new TimelineMapScope(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            sp.GetRequiredService<DatasetsViewModel>()));
+        services.AddSingleton<ITimelineMapScope>(sp => sp.GetRequiredService<TimelineMapScope>());
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();
