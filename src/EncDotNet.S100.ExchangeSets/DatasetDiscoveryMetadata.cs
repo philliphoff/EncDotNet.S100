@@ -227,14 +227,17 @@ public sealed class DatasetDiscoveryMetadata
     /// The maximum is taken so detail remains visible wherever <em>any</em>
     /// coverage region still permits it, matching the S-101 in-file
     /// out-of-scale-band resolution. Drives the hole-safe per-cell zoom-out
-    /// visibility window (issue #438).
+    /// visibility window (issue #438). An inverted per-coverage pair is
+    /// normalised first (see <see cref="EncDotNet.S100.Core.DisplayScaleRange.FromDeclared"/>).
     /// </remarks>
     public int? ResolveMinimumDisplayScale()
     {
         int? result = null;
         foreach (var coverage in DataCoverages)
         {
-            if (coverage.MinimumDisplayScale is not int value || value <= 0)
+            var window = EncDotNet.S100.Core.DisplayScaleRange.FromDeclared(
+                coverage.MinimumDisplayScale, coverage.MaximumDisplayScale);
+            if (window.Minimum is not int value)
                 continue;
             result = result is null ? value : Math.Max(result.Value, value);
         }
@@ -254,13 +257,17 @@ public sealed class DatasetDiscoveryMetadata
     /// Carried for completeness; the zoom-in cutoff it would drive is deferred
     /// to the coverage-clipping work (issue #438 Phase 2) because a naive
     /// whole-cell cutoff would leave holes outside finer cells' footprints.
+    /// An inverted per-coverage pair is normalised first (see
+    /// <see cref="EncDotNet.S100.Core.DisplayScaleRange.FromDeclared"/>).
     /// </remarks>
     public int? ResolveMaximumDisplayScale()
     {
         int? result = null;
         foreach (var coverage in DataCoverages)
         {
-            if (coverage.MaximumDisplayScale is not int value || value <= 0)
+            var window = EncDotNet.S100.Core.DisplayScaleRange.FromDeclared(
+                coverage.MinimumDisplayScale, coverage.MaximumDisplayScale);
+            if (window.Maximum is not int value)
                 continue;
             result = result is null ? value : Math.Min(result.Value, value);
         }

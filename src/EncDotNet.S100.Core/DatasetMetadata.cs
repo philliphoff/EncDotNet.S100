@@ -146,7 +146,34 @@ public sealed record DatasetMetadata
 /// <param name="Minimum">Coarsest display-scale denominator (largest value), or <c>null</c>.</param>
 /// <param name="Maximum">Finest display-scale denominator (smallest value), or <c>null</c>.</param>
 [Description("Display-scale window as coarsest/finest scale denominators.")]
-public readonly record struct DisplayScaleRange(int? Minimum, int? Maximum);
+public readonly record struct DisplayScaleRange(int? Minimum, int? Maximum)
+{
+    /// <summary>
+    /// Builds the window one coverage declares from its raw
+    /// <c>minimumDisplayScale</c> / <c>maximumDisplayScale</c> denominators,
+    /// tolerating an inverted pair.
+    /// </summary>
+    /// <remarks>
+    /// Non-positive denominators are treated as absent. When both bounds are
+    /// present but the declared minimum is the <em>finer</em> scale (smaller
+    /// denominator), the two are swapped so <see cref="Minimum"/> is always
+    /// the coarsest bound. Producers do ship such data (several IHO S-101
+    /// test cells declare <c>minimumDisplayScale = 22000</c> with
+    /// <c>maximumDisplayScale = 90000</c>), and reading it literally would
+    /// hide the whole cell outside a far narrower band than intended.
+    /// </remarks>
+    /// <param name="minimum">The declared <c>minimumDisplayScale</c> denominator, or <c>null</c>.</param>
+    /// <param name="maximum">The declared <c>maximumDisplayScale</c> denominator, or <c>null</c>.</param>
+    /// <returns>The normalised window; both bounds are <c>null</c> when neither is usable.</returns>
+    public static DisplayScaleRange FromDeclared(int? minimum, int? maximum)
+    {
+        int? min = minimum > 0 ? minimum : null;
+        int? max = maximum > 0 ? maximum : null;
+        return min is int lo && max is int hi && lo < hi
+            ? new DisplayScaleRange(hi, lo)
+            : new DisplayScaleRange(min, max);
+    }
+}
 
 /// <summary>
 /// The temporal span a dynamic dataset covers, from its earliest to its
