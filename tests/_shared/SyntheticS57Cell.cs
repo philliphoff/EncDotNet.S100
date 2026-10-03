@@ -31,6 +31,41 @@ internal static class SyntheticS57Cell
     }
 
     /// <summary>
+    /// Writes a copy of the NOAA fixture into <paramref name="directory"/> with
+    /// source errors a validator must report: the second <c>DEPARE</c> feature
+    /// is given the FOID of the first (a duplicate feature object identifier,
+    /// <c>S101-R-2.1</c> once translated) and, when
+    /// <paramref name="zeroCompilationScale"/> is set, the DSPM compilation
+    /// scale is zeroed (<c>S57-R-1.1</c>). Returns the cell's full path.
+    /// </summary>
+    public static string WriteWithSourceErrors(string directory, string fileName, bool zeroCompilationScale = false)
+    {
+        const ushort depareObjl = 42;
+        var document = Iso8211DocumentReader.ReadFromFile(FixturePath());
+
+        // FRID (binary): RCNM b11, RCID b14, PRIM b11, GRUP b11, OBJL b12, …
+        var depthAreas = document.DataRecords
+            .Where(r => r.Fields.FirstOrDefault(f => f.Tag == "FRID") is { } frid
+                && BitConverter.ToUInt16(frid.Data, 7) == depareObjl)
+            .Take(2)
+            .Select(r => r.Fields.First(f => f.Tag == "FOID"))
+            .ToList();
+        // FOID (binary): AGEN b12, FIDN b14, FIDS b12.
+        Array.Copy(depthAreas[0].Data, depthAreas[1].Data, 8);
+
+        if (zeroCompilationScale)
+        {
+            // DSPM (binary): RCNM b11, RCID b14, HDAT b11, VDAT b11, SDAT b11, CSCL b14, …
+            var dspm = document.DataRecords.SelectMany(r => r.Fields).First(f => f.Tag == "DSPM");
+            Array.Clear(dspm.Data, 8, 4);
+        }
+
+        var path = Path.Combine(directory, fileName);
+        Iso8211DocumentWriter.WriteToFile(path, document);
+        return path;
+    }
+
+    /// <summary>
     /// Locates <c>PRSP</c> in a binary-implementation DSID field (S-57 Edition 3.1
     /// Part 3 §7.3.1.1): RCNM (b11), RCID (b14), EXPP (b11), INTU (b11); the
     /// variable-length DSNM, EDTN and UPDN, each closed by a unit terminator;

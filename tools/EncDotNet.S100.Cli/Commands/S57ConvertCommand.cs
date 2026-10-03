@@ -161,6 +161,8 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             table.AddRow("Bridge equipment linked", diagnostics.BridgeEquipmentLinked.ToString());
         if (diagnostics.BridgeCollectionsUnjoined > 0)
             table.AddRow("Bridge collections not joined", diagnostics.BridgeCollectionsUnjoined.ToString());
+        if (diagnostics.DerivedFeatureIdentifiersAssigned > 0)
+            table.AddRow("Derived feature identifiers", diagnostics.DerivedFeatureIdentifiersAssigned.ToString());
 
         table.AddRow(
             "[yellow]Unmapped object classes[/]",
@@ -221,6 +223,7 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             bridgeAggregationsEmitted = diagnostics.BridgeAggregationsEmitted,
             bridgeEquipmentLinked = diagnostics.BridgeEquipmentLinked,
             bridgeCollectionsUnjoined = diagnostics.BridgeCollectionsUnjoined,
+            derivedFeatureIdentifiersAssigned = diagnostics.DerivedFeatureIdentifiersAssigned,
             unmappedObjectClasses = diagnostics.UnmappedObjectClasses
                 .OrderByDescending(p => p.Value)
                 .ToDictionary(p => p.Key.ToString(), p => p.Value),

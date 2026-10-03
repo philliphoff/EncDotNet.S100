@@ -143,6 +143,15 @@ public sealed class S57TranslationDiagnostics
     public int BridgeSpansEmitted { get; internal set; }
 
     /// <summary>
+    /// Number of S-101 features given a derived feature object identifier
+    /// because they come from the same S-57 object as an earlier feature (for
+    /// example the span of a <c>BRIDGE</c>, which follows its <c>Bridge</c>):
+    /// each keeps the agency and <c>FIDN</c> and takes the next unused
+    /// <c>FIDS</c>, so FOIDs stay unique within the dataset.
+    /// </summary>
+    public int DerivedFeatureIdentifiersAssigned { get; internal set; }
+
+    /// <summary>
     /// Number of aggregated <c>Bridge</c> features emitted for S-57
     /// <c>C_AGGR</c> collections of <c>BRIDGE</c> objects (plus any
     /// <c>PYLONS</c> / <c>PONTON</c>, lights and other members) (S-65 Annex B §4.8.10). Each replaces the

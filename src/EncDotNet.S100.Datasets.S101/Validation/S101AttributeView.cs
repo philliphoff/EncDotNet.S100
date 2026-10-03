@@ -43,6 +43,14 @@ public sealed class S101AttributeView
     public ushort Index { get; init; }
 
     /// <summary>
+    /// The ISO 8211 <c>PAIX</c> of the row (S-100 Part 10a): the 1-based
+    /// position, within the same record's attribute rows, of the complex
+    /// attribute row this row is a sub-attribute of, or <c>0</c> when the row
+    /// is bound directly to the feature or information type.
+    /// </summary>
+    public ushort ParentIndex { get; init; }
+
+    /// <summary>
     /// Attribute value as a string. Numeric and enumerated values are
     /// stringified by the parser. The empty string is preserved as
     /// <see cref="string.Empty"/> so rules can distinguish "set but

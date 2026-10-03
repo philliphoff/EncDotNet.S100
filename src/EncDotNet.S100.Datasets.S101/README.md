@@ -127,15 +127,21 @@ var report = S101DatasetRules.Default.Run(view);
 | Rule id            | Severity | Checks                                                                                                              |
 |--------------------|----------|---------------------------------------------------------------------------------------------------------------------|
 | `S101-R-1.1`       | Error    | Feature type code resolves to an FC acronym.                                                                        |
-| `S101-R-1.2`       | Error    | Attribute code resolves AND is bound to the host feature class (walks the FC `SuperType` chain).                    |
+| `S101-R-1.2`       | Error    | Attribute code resolves AND is bound where it sits: a top-level row (`PAIX` 0) to the host feature class (walks the FC `SuperType` chain), a sub-attribute row to the complex attribute its `PAIX` points at. |
 | `S101-R-2.1`       | Error    | FOID uniqueness — one finding per duplicate, with the first occurrence as anchor.                                   |
 | `S101-R-3.1`       | Error    | Spatial associations resolve into the correct record dictionary (point, curve, surface, composite curve).           |
-| `S101-R-3.2`       | Error    | Surface ring closure plus rejection of rings with fewer than three distinct points.                                 |
+| `S101-R-3.2`       | Error    | Surface ring closure plus rejection of rings with fewer than three distinct points. Each ring is walked in its encoded orientation (ring association, composite-curve component and curve). |
 | `S101-R-3.3`       | Error    | Composite curve continuity (end of segment N equals start of segment N+1).                                          |
 | `S101-R-4.1`       | Warning  | Enumerated attribute values fall in the FC-declared domain.                                                         |
 | `S101-R-5.1`       | Warning  | Resolved (lat, lon) coordinates lie in WGS-84 ranges.                                                               |
 | `S101-R-5.2`       | Warning  | Information associations resolve to a known information record.                                                     |
 | `S101-PROJ-PARSE`  | —        | Placeholder reserving the namespace for future parser-diagnostic findings; body intentionally empty.                |
+
+Findings about a feature carry its location — the position of a
+single-point feature, otherwise the WGS-84 envelope of its geometry — and
+geometry findings carry the ring's envelope and the vertex at the gap
+(`S101-R-3.2`) or the discontinuity (`S101-R-3.3`), so map overlays can
+mark them.
 
 The same `S101DatasetRules.Default` entry point is reused by S-57
 post-translation delegation (see

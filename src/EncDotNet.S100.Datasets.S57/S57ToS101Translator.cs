@@ -31,6 +31,26 @@ namespace EncDotNet.S100.Datasets.S57;
 ///   yet performed; string attribute values pass through unchanged.</item>
 /// </list>
 /// </para>
+/// <para>
+/// Complex attributes are emitted in pre-order: the complex's row (empty
+/// value) followed by its sub-attribute rows. Every row's
+/// <see cref="S101Attribute.ParentIndex"/> (ISO 8211 <c>PAIX</c>, S-100
+/// Part 10a) names the 1-based position of its parent complex row in the
+/// same list, or <c>0</c> for a row bound directly to the feature, so the
+/// nesting the Feature Catalogue prescribes is explicit in the output.
+/// </para>
+/// <para>
+/// Feature identifiers: every S-101 feature carries the producing agency,
+/// <c>FIDN</c> and <c>FIDS</c> of the S-57 object it comes from. When one S-57
+/// object yields several S-101 features (a <c>BRIDGE</c> becomes a
+/// <c>Bridge</c> and a <c>SpanFixed</c> / <c>SpanOpening</c>), the primary
+/// feature (the <c>Bridge</c>) keeps the S-57 identifier and the derived one
+/// keeps the agency and <c>FIDN</c> but takes the next <c>FIDS</c> (the S-57
+/// feature identification subdivision, wrapping from 65535 to 0) that no
+/// feature in the translated dataset uses, so feature object identifiers stay
+/// unique. Features of distinct S-57 objects that share a FOID in the source
+/// cell keep it, so validation still reports the source duplicate.
+/// </para>
 /// </remarks>
 public sealed class S57ToS101Translator
 {
@@ -800,6 +820,7 @@ public sealed class S57ToS101Translator
         ctx.TranslateNodes();
         ctx.TranslateEdges();
         ctx.TranslateFeatures();
+        ctx.FinishRecords();
 
         // S57Document.CoordinateMultiplicationFactor / SoundingMultiplicationFactor
         // already supply the documented defaults (10_000_000 and 10).
@@ -889,6 +910,12 @@ public sealed class S57ToS101Translator
         // structure. S-101 binds a light to at most one structure, so a light
         // listed by two bridge collections is linked by the first only.
         private readonly HashSet<uint> _linkedEquipment = new();
+
+        // Record ids of features the translator derives from an S-57 object
+        // that also yields another feature (bridge spans). FinishRecords gives
+        // them a FIDS of their own; repeated FOIDs between features of distinct
+        // S-57 objects are source data and are left for validation to report.
+        private readonly HashSet<uint> _derivedFeatureIds = new();
 
         public Dictionary<uint, S101PointRecord> Points { get; } = new();
         public Dictionary<uint, S101MultiPointRecord> MultiPoints { get; } = new();
@@ -1937,9 +1964,11 @@ public sealed class S57ToS101Translator
             IReadOnlyList<S101SpatialAssociation> spatials)
         {
             if (_diagnostics is not null) _diagnostics.BridgeSpansEmitted++;
+            var recordId = _nextFeatureId++;
+            _derivedFeatureIds.Add(recordId);
             return new S101FeatureRecord
             {
-                RecordId = _nextFeatureId++,
+                RecordId = recordId,
                 FeatureTypeCode = GetOrAssignFeatureTypeCode(span.SpanClass),
                 ProducingAgency = (ushort)feat.RecordName.AgencyCode,
                 FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
@@ -4557,6 +4586,111 @@ public sealed class S57ToS101Translator
             }
 
             return null;
+        }
+
+        // ── Record finishing ────────────────────────────────────────────
+
+        // Final pass over the emitted records: sets each attribute row's PAIX
+        // from the Feature Catalogue nesting (WithParentIndices) and gives a
+        // derived feature (_derivedFeatureIds) whose FOID another feature
+        // already carries the next free FIDS.
+        public void FinishRecords()
+        {
+            var used = new HashSet<(ushort Agency, uint Fidn, ushort Fids)>();
+            var primary = new HashSet<(ushort Agency, uint Fidn, ushort Fids)>();
+            foreach (var f in Features)
+            {
+                var foid = (f.ProducingAgency, f.FeatureIdentificationNumber, f.FeatureIdentificationSubdivision);
+                used.Add(foid);
+                if (!_derivedFeatureIds.Contains(f.RecordId))
+                    primary.Add(foid);
+            }
+
+            var derivedTaken = new HashSet<(ushort Agency, uint Fidn, ushort Fids)>();
+            for (int i = 0; i < Features.Count; i++)
+            {
+                var f = Features[i];
+                var foid = (f.ProducingAgency, f.FeatureIdentificationNumber, f.FeatureIdentificationSubdivision);
+                var fids = f.FeatureIdentificationSubdivision;
+                if (_derivedFeatureIds.Contains(f.RecordId)
+                    && (primary.Contains(foid) || !derivedTaken.Add(foid)))
+                {
+                    fids = NextFreeSubdivision(foid, used);
+                    used.Add((f.ProducingAgency, f.FeatureIdentificationNumber, fids));
+                    derivedTaken.Add((f.ProducingAgency, f.FeatureIdentificationNumber, fids));
+                    if (_diagnostics is not null) _diagnostics.DerivedFeatureIdentifiersAssigned++;
+                }
+
+                Features[i] = new S101FeatureRecord
+                {
+                    RecordId = f.RecordId,
+                    FeatureTypeCode = f.FeatureTypeCode,
+                    ProducingAgency = f.ProducingAgency,
+                    FeatureIdentificationNumber = f.FeatureIdentificationNumber,
+                    FeatureIdentificationSubdivision = fids,
+                    Attributes = WithParentIndices(f.Attributes),
+                    SpatialAssociations = f.SpatialAssociations,
+                    FeatureAssociations = f.FeatureAssociations,
+                    InformationAssociations = f.InformationAssociations,
+                    RecordVersion = f.RecordVersion,
+                    UpdateInstruction = f.UpdateInstruction,
+                };
+            }
+
+            foreach (var (id, info) in InformationTypes.ToList())
+            {
+                InformationTypes[id] = new S101InformationRecord
+                {
+                    RecordId = info.RecordId,
+                    InformationTypeCode = info.InformationTypeCode,
+                    Attributes = WithParentIndices(info.Attributes),
+                    RecordVersion = info.RecordVersion,
+                    UpdateInstruction = info.UpdateInstruction,
+                };
+            }
+        }
+
+        // The FIDS after foid's (wrapping at 65535) that no feature with the
+        // same agency and FIDN uses yet.
+        private static ushort NextFreeSubdivision(
+            (ushort Agency, uint Fidn, ushort Fids) foid,
+            HashSet<(ushort Agency, uint Fidn, ushort Fids)> used)
+        {
+            var candidate = foid.Fids;
+            do
+            {
+                candidate = unchecked((ushort)(candidate + 1));
+            }
+            while (used.Contains((foid.Agency, foid.Fidn, candidate)) && candidate != foid.Fids);
+            return candidate;
+        }
+
+        // Returns rows with ParentIndex (PAIX) set from the Feature Catalogue:
+        // a row is a child of the innermost open complex row whose complex
+        // binds it as a sub-attribute, otherwise it closes that complex and is
+        // tried against the next one out, ending at the top level (PAIX 0). A
+        // complex row opens a new scope. The emitters write complexes in
+        // pre-order and put a feature's own simple attributes before its
+        // complexes (or use attributes no open complex binds), so the
+        // FC-driven reconstruction is unambiguous.
+        private List<S101Attribute> WithParentIndices(IReadOnlyList<S101Attribute> rows)
+        {
+            var result = new List<S101Attribute>(rows.Count);
+            var open = new List<(string Code, ushort Position)>();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var row = rows[i];
+                AttributeTypeCatalogue.TryGetValue(row.NumericCode, out var code);
+                while (open.Count > 0 && !_featureBindings.BindsSubAttribute(open[^1].Code, code))
+                    open.RemoveAt(open.Count - 1);
+
+                var parent = open.Count > 0 ? open[^1].Position : (ushort)0;
+                result.Add(row with { ParentIndex = parent });
+
+                if (code is not null && _featureBindings.IsComplexAttribute(code))
+                    open.Add((code, (ushort)(i + 1)));
+            }
+            return result;
         }
 
         // ── Catalogue interning ─────────────────────────────────────────

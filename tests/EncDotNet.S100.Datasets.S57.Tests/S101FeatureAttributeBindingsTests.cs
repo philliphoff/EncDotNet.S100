@@ -38,4 +38,28 @@ public class S101FeatureAttributeBindingsTests
         Assert.False(s401.Binds("LockBasin", "typeOfShip"));
         Assert.False(s401.DefinesFeatureType("TimeScheduleInGeneral"));
     }
+
+    [Theory]
+    [InlineData("zoneOfConfidence", "categoryOfZoneOfConfidenceInData", true)]
+    [InlineData("zoneOfConfidence", "horizontalPositionUncertainty", true)]
+    [InlineData("horizontalPositionUncertainty", "uncertaintyFixed", true)]
+    [InlineData("featureName", "name", true)]
+    [InlineData("featureName", "categoryOfZoneOfConfidenceInData", false)]
+    [InlineData("name", "language", false)]
+    [InlineData(null, "name", false)]
+    public void BindsSubAttribute_FollowsComplexAttributeBindings(string? complexCode, string attributeCode, bool expected)
+    {
+        Assert.Equal(expected, S101FeatureAttributeBindings.Default.BindsSubAttribute(complexCode, attributeCode));
+    }
+
+    [Theory]
+    [InlineData("zoneOfConfidence", true)]
+    [InlineData("featureName", true)]
+    [InlineData("name", false)]
+    [InlineData("DepthArea", false)]
+    [InlineData(null, false)]
+    public void IsComplexAttribute_RecognisesCatalogueComplexes(string? attributeCode, bool expected)
+    {
+        Assert.Equal(expected, S101FeatureAttributeBindings.Default.IsComplexAttribute(attributeCode));
+    }
 }

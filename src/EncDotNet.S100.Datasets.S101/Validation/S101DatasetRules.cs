@@ -62,7 +62,7 @@ public static class S101DatasetRules
                             "feature type catalogue.",
                         DatasetId = datasetId,
                         RelatedFeatureId = f.FoidKey,
-                    });
+                    }.At(view.Locate(f)));
                 }
                 return findings;
             })
@@ -71,9 +71,11 @@ public static class S101DatasetRules
     /// <summary>
     /// <c>S101-R-1.2</c> — Every attribute on every feature must
     /// resolve through <see cref="S101Document.AttributeTypeCatalogue"/>
-    /// AND its acronym must be a permitted attribute of the host
-    /// feature class per the Feature Catalogue (including inherited
-    /// bindings from any super-type chain).
+    /// AND be bound where it sits: a top-level attribute (<c>PAIX</c> 0)
+    /// must be a permitted attribute of the host feature class per the
+    /// Feature Catalogue (including inherited bindings from any super-type
+    /// chain); a sub-attribute (<c>PAIX</c> &gt; 0) must be a sub-attribute
+    /// binding of the complex attribute its <c>PAIX</c> points at.
     /// </summary>
     /// <remarks>
     /// Spec reference: S-101 Edition 1.2.0 §6, S-100 Part 5 (ISO
@@ -92,6 +94,7 @@ public static class S101DatasetRules
             {
                 var findings = new List<ValidationFinding>();
                 var datasetId = view.Raw.Identification.DatasetName;
+                Dictionary<string, HashSet<string>>? complexBindings = null;
 
                 foreach (var f in view.Features)
                 {
@@ -108,7 +111,7 @@ public static class S101DatasetRules
                                     "which is not declared in the dataset's attribute type catalogue.",
                                 DatasetId = datasetId,
                                 RelatedFeatureId = f.FoidKey,
-                            });
+                            }.At(view.Locate(f)));
                         }
                     }
 
@@ -119,21 +122,47 @@ public static class S101DatasetRules
                     if (permitted is null)
                         continue; // Unknown feature class; R-1.1 already fires.
 
+                    complexBindings ??= CollectComplexSubAttributes(view.Decoder);
                     foreach (var a in f.Attributes)
                     {
                         if (a.Acronym is null) continue;
-                        if (permitted.Contains(a.Acronym)) continue;
+
+                        string? message;
+                        if (a.ParentIndex == 0)
+                        {
+                            if (permitted.Contains(a.Acronym)) continue;
+                            message = $"Feature '{f.FeatureTypeAcronym}' (RCID {f.Raw.RecordId}) carries " +
+                                $"attribute '{a.Acronym}' which is not bound to that feature class in the " +
+                                "S-101 Feature Catalogue.";
+                        }
+                        else
+                        {
+                            var parent = a.ParentIndex <= f.Attributes.Count
+                                ? f.Attributes[a.ParentIndex - 1].Acronym
+                                : null;
+                            if (parent is not null && complexBindings.TryGetValue(parent, out var subs))
+                            {
+                                if (subs.Contains(a.Acronym)) continue;
+                                message = $"Feature '{f.FeatureTypeAcronym}' (RCID {f.Raw.RecordId}) carries " +
+                                    $"attribute '{a.Acronym}' inside complex attribute '{parent}', which does " +
+                                    "not bind it in the S-101 Feature Catalogue.";
+                            }
+                            else
+                            {
+                                message = $"Feature '{f.FeatureTypeAcronym}' (RCID {f.Raw.RecordId}) carries " +
+                                    $"attribute '{a.Acronym}' whose parent index {a.ParentIndex} does not " +
+                                    "point at a complex attribute of the feature.";
+                            }
+                        }
 
                         findings.Add(new ValidationFinding
                         {
                             RuleId = "S101-R-1.2",
                             Severity = ValidationSeverity.Error,
-                            Message = $"Feature '{f.FeatureTypeAcronym}' (RCID {f.Raw.RecordId}) carries " +
-                                $"attribute '{a.Acronym}' which is not bound to that feature class in the " +
-                                "S-101 Feature Catalogue.",
+                            Message = message,
                             DatasetId = datasetId,
                             RelatedFeatureId = f.FoidKey,
-                        });
+                        }.At(view.Locate(f)));
                     }
                 }
 
@@ -178,7 +207,7 @@ public static class S101DatasetRules
                                 $"identifier first used by feature RCID {anchor.Raw.RecordId}.",
                             DatasetId = datasetId,
                             RelatedFeatureId = key,
-                        });
+                        }.At(view.Locate(f)));
                     }
                     else
                     {
@@ -224,7 +253,7 @@ public static class S101DatasetRules
                                 $"(RCNM={sa.RecordName}, RCID={sa.RecordId}) which is not present in the dataset.",
                             DatasetId = datasetId,
                             RelatedFeatureId = f.FoidKey,
-                        });
+                        }.At(view.Locate(f)));
                     }
                 }
                 return findings;
@@ -235,9 +264,10 @@ public static class S101DatasetRules
     /// <c>S101-R-3.2</c> — Every surface record's rings (exterior and
     /// interior) must be closed and contain at least three distinct
     /// vertices. A ring is closed when its constituent curves form a
-    /// cycle (end of the last curve equals start of the first); a
-    /// degenerate ring (fewer than three distinct points) is reported
-    /// regardless of closure per the design note §8.2.
+    /// cycle (end of the last curve equals start of the first), walking
+    /// each curve, composite curve component, and ring association in its
+    /// encoded orientation; a degenerate ring (fewer than three distinct
+    /// points) is reported regardless of closure per the design note §8.2.
     /// </summary>
     /// <remarks>
     /// Spec reference: S-100 Part 10a §4.3.3 (Surface records) and
@@ -329,7 +359,7 @@ public static class S101DatasetRules
                                 "S-101 Feature Catalogue.",
                             DatasetId = datasetId,
                             RelatedFeatureId = f.FoidKey,
-                        });
+                        }.At(view.Locate(f)));
                     }
                 }
                 return findings;
@@ -422,7 +452,7 @@ public static class S101DatasetRules
                                 "the dataset.",
                             DatasetId = datasetId,
                             RelatedFeatureId = f.FoidKey,
-                        });
+                        }.At(view.Locate(f)));
                     }
                 }
                 return findings;
@@ -521,14 +551,32 @@ public static class S101DatasetRules
         return permitted;
     }
 
-    private static (uint cmfX, uint cmfY) EffectiveCmf(S101DatasetStructureInfo si)
+    /// <summary>
+    /// Maps each complex attribute code in the Feature Catalogue to the codes
+    /// of the attributes its sub-attribute bindings permit.
+    /// </summary>
+    private static Dictionary<string, HashSet<string>> CollectComplexSubAttributes(FeatureCatalogueDecoder decoder)
     {
-        // S-100 Part 10a §4.3.1 — CMF defaults to 10^7 when the DSSI
-        // value is zero (i.e. unset).
-        var cmfX = si.CoordinateMultiplicationFactorX == 0 ? 10_000_000u : si.CoordinateMultiplicationFactorX;
-        var cmfY = si.CoordinateMultiplicationFactorY == 0 ? 10_000_000u : si.CoordinateMultiplicationFactorY;
-        return (cmfX, cmfY);
+        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ca in decoder.Catalogue.ComplexAttributes)
+        {
+            if (string.IsNullOrEmpty(ca.Code)) continue;
+            if (!map.TryGetValue(ca.Code, out var subs))
+            {
+                subs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                map[ca.Code] = subs;
+            }
+            foreach (var binding in ca.SubAttributeBindings)
+            {
+                if (!string.IsNullOrEmpty(binding.AttributeRef))
+                    subs.Add(binding.AttributeRef);
+            }
+        }
+        return map;
     }
+
+    private static (uint cmfX, uint cmfY) EffectiveCmf(S101DatasetStructureInfo si)
+        => S101SpatialGeometry.EffectiveCmf(si);
 
     private static GeoPosition ToLatLon(int y, int x, uint cmfY, uint cmfX)
         => new((double)y / cmfY, (double)x / cmfX);
@@ -557,13 +605,11 @@ public static class S101DatasetRules
         List<ValidationFinding> findings)
     {
         var relatedId = $"surf:{surface.RecordId}";
-        var (cmfX, cmfY) = EffectiveCmf(view.Raw.StructureInfo);
+        var cmf = S101SpatialGeometry.EffectiveCmf(view.Raw.StructureInfo);
 
-        var rings = GroupRings(surface);
-        foreach (var ring in rings)
+        foreach (var pts in ResolveRings(view.Raw, surface))
         {
-            var pts = ResolveRingPoints(view, surface, ring, cmfX, cmfY, datasetId, relatedId, findings);
-            if (pts is null) continue;
+            if (pts is null) continue; // Dangling reference — R-3.1 territory.
 
             var distinct = CountDistinct(pts);
             if (distinct < 3)
@@ -574,6 +620,8 @@ public static class S101DatasetRules
                     Severity = ValidationSeverity.Error,
                     Message = $"Surface (RCID {surface.RecordId}) ring has only {distinct} distinct vertex/vertices; " +
                         "a ring requires at least three.",
+                    Point = pts.Count > 0 ? S101SpatialGeometry.ToGeoPosition(pts[0], cmf) : null,
+                    BoundingBox = S101SpatialGeometry.Envelope(pts, cmf),
                     DatasetId = datasetId,
                     RelatedFeatureId = relatedId,
                 });
@@ -582,7 +630,7 @@ public static class S101DatasetRules
 
             var first = pts[0];
             var last = pts[^1];
-            if (Math.Abs(first.X - last.X) > 0 || Math.Abs(first.Y - last.Y) > 0)
+            if (first != last)
             {
                 findings.Add(new ValidationFinding
                 {
@@ -590,6 +638,8 @@ public static class S101DatasetRules
                     Severity = ValidationSeverity.Error,
                     Message = $"Surface (RCID {surface.RecordId}) ring is not closed: first vertex " +
                         $"({first.Y}, {first.X}) ≠ last vertex ({last.Y}, {last.X}).",
+                    Point = S101SpatialGeometry.ToGeoPosition(last, cmf),
+                    BoundingBox = S101SpatialGeometry.Envelope(pts, cmf),
                     DatasetId = datasetId,
                     RelatedFeatureId = relatedId,
                 });
@@ -597,113 +647,48 @@ public static class S101DatasetRules
         }
     }
 
-    private static List<List<S101RingAssociation>> GroupRings(S101SurfaceRecord surface)
+    /// <summary>
+    /// Resolves the rings of a surface to vertex paths. Each RIAS entry
+    /// references a curve or composite curve (S-100 Part 10a §4.3.3); its
+    /// path is walked in the entry's orientation, honouring each composite
+    /// component's own orientation. A ring is normally one entry, but an
+    /// encoding that spreads a ring over consecutive entries of the same
+    /// usage is accepted: entries accumulate into one path until it closes or
+    /// the usage changes. A <c>null</c> path marks a ring with a dangling
+    /// reference.
+    /// </summary>
+    private static IEnumerable<List<(int Y, int X)>?> ResolveRings(S101Document document, S101SurfaceRecord surface)
     {
-        // RIAS lists ring associations consecutively, exterior (USAG=1)
-        // first followed by interior (USAG=2) rings; each ring is a
-        // contiguous run sharing the same Usage value. We don't have
-        // an explicit per-ring delimiter so the simplest grouping is
-        // "split whenever Usage transitions from 1 → 2"; multiple
-        // interior rings (USAG=2) belonging to the same surface would
-        // be encoded by repeated curves in the same run. For ring
-        // closure analysis we evaluate the whole run as one boundary
-        // path — sufficient for v1.
-        var groups = new List<List<S101RingAssociation>>();
-        List<S101RingAssociation>? current = null;
-        byte previousUsage = 0;
+        List<(int Y, int X)>? current = null;
+        bool dangling = false;
+        byte usage = 0;
         foreach (var ra in surface.RingAssociations)
         {
-            if (current is null || ra.Usage != previousUsage)
+            if (current is not null && ra.Usage != usage)
             {
-                current = new List<S101RingAssociation>();
-                groups.Add(current);
-                previousUsage = ra.Usage;
+                yield return dangling ? null : current;
+                current = null;
             }
-            current.Add(ra);
-        }
-        return groups;
-    }
 
-    private static List<(int Y, int X)>? ResolveRingPoints(
-        S101DatasetView view,
-        S101SurfaceRecord surface,
-        List<S101RingAssociation> ring,
-        uint cmfX,
-        uint cmfY,
-        string? datasetId,
-        string relatedId,
-        List<ValidationFinding> findings)
-    {
-        var pts = new List<(int Y, int X)>();
-        foreach (var ra in ring)
-        {
-            var curve = ResolveCurveSegments(view, ra.RecordName, ra.RecordId);
-            if (curve is null)
+            if (current is null)
             {
-                // Dangling spatial reference — R-3.1 owns this finding;
-                // skip the ring entirely to avoid a duplicate report.
-                return null;
+                current = new List<(int Y, int X)>();
+                dangling = false;
+                usage = ra.Usage;
             }
-            AppendCurvePoints(view, curve, ra.Orientation == 2, pts);
-        }
-        _ = (cmfX, cmfY, datasetId, relatedId, findings);
-        return pts;
-    }
 
-    private static IReadOnlyList<S101CurveSegmentRecord>? ResolveCurveSegments(
-        S101DatasetView view, byte recordName, uint recordId)
-    {
-        // A ring component is either a curve (RCNM=120) or a composite
-        // curve (RCNM=125). For composite curves, recursively gather
-        // the underlying curve segments in declared order.
-        if (recordName == 120)
-        {
-            return view.Raw.CurveSegments.TryGetValue(recordId, out var c)
-                ? new[] { c }
-                : null;
-        }
-        if (recordName == 125)
-        {
-            if (!view.Raw.CompositeCurves.TryGetValue(recordId, out var composite)) return null;
-            var list = new List<S101CurveSegmentRecord>();
-            foreach (var cu in composite.CurveComponents)
-            {
-                if (!view.Raw.CurveSegments.TryGetValue(cu.RecordId, out var c)) return null;
-                list.Add(c);
-            }
-            return list;
-        }
-        return null;
-    }
+            if (!S101SpatialGeometry.AppendCurvePath(document, ra.RecordName, ra.RecordId, ra.Orientation == 2, current))
+                dangling = true;
 
-    private static void AppendCurvePoints(
-        S101DatasetView view,
-        IReadOnlyList<S101CurveSegmentRecord> segments,
-        bool reverseRing,
-        List<(int Y, int X)> sink)
-    {
-        // We walk each curve segment in begin→end order and append
-        // begin point, intermediate coordinates, and end point. Per-
-        // segment orientation (forward/reverse) is encoded at the
-        // ring level; for v1 we honour the ring orientation by
-        // reversing the final point sequence if requested. The
-        // segment-level orientation flag is not surfaced through
-        // S101RingAssociation, so segment-level reversal is left to
-        // a v-next refinement.
-        foreach (var seg in segments)
-        {
-            (int Y, int X)? begin = null, end = null;
-            foreach (var pa in seg.PointAssociations)
+            if (!dangling && current.Count > 3 && current[0] == current[^1])
             {
-                if (!view.Raw.Points.TryGetValue(pa.RecordId, out var p)) continue;
-                if (pa.Topology == 1) begin = (p.Y, p.X);
-                else if (pa.Topology == 2) end = (p.Y, p.X);
+                yield return current;
+                current = null;
             }
-            if (begin is { } b) sink.Add(b);
-            foreach (var ic in seg.IntermediateCoordinates) sink.Add((ic.Y, ic.X));
-            if (end is { } e) sink.Add(e);
         }
-        if (reverseRing) sink.Reverse();
+
+        if (current is not null)
+            yield return dangling ? null : current;
     }
 
     private static int CountDistinct(List<(int Y, int X)> pts)
@@ -750,6 +735,7 @@ public static class S101DatasetRules
                     Message = $"Composite curve (RCID {composite.RecordId}) is not continuous at " +
                         $"component index {index}: previous endpoint ({pe.Y}, {pe.X}) ≠ next start " +
                         $"({b.Y}, {b.X}).",
+                    Point = S101SpatialGeometry.ToGeoPosition(pe, S101SpatialGeometry.EffectiveCmf(view.Raw.StructureInfo)),
                     DatasetId = datasetId,
                     RelatedFeatureId = relatedId,
                 });
@@ -758,4 +744,11 @@ public static class S101DatasetRules
             index++;
         }
     }
+
+    /// <summary>
+    /// Returns <paramref name="finding"/> carrying <paramref name="location"/>
+    /// so the finding can be drawn on a map.
+    /// </summary>
+    private static ValidationFinding At(this ValidationFinding finding, S101FindingLocation location)
+        => finding with { Point = location.Point, BoundingBox = location.BoundingBox };
 }
