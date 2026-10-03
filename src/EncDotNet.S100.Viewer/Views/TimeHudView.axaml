@@ -13,16 +13,16 @@
          view time, its offset, ‹ ›, Live and the dock toggle; the status
          message as a chip 8 px above it. -->
     <UserControl.Styles>
-        <!-- F2: the map tool buttons' see-through surface. -->
-        <Style Selector="Border.HudSurface">
-            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
-            <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="Opacity" Value="0.88" />
+        <!-- F4: the chip's amber and red tints. -->
+        <Style Selector="Border.HudTint">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
-        <Style Selector="Border.HudChip.warning">
+        <Style Selector="Border.HudTint.warning">
+            <Setter Property="IsVisible" Value="True" />
             <Setter Property="Background" Value="#D1FFFBEB" />
         </Style>
-        <Style Selector="Border.HudChip.error">
+        <Style Selector="Border.HudTint.error">
+            <Setter Property="IsVisible" Value="True" />
             <Setter Property="Background" Value="#D1FEF2F2" />
         </Style>
         <Style Selector="Border.ModePill">
@@ -85,7 +85,9 @@
     <StackPanel Spacing="8" HorizontalAlignment="Center">
         <!-- F4: the message chip, with the status line's text and action (B3). -->
         <Panel HorizontalAlignment="Center" IsVisible="{Binding HasStatusMessage}">
-            <Border Classes="HudSurface HudChip"
+            <!-- F2: the map tool buttons' see-through surface (as the map stamp). -->
+            <Border Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
+            <Border Classes="HudTint" CornerRadius="10"
                     Classes.warning="{Binding IsStatusWarning}"
                     Classes.error="{Binding IsStatusError}" />
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="12,6">
@@ -108,7 +110,7 @@
 
         <!-- F3: the 40 px bar. -->
         <Panel x:Name="Bar" Height="40" HorizontalAlignment="Center">
-            <Border Classes="HudSurface" />
+            <Border Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0" VerticalAlignment="Center">
                 <!-- Live: a dark pill; pinned: an outlined PINNED label (dropped when tiny). -->
                 <Border Classes="ModePill live"

@@ -642,7 +642,7 @@ carry timestamps. When at least one such dataset is loaded a small
 **Time HUD** appears at the bottom centre of the map: the mode (Live or
 Pinned), the view time and its offset from now, ‹ › steps, Live, and a
 button (or `T`) that opens the **Timeline dock** in its place. Click the
-time and use ← → to step. Below 900 px of map width the dock is
+time and use ← → to step. In a window under 900 px wide the dock is
 unavailable and the HUD is the only control. The dock's
 timeline aggregates every time sample across the loaded datasets
 into a single slider; scrubbing the slider re-renders every

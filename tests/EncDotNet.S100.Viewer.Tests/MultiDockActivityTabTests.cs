@@ -251,7 +251,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
         var time = new GlobalTimeService();
         var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
         var vm = CreateViewModel(new IActivityTab[] { new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom } }, timeline: timeline);
-        vm.MapWidth = 1200;
+        vm.WindowWidth = 1200;
         Assert.False(vm.IsTimeHudVisible);
 
         var t0 = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -271,13 +271,13 @@ public sealed class MultiDockActivityTabTests : IDisposable
         Assert.False(vm.IsTimeHudVisible);
 
         // Under 900 px the dock is hidden (but remembered) and the HUD is the only control.
-        vm.MapWidth = 850;
+        vm.WindowWidth = 850;
         Assert.True(vm.IsBottomDockOpen);
         Assert.False(vm.IsBottomDockShown);
         Assert.True(vm.IsTimeHudVisible);
         Assert.False(vm.ToggleTimelineDockCommand.CanExecute(null));
 
-        vm.MapWidth = 1000;
+        vm.WindowWidth = 1000;
         Assert.True(vm.IsBottomDockShown);
     }
 

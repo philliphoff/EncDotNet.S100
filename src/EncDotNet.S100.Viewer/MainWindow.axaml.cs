@@ -129,6 +129,7 @@ public partial class MainWindow : ShadUI.Window
 
         // The Time HUD and the dock follow the map's width (#712 F5).
         MapArea.SizeChanged += (_, e) => _viewModel.MapWidth = e.NewSize.Width;
+        SizeChanged += (_, e) => _viewModel.WindowWidth = e.NewSize.Width;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The

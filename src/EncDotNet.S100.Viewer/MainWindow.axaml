@@ -500,7 +500,7 @@
                                     Margin="0,4,0,0" />
                 <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
                      bottom centre of the map while its dock is closed (or the
-                     map is too narrow for the dock). -->
+                     window is too narrow for the dock). -->
                 <views:TimeHudView DataContext="{Binding Timeline}"
                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsTimeHudVisible}"
                                    DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleTimelineDockCommand}"
@@ -521,8 +521,7 @@
                             <Binding Path="IsBottomDockShown" />
                         </MultiBinding>
                     </Panel.IsVisible>
-                    <Border Background="{DynamicResource BackgroundColor}"
-                            Opacity="0.78"
+                    <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
                             CornerRadius="6" />
                     <StackPanel Orientation="Horizontal"
                                 Spacing="6"

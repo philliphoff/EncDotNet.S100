@@ -238,44 +238,52 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Below this map width the Timeline dock is unavailable and the Time HUD is the only control (#712, handoff F5).</summary>
-    internal const double DockMinimumMapWidth = 900;
+    /// <summary>Below this window width the Timeline dock is unavailable and the Time HUD is the only control (#712, handoff F5).</summary>
+    internal const double DockMinimumWindowWidth = 900;
 
+    private double _windowWidth = double.PositiveInfinity;
     private double _mapWidth = double.PositiveInfinity;
 
-    /// <summary>The map's width, set by the window as it lays out (#712 F5).</summary>
-    public double MapWidth
+    /// <summary>The window's width, set as it lays out (#712 F5).</summary>
+    public double WindowWidth
     {
-        get => _mapWidth;
+        get => _windowWidth;
         set
         {
-            var wasNarrow = IsMapNarrow;
-            if (SetProperty(ref _mapWidth, value) && wasNarrow != IsMapNarrow)
+            var wasNarrow = IsWindowNarrow;
+            if (SetProperty(ref _windowWidth, value) && wasNarrow != IsWindowNarrow)
                 RaiseTimeSurfaces();
         }
     }
 
-    /// <summary>True when the map is too narrow for the bottom dock (#712 F5).</summary>
-    public bool IsMapNarrow => _mapWidth < DockMinimumMapWidth;
+    /// <summary>The map's width, which the Time HUD fits (it drops the offset, then the PINNED label).</summary>
+    public double MapWidth
+    {
+        get => _mapWidth;
+        set => SetProperty(ref _mapWidth, value);
+    }
+
+    /// <summary>True when the window is too narrow for the bottom dock (#712 F5).</summary>
+    public bool IsWindowNarrow => _windowWidth < DockMinimumWindowWidth;
 
     /// <summary>
-    /// True when the bottom dock is shown: open, and the map wide enough for
-    /// it. A narrow map hides it without forgetting that it was open.
+    /// True when the bottom dock is shown: open, and the window wide enough
+    /// for it. A narrow window hides it without forgetting that it was open.
     /// </summary>
-    public bool IsBottomDockShown => IsBottomDockOpen && !IsMapNarrow;
+    public bool IsBottomDockShown => IsBottomDockOpen && !IsWindowNarrow;
 
     /// <summary>
     /// True when the Time HUD is on the map (#712, handoff F5): something is
-    /// time-aware and the Timeline dock is not shown (closed, or the map too narrow).
+    /// time-aware and the Timeline dock is not shown (closed, or the window too narrow).
     /// </summary>
     public bool IsTimeHudVisible => Timeline.IsActive && !IsBottomDockShown;
 
-    /// <summary>Opens or closes the Timeline dock from the Time HUD; unavailable on a narrow map.</summary>
+    /// <summary>Opens or closes the Timeline dock from the Time HUD; unavailable in a narrow window.</summary>
     public ICommand ToggleTimelineDockCommand { get; private set; } = null!;
 
     private void RaiseTimeSurfaces()
     {
-        OnPropertyChanged(nameof(IsMapNarrow));
+        OnPropertyChanged(nameof(IsWindowNarrow));
         OnPropertyChanged(nameof(IsBottomDockShown));
         OnPropertyChanged(nameof(IsTimeHudVisible));
         (ToggleTimelineDockCommand as RelayCommand)?.NotifyCanExecuteChanged();
@@ -1247,7 +1255,7 @@ internal sealed class MainViewModel : ViewModelBase
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
 
         ToggleTimelineCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen);
-        ToggleTimelineDockCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen, () => !IsMapNarrow);
+        ToggleTimelineDockCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen, () => !IsWindowNarrow);
 
         TogglePickPanelCommand = new RelayCommand(() => IsRightDockOpen = !IsRightDockOpen);
 
