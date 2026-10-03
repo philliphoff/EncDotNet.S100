@@ -234,6 +234,27 @@ internal sealed class TimelineAxisMap
 
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 
+    /// <summary>
+    /// Maps <paramref name="segments"/> onto the axis as bands (a lane's data,
+    /// #710), clipped to the window; a band never narrows below a sliver so a
+    /// short window inside a collapsed gap still shows.
+    /// </summary>
+    public IReadOnlyList<NormalizedCoverageBand> BandsFor(IEnumerable<CoverageSegment> segments)
+    {
+        if (IsDegenerate)
+            return [];
+        var bands = new List<NormalizedCoverageBand>();
+        foreach (var segment in segments)
+        {
+            if (segment.End < _min || segment.Start > _max)
+                continue;
+            var start = ToPosition(segment.Start);
+            var width = Math.Max(ToPosition(segment.End) - start, 0.002);
+            bands.Add(new NormalizedCoverageBand(start, Math.Min(width, 1 - start)));
+        }
+        return bands;
+    }
+
     /// <summary>True when <paramref name="time"/> lies inside a collapsed gap.</summary>
     public bool IsInCollapsedGap(DateTime time) =>
         _spans.Any(span => span.Kind == SpanKind.CollapsedGap && time > span.RealStart && time < span.RealEnd);

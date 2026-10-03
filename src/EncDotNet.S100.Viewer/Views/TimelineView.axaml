@@ -4,6 +4,7 @@
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
              x:Class="EncDotNet.S100.Viewer.Views.TimelineView"
              x:DataType="vm:TimelineViewModel">
 
@@ -52,7 +53,98 @@
         <Style Selector="Button.warning /template/ ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
         </Style>
+        <!-- Lanes (#710, handoff E1–E2). -->
+        <Style Selector="Button.LaneGroup">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.LaneGroup /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.ExpiredTag">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.ExpiredTag TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="FontSize" Value="10.5" />
+        </Style>
+        <Style Selector="TextBlock.LaneTime">
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+        <Style Selector="TextBlock.LaneTime.warning">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
     </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- One lane: label column (swatch, code, sub, tag; layer time below)
+             and its data on the shared axis (handoff E1, E2). -->
+        <DataTemplate x:Key="LaneTemplate" x:DataType="vm:TimelineLaneViewModel">
+            <Grid ColumnDefinitions="248,*"
+                  Height="34"
+                  Background="Transparent"
+                  ToolTip.Tip="{Binding Tooltip}">
+                <DockPanel Grid.Column="0" Margin="14,0,8,0">
+                    <Border DockPanel.Dock="Left"
+                            Width="3"
+                            Margin="0,5,8,5"
+                            CornerRadius="1"
+                            Background="{Binding Swatch}" />
+                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="{Binding Code}"
+                                       MaxWidth="120"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontFamily="Menlo, Consolas, monospace"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <Border DockPanel.Dock="Right"
+                                    Classes="ExpiredTag"
+                                    IsVisible="{Binding IsExpired}">
+                                <TextBlock Text="{x:Static loc:Strings.TimelinePanel_TagExpired}" />
+                            </Border>
+                            <TextBlock Text="{Binding Sub}"
+                                       Margin="6,0,6,0"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                        </DockPanel>
+                        <!-- The layer time; with no data, a click jumps to the nearest data (D3). -->
+                        <TextBlock Classes="LaneTime"
+                                   Classes.warning="{Binding IsHidden}"
+                                   Text="{Binding LayerTime}"
+                                   FontFamily="Menlo, Consolas, monospace"
+                                   FontSize="10.5"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </DockPanel>
+                <views:CoverageBandControl Grid.Column="1"
+                                           Height="12"
+                                           Margin="2,0,2,0"
+                                           VerticalAlignment="Center"
+                                           Fill="{Binding Swatch}"
+                                           TrackBrush="#14808080"
+                                           HatchBrush="#59A1A1AA"
+                                           TickRise="0"
+                                           BandCornerRadius="3"
+                                           Bands="{Binding Bands}"
+                                           Gaps="{Binding Gaps}" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
 
     <Border Background="{DynamicResource BackgroundColor}"
             Padding="12,2"
@@ -163,15 +255,35 @@
                 </Grid>
 
                 <!-- Body: the slider, coverage band and status line. -->
-                <DockPanel LastChildFill="False"
-                           VerticalAlignment="Top">
+                <DockPanel LastChildFill="True">
 
                     <Grid x:Name="AxisArea"
                           DockPanel.Dock="Top"
                           Background="Transparent"
+                          ColumnDefinitions="Auto,*"
                           RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                        <!-- E1: the summary row's label and the In map view
+                             filter (E4), over the lanes' label column. -->
+                        <StackPanel Grid.Column="0"
+                                    Grid.Row="1"
+                                    Grid.RowSpan="4"
+                                    Width="248"
+                                    Spacing="2"
+                                    IsVisible="{Binding ShowLanes}"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SummaryLabel, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="0.6"
+                                       Opacity="0.6" />
+                            <CheckBox IsVisible="{Binding IsInMapViewAvailable}"
+                                      IsChecked="{Binding IsInMapView}"
+                                      Content="{x:Static loc:Strings.TimelinePanel_InMapView}"
+                                      FontSize="12"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineInMapView}" />
+                        </StackPanel>
                         <!-- C5: the overview strip: everything loaded, and the shown window. -->
-                        <views:OverviewStripControl Grid.Row="0"
+                        <views:OverviewStripControl Grid.Row="0" Grid.Column="1"
                                                     Height="6"
                                                     Margin="2,0,2,4"
                                                     Bands="{Binding OverviewBands}"
@@ -180,8 +292,8 @@
                                                     Fill="#59A1A1AA"
                                                     Bracket="{DynamicResource ForegroundColor}" />
                         <!-- A strip for the NOW label (every timeline, A2). -->
-                        <Panel Grid.Row="1" Height="14" />
-                        <Slider Grid.Row="2"
+                        <Panel Grid.Row="1" Grid.Column="1" Height="14" />
+                        <Slider Grid.Row="2" Grid.Column="1"
                                 Foreground="{DynamicResource AccentBrush}"
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"
@@ -194,7 +306,7 @@
                                 TickPlacement="BottomRight"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
                         <!-- C2: the slider's track breaks at each collapsed gap. -->
-                        <views:GapBreakControl Grid.Row="2"
+                        <views:GapBreakControl Grid.Row="2" Grid.Column="1"
                                                Margin="2,0,2,0"
                                                Height="12"
                                                VerticalAlignment="Center"
@@ -204,7 +316,7 @@
                         <!-- Data-coverage band: data filled, collapsed gaps
                              hatched (with their length and ends on hover).
                              Inset by 2px to line up with the slider's track. -->
-                        <views:CoverageBandControl x:Name="Band"
+                        <views:CoverageBandControl x:Name="Band" Grid.Column="1"
                                                    Grid.Row="3"
                                                    Opacity="{Binding BandOpacity}"
                                                    Height="12"
@@ -219,14 +331,14 @@
                                                    Gaps="{Binding Gaps, Mode=OneWay}"
                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCoverageBand}" />
                         <!-- C3: gap, day and 6-hour labels. -->
-                        <views:AxisLabelsControl Grid.Row="4"
+                        <views:AxisLabelsControl Grid.Row="4" Grid.Column="1"
                                                  Height="14"
                                                  Margin="2,3,2,0"
                                                  Labels="{Binding AxisLabels}"
                                                  Foreground="{DynamicResource ForegroundColor}"
                                                  Muted="#A1A1AA" />
                         <!-- The NOW line: a dashed line through the slider and the band. -->
-                        <views:NowMarkerControl Grid.Row="1"
+                        <views:NowMarkerControl Grid.Row="1" Grid.Column="1"
                                                 Grid.RowSpan="3"
                                                 Margin="2,0,2,0"
                                                 Position="{Binding NowPosition}"
@@ -236,7 +348,7 @@
 
                     <!-- Status line (B3): the range on the left; one message
                          with its action on the right. -->
-                    <Grid DockPanel.Dock="Top"
+                    <Grid DockPanel.Dock="Bottom"
                           ColumnDefinitions="*,Auto"
                           Margin="0,4,0,0">
                         <TextBlock Grid.Column="0"
@@ -272,6 +384,81 @@
                                     VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
+
+                    <!-- Lanes (#710, handoff Part E): one per layer, grouped by
+                         product, with NOW and the view time through all of them. -->
+                    <ScrollViewer IsVisible="{Binding ShowLanes}"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Margin="0,4,0,0">
+                        <Grid x:Name="LanesHost"
+                              ColumnDefinitions="248,*"
+                              Background="Transparent">
+                            <StackPanel Grid.ColumnSpan="2">
+                                <ItemsControl ItemsSource="{Binding LaneGroups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:TimelineLaneGroupViewModel">
+                                            <StackPanel>
+                                                <Button Classes="LaneGroup" Command="{Binding ToggleCommand}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+                                                        <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding Count}" Opacity="0.6" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <ItemsControl ItemsSource="{Binding Lanes}"
+                                                              IsVisible="{Binding IsExpanded}"
+                                                              ItemTemplate="{StaticResource LaneTemplate}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- E4: the layers outside the map view, folded into one row. -->
+                                <StackPanel IsVisible="{Binding HasOutsideLanes}">
+                                    <Grid ColumnDefinitions="248,*" Height="28">
+                                        <Button Classes="LaneGroup"
+                                                Command="{Binding ToggleOutsideCommand}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineOutsideMapView}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding IsOutsideExpanded}" />
+                                                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding !IsOutsideExpanded}" />
+                                                <TextBlock Text="{Binding OutsideLabel}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                        <views:CoverageBandControl Grid.Column="1"
+                                                                   Height="10"
+                                                                   Margin="2,0,2,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Fill="#A1A1AA"
+                                                                   TickRise="0"
+                                                                   BandCornerRadius="3"
+                                                                   Bands="{Binding OutsideBands}"
+                                                                   Gaps="{Binding Gaps}"
+                                                                   HatchBrush="#59A1A1AA" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding OutsideLanes}"
+                                                  IsVisible="{Binding IsOutsideExpanded}"
+                                                  Opacity="0.7"
+                                                  ItemTemplate="{StaticResource LaneTemplate}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <!-- E3: NOW (dashed) and the view time (2 px accent) through every lane. -->
+                            <views:NowMarkerControl Grid.Column="1"
+                                                    Margin="2,0,2,0"
+                                                    LabelHeight="0"
+                                                    Position="{Binding NowPosition}"
+                                                    Stroke="{DynamicResource ForegroundColor}" />
+                            <views:NowMarkerControl Grid.Column="1"
+                                                    Margin="2,0,2,0"
+                                                    LabelHeight="0"
+                                                    IsDashed="False"
+                                                    Thickness="2"
+                                                    Opacity="0.55"
+                                                    Position="{Binding SliderValue}"
+                                                    Stroke="{DynamicResource AccentBrush}" />
+                        </Grid>
+                    </ScrollViewer>
                 </DockPanel>
             </DockPanel>
 

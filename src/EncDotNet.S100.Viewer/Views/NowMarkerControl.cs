@@ -25,9 +25,17 @@ internal sealed class NowMarkerControl : Control
     public static readonly StyledProperty<double> LabelHeightProperty =
         AvaloniaProperty.Register<NowMarkerControl, double>(nameof(LabelHeight), 14d);
 
+    /// <summary>True (the default) for a dashed line; false for a solid one (the view-time line through the lanes, #710 E3).</summary>
+    public static readonly StyledProperty<bool> IsDashedProperty =
+        AvaloniaProperty.Register<NowMarkerControl, bool>(nameof(IsDashed), true);
+
+    /// <summary>The line's thickness.</summary>
+    public static readonly StyledProperty<double> ThicknessProperty =
+        AvaloniaProperty.Register<NowMarkerControl, double>(nameof(Thickness), 1d);
+
     static NowMarkerControl()
     {
-        AffectsRender<NowMarkerControl>(PositionProperty, StrokeProperty, LabelProperty, LabelHeightProperty);
+        AffectsRender<NowMarkerControl>(PositionProperty, StrokeProperty, LabelProperty, LabelHeightProperty, IsDashedProperty, ThicknessProperty);
         IsHitTestVisibleProperty.OverrideDefaultValue<NowMarkerControl>(false);
     }
 
@@ -59,6 +67,20 @@ internal sealed class NowMarkerControl : Control
         set => SetValue(LabelHeightProperty, value);
     }
 
+    /// <inheritdoc cref="IsDashedProperty"/>
+    public bool IsDashed
+    {
+        get => GetValue(IsDashedProperty);
+        set => SetValue(IsDashedProperty, value);
+    }
+
+    /// <inheritdoc cref="ThicknessProperty"/>
+    public double Thickness
+    {
+        get => GetValue(ThicknessProperty);
+        set => SetValue(ThicknessProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         base.Render(context);
@@ -67,9 +89,9 @@ internal sealed class NowMarkerControl : Control
         if (double.IsNaN(position) || Stroke is not { } stroke || Bounds.Width <= 0 || Bounds.Height <= 0)
             return;
 
-        var x = Math.Round(Math.Clamp(position, 0, 1) * Bounds.Width) + 0.5;
+        var x = Math.Round(Math.Clamp(position, 0, 1) * Bounds.Width) + (Thickness % 2 == 1 ? 0.5 : 0);
         var top = Math.Min(LabelHeight, Bounds.Height);
-        var pen = new Pen(stroke, 1, new DashStyle([3, 2], 0));
+        var pen = new Pen(stroke, Thickness, IsDashed ? new DashStyle([3, 2], 0) : null);
         context.DrawLine(pen, new Point(x, top), new Point(x, Bounds.Height));
 
         if (string.IsNullOrEmpty(Label))

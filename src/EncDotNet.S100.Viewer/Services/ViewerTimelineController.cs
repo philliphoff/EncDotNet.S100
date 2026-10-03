@@ -91,14 +91,25 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
         ViewerTimelineState? state = null;
         await _dispatch(() =>
         {
-            if (!_time.IsActive)
+            var windowed = change.Preset is not null || change.Zoom is not null || change.Window is not null;
+            if (change.InMapView is not null && !_timeline.IsInMapViewAvailable)
+                reason = "the map view is not available";
+            else if (windowed && !_time.IsActive)
                 reason = "no time-aware dataset is loaded";
-            else if (change.Preset is { } preset)
-                _timeline.ApplyPreset(preset);
-            else if (change.Zoom is { } zoom)
-                _timeline.ZoomBy(zoom > 0 ? 0.5 : 2);
-            else if (change.Window is { } window)
-                _timeline.SetWindow(window.Start, window.End);
+            else
+            {
+                // Lanes and the filter first: the filter decides what a preset spans.
+                if (change.CollapsedToStrip is { } strip)
+                    _timeline.IsCollapsedToStrip = strip;
+                if (change.InMapView is { } inMapView)
+                    _timeline.IsInMapView = inMapView;
+                if (change.Preset is { } preset && !_timeline.ApplyPreset(preset))
+                    reason = preset == TimelinePreset.InView ? "no layer is in the map view" : "there is no run to show";
+                else if (change.Zoom is { } zoom)
+                    _timeline.ZoomBy(zoom > 0 ? 0.5 : 2);
+                else if (change.Window is { } window)
+                    _timeline.SetWindow(window.Start, window.End);
+            }
             state = Snapshot();
         }).ConfigureAwait(false);
         return new ViewTimeOutcome(reason is null, reason, state!);
@@ -155,10 +166,26 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Step = _timeline.StepKind,
             StepDriver = _timeline.Driver?.Name,
             Gaps = _timeline.AxisGaps,
+            InMapView = _timeline.IsInMapView,
+            CollapsedToStrip = _timeline.IsCollapsedToStrip,
+            Lanes = Lanes(),
             Offset = _timeline.OffsetText,
             Message = _timeline.HasStatusMessage ? _timeline.StatusMessage : null,
             MessageAction = _timeline.HasStatusAction ? _timeline.StatusActionText : null,
         };
+    }
+
+    private TimelineLaneState[] Lanes()
+    {
+        string Id(TimelineLaneViewModel lane) =>
+            _datasets.Entries.FirstOrDefault(e => e.Id.Value == lane.DatasetId)?.DisplayName ?? lane.Dataset.Name;
+        var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => new TimelineLaneState(
+            Id(lane), lane.Code, g.Title, true, lane.IsInMapView, lane.IsExpired, lane.LayerTime)));
+        var folded = _timeline.HasOutsideLanes
+            ? _timeline.OutsideLanes.Select(lane => new TimelineLaneState(
+                Id(lane), lane.Code, TimelineViewModel.GroupTitle(lane.Dataset.ProductSpec ?? string.Empty), false, lane.IsInMapView, lane.IsExpired, lane.LayerTime))
+            : [];
+        return [.. listed, .. folded];
     }
 
     private static TimelineLayerState Layer(DatasetEntry entry, DateTime? viewTime)

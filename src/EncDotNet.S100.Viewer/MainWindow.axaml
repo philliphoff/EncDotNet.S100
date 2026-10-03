@@ -477,9 +477,10 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" MinHeight="100" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="150" MinHeight="120"
+                    <!-- 260: room for a few Timeline lanes (#710); a saved height wins. -->
+                    <RowDefinition Height="260" MinHeight="120"
                                    bh:CollapsibleRow.IsVisible="{Binding IsBottomDockOpen}"
-                                   bh:CollapsibleRow.ExpandedHeight="150"
+                                   bh:CollapsibleRow.ExpandedHeight="260"
                                    bh:CollapsibleRow.MinHeightWhenVisible="120"
                                    bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
                 </Grid.RowDefinitions>
@@ -880,7 +881,20 @@
                                         CloseCommand="{Binding CloseDockCommand}"
                                         CloseCommandParameter="Bottom"
                                         CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
-                                        IsVisible="{Binding IsBottomDockOpen}" />
+                                        IsVisible="{Binding IsBottomDockOpen}">
+                    <!-- #710 E6: lanes or the strip, remembered. -->
+                    <views:ApplicationPanel.HeaderContent>
+                        <Button Classes="Ghost"
+                                x:DataType="vm:TimelineViewModel"
+                                DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Timeline}"
+                                IsVisible="{Binding IsActive}"
+                                Command="{Binding ToggleStripCommand}"
+                                Content="{Binding StripToggleLabel}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCollapseToStrip}"
+                                Height="22" MinHeight="0" Padding="6,0"
+                                FontSize="11.5" />
+                    </views:ApplicationPanel.HeaderContent>
+                </views:ApplicationPanel>
             </Grid>
             <GridSplitter Grid.Column="3"
                           Classes="PaneSplitter"

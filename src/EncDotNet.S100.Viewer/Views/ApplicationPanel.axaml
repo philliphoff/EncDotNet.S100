@@ -20,7 +20,7 @@
                              close button line up; title and close button are
                              vertically centered within it. -->
                         <Border DockPanel.Dock="Top" Height="28" Padding="12,0,6,0">
-                            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Stretch">
+                            <Grid ColumnDefinitions="*,Auto,Auto" VerticalAlignment="Stretch">
                                 <TextBlock Grid.Column="0"
                                            Text="{Binding Title,
                                                   RelativeSource={RelativeSource TemplatedParent},
@@ -34,7 +34,11 @@
                                      so hover/pressed come for free) with Padding=0
                                      and a transparent background, sized to a small
                                      glyph. -->
-                                <Button Grid.Column="1"
+                                <ContentPresenter Grid.Column="1"
+                                                  Content="{TemplateBinding HeaderContent}"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,4,0" />
+                                <Button Grid.Column="2"
                                         Width="24"
                                         Height="24"
                                         MinWidth="0"

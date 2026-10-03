@@ -20,10 +20,10 @@ public sealed class TimelineViewTests
     private static void Show(TimelineViewModel timeline)
     {
         var view = new TimelineView { DataContext = timeline };
-        var window = new Window { Content = view, Width = 900, Height = 220 };
+        var window = new Window { Content = view, Width = 900, Height = 320 };
         window.Show();
-        window.Measure(new Size(900, 220));
-        window.Arrange(new Rect(0, 0, 900, 220));
+        window.Measure(new Size(900, 320));
+        window.Arrange(new Rect(0, 0, 900, 320));
         window.Close();
     }
 
@@ -66,4 +66,46 @@ public sealed class TimelineViewTests
             Assert.NotEmpty(timeline.Gaps);
             Assert.Contains(timeline.AxisLabels, l => l.Kind == AxisLabelKind.Gap);
         });
+
+    [Fact]
+    public void Lanes_with_a_folded_row_bind_and_lay_out() =>
+        HeadlessTest.Run(() =>
+        {
+            var service = new GlobalTimeService();
+            var scope = new InViewScope("m0", "m1");
+            var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), scope: scope);
+            var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+            service.ApplySnapshot(new MapsuiMapTimeSnapshot
+            {
+                Minimum = samples[0],
+                Maximum = samples[^1],
+                Current = samples[0],
+                Samples = samples,
+                CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+                Datasets = [.. Enumerable.Range(0, 8).Select(i => new MapsuiMapTimedDataset($"111US00_M{i}OFS_20261002T00Z_US4XX1DD", samples[0], samples[^1])
+                {
+                    DatasetId = $"m{i}",
+                    ProductSpec = "S-111",
+                    Samples = samples,
+                })],
+            });
+            timeline.IsOutsideExpanded = true;
+
+            Show(timeline);
+
+            Assert.True(timeline.ShowLanes);
+            Assert.Equal(2, Assert.Single(timeline.LaneGroups).Count);
+            Assert.Equal(6, timeline.OutsideLanes.Count);
+        });
+
+    private sealed class InViewScope(params string[] inView) : ITimelineMapScope
+    {
+        public event Action? Changed { add { } remove { } }
+
+        public bool? IsInMapView(string datasetId) => inView.Contains(datasetId);
+
+        public void Highlight(string? datasetId, (byte R, byte G, byte B) color = default)
+        {
+        }
+    }
 }

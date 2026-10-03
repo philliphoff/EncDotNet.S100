@@ -3852,6 +3852,58 @@
   <data name="TimelinePanel_PresetCustom" xml:space="preserve">
     <value>Custom</value>
   </data>
+  <data name="TimelinePanel_PresetInView" xml:space="preserve">
+    <value>In view</value>
+  </data>
+  <data name="TimelinePanel_InMapView" xml:space="preserve">
+    <value>In map view</value>
+  </data>
+  <data name="TimelinePanel_InMapViewCountFormat" xml:space="preserve">
+    <value>{0} of {1} layers in map view</value>
+  </data>
+  <data name="TimelinePanel_OutsideMapViewFormat" xml:space="preserve">
+    <value>{0} more outside the map view</value>
+  </data>
+  <data name="TimelinePanel_CollapseToStrip" xml:space="preserve">
+    <value>Collapse to strip</value>
+  </data>
+  <data name="TimelinePanel_ShowLanes" xml:space="preserve">
+    <value>Show lanes</value>
+  </data>
+  <data name="TimelinePanel_TagExpired" xml:space="preserve">
+    <value>Expired</value>
+  </data>
+  <data name="TimelinePanel_LaneRunFormat" xml:space="preserve">
+    <value>{0} run</value>
+  </data>
+  <data name="TimelinePanel_LaneTooltipFormat" xml:space="preserve">
+    <value>{0}
+{1} · {2} → {3}</value>
+  </data>
+  <data name="TimelinePanel_ProductS104" xml:space="preserve">
+    <value>Water level</value>
+  </data>
+  <data name="TimelinePanel_ProductS111" xml:space="preserve">
+    <value>Surface currents</value>
+  </data>
+  <data name="TimelinePanel_ProductS411" xml:space="preserve">
+    <value>Sea ice</value>
+  </data>
+  <data name="TimelinePanel_ProductS412" xml:space="preserve">
+    <value>Weather</value>
+  </data>
+  <data name="TimelinePanel_ProductS413" xml:space="preserve">
+    <value>Weather and wave</value>
+  </data>
+  <data name="Tooltip_TimelineInMapView" xml:space="preserve">
+    <value>Only list the layers in the map view; they set the axis</value>
+  </data>
+  <data name="Tooltip_TimelineCollapseToStrip" xml:space="preserve">
+    <value>Switch between one lane per layer and the single strip</value>
+  </data>
+  <data name="Tooltip_TimelineOutsideMapView" xml:space="preserve">
+    <value>Layers outside the map view; click to list them</value>
+  </data>
   <data name="Tooltip_TimelinePreviousData" xml:space="preserve">
     <value>Previous data, skipping gaps (⌥←)</value>
   </data>

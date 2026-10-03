@@ -24,6 +24,9 @@ internal enum TimelinePreset
     /// <summary>The run (dataset) holding the view time.</summary>
     ThisRun,
 
+    /// <summary>The data of the layers in the map view (#710).</summary>
+    InView,
+
     /// <summary>Everything loaded, and now (the default).</summary>
     AllLoaded,
 
@@ -108,13 +111,17 @@ internal sealed partial class TimelineViewModel
         }
     }
 
-    /// <summary>The loaded range widened to include now and the view time.</summary>
+    /// <summary>
+    /// The loaded range (of the layers in the map view while the In map view
+    /// filter is on, #710) widened to include now and the view time.
+    /// </summary>
     private (DateTime Start, DateTime End)? FullWindow
     {
         get
         {
-            if (_service.MinTime is not { } min || _service.MaxTime is not { } max)
+            if (AxisRange is not { } range)
                 return null;
+            var (min, max) = range;
             var now = Now;
             var start = min < now ? min : now;
             var end = max > now ? max : now;
@@ -164,8 +171,12 @@ internal sealed partial class TimelineViewModel
         var focus = new List<DateTime>(2) { Now };
         if (_service.CurrentTime is { } current)
             focus.Add(current);
-        _axis = new TimelineAxisMap(start, end, _service.CoverageSegments, focus);
-        _overview = new TimelineAxisMap(start < full.Start ? start : full.Start, end > full.End ? end : full.End, _service.CoverageSegments);
+        _axis = new TimelineAxisMap(start, end, AxisCoverage, focus);
+
+        // The overview spans everything loaded, whatever the filter (handoff C5).
+        var overviewStart = Earliest(start, full.Start, _service.MinTime ?? full.Start);
+        var overviewEnd = Latest(end, full.End, _service.MaxTime ?? full.End);
+        _overview = new TimelineAxisMap(overviewStart, overviewEnd, _service.CoverageSegments);
 
         var culture = CultureInfo.CurrentCulture;
         _gaps = [.. _axis.Gaps.Select(g => new NormalizedGap(
@@ -181,8 +192,13 @@ internal sealed partial class TimelineViewModel
         _ticks = DriverTicks(_axis);
     }
 
+    private static DateTime Earliest(params DateTime[] times) => times.Min();
+
+    private static DateTime Latest(params DateTime[] times) => times.Max();
+
     private void RaiseAxis()
     {
+        RebuildLanes();
         OnPropertyChanged(nameof(CoverageBands));
         OnPropertyChanged(nameof(Gaps));
         OnPropertyChanged(nameof(AxisLabels));
@@ -307,11 +323,12 @@ internal sealed partial class TimelineViewModel
 
     /// <summary>
     /// The layer whose samples "Sample of" follows and whose ticks show: the
-    /// one chosen, else the forecast with the coarsest cadence (handoff C6).
+    /// one chosen, else the forecast with the coarsest cadence in view
+    /// (handoff C6).
     /// </summary>
     internal MapsuiMapTimedDataset? Driver =>
         _service.TimedDatasets.FirstOrDefault(d => d.Name == _driverName)
-        ?? TimelineStepper.DefaultDriver(_service.TimedDatasets, IsForecastDataset);
+        ?? TimelineStepper.DefaultDriver(AxisDatasets, IsForecastDataset);
 
     private static bool IsForecastDataset(MapsuiMapTimedDataset dataset) =>
         string.Equals(dataset.ProductSpec, "S-111", StringComparison.OrdinalIgnoreCase)
@@ -371,6 +388,7 @@ internal sealed partial class TimelineViewModel
         TimelinePreset.Today => Strings.TimelinePanel_PresetToday,
         TimelinePreset.Next48Hours => Strings.TimelinePanel_PresetNext48Hours,
         TimelinePreset.ThisRun => Strings.TimelinePanel_PresetThisRun,
+        TimelinePreset.InView => Strings.TimelinePanel_PresetInView,
         TimelinePreset.AllLoaded => Strings.TimelinePanel_PresetAllLoaded,
         _ => Strings.TimelinePanel_PresetCustom,
     };
@@ -384,8 +402,8 @@ internal sealed partial class TimelineViewModel
     /// <summary>The visible window's width on the overview strip (0–1).</summary>
     public double OverviewWindowWidth => _overview is { } o && _axis is { } a ? o.ToPosition(a.End) - o.ToPosition(a.Start) : 1;
 
-    /// <summary>Applies <paramref name="preset"/>.</summary>
-    internal void ApplyPreset(TimelinePreset preset)
+    /// <summary>Applies <paramref name="preset"/>; false when it has nothing to show (no run, no layer in the map view).</summary>
+    internal bool ApplyPreset(TimelinePreset preset)
     {
         var now = Now;
         (DateTime, DateTime)? window = preset switch
@@ -394,14 +412,16 @@ internal sealed partial class TimelineViewModel
             TimelinePreset.Today => Today(now),
             TimelinePreset.Next48Hours => (now, now.AddHours(48)),
             TimelinePreset.ThisRun => ThisRun(),
+            TimelinePreset.InView => InViewWindow(),
             _ => null,
         };
-        if (preset == TimelinePreset.ThisRun && window is null)
-            return;
+        if (preset is TimelinePreset.ThisRun or TimelinePreset.InView && window is null)
+            return false;
         _zoom = window;
         _preset = window is null ? TimelinePreset.AllLoaded : preset;
         RebuildAxis();
         RaiseSteps();
+        return true;
     }
 
     /// <summary>Zooms by <paramref name="factor"/> (below 1 zooms in) around the view time.</summary>
@@ -527,7 +547,7 @@ internal sealed partial class TimelineViewModel
                 ZoomBy(2);
                 return true;
             case Key.D0 or Key.NumPad0:
-                ApplyPreset(TimelinePreset.AllLoaded);
+                _ = ApplyPreset(TimelinePreset.AllLoaded);
                 return true;
             default:
                 return false;

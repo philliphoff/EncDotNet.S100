@@ -457,6 +457,12 @@ internal sealed class ViewerSettings
     public bool IsTimelineVisible { get; set; } = true;
 
     /// <summary>
+    /// Whether the Timeline dock shows the single strip rather than one lane
+    /// per layer ("Collapse to strip", #710 handoff E6). Default <c>false</c>.
+    /// </summary>
+    public bool IsTimelineCollapsedToStrip { get; set; }
+
+    /// <summary>
     /// Whether the Pick Report (Object Information) side panel auto-opens
     /// when a feature is picked. The user can also explicitly hide it via
     /// the View menu.

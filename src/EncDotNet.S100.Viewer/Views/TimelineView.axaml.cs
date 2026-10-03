@@ -33,6 +33,27 @@ public partial class TimelineView : UserControl
             axis.PointerMoved += OnAxisMoved;
             axis.PointerReleased += (_, _) => _panFrom = null;
         }
+        if (this.FindControl<Grid>("LanesHost") is { } lanes)
+        {
+            // Hovering a lane outlines its footprint on the map (#710 E4).
+            lanes.PointerMoved += (_, e) => Timeline?.HoverLane(LaneOf(e.Source));
+            lanes.PointerExited += (_, _) => Timeline?.HoverLane(null);
+            lanes.Tapped += OnLaneTapped;
+        }
+    }
+
+    private static TimelineLaneViewModel? LaneOf(object? source) =>
+        (source as StyledElement)?.DataContext as TimelineLaneViewModel;
+
+    /// <summary>Clicking a lane's "no data" layer time jumps to its nearest data (handoff D3).</summary>
+    private static void OnLaneTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Source is TextBlock { Classes: var classes } text && classes.Contains("LaneTime")
+            && LaneOf(text) is { } lane && lane.JumpCommand.CanExecute(null))
+        {
+            lane.JumpCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
@@ -97,6 +118,19 @@ public partial class TimelineView : UserControl
         menu.Items.Add(Preset(Strings.TimelinePanel_PresetNext48Hours, TimelinePreset.Next48Hours));
         menu.Items.Add(Preset(Strings.TimelinePanel_PresetThisRun, TimelinePreset.ThisRun));
         menu.Items.Add(Preset(Strings.TimelinePanel_PresetAllLoaded, TimelinePreset.AllLoaded));
+        if (timeline.IsInMapViewAvailable)
+        {
+            // #710 E4: In view, and the In map view filter (also beside the lanes' label).
+            menu.Items.Add(Preset(Strings.TimelinePanel_PresetInView, TimelinePreset.InView));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(new MenuItem
+            {
+                Header = Strings.TimelinePanel_InMapView,
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = timeline.IsInMapView,
+                Command = timeline.ToggleInMapViewCommand,
+            });
+        }
         menu.ShowAt(anchor);
     }
 
@@ -117,10 +151,12 @@ public partial class TimelineView : UserControl
 
     private void OnAxisMoved(object? sender, PointerEventArgs e)
     {
-        if (_panFrom is not { } from || Timeline is not { } timeline || sender is not Control axis || axis.Bounds.Width <= 0)
+        // The band spans the axis' track (the lanes' label column is beside it).
+        var track = this.FindControl<CoverageBandControl>("Band");
+        if (_panFrom is not { } from || Timeline is not { } timeline || track is null || track.Bounds.Width <= 0)
             return;
         var at = e.GetPosition(this);
-        timeline.PanBy(-(at.X - from.X) / axis.Bounds.Width);
+        timeline.PanBy(-(at.X - from.X) / track.Bounds.Width);
         _panFrom = at;
     }
 

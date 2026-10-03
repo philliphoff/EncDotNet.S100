@@ -56,6 +56,20 @@ public class ApplicationPanel : ContentControl
         AvaloniaProperty.Register<ApplicationPanel, string?>(nameof(CloseButtonToolTip));
 
     /// <summary>
+    /// Optional controls shown in the title bar before the close button
+    /// (e.g. the Timeline's "Collapse to strip", #710).
+    /// </summary>
+    public static readonly StyledProperty<object?> HeaderContentProperty =
+        AvaloniaProperty.Register<ApplicationPanel, object?>(nameof(HeaderContent));
+
+    /// <inheritdoc cref="HeaderContentProperty"/>
+    public object? HeaderContent
+    {
+        get => GetValue(HeaderContentProperty);
+        set => SetValue(HeaderContentProperty, value);
+    }
+
+    /// <summary>
     /// The panel title. Rendered upper-cased in the title bar.
     /// </summary>
     public string? Title

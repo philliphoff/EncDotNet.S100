@@ -33,18 +33,28 @@ internal interface IViewerTimelineController
     /// </summary>
     Task<ViewTimeOutcome> StepAsync(TimelineStepKind? kind, int direction, int count, CancellationToken ct = default);
 
-    /// <summary>Changes what the axis shows: a preset, a zoom step, or a window.</summary>
+    /// <summary>
+    /// Changes what the axis shows (a preset, a zoom step, or a window) and,
+    /// independently, the In map view filter and lanes vs strip (#710).
+    /// </summary>
     Task<ViewTimeOutcome> SetViewAsync(TimelineViewChange change, CancellationToken ct = default);
 }
 
-/// <summary>A change to the Timeline's window (#708 C5): exactly one of the members is set.</summary>
+/// <summary>A change to the Timeline's window (#708 C5): at most one of the members is set.</summary>
 /// <param name="Preset">A preset to apply.</param>
 /// <param name="Zoom">+1 zooms in (half the span), −1 out (double), around the view time.</param>
 /// <param name="Window">A window to show.</param>
 internal sealed record TimelineViewChange(
     EncDotNet.S100.Viewer.ViewModels.TimelinePreset? Preset,
     int? Zoom,
-    (DateTime Start, DateTime End)? Window);
+    (DateTime Start, DateTime End)? Window)
+{
+    /// <summary>Turns the In map view filter on or off (#710 E4); null leaves it.</summary>
+    public bool? InMapView { get; init; }
+
+    /// <summary>True collapses the dock to the strip, false shows the lanes (#710 E6); null leaves it.</summary>
+    public bool? CollapsedToStrip { get; init; }
+}
 
 /// <summary>The Timeline as the user sees it, plus the time each layer draws.</summary>
 /// <param name="Active">True when at least one time-aware dataset is loaded.</param>
@@ -103,7 +113,26 @@ internal sealed record ViewerTimelineState(
 
     /// <summary>The collapsed gaps on the axis.</summary>
     public IReadOnlyList<AxisGap> Gaps { get; init; } = [];
+
+    /// <summary>True while the In map view filter is on (#710).</summary>
+    public bool InMapView { get; init; }
+
+    /// <summary>True when the dock shows the strip rather than lanes.</summary>
+    public bool CollapsedToStrip { get; init; }
+
+    /// <summary>The lanes: those listed, then those folded outside the map view.</summary>
+    public IReadOnlyList<TimelineLaneState> Lanes { get; init; } = [];
 }
+
+/// <summary>One lane of the Timeline (#710).</summary>
+/// <param name="Id">The dataset id, as <c>list_datasets</c> reports it (else the dataset name).</param>
+/// <param name="Label">The lane's code, e.g. "cbofs".</param>
+/// <param name="Group">The product group, e.g. "S-111 Surface currents".</param>
+/// <param name="Listed">True when listed; false when folded outside the map view.</param>
+/// <param name="InMapView">Whether its footprint intersects the map view; null when unknown.</param>
+/// <param name="Expired">True for a forecast that has ended.</param>
+/// <param name="Time">The layer time as the lane shows it.</param>
+internal sealed record TimelineLaneState(string Id, string Label, string Group, bool Listed, bool? InMapView, bool Expired, string Time);
 
 /// <summary>What one time-aware layer draws at the view time.</summary>
 /// <param name="Id">The dataset id, as <c>list_datasets</c> reports it.</param>
