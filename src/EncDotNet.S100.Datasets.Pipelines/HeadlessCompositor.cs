@@ -315,6 +315,9 @@ public sealed class HeadlessCompositor
                     var (w, e, s, n, nativeToWgs84) = extent.Value;
                     var arrowRenderer = new SkiaCoverageArrowRenderer
                     {
+                        // Without the palette the SCAROW fSCBN{N} colour tokens
+                        // stay unresolved and every arrow draws black.
+                        Palette = arrow.Palette,
                         SymbolProvider = arrow.SymbolProvider,
                         BaseSymbolScale = arrow.BaseSymbolScale,
                     };

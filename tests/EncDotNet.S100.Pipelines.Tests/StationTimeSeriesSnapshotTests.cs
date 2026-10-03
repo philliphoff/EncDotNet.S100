@@ -1,7 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S104.Tests.Fixtures;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -98,7 +97,7 @@ public class StationTimeSeriesSnapshotTests
         var path = WriteS111Fixture();
         try
         {
-            var p = new S111DatasetProcessor(path, new PortrayalCatalogueManager(), IdentityFactory.Instance);
+            var p = new S111DatasetProcessor(path, S111TestCatalogues.Create(), IdentityFactory.Instance);
             _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
             var info = p.GetFeatureInfo("station:S1");
 

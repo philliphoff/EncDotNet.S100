@@ -146,8 +146,20 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
             ValueFieldName = SpeedFieldName,
             RotationFieldName = DirectionFieldName,
             Bands = symbolBands,
+            NominalSymbolLengthMillimetres = NominalArrowLengthMillimetres,
+            MaxSymbolToSpacingRatio = SymbolThinning.DefaultMaxSymbolToSpacingRatio,
         };
     }
+
+    /// <summary>
+    /// The length of a SCAROW arrow at scale 1: 10 mm. S-111 Ed 2.0.0 Figure 9-1
+    /// (and Annex H Rule 1) puts the arrow's tip at y = -5 mm and its tail at
+    /// y = +5 mm; the bundled SCAROW01–09 SVGs use the same path, and the
+    /// catalogue's scale factors (0.40 / 0.20 × speed / 2.60) are
+    /// <c>Href · min(max(Slow, S), Shigh) / Sref</c> (Eqn 9.1) divided by this
+    /// <c>Href</c>. Thinning spaces arrows by this length times their scale.
+    /// </summary>
+    public const double NominalArrowLengthMillimetres = 10.0;
 
     /// <inheritdoc/>
     /// <remarks>Always empty: S-111 is portrayed with arrow symbols only.</remarks>

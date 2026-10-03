@@ -2,7 +2,6 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
 
@@ -27,7 +26,7 @@ public class S111Dcf1ProcessorTests
                     TimeStep("20240101T013000Z", (0.5f, 60f), (0.8f, 120f)),
                 ],
                 declaredInterval: 43_200);
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, new ProjNetCrsTransformFactory());
 
             Assert.Equal(
@@ -66,7 +65,7 @@ public class S111Dcf1ProcessorTests
                 path,
                 [new() { Latitude = 52.88, Longitude = 4.61 }],
                 [TimeStep("20240101T000000Z", (0.3f, 360f))]);
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, new ProjNetCrsTransformFactory());
 
             var report = Assert.IsType<ValidationReport>(processor.Validate());
@@ -91,7 +90,7 @@ public class S111Dcf1ProcessorTests
                 [TimeStep(
                     "20240101T000000Z",
                     (S111CoverageSource.FillValue, S111CoverageSource.FillValue))]);
-            using var catalogues = new PortrayalCatalogueManager();
+            using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, new ProjNetCrsTransformFactory());
 
             var report = Assert.IsType<ValidationReport>(processor.Validate());

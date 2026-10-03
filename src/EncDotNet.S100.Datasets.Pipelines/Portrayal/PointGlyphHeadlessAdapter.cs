@@ -27,12 +27,16 @@ internal static class PointGlyphHeadlessAdapter
             OutlineColor = glyph.OutlineColor,
             OutlineWidth = glyph.OutlineWidth,
             SymbolScale = glyph.SymbolScale,
-            // PointGlyph stores Mapsui's counter-clockwise rotation. Skia's
-            // screen coordinate system uses clockwise-positive rotation.
-            RotationDegrees = -glyph.Rotation,
+            // PointGlyph.Rotation is clockwise on screen (Mapsui's
+            // SymbolRotation convention), as is Skia's RotateDegrees.
+            RotationDegrees = glyph.Rotation,
+            ThinningPriority = glyph.ThinningPriority,
         }).ToArray();
 
-        return new PointGlyphCompositeLayer(glyphs);
+        return subLayer.Thinning is { } thinning
+            ? new PointGlyphCompositeLayer(
+                glyphs, thinning.SymbolLengthPixelsPerScale, thinning.MaxSymbolToSpacingRatio)
+            : new PointGlyphCompositeLayer(glyphs);
     }
 
     public static SKBitmap Render(

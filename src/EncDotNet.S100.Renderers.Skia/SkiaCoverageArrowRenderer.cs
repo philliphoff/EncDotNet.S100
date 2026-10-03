@@ -43,18 +43,10 @@ public sealed class SkiaCoverageArrowRenderer
     public double BaseSymbolScale { get; init; } = 1.0;
 
     /// <summary>
-    /// Target maximum number of arrows along the longest grid axis; the
-    /// renderer strides the grid so no more than roughly
-    /// <c>MaxArrowsPerAxis²</c> arrows are emitted. Set to 0 to disable
-    /// subsampling.
-    /// </summary>
-    public int MaxArrowsPerAxis { get; init; } = 80;
-
-    /// <summary>
-    /// Draws the layer's symbol scheme onto <paramref name="canvas"/>. Each
-    /// selected grid cell becomes one rotated, palette-coloured symbol placed
-    /// at its projected pixel position. No-ops when the layer has no symbol
-    /// scheme.
+    /// Draws the layer's symbol scheme onto <paramref name="canvas"/>. Each grid
+    /// cell that survives thinning becomes one rotated, palette-coloured symbol
+    /// placed at its projected pixel position. No-ops when the layer has no
+    /// symbol scheme.
     /// </summary>
     /// <param name="canvas">Target canvas (already sized / cleared by the caller).</param>
     /// <param name="layer">The styled coverage layer carrying the symbol scheme.</param>
@@ -65,6 +57,13 @@ public sealed class SkiaCoverageArrowRenderer
     /// <param name="project">
     /// Projects an EPSG:3857 (x, y) world coordinate to an output pixel.
     /// </param>
+    /// <remarks>
+    /// Thinning uses the S-98 Appendix G-1.1 grid algorithm
+    /// (<see cref="SymbolThinning.ThinGrid"/>) over the canvas's clip bounds,
+    /// with the same arrow length and <c>Rmax</c> as
+    /// <c>MapsuiCoverageArrowRenderer</c>, so a headless render and the viewer
+    /// draw the same arrows for the same view.
+    /// </remarks>
     public void Draw(
         SKCanvas canvas,
         StyledCoverageLayer layer,
@@ -80,66 +79,67 @@ public sealed class SkiaCoverageArrowRenderer
         if (symbolScheme is null)
             return;
 
-        var sampled = layer.Coverage;
-        var georeferencer = layer.Georeferencer;
-        var valueData = sampled.GetField(symbolScheme.ValueFieldName);
-        var rotationData = sampled.GetField(symbolScheme.RotationFieldName);
-        int srcRows = valueData.GetLength(0);
-        int srcCols = valueData.GetLength(1);
+        var field = CoverageSymbolField.Build(layer, nativeToWgs84);
+        int count = field.X.Length;
+        if (count == 0)
+            return;
 
-        float noDataValue = layer.NoDataValue;
-        bool noDataIsNaN = float.IsNaN(noDataValue);
-
-        int stride = 1;
-        if (MaxArrowsPerAxis > 0)
+        // Thin in output-pixel space.
+        var screenX = new double[count];
+        var screenY = new double[count];
+        for (int i = 0; i < count; i++)
         {
-            int longestAxis = Math.Max(srcRows, srcCols);
-            stride = Math.Max(1, (longestAxis + MaxArrowsPerAxis - 1) / MaxArrowsPerAxis);
+            var (px, py) = project((field.X[i], field.Y[i]));
+            screenX[i] = px;
+            screenY[i] = py;
         }
 
-        for (int r = 0; r < srcRows; r += stride)
-            for (int c = 0; c < srcCols; c += stride)
-            {
-                float value = valueData[r, c];
-                bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
-                if (isNoData) continue;
+        double lengthPerScale = symbolScheme.NominalSymbolLengthMillimetres
+            * SymbolThinning.PixelsPerMillimetre * BaseSymbolScale;
+        float maxScale = 0;
+        foreach (float s in field.Scale)
+        {
+            if (s > maxScale)
+                maxScale = s;
+        }
 
-                float direction = rotationData[r, c];
-                bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
-                if (dirNoData) continue;
+        var clip = canvas.LocalClipBounds;
+        var displayed = new SymbolRect(clip.Left, clip.Top, clip.Right, clip.Bottom)
+            .Inflate(maxScale * lengthPerScale / 2.0);
 
-                var band = symbolScheme.Resolve(value);
-                if (band is null) continue;
+        var selected = new List<int>();
+        SymbolThinning.ThinGrid(
+            field.Rows, field.Cols, screenX, screenY, field.Scale, field.Priority,
+            lengthPerScale, displayed, symbolScheme.MaxSymbolToSpacingRatio, selected);
 
-                var picture = GetPicture(band.SymbolRef);
-                if (picture is null) continue;
+        foreach (int i in selected)
+        {
+            var band = field.Bands[i];
+            if (band is null)
+                continue;
 
-                var (nativeX, nativeY) = georeferencer.ToNative(r, c);
-                double lon, lat;
-                if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
-                else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
-                var (mx, my) = WebMercator.FromLonLat(lon, lat);
-                var (px, py) = project((mx, my));
+            var picture = GetPicture(band.SymbolRef);
+            if (picture is null)
+                continue;
 
-                double bandScale = band.ScaleByValue
-                    ? band.ScaleFactor * value
-                    : band.ScaleFactor;
-                float scale = (float)(BaseSymbolScale * bandScale);
-                if (scale <= 0) continue;
+            float scale = (float)(BaseSymbolScale * field.Scale[i]);
+            if (scale <= 0)
+                continue;
 
-                var bounds = picture.CullRect;
+            var bounds = picture.CullRect;
 
-                canvas.Save();
-                canvas.Translate(px, py);
-                // surfaceCurrentDirection is degrees true (0=N, 90=E), which matches
-                // Skia's clockwise-from-up rotation convention.
-                canvas.RotateDegrees(direction);
-                canvas.Scale(scale);
-                // Centre the symbol's bbox on the (now rotated/scaled) origin.
-                canvas.Translate(-(bounds.Left + bounds.Width / 2f), -(bounds.Top + bounds.Height / 2f));
-                canvas.DrawPicture(picture);
-                canvas.Restore();
-            }
+            canvas.Save();
+            canvas.Translate((float)screenX[i], (float)screenY[i]);
+            // surfaceCurrentDirection is degrees true (0=N, 90=E), which matches
+            // Skia's clockwise-from-up rotation convention.
+            canvas.RotateDegrees(field.Rotation[i]);
+            canvas.Scale(scale);
+            // Centre the symbol's bbox on the (now rotated/scaled) origin: the
+            // SCAROW pivot point (0, 0) is the centre of its viewBox.
+            canvas.Translate(-(bounds.Left + bounds.Width / 2f), -(bounds.Top + bounds.Height / 2f));
+            canvas.DrawPicture(picture);
+            canvas.Restore();
+        }
     }
 
     private SKPicture? GetPicture(string symbolRef)

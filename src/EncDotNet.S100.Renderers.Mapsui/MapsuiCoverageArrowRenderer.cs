@@ -2,12 +2,9 @@ using System.Runtime.CompilerServices;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
-using Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
-using Mapsui.Projections;
 using Mapsui.Styles;
-
-using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 
 [assembly: InternalsVisibleTo("EncDotNet.S100.Datasets.S111.Tests")]
 [assembly: InternalsVisibleTo("EncDotNet.S100.Pipelines.Tests")]
@@ -16,21 +13,18 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Renders oriented symbols (e.g. S-111 current arrows) from a
-/// <see cref="StyledCoverageLayer"/> as one vector <see cref="PointFeature"/>
-/// per selected grid cell.  Each feature carries a Mapsui
+/// <see cref="StyledCoverageLayer"/> as a <see cref="ThinnedSymbolLayer"/>:
+/// one vector <see cref="PointFeature"/> per grid cell that survives
+/// zoom-dependent thinning. Each feature carries a Mapsui
 /// <see cref="ImageStyle"/> that wraps the bundled SVG symbol via the
 /// <c>"svg-content://"</c> URI scheme so Mapsui re-rasterises the symbol
 /// at the active screen DPI on every viewport change.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The previous implementation rasterised every arrow into a single
-/// georeferenced PNG (<see cref="RasterFeature"/>) sized to the dataset
-/// extent.  At low map zoom that bitmap was downscaled (arrows shrank
-/// to a few screen pixels and were hard to read); at high zoom it was
-/// upscaled (arrows pixelated).  Per-feature symbols keep arrows at a
-/// stable on-screen size and sharp at every zoom — the convention used
-/// by ECDIS-style symbology in S-100 Part 9 §11.
+/// Per-feature symbols keep arrows at a stable on-screen size and sharp at
+/// every zoom — S-111 Ed 2.0.0 §9.2.4 sizes arrows in millimetres on the
+/// display, not in ground units.
 /// </para>
 /// <para>
 /// Per-band scaling follows the bundled portrayal catalogue
@@ -38,9 +32,18 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// bands 1-3 share <c>scaleFloor = 0.40</c>, bands 4-8 use
 /// <c>scaleFactorIntermediate = 0.20</c> multiplied by
 /// <c>surfaceCurrentSpeed</c>, and band 9 uses
-/// <c>scaleCeiling = 2.60</c>.  These per-band factors multiply
-/// <see cref="BaseSymbolScale"/> to produce the Mapsui
-/// <see cref="BasePointStyle.SymbolScale"/>.
+/// <c>scaleCeiling = 2.60</c> — Eqn 9.1 with <c>Href</c> = 10 mm,
+/// <c>Sref</c> = 5 kn, <c>Slow</c> = 2 kn and <c>Shigh</c> = 13 kn. These
+/// per-band factors multiply <see cref="BaseSymbolScale"/> to produce the
+/// Mapsui <see cref="BasePointStyle.SymbolScale"/>.
+/// </para>
+/// <para>
+/// Thinning is done per frame by the returned layer, for the resolution it is
+/// drawn at, with the S-98 Appendix G-1.1 grid algorithm (see
+/// <see cref="SymbolThinning.ThinGrid"/>). The arrow length it spaces by is the
+/// scheme's <see cref="CoverageSymbolScheme.NominalSymbolLengthMillimetres"/> ×
+/// band scale × <see cref="BaseSymbolScale"/>, converted at
+/// <see cref="SymbolThinning.PixelsPerMillimetre"/>.
 /// </para>
 /// </remarks>
 public sealed class MapsuiCoverageArrowRenderer
@@ -57,28 +60,6 @@ public sealed class MapsuiCoverageArrowRenderer
     public double Opacity { get; set; } = 1.0;
 
     /// <summary>
-    /// Target maximum number of arrows along the longest grid axis.
-    /// The renderer computes a stride so that no more than roughly
-    /// <c>MaxArrowsPerAxis²</c> arrows are emitted.
-    /// Set to 0 to disable subsampling.
-    /// </summary>
-    public int MaxArrowsPerAxis { get; set; } = 80;
-
-    /// <summary>
-    /// Minimum on-screen spacing, in pixels, between adjacent emitted
-    /// arrows. When the supplied <see cref="PipelineViewport"/> projects
-    /// grid cells closer together than this, the renderer increases the
-    /// subsampling stride so dense grids (or wide multi-dataset extents)
-    /// do not emit overlapping arrows that are illegible and costly to
-    /// draw on every pan frame. Set to 0 to disable viewport-aware
-    /// decimation (the grid-based <see cref="MaxArrowsPerAxis"/> cap still
-    /// applies). The SCAROW symbols rasterise to ~23×42 px at
-    /// <c>SymbolScale = 1.0</c>, so the default keeps roughly one arrow
-    /// per symbol footprint.
-    /// </summary>
-    public double MinArrowSpacingPixels { get; set; } = 14.0;
-
-    /// <summary>
     /// Multiplier applied to each band's scale factor to produce the
     /// Mapsui <see cref="BasePointStyle.SymbolScale"/>.  The bundled SCAROW
     /// SVGs declare <c>width="6mm" height="11mm"</c> with viewBox
@@ -86,7 +67,9 @@ public sealed class MapsuiCoverageArrowRenderer
     /// 23×42 pixels at 96 dpi when <c>SymbolScale = 1.0</c>.  Callers
     /// (typically <c>S111DatasetProcessor</c>) should multiply the
     /// user-facing <c>RenderContext.SymbolScale</c> into this value so
-    /// the Symbol Scale slider continues to affect arrow size.
+    /// the Symbol Scale slider continues to affect arrow size. Thinning
+    /// spaces arrows by their scaled size, so a larger symbol scale also
+    /// draws fewer arrows.
     /// </summary>
     public double BaseSymbolScale { get; set; } = 1.0;
 
@@ -115,165 +98,66 @@ public sealed class MapsuiCoverageArrowRenderer
     }
 
     /// <summary>
-    /// Renders the layer's symbol scheme as one rotated, palette-coloured
-    /// <see cref="PointFeature"/> per selected grid cell.  Returns
-    /// <c>null</c> when the layer has no symbol scheme.
+    /// Renders the layer's symbol scheme as a <see cref="ThinnedSymbolLayer"/>
+    /// of rotated, palette-coloured <see cref="PointFeature"/>s, one per grid
+    /// cell with data. Returns <c>null</c> when the layer has no symbol scheme.
     /// </summary>
-    public ILayer? Render(StyledCoverageLayer layer, PipelineViewport viewport)
+    /// <param name="layer">The styled coverage layer carrying the symbol scheme.</param>
+    public ILayer? Render(StyledCoverageLayer layer)
     {
+        ArgumentNullException.ThrowIfNull(layer);
         var symbolScheme = layer.SymbolScheme;
         if (symbolScheme is null)
             return null;
 
-        var sampled = layer.Coverage;
-        var georeferencer = layer.Georeferencer;
-        var valueData = sampled.GetField(symbolScheme.ValueFieldName);
-        var rotationData = sampled.GetField(symbolScheme.RotationFieldName);
-        int srcRows = valueData.GetLength(0);
-        int srcCols = valueData.GetLength(1);
+        var field = CoverageSymbolField.Build(
+            layer, _transformFactory.Create(layer.Georeferencer.CRS, "EPSG:4326"));
 
-        float noDataValue = layer.NoDataValue;
-        bool noDataIsNaN = float.IsNaN(noDataValue);
+        double lengthPixelsPerScale = symbolScheme.NominalSymbolLengthMillimetres
+            * SymbolThinning.PixelsPerMillimetre * BaseSymbolScale;
 
-        var nativeToWgs84 = _transformFactory.Create(georeferencer.CRS, "EPSG:4326");
-
-        // Subsample so dense grids do not emit hundreds of thousands of
-        // features at zoom-out; matches the spacing the old bitmap path used.
-        int stride = 1;
-        if (MaxArrowsPerAxis > 0)
-        {
-            int longestAxis = Math.Max(srcRows, srcCols);
-            stride = Math.Max(1, (longestAxis + MaxArrowsPerAxis - 1) / MaxArrowsPerAxis);
-        }
-
-        // Viewport-aware decimation: when adjacent cells project closer than
-        // MinArrowSpacingPixels on screen, widen the stride so arrows stay
-        // legible and the per-pan draw cost stays bounded.
-        int viewportStride = ComputeViewportStride(
-            viewport, georeferencer, nativeToWgs84, srcRows, srcCols);
-        stride = Math.Max(stride, viewportStride);
-
-        var features = new List<IFeature>();
-
-        for (int r = 0; r < srcRows; r += stride)
-            for (int c = 0; c < srcCols; c += stride)
-            {
-                float value = valueData[r, c];
-                bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
-                if (isNoData) continue;
-
-                float direction = rotationData[r, c];
-                bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
-                if (dirNoData) continue;
-
-                var band = symbolScheme.Resolve(value);
-                if (band is null) continue;
-
-                var svgSource = GetResolvedSvg(band.SymbolRef);
-                if (svgSource is null) continue;
-
-                // Project grid cell centre to Mercator for the PointFeature.
-                var (nativeX, nativeY) = georeferencer.ToNative(r, c);
-                double lon, lat;
-                if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
-                else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
-                var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-
-                double bandScale = band.ScaleByValue
-                    ? band.ScaleFactor * value
-                    : band.ScaleFactor;
-
-                var feature = new PointFeature(mx, my);
-                feature.Styles.Add(new ImageStyle
-                {
-                    Image = new Image { Source = svgSource, RasterizeSvg = true },
-                    SymbolScale = BaseSymbolScale * bandScale,
-                    // SymbolRotation in Mapsui is degrees clockwise from
-                    // map-up; surfaceCurrentDirection is degrees true (0=N,
-                    // 90=E), which is the same convention.
-                    SymbolRotation = direction,
-                    RotateWithMap = true,
-                    Opacity = (float)Opacity,
-                });
-                features.Add(feature);
-            }
-
-        return new MemoryLayer
+        var thinned = new ThinnedSymbolLayer(
+            field.Rows,
+            field.Cols,
+            field.X,
+            field.Y,
+            field.Scale,
+            field.Priority,
+            lengthPixelsPerScale,
+            symbolScheme.MaxSymbolToSpacingRatio,
+            i => CreateFeature(field, i))
         {
             Name = LayerName,
-            Features = features,
             Style = null,
             Opacity = Opacity,
         };
+        return thinned;
     }
 
-    /// <summary>
-    /// Computes the additional subsampling stride needed so adjacent grid
-    /// cells project at least <see cref="MinArrowSpacingPixels"/> apart in
-    /// the supplied <paramref name="viewport"/>. Returns 1 (no extra
-    /// decimation) when spacing cannot be determined or decimation is
-    /// disabled.
-    /// </summary>
-    private int ComputeViewportStride(
-        PipelineViewport viewport,
-        GridGeoreferencer georeferencer,
-        ICrsTransform nativeToWgs84,
-        int srcRows,
-        int srcCols)
+    private PointFeature? CreateFeature(CoverageSymbolField field, int index)
     {
-        if (MinArrowSpacingPixels <= 0 || srcRows < 2 || srcCols < 2)
-            return 1;
+        var band = field.Bands[index];
+        if (band is null)
+            return null;
 
-        (double Lon, double Lat) ToLonLat(int r, int c)
+        var svgSource = GetResolvedSvg(band.SymbolRef);
+        if (svgSource is null)
+            return null;
+
+        var feature = new PointFeature(field.X[index], field.Y[index]);
+        feature.Styles.Add(new ImageStyle
         {
-            var (nx, ny) = georeferencer.ToNative(r, c);
-            if (nativeToWgs84.IsIdentity)
-                return (nx, ny);
-            var (lon, lat) = nativeToWgs84.Transform(nx, ny);
-            return (lon, lat);
-        }
-
-        var origin = ToLonLat(0, 0);
-        var alongCol = ToLonLat(0, 1);
-        var alongRow = ToLonLat(1, 0);
-
-        double cellLonStepDeg = Math.Abs(alongCol.Lon - origin.Lon);
-        double cellLatStepDeg = Math.Abs(alongRow.Lat - origin.Lat);
-
-        return ViewportStride(viewport, cellLonStepDeg, cellLatStepDeg, MinArrowSpacingPixels);
-    }
-
-    /// <summary>
-    /// Pure helper: given the per-cell longitude/latitude step (degrees)
-    /// and a target minimum on-screen arrow spacing in pixels, returns the
-    /// stride (≥ 1) that keeps adjacent emitted arrows at least that far
-    /// apart in <paramref name="viewport"/>.
-    /// </summary>
-    internal static int ViewportStride(
-        PipelineViewport viewport,
-        double cellLonStepDeg,
-        double cellLatStepDeg,
-        double minSpacingPixels)
-    {
-        if (minSpacingPixels <= 0)
-            return 1;
-
-        double lonSpan = viewport.LongitudeSpan;
-        double latSpan = viewport.LatitudeSpan;
-        if (lonSpan <= 0 || latSpan <= 0 || viewport.WidthPixels <= 0 || viewport.HeightPixels <= 0)
-            return 1;
-
-        double pxPerLon = viewport.WidthPixels / lonSpan;
-        double pxPerLat = viewport.HeightPixels / latSpan;
-
-        double cellPx = Math.Sqrt(
-            (cellLonStepDeg * pxPerLon) * (cellLonStepDeg * pxPerLon) +
-            (cellLatStepDeg * pxPerLat) * (cellLatStepDeg * pxPerLat));
-
-        if (cellPx <= 0 || double.IsNaN(cellPx) || double.IsInfinity(cellPx))
-            return 1;
-
-        return Math.Max(1, (int)Math.Ceiling(minSpacingPixels / cellPx));
+            Image = new Image { Source = svgSource, RasterizeSvg = true },
+            SymbolScale = BaseSymbolScale * field.Scale[index],
+            // SymbolRotation in Mapsui is degrees clockwise from map-up;
+            // surfaceCurrentDirection is degrees true (0=N, 90=E), which is
+            // the same convention (S-111 §9.2.2: a Mercator display preserves
+            // angles, so no further correction is needed).
+            SymbolRotation = field.Rotation[index],
+            RotateWithMap = true,
+            Opacity = (float)Opacity,
+        });
+        return feature;
     }
 
     /// <summary>
