@@ -364,7 +364,7 @@ internal sealed partial class TimelineViewModel
             if (tiled is { } tile)
                 parts.Add(tile.Tile);
             if (run is { FromIssueTime: false } known)
-                parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, known.Time.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z"));
+                parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, ForecastRunNames.FormatRun(known.Time, format, zone, now)));
             if (TimelineStepper.Cadence(dataset.Samples) is { } cadence && cadence > TimeSpan.Zero)
                 parts.Add(Duration(cadence));
             lane.Sub = string.Join(" · ", parts);

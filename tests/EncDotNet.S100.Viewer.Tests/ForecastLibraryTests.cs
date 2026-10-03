@@ -57,13 +57,13 @@ public sealed class ForecastLibraryTests : IDisposable
         },
     };
 
-    private async Task<LibraryPanelViewModel> PanelAsync(Services.GlobalTimeService? viewTime = null)
+    private async Task<LibraryPanelViewModel> PanelAsync(Services.GlobalTimeService? viewTime = null, Services.ITimeFormatProvider? timeFormat = null)
     {
         _library.Initialize();
         _library.AddCollection("S-111", [new S100ForecastFeedSource(Guid.NewGuid(), null, ModelsUri, [Cbofs, Nyofs])]);
         await _library.WhenIdle();
         var panel = new LibraryPanelViewModel(
-            _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time, viewTime: viewTime);
+            _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time, viewTime: viewTime, timeFormat: timeFormat);
         panel.Sync();
         panel.SelectedNode = Source(panel);
         return panel;
@@ -361,6 +361,40 @@ public sealed class ForecastLibraryTests : IDisposable
         Assert.Equal(at is null ? null : DateTime.Parse(at, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal), query.ValidAt);
         Assert.NotNull(McpTools.QueryLibraryItemsTool.Parse(
             new McpTools.QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, "soon")).Error);
+    }
+
+    [Fact]
+    public async Task Run_times_follow_the_users_Local_or_UTC_setting()
+    {
+        var format = new SwitchableFormat { Current = TimeFormat.Local };
+        var tokyo = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+        _time.SetLocalTimeZone(tokyo);
+        using var panel = await PanelAsync(timeFormat: format);
+        var cbofs = Model(panel, "cbofs");
+        var local = TimeZoneInfo.ConvertTimeFromUtc(Run.UtcDateTime, tokyo);
+        var c = System.Globalization.CultureInfo.CurrentCulture;
+
+        Assert.Contains($"run {local.ToString("d", c)} {local.ToString("t", c)}", cbofs.Summary, StringComparison.Ordinal);
+
+        var changed = new List<string?>();
+        cbofs.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        format.Switch(TimeFormat.Utc);
+
+        Assert.Contains(nameof(LibraryItemViewModel.Summary), changed);
+        Assert.Contains($"run {Run.UtcDateTime.ToString("d", c)} 18:00Z", cbofs.Summary, StringComparison.Ordinal);
+    }
+
+    private sealed class SwitchableFormat : Services.ITimeFormatProvider
+    {
+        public TimeFormat Current { get; set; }
+
+        public event Action<TimeFormat>? TimeFormatChanged;
+
+        public void Switch(TimeFormat format)
+        {
+            Current = format;
+            TimeFormatChanged?.Invoke(format);
+        }
     }
 
     private sealed class RunIndexer : ICollectionSourceIndexer

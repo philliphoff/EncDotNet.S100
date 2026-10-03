@@ -40,6 +40,21 @@ internal static class ForecastRuns
     public static string FormatRun(DateTimeOffset time) =>
         time.UtcDateTime.ToString("d", CultureInfo.CurrentCulture) + " " + time.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z";
 
+    /// <summary>
+    /// A run time as the user reads it (#730): "30.09.2026 12:00Z" in UTC, the
+    /// local date and short time ("30.09.2026 05:00") in Local.
+    /// </summary>
+    /// <param name="time">The run time.</param>
+    /// <param name="format">The user's Local/UTC setting.</param>
+    /// <param name="zone">The machine's zone.</param>
+    public static string FormatRun(DateTimeOffset time, TimeFormat format, TimeZoneInfo zone)
+    {
+        if (format == TimeFormat.Utc)
+            return FormatRun(time);
+        var local = TimeZoneInfo.ConvertTimeFromUtc(time.UtcDateTime, zone);
+        return local.ToString("d", CultureInfo.CurrentCulture) + " " + local.ToString("t", CultureInfo.CurrentCulture);
+    }
+
     /// <summary>"39 h left" / "4 d left" before <paramref name="end"/>, "Ended 9 h ago" after it.</summary>
     public static string TimeLeft(DateTimeOffset end, DateTimeOffset now) => TimeLeft(end - now);
 

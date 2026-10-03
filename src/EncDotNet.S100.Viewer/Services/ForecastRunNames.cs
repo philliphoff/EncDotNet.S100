@@ -67,7 +67,35 @@ internal static partial class ForecastRunNames
         return dataset.IssueTime is { } issued ? new ForecastRun(model, issued, FromIssueTime: true) : null;
     }
 
-    /// <summary>"cbofs 12:00Z": <see cref="RunOf"/> as the Timeline lists runs.</summary>
+    /// <summary>
+    /// A run time as the user reads it (#730): <c>18:00Z</c> in UTC, the local
+    /// short time otherwise (both as the layer times read), with the day
+    /// (<c>03.10 18:00Z</c>) when the run is more than
+    /// <see cref="LayerTimes.DateThreshold"/> from <paramref name="now"/>.
+    /// </summary>
+    /// <param name="utc">The run time (UTC).</param>
+    /// <param name="format">The user's Local/UTC setting.</param>
+    /// <param name="zone">The machine's zone.</param>
+    /// <param name="now">Now; null always adds the day.</param>
+    public static string FormatRun(DateTime utc, TimeFormat format, TimeZoneInfo zone, DateTime? now)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        var clock = LayerTimes.Clock(utc, format, zone, culture);
+        return now is { } at && (utc - at).Duration() <= LayerTimes.DateThreshold
+            ? clock
+            : $"{LayerTimes.Day(utc, zone, culture)} {clock}";
+    }
+
+    /// <summary>"cbofs 13:00" (Local) or "cbofs 18:00Z" (UTC): <see cref="RunOf"/> as the user reads it.</summary>
+    /// <param name="dataset">The loaded dataset.</param>
+    /// <param name="library">What the Library knows, if anything.</param>
+    /// <param name="format">The user's Local/UTC setting.</param>
+    /// <param name="zone">The machine's zone.</param>
+    /// <param name="now">Now, to leave out the day of a recent run.</param>
+    public static string? Describe(EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset dataset, IReadOnlyList<LibraryTimedEntry>? library, TimeFormat format, TimeZoneInfo zone, DateTime now) =>
+        RunOf(dataset, library) is { } run ? $"{run.Model} {FormatRun(run.Time, format, zone, now)}" : null;
+
+    /// <summary>"cbofs 12:00Z": <see cref="RunOf"/> in UTC, as agents read runs whatever the user's setting.</summary>
     public static string? Describe(EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset dataset, IReadOnlyList<LibraryTimedEntry>? library = null) =>
         RunOf(dataset, library) is { } run ? $"{run.Model} {run.Time.ToString("HH:mm", CultureInfo.InvariantCulture)}Z" : null;
 

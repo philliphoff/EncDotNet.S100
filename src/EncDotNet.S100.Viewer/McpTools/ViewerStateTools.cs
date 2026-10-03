@@ -56,7 +56,7 @@ internal sealed record TimelineStateDto(
     [property: Description("Latest loaded sample, UTC ISO-8601, or null.")] DateTime? Maximum,
     [property: Description("Number of distinct loaded samples across all layers.")] int SampleCount,
     [property: Description("Merged windows in which some layer draws; the spaces between them are gaps.")] IReadOnlyList<TimeWindowDto> Coverage,
-    [property: Description("Forecast runs loaded, e.g. 'cbofs 12:00Z'.")] IReadOnlyList<string> Runs,
+    [property: Description("Forecast runs loaded, e.g. 'cbofs 12:00Z': always UTC, whatever the user's Local/UTC display setting (the summary shows them as the user reads them).")] IReadOnlyList<string> Runs,
     [property: Description("True when now lies inside a loaded window (some layer has data now).")] bool NowInCoverage,
     [property: Description("True when every loaded forecast has ended.")] bool ForecastEnded,
     [property: Description("The Timeline's time readout as displayed (user's Local/UTC setting).")] string Readout,

@@ -474,6 +474,69 @@ public sealed class TimelineLanesTests
         public void Reveal(LibraryTimedEntry entry) => Revealed = entry;
     }
 
+    // ── run times follow the user's setting (#730) ─────────────────────
+
+    [Fact]
+    public void Run_times_read_one_way_on_every_lane_and_follow_the_setting()
+    {
+        var older = Run.AddHours(-6);
+        var service = new GlobalTimeService();
+        var format = new SwitchableFormat { Current = TimeFormat.Local };
+        var clock = new FakeTimeProvider(new DateTimeOffset(Run.AddHours(1)));
+        var eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        clock.SetLocalTimeZone(eastern);
+        var library = new FakeLibrary
+        {
+            Entries =
+            [
+                Entry("111US00_CBOFS_US4MD1DD", older, 48, LibraryTimedState.Loaded, Chesapeake),
+                Entry("111US00_DBOFS_US4DE1AD", Run, 48, LibraryTimedState.Online, Delaware),
+            ],
+        };
+        var timeline = new TimelineViewModel(service, format, clock, action => action(), scope: new FakeScope { Unknown = true }, library: library);
+        Load(service, Model("cbofs", older) with { Name = "111US00_CBOFS_US4MD1DD" });
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        string Local(DateTime utc) => LayerTimes.Clock(utc, TimeFormat.Local, eastern, culture);
+
+        var cbofs = timeline.LaneGroups[0].Lanes[0];
+        var dbofs = timeline.LaneGroups[0].Lanes[1];
+        Assert.Contains($"{Local(older)} run", cbofs.Sub, StringComparison.Ordinal);
+        Assert.Equal($"{Local(Run)} run", dbofs.LayerTime);
+        Assert.Equal($"dbofs · {Local(Run)} run", dbofs.ActionTitle);
+        Assert.Equal([$"cbofs {Local(older)}"], timeline.DisplayRuns);
+        Assert.Equal(["cbofs 12:00Z"], timeline.Runs);
+
+        format.Switch(TimeFormat.Utc);
+
+        Assert.Contains("12:00Z run", cbofs.Sub, StringComparison.Ordinal);
+        Assert.Equal("18:00Z run", dbofs.LayerTime);
+        Assert.Equal(["cbofs 12:00Z"], timeline.DisplayRuns);
+        Assert.Equal(["cbofs 12:00Z"], timeline.Runs);
+    }
+
+    [Fact]
+    public void A_run_far_from_now_carries_its_day()
+    {
+        var far = ForecastRunNames.FormatRun(Run, TimeFormat.Utc, TimeZoneInfo.Utc, Run.AddDays(3));
+
+        Assert.EndsWith(" 18:00Z", far, StringComparison.Ordinal);
+        Assert.NotEqual("18:00Z", far);
+        Assert.Equal("18:00Z", ForecastRunNames.FormatRun(Run, TimeFormat.Utc, TimeZoneInfo.Utc, Run.AddHours(5)));
+    }
+
+    private sealed class SwitchableFormat : ITimeFormatProvider
+    {
+        public TimeFormat Current { get; set; }
+
+        public event Action<TimeFormat>? TimeFormatChanged;
+
+        public void Switch(TimeFormat format)
+        {
+            Current = format;
+            TimeFormatChanged?.Invoke(format);
+        }
+    }
+
     private sealed class UtcFormat : ITimeFormatProvider
     {
         public TimeFormat Current => TimeFormat.Utc;

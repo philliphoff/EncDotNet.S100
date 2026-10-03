@@ -54,6 +54,7 @@ internal sealed record LibraryForecastCounts(int Models, int Local, int NewerRun
 internal sealed class LibraryNodeViewModel : ViewModelBase
 {
     private readonly Func<CollectionSource, FeedHealth?>? _health;
+    private readonly Func<TimeFormat>? _timeFormat;
     private LibraryCollection _collection;
     private LibrarySource? _source;
     private SourceIndexGroup? _group;
@@ -65,11 +66,13 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private string _renameText = string.Empty;
 
     private LibraryNodeViewModel(
-        LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health, SourceIndexGroup? group = null)
+        LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health, SourceIndexGroup? group = null,
+        Func<TimeFormat>? timeFormat = null)
     {
         _collection = collection;
         _source = source;
         _health = health;
+        _timeFormat = timeFormat;
         _group = group;
         if (source is not null && group is null)
             SyncGroups();
@@ -78,12 +81,21 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// <summary>Creates a collection node with a child per source.</summary>
     /// <param name="collection">The collection.</param>
     /// <param name="health">How a shared feed's server last answered, for its status line.</param>
-    public static LibraryNodeViewModel ForCollection(LibraryCollection collection, Func<CollectionSource, FeedHealth?>? health = null)
+    /// <param name="timeFormat">The user's Local/UTC setting, for run times (#730); UTC when null.</param>
+    public static LibraryNodeViewModel ForCollection(LibraryCollection collection, Func<CollectionSource, FeedHealth?>? health = null, Func<TimeFormat>? timeFormat = null)
     {
-        var node = new LibraryNodeViewModel(collection, null, health);
+        var node = new LibraryNodeViewModel(collection, null, health, timeFormat: timeFormat);
         foreach (var source in collection.Sources)
-            node.Children.Add(new LibraryNodeViewModel(collection, source, health));
+            node.Children.Add(new LibraryNodeViewModel(collection, source, health, timeFormat: timeFormat));
         return node;
+    }
+
+    /// <summary>Re-reads the status line after the user's Local/UTC setting changed (#730).</summary>
+    internal void RefreshTimeFormat()
+    {
+        RaiseStatus();
+        foreach (var child in Children)
+            child.RefreshTimeFormat();
     }
 
     /// <summary>The source nodes of a collection node; a manifest source's group nodes; otherwise empty.</summary>
@@ -285,7 +297,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
-            return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c);
+            return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c, _timeFormat?.Invoke() ?? TimeFormat.Utc);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
             return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), _catalogueCounts, c);
         if (problems > 0)
@@ -362,7 +374,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// (green), "Latest runs 30.09 18:00Z · nothing local" (grey), or offline.
     /// </summary>
     private static (string, LibraryNodeStatusKind) ForecastStatus(
-        SourceIndex index, FeedHealth? health, LibraryForecastCounts? counts, CultureInfo c)
+        SourceIndex index, FeedHealth? health, LibraryForecastCounts? counts, CultureInfo c, TimeFormat format)
     {
         if (health is { IsReachable: false, CopyFetchedAt: { } cached })
         {
@@ -389,7 +401,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
                 return (line, LibraryNodeStatusKind.Ok);
             default:
                 var latest = index.PublishedAt is { } run
-                    ? string.Format(c, Strings.Library_StatusLine_LatestRunsFormat, ForecastRuns.FormatRun(run))
+                    ? string.Format(c, Strings.Library_StatusLine_LatestRunsFormat, ForecastRuns.FormatRun(run, format, TimeZoneInfo.Local))
                     : checkedText;
                 return ($"{latest} · {Strings.Library_StatusLine_NothingLocal}", LibraryNodeStatusKind.Info);
         }
@@ -516,7 +528,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             var existing = Children.FirstOrDefault(c => c.Id == source.Id);
             if (existing is null)
             {
-                Children.Insert(i, new LibraryNodeViewModel(collection, source, _health));
+                Children.Insert(i, new LibraryNodeViewModel(collection, source, _health, timeFormat: _timeFormat));
             }
             else
             {
@@ -553,7 +565,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             var existing = Children.FirstOrDefault(c => string.Equals(c.GroupId, group.Id, StringComparison.OrdinalIgnoreCase));
             if (existing is null)
             {
-                Children.Insert(i, new LibraryNodeViewModel(_collection, _source, _health, group));
+                Children.Insert(i, new LibraryNodeViewModel(_collection, _source, _health, group, _timeFormat));
                 continue;
             }
 

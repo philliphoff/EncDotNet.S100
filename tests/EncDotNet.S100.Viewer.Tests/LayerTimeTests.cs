@@ -90,7 +90,7 @@ public sealed class LayerTimeTests
         });
 
         Assert.Equal(["cbofs 00:00Z"], timeline.Runs);
-        Assert.Contains("cbofs 00:00Z", timeline.RangeLabel, StringComparison.Ordinal);
+        Assert.Equal([$"cbofs {LayerTimes.Clock(Run, TimeFormat.Local, TimeZoneInfo.Utc, System.Globalization.CultureInfo.CurrentCulture)}"], timeline.DisplayRuns);
     }
 
     private sealed class StaticLibrary(params LibraryTimedEntry[] entries) : ILibraryTimeSource

@@ -50,6 +50,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly TimeProvider _time;
     private readonly ITimer? _clock;
     private readonly Services.GlobalTimeService? _viewTime;
+    private readonly Func<TimeFormat>? _runFormat;
     private bool _atViewTime;
     private IReadOnlyList<LibraryItemViewModel> _textMatched = [];
 
@@ -79,8 +80,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
         Services.Notifications.INotificationService? notifications = null,
         TimeProvider? time = null,
-        Services.GlobalTimeService? viewTime = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime)
+        Services.GlobalTimeService? viewTime = null,
+        Services.ITimeFormatProvider? timeFormat = null)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime, timeFormat)
     {
     }
 
@@ -93,10 +95,14 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
         Services.Notifications.INotificationService? notifications = null,
         TimeProvider? time = null,
-        Services.GlobalTimeService? viewTime = null)
+        Services.GlobalTimeService? viewTime = null,
+        Services.ITimeFormatProvider? timeFormat = null)
     {
         _time = time ?? TimeProvider.System;
         _viewTime = viewTime;
+        _runFormat = timeFormat is null ? null : () => timeFormat.Current;
+        if (timeFormat is not null)
+            timeFormat.TimeFormatChanged += _ => dispatch(OnTimeFormatChanged);
         _feedHealth = feedHealth;
         _notifications = notifications;
         ArgumentNullException.ThrowIfNull(downloader);
@@ -720,8 +726,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                     && EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer.RunOf(first.Item) is { } onlineRun
                     && _downloader.LocalPublishedAtOf(first.Item) is { } localRun
                     ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkRunReplacesFormat, newRuns[0],
-                        onlineRun.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z",
-                        localRun.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z")
+                        ShortRun(onlineRun),
+                        ShortRun(localRun))
                     : string.Join(", ", newRuns);
             }
 
@@ -1377,7 +1383,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             var existing = Nodes.FirstOrDefault(n => n.Id == collection.Id);
             if (existing is null)
             {
-                Nodes.Insert(i, LibraryNodeViewModel.ForCollection(collection, _feedHealth));
+                Nodes.Insert(i, LibraryNodeViewModel.ForCollection(collection, _feedHealth, _runFormat));
                 continue;
             }
 
@@ -1462,7 +1468,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// user sees (used by the MCP Library tools, #715).
     /// </summary>
     internal LibraryItemViewModel CreateItem(CollectionItem item, LibrarySource source) =>
-        new(item, source, _loader.StateOf, _downloader, CollectionNameOf(source.Id), RetryDownloadAsync, _time);
+        new(item, source, _loader.StateOf, _downloader, CollectionNameOf(source.Id), RetryDownloadAsync, _time, _runFormat);
 
     private string? CollectionNameOf(Guid sourceId) =>
         _library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == sourceId))?.Definition.Name;
@@ -1471,7 +1477,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         node is null
             ? []
             : node.EnumerateItems()
-                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name, RetryDownloadAsync, _time))
+                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name, RetryDownloadAsync, _time, _runFormat))
                 .ToArray();
 
     private Task RetryDownloadAsync(LibraryItemViewModel item) => DownloadItemAsync(item, load: false);
@@ -1596,7 +1602,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 if (!_packageHeaders.TryGetValue(key, out var model) || !ReferenceEquals(model.Source, row.Source))
                 {
                     _packageHeaders[key] = model = LibraryItemViewModel.ForModelGroup(
-                        row.Source, members, expanded, TogglePackage, _loader.StateOf, _downloader, _time);
+                        row.Source, members, expanded, TogglePackage, _loader.StateOf, _downloader, _time, _runFormat);
                 }
                 else
                 {
@@ -1658,6 +1664,22 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         var selected = _selectedItem;
         ApplyFilter();
         SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+    }
+
+    /// <summary>"18:00Z", or the local short time, as the user reads runs (#730).</summary>
+    private string ShortRun(DateTimeOffset run) =>
+        Services.ForecastRunNames.FormatRun(run.UtcDateTime, _runFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone, _time.GetUtcNow().UtcDateTime);
+
+    /// <summary>The user switched Local/UTC: re-read every run time shown (#730).</summary>
+    private void OnTimeFormatChanged()
+    {
+        foreach (var node in Nodes)
+            node.RefreshTimeFormat();
+        foreach (var item in _items)
+            item.RefreshTimeFormat();
+        foreach (var header in _packageHeaders.Values)
+            header.RefreshTimeFormat();
+        OnPropertyChanged(nameof(BulkScope));
     }
 
     private DateTime? ViewTime => _viewTime?.IsActive == true ? _viewTime.CurrentTime : null;
