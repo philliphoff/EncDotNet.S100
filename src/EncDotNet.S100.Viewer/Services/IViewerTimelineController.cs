@@ -120,7 +120,17 @@ internal sealed record TimelineLayerState(
     DateTime? DrawnTime,
     DateTime? PreviousSample,
     DateTime? NextSample,
-    int SampleCount);
+    int SampleCount)
+{
+    /// <summary>The layer time as its row shows it, or null.</summary>
+    public string? Time { get; init; }
+
+    /// <summary>True when the layer has no data near the view time and hides.</summary>
+    public bool Hidden { get; init; }
+
+    /// <summary>True while the layer is drawing the view time.</summary>
+    public bool Drawing { get; init; }
+}
 
 /// <summary>The outcome of <see cref="IViewerTimelineController.SetViewTimeAsync"/>.</summary>
 /// <param name="Applied">True when the view time was changed or already matched.</param>

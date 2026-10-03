@@ -407,6 +407,19 @@ internal sealed class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Opens the Datasets panel on its flat list and selects the dataset with
+    /// <paramref name="datasetId"/>, so the user sees its layer time.
+    /// </summary>
+    internal void ShowLayer(string datasetId)
+    {
+        if (Datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal)) is not { } entry)
+            return;
+        SelectTab("Datasets");
+        Datasets.ActiveTabIndex = 1;
+        Datasets.SelectedDataset = entry;
+    }
+
+    /// <summary>
     /// Selects the tab with the given <see cref="IActivityTab.Id"/>, or
     /// no-ops if no such tab is registered. Routes to whichever dock
     /// owns the tab.
@@ -1076,6 +1089,8 @@ internal sealed class MainViewModel : ViewModelBase
         DisplayModeToolbar = displayModeToolbar;
         EcdisDisplayPanel = ecdisDisplayPanel;
         Timeline.CloseRequested += () => IsBottomDockOpen = false;
+        // "No data … for N of M layers" opens the dataset list on that layer (#709, handoff D4).
+        Timeline.ShowLayerRequested += ShowLayer;
 
         // Activity tab registry — partitioned by Dock, ordered by
         // IActivityTab.Order ascending. Left-dock tabs further split into

@@ -1761,6 +1761,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 entry.TimePolicy.AvailableTimes.Max())
             {
                 ProductSpec = entry.Dataset.Metadata.Spec.Name,
+                DatasetId = entry.Dataset.Id.Value,
+                Selection = entry.TimePolicy.Selection,
+                Tolerance = entry.TimePolicy.Tolerance,
                 Coverage = entry.TimePolicy.CoverageSegments,
                 Samples = entry.TimePolicy.AvailableTimes,
             })
@@ -2088,34 +2091,14 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         /// The sample to draw at <paramref name="time"/>, or <c>null</c>
         /// when no sample lies within the tolerance and the dataset hides.
         /// </summary>
-        public DateTime? SnapTo(DateTime time)
-        {
-            var index = Array.BinarySearch(_times, time);
-            if (index >= 0)
-                return _times[index];
+        public DateTime? SnapTo(DateTime time) => MapsuiTimeSelection.Select(_times, Selection, _tolerance, time);
 
-            // ~index is the first sample after the clock.
-            var next = ~index;
-            if (_kind == TimePolicyKind.AtOrBefore)
-            {
-                if (next == 0)
-                    return null;
-                var previous = _times[next - 1];
-                return time - previous <= _tolerance ? previous : null;
-            }
+        /// <summary>How this policy picks a sample.</summary>
+        public MapsuiTimeSelectionKind Selection =>
+            _kind == TimePolicyKind.AtOrBefore ? MapsuiTimeSelectionKind.AtOrBefore : MapsuiTimeSelectionKind.Nearest;
 
-            DateTime? nearest = null;
-            if (next > 0)
-                nearest = _times[next - 1];
-            if (next < _times.Length
-                && (nearest is not { } before || _times[next] - time < time - before))
-            {
-                nearest = _times[next];
-            }
-            return nearest is { } sample && (sample - time).Duration() <= _tolerance
-                ? sample
-                : null;
-        }
+        /// <summary>How far from the clock a sample may be.</summary>
+        public TimeSpan Tolerance => _tolerance;
 
         private IReadOnlyList<MapsuiMapTimeSegment> ComputeSegments()
         {

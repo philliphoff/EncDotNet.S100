@@ -29,6 +29,16 @@ internal static partial class ForecastRunNames
     }
 
     /// <summary>Product number, producer code, an optional <c>_MODEL</c> (or a tile code), then <c>_yyyyMMddTHHZ</c>.</summary>
+    /// <summary>The run time in a forecast file's name, or null when it carries none.</summary>
+    /// <param name="name">A dataset name, e.g. <c>111US00_CBOFS_20260930T18Z_US4VA1DD</c>.</param>
+    public static DateTime? RunTime(string? name) =>
+        !string.IsNullOrEmpty(name)
+        && RunPattern().Match(name) is { Success: true } match
+        && DateTime.TryParseExact(match.Groups["run"].Value, "yyyyMMdd'T'HH", CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var run)
+            ? run
+            : null;
+
     [GeneratedRegex(@"^(?<product>\d{3})[A-Z0-9]{4}(?:_(?<model>[A-Z][A-Z0-9_]*?)|[A-Z0-9]*?)_(?<run>\d{8}T\d{2})Z", RegexOptions.CultureInvariant)]
     private static partial Regex RunPattern();
 }

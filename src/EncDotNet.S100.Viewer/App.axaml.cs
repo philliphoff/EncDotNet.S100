@@ -117,6 +117,7 @@ public partial class App : Application
 
         _services = ConfigureServices();
         _services.GetRequiredService<ViewerPresentationCoordinator>();
+        _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();
 
         // Now that the container exists, route recorded crashes into the
@@ -594,6 +595,13 @@ public partial class App : Application
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();
+        services.AddSingleton<TimeRefreshProgress>();
+        services.AddSingleton(sp => new LayerTimeCoordinator(
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<TimeRefreshProgress>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<ITimeFormatProvider>()));
         services.AddSingleton<EcdisDisplayState>(sp =>
         {
             var settings = sp.GetRequiredService<ViewerSettings>();

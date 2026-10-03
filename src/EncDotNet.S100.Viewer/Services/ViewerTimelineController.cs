@@ -183,6 +183,11 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             DrawnTime: entry.CurrentTime,
             PreviousSample: previous,
             NextSample: next,
-            SampleCount: samples.Count);
+            SampleCount: samples.Count)
+        {
+            Time = entry.LayerTime?.Text,
+            Hidden = entry.IsLayerHidden,
+            Drawing = entry.IsLayerDrawing,
+        };
     }
 }

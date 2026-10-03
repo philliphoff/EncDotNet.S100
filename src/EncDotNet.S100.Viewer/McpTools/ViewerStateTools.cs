@@ -39,7 +39,10 @@ internal sealed record TimelineLayerDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? DrawnTime,
     [property: Description("The latest sample at or before the view time, UTC ISO-8601, or null.")] DateTime? PreviousSample,
     [property: Description("The earliest sample after the view time, UTC ISO-8601, or null.")] DateTime? NextSample,
-    [property: Description("Number of samples in the layer.")] int SampleCount);
+    [property: Description("Number of samples in the layer.")] int SampleCount,
+    [property: Description("The layer time as its row in the Datasets list shows it: '08:00Z · T+20 h', '20:06Z (−24 min)', 'no data · last 18:00Z, 6 h earlier', 'drawing…'; null for none.")] string? Time,
+    [property: Description("True when the layer has no data within its tolerance of the view time and hides (its row's Hidden tag).")] bool Hidden,
+    [property: Description("True while the layer is drawing the view time.")] bool Drawing);
 
 /// <summary>The Timeline as the user sees it.</summary>
 [Description("The viewer's Timeline: mode, now, view time, loaded range and what each time-aware layer draws.")]
@@ -166,7 +169,7 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.StepDriver,
         [.. state.Gaps.Select(g => new TimelineGapDto(g.From, g.To, TimelineAxisLabels.GapLength(g.Length, CultureInfo.InvariantCulture)))],
         [.. state.Layers.Select(layer => new TimelineLayerDto(
-            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount))]);
+            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing))]);
 }
 
 /// <summary>Request for <see cref="SetViewTimeTool"/>.</summary>

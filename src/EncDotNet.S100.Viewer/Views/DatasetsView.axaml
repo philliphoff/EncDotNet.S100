@@ -12,6 +12,8 @@
              x:DataType="vm:DatasetsViewModel">
 
     <UserControl.Resources>
+        <SolidColorBrush x:Key="LayerHiddenTagBackground" Color="{DynamicResource WarningColor}" Opacity="0.10" />
+        <SolidColorBrush x:Key="LayerHiddenTagBorder" Color="{DynamicResource WarningColor}" Opacity="0.35" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusVerifiedConverter" Match="Verified" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusUnsignedConverter" Match="Unsigned" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusInvalidConverter" Match="Invalid,Untrusted,Mixed,Error" />
@@ -20,6 +22,38 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
+        <!-- Layer time (#709, handoff D3): a second line on time-aware rows. -->
+        <Style Selector="Button.LayerTime">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontFamily" Value="Menlo, Consolas, monospace" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+        <Style Selector="Button.LayerTime /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.LayerTime.hidden TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Button.LayerTime.hidden">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.LayerTime.drawing">
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+        <Style Selector="Border.HiddenTag">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="5,0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource LayerHiddenTagBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LayerHiddenTagBorder}" />
+        </Style>
         <!--
           Mirror of the main window's `GridSplitter.PaneSplitter` style.
           UserControls don't inherit window-scoped styles, so we keep a
@@ -441,11 +475,27 @@
                                                                IsVisible="{Binding !IsVisible}" />
                                             </Panel>
                                         </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding DisplayName}"
-                                                   VerticalAlignment="Center"
-                                                   Opacity="{Binding RowOpacity}"
-                                                   TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       Opacity="{Binding RowOpacity}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
+                                            <Button Grid.Column="0"
+                                                    Classes="LayerTime"
+                                                    Classes.hidden="{Binding IsLayerHidden}"
+                                                    Classes.drawing="{Binding IsLayerDrawing}"
+                                                    Command="{Binding JumpToLayerDataCommand}"
+                                                    ToolTip.Tip="{Binding LayerTimeText}">
+                                                <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
+                                            </Button>
+                                            <Border Grid.Column="1" Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
+                                                <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource WarningColor}" />
+                                            </Border>
+                                        </Grid>
+                                        </StackPanel>
                                         <Border Grid.Column="2" Classes="SpecTag">
                                             <TextBlock Text="{Binding ProductSpec}"
                                                        FontSize="10"
@@ -563,6 +613,22 @@
                                     <TextBlock Text="{Binding ProductSpec}"
                                                FontSize="11"
                                                Opacity="0.6" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
+                                        <Button Grid.Column="0"
+                                                Classes="LayerTime"
+                                                Classes.hidden="{Binding IsLayerHidden}"
+                                                Classes.drawing="{Binding IsLayerDrawing}"
+                                                Command="{Binding JumpToLayerDataCommand}"
+                                                ToolTip.Tip="{Binding LayerTimeText}">
+                                            <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
+                                        </Button>
+                                        <Border Grid.Column="1" Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
+                                            <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource WarningColor}" />
+                                        </Border>
+                                    </Grid>
                                 </StackPanel>
                                 <ic:FluentIcon Grid.Column="2"
                                                Icon="Warning"
