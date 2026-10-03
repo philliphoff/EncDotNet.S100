@@ -1,5 +1,4 @@
 using System.Globalization;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.S102.Validation;
