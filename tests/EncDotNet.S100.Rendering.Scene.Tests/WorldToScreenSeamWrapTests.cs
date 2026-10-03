@@ -110,4 +110,30 @@ public sealed class WorldToScreenSeamWrapTests
         Assert.Equal(xOn, xOff, 3);
         Assert.Equal(yOn, yOff, 3);
     }
+
+    [Fact]
+    public void Viewport_wider_than_the_world_does_not_wrap()
+    {
+        // A whole-world box aspect-fitted to a wide image spans more than 360°
+        // (here −279° → +279°). Every op already lies inside it unwrapped, so
+        // wrapping into [minX, minX + circumference) would fold 100°E back to
+        // −260° and leave the east of the frame empty.
+        var vp = new Viewport
+        {
+            MinLongitude = -279.0,
+            MaxLongitude = 279.0,
+            MinLatitude = -80.0,
+            MaxLatitude = 80.0,
+            WidthPixels = 1600,
+            HeightPixels = 800,
+            ScaleDenominator = 100_000_000,
+        };
+        var transform = WorldToScreen.Create(vp);
+
+        var world = WebMercator.FromLonLat(100.0, 50.0);
+        var (x, _) = transform.Project(world);
+
+        double expected = (100.0 + 279.0) / 558.0 * 1600.0;
+        Assert.InRange(x, expected - 1, expected + 1);
+    }
 }
