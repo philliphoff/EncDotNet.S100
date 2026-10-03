@@ -55,7 +55,9 @@ public readonly struct WorldToScreen
     /// into <c>[minX, minX + <see cref="WebMercator.Circumference"/>)</c> before
     /// projection so geometry on the far side of the seam registers in the shifted
     /// window. For every normal viewport (which never exceeds ±180°) wrapping is
-    /// disabled, so partially off-screen features are never teleported.
+    /// disabled, so partially off-screen features are never teleported. Wrapping
+    /// is also disabled for a viewport spanning a full world or more of
+    /// longitude, where every op already lies inside the window unwrapped.
     /// </remarks>
     /// <param name="viewport">The display viewport (geographic bounds + pixel size).</param>
     /// <returns>The world → screen affine.</returns>
@@ -89,7 +91,14 @@ public readonly struct WorldToScreen
         double spanY = maxY - minY;
         double scaleX = spanX != 0 ? viewport.WidthPixels / spanX : 0;
         double scaleY = spanY != 0 ? viewport.HeightPixels / spanY : 0;
+        // Wrapping folds every op into one circumference starting at minX, so it
+        // is only meaningful for a window narrower than the world. A window at
+        // least one world wide (e.g. a ±180° box aspect-fitted out to ~±279°)
+        // already holds every op at its raw world-X; wrapping it would fold the
+        // eastern part of the world back west, smearing polygons that cross
+        // the fold and leaving the east of the frame empty.
         bool wrapX = allowSeamWrap
+            && spanX < WebMercator.Circumference
             && (viewport.MaxLongitude > 180.0 || viewport.MinLongitude < -180.0);
         return new WorldToScreen(minX, maxY, scaleX, scaleY, wrapX);
     }
