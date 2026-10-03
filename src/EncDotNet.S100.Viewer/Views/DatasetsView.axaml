@@ -36,7 +36,7 @@
         <Style Selector="Button.LayerTime /template/ ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
-        <Style Selector="Button.LayerTime.hidden /template/ ContentPresenter">
+        <Style Selector="Button.LayerTime.hidden TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
         </Style>
         <Style Selector="Button.LayerTime.hidden">
@@ -479,20 +479,22 @@
                                             <TextBlock Text="{Binding DisplayName}"
                                                        Opacity="{Binding RowOpacity}"
                                                        TextTrimming="CharacterEllipsis" />
-                                            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasLayerTime}">
-                                            <Button Classes="LayerTime"
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
+                                            <Button Grid.Column="0"
+                                                    Classes="LayerTime"
                                                     Classes.hidden="{Binding IsLayerHidden}"
                                                     Classes.drawing="{Binding IsLayerDrawing}"
-                                                    Content="{Binding LayerTimeText}"
                                                     Command="{Binding JumpToLayerDataCommand}"
-                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LayerTimeJump}" />
-                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
+                                                    ToolTip.Tip="{Binding LayerTimeText}">
+                                                <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
+                                            </Button>
+                                            <Border Grid.Column="1" Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
                                                 <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
                                                            FontSize="10"
                                                            FontWeight="SemiBold"
                                                            Foreground="{DynamicResource WarningColor}" />
                                             </Border>
-                                        </StackPanel>
+                                        </Grid>
                                         </StackPanel>
                                         <Border Grid.Column="2" Classes="SpecTag">
                                             <TextBlock Text="{Binding ProductSpec}"
@@ -611,20 +613,22 @@
                                     <TextBlock Text="{Binding ProductSpec}"
                                                FontSize="11"
                                                Opacity="0.6" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasLayerTime}">
-                                        <Button Classes="LayerTime"
-                                            Classes.hidden="{Binding IsLayerHidden}"
-                                            Classes.drawing="{Binding IsLayerDrawing}"
-                                            Content="{Binding LayerTimeText}"
-                                            Command="{Binding JumpToLayerDataCommand}"
-                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LayerTimeJump}" />
-                                        <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
-                                        <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource WarningColor}" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
+                                        <Button Grid.Column="0"
+                                                Classes="LayerTime"
+                                                Classes.hidden="{Binding IsLayerHidden}"
+                                                Classes.drawing="{Binding IsLayerDrawing}"
+                                                Command="{Binding JumpToLayerDataCommand}"
+                                                ToolTip.Tip="{Binding LayerTimeText}">
+                                            <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
+                                        </Button>
+                                        <Border Grid.Column="1" Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
+                                            <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource WarningColor}" />
                                         </Border>
-                                    </StackPanel>
+                                    </Grid>
                                 </StackPanel>
                                 <ic:FluentIcon Grid.Column="2"
                                                Icon="Warning"
