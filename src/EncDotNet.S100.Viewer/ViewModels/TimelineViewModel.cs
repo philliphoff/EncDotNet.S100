@@ -131,6 +131,9 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
                 OnPropertyChanged(nameof(CurrentTimeLabel));
                 OnPropertyChanged(nameof(RangeLabel));
                 OnPropertyChanged(nameof(StampText));
+                OnPropertyChanged(nameof(DisplayRuns));
+                // Lane labels, run times and the band popover follow the setting (#730).
+                UpdateLaneTimes();
             };
         }
     }
@@ -287,9 +290,16 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         Runs.Count > 0
         || _service.TimedDatasets.Any(d => string.Equals(d.ProductSpec, "S-111", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The forecast runs loaded, by model, e.g. "cbofs 12:00Z".</summary>
+    /// <summary>The forecast runs loaded, by model, in UTC whatever the user's setting (for agents), e.g. "cbofs 12:00Z".</summary>
     public IReadOnlyList<string> Runs => _service.TimedDatasets
         .Select(d => ForecastRunNames.Describe(d, LibraryEntries))
+        .OfType<string>()
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+
+    /// <summary>The forecast runs loaded, as the user reads them (#730): "cbofs 13:00" in Local, "cbofs 18:00Z" in UTC.</summary>
+    public IReadOnlyList<string> DisplayRuns => _service.TimedDatasets
+        .Select(d => ForecastRunNames.Describe(d, LibraryEntries, ActiveFormat, Zone, Now))
         .OfType<string>()
         .Distinct(StringComparer.Ordinal)
         .ToArray();
@@ -566,7 +576,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             if (IsForecastTimeline)
             {
                 // D4: "30.09 12:00 → 02.10 18:00 UTC · 55 h · cbofs 12:00Z, nyofs 18:00Z · hourly".
-                var runs = Runs;
+                var runs = DisplayRuns;
                 var parts = new List<string>(6)
                 {
                     $"{TimeFormatting.Format(_service.MinTime.Value, fmt)} → {TimeFormatting.Format(_service.MaxTime.Value, fmt)}",

@@ -196,14 +196,8 @@ internal sealed partial class TimelineViewModel
     /// "18:00Z" (or the local short time) as the layer times read, with the
     /// day ("01.10 18:00Z") unless <paramref name="near"/> and within a day of now.
     /// </summary>
-    private string Short(DateTime utc, TimeFormat format, bool near = false)
-    {
-        var culture = CultureInfo.CurrentCulture;
-        var clock = LayerTimes.Clock(utc, format, Zone, culture);
-        return near && (utc - Now).Duration() <= LayerTimes.DateThreshold
-            ? clock
-            : $"{LayerTimes.Day(utc, Zone, culture)} {clock}";
-    }
+    private string Short(DateTime utc, TimeFormat format, bool near = false) =>
+        ForecastRunNames.FormatRun(utc, format, Zone, near ? Now : null);
 
     /// <summary>The band popover's title and details (handoff E5).</summary>
     private void UpdateLaneActions(TimelineLaneViewModel lane, TimeFormat format)

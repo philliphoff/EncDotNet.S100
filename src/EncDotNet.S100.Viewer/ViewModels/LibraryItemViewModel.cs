@@ -21,6 +21,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private LibraryAvailability? _availability;
     private CollectionItem? _effective;
     private readonly TimeProvider _time;
+    private readonly Func<TimeFormat>? _timeFormat;
     private IReadOnlyList<LibraryItemViewModel> _members = [];
 
     public LibraryItemViewModel(
@@ -30,7 +31,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         ILibraryDownloader? downloader = null,
         string? collectionName = null,
         Func<LibraryItemViewModel, Task>? download = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        Func<TimeFormat>? timeFormat = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
@@ -41,6 +43,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         _collectionName = collectionName;
         _download = download;
         _time = time ?? TimeProvider.System;
+        _timeFormat = timeFormat;
         RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
             () => _download?.Invoke(this) ?? Task.CompletedTask);
         CancelDownloadCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => _downloader?.Cancel(Item));
@@ -217,7 +220,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForModelGroup(
         LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle,
-        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider? time)
+        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider? time,
+        Func<TimeFormat>? timeFormat = null)
     {
         var first = members[0].Item;
         var model = ForecastRuns.ModelOf(first) ?? first.Name;
@@ -230,7 +234,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Bounds = GeoBounds.UnionAll(members.Select(m => m.Item.Bounds).OfType<GeoBounds>()),
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, loadState, downloader, time: time)
+        header = new LibraryItemViewModel(item, source, loadState, downloader, time: time, timeFormat: timeFormat)
         {
             IsGroupHeader = true,
             IsModelHeader = true,
@@ -334,6 +338,19 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the shown run's window has ended.</summary>
     public bool IsWindowEnded => ShownValidTo is { } end && end <= _time.GetUtcNow();
 
+    /// <summary>A run time as the user reads it: their Local/UTC setting (#730); UTC without one.</summary>
+    private string FormatRun(DateTimeOffset time) =>
+        ForecastRuns.FormatRun(time, _timeFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone);
+
+    /// <summary>Re-reads the run times after the user's Local/UTC setting changed (#730).</summary>
+    internal void RefreshTimeFormat()
+    {
+        if (!IsForecast)
+            return;
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Details));
+    }
+
     /// <summary>Re-evaluates what depends on the clock (time left, Expired); called every minute for forecasts.</summary>
     public void RefreshClock()
     {
@@ -371,9 +388,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         if (IsForecastRunRow)
         {
             if (ShownRun is { } run)
-                parts.Add(string.Format(c, Strings.Library_Forecast_RunFormat, ForecastRuns.FormatRun(run)));
+                parts.Add(string.Format(c, Strings.Library_Forecast_RunFormat, FormatRun(run)));
             if (ShownValidTo is { } end)
-                parts.Add(string.Format(c, Strings.Library_Forecast_ToFormat, ForecastRuns.FormatRun(end)));
+                parts.Add(string.Format(c, Strings.Library_Forecast_ToFormat, FormatRun(end)));
             if (IsModelHeader)
                 parts.Add(string.Format(c, Strings.Library_Forecast_TilesFormat, _members.Count));
         }
@@ -725,12 +742,12 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             if (IsForecast)
             {
                 if (ShownRun is { } shown)
-                    Add(forecast, Strings.Library_Field_Run, ForecastRuns.FormatRun(shown), mono: true);
+                    Add(forecast, Strings.Library_Field_Run, FormatRun(shown), mono: true);
                 if (ShownRun is { } from && ShownValidTo is { } to)
-                    Add(forecast, Strings.Library_Field_Valid, $"{ForecastRuns.FormatRun(from)} → {ForecastRuns.FormatRun(to)}", mono: true);
+                    Add(forecast, Strings.Library_Field_Valid, $"{FormatRun(from)} → {FormatRun(to)}", mono: true);
                 Add(forecast, Strings.Library_Field_NewerRun, Availability == LibraryAvailability.Outdated
                         && S100ForecastFeedIndexer.RunOf(Item) is { } newer
-                    ? string.Format(c, Strings.Library_NewerRunOnlineFormat, ForecastRuns.FormatRun(newer))
+                    ? string.Format(c, Strings.Library_NewerRunOnlineFormat, FormatRun(newer))
                     : Source.Index is { } index
                         ? string.Format(c, Strings.Library_NewerRunNoneFormat, index.IndexedAt.ToLocalTime().ToString("g", c))
                         : null);

@@ -939,7 +939,8 @@ public partial class App : Application
                     _ => null,
                 },
                 time: sp.GetRequiredService<TimeProvider>(),
-                viewTime: sp.GetRequiredService<GlobalTimeService>());
+                viewTime: sp.GetRequiredService<GlobalTimeService>(),
+                timeFormat: sp.GetService<ITimeFormatProvider>());
         });
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
             sp.GetRequiredService<LibraryPanelViewModel>(),

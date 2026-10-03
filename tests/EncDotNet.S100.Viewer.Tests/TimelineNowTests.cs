@@ -55,7 +55,10 @@ public sealed class TimelineNowTests
         Assert.False(timeline.HasStatusMessage);
         Assert.False(timeline.NowCommand.CanExecute(null));
         Assert.Equal(["cbofs 12:00Z"], timeline.Runs);
-        Assert.Contains(" · 48 h · cbofs 12:00Z · hourly", timeline.RangeLabel, StringComparison.Ordinal);
+        // The range line reads the run in the user's setting (Local here, #730); agents get UTC.
+        var local = LayerTimes.Clock(Run, TimeFormat.Local, TimeZoneInfo.Utc, System.Globalization.CultureInfo.CurrentCulture);
+        Assert.Contains($" · 48 h · cbofs {local} · hourly", timeline.RangeLabel, StringComparison.Ordinal);
+        Assert.Equal(["cbofs 12:00Z"], timeline.Runs);
     }
 
     [Fact]
