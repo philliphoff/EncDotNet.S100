@@ -77,6 +77,20 @@
             <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
             <Setter Property="FontSize" Value="10.5" />
         </Style>
+        <Style Selector="Border.NewRunTag">
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.NewRunTag TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+            <Setter Property="FontSize" Value="10.5" />
+        </Style>
+        <Style Selector="Panel.LaneTrack.actions">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
         <Style Selector="TextBlock.LaneTime">
             <Setter Property="Opacity" Value="0.75" />
         </Style>
@@ -110,10 +124,16 @@
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
+                            <!-- The Library's tags (#711 G3): New run before Expired. -->
                             <Border DockPanel.Dock="Right"
                                     Classes="ExpiredTag"
-                                    IsVisible="{Binding IsExpired}">
-                                <TextBlock Text="{x:Static loc:Strings.TimelinePanel_TagExpired}" />
+                                    IsVisible="{Binding IsExpiredTag}">
+                                <TextBlock Text="{x:Static loc:Strings.Library_Tag_Expired}" />
+                            </Border>
+                            <Border DockPanel.Dock="Right"
+                                    Classes="NewRunTag"
+                                    IsVisible="{Binding IsNewRun}">
+                                <TextBlock Text="{x:Static loc:Strings.Library_Tag_NewRun}" />
                             </Border>
                             <TextBlock Text="{Binding Sub}"
                                        Margin="6,0,6,0"
@@ -131,17 +151,53 @@
                                    TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </DockPanel>
-                <views:CoverageBandControl Grid.Column="1"
-                                           Height="12"
-                                           Margin="2,0,2,0"
-                                           VerticalAlignment="Center"
-                                           Fill="{Binding Swatch}"
-                                           TrackBrush="#14808080"
-                                           HatchBrush="#59A1A1AA"
-                                           TickRise="0"
-                                           BandCornerRadius="3"
-                                           Bands="{Binding Bands}"
-                                           Gaps="{Binding Gaps}" />
+                <!-- The lane's data: Library windows (dashed online, outlined on
+                     disk) behind the loaded band; a click opens its actions (E5). -->
+                <Panel Grid.Column="1"
+                       Classes="LaneTrack"
+                       Classes.actions="{Binding HasActions}"
+                       Background="Transparent"
+                       Margin="2,0,2,0">
+                    <FlyoutBase.AttachedFlyout>
+                        <Flyout Placement="Top">
+                            <StackPanel Spacing="6" MinWidth="220" x:DataType="vm:TimelineLaneViewModel">
+                                <TextBlock Text="{Binding ActionTitle}" FontWeight="SemiBold" FontSize="13" />
+                                <TextBlock Text="{Binding ActionDetail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" MaxWidth="320" />
+                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                                    <Button Classes="Primary"
+                                            Height="28" MinHeight="0" Padding="12,0" FontSize="12"
+                                            IsVisible="{Binding CanGet}"
+                                            Content="{Binding GetText}"
+                                            Command="{Binding GetCommand}" />
+                                    <Button Classes="Outline"
+                                            Height="28" MinHeight="0" Padding="12,0" FontSize="12"
+                                            IsVisible="{Binding CanLoad}"
+                                            Content="{x:Static loc:Strings.TimelinePanel_BandLoad}"
+                                            Command="{Binding LoadCommand}" />
+                                    <Button Classes="Ghost"
+                                            Height="28" MinHeight="0" Padding="8,0" FontSize="12"
+                                            Content="{x:Static loc:Strings.TimelinePanel_BandReveal}"
+                                            Command="{Binding RevealCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Flyout>
+                    </FlyoutBase.AttachedFlyout>
+                    <views:KnownBandControl Height="18"
+                                            VerticalAlignment="Center"
+                                            Stroke="{Binding Swatch}"
+                                            OnlineBands="{Binding OnlineBands}"
+                                            OnDiskBands="{Binding OnDiskBands}"
+                                            Progress="{Binding Progress}" />
+                    <views:CoverageBandControl Height="12"
+                                               VerticalAlignment="Center"
+                                               Fill="{Binding Swatch}"
+                                               TrackBrush="#14808080"
+                                               HatchBrush="#59A1A1AA"
+                                               TickRise="0"
+                                               BandCornerRadius="3"
+                                               Bands="{Binding Bands}"
+                                               Gaps="{Binding Gaps}" />
+                </Panel>
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
@@ -281,6 +337,12 @@
                                       Content="{x:Static loc:Strings.TimelinePanel_InMapView}"
                                       FontSize="12"
                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineInMapView}" />
+                            <!-- #711 E2: what the Library knows but has not loaded. -->
+                            <CheckBox IsVisible="{Binding IsShowOnlineAvailable}"
+                                      IsChecked="{Binding ShowOnline}"
+                                      Content="{x:Static loc:Strings.TimelinePanel_ShowOnline}"
+                                      FontSize="12"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineShowOnline}" />
                         </StackPanel>
                         <!-- C5: the overview strip: everything loaded, and the shown window. -->
                         <views:OverviewStripControl Grid.Row="0" Grid.Column="1"

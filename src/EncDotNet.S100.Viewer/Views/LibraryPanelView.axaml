@@ -502,7 +502,7 @@
                             </Button>
                         </Grid>
                     </Panel>
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
@@ -510,7 +510,15 @@
                                            VerticalAlignment="Center" Margin="4,0,8,0" />
                             </TextBox.InnerRightContent>
                         </TextBox>
-                        <Button Grid.Column="1" Classes="Icon libraryIcon"
+                        <!-- #711 G2: only data valid at the Timeline's view time (with any segment). -->
+                        <ToggleButton Grid.Column="1" Classes="Icon libraryIcon coverageToggle"
+                                      IsVisible="{Binding HasViewTime}"
+                                      IsChecked="{Binding IsAtViewTime}"
+                                      ToolTip.Tip="{Binding AtViewTimeTooltip}"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Library_State_AtViewTime}">
+                            <ic:FluentIcon Icon="Clock" FontSize="16" />
+                        </ToggleButton>
+                        <Button Grid.Column="2" Classes="Icon libraryIcon"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
@@ -711,6 +719,21 @@
                                             ToolTip.Tip="{Binding SelectedItem.DownloadTooltip}"
                                             AutomationProperties.Name="{Binding SelectedItem.DownloadTooltip}">
                                         <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
+                                    </Button>
+                                    <!-- #711 G3: the dataset's window on the Timeline. -->
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding ShowOnTimelineCommand}"
+                                            IsVisible="{Binding HasValidWindow}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Library_ShowOnTimeline}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Library_ShowOnTimeline}">
+                                        <ic:FluentIcon Icon="Clock" FontSize="16" />
+                                    </Button>
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding GoToRunStartCommand}"
+                                            IsVisible="{Binding HasValidWindow}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Library_GoToRunStart}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Library_GoToRunStart}">
+                                        <ic:FluentIcon Icon="Previous" FontSize="16" />
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding ZoomToCommand}"

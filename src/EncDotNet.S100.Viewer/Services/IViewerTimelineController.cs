@@ -54,6 +54,9 @@ internal sealed record TimelineViewChange(
 
     /// <summary>True collapses the dock to the strip, false shows the lanes (#710 E6); null leaves it.</summary>
     public bool? CollapsedToStrip { get; init; }
+
+    /// <summary>Turns Show online on or off (#711 E2); null leaves it.</summary>
+    public bool? ShowOnline { get; init; }
 }
 
 /// <summary>The Timeline as the user sees it, plus the time each layer draws.</summary>
@@ -120,6 +123,9 @@ internal sealed record ViewerTimelineState(
     /// <summary>True when the dock shows the strip rather than lanes.</summary>
     public bool CollapsedToStrip { get; init; }
 
+    /// <summary>True while the lanes show what the Library knows but has not loaded (#711).</summary>
+    public bool ShowOnline { get; init; }
+
     /// <summary>The lanes: those listed, then those folded outside the map view.</summary>
     public IReadOnlyList<TimelineLaneState> Lanes { get; init; } = [];
 }
@@ -132,7 +138,27 @@ internal sealed record ViewerTimelineState(
 /// <param name="InMapView">Whether its footprint intersects the map view; null when unknown.</param>
 /// <param name="Expired">True for a forecast that has ended.</param>
 /// <param name="Time">The layer time as the lane shows it.</param>
-internal sealed record TimelineLaneState(string Id, string Label, string Group, bool Listed, bool? InMapView, bool Expired, string Time);
+internal sealed record TimelineLaneState(string Id, string Label, string Group, bool Listed, bool? InMapView, bool Expired, string Time)
+{
+    /// <summary>True for a lane of Library data that is not loaded (#711).</summary>
+    public bool Library { get; init; }
+
+    /// <summary>True when a newer run is online ("New run").</summary>
+    public bool NewRun { get; init; }
+
+    /// <summary>The Library's windows for the lane.</summary>
+    public IReadOnlyList<TimelineLibraryWindow> Windows { get; init; } = [];
+}
+
+/// <summary>A window of data the Library knows for a lane (#711).</summary>
+/// <param name="ItemId">The Library item id, as the Library MCP tools use it.</param>
+/// <param name="State">Online, on disk or loaded.</param>
+/// <param name="Start">Start (UTC).</param>
+/// <param name="End">End (UTC).</param>
+/// <param name="Run">The forecast run, if any.</param>
+/// <param name="NewRun">True for a newer run than the copy on disk.</param>
+/// <param name="Expired">True when the copy on disk has ended.</param>
+internal sealed record TimelineLibraryWindow(string ItemId, LibraryTimedState State, DateTime Start, DateTime End, DateTime? Run, bool NewRun, bool Expired);
 
 /// <summary>What one time-aware layer draws at the view time.</summary>
 /// <param name="Id">The dataset id, as <c>list_datasets</c> reports it.</param>

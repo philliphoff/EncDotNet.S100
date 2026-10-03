@@ -3852,6 +3852,54 @@
   <data name="TimelinePanel_PresetCustom" xml:space="preserve">
     <value>Custom</value>
   </data>
+  <data name="Library_State_AtViewTime" xml:space="preserve">
+    <value>Valid at view time</value>
+  </data>
+  <data name="Tooltip_LibraryAtViewTimeFormat" xml:space="preserve">
+    <value>Only data valid at the Timeline's view time · {0:N0}</value>
+  </data>
+  <data name="Library_ShowOnTimeline" xml:space="preserve">
+    <value>Show on timeline</value>
+  </data>
+  <data name="Library_GoToRunStart" xml:space="preserve">
+    <value>Go to start of run</value>
+  </data>
+  <data name="TimelinePanel_ShowOnline" xml:space="preserve">
+    <value>Show online</value>
+  </data>
+  <data name="Tooltip_TimelineShowOnline" xml:space="preserve">
+    <value>Also show data the Library knows about: dashed online, outlined on disk</value>
+  </data>
+  <data name="TimelinePanel_LaneOnline" xml:space="preserve">
+    <value>online</value>
+  </data>
+  <data name="TimelinePanel_LaneOnDisk" xml:space="preserve">
+    <value>on disk</value>
+  </data>
+  <data name="TimelinePanel_LaneTilesFormat" xml:space="preserve">
+    <value>{0} tiles</value>
+  </data>
+  <data name="TimelinePanel_BandRunFormat" xml:space="preserve">
+    <value>{0} run</value>
+  </data>
+  <data name="TimelinePanel_BandWindowFormat" xml:space="preserve">
+    <value>Valid {0} → {1}</value>
+  </data>
+  <data name="TimelinePanel_BandGetFormat" xml:space="preserve">
+    <value>Get · {0}</value>
+  </data>
+  <data name="TimelinePanel_BandGet" xml:space="preserve">
+    <value>Get</value>
+  </data>
+  <data name="TimelinePanel_BandLoad" xml:space="preserve">
+    <value>Load</value>
+  </data>
+  <data name="TimelinePanel_BandReveal" xml:space="preserve">
+    <value>Reveal in Library</value>
+  </data>
+  <data name="TimelinePanel_BandDownloadingFormat" xml:space="preserve">
+    <value>Downloading · {0:P0}</value>
+  </data>
   <data name="TimelinePanel_PresetInView" xml:space="preserve">
     <value>In view</value>
   </data>
@@ -3869,9 +3917,6 @@
   </data>
   <data name="TimelinePanel_ShowLanes" xml:space="preserve">
     <value>Show lanes</value>
-  </data>
-  <data name="TimelinePanel_TagExpired" xml:space="preserve">
-    <value>Expired</value>
   </data>
   <data name="TimelinePanel_LaneRunFormat" xml:space="preserve">
     <value>{0} run</value>

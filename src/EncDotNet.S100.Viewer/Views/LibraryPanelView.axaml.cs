@@ -44,10 +44,23 @@ public partial class LibraryPanelView : UserControl
         base.OnDataContextChanged(e);
 
         if (_viewModel is not null)
+        {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.Revealed -= OnRevealed;
+        }
         _viewModel = DataContext as LibraryPanelViewModel;
         if (_viewModel is not null)
+        {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.Revealed += OnRevealed;
+        }
+    }
+
+    /// <summary>"Reveal in Library" from the Timeline (#711): bring the row into view.</summary>
+    private void OnRevealed(object? sender, LibraryItemViewModel item)
+    {
+        if (this.FindControl<ListBox>("ItemList") is { } list)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => list.ScrollIntoView(item), Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>A map tap selects a dataset without changing the list: bring its row into view.</summary>

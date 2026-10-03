@@ -76,12 +76,12 @@ internal static class LayerTimes
     }
 
     /// <summary>"18:00Z" in UTC, the local short time otherwise.</summary>
-    private static string Clock(DateTime utc, TimeFormat format, TimeZoneInfo zone, CultureInfo culture) =>
+    internal static string Clock(DateTime utc, TimeFormat format, TimeZoneInfo zone, CultureInfo culture) =>
         format == TimeFormat.Utc
             ? utc.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z"
             : TimeZoneInfo.ConvertTimeFromUtc(utc, zone).ToString("t", culture);
 
-    private static string Day(DateTime utc, TimeZoneInfo zone, CultureInfo culture) =>
+    internal static string Day(DateTime utc, TimeZoneInfo zone, CultureInfo culture) =>
         TimeZoneInfo.ConvertTimeFromUtc(utc, zone).ToString(TimelineAxisLabels.DayMonthPattern(culture), culture);
 
     /// <summary>"24 min", "6 h", "3 d", "6 wk".</summary>

@@ -53,6 +53,11 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     {
     }
 
+    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time, IForecastRunRefresher refresher, TimeRefreshProgress progress, ITimelineMapScope scope, ILibraryTimeSource library)
+        : this(service, timeFormat, time, PostToUiThread, refresher, progress, scope, library)
+    {
+    }
+
     internal TimelineViewModel(
         GlobalTimeService service,
         ITimeFormatProvider? timeFormat,
@@ -60,7 +65,8 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         Action<Action> dispatch,
         IForecastRunRefresher? refresher = null,
         TimeRefreshProgress? progress = null,
-        ITimelineMapScope? scope = null)
+        ITimelineMapScope? scope = null,
+        ILibraryTimeSource? library = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(time);
@@ -74,7 +80,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         PreviousStepCommand = new RelayCommand(() => StepBy(-1), () => CanStep(StepKind, -1));
         NextStepCommand = new RelayCommand(() => StepBy(+1), () => CanStep(StepKind, +1));
         InitializeNavigation();
-        InitializeLanes(scope);
+        InitializeLanes(scope, library);
         NowCommand = new RelayCommand(GoLive, () => IsActive && !IsLive);
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
         CheckForNewRunsCommand = new RelayCommand(() => _refresher?.RefreshForecastSources(), () => _refresher?.HasForecastSources == true);

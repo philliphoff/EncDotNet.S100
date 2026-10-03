@@ -107,5 +107,11 @@ public sealed class TimelineViewTests
         public void Highlight(string? datasetId, (byte R, byte G, byte B) color = default)
         {
         }
+
+        public bool? Intersects(EncDotNet.S100.Collections.GeoBounds bounds) => true;
+
+        public void HighlightAreas(IReadOnlyList<EncDotNet.S100.Collections.GeoBounds> areas, (byte R, byte G, byte B) color = default)
+        {
+        }
     }
 }

@@ -43,9 +43,10 @@ internal static class LibraryMcpAdapters
             [Description("Longitude of the point.")] double? lon = null,
             [Description("0-based page (default 0).")] int? page = null,
             [Description("Items per page, 1–500 (default 50).")] int? pageSize = null,
+            [Description("Keep only items whose data covers a time: 'view_time' (the Timeline's view time, as the Library's Valid at view time toggle) or an ISO-8601 time. A forecast's window is its run's (the downloaded copy's, else the catalogue's).")] string? validAt = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
-                new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, lat, lon, page, pageSize), ct));
+                new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, lat, lon, page, pageSize, validAt), ct));
         return Tool(del, QueryLibraryItemsTool.Name,
             "Finds datasets in the live viewer's Library, paged. Each item reports its id, spec, state as the Library "
             + "row shows it ('online' not downloaded, 'local' on disk, 'loaded', 'on_pan', 'update' newer edition or run "

@@ -43,9 +43,10 @@ internal sealed partial class TimelineViewModel
     private IReadOnlyList<NormalizedCoverageBand> _outsideBands = [];
     private TimelineLaneViewModel? _hoveredLane;
 
-    private void InitializeLanes(ITimelineMapScope? scope)
+    private void InitializeLanes(ITimelineMapScope? scope, ILibraryTimeSource? library)
     {
         _scope = scope;
+        InitializeLibrary(library);
         ToggleInMapViewCommand = new RelayCommand(() => IsInMapView = !IsInMapView, () => IsInMapViewAvailable);
         ToggleStripCommand = new RelayCommand(() => IsCollapsedToStrip = !IsCollapsedToStrip);
         ToggleOutsideCommand = new RelayCommand(() => IsOutsideExpanded = !IsOutsideExpanded);
@@ -109,7 +110,7 @@ internal sealed partial class TimelineViewModel
     /// </summary>
     public bool IsInMapView
     {
-        get => IsInMapViewAvailable && (_inMapViewChoice ?? _service.TimedDatasets.Count > InMapViewDefaultThreshold);
+        get => IsInMapViewAvailable && (_inMapViewChoice ?? LaneCount > InMapViewDefaultThreshold);
         set
         {
             if (!IsInMapViewAvailable || IsInMapView == value && _inMapViewChoice is not null)
@@ -164,21 +165,42 @@ internal sealed partial class TimelineViewModel
     /// <summary>True when the axis follows a subset of the layers.</summary>
     private bool IsAxisScoped => IsFiltering && AxisDatasets.Count < _service.TimedDatasets.Count;
 
-    /// <summary>The loaded range of the layers that set the axis.</summary>
+    /// <summary>
+    /// The range of the layers that set the axis, widened by the Library data
+    /// shown with them (#711).
+    /// </summary>
     private (DateTime Min, DateTime Max)? AxisRange
     {
         get
         {
+            (DateTime Min, DateTime Max)? range;
             if (!IsAxisScoped)
-                return _service.MinTime is { } min && _service.MaxTime is { } max ? (min, max) : null;
-            var datasets = AxisDatasets;
-            return (datasets.Min(d => d.First), datasets.Max(d => d.Last));
+            {
+                range = _service.MinTime is { } min && _service.MaxTime is { } max ? (min, max) : null;
+            }
+            else
+            {
+                var datasets = AxisDatasets;
+                range = (datasets.Min(d => d.First), datasets.Max(d => d.Last));
+            }
+            if (range is not { } loaded)
+                return null;
+            foreach (var window in KnownWindows())
+                loaded = (window.Start < loaded.Min ? window.Start : loaded.Min, window.End > loaded.Max ? window.End : loaded.Max);
+            return loaded;
         }
     }
 
-    /// <summary>The coverage that lays out the axis: the layers in scope, merged.</summary>
-    private IReadOnlyList<CoverageSegment> AxisCoverage =>
-        IsAxisScoped ? Merge(AxisDatasets.SelectMany(Segments)) : _service.CoverageSegments;
+    /// <summary>The coverage that lays out the axis: the layers in scope and the Library data shown, merged.</summary>
+    private IReadOnlyList<CoverageSegment> AxisCoverage
+    {
+        get
+        {
+            var loaded = IsAxisScoped ? Merge(AxisDatasets.SelectMany(Segments)) : _service.CoverageSegments;
+            var known = KnownWindows().ToArray();
+            return known.Length == 0 ? loaded : Merge(loaded.Concat(known));
+        }
+    }
 
     /// <summary>The windows in which a dataset draws.</summary>
     private static IEnumerable<CoverageSegment> Segments(MapsuiMapTimedDataset dataset) =>
@@ -211,7 +233,8 @@ internal sealed partial class TimelineViewModel
     /// </summary>
     private void OnMapScopeChanged()
     {
-        var key = string.Join('|', _service.TimedDatasets.Where(IsInView).Select(LaneKey));
+        var key = string.Join('|', _service.TimedDatasets.Where(IsInView).Select(LaneKey))
+            + "#" + (ShowOnline ? string.Join('|', LibraryEntries.Where(IsInView).Select(e => e.ItemId)) : string.Empty);
         if (key == _inViewKey)
             return;
         _inViewKey = key;
@@ -233,7 +256,7 @@ internal sealed partial class TimelineViewModel
         if (ReferenceEquals(lane, _hoveredLane))
             return;
         _hoveredLane = lane;
-        _scope?.Highlight(lane?.DatasetId, lane is null ? default : (lane.Color.R, lane.Color.G, lane.Color.B));
+        HighlightLane(lane);
     }
 
     /// <summary>
@@ -245,8 +268,7 @@ internal sealed partial class TimelineViewModel
         var datasets = _service.TimedDatasets;
         var axis = _axis;
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var inScope = new List<TimelineLaneViewModel>();
-        var outside = new List<TimelineLaneViewModel>();
+        var lanes = new List<(TimelineLaneViewModel Lane, bool InScope)>();
         var filtering = IsFiltering;
         foreach (var dataset in datasets
             .OrderBy(d => Product(d.ProductSpec).Order)
@@ -258,15 +280,25 @@ internal sealed partial class TimelineViewModel
                 continue;
             if (!_lanes.TryGetValue(key, out var lane))
             {
-                lane = new TimelineLaneViewModel(key, dataset, Product(dataset.ProductSpec).Color, _service.SetCurrentTime);
+                lane = new TimelineLaneViewModel(key, dataset, dataset.ProductSpec ?? string.Empty, Product(dataset.ProductSpec).Color, _service.SetCurrentTime, _library);
                 _lanes[key] = lane;
             }
             lane.Dataset = dataset;
             lane.IsInMapView = _scope is not null && dataset.DatasetId is { } id ? _scope.IsInMapView(id) : null;
             lane.Bands = axis is null ? [] : axis.BandsFor(Segments(dataset));
             lane.Gaps = _gaps;
-            (!filtering || IsInView(dataset) ? inScope : outside).Add(lane);
+            lanes.Add((lane, !filtering || IsInView(dataset)));
         }
+
+        // Library data: linked to the loaded lanes, or lanes of their own (#711).
+        LinkLibrary([.. lanes.Select(l => l.Lane)], lanes, seen);
+        var ordered = lanes
+            .OrderBy(l => Product(l.Lane.Spec).Order)
+            .ThenBy(l => l.Lane.Spec, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(l => l.Lane.IsKnown)
+            .ToArray();
+        var inScope = ordered.Where(l => l.InScope).Select(l => l.Lane).ToList();
+        var outside = ordered.Where(l => !l.InScope).Select(l => l.Lane).ToList();
         foreach (var stale in _lanes.Keys.Where(k => !seen.Contains(k)).ToArray())
             _lanes.Remove(stale);
 
@@ -275,7 +307,7 @@ internal sealed partial class TimelineViewModel
         {
             _laneStructure = structure;
             LaneGroups.Clear();
-            foreach (var group in inScope.GroupBy(l => l.Dataset.ProductSpec ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            foreach (var group in inScope.GroupBy(l => l.Spec, StringComparer.OrdinalIgnoreCase))
             {
                 LaneGroups.Add(new TimelineLaneGroupViewModel(
                     group.Key,
@@ -294,9 +326,10 @@ internal sealed partial class TimelineViewModel
         }
         _outsideBands = axis is null || outside.Count == 0
             ? []
-            : axis.BandsFor(Merge(outside.SelectMany(l => Segments(l.Dataset))));
+            : axis.BandsFor(Merge(outside.SelectMany(LaneSegments)));
 
         UpdateLaneTimes();
+        UpdateLaneProgress();
         OnPropertyChanged(nameof(OutsideLanes));
         OnPropertyChanged(nameof(HasOutsideLanes));
         OnPropertyChanged(nameof(OutsideLabel));
@@ -317,7 +350,13 @@ internal sealed partial class TimelineViewModel
         var view = _service.CurrentTime;
         foreach (var lane in _lanes.Values)
         {
-            var dataset = lane.Dataset;
+            if (lane.Dataset is not { } dataset)
+            {
+                UpdateKnownLane(lane, format);
+                UpdateLaneActions(lane, format);
+                continue;
+            }
+            UpdateLaneActions(lane, format);
             var run = ForecastRunNames.Describe(dataset.Name);
             var tiled = ForecastRunNames.ModelAndTile(dataset.Name);
             lane.Code = tiled?.Model ?? DriverLabel(dataset);

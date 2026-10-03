@@ -94,6 +94,8 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             var windowed = change.Preset is not null || change.Zoom is not null || change.Window is not null;
             if (change.InMapView is not null && !_timeline.IsInMapViewAvailable)
                 reason = "the map view is not available";
+            else if (change.ShowOnline is not null && !_timeline.IsShowOnlineAvailable)
+                reason = "the Library is not available";
             else if (windowed && !_time.IsActive)
                 reason = "no time-aware dataset is loaded";
             else
@@ -103,6 +105,8 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
                     _timeline.IsCollapsedToStrip = strip;
                 if (change.InMapView is { } inMapView)
                     _timeline.IsInMapView = inMapView;
+                if (change.ShowOnline is { } showOnline)
+                    _timeline.ShowOnline = showOnline;
                 if (change.Preset is { } preset && !_timeline.ApplyPreset(preset))
                     reason = preset == TimelinePreset.InView ? "no layer is in the map view" : "there is no run to show";
                 else if (change.Zoom is { } zoom)
@@ -167,6 +171,7 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             StepDriver = _timeline.Driver?.Name,
             Gaps = _timeline.AxisGaps,
             InMapView = _timeline.IsInMapView,
+            ShowOnline = _timeline.ShowOnline,
             CollapsedToStrip = _timeline.IsCollapsedToStrip,
             Lanes = Lanes(),
             Offset = _timeline.OffsetText,
@@ -178,12 +183,19 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
     private TimelineLaneState[] Lanes()
     {
         string Id(TimelineLaneViewModel lane) =>
-            _datasets.Entries.FirstOrDefault(e => e.Id.Value == lane.DatasetId)?.DisplayName ?? lane.Dataset.Name;
-        var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => new TimelineLaneState(
-            Id(lane), lane.Code, g.Title, true, lane.IsInMapView, lane.IsExpired, lane.LayerTime)));
+            lane.Dataset is { } dataset
+                ? _datasets.Entries.FirstOrDefault(e => e.Id.Value == lane.DatasetId)?.DisplayName ?? dataset.Name
+                : lane.Key;
+        TimelineLaneState State(TimelineLaneViewModel lane, string group, bool listed) =>
+            new(Id(lane), lane.Code, group, listed, lane.IsInMapView, lane.IsExpired, lane.LayerTime)
+            {
+                Library = lane.IsKnown,
+                NewRun = lane.IsNewRun,
+                Windows = [.. lane.Entries.Select(e => new TimelineLibraryWindow(e.ItemId, e.State, e.Start, e.End, e.Run, e.IsNewRun, e.IsExpired))],
+            };
+        var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => State(lane, g.Title, true)));
         var folded = _timeline.HasOutsideLanes
-            ? _timeline.OutsideLanes.Select(lane => new TimelineLaneState(
-                Id(lane), lane.Code, TimelineViewModel.GroupTitle(lane.Dataset.ProductSpec ?? string.Empty), false, lane.IsInMapView, lane.IsExpired, lane.LayerTime))
+            ? _timeline.OutsideLanes.Select(lane => State(lane, TimelineViewModel.GroupTitle(lane.Spec), false))
             : [];
         return [.. listed, .. folded];
     }

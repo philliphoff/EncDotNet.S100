@@ -57,13 +57,13 @@ public sealed class ForecastLibraryTests : IDisposable
         },
     };
 
-    private async Task<LibraryPanelViewModel> PanelAsync()
+    private async Task<LibraryPanelViewModel> PanelAsync(Services.GlobalTimeService? viewTime = null)
     {
         _library.Initialize();
         _library.AddCollection("S-111", [new S100ForecastFeedSource(Guid.NewGuid(), null, ModelsUri, [Cbofs, Nyofs])]);
         await _library.WhenIdle();
         var panel = new LibraryPanelViewModel(
-            _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time);
+            _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time, viewTime: viewTime);
         panel.Sync();
         panel.SelectedNode = Source(panel);
         return panel;
@@ -229,6 +229,138 @@ public sealed class ForecastLibraryTests : IDisposable
         Assert.Equal(known.CatalogUri, source.ModelsUri);
         Assert.Equal([Cbofs], source.Models);
         Assert.Equal(ForecastShape.Regional, source.Shape);
+    }
+
+    // ── the Timeline link (#711) ───────────────────────────────────────
+
+    private Services.LibraryTimeSource TimeSource(LibraryPanelViewModel panel) =>
+        new(panel, _library, new NullLoader(), _time, action => action());
+
+    [Fact]
+    public async Task The_timeline_knows_each_tiles_window_online_on_disk_and_a_newer_run()
+    {
+        _downloader.Have("111US00_CBOFS_US4VA1DD", Run.AddHours(-6));
+        using var panel = await PanelAsync();
+
+        var entries = TimeSource(panel).Entries;
+
+        var dd = entries.Where(e => e.Name == "111US00_CBOFS_US4VA1DD").OrderBy(e => e.Start).ToArray();
+        Assert.Equal(2, dd.Length);
+        Assert.Equal((Services.LibraryTimedState.OnDisk, Run.AddHours(-6).UtcDateTime, Run.AddHours(42).UtcDateTime), (dd[0].State, dd[0].Start, dd[0].End));
+        Assert.False(dd[0].IsNewRun);
+        Assert.Equal((Services.LibraryTimedState.Online, Run.UtcDateTime, Run.AddHours(48).UtcDateTime), (dd[1].State, dd[1].Start, dd[1].End));
+        Assert.True(dd[1].IsNewRun);
+        Assert.Equal(500_000, dd[1].SizeBytes);
+        Assert.Equal("cbofs/US4VA1DD", dd[1].MatchKey);
+
+        var de = Assert.Single(entries, e => e.Name == "111US00_CBOFS_US4VA1DE");
+        Assert.Equal(Services.LibraryTimedState.Online, de.State);
+        Assert.False(de.IsNewRun);
+        var ny = Assert.Single(entries, e => e.Model == "nyofs");
+        Assert.Equal((Run.AddHours(1).UtcDateTime, Run.AddHours(55).UtcDateTime), (ny.Start, ny.End));
+        Assert.EndsWith(":nyofs/111US00_NYOFS_US4NY1AP", ny.ItemId, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_run_on_disk_whose_window_ended_is_expired_on_the_timeline()
+    {
+        _downloader.Have("111US00_CBOFS_US4VA1DD", Run);
+        _time.Advance(TimeSpan.FromHours(60));
+        using var panel = await PanelAsync();
+
+        var entry = Assert.Single(TimeSource(panel).Entries, e => e.Name == "111US00_CBOFS_US4VA1DD");
+
+        Assert.Equal(Services.LibraryTimedState.OnDisk, entry.State);
+        Assert.True(entry.IsExpired);
+    }
+
+    [Fact]
+    public async Task The_at_time_facet_lists_what_is_valid_at_the_view_time()
+    {
+        var viewTime = new Services.GlobalTimeService();
+        var samples = Enumerable.Range(0, 49).Select(h => Run.UtcDateTime.AddHours(h)).ToArray();
+        viewTime.ApplySnapshot(new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[2],
+            Samples = samples,
+            CoverageSegments = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset("111US00_CBOFS_US4VA1DD", samples[0], samples[^1])],
+        });
+        using var panel = await PanelAsync(viewTime);
+
+        Assert.True(panel.HasViewTime);
+        Assert.Equal(3, panel.AtViewTimeCount);
+
+        viewTime.SetCurrentTime(Run.UtcDateTime.AddHours(50));
+        Assert.Equal(1, panel.AtViewTimeCount);
+        panel.IsAtViewTime = true;
+        Assert.Equal(["nyofs"], panel.Items.Where(i => i.IsModelHeader).Select(i => i.Name));
+        // The toggle narrows the segments too.
+        Assert.Equal(1, panel.AllCount);
+        Assert.Equal(1, panel.OnlineCount);
+    }
+
+    [Fact]
+    public async Task Reveal_selects_a_tile_and_opens_its_model()
+    {
+        using var panel = await PanelAsync();
+        panel.FilterText = "nyofs";
+        LibraryItemViewModel? revealed = null;
+        panel.Revealed += (_, item) => revealed = item;
+        var source = Source(panel).Source!.Id;
+
+        Assert.True(panel.Reveal(source, "cbofs/111US00_CBOFS_US4VA1DE"));
+
+        Assert.Equal("111US00_CBOFS_US4VA1DE", panel.SelectedItem?.Name);
+        Assert.Same(panel.SelectedItem, revealed);
+        Assert.Equal(string.Empty, panel.FilterText);
+        Assert.False(panel.Reveal(source, "cbofs/nothing"));
+    }
+
+    [Fact]
+    public async Task A_row_shows_its_window_on_the_timeline_and_goes_to_its_run()
+    {
+        var viewTime = new Services.GlobalTimeService();
+        var samples = Enumerable.Range(0, 3).Select(h => Run.UtcDateTime.AddHours(h)).ToArray();
+        viewTime.ApplySnapshot(new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset("x", samples[0], samples[^1])],
+        });
+        using var panel = await PanelAsync(viewTime);
+        (DateTime, DateTime)? shown = null;
+        DateTime? went = null;
+        panel.ShowOnTimelineRequested += (_, window) => shown = window;
+        panel.GoToTimeRequested += (_, at) => went = at;
+
+        panel.SelectedItem = Model(panel, "nyofs");
+        Assert.True(panel.HasValidWindow);
+        panel.ShowOnTimelineCommand.Execute(null);
+        panel.GoToRunStartCommand.Execute(null);
+
+        Assert.Equal((Run.AddHours(1).UtcDateTime, Run.AddHours(55).UtcDateTime), shown);
+        Assert.Equal(Run.AddHours(1).UtcDateTime, went);
+    }
+
+    [Theory]
+    [InlineData("view_time", true, null)]
+    [InlineData("2026-09-30T20:00:00Z", false, "2026-09-30T20:00:00Z")]
+    public void Query_library_items_takes_validAt(string validAt, bool atViewTime, string? at)
+    {
+        var (query, error) = McpTools.QueryLibraryItemsTool.Parse(
+            new McpTools.QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, validAt));
+
+        Assert.Null(error);
+        Assert.Equal(atViewTime, query!.ValidAtViewTime);
+        Assert.Equal(at is null ? null : DateTime.Parse(at, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal), query.ValidAt);
+        Assert.NotNull(McpTools.QueryLibraryItemsTool.Parse(
+            new McpTools.QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, "soon")).Error);
     }
 
     private sealed class RunIndexer : ICollectionSourceIndexer

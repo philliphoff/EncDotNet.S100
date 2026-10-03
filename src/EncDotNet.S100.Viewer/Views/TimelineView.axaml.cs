@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -45,7 +47,10 @@ public partial class TimelineView : UserControl
     private static TimelineLaneViewModel? LaneOf(object? source) =>
         (source as StyledElement)?.DataContext as TimelineLaneViewModel;
 
-    /// <summary>Clicking a lane's "no data" layer time jumps to its nearest data (handoff D3).</summary>
+    /// <summary>
+    /// Clicking a lane's "no data" layer time jumps to its nearest data
+    /// (handoff D3); clicking its bands opens their Library actions (E5).
+    /// </summary>
     private static void OnLaneTapped(object? sender, TappedEventArgs e)
     {
         if (e.Source is TextBlock { Classes: var classes } text && classes.Contains("LaneTime")
@@ -53,6 +58,19 @@ public partial class TimelineView : UserControl
         {
             lane.JumpCommand.Execute(null);
             e.Handled = true;
+            return;
+        }
+        for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Panel track && track.Classes.Contains("LaneTrack"))
+            {
+                if (LaneOf(track) is { HasActions: true })
+                {
+                    FlyoutBase.ShowAttachedFlyout(track);
+                    e.Handled = true;
+                }
+                return;
+            }
         }
     }
 
@@ -129,6 +147,16 @@ public partial class TimelineView : UserControl
                 ToggleType = MenuItemToggleType.CheckBox,
                 IsChecked = timeline.IsInMapView,
                 Command = timeline.ToggleInMapViewCommand,
+            });
+        }
+        if (timeline.IsShowOnlineAvailable)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = Strings.TimelinePanel_ShowOnline,
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = timeline.ShowOnline,
+                Command = timeline.ToggleShowOnlineCommand,
             });
         }
         menu.ShowAt(anchor);

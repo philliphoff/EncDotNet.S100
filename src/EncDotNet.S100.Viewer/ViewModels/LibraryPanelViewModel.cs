@@ -49,6 +49,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Action<Action> _dispatch;
     private readonly TimeProvider _time;
     private readonly ITimer? _clock;
+    private readonly Services.GlobalTimeService? _viewTime;
+    private bool _atViewTime;
+    private IReadOnlyList<LibraryItemViewModel> _textMatched = [];
 
     private LibraryNodeViewModel? _selectedNode;
     private bool _hasSynced;
@@ -75,8 +78,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryDownloader downloader,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
         Services.Notifications.INotificationService? notifications = null,
-        TimeProvider? time = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time)
+        TimeProvider? time = null,
+        Services.GlobalTimeService? viewTime = null)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime)
     {
     }
 
@@ -88,9 +92,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         Action<Action> dispatch,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
         Services.Notifications.INotificationService? notifications = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        Services.GlobalTimeService? viewTime = null)
     {
         _time = time ?? TimeProvider.System;
+        _viewTime = viewTime;
         _feedHealth = feedHealth;
         _notifications = notifications;
         ArgumentNullException.ThrowIfNull(downloader);
@@ -134,6 +140,26 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
+        ShowOnTimelineCommand = new RelayCommand(
+            () =>
+            {
+                if (_selectedItem?.ValidWindow is { } window)
+                    ShowOnTimelineRequested?.Invoke(this, window);
+            },
+            () => HasViewTime && _selectedItem?.ValidWindow is not null);
+        GoToRunStartCommand = new RelayCommand(
+            () =>
+            {
+                if (_selectedItem?.ValidWindow is { } window)
+                    GoToTimeRequested?.Invoke(this, window.Start);
+            },
+            () => HasViewTime && _selectedItem?.ValidWindow is not null);
+        if (_viewTime is not null)
+        {
+            // The "At view time" facet follows the Timeline (#711, handoff G2).
+            _viewTime.CurrentTimeChanged += _ => _dispatch(OnViewTimeChanged);
+            _viewTime.RangeChanged += () => _dispatch(OnViewTimeChanged);
+        }
         _loader.Changed += OnLoaderChanged;
         _downloader.Changed += OnLoaderChanged;
         _downloader.ProgressChanged += OnDownloadProgress;
@@ -206,6 +232,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(HasValidWindow));
                 UpdatePairing();
             }
         }
@@ -343,6 +372,98 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     public bool IsStateOnline { get => _stateFilter == LibraryStateFilter.Online; set { if (value) StateFilter = LibraryStateFilter.Online; } }
 
     public bool IsStateUpdates { get => _stateFilter == LibraryStateFilter.Updates; set { if (value) StateFilter = LibraryStateFilter.Updates; } }
+
+    /// <summary>
+    /// Lists only data valid at the Timeline's view time (#711, handoff G2):
+    /// a toggle beside the filter box that narrows whichever segment is chosen.
+    /// </summary>
+    public bool IsAtViewTime
+    {
+        get => _atViewTime;
+        set
+        {
+            if (SetProperty(ref _atViewTime, value))
+            {
+                EndTap();
+                ApplyFilter();
+            }
+        }
+    }
+
+    /// <summary>"Only data valid at the view time · 12".</summary>
+    public string AtViewTimeTooltip => string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_LibraryAtViewTimeFormat, AtViewTimeCount);
+
+    /// <summary>True when the Timeline has a view time, so "At view time" and the row's Timeline actions apply.</summary>
+    public bool HasViewTime => _viewTime?.CurrentTime is not null && _viewTime.IsActive;
+
+    /// <summary>Of the datasets matching the text, how many hold data at the view time.</summary>
+    public int AtViewTimeCount { get; private set; }
+
+    /// <summary>True when the selected dataset has a time window (forecast run or time coverage).</summary>
+    public bool HasValidWindow => _selectedItem?.ValidWindow is not null;
+
+    /// <summary>Shows the selected dataset's window on the Timeline (#711, handoff G3).</summary>
+    public ICommand ShowOnTimelineCommand { get; }
+
+    /// <summary>Moves the Timeline's view time to the start of the selected dataset's run or window.</summary>
+    public ICommand GoToRunStartCommand { get; }
+
+    /// <summary>Raised with a window the Timeline should show.</summary>
+    public event EventHandler<(DateTime Start, DateTime End)>? ShowOnTimelineRequested;
+
+    /// <summary>Raised with a time the Timeline should move to.</summary>
+    public event EventHandler<DateTime>? GoToTimeRequested;
+
+    /// <summary>Raised after <see cref="Reveal"/> selected a dataset, so the view can show the panel and scroll to it.</summary>
+    public event EventHandler<LibraryItemViewModel>? Revealed;
+
+    /// <summary>
+    /// Selects a dataset by its source and key, as "Reveal in Library" does
+    /// from the Timeline (#711, handoff G3): its source node, every state,
+    /// no text filter, and its model's group opened.
+    /// </summary>
+    internal bool Reveal(Guid sourceId, string key)
+    {
+        var node = Nodes.SelectMany(n => n.SelfAndDescendants())
+            .FirstOrDefault(n => !n.IsGroup && n.Source?.Id == sourceId && n.EnumerateItems().Any(p => p.Item.Key == key))
+            ?? Nodes.FirstOrDefault(n => n.EnumerateItems().Any(p => p.Source.Id == sourceId && p.Item.Key == key));
+        if (node is null)
+            return false;
+        if (_location is not null)
+            SetLocation(null);
+        _filterText = string.Empty;
+        OnPropertyChanged(nameof(FilterText));
+        _stateFilter = LibraryStateFilter.All;
+        _atViewTime = false;
+        OnPropertyChanged(nameof(StateFilter));
+        OnPropertyChanged(nameof(IsStateAll));
+        OnPropertyChanged(nameof(IsStateLocal));
+        OnPropertyChanged(nameof(IsStateOnline));
+        OnPropertyChanged(nameof(IsStateUpdates));
+        OnPropertyChanged(nameof(IsAtViewTime));
+        if (_selectedNode != node)
+            SelectedNode = node;
+        else
+            ApplyFilter();
+        var row = _allItems.FirstOrDefault(i => i.Source.Id == sourceId && i.Item.Key == key);
+        if (row is not null && PackageOf(row) is { } package && _expandedPackages.Add(package))
+            ApplyFilter();
+        SelectedItem = _items.FirstOrDefault(i => i.Source.Id == sourceId && i.Item.Key == key);
+        if (_selectedItem is { } selected)
+            Revealed?.Invoke(this, selected);
+        return _selectedItem is not null;
+    }
+
+    private void OnViewTimeChanged()
+    {
+        OnPropertyChanged(nameof(HasViewTime));
+        ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
+        if (_atViewTime)
+            ApplyFilter();
+        else
+            Recount();
+    }
 
     /// <summary>Datasets passing the text filter (the "All" segment's count).</summary>
     public int AllCount => _textFiltered.Count;
@@ -1397,10 +1518,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private void ApplyFilter()
     {
         var filter = _filterText.Trim();
-        _textFiltered = _allItems
+        _textMatched = _allItems
             .Where(i => _showCancelled || !i.IsCancelled)
             .Where(i => filter.Length == 0 || i.Matches(filter))
             .ToArray();
+        var viewTime = ViewTime;
+        _textFiltered = _atViewTime ? [.. _textMatched.Where(i => IsValidAt(i, viewTime))] : _textMatched;
         var listed = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
         _listedDatasets = listed.Length;
         Items = GroupPackages(listed, expandAll: filter.Length > 0);
@@ -1537,6 +1660,15 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
     }
 
+    private DateTime? ViewTime => _viewTime?.IsActive == true ? _viewTime.CurrentTime : null;
+
+    /// <summary>The Timeline's view time, while it has one (for the MCP <c>validAt</c> filter).</summary>
+    internal DateTime? CurrentViewTime => ViewTime;
+
+    /// <summary>True when the item's data covers <paramref name="viewTime"/>.</summary>
+    private static bool IsValidAt(LibraryItemViewModel item, DateTime? viewTime) =>
+        viewTime is { } at && item.ValidWindow is { } window && at >= window.Start && at <= window.End;
+
     private static bool InState(LibraryItemViewModel item, LibraryStateFilter state) => state switch
     {
         LibraryStateFilter.Local => item.Availability is LibraryAvailability.Local or LibraryAvailability.Loaded or LibraryAvailability.Deferred,
@@ -1552,6 +1684,10 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         LocalCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Local));
         OnlineCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Online));
         UpdatesCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Updates));
+        var viewTime = ViewTime;
+        AtViewTimeCount = viewTime is null ? 0 : _textMatched.Count(i => IsValidAt(i, viewTime));
+        OnPropertyChanged(nameof(AtViewTimeCount));
+        OnPropertyChanged(nameof(AtViewTimeTooltip));
         OnPropertyChanged(nameof(AllCount));
         OnPropertyChanged(nameof(LocalCount));
         OnPropertyChanged(nameof(OnlineCount));

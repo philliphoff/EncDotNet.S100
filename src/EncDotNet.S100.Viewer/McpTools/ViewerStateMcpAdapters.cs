@@ -74,14 +74,16 @@ internal static class ViewerStateMcpAdapters
             [Description("End of a custom window, ISO-8601 (with start).")] string? end = null,
             [Description("True lists only the layers whose footprint intersects the map view (they also set the axis; the rest fold into one row); false lists every layer. Omit to leave it.")] bool? inMapView = null,
             [Description("'lanes' (one lane per layer, grouped by product) or 'strip' (the single strip), as the dock header's Collapse to strip does. Omit to leave it.")] string? layout = null,
+            [Description("True also shows what the Library knows but has not loaded (online dashed, on disk outlined) on the lanes; false shows loaded data only. Omit to leave it.")] bool? showOnline = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetTimelineViewRequest(preset, zoom, start, end, inMapView, layout), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetTimelineViewRequest(preset, zoom, start, end, inMapView, layout, showOnline), ct));
         return Tool(del, SetTimelineViewTool.Name,
             "Changes what the live viewer's Timeline shows, as its preset menu, mouse wheel, drag, In map view checkbox "
             + "and Collapse to strip do: at most one of a preset, a zoom step or a custom start/end, and/or the In map "
-            + "view filter and the lanes/strip layout (applied first, so a preset follows the filter). The view time is "
-            + "not changed. Returns the Timeline state, whose 'window', 'preset', 'gaps', 'inMapView', 'layout' and "
-            + "'lanes' describe it. Mutating; viewer-injected tool.");
+            + "view filter, Show online and the lanes/strip layout (applied first, so a preset follows them). The view "
+            + "time is not changed. Returns the Timeline state, whose 'window', 'preset', 'gaps', 'inMapView', "
+            + "'showOnline', 'layout' and 'lanes' describe it. A lane's 'windows' carry Library item ids for "
+            + "library_action (Get = download, Load = load) and describe_library_item. Mutating; viewer-injected tool.");
     }
 
     /// <summary>Creates <c>set_dataset_state</c>.</summary>

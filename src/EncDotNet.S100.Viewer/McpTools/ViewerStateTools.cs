@@ -72,7 +72,19 @@ internal sealed record TimelineStateDto(
     [property: Description("The time-aware layers in Datasets-list order. Layer times settle after the map's time refresh; call await_render_idle after set_view_time before reading them.")] IReadOnlyList<TimelineLayerDto> Layers,
     [property: Description("True while the In map view filter is on: only the layers in the map view are listed and set the axis (set_timeline_view inMapView changes it).")] bool InMapView,
     [property: Description("'lanes' (one lane per layer) or 'strip' (the single strip); set_timeline_view layout changes it.")] string Layout,
-    [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes);
+    [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes,
+    [property: Description("True while the lanes also show what the Library knows but has not loaded: online (dashed) and on disk (outlined); set_timeline_view showOnline changes it.")] bool ShowOnline);
+
+/// <summary>A window of data the Library knows for a Timeline lane.</summary>
+[Description("A window of data the Library knows for a Timeline lane.")]
+internal sealed record TimelineLibraryWindowDto(
+    [property: Description("Library item id, for library_action / describe_library_item.")] string ItemId,
+    [property: Description("'online', 'on_disk' or 'loaded'.")] string State,
+    [property: Description("Start, UTC ISO-8601.")] DateTime Start,
+    [property: Description("End, UTC ISO-8601.")] DateTime End,
+    [property: Description("The forecast run, UTC ISO-8601, or null.")] DateTime? Run,
+    [property: Description("True for a newer run online than the copy on disk ('New run').")] bool NewRun,
+    [property: Description("True when the copy on disk has ended ('Expired').")] bool Expired);
 
 /// <summary>One lane of the Timeline.</summary>
 [Description("One lane of the Timeline: a time-aware layer on the shared axis.")]
@@ -83,7 +95,10 @@ internal sealed record TimelineLaneDto(
     [property: Description("True when listed; false when folded into 'N more outside the map view'.")] bool Listed,
     [property: Description("Whether the layer's footprint intersects the map view; null when not known yet.")] bool? InMapView,
     [property: Description("True for a forecast that has ended (grey, Expired tag).")] bool Expired,
-    [property: Description("The layer time as the lane shows it.")] string Time);
+    [property: Description("The layer time as the lane shows it (a Library lane: its run).")] string Time,
+    [property: Description("True for a lane of Library data that is not loaded (its id is 'library:<spec>/<model>').")] bool Library,
+    [property: Description("True when a newer run is online ('New run' tag).")] bool NewRun,
+    [property: Description("The Library's windows for the lane: the loaded copy, a newer run online, data on disk.")] IReadOnlyList<TimelineLibraryWindowDto> Windows);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
 [Description("A loaded dataset's display state before and after a change.")]
@@ -186,7 +201,17 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
             layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing))],
         state.InMapView,
         state.CollapsedToStrip ? "strip" : "lanes",
-        [.. state.Lanes.Select(lane => new TimelineLaneDto(lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time))]);
+        [.. state.Lanes.Select(lane => new TimelineLaneDto(
+            lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time, lane.Library, lane.NewRun,
+            [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))]))],
+        state.ShowOnline);
+
+    private static string WindowState(LibraryTimedState state) => state switch
+    {
+        LibraryTimedState.Online => "online",
+        LibraryTimedState.OnDisk => "on_disk",
+        _ => "loaded",
+    };
 }
 
 /// <summary>Request for <see cref="SetViewTimeTool"/>.</summary>
@@ -478,7 +503,7 @@ internal sealed class StepTimeTool(IViewerTimelineController timeline)
 }
 
 /// <summary>Request for <see cref="SetTimelineViewTool"/>.</summary>
-internal sealed record SetTimelineViewRequest(string? Preset, string? Zoom, string? Start, string? End, bool? InMapView = null, string? Layout = null);
+internal sealed record SetTimelineViewRequest(string? Preset, string? Zoom, string? Start, string? End, bool? InMapView = null, string? Layout = null, bool? ShowOnline = null);
 
 /// <summary>Changes the window the Timeline's axis shows (MCP <c>set_timeline_view</c>).</summary>
 internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
@@ -494,8 +519,8 @@ internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
         ArgumentNullException.ThrowIfNull(request);
         var hasWindow = !string.IsNullOrWhiteSpace(request.Start) || !string.IsNullOrWhiteSpace(request.End);
         var given = (string.IsNullOrWhiteSpace(request.Preset) ? 0 : 1) + (string.IsNullOrWhiteSpace(request.Zoom) ? 0 : 1) + (hasWindow ? 1 : 0);
-        if (given > 1 || (given == 0 && request.InMapView is null && string.IsNullOrWhiteSpace(request.Layout)))
-            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "supply at most one of preset, zoom, or start and end, and/or inMapView or layout"));
+        if (given > 1 || (given == 0 && request.InMapView is null && request.ShowOnline is null && string.IsNullOrWhiteSpace(request.Layout)))
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument("preset", "supply at most one of preset, zoom, or start and end, and/or inMapView, showOnline or layout"));
 
         bool? strip = request.Layout?.Trim().ToLowerInvariant() switch
         {
@@ -542,7 +567,7 @@ internal sealed class SetTimelineViewTool(IViewerTimelineController timeline)
             change = new TimelineViewChange(null, null, (start, end));
         }
 
-        change = change with { InMapView = request.InMapView, CollapsedToStrip = strip };
+        change = change with { InMapView = request.InMapView, CollapsedToStrip = strip, ShowOnline = request.ShowOnline };
         var outcome = await _timeline.SetViewAsync(change, ct).ConfigureAwait(false);
         return outcome.Applied
             ? ToolResult<TimelineStateDto>.Ok(GetTimelineStateTool.ToDto(outcome.State))

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
@@ -58,7 +59,8 @@ internal sealed record QueryLibraryItemsRequest(
     double? Lat,
     double? Lon,
     int? Page,
-    int? PageSize);
+    int? PageSize,
+    string? ValidAt = null);
 
 /// <summary>Finds Library items (MCP <c>query_library_items</c>).</summary>
 internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
@@ -140,6 +142,19 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
             point = new GeoPosition(lat, lon);
         }
 
+        // #711 G2: data valid at the Timeline's view time, or at a time.
+        DateTime? validAt = null;
+        var atViewTime = false;
+        if (!string.IsNullOrWhiteSpace(request.ValidAt))
+        {
+            if (string.Equals(request.ValidAt.Trim(), "view_time", StringComparison.OrdinalIgnoreCase))
+                atViewTime = true;
+            else if (DateTime.TryParse(request.ValidAt, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var at))
+                validAt = at;
+            else
+                return (null, new InvalidArgument("validAt", "expected 'view_time' or an ISO-8601 time"));
+        }
+
         var page = request.Page ?? 0;
         if (page < 0)
             return (null, new InvalidArgument("page", "must be 0 or more"));
@@ -155,7 +170,11 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
             bounds,
             point,
             page,
-            pageSize), null);
+            pageSize)
+        {
+            ValidAt = validAt,
+            ValidAtViewTime = atViewTime,
+        }, null);
     }
 
     /// <summary>True when <paramref name="request"/> sets any filter (not just a page).</summary>
@@ -165,7 +184,8 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
         || !string.IsNullOrWhiteSpace(request.Spec)
         || !string.IsNullOrWhiteSpace(request.Text)
         || request.South is not null || request.West is not null || request.North is not null || request.East is not null
-        || request.Lat is not null || request.Lon is not null;
+        || request.Lat is not null || request.Lon is not null
+        || !string.IsNullOrWhiteSpace(request.ValidAt);
 }
 
 /// <summary>Describes one Library item as its details pane does (MCP <c>describe_library_item</c>).</summary>
