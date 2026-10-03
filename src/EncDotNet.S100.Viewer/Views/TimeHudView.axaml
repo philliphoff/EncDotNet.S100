@@ -1,0 +1,174 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.TimeHudView"
+             x:DataType="vm:TimelineViewModel"
+             Focusable="True">
+
+    <!-- The Time HUD (#712, handoff Part F): the Timeline's everyday surface
+         on the map while the dock is closed. A 40 px bar with the mode, the
+         view time, its offset, ‹ ›, Live and the dock toggle; the status
+         message as a chip 8 px above it. -->
+    <UserControl.Styles>
+        <!-- F4: the chip's amber and red tints. -->
+        <Style Selector="Border.HudTint">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.HudTint.warning">
+            <Setter Property="IsVisible" Value="True" />
+            <Setter Property="Background" Value="#D1FFFBEB" />
+        </Style>
+        <Style Selector="Border.HudTint.error">
+            <Setter Property="IsVisible" Value="True" />
+            <Setter Property="Background" Value="#D1FEF2F2" />
+        </Style>
+        <Style Selector="Border.ModePill">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.ModePill.live">
+            <Setter Property="BorderBrush" Value="#18181B" />
+            <Setter Property="Background" Value="#18181B" />
+        </Style>
+        <Style Selector="Border.ModePill.live TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.HudText">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.HudText /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.HudText.warning /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="#B45309" />
+        </Style>
+        <Style Selector="Button.HudText.error /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="#B91C1C" />
+        </Style>
+        <Style Selector="Button.HudText.warning">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.HudAction /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.HudSeparator">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Button.HudIcon">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <!-- F5: narrow maps drop the offset, then the PINNED label. -->
+        <Style Selector="views|TimeHudView.compact TextBlock#Offset">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="views|TimeHudView.tiny Border#PinnedPill">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="8" HorizontalAlignment="Center">
+        <!-- F4: the message chip, with the status line's text and action (B3). -->
+        <Panel HorizontalAlignment="Center" IsVisible="{Binding HasStatusMessage}">
+            <!-- F2: the map tool buttons' see-through surface (as the map stamp). -->
+            <Border Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
+            <Border Classes="HudTint" CornerRadius="10"
+                    Classes.warning="{Binding IsStatusWarning}"
+                    Classes.error="{Binding IsStatusError}" />
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="12,6">
+                <Button Classes="HudText"
+                        Content="{Binding StatusMessage}"
+                        Command="{Binding ShowLayersCommand}"
+                        IsHitTestVisible="{Binding IsStatusWarning}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineShowLayers}"
+                        Classes.warning="{Binding IsStatusWarning}"
+                        Classes.error="{Binding IsStatusError}"
+                        VerticalAlignment="Center" />
+                <Button Classes="HudText HudAction"
+                        IsVisible="{Binding HasStatusAction}"
+                        Content="{Binding StatusActionText}"
+                        Command="{Binding StatusActionCommand}"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Center" />
+            </StackPanel>
+        </Panel>
+
+        <!-- F3: the 40 px bar. -->
+        <Panel x:Name="Bar" Height="40" HorizontalAlignment="Center">
+            <Border Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0" VerticalAlignment="Center">
+                <!-- Live: a dark pill; pinned: an outlined PINNED label (dropped when tiny). -->
+                <Border Classes="ModePill live"
+                        IsVisible="{Binding IsLive}"
+                        CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessColor}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ModeLabel}" FontSize="10.5" FontWeight="Bold" LetterSpacing="0.6" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="PinnedPill"
+                        Classes="ModePill"
+                        IsVisible="{Binding !IsLive}"
+                        CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ModeLabel}" FontSize="10.5" FontWeight="Bold" LetterSpacing="0.6" VerticalAlignment="Center" />
+                </Border>
+                <!-- F6: clicking the time focuses the bar for the keyboard; there is no picker. -->
+                <TextBlock x:Name="TimeText"
+                           Text="{Binding CurrentTimeLabel}"
+                           FontFamily="Menlo, Consolas, monospace"
+                           FontSize="13" FontWeight="SemiBold"
+                           Cursor="Hand"
+                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudTime}"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="Offset"
+                           Text="{Binding OffsetText}"
+                           FontSize="12"
+                           Foreground="{DynamicResource AccentBrush}"
+                           VerticalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.LayerTime_Drawing}"
+                           IsVisible="{Binding IsDrawing}"
+                           FontSize="12" Opacity="0.6"
+                           VerticalAlignment="Center" />
+                <Border Classes="HudSeparator" />
+                <Button Classes="Icon HudIcon"
+                        Command="{Binding PreviousStepCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
+                    <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <Button Classes="Icon HudIcon"
+                        Command="{Binding NextStepCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
+                    <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <Button Classes="Primary"
+                        IsVisible="{Binding !IsLive}"
+                        Height="28" MinHeight="0" Padding="12,0"
+                        FontSize="12"
+                        Content="{x:Static loc:Strings.TimeHud_Live}"
+                        Command="{Binding NowCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
+                <Border Classes="HudSeparator" />
+                <Button x:Name="DockToggle"
+                        Classes="Icon HudIcon"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}">
+                    <ic:FluentIcon Icon="PanelBottom" IconVariant="Regular" FontSize="16" />
+                </Button>
+            </StackPanel>
+        </Panel>
+    </StackPanel>
+</UserControl>

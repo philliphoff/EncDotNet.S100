@@ -18,6 +18,15 @@
                 <ResourceInclude Source="avares://SoundCharts/Resources/ProgressBarTheme.axaml" />
             </ResourceDictionary.MergedDictionaries>
             <ResourceDictionary.ThemeDictionaries>
+                <!-- The map overlays' see-through surface (#712 F2): the Time HUD
+                     and the map stamp. White at 72 % by day; dark ink at 72 %
+                     (inherited by Dusk and Night). -->
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B8FFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B818181B" />
+                </ResourceDictionary>
                 <!--
                   S-100 Night chrome variant. Inherits from ShadUI's
                   Dark dictionary via ChromeThemes.S100Night's

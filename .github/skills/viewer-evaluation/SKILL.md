@@ -170,7 +170,7 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 | `close_dataset {id}` / `close_all_datasets` | Unload (retention loops without restarting). |
 | `list_panels` | Read-only — enumerate activity panels (left/right/bottom dock tabs) + `available`/`selected`/`dockOpen`/`showing` state. |
 | `set_panel {panel, visible?}` | Show/hide a panel by id (`Datasets`, `LayerStack`, `PickReport`, `Timeline`, …) to drive & verify non-render UX. |
-| `get_timeline_state` | Read-only — Timeline mode (`live`/`pinned`), now, view time, coverage gaps, runs, and per layer the sample it draws (null = hidden, no data near the view time). |
+| `get_timeline_state` | Read-only (with the dock closed the Time HUD shows the same readout at the bottom of the map; `set_panel Timeline` opens the dock) — Timeline mode (`live`/`pinned`), now, view time, coverage gaps, runs, and per layer the sample it draws (null = hidden, no data near the view time). |
 | `set_view_time {time, snap?}` | `now`, an ISO-8601 time, or an offset (`+6h`); `snap: exact` (default) can land between samples, unlike `set_time_step`. `await_render_idle` before reading layer times. |
 | `step_time {direction, unit?, count?}` / `set_timeline_view {preset|zoom|start,end, inMapView?, showOnline?, layout?}` | Step the Timeline by 10min/1h/6h/1d, driver samples, boundaries or data clusters; change the axis window (presets incl. `in_view`, zoom, custom), the In map view lane filter, Show online (Library data not loaded), and lanes vs strip. `get_timeline_state.lanes` lists what the lanes show, with Library item ids for `library_action`. |
 | `set_dataset_state {datasetId, visible?, opacity?}` | Show/hide a loaded dataset (e.g. gridded S-104, which loads hidden). |

@@ -638,8 +638,12 @@ user-hidden viewing groups. All overrides persist between sessions.
 ## Time-varying data
 
 S-104 water levels, S-111 surface currents, and S-411 sea ice all
-carry timestamps. When at least one such dataset is loaded the
-viewer reveals a **global timeline** at the bottom of the map. The
+carry timestamps. When at least one such dataset is loaded a small
+**Time HUD** appears at the bottom centre of the map: the mode (Live or
+Pinned), the view time and its offset from now, ‹ › steps, Live, and a
+button (or `T`) that opens the **Timeline dock** in its place. Click the
+time and use ← → to step. In a window under 900 px wide the dock is
+unavailable and the HUD is the only control. The dock's
 timeline aggregates every time sample across the loaded datasets
 into a single slider; scrubbing the slider re-renders every
 participating dataset at the timestep nearest the global clock
@@ -649,7 +653,7 @@ timestamps the slider exposes discrete stops at each one; otherwise
 it shows evenly-spaced guide ticks across the aggregate range.
 Previous / next buttons step exactly one sample at a time and are
 always available, which is handy for nudging within a dense cluster.
-The panel hides automatically when no time-varying dataset is loaded.
+The HUD and the dock's controls hide when no time-varying dataset is loaded.
 
 To keep clusters selectable when data is sparse, the slider uses a
 **gap-collapsing (focus + context) axis**: ranges that contain data
