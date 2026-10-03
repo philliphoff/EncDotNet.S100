@@ -2,7 +2,6 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
 

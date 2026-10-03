@@ -4,7 +4,6 @@ using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Validation;
-using Mapsui.Layers;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;

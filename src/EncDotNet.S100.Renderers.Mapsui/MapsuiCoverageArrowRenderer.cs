@@ -2,11 +2,9 @@ using System.Runtime.CompilerServices;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
-using Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Styles;
-using EncDotNet.S100.Rendering.Scene;
-
 
 [assembly: InternalsVisibleTo("EncDotNet.S100.Datasets.S111.Tests")]
 [assembly: InternalsVisibleTo("EncDotNet.S100.Pipelines.Tests")]
