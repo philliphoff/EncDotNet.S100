@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 
@@ -110,6 +111,27 @@ internal sealed record DatasetStateDto(
     [property: Description("Whether the dataset drew, before the call.")] bool PreviousVisible,
     [property: Description("Dataset opacity in 0..1, before the call.")] double PreviousOpacity,
     [property: Description("True when the call changed anything.")] bool Changed);
+
+/// <summary>A dataset's validation findings, as its Validation tab shows them.</summary>
+[Description("A dataset's validation findings, as the inspector's Validation tab shows them.")]
+internal sealed record ValidationSummaryDto(
+    [property: Description("'ready' (the rule pack ran; the counts are its findings), 'no_rule_pack' (the spec has no rules yet) or 'not_loaded' (the dataset is still loading, deferred until it is in view, or failed to load; counts are 0).")] string State,
+    [property: Description("Total findings.")] int Total,
+    [property: Description("Error findings.")] int Errors,
+    [property: Description("Warning findings.")] int Warnings,
+    [property: Description("Info findings.")] int Infos,
+    [property: Description("Findings with a location: the markers the map's validation overlay draws for the selected dataset.")] int Located,
+    [property: Description("The Validation tab's heading as displayed: its counts summary, or its empty-state message ('No findings.', 'Validation rules not yet defined for S-102.'); null when not loaded.")] string? Message);
+
+/// <summary>Result of select_dataset.</summary>
+[Description("The dataset selected in the Datasets panel and its validation summary.")]
+internal sealed record DatasetSelectionDto(
+    [property: Description("Dataset id, as list_datasets reports it.")] string Id,
+    [property: Description("Product specification, e.g. 'S-57'.")] string Spec,
+    [property: Description("The dataset the inspector showed before the call, or null.")] string? PreviousId,
+    [property: Description("The inspector tab shown: 'dataset', 'layers' or 'validation'.")] string Tab,
+    [property: Description("True for an exchange-set cell that loads only once it is in view at a relevant scale (zoom to it, await_render_idle, then select it again for its findings).")] bool Deferred,
+    [property: Description("The dataset's validation findings.")] ValidationSummaryDto Validation);
 
 /// <summary>A notification as the user sees it.</summary>
 [Description("A notification shown in the viewer.")]
@@ -337,6 +359,84 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
             outcome.PreviousOpacity,
             outcome.Visible != outcome.PreviousVisible || outcome.Opacity != outcome.PreviousOpacity));
     }
+}
+
+// ---------------------------------------------------------------------------
+// select_dataset
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="SelectDatasetTool"/>.</summary>
+internal sealed record SelectDatasetRequest(string DatasetId, string? Tab, int? TimeoutMs);
+
+/// <summary>
+/// Selects a loaded dataset in the Datasets panel and chooses the inspector
+/// tab (MCP <c>select_dataset</c>), as the user does by clicking its row and a
+/// tab. The selection drives the inspector and the map's validation overlay.
+/// </summary>
+internal sealed class SelectDatasetTool(IViewerDatasetStateController datasets)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "select_dataset";
+
+    /// <summary>Default wait for a loading dataset's validation, in milliseconds.</summary>
+    internal const int DefaultTimeoutMs = 10_000;
+
+    /// <summary>Longest accepted wait, in milliseconds.</summary>
+    internal const int MaxTimeoutMs = 120_000;
+
+    private readonly IViewerDatasetStateController _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
+
+    /// <summary>Applies the request.</summary>
+    public async Task<ToolResult<DatasetSelectionDto>> InvokeAsync(SelectDatasetRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.DatasetId))
+            return ToolResult<DatasetSelectionDto>.Err(new InvalidArgument("datasetId", "value is required; call list_datasets for the ids"));
+
+        DatasetInspectorTab? tab = null;
+        if (!string.IsNullOrWhiteSpace(request.Tab))
+        {
+            tab = ParseTab(request.Tab);
+            if (tab is null)
+                return ToolResult<DatasetSelectionDto>.Err(new InvalidArgument("tab", "expected 'dataset', 'layers' or 'validation'"));
+        }
+
+        var timeout = TimeSpan.FromMilliseconds(Math.Clamp(request.TimeoutMs ?? DefaultTimeoutMs, 0, MaxTimeoutMs));
+        var id = request.DatasetId.Trim();
+        var outcome = await _datasets.SelectAsync(id, tab, timeout, ct).ConfigureAwait(false);
+        if (outcome is null)
+            return ToolResult<DatasetSelectionDto>.Err(new DatasetNotFound(new DatasetId(id)));
+        return ToolResult<DatasetSelectionDto>.Ok(ToDto(outcome));
+    }
+
+    /// <summary>Parses a tab name ('dataset', 'layers', 'validation'; any casing), or null.</summary>
+    internal static DatasetInspectorTab? ParseTab(string text) => text.Trim().ToLowerInvariant() switch
+    {
+        "dataset" => DatasetInspectorTab.Dataset,
+        "layers" => DatasetInspectorTab.Layers,
+        "validation" => DatasetInspectorTab.Validation,
+        _ => null,
+    };
+
+    internal static DatasetSelectionDto ToDto(DatasetSelectionOutcome outcome) => new(
+        outcome.Id,
+        outcome.Spec,
+        outcome.PreviousId,
+        outcome.Tab.ToString().ToLowerInvariant(),
+        outcome.Deferred,
+        new ValidationSummaryDto(
+            outcome.ValidationState switch
+            {
+                DatasetValidationState.Ready => "ready",
+                DatasetValidationState.NoRulePack => "no_rule_pack",
+                _ => "not_loaded",
+            },
+            outcome.Errors + outcome.Warnings + outcome.Infos,
+            outcome.Errors,
+            outcome.Warnings,
+            outcome.Infos,
+            outcome.Located,
+            outcome.Message));
 }
 
 // ---------------------------------------------------------------------------
