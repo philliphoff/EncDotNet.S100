@@ -363,6 +363,21 @@ public sealed class TimelineLanesTests
     }
 
     [Fact]
+    public void Library_lanes_count_toward_turning_the_filter_on()
+    {
+        var entries = Nationwide.Skip(1).Take(6)
+            .Select(m => Entry($"111US00_{m.ToUpperInvariant()}_US4XX1AA", Run, 48, LibraryTimedState.Online, Delaware))
+            .ToArray();
+        var (service, timeline, _, _) = CreateWithLibrary(Run, entries);
+        Load(service, Model("cbofs"));
+
+        Assert.True(timeline.IsInMapView);
+
+        timeline.ShowOnline = false;
+        Assert.False(timeline.IsInMapView);
+    }
+
+    [Fact]
     public void Show_online_off_draws_loaded_data_only()
     {
         var (_, timeline, _, _) = Chesapeake18Z();

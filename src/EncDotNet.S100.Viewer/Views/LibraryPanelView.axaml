@@ -502,7 +502,7 @@
                             </Button>
                         </Grid>
                     </Panel>
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
@@ -510,7 +510,15 @@
                                            VerticalAlignment="Center" Margin="4,0,8,0" />
                             </TextBox.InnerRightContent>
                         </TextBox>
-                        <Button Grid.Column="1" Classes="Icon libraryIcon"
+                        <!-- #711 G2: only data valid at the Timeline's view time (with any segment). -->
+                        <ToggleButton Grid.Column="1" Classes="Icon libraryIcon coverageToggle"
+                                      IsVisible="{Binding HasViewTime}"
+                                      IsChecked="{Binding IsAtViewTime}"
+                                      ToolTip.Tip="{Binding AtViewTimeTooltip}"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Library_State_AtViewTime}">
+                            <ic:FluentIcon Icon="Clock" FontSize="16" />
+                        </ToggleButton>
+                        <Button Grid.Column="2" Classes="Icon libraryIcon"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
@@ -546,15 +554,6 @@
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
                                     <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </RadioButton>
-                            <!-- #711 G2: data valid at the Timeline's view time. -->
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAtViewTime}"
-                                         IsVisible="{Binding HasViewTime}"
-                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryAtViewTime}">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{x:Static loc:Strings.Library_State_AtViewTime}" />
-                                    <TextBlock Text="{Binding AtViewTimeCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
                         </UniformGrid>

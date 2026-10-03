@@ -61,7 +61,7 @@ internal sealed record LibraryItemQuery(
     /// <summary>Keep only items whose data covers this time (#711).</summary>
     public DateTime? ValidAt { get; init; }
 
-    /// <summary>Keep only items whose data covers the Timeline's view time (#711, the "At time" facet).</summary>
+    /// <summary>Keep only items whose data covers the Timeline's view time (#711, the Library's Valid at view time toggle).</summary>
     public bool ValidAtViewTime { get; init; }
 }
 

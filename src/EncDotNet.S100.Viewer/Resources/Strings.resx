@@ -3853,10 +3853,10 @@
     <value>Custom</value>
   </data>
   <data name="Library_State_AtViewTime" xml:space="preserve">
-    <value>At time</value>
+    <value>Valid at view time</value>
   </data>
-  <data name="Tooltip_LibraryAtViewTime" xml:space="preserve">
-    <value>Data valid at the Timeline's view time</value>
+  <data name="Tooltip_LibraryAtViewTimeFormat" xml:space="preserve">
+    <value>Only data valid at the Timeline's view time · {0:N0}</value>
   </data>
   <data name="Library_ShowOnTimeline" xml:space="preserve">
     <value>Show on timeline</value>

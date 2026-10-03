@@ -533,7 +533,7 @@ internal static class Strings
     public static string TimelinePanel_PresetAllLoaded => Get(nameof(TimelinePanel_PresetAllLoaded));
     public static string TimelinePanel_PresetCustom => Get(nameof(TimelinePanel_PresetCustom));
     public static string Library_State_AtViewTime => Get(nameof(Library_State_AtViewTime));
-    public static string Tooltip_LibraryAtViewTime => Get(nameof(Tooltip_LibraryAtViewTime));
+    public static string Tooltip_LibraryAtViewTimeFormat => Get(nameof(Tooltip_LibraryAtViewTimeFormat));
     public static string Library_ShowOnTimeline => Get(nameof(Library_ShowOnTimeline));
     public static string Library_GoToRunStart => Get(nameof(Library_GoToRunStart));
     public static string TimelinePanel_ShowOnline => Get(nameof(TimelinePanel_ShowOnline));

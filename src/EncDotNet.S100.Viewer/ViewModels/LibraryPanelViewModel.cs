@@ -24,9 +24,6 @@ internal enum LibraryStateFilter
 
     /// <summary>Downloaded, with a newer edition or update available.</summary>
     Updates,
-
-    /// <summary>Data valid at the Timeline's view time (#711, handoff G2).</summary>
-    AtViewTime,
 }
 
 /// <summary>
@@ -53,6 +50,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly TimeProvider _time;
     private readonly ITimer? _clock;
     private readonly Services.GlobalTimeService? _viewTime;
+    private bool _atViewTime;
+    private IReadOnlyList<LibraryItemViewModel> _textMatched = [];
 
     private LibraryNodeViewModel? _selectedNode;
     private bool _hasSynced;
@@ -360,7 +359,6 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(IsStateLocal));
                 OnPropertyChanged(nameof(IsStateOnline));
                 OnPropertyChanged(nameof(IsStateUpdates));
-                OnPropertyChanged(nameof(IsStateAtViewTime));
                 EndTap();
                 ApplyFilter();
             }
@@ -375,12 +373,30 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     public bool IsStateUpdates { get => _stateFilter == LibraryStateFilter.Updates; set { if (value) StateFilter = LibraryStateFilter.Updates; } }
 
-    public bool IsStateAtViewTime { get => _stateFilter == LibraryStateFilter.AtViewTime; set { if (value) StateFilter = LibraryStateFilter.AtViewTime; } }
+    /// <summary>
+    /// Lists only data valid at the Timeline's view time (#711, handoff G2):
+    /// a toggle beside the filter box that narrows whichever segment is chosen.
+    /// </summary>
+    public bool IsAtViewTime
+    {
+        get => _atViewTime;
+        set
+        {
+            if (SetProperty(ref _atViewTime, value))
+            {
+                EndTap();
+                ApplyFilter();
+            }
+        }
+    }
+
+    /// <summary>"Only data valid at the view time · 12".</summary>
+    public string AtViewTimeTooltip => string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_LibraryAtViewTimeFormat, AtViewTimeCount);
 
     /// <summary>True when the Timeline has a view time, so "At view time" and the row's Timeline actions apply.</summary>
     public bool HasViewTime => _viewTime?.CurrentTime is not null && _viewTime.IsActive;
 
-    /// <summary>Of the datasets passing the text filter, how many hold data at the view time.</summary>
+    /// <summary>Of the datasets matching the text, how many hold data at the view time.</summary>
     public int AtViewTimeCount { get; private set; }
 
     /// <summary>True when the selected dataset has a time window (forecast run or time coverage).</summary>
@@ -418,12 +434,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         _filterText = string.Empty;
         OnPropertyChanged(nameof(FilterText));
         _stateFilter = LibraryStateFilter.All;
+        _atViewTime = false;
         OnPropertyChanged(nameof(StateFilter));
         OnPropertyChanged(nameof(IsStateAll));
         OnPropertyChanged(nameof(IsStateLocal));
         OnPropertyChanged(nameof(IsStateOnline));
         OnPropertyChanged(nameof(IsStateUpdates));
-        OnPropertyChanged(nameof(IsStateAtViewTime));
+        OnPropertyChanged(nameof(IsAtViewTime));
         if (_selectedNode != node)
             SelectedNode = node;
         else
@@ -442,7 +459,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasViewTime));
         ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
         ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
-        if (_stateFilter == LibraryStateFilter.AtViewTime)
+        if (_atViewTime)
             ApplyFilter();
         else
             Recount();
@@ -1501,11 +1518,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private void ApplyFilter()
     {
         var filter = _filterText.Trim();
-        _textFiltered = _allItems
+        _textMatched = _allItems
             .Where(i => _showCancelled || !i.IsCancelled)
             .Where(i => filter.Length == 0 || i.Matches(filter))
             .ToArray();
-        var listed = _textFiltered.Where(i => InState(i, _stateFilter, ViewTime)).ToArray();
+        var viewTime = ViewTime;
+        _textFiltered = _atViewTime ? [.. _textMatched.Where(i => IsValidAt(i, viewTime))] : _textMatched;
+        var listed = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
         _listedDatasets = listed.Length;
         Items = GroupPackages(listed, expandAll: filter.Length > 0);
         Recount();
@@ -1646,9 +1665,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>The Timeline's view time, while it has one (for the MCP <c>validAt</c> filter).</summary>
     internal DateTime? CurrentViewTime => ViewTime;
 
-    private static bool InState(LibraryItemViewModel item, LibraryStateFilter state, DateTime? viewTime = null) => state switch
+    /// <summary>True when the item's data covers <paramref name="viewTime"/>.</summary>
+    private static bool IsValidAt(LibraryItemViewModel item, DateTime? viewTime) =>
+        viewTime is { } at && item.ValidWindow is { } window && at >= window.Start && at <= window.End;
+
+    private static bool InState(LibraryItemViewModel item, LibraryStateFilter state) => state switch
     {
-        LibraryStateFilter.AtViewTime => viewTime is { } at && item.ValidWindow is { } window && at >= window.Start && at <= window.End,
         LibraryStateFilter.Local => item.Availability is LibraryAvailability.Local or LibraryAvailability.Loaded or LibraryAvailability.Deferred,
         LibraryStateFilter.Updates when item.IsForecast => item.Availability is LibraryAvailability.Outdated or LibraryAvailability.Expired,
         LibraryStateFilter.Online => item.Availability == LibraryAvailability.Online,
@@ -1663,8 +1685,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnlineCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Online));
         UpdatesCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Updates));
         var viewTime = ViewTime;
-        AtViewTimeCount = viewTime is null ? 0 : _textFiltered.Count(i => InState(i, LibraryStateFilter.AtViewTime, viewTime));
+        AtViewTimeCount = viewTime is null ? 0 : _textMatched.Count(i => IsValidAt(i, viewTime));
         OnPropertyChanged(nameof(AtViewTimeCount));
+        OnPropertyChanged(nameof(AtViewTimeTooltip));
         OnPropertyChanged(nameof(AllCount));
         OnPropertyChanged(nameof(LocalCount));
         OnPropertyChanged(nameof(OnlineCount));

@@ -295,8 +295,11 @@ public sealed class ForecastLibraryTests : IDisposable
 
         viewTime.SetCurrentTime(Run.UtcDateTime.AddHours(50));
         Assert.Equal(1, panel.AtViewTimeCount);
-        panel.IsStateAtViewTime = true;
+        panel.IsAtViewTime = true;
         Assert.Equal(["nyofs"], panel.Items.Where(i => i.IsModelHeader).Select(i => i.Name));
+        // The toggle narrows the segments too.
+        Assert.Equal(1, panel.AllCount);
+        Assert.Equal(1, panel.OnlineCount);
     }
 
     [Fact]

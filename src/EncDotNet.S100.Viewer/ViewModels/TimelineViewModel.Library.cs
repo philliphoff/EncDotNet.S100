@@ -56,6 +56,24 @@ internal sealed partial class TimelineViewModel
     /// <summary>Turns Show online on or off.</summary>
     public ICommand ToggleShowOnlineCommand { get; private set; } = null!;
 
+    /// <summary>How many lanes there are: one per loaded layer, and one per model of Library data not loaded.</summary>
+    private int LaneCount
+    {
+        get
+        {
+            var datasets = _service.TimedDatasets;
+            if (!ShowOnline)
+                return datasets.Count;
+            var loaded = datasets.Select(d => LibraryTimedEntry.KeyOf(d.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var known = LibraryEntries
+                .Where(e => e.State != LibraryTimedState.Loaded && !loaded.Contains(e.MatchKey))
+                .Select(e => $"{e.Spec}/{e.Model ?? e.MatchKey}")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            return datasets.Count + known;
+        }
+    }
+
     /// <summary>Every Library window, for linking lanes (shown or not).</summary>
     private IReadOnlyList<LibraryTimedEntry> LibraryEntries => _library?.Entries ?? [];
 

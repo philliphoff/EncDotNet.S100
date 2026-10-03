@@ -110,7 +110,7 @@ internal sealed partial class TimelineViewModel
     /// </summary>
     public bool IsInMapView
     {
-        get => IsInMapViewAvailable && (_inMapViewChoice ?? _service.TimedDatasets.Count > InMapViewDefaultThreshold);
+        get => IsInMapViewAvailable && (_inMapViewChoice ?? LaneCount > InMapViewDefaultThreshold);
         set
         {
             if (!IsInMapViewAvailable || IsInMapView == value && _inMapViewChoice is not null)
