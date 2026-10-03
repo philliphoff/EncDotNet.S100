@@ -88,13 +88,24 @@ public sealed class TimelineLanesTests
         Assert.Equal(["S-111 Surface currents", "S-104 Water level"], timeline.LaneGroups.Select(g => g.Title));
         var cbofs = timeline.LaneGroups[0].Lanes[0];
         Assert.Equal("cbofs", cbofs.Code);
-        Assert.Equal("18:00Z run · 1 h", cbofs.Sub);
+        Assert.Equal("US4XX1DD · 18:00Z run · 1 h", cbofs.Sub);
         Assert.Equal("20:00Z (−30 min)", cbofs.LayerTime);
         Assert.Contains("111US00_CBOFS", cbofs.Tooltip, StringComparison.Ordinal);
         Assert.Single(cbofs.Bands);
         Assert.Equal("6 min", timeline.LaneGroups[1].Lanes[0].Sub);
         Assert.True(timeline.ShowLanes);
     }
+
+    [Theory]
+    [InlineData("111US00_CBOFS_US4MD1DD", "cbofs", "US4MD1DD")]
+    [InlineData("111US00_NGOFS2_20261003T12Z_US4LA1CL", "ngofs2", "US4LA1CL")]
+    public void Tiled_forecast_names_give_the_model_and_tile(string name, string model, string tile) =>
+        Assert.Equal((model, tile), ForecastRunNames.ModelAndTile(name));
+
+    [Theory]
+    [InlineData("104US00_BALTIMORE")]
+    [InlineData("104US004SC1BO_20251217T12Z")]
+    public void Other_names_give_no_model(string name) => Assert.Null(ForecastRunNames.ModelAndTile(name));
 
     [Fact]
     public void Scenario_5_lists_only_the_models_in_view_and_they_set_the_axis()
@@ -252,6 +263,7 @@ public sealed class TimelineLanesTests
         Assert.Equal(["cbofs", "dbofs"], state.Lanes.Where(l => l.Listed).Select(l => l.Label));
         Assert.Equal(12, state.Lanes.Count(l => !l.Listed));
         Assert.Equal("S-111 Surface currents", state.Lanes[0].Group);
+        Assert.Equal("S-111 Surface currents", state.Lanes[^1].Group);
 
         Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null, InMapView: false, Layout: "strip"))).TryGetValue(out var off));
         Assert.False(off!.InMapView);

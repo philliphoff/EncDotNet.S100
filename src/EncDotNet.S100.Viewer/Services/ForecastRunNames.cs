@@ -39,6 +39,20 @@ internal static partial class ForecastRunNames
             ? run
             : null;
 
+    /// <summary>
+    /// The model and tile a tiled forecast's name carries, with or without
+    /// its run (#710): <c>111US00_CBOFS_US4MD1DD</c> → ("cbofs", "US4MD1DD");
+    /// <see langword="null"/> for other names.
+    /// </summary>
+    /// <param name="name">A dataset name.</param>
+    public static (string Model, string Tile)? ModelAndTile(string? name) =>
+        !string.IsNullOrEmpty(name) && TilePattern().Match(name) is { Success: true } match
+            ? (match.Groups["model"].Value.ToLowerInvariant(), match.Groups["tile"].Value)
+            : null;
+
+    [GeneratedRegex(@"^\d{3}[A-Z0-9]{4}_(?<model>[A-Z][A-Z0-9]+)_(?:\d{8}T\d{2}Z_)?(?<tile>[A-Z0-9]+)$", RegexOptions.CultureInvariant)]
+    private static partial Regex TilePattern();
+
     [GeneratedRegex(@"^(?<product>\d{3})[A-Z0-9]{4}(?:_(?<model>[A-Z][A-Z0-9_]*?)|[A-Z0-9]*?)_(?<run>\d{8}T\d{2})Z", RegexOptions.CultureInvariant)]
     private static partial Regex RunPattern();
 }

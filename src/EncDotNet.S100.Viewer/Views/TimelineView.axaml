@@ -240,13 +240,6 @@
                                 Content="{x:Static loc:Strings.TimelinePanel_GoLive}"
                                 Command="{Binding NowCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
-                        <!-- E4: In map view. -->
-                        <CheckBox IsVisible="{Binding IsInMapViewAvailable}"
-                                  IsChecked="{Binding IsInMapView}"
-                                  Content="{x:Static loc:Strings.TimelinePanel_InMapView}"
-                                  FontSize="12"
-                                  Margin="10,0,0,0"
-                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineInMapView}" />
                         <!-- C5: the window presets. -->
                         <Button x:Name="PresetMenuButton"
                                 Classes="Outline"
@@ -269,18 +262,26 @@
                           Background="Transparent"
                           ColumnDefinitions="Auto,*"
                           RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                        <!-- E1: the summary row's label, over the lanes' label column. -->
-                        <TextBlock Grid.Column="0"
-                                   Grid.Row="2"
-                                   Grid.RowSpan="2"
-                                   Width="248"
-                                   IsVisible="{Binding ShowLanes}"
-                                   Text="{Binding SummaryLabel, Converter={x:Static conv:ToUpperConverter.Instance}}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   LetterSpacing="0.6"
-                                   Opacity="0.6"
-                                   VerticalAlignment="Center" />
+                        <!-- E1: the summary row's label and the In map view
+                             filter (E4), over the lanes' label column. -->
+                        <StackPanel Grid.Column="0"
+                                    Grid.Row="1"
+                                    Grid.RowSpan="4"
+                                    Width="248"
+                                    Spacing="2"
+                                    IsVisible="{Binding ShowLanes}"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SummaryLabel, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="0.6"
+                                       Opacity="0.6" />
+                            <CheckBox IsVisible="{Binding IsInMapViewAvailable}"
+                                      IsChecked="{Binding IsInMapView}"
+                                      Content="{x:Static loc:Strings.TimelinePanel_InMapView}"
+                                      FontSize="12"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineInMapView}" />
+                        </StackPanel>
                         <!-- C5: the overview strip: everything loaded, and the shown window. -->
                         <views:OverviewStripControl Grid.Row="0" Grid.Column="1"
                                                     Height="6"

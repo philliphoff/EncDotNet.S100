@@ -251,7 +251,7 @@ internal sealed partial class TimelineViewModel
         foreach (var dataset in datasets
             .OrderBy(d => Product(d.ProductSpec).Order)
             .ThenBy(d => d.ProductSpec, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(DriverLabel, StringComparer.OrdinalIgnoreCase))
+            .ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
         {
             var key = LaneKey(dataset);
             if (!seen.Add(key))
@@ -319,8 +319,11 @@ internal sealed partial class TimelineViewModel
         {
             var dataset = lane.Dataset;
             var run = ForecastRunNames.Describe(dataset.Name);
-            lane.Code = DriverLabel(dataset);
-            var parts = new List<string>(2);
+            var tiled = ForecastRunNames.ModelAndTile(dataset.Name);
+            lane.Code = tiled?.Model ?? DriverLabel(dataset);
+            var parts = new List<string>(3);
+            if (tiled is { } tile)
+                parts.Add(tile.Tile);
             if (run?.Split(' ') is [_, var runTime, ..])
                 parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, runTime));
             if (TimelineStepper.Cadence(dataset.Samples) is { } cadence && cadence > TimeSpan.Zero)
@@ -351,7 +354,7 @@ internal sealed partial class TimelineViewModel
             : (string.Empty, OtherProductColor, int.MaxValue);
 
     /// <summary>"S-111 Surface currents", or the specification alone.</summary>
-    private static string GroupTitle(string spec) =>
+    internal static string GroupTitle(string spec) =>
         Product(spec).Title is { Length: > 0 } title ? $"{spec} {title}" : spec;
 
     /// <summary>The window spanned by the layers in the map view, for the In view preset.</summary>

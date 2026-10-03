@@ -118,6 +118,19 @@ public partial class TimelineView : UserControl
         menu.Items.Add(Preset(Strings.TimelinePanel_PresetNext48Hours, TimelinePreset.Next48Hours));
         menu.Items.Add(Preset(Strings.TimelinePanel_PresetThisRun, TimelinePreset.ThisRun));
         menu.Items.Add(Preset(Strings.TimelinePanel_PresetAllLoaded, TimelinePreset.AllLoaded));
+        if (timeline.IsInMapViewAvailable)
+        {
+            // #710 E4: In view, and the In map view filter (also beside the lanes' label).
+            menu.Items.Add(Preset(Strings.TimelinePanel_PresetInView, TimelinePreset.InView));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(new MenuItem
+            {
+                Header = Strings.TimelinePanel_InMapView,
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = timeline.IsInMapView,
+                Command = timeline.ToggleInMapViewCommand,
+            });
+        }
         menu.ShowAt(anchor);
     }
 

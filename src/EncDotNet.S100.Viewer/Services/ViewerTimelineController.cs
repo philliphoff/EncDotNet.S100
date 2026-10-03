@@ -183,7 +183,7 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Id(lane), lane.Code, g.Title, true, lane.IsInMapView, lane.IsExpired, lane.LayerTime)));
         var folded = _timeline.HasOutsideLanes
             ? _timeline.OutsideLanes.Select(lane => new TimelineLaneState(
-                Id(lane), lane.Code, lane.Dataset.ProductSpec ?? string.Empty, false, lane.IsInMapView, lane.IsExpired, lane.LayerTime))
+                Id(lane), lane.Code, TimelineViewModel.GroupTitle(lane.Dataset.ProductSpec ?? string.Empty), false, lane.IsInMapView, lane.IsExpired, lane.LayerTime))
             : [];
         return [.. listed, .. folded];
     }
