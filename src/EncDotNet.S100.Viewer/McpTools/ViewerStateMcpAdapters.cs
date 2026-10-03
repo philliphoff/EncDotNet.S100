@@ -6,6 +6,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// <summary>
 /// Wraps the viewer-state tools (<see cref="GetTimelineStateTool"/>,
 /// <see cref="SetViewTimeTool"/>, <see cref="SetDatasetStateTool"/>,
+/// <see cref="SelectDatasetTool"/>,
 /// <see cref="ListNotificationsTool"/>, <see cref="DismissNotificationTool"/>,
 /// <see cref="SetTestClockTool"/>) as MCP server tools (#715).
 /// </summary>
@@ -101,6 +102,28 @@ internal static class ViewerStateMcpAdapters
             + "list do. Some datasets load hidden (e.g. gridded S-104 water-level surfaces, or duplicate variants in an "
             + "exchange set); use this to switch them on. With neither 'visible' nor 'opacity' it only reports the "
             + "current state. Returns the state before and after. Mutating; viewer-injected tool.");
+    }
+
+    /// <summary>Creates <c>select_dataset</c>.</summary>
+    public static McpServerTool Create(SelectDatasetTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("Dataset id, as list_datasets / open_dataset report it.")] string datasetId,
+            [Description("The inspector tab to show: 'dataset', 'layers' or 'validation'; omit to leave it.")] string? tab = null,
+            [Description("How long to wait for a dataset that is still loading to finish validation, in ms (default 10000, 0–120000).")] int? timeoutMs = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SelectDatasetRequest(datasetId, tab, timeoutMs), ct));
+        return Tool(del, SelectDatasetTool.Name,
+            "Selects a loaded dataset in the Datasets panel, as the user does by clicking its row, and optionally "
+            + "switches the inspector to its Dataset, Layers or Validation tab. The panel switches to its Datasets tab "
+            + "when needed. The selection drives the inspector and the map's validation overlay, which draws the "
+            + "selected dataset's located findings. It does not open the panel: call set_panel Datasets first to see "
+            + "it. Returns the selection and a validation summary (finding counts by severity, or the empty-state "
+            + "message). Validation runs when a dataset loads (open_dataset returns after it); for a dataset still "
+            + "loading this waits up to timeoutMs, and an exchange-set cell deferred until it is in view reports "
+            + "'not_loaded'. Call await_render_idle before capture_app_screenshot so the overlay has painted. "
+            + "dataset_not_found for an unknown id. Mutating; viewer-injected tool.");
     }
 
     /// <summary>Creates <c>list_notifications</c>.</summary>

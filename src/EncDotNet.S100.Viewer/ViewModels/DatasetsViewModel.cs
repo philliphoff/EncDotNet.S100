@@ -872,6 +872,52 @@ internal sealed class DatasetsViewModel : ViewModelBase
         }
     }
 
+    private DatasetInspectorTab _inspectorTab = DatasetInspectorTab.Dataset;
+    /// <summary>
+    /// The tab the pinned dataset inspector shows (Dataset / Layers /
+    /// Validation). Kept across selection changes, as the tab strip is.
+    /// Hosts (e.g. the MCP <c>select_dataset</c> tool) set it to switch
+    /// tabs; <see cref="InspectorTabIndex"/> is the view's binding.
+    /// </summary>
+    public DatasetInspectorTab InspectorTab
+    {
+        get => _inspectorTab;
+        set
+        {
+            if (!Enum.IsDefined(value) || _inspectorTab == value) return;
+            _inspectorTab = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(InspectorTabIndex));
+        }
+    }
+
+    /// <summary>
+    /// <see cref="InspectorTab"/> as a tab index, bound TwoWay to the
+    /// inspector <c>TabControl.SelectedIndex</c> so a click on a tab and a
+    /// programmatic change stay in sync. Out-of-range values (such as the
+    /// -1 a tab strip reports while it has no items) are ignored.
+    /// </summary>
+    public int InspectorTabIndex
+    {
+        get => (int)_inspectorTab;
+        set => InspectorTab = (DatasetInspectorTab)value;
+    }
+
+    /// <summary>
+    /// Selects <paramref name="entry"/> as a click on its row in the
+    /// <b>Datasets</b> tab does: switches the panel to that tab and makes
+    /// the entry the list selection, so <see cref="SelectedEntry"/>, the
+    /// inspector and the validation overlay follow. Switching tabs pins
+    /// the choice, as a user's tab click does.
+    /// </summary>
+    /// <param name="entry">An entry of <see cref="Entries"/>.</param>
+    public void SelectDataset(DatasetEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ActiveTabIndex = DatasetsTabIndex;
+        SelectedDataset = entry;
+    }
+
     /// <summary>The exchange set reflected in the pinned inspector when a
     /// source node (not a dataset) is selected on the Exchange sets tab.</summary>
     public ExchangeSetHeader? InspectedExchangeSet => _inspectedExchangeSet;

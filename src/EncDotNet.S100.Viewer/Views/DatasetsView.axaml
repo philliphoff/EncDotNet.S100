@@ -774,7 +774,9 @@
                     </ScrollViewer>
 
                     <TabControl Classes="CenteredTabs"
+                                x:Name="InspectorTabs"
                                 IsVisible="{Binding HasSelection}"
+                                SelectedIndex="{Binding InspectorTabIndex, Mode=TwoWay}"
                                 Padding="0"
                                 Margin="0,8,0,0">
                         <!-- Dataset-wide UX -->

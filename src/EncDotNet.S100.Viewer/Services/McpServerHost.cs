@@ -351,6 +351,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_datasetState is not null)
         {
             tools.Add(ViewerStateMcpAdapters.Create(new SetDatasetStateTool(_datasetState)));
+            tools.Add(ViewerStateMcpAdapters.Create(new SelectDatasetTool(_datasetState)));
         }
         if (_notifications is not null)
         {

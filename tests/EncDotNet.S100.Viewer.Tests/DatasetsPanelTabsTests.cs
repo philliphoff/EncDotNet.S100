@@ -322,4 +322,69 @@ public class DatasetsPanelTabsTests
         var vm = NewVm();
         Assert.False(vm.HasExchangeSets);
     }
+
+    // ── Inspector tab and programmatic selection ─────────────────────
+
+    [Fact]
+    public void InspectorTab_DefaultsToDataset_AndMirrorsTheIndex()
+    {
+        var vm = NewVm();
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        Assert.Equal(DatasetInspectorTab.Dataset, vm.InspectorTab);
+        Assert.Equal(0, vm.InspectorTabIndex);
+
+        vm.InspectorTab = DatasetInspectorTab.Validation;
+        Assert.Equal(2, vm.InspectorTabIndex);
+        Assert.Contains(nameof(DatasetsViewModel.InspectorTab), changed);
+        Assert.Contains(nameof(DatasetsViewModel.InspectorTabIndex), changed);
+
+        vm.InspectorTabIndex = 1;
+        Assert.Equal(DatasetInspectorTab.Layers, vm.InspectorTab);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    public void InspectorTabIndex_IgnoresOutOfRangeValues(int index)
+    {
+        var vm = NewVm();
+        vm.InspectorTab = DatasetInspectorTab.Layers;
+
+        vm.InspectorTabIndex = index;
+
+        Assert.Equal(DatasetInspectorTab.Layers, vm.InspectorTab);
+    }
+
+    [Fact]
+    public void InspectorTab_SurvivesSelectionChanges()
+    {
+        var vm = NewVm();
+        var a = vm.Add("/disk/a.000", "S-101");
+        var b = vm.Add("/disk/b.000", "S-101");
+        vm.SelectDataset(a);
+        vm.InspectorTab = DatasetInspectorTab.Validation;
+
+        vm.SelectDataset(b);
+
+        Assert.Equal(DatasetInspectorTab.Validation, vm.InspectorTab);
+    }
+
+    [Fact]
+    public void SelectDataset_SwitchesToTheDatasetsTab_AndDrivesTheInspector()
+    {
+        var vm = NewVm();
+        var src = new StubAssetSource();
+        vm.RegisterExchangeSetHeader(src, "/a", null, null, 1, _ => { });
+        var cell = vm.AddFromExchangeSet(src, "a/d1.000", "S-101");
+        Assert.Equal(DatasetsViewModel.ExchangeSetsTabIndex, vm.ActiveTabIndex);
+
+        vm.SelectDataset(cell);
+
+        Assert.Equal(DatasetsViewModel.DatasetsTabIndex, vm.ActiveTabIndex);
+        Assert.Same(cell, vm.SelectedDataset);
+        Assert.Same(cell, vm.SelectedEntry);
+        Assert.True(vm.HasSelection);
+    }
 }

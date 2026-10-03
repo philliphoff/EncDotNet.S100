@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
@@ -215,6 +216,108 @@ public sealed class ViewerStateToolsTests
         Assert.Equal("opacity", Assert.IsType<InvalidArgument>(opacity).Parameter);
     }
 
+    // ── select_dataset ────────────────────────────────────────────────
+
+    private static ValidationReport ReportOf(params ValidationFinding[] findings) =>
+        new(findings, RulesEvaluated: findings.Length, RulesWithFindings: findings.Length);
+
+    [Fact]
+    public async Task Select_dataset_selects_the_row_switches_the_tab_and_summarises_validation()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var other = datasets.Add("/data/US5OTHER.000", "S-57");
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        cell.IsLoaded = true;
+        cell.SetValidationReport(ReportOf(
+            new ValidationFinding { RuleId = "R1", Severity = ValidationSeverity.Error, Message = "a", Point = new EncDotNet.S100.DataModel.GeoPosition(25.0, -80.0) },
+            new ValidationFinding { RuleId = "R2", Severity = ValidationSeverity.Warning, Message = "b" },
+            new ValidationFinding { RuleId = "R3", Severity = ValidationSeverity.Warning, Message = "c" }));
+        datasets.SelectDataset(other);
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "Validation", null));
+
+        Assert.True(result.TryGetValue(out var selection));
+        Assert.Equal(cell.DisplayName, selection!.Id);
+        Assert.Equal(other.DisplayName, selection.PreviousId);
+        Assert.Equal("validation", selection.Tab);
+        Assert.Equal("ready", selection.Validation.State);
+        Assert.Equal(3, selection.Validation.Total);
+        Assert.Equal(1, selection.Validation.Errors);
+        Assert.Equal(2, selection.Validation.Warnings);
+        Assert.Equal(1, selection.Validation.Located);
+        Assert.Equal(cell.ValidationCountsSummary, selection.Validation.Message);
+        Assert.Same(cell, datasets.SelectedEntry);
+        Assert.Equal(DatasetInspectorTab.Validation, datasets.InspectorTab);
+        Assert.Equal(DatasetsViewModel.DatasetsTabIndex, datasets.ActiveTabIndex);
+    }
+
+    [Fact]
+    public async Task Select_dataset_leaves_the_tab_when_omitted_and_reports_the_empty_state()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var grid = datasets.Add("/data/102CA0047600.h5", "S-102");
+        grid.IsLoaded = true;
+        datasets.InspectorTab = DatasetInspectorTab.Layers;
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(grid.DisplayName, null, null));
+
+        Assert.True(result.TryGetValue(out var selection));
+        Assert.Equal("layers", selection!.Tab);
+        Assert.Null(selection.PreviousId);
+        Assert.Equal("no_rule_pack", selection.Validation.State);
+        Assert.Equal(grid.ValidationEmptyStateMessage, selection.Validation.Message);
+    }
+
+    [Fact]
+    public async Task Select_dataset_waits_for_a_loading_dataset_to_validate()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var pending = tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "validation", 30_000));
+        Assert.False(pending.IsCompleted);
+        cell.IsLoaded = true;
+        cell.SetValidationReport(ReportOf(new ValidationFinding { RuleId = "R1", Severity = ValidationSeverity.Info, Message = "i" }));
+
+        Assert.True((await pending).TryGetValue(out var selection));
+        Assert.Equal("ready", selection!.Validation.State);
+        Assert.Equal(1, selection.Validation.Infos);
+    }
+
+    [Fact]
+    public async Task Select_dataset_reports_not_loaded_after_the_timeout()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, null, 0));
+
+        Assert.True(result.TryGetValue(out var selection));
+        Assert.Equal("not_loaded", selection!.Validation.State);
+        Assert.Null(selection.Validation.Message);
+        Assert.Same(cell, datasets.SelectedEntry);
+    }
+
+    [Fact]
+    public async Task Select_dataset_rejects_unknown_ids_and_tabs()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest("missing.000", null, null))).TryGetError(out var missing));
+        Assert.Equal("dataset_not_found", missing!.Code);
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "findings", null))).TryGetError(out var tab));
+        Assert.Equal("tab", Assert.IsType<InvalidArgument>(tab).Parameter);
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(" ", null, null))).TryGetError(out var blank));
+        Assert.Equal("datasetId", Assert.IsType<InvalidArgument>(blank).Parameter);
+        Assert.Null(datasets.SelectedEntry);
+    }
+
     // ── list_notifications / dismiss_notification ──────────────────────
 
     [Fact]
@@ -312,13 +415,15 @@ public sealed class ViewerStateToolsTests
             ViewerStateMcpAdapters.Create(new SetTimelineViewTool(timeline)),
             ViewerStateMcpAdapters.Create(new SetDatasetStateTool(new ViewerDatasetStateController(
                 new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
+            ViewerStateMcpAdapters.Create(new SelectDatasetTool(new ViewerDatasetStateController(
+                new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
             ViewerStateMcpAdapters.Create(new ListNotificationsTool(notifications)),
             ViewerStateMcpAdapters.Create(new DismissNotificationTool(notifications)),
             ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider())),
         };
 
         Assert.Equal(
-            ["get_timeline_state", "set_view_time", "step_time", "set_timeline_view", "set_dataset_state", "list_notifications", "dismiss_notification", "set_test_clock"],
+            ["get_timeline_state", "set_view_time", "step_time", "set_timeline_view", "set_dataset_state", "select_dataset", "list_notifications", "dismiss_notification", "set_test_clock"],
             tools.Select(tool => tool.ProtocolTool.Name));
     }
 }
