@@ -334,6 +334,58 @@ public class VectorPipelineTests
         Assert.Empty(layer.Instructions);
     }
 
+    [Theory]
+    [InlineData(90020, new[] { "BOYLAT01" })]
+    [InlineData(21010, new string[0])]
+    public async Task ProcessAsync_MultipleViewingGroups_HiddenWhenAnyGroupHidden(
+        int hiddenGroup, string[] expectedSymbols)
+    {
+        // S-100 Part 9 §9-11.1.3: an instruction with several viewing groups
+        // is disabled when any of them is disabled. The Part 9 XML
+        // viewingGroup element is 1..*.
+        var source = new FakeFeatureXmlSource(
+            featureTypes: ["Buoy"],
+            featureXml: "<Dataset><Feature id='1' type='Buoy'/></Dataset>");
+
+        var xslt = CompileXslt("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>1</featureReference>
+                    <viewingGroup>21010</viewingGroup>
+                    <drawingPriority>8</drawingPriority>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                  <pointInstruction>
+                    <featureReference>1</featureReference>
+                    <viewingGroup>21010</viewingGroup>
+                    <viewingGroup>90020</viewingGroup>
+                    <drawingPriority>24</drawingPriority>
+                    <symbol reference="INFORM01"/>
+                  </pointInstruction>
+                </displayList>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var viewingGroups = new ViewingGroupController();
+        viewingGroups.SetVisible(hiddenGroup, false);
+
+        var catalogue = new FakeVectorPortrayalCatalogue(
+        [
+            new PortrayalRule { Name = "BuoyRule", Type = PortrayalRuleType.Xslt, ExecutionOrder = 1, AppliesTo = ["Buoy"] },
+        ],
+        xsltRules: new() { ["BuoyRule"] = xslt },
+        viewingGroups: viewingGroups);
+
+        var layer = await new VectorPipeline().ProcessAsync(source, catalogue);
+
+        Assert.Equal(
+            expectedSymbols,
+            layer.Instructions.OfType<PointInstruction>().Select(p => p.SymbolReference).ToArray());
+    }
+
     [Fact]
     public async Task ProcessAsync_MixedTypes_SortedByPlane_Priority_TypeOrder()
     {

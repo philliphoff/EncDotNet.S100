@@ -65,6 +65,7 @@ public static class S101SafconLabelMerger
                     FeatureReference = p.FeatureReference,
                     Text = depthText,
                     ViewingGroup = p.ViewingGroup,
+                    AdditionalViewingGroups = p.AdditionalViewingGroups,
                     DrawingPriority = p.DrawingPriority,
                     Plane = p.Plane,
                     FontSize = 10,

@@ -31,7 +31,12 @@ public static class DrawingInstructionSerializer
     /// Version stamp for the serialization frame. Bump on any change to the
     /// frame layout or the <see cref="DrawingInstruction"/> field set.
     /// </summary>
-    public const int FormatVersion = 2;
+    /// <remarks>
+    /// v3: the base fields carry <see cref="DrawingInstruction.AdditionalViewingGroups"/>
+    /// (a count-prefixed id list after the primary viewing group), so v2 lists —
+    /// which dropped every viewing group but the first — are rebuilt.
+    /// </remarks>
+    public const int FormatVersion = 3;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -175,12 +180,13 @@ public static class DrawingInstructionSerializer
 
     private static PointInstruction ReadPoint(BinaryReader r)
     {
-        var (featureRef, plane, vg, priority, scaleMin, scaleMax) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax) = ReadBase(r);
         return new PointInstruction
         {
             FeatureReference = featureRef,
             Plane = plane,
             ViewingGroup = vg,
+            AdditionalViewingGroups = extraVg,
             DrawingPriority = priority,
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
@@ -197,12 +203,13 @@ public static class DrawingInstructionSerializer
 
     private static LineInstruction ReadLine(BinaryReader r)
     {
-        var (featureRef, plane, vg, priority, scaleMin, scaleMax) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax) = ReadBase(r);
         return new LineInstruction
         {
             FeatureReference = featureRef,
             Plane = plane,
             ViewingGroup = vg,
+            AdditionalViewingGroups = extraVg,
             DrawingPriority = priority,
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
@@ -217,12 +224,13 @@ public static class DrawingInstructionSerializer
 
     private static AreaInstruction ReadArea(BinaryReader r)
     {
-        var (featureRef, plane, vg, priority, scaleMin, scaleMax) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax) = ReadBase(r);
         return new AreaInstruction
         {
             FeatureReference = featureRef,
             Plane = plane,
             ViewingGroup = vg,
+            AdditionalViewingGroups = extraVg,
             DrawingPriority = priority,
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
@@ -235,12 +243,13 @@ public static class DrawingInstructionSerializer
 
     private static TextInstruction ReadText(BinaryReader r)
     {
-        var (featureRef, plane, vg, priority, scaleMin, scaleMax) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax) = ReadBase(r);
         return new TextInstruction
         {
             FeatureReference = featureRef,
             Plane = plane,
             ViewingGroup = vg,
+            AdditionalViewingGroups = extraVg,
             DrawingPriority = priority,
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
@@ -269,21 +278,37 @@ public static class DrawingInstructionSerializer
         w.Write(instruction.FeatureReference);
         w.Write((int)instruction.Plane);
         w.Write(instruction.ViewingGroup);
+        w.Write(instruction.AdditionalViewingGroups.Count);
+        foreach (var viewingGroup in instruction.AdditionalViewingGroups)
+            w.Write(viewingGroup);
         w.Write(instruction.DrawingPriority);
         WriteNullableDouble(w, instruction.ScaleMinimum);
         WriteNullableDouble(w, instruction.ScaleMaximum);
     }
 
     private static (string FeatureReference, DisplayPlane Plane, int ViewingGroup,
-        int DrawingPriority, double? ScaleMinimum, double? ScaleMaximum) ReadBase(BinaryReader r)
+        IReadOnlyList<int> AdditionalViewingGroups, int DrawingPriority,
+        double? ScaleMinimum, double? ScaleMaximum) ReadBase(BinaryReader r)
     {
         var featureRef = r.ReadString();
         var plane = (DisplayPlane)r.ReadInt32();
         var vg = r.ReadInt32();
+        var extraCount = r.ReadInt32();
+        if (extraCount < 0 || extraCount > (r.BaseStream.Length - r.BaseStream.Position) / sizeof(int))
+            throw new InvalidDataException($"Invalid viewing-group count {extraCount}.");
+        IReadOnlyList<int> extraVg = [];
+        if (extraCount > 0)
+        {
+            var extra = new int[extraCount];
+            for (var i = 0; i < extraCount; i++)
+                extra[i] = r.ReadInt32();
+            extraVg = extra;
+        }
+
         var priority = r.ReadInt32();
         var scaleMin = ReadNullableDouble(r);
         var scaleMax = ReadNullableDouble(r);
-        return (featureRef, plane, vg, priority, scaleMin, scaleMax);
+        return (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax);
     }
 
     private static void WriteString(BinaryWriter w, string? value)

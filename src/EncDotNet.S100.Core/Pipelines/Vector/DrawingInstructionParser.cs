@@ -44,6 +44,7 @@ public static class DrawingInstructionParser
 
         // Current state — accumulated as we scan through commands
         int viewingGroup = 0;
+        IReadOnlyList<int> additionalViewingGroups = [];
         int drawingPriority = 0;
         DisplayPlane displayPlane = DisplayPlane.UnderRadar;
         double? scaleMinimum = null;
@@ -112,10 +113,11 @@ public static class DrawingInstructionParser
             {
                 // ── State-setting commands ──
                 case "ViewingGroup":
-                    // May be "vg1,vg2" — take the first
-                    var vgParts = value.Split(',');
-                    if (vgParts.Length > 0 && int.TryParse(vgParts[0], CultureInfo.InvariantCulture, out var vg))
-                        viewingGroup = vg;
+                    // "ViewingGroup:vg1[,vg2[,…]]" (S-100 Part 9a §9a-11.2.2.1).
+                    // Keep every id: the instruction is disabled when any of
+                    // them is (Part 9 §9-11.1.3), so S-101's trailing 90020 /
+                    // 90021 on INFORM01 must survive parsing to act as a toggle.
+                    ParseViewingGroups(value, ref viewingGroup, ref additionalViewingGroups);
                     break;
 
                 case "DrawingPriority":
@@ -220,6 +222,7 @@ public static class DrawingInstructionParser
                         FeatureReference = featureRef,
                         SymbolReference = value,
                         ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
                         DrawingPriority = drawingPriority,
                         Plane = displayPlane,
                         Rotation = rotation,
@@ -265,6 +268,7 @@ public static class DrawingInstructionParser
                         FeatureReference = featureRef,
                         LineStyleReference = string.IsNullOrEmpty(value) ? lineStyleRef : value,
                         ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
                         DrawingPriority = drawingPriority,
                         Plane = displayPlane,
                         LineWidth = lineWidth,
@@ -290,6 +294,7 @@ public static class DrawingInstructionParser
                         FeatureReference = featureRef,
                         FillColor = cfParts[0],
                         ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
                         DrawingPriority = drawingPriority,
                         Plane = displayPlane,
                         Transparency = cfParts.Length > 1 &&
@@ -305,6 +310,7 @@ public static class DrawingInstructionParser
                         FeatureReference = featureRef,
                         AreaFillReference = value,
                         ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
                         DrawingPriority = drawingPriority,
                         Plane = displayPlane,
                         ScaleMinimum = scaleMinimum,
@@ -318,6 +324,7 @@ public static class DrawingInstructionParser
                         FeatureReference = featureRef,
                         Text = DefDecode(value),
                         ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
                         DrawingPriority = drawingPriority,
                         Plane = displayPlane,
                         FontSize = fontSize,
@@ -512,6 +519,58 @@ public static class DrawingInstructionParser
     /// <summary>
     /// Decodes DEF-encoded text: &amp;a → &amp;, &amp;s → ;, &amp;c → :, &amp;m → ,
     /// </summary>
+    /// <summary>
+    /// Parses a comma-separated viewing-group list (<c>vg1[,vg2[,…]]</c>) into
+    /// the primary group and any additional groups. Ids that do not parse as
+    /// integers are skipped and repeated ids are kept once; when no id parses,
+    /// both outputs are left unchanged.
+    /// </summary>
+    private static void ParseViewingGroups(
+        string value, ref int primary, ref IReadOnlyList<int> additional)
+    {
+        if (TrySplitViewingGroups(value.Split(','), out var first, out var rest))
+        {
+            primary = first;
+            additional = rest;
+        }
+    }
+
+    /// <summary>
+    /// Splits viewing-group ids into the primary (first parseable) id and the
+    /// distinct remaining ids, in order. Shared by the Lua instruction parser
+    /// and the Part 9 XML display-list reader, whose <c>viewingGroup</c>
+    /// element is likewise <c>1..*</c>.
+    /// </summary>
+    /// <returns><see langword="false"/> when no id parses as an integer.</returns>
+    internal static bool TrySplitViewingGroups(
+        IEnumerable<string> ids, out int primary, out IReadOnlyList<int> additional)
+    {
+        primary = 0;
+        additional = [];
+        List<int>? rest = null;
+        var found = false;
+
+        foreach (var raw in ids)
+        {
+            if (!int.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+                continue;
+
+            if (!found)
+            {
+                primary = id;
+                found = true;
+            }
+            else if (id != primary && (rest is null || !rest.Contains(id)))
+            {
+                (rest ??= []).Add(id);
+            }
+        }
+
+        if (rest is not null)
+            additional = rest;
+        return found;
+    }
+
     /// <summary>
     /// Maps an S-100 Part 9 <c>rotationCRS</c> value to its frame. Only
     /// <c>GeographicCRS</c> turns with the chart; <c>PortrayalCRS</c>, the
