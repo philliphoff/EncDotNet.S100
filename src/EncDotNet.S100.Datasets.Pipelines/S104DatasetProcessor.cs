@@ -915,7 +915,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             case S104DatasetData.GriddedCoverage g:
                 try
                 {
-                    return S104DatasetRules.Default.Run(g.Dataset);
+                    return S104DatasetRules.Default.Run(g.Dataset, new ValidationContext { CrsTransformFactory = _crsTransformFactory });
                 }
                 catch (S100DatasetSchemaException ex)
                 {

@@ -1,6 +1,8 @@
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
+using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -189,6 +191,9 @@ public class S102ValidationTests
     [InlineData("2024-05-01")]
     [InlineData("2024-05-01T12:00:00Z")]
     [InlineData("2024-05-01T12:00:00+02:00")]
+    [InlineData("20260902")]                 // ISO 8601 basic format (S-100 Part 10c / NOAA S-102)
+    [InlineData("20260902T105406Z")]
+    [InlineData("20260902T105406+0000")]
     public void R3_2_Does_Not_Fire_On_Iso8601(string date)
     {
         var dataset = new S102Dataset
@@ -199,6 +204,63 @@ public class S102ValidationTests
 
         var report = S102DatasetRules.Default.Run(dataset);
         Assert.DoesNotContain(report.Findings, x => x.RuleId == "S102-R-3.2");
+    }
+
+    [Theory]
+    [InlineData("2026-13-01")]
+    [InlineData("20261301")]
+    [InlineData("2026091")]
+    [InlineData("02/09/2026")]
+    public void R3_2_Fires_On_Malformed_Or_Impossible_Date(string date)
+    {
+        var dataset = new S102Dataset
+        {
+            IssueDate = date,
+            Coverages = new[] { MakeCoverage() },
+        };
+
+        var report = S102DatasetRules.Default.Run(dataset);
+        Assert.Single(report.Findings, x => x.RuleId == "S102-R-3.2");
+    }
+
+    // ----- R-3.3 -----
+
+    [Theory]
+    [InlineData("105406+0000")]   // NOAA S-102 Ed 3: basic format with a UTC offset
+    [InlineData("105406Z")]
+    [InlineData("105406")]
+    [InlineData("1054")]
+    [InlineData("10:54:06Z")]
+    [InlineData("10:54:06.437304")]
+    [InlineData("10:54:06-05:00")]
+    public void R3_3_Does_Not_Fire_On_Iso8601_Time(string time)
+    {
+        var dataset = new S102Dataset
+        {
+            IssueTime = time,
+            Coverages = new[] { MakeCoverage() },
+        };
+
+        var report = S102DatasetRules.Default.Run(dataset);
+        Assert.DoesNotContain(report.Findings, x => x.RuleId == "S102-R-3.3");
+    }
+
+    [Theory]
+    [InlineData("25:00:00")]
+    [InlineData("106006")]
+    [InlineData("10:5406")]
+    [InlineData("noon")]
+    public void R3_3_Fires_On_Malformed_Time(string time)
+    {
+        var dataset = new S102Dataset
+        {
+            IssueTime = time,
+            Coverages = new[] { MakeCoverage() },
+        };
+
+        var report = S102DatasetRules.Default.Run(dataset);
+        var f = Assert.Single(report.Findings, x => x.RuleId == "S102-R-3.3");
+        Assert.Equal(ValidationSeverity.Warning, f.Severity);
     }
 
     // ----- R-4.1 -----
@@ -249,6 +311,104 @@ public class S102ValidationTests
         Assert.DoesNotContain(report.Findings, x => x.RuleId == "S102-R-4.2");
     }
 
+    // ----- R-4.1 / R-4.2 on projected CRSs -----
+
+    // The NOAA Seattle tile 102US005SEAFL262247: WGS 84 / UTM 10N, 4 m grid, origin in metres.
+    private static S102Dataset MakeUtmDataset(double originNorthing = 5_266_464.620518, double originEasting = 545_082.875728)
+        => new()
+        {
+            HorizontalCRS = 32610,
+            IssueDate = "20260902",
+            IssueTime = "105406+0000",
+            Coverages = new[]
+            {
+                MakeCoverage(
+                    rows: 2088, cols: 1206,
+                    originLat: originNorthing, originLon: originEasting,
+                    spacingLat: 4.0, spacingLon: 4.0,
+                    values: FillDepths(2088 * 1206, 10f)),
+            },
+        };
+
+    [Fact]
+    public void R4_Does_Not_Fire_On_Projected_Utm_Coverage_Without_Transform()
+    {
+        var report = S102DatasetRules.Default.Run(MakeUtmDataset());
+
+        Assert.DoesNotContain(report.Findings, x => x.RuleId is "S102-R-3.2" or "S102-R-3.3" or "S102-R-4.1" or "S102-R-4.2");
+    }
+
+    [Fact]
+    public void R4_Does_Not_Fire_On_Projected_Utm_Coverage_With_ProjNet_Transform()
+    {
+        var context = new ValidationContext { CrsTransformFactory = new ProjNetCrsTransformFactory() };
+
+        var report = S102DatasetRules.Default.Run(MakeUtmDataset(), context);
+
+        Assert.DoesNotContain(report.Findings, x => x.RuleId is "S102-R-4.1" or "S102-R-4.2");
+    }
+
+    [Fact]
+    public void R4_1_Fires_On_Projected_Coverage_With_Degrees_For_Metres()
+    {
+        // Geographic degrees written into a UTM dataset: easting -122 m is impossible.
+        var report = S102DatasetRules.Default.Run(MakeUtmDataset(originNorthing: 47.55, originEasting: -122.4));
+
+        var f = Assert.Single(report.Findings, x => x.RuleId == "S102-R-4.1");
+        Assert.Contains("easting", f.Message);
+        Assert.DoesNotContain("[-90, 90]", f.Message);
+    }
+
+    [Fact]
+    public void R4_2_Fires_On_Projected_Extent_Beyond_Utm_Northing()
+    {
+        var context = new ValidationContext { CrsTransformFactory = new ProjNetCrsTransformFactory() };
+        var dataset = new S102Dataset
+        {
+            HorizontalCRS = 32610,
+            Coverages = new[]
+            {
+                // 4 km spacing × 2000 rows runs the far corner past 10 000 km northing.
+                MakeCoverage(rows: 2000, cols: 2, originLat: 5_266_464.0, originLon: 545_082.0,
+                    spacingLat: 4_000.0, spacingLon: 4.0, values: FillDepths(4000, 10f)),
+            },
+        };
+
+        var report = S102DatasetRules.Default.Run(dataset, context);
+
+        Assert.DoesNotContain(report.Findings, x => x.RuleId == "S102-R-4.1");
+        var f = Assert.Single(report.Findings, x => x.RuleId == "S102-R-4.2");
+        Assert.Contains("northing", f.Message);
+    }
+
+    [Fact]
+    public void R4_Does_Not_Check_Coverage_In_Unclassified_Crs()
+    {
+        var dataset = new S102Dataset
+        {
+            HorizontalCRS = 12345,
+            Coverages = new[] { MakeCoverage(originLat: 5_266_464.0, originLon: 545_082.0) },
+        };
+
+        var report = S102DatasetRules.Default.Run(dataset);
+
+        Assert.DoesNotContain(report.Findings, x => x.RuleId is "S102-R-4.1" or "S102-R-4.2");
+    }
+
+    [Fact]
+    public void Real_Noaa_Utm_Fixture_Validates_Without_Georeferencing_Or_Date_Findings()
+    {
+        // NOAA Lake Erie tile: EPSG:32617, issueDate "20260126" (ISO 8601 basic).
+        using var hdf5 = PureHdfFile.Open("TestData/102US004MI1CI262227.h5");
+        var dataset = S102DatasetReader.Read(hdf5);
+        Assert.Equal(32617, dataset.HorizontalCRS);
+
+        var context = new ValidationContext { CrsTransformFactory = new ProjNetCrsTransformFactory() };
+        var report = S102DatasetRules.Default.Run(dataset, context);
+
+        Assert.DoesNotContain(report.Findings, x => x.RuleId is "S102-R-3.2" or "S102-R-3.3" or "S102-R-4.1" or "S102-R-4.2");
+    }
+
     // ----- R-5.1 -----
 
     [Fact]
@@ -297,7 +457,7 @@ public class S102ValidationTests
         var dataset = MakeDataset();
         var report = S102DatasetRules.Default.Run(dataset);
         Assert.True(report.IsValid, $"Expected no findings, got: {string.Join("; ", report.Findings.Select(f => f.RuleId))}");
-        Assert.Equal(8, report.RulesEvaluated);
+        Assert.Equal(9, report.RulesEvaluated);
     }
 
     [Fact]

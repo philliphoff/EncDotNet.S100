@@ -37,7 +37,12 @@ public sealed class S111StationSeriesDataset
     /// <summary>Reference to an associated metadata file.</summary>
     public string? Metadata { get; init; }
 
-    /// <summary>Depth below the water surface at which currents apply, in metres.</summary>
+    /// <summary>
+    /// The <c>surfaceCurrentDepth</c> root attribute, in metres, interpreted per
+    /// <c>depthTypeIndex</c>: a height on an upward axis relative to the reference
+    /// level (so a level below the sea surface is negative, e.g. <c>-4.5</c>), or
+    /// the positive thickness of a layer average.
+    /// </summary>
     public float? SurfaceCurrentDepth { get; init; }
 
     /// <summary>

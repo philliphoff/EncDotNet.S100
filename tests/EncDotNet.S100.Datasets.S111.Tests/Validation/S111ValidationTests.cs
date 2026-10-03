@@ -193,18 +193,30 @@ public class S111ValidationTests
         Assert.DoesNotContain(report.Findings, f => f.RuleId == "S111-R-2.1");
     }
 
-    // ----- R-3.1: SurfaceCurrentDepth in [0, 1500] when present -----
+    // ----- R-3.1: |SurfaceCurrentDepth| <= 1500 when present -----
 
-    [Fact]
-    public void R3_1_Fires_When_Depth_Is_Negative()
+    [Theory]
+    [InlineData(-4.5f)]   // NOAA OFS: 4.5 m below the sea surface on S-111's upward axis
+    [InlineData(-1.0f)]
+    [InlineData(-1500.0f)]
+    public void R3_1_Does_Not_Fire_On_Negative_Depth_Below_The_Reference_Level(float depth)
     {
-        var dataset = MakeDataset(depth: -1.0f, coverages: MakeCoverage());
+        var dataset = MakeDataset(depth: depth, coverages: MakeCoverage());
 
         var report = S111SurfaceCurrentRules.Default.Run(dataset);
 
-        var r31 = report.Findings.Where(f => f.RuleId == "S111-R-3.1").ToList();
-        Assert.Single(r31);
-        Assert.Equal(ValidationSeverity.Warning, r31[0].Severity);
+        Assert.DoesNotContain(report.Findings, f => f.RuleId == "S111-R-3.1");
+    }
+
+    [Fact]
+    public void R3_1_Fires_When_Negative_Depth_Exceeds_1500m()
+    {
+        var dataset = MakeDataset(depth: -2000.0f, coverages: MakeCoverage());
+
+        var report = S111SurfaceCurrentRules.Default.Run(dataset);
+
+        var r31 = Assert.Single(report.Findings, f => f.RuleId == "S111-R-3.1");
+        Assert.Equal(ValidationSeverity.Warning, r31.Severity);
     }
 
     [Fact]
@@ -375,6 +387,8 @@ public class S111ValidationTests
         Assert.Single(r42);
         Assert.Equal(ValidationSeverity.Error, r42[0].Severity);
         Assert.Equal("/SurfaceCurrent/SurfaceCurrent.01", r42[0].RelatedFeatureId);
+        // The reported worst value is the offending 360, not the zero seed.
+        Assert.Contains("worst observed: 360°", r42[0].Message);
     }
 
     [Fact]

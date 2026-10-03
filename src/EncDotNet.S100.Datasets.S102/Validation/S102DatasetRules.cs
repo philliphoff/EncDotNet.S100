@@ -193,28 +193,24 @@ public static class S102DatasetRules
 
     /// <summary>
     /// <c>S102-R-3.2</c> — When <see cref="S102Dataset.IssueDate"/> is
-    /// set, it parses as an ISO 8601 date or date-time.
+    /// set, it parses as an ISO 8601 date or date-time, in the basic
+    /// (<c>20260902</c>) or extended (<c>2026-09-02</c>) format.
     /// </summary>
     /// <remarks>
     /// Spec reference: S-102 Edition 3.0.0 §10.2 root attribute
-    /// <c>issueDate</c>. Implements the <c>s102-bathymetry</c>
-    /// skill review-checklist item "root metadata parse cleanly".
+    /// <c>issueDate</c>, which S-100 Part 10c writes in the ISO 8601
+    /// basic format <c>YYYYMMDD</c>. Implements the <c>s102-bathymetry</c>
+    /// skill review-checklist item "root metadata parse cleanly". See
+    /// <see cref="Iso8601Text.IsDateOrDateTime"/> for the accepted forms.
     /// </remarks>
     public static IValidationRule<S102Dataset> IssueDateIsIso8601 { get; } =
         ValidationRuleBuilder.RuleFor<S102Dataset>("S102-R-3.2")
-            .WithDescription("IssueDate, when set, must parse as an ISO 8601 date or date-time.")
+            .WithDescription("IssueDate, when set, must parse as an ISO 8601 date or date-time (basic or extended format).")
             .WithSeverity(ValidationSeverity.Warning)
             .Yield((dataset, _) =>
             {
                 var raw = dataset.IssueDate;
-                if (string.IsNullOrWhiteSpace(raw))
-                    return Array.Empty<ValidationFinding>();
-
-                if (DateTimeOffset.TryParse(
-                        raw,
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.RoundtripKind,
-                        out DateTimeOffset _))
+                if (string.IsNullOrWhiteSpace(raw) || Iso8601Text.IsDateOrDateTime(raw))
                     return Array.Empty<ValidationFinding>();
 
                 return new[]
@@ -230,31 +226,69 @@ public static class S102DatasetRules
             .Build();
 
     /// <summary>
-    /// <c>S102-R-4.1</c> — Each coverage's
-    /// <see cref="BathymetryCoverage.OriginLatitude"/> is in [-90, 90]
-    /// and <see cref="BathymetryCoverage.OriginLongitude"/> is in
-    /// [-180, 180].
+    /// <c>S102-R-3.3</c> — When <see cref="S102Dataset.IssueTime"/> is
+    /// set, it parses as an ISO 8601 time of day, in the basic
+    /// (<c>105406Z</c>, <c>105406+0000</c>) or extended
+    /// (<c>10:54:06Z</c>) format.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-100 Part 10c §10.2.1.2 grid georeferencing.
-    /// Implements <c>s102-bathymetry</c> skill review-checklist item
-    /// "georeferencing attributes within WGS-84 range".
+    /// Spec reference: S-102 Edition 3.0.0 §10.2 root attribute
+    /// <c>issueTime</c>, which S-100 Part 10c writes in the ISO 8601
+    /// basic format <c>hhmmss</c> with an optional zone designator. See
+    /// <see cref="Iso8601Text.IsTimeOfDay"/> for the accepted forms.
+    /// </remarks>
+    public static IValidationRule<S102Dataset> IssueTimeIsIso8601 { get; } =
+        ValidationRuleBuilder.RuleFor<S102Dataset>("S102-R-3.3")
+            .WithDescription("IssueTime, when set, must parse as an ISO 8601 time of day (basic or extended format).")
+            .WithSeverity(ValidationSeverity.Warning)
+            .Yield((dataset, _) =>
+            {
+                var raw = dataset.IssueTime;
+                if (string.IsNullOrWhiteSpace(raw) || Iso8601Text.IsTimeOfDay(raw))
+                    return Array.Empty<ValidationFinding>();
+
+                return new[]
+                {
+                    new ValidationFinding
+                    {
+                        RuleId = "S102-R-3.3",
+                        Severity = ValidationSeverity.Warning,
+                        Message = $"IssueTime '{raw}' is not a recognisable ISO 8601 time of day.",
+                    },
+                };
+            })
+            .Build();
+
+    /// <summary>
+    /// <c>S102-R-4.1</c> — Each coverage's grid origin
+    /// (<see cref="BathymetryCoverage.OriginLongitude"/>,
+    /// <see cref="BathymetryCoverage.OriginLatitude"/>) is a plausible
+    /// position in the dataset's <see cref="S102Dataset.HorizontalCRS"/>:
+    /// within [-90, 90] / [-180, 180] degrees for a geographic CRS, or
+    /// within the projected bounds (and reprojecting to a valid WGS 84
+    /// position) for a projected one.
+    /// </summary>
+    /// <remarks>
+    /// Spec reference: S-100 Part 10c §10.2.1.2 grid georeferencing;
+    /// S-102 Edition 3.0.0 permits projected CRSs (e.g. WGS 84 / UTM),
+    /// for which the <c>gridOrigin*</c> values are metres. See
+    /// <see cref="GridGeoreferencing"/> for the CRS-specific checks;
+    /// a CRS it cannot classify is not checked. Implements
+    /// <c>s102-bathymetry</c> skill review-checklist item
+    /// "georeferencing attributes within range".
     /// </remarks>
     public static IValidationRule<S102Dataset> CoverageOriginInWgs84Range { get; } =
         ValidationRuleBuilder.RuleFor<S102Dataset>("S102-R-4.1")
-            .WithDescription("Each BathymetryCoverage origin lat/lon must be within WGS-84 ranges.")
+            .WithDescription("Each BathymetryCoverage origin must be a valid position in the dataset's horizontal CRS.")
             .WithSeverity(ValidationSeverity.Error)
-            .Yield((dataset, _) =>
+            .Yield((dataset, context) =>
             {
+                var georef = GridGeoreferencing.For(dataset.HorizontalCRS, context);
                 var findings = new List<ValidationFinding>();
                 for (var i = 0; i < dataset.Coverages.Count; i++)
                 {
                     var c = dataset.Coverages[i];
-                    var problems = new List<string>();
-                    if (c.OriginLatitude < -90 || c.OriginLatitude > 90)
-                        problems.Add($"OriginLatitude {Fmt(c.OriginLatitude)} outside [-90, 90]");
-                    if (c.OriginLongitude < -180 || c.OriginLongitude > 180)
-                        problems.Add($"OriginLongitude {Fmt(c.OriginLongitude)} outside [-180, 180]");
+                    var problems = georef.CheckPosition(c.OriginLongitude, c.OriginLatitude, "OriginLongitude", "OriginLatitude");
                     if (problems.Count == 0)
                         continue;
 
@@ -273,26 +307,32 @@ public static class S102DatasetRules
             .Build();
 
     /// <summary>
-    /// <c>S102-R-4.2</c> — Each coverage's extent
-    /// (<c>origin + (numPoints - 1) × spacing</c>) does not wrap the
-    /// antimeridian (longitude end &gt; 180) or cross the pole
-    /// (latitude end &gt; 90). Antimeridian-spanning datasets are out
-    /// of scope for V-1.
+    /// <c>S102-R-4.2</c> — Each coverage's far grid corner
+    /// (<c>origin + (numPoints - 1) × spacing</c>) is a plausible
+    /// position in the dataset's <see cref="S102Dataset.HorizontalCRS"/>.
+    /// For a geographic CRS that means the extent does not wrap the
+    /// antimeridian (longitude end &gt; 180) or cross the pole (latitude
+    /// end &gt; 90) — antimeridian-spanning datasets are out of scope for
+    /// V-1; for a projected CRS it means the corner stays within the
+    /// projected bounds and reprojects to a valid WGS 84 position.
     /// </summary>
     /// <remarks>
     /// Spec reference: S-100 Part 10c §10.2.1.2; implements the
     /// <c>s102-bathymetry</c> skill review-checklist item "tile
-    /// extent stays within WGS-84 ranges". When the rule fires, the
-    /// finding carries a <see cref="ValidationFinding.BoundingBox"/>
-    /// approximating the offending tile extent (clamped to ordered
-    /// edges only; values may themselves be out of range).
+    /// extent stays within range". See <see cref="GridGeoreferencing"/>.
+    /// When the rule fires, the finding carries a
+    /// <see cref="ValidationFinding.BoundingBox"/> approximating the
+    /// offending tile extent in WGS 84 (edges ordered only; values may
+    /// themselves be out of range) — for a projected grid only when it
+    /// can be reprojected.
     /// </remarks>
     public static IValidationRule<S102Dataset> CoverageExtentDoesNotWrap { get; } =
         ValidationRuleBuilder.RuleFor<S102Dataset>("S102-R-4.2")
-            .WithDescription("Coverage extent must not wrap the antimeridian or cross the pole.")
+            .WithDescription("Coverage extent must stay valid in the dataset's horizontal CRS (no antimeridian wrap or pole crossing).")
             .WithSeverity(ValidationSeverity.Error)
-            .Yield((dataset, _) =>
+            .Yield((dataset, context) =>
             {
+                var georef = GridGeoreferencing.For(dataset.HorizontalCRS, context);
                 var findings = new List<ValidationFinding>();
                 for (var i = 0; i < dataset.Coverages.Count; i++)
                 {
@@ -303,19 +343,13 @@ public static class S102DatasetRules
                     double latEnd = c.OriginLatitude + (c.NumPointsLatitudinal - 1) * c.SpacingLatitudinal;
                     double lonEnd = c.OriginLongitude + (c.NumPointsLongitudinal - 1) * c.SpacingLongitudinal;
 
-                    var problems = new List<string>();
-                    if (latEnd > 90 || latEnd < -90)
-                        problems.Add($"latitude end {Fmt(latEnd)} outside [-90, 90]");
-                    if (lonEnd > 180 || lonEnd < -180)
-                        problems.Add($"longitude end {Fmt(lonEnd)} outside [-180, 180] (antimeridian-spanning tiles are out of scope for V-1)");
+                    var problems = georef.CheckPosition(
+                        lonEnd, latEnd, "longitude end", "latitude end",
+                        longitudeNote: "(antimeridian-spanning tiles are out of scope for V-1)");
                     if (problems.Count == 0)
                         continue;
 
-                    double south = Math.Min(c.OriginLatitude, latEnd);
-                    double north = Math.Max(c.OriginLatitude, latEnd);
-                    double west = Math.Min(c.OriginLongitude, lonEnd);
-                    double east = Math.Max(c.OriginLongitude, lonEnd);
-
+                    georef.TryGetGeographicBounds(c.OriginLongitude, c.OriginLatitude, lonEnd, latEnd, out var bounds);
                     findings.Add(new ValidationFinding
                     {
                         RuleId = "S102-R-4.2",
@@ -324,7 +358,7 @@ public static class S102DatasetRules
                             $"BathymetryCoverage at '{CoveragePath(c, i)}' has out-of-range extent: " +
                             string.Join("; ", problems) + ".",
                         RelatedFeatureId = CoveragePath(c, i),
-                        BoundingBox = new BoundingBox(south, west, north, east),
+                        BoundingBox = bounds,
                     });
                 }
                 return findings;
@@ -418,6 +452,7 @@ public static class S102DatasetRules
         NoDataFillValueIsCanonical,
         HorizontalCrsIsKnownEpsg,
         IssueDateIsIso8601,
+        IssueTimeIsIso8601,
         CoverageOriginInWgs84Range,
         CoverageExtentDoesNotWrap,
         DepthValuesInPlausibleRange,
