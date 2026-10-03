@@ -548,6 +548,15 @@
                                     <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
+                            <!-- #711 G2: data valid at the Timeline's view time. -->
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAtViewTime}"
+                                         IsVisible="{Binding HasViewTime}"
+                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryAtViewTime}">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_State_AtViewTime}" />
+                                    <TextBlock Text="{Binding AtViewTimeCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
                         </UniformGrid>
                     </Border>
                     <!-- One bulk bar: what the buttons act on, then Download (or Cancel) and On pan. -->
@@ -711,6 +720,21 @@
                                             ToolTip.Tip="{Binding SelectedItem.DownloadTooltip}"
                                             AutomationProperties.Name="{Binding SelectedItem.DownloadTooltip}">
                                         <ic:FluentIcon Icon="ArrowDownload" FontSize="16" />
+                                    </Button>
+                                    <!-- #711 G3: the dataset's window on the Timeline. -->
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding ShowOnTimelineCommand}"
+                                            IsVisible="{Binding HasValidWindow}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Library_ShowOnTimeline}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Library_ShowOnTimeline}">
+                                        <ic:FluentIcon Icon="Clock" FontSize="16" />
+                                    </Button>
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding GoToRunStartCommand}"
+                                            IsVisible="{Binding HasValidWindow}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Library_GoToRunStart}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Library_GoToRunStart}">
+                                        <ic:FluentIcon Icon="Previous" FontSize="16" />
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding ZoomToCommand}"

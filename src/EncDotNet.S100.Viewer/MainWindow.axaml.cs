@@ -423,6 +423,13 @@ public partial class MainWindow : ShadUI.Window
         // Timeline lanes (#710): the hovered lane's footprint.
         App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.TimelineMapScope>().Attach(_mapHost);
 
+        // Library ↔ Timeline actions (#711): Show on timeline, Go to start of run, Reveal in Library.
+        _ = new EncDotNet.S100.Viewer.Services.LibraryTimelineLink(
+            App.Services.GetRequiredService<LibraryPanelViewModel>(),
+            _viewModel.Timeline,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.GlobalTimeService>(),
+            _viewModel);
+
         // Library coverage (issue #655): outline the datasets listed in the
         // Library panel — without loading them — while that panel is showing.
         _libraryCoverageController = new LibraryCoverageOverlayController(

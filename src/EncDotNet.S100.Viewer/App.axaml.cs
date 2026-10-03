@@ -937,8 +937,15 @@ public partial class App : Application
                     EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
                     _ => null,
                 },
-                time: sp.GetRequiredService<TimeProvider>());
+                time: sp.GetRequiredService<TimeProvider>(),
+                viewTime: sp.GetRequiredService<GlobalTimeService>());
         });
+        services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
+            sp.GetRequiredService<LibraryPanelViewModel>(),
+            sp.GetRequiredService<Library.LibraryService>(),
+            sp.GetRequiredService<Library.ILibraryLoader>(),
+            sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<ILibraryTimeSource>(sp => sp.GetRequiredService<LibraryTimeSource>());
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(

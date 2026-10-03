@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -249,6 +250,92 @@ internal sealed class OverviewStripControl : Control
         {
             var rect = new Rect(WindowStart * width, 0, Math.Max(WindowWidth * width, 2), height).Deflate(0.5);
             context.DrawRectangle(null, new Pen(bracket, 1), rect, 2, 2);
+        }
+    }
+}
+
+/// <summary>
+/// A lane's Library bands (#711, handoff E2): online windows dashed with the
+/// fill at 6 %, windows on disk outlined, and a running download filling its
+/// online band from the left (E5). Drawn 18 px high behind the 12 px loaded band.
+/// </summary>
+internal sealed class KnownBandControl : Control
+{
+    /// <summary>Online windows.</summary>
+    public static readonly StyledProperty<IReadOnlyList<NormalizedCoverageBand>?> OnlineBandsProperty =
+        AvaloniaProperty.Register<KnownBandControl, IReadOnlyList<NormalizedCoverageBand>?>(nameof(OnlineBands));
+
+    /// <summary>Windows on disk, not loaded.</summary>
+    public static readonly StyledProperty<IReadOnlyList<NormalizedCoverageBand>?> OnDiskBandsProperty =
+        AvaloniaProperty.Register<KnownBandControl, IReadOnlyList<NormalizedCoverageBand>?>(nameof(OnDiskBands));
+
+    /// <summary>The product colour.</summary>
+    public static readonly StyledProperty<IBrush?> StrokeProperty =
+        AvaloniaProperty.Register<KnownBandControl, IBrush?>(nameof(Stroke));
+
+    /// <summary>How far a download has got (0–1); NaN for none.</summary>
+    public static readonly StyledProperty<double> ProgressProperty =
+        AvaloniaProperty.Register<KnownBandControl, double>(nameof(Progress), double.NaN);
+
+    static KnownBandControl()
+    {
+        AffectsRender<KnownBandControl>(OnlineBandsProperty, OnDiskBandsProperty, StrokeProperty, ProgressProperty);
+    }
+
+    /// <inheritdoc cref="OnlineBandsProperty"/>
+    public IReadOnlyList<NormalizedCoverageBand>? OnlineBands
+    {
+        get => GetValue(OnlineBandsProperty);
+        set => SetValue(OnlineBandsProperty, value);
+    }
+
+    /// <inheritdoc cref="OnDiskBandsProperty"/>
+    public IReadOnlyList<NormalizedCoverageBand>? OnDiskBands
+    {
+        get => GetValue(OnDiskBandsProperty);
+        set => SetValue(OnDiskBandsProperty, value);
+    }
+
+    /// <inheritdoc cref="StrokeProperty"/>
+    public IBrush? Stroke
+    {
+        get => GetValue(StrokeProperty);
+        set => SetValue(StrokeProperty, value);
+    }
+
+    /// <inheritdoc cref="ProgressProperty"/>
+    public double Progress
+    {
+        get => GetValue(ProgressProperty);
+        set => SetValue(ProgressProperty, value);
+    }
+
+    /// <inheritdoc />
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        var width = Bounds.Width;
+        var height = Bounds.Height;
+        if (width <= 0 || height <= 0 || Stroke is not ISolidColorBrush stroke)
+            return;
+        var color = stroke.Color;
+        var fill = new ImmutableSolidColorBrush(color, 0.06);
+        var dashed = new Pen(stroke, 1, new DashStyle([3, 2], 0));
+        var solid = new Pen(stroke, 1);
+        Rect Box(NormalizedCoverageBand band) =>
+            new Rect(Math.Clamp(band.Start, 0, 1) * width, 0, Math.Max(band.Width * width, 2), height).Deflate(0.5);
+
+        foreach (var band in OnDiskBands ?? [])
+            context.DrawRectangle(null, solid, Box(band), 3, 3);
+        foreach (var band in OnlineBands ?? [])
+        {
+            var box = Box(band);
+            context.DrawRectangle(fill, dashed, box, 3, 3);
+            if (!double.IsNaN(Progress))
+            {
+                var done = box.WithWidth(box.Width * Math.Clamp(Progress, 0, 1));
+                context.DrawRectangle(new ImmutableSolidColorBrush(color, 0.55), null, done, 3, 3);
+            }
         }
     }
 }

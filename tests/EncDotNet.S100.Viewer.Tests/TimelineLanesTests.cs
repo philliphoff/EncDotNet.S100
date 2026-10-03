@@ -1,3 +1,4 @@
+using EncDotNet.S100.Collections;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.McpTools;
@@ -279,6 +280,185 @@ public sealed class TimelineLanesTests
         Assert.Equal("layout", Assert.IsType<InvalidArgument>(bad).Parameter);
     }
 
+    // ── Library data on the lanes (#711) ───────────────────────────────
+
+    private static readonly GeoBounds Chesapeake = new(36.8, -77, 39.6, -75.8);
+    private static readonly GeoBounds Delaware = new(38.4, -75.6, 39.9, -74.8);
+
+    private static LibraryTimedEntry Entry(string name, DateTime start, int hours, LibraryTimedState state, GeoBounds bounds, bool newRun = false) =>
+        new($"feed:{name}", name, "S-111", start, start.AddHours(hours), state)
+        {
+            Run = start,
+            Model = ForecastRunNames.ModelAndTile(name)?.Model,
+            IsNewRun = newRun,
+            SizeBytes = state == LibraryTimedState.Online ? 500_000 : null,
+            Bounds = bounds,
+        };
+
+    private static (GlobalTimeService Service, TimelineViewModel Timeline, FakeScope Scope, FakeLibrary Library) CreateWithLibrary(DateTime now, params LibraryTimedEntry[] entries)
+    {
+        var service = new GlobalTimeService();
+        var scope = new FakeScope { Unknown = true };
+        var library = new FakeLibrary { Entries = entries };
+        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action(), scope: scope, library: library);
+        return (service, timeline, scope, library);
+    }
+
+    /// <summary>A loaded cbofs tile (12:00Z run, named as Library tiles are) with a newer 18:00Z run online, and dbofs online.</summary>
+    private static (GlobalTimeService, TimelineViewModel, FakeScope, FakeLibrary) Chesapeake18Z()
+    {
+        var older = Run.AddHours(-6);
+        var created = CreateWithLibrary(
+            Run.AddHours(1),
+            Entry("111US00_CBOFS_US4MD1DD", older, 48, LibraryTimedState.Loaded, Chesapeake),
+            Entry("111US00_CBOFS_US4MD1DD", Run, 48, LibraryTimedState.Online, Chesapeake, newRun: true),
+            Entry("111US00_DBOFS_US4DE1AD", Run, 48, LibraryTimedState.Online, Delaware),
+            Entry("111US00_DBOFS_US4NJ1AC", Run, 48, LibraryTimedState.Online, Delaware));
+        var cbofs = Model("cbofs", older) with { Name = "111US00_CBOFS_US4MD1DD" };
+        Load(created.Service, cbofs);
+        return created;
+    }
+
+    [Fact]
+    public void A_loaded_tile_with_a_newer_run_online_shows_it_dashed_with_New_run()
+    {
+        var (_, timeline, _, library) = Chesapeake18Z();
+
+        var group = Assert.Single(timeline.LaneGroups);
+        Assert.Equal(["cbofs", "dbofs"], group.Lanes.Select(l => l.Code));
+        var cbofs = group.Lanes[0];
+        Assert.False(cbofs.IsKnown);
+        Assert.True(cbofs.IsNewRun);
+        Assert.Single(cbofs.OnlineBands);
+        Assert.Empty(cbofs.OnDiskBands);
+        Assert.True(cbofs.CanGet);
+        Assert.Equal("Get · " + LibraryItemViewModel.FormatBytes(500_000), cbofs.GetText);
+        // The newer run widens the axis past the loaded data (to 18:00Z + 48 h).
+        Assert.Equal(Run.AddHours(48), timeline.VisibleEnd);
+
+        cbofs.GetCommand.Execute(null);
+        Assert.Equal(["111US00_CBOFS_US4MD1DD"], library.Got.Select(e => e.Name));
+        cbofs.RevealCommand.Execute(null);
+        Assert.Equal("111US00_CBOFS_US4MD1DD", library.Revealed?.Name);
+    }
+
+    [Fact]
+    public void Library_data_not_loaded_gets_its_own_lane_per_model()
+    {
+        var (_, timeline, _, library) = Chesapeake18Z();
+
+        var dbofs = timeline.LaneGroups[0].Lanes[1];
+        Assert.True(dbofs.IsKnown);
+        Assert.Equal("online · 2 tiles · " + LibraryItemViewModel.FormatBytes(1_000_000), dbofs.Sub);
+        Assert.Equal("18:00Z run", dbofs.LayerTime);
+        Assert.Equal("dbofs · 18:00Z run", dbofs.ActionTitle);
+        Assert.StartsWith("Valid ", dbofs.ActionDetail, StringComparison.Ordinal);
+        Assert.EndsWith(" 18:00Z · 2 tiles · " + LibraryItemViewModel.FormatBytes(1_000_000), dbofs.ActionDetail, StringComparison.Ordinal);
+        Assert.Single(dbofs.OnlineBands);
+        Assert.Empty(dbofs.Bands);
+        Assert.False(dbofs.CanLoad);
+
+        dbofs.GetCommand.Execute(null);
+        Assert.Equal(2, library.Got.Count);
+    }
+
+    [Fact]
+    public void Show_online_off_draws_loaded_data_only()
+    {
+        var (_, timeline, _, _) = Chesapeake18Z();
+
+        timeline.ToggleShowOnlineCommand.Execute(null);
+
+        Assert.False(timeline.ShowOnline);
+        var lane = Assert.Single(Assert.Single(timeline.LaneGroups).Lanes);
+        Assert.Empty(lane.OnlineBands);
+        Assert.True(lane.IsNewRun);
+        Assert.Equal(Run.AddHours(42), timeline.VisibleEnd);
+    }
+
+    [Fact]
+    public void Library_lanes_outside_the_map_view_fold_with_the_rest()
+    {
+        var (_, timeline, scope, _) = Chesapeake18Z();
+        scope.Unknown = false;
+        scope.InView = ["cbofs"];
+        scope.View = new GeoBounds(37, -76.9, 38, -76);
+        timeline.IsInMapView = true;
+
+        Assert.Equal(["cbofs"], Assert.Single(timeline.LaneGroups).Lanes.Select(l => l.Code));
+        Assert.Equal("dbofs", Assert.Single(timeline.OutsideLanes).Code);
+
+        timeline.HoverLane(timeline.OutsideLanes[0]);
+        Assert.Equal(2, scope.HighlightedAreas.Count);
+    }
+
+    [Fact]
+    public void A_download_fills_its_band()
+    {
+        var (_, timeline, _, library) = Chesapeake18Z();
+        var dbofs = timeline.LaneGroups[0].Lanes[1];
+
+        library.Progress = 0.4;
+        library.RaiseProgress();
+
+        Assert.Equal(0.4, dbofs.Progress, 3);
+        Assert.False(dbofs.CanGet);
+        Assert.Equal("Downloading · 40%", dbofs.ActionDetail.Replace(" %", "%", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Get_timeline_state_reports_library_lanes_and_set_timeline_view_turns_show_online()
+    {
+        var (service, timeline, _, _) = Chesapeake18Z();
+        var controller = new ViewerTimelineController(
+            service, timeline, new DatasetsViewModel(new FakeDatasetLoaderService()), new FakeTimeProvider(new DateTimeOffset(Run)),
+            action => { action(); return Task.CompletedTask; });
+
+        Assert.True((await new GetTimelineStateTool(controller).InvokeAsync()).TryGetValue(out var state));
+        Assert.True(state!.ShowOnline);
+        var cbofs = state.Lanes[0];
+        Assert.True(cbofs.NewRun);
+        Assert.False(cbofs.Library);
+        Assert.Equal(["loaded", "online"], cbofs.Windows.Select(w => w.State));
+        var dbofs = state.Lanes[1];
+        Assert.True(dbofs.Library);
+        Assert.Equal("library:S-111/dbofs", dbofs.Id);
+        Assert.All(dbofs.Windows, w => Assert.StartsWith("feed:", w.ItemId, StringComparison.Ordinal));
+
+        Assert.True((await new SetTimelineViewTool(controller).InvokeAsync(new SetTimelineViewRequest(null, null, null, null, ShowOnline: false))).TryGetValue(out var off));
+        Assert.False(off!.ShowOnline);
+        Assert.Single(off.Lanes);
+    }
+
+    private sealed class FakeLibrary : ILibraryTimeSource
+    {
+        public IReadOnlyList<LibraryTimedEntry> Entries { get; set; } = [];
+
+        public double? Progress { get; set; }
+
+        public List<LibraryTimedEntry> Got { get; } = [];
+
+        public LibraryTimedEntry? Revealed { get; private set; }
+
+        public event Action? Changed { add { } remove { } }
+
+        public event Action? ProgressChanged;
+
+        public void RaiseProgress() => ProgressChanged?.Invoke();
+
+        public double? ProgressOf(LibraryTimedEntry entry) => entry.State == LibraryTimedState.Online ? Progress : null;
+
+        public Task GetAsync(IReadOnlyList<LibraryTimedEntry> entries)
+        {
+            Got.AddRange(entries);
+            return Task.CompletedTask;
+        }
+
+        public Task LoadAsync(IReadOnlyList<LibraryTimedEntry> entries) => Task.CompletedTask;
+
+        public void Reveal(LibraryTimedEntry entry) => Revealed = entry;
+    }
+
     private sealed class UtcFormat : ITimeFormatProvider
     {
         public TimeFormat Current => TimeFormat.Utc;
@@ -307,5 +487,18 @@ public sealed class TimelineLanesTests
         }
 
         public void RaiseChanged() => Changed?.Invoke();
+
+        /// <summary>The map view for Library footprints; null before the first view.</summary>
+        public GeoBounds? View { get; set; }
+
+        public IReadOnlyList<GeoBounds> HighlightedAreas { get; private set; } = [];
+
+        public bool? Intersects(GeoBounds bounds) => View is { } view ? bounds.Intersects(view) : null;
+
+        public void HighlightAreas(IReadOnlyList<GeoBounds> areas, (byte R, byte G, byte B) color = default)
+        {
+            HighlightedAreas = areas;
+            Color = color;
+        }
     }
 }

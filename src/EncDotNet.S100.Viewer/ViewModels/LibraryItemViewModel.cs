@@ -286,6 +286,37 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the downloaded copy's run has ended (whatever is online).</summary>
     private bool IsRunEnded => LocalRun is not null && ShownValidTo is { } end && end <= _time.GetUtcNow();
 
+    /// <summary>
+    /// The time the item's data covers (#711): a forecast run's valid window
+    /// (the downloaded copy's run, else the catalogue's), or a dataset's own
+    /// time coverage; <see langword="null"/> for none.
+    /// </summary>
+    internal (DateTime Start, DateTime End)? ValidWindow =>
+        IsForecast
+            ? ShownRun is { } run && ShownValidTo is { } end ? (run.UtcDateTime, end.UtcDateTime) : null
+            : TimeCoverage(Item);
+
+    /// <summary>The run of the downloaded copy, if any (UTC).</summary>
+    internal DateTime? LocalRunTime => LocalRun?.UtcDateTime;
+
+    /// <summary>The catalogue's latest run and its valid window, for a forecast (UTC).</summary>
+    internal (DateTime Run, DateTime End)? CatalogueRun =>
+        S100ForecastFeedIndexer.RunOf(Item) is { } run && S100ForecastFeedIndexer.ValidToOf(Item) is { } end
+            ? (run.UtcDateTime, end.UtcDateTime)
+            : null;
+
+    /// <summary>True when the item's downloaded copy is loaded on the map now.</summary>
+    internal bool IsLoadedNow => _loadState?.Invoke(EffectiveItem) == LibraryLoadState.Loaded;
+
+    /// <summary>A dataset's own time coverage, as a local index records it (<c>timeStart</c>/<c>timeEnd</c>).</summary>
+    internal static (DateTime Start, DateTime End)? TimeCoverage(CollectionItem item) =>
+        item.Properties.TryGetValue("timeStart", out var start) && item.Properties.TryGetValue("timeEnd", out var end)
+        && DateTimeOffset.TryParse(start, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var s)
+        && DateTimeOffset.TryParse(end, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var e)
+        && e >= s
+            ? (s.UtcDateTime, e.UtcDateTime)
+            : null;
+
     /// <summary>True when a forecast run row shows its valid window as a bar.</summary>
     public bool HasForecastWindow => IsForecastRunRow && ShownValidTo is not null;
 

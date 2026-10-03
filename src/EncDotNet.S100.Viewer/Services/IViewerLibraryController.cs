@@ -56,7 +56,14 @@ internal sealed record LibraryItemQuery(
     GeoBounds? Bounds,
     GeoPosition? Point,
     int Page,
-    int PageSize);
+    int PageSize)
+{
+    /// <summary>Keep only items whose data covers this time (#711).</summary>
+    public DateTime? ValidAt { get; init; }
+
+    /// <summary>Keep only items whose data covers the Timeline's view time (#711, the "At time" facet).</summary>
+    public bool ValidAtViewTime { get; init; }
+}
 
 /// <summary>A Library collection: a top-level node of the Library tree.</summary>
 [Description("A Library collection (a top-level node of the Library tree) and its sources.")]
@@ -261,6 +268,10 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
             rows = rows.Where(row => row.Matches(query.Text));
         if (query.States is { Count: > 0 } states)
             rows = rows.Where(row => states.Contains(StateName(row.Availability)));
+        if ((query.ValidAtViewTime ? _panel.CurrentViewTime : query.ValidAt) is { } at)
+            rows = rows.Where(row => row.ValidWindow is { } window && at >= window.Start && at <= window.End);
+        else if (query.ValidAtViewTime)
+            rows = [];
 
         return rows.ToList();
     }

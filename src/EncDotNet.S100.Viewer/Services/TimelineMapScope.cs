@@ -30,6 +30,15 @@ internal interface ITimelineMapScope
     /// <param name="datasetId">The session dataset id, or null.</param>
     /// <param name="color">The outline colour (the lane's product colour).</param>
     void Highlight(string? datasetId, (byte R, byte G, byte B) color = default);
+
+    /// <summary>True when <paramref name="bounds"/> intersect the map view; null before the first view.</summary>
+    /// <param name="bounds">A footprint in degrees.</param>
+    bool? Intersects(GeoBounds bounds);
+
+    /// <summary>Outlines footprints on the map (a Library lane's tiles, #711); empty clears them.</summary>
+    /// <param name="areas">Footprints in degrees.</param>
+    /// <param name="color">The outline colour.</param>
+    void HighlightAreas(IReadOnlyList<GeoBounds> areas, (byte R, byte G, byte B) color = default);
 }
 
 /// <summary>
@@ -89,6 +98,30 @@ internal sealed class TimelineMapScope : ITimelineMapScope
             return;
         }
         _overlay.Show([new S100DatasetExtentIndicator(extent, 0)], color == default ? ((byte)0x25, (byte)0x63, (byte)0xEB) : color);
+    }
+
+    /// <inheritdoc />
+    public bool? Intersects(GeoBounds bounds) => View() is { } view ? bounds.Intersects(view) : null;
+
+    /// <inheritdoc />
+    public void HighlightAreas(IReadOnlyList<GeoBounds> areas, (byte R, byte G, byte B) color = default)
+    {
+        if (areas.Count == 0)
+        {
+            _overlay.Clear();
+            return;
+        }
+        _overlay.Show(
+            areas.Select(a => new S100DatasetExtentIndicator(Mercator(a), 0)),
+            color == default ? ((byte)0x25, (byte)0x63, (byte)0xEB) : color);
+    }
+
+    private static MRect Mercator(GeoBounds bounds)
+    {
+        var east = bounds.CrossesAntimeridian ? bounds.East + 360 : bounds.East;
+        var (minX, minY) = SphericalMercator.FromLonLat(bounds.West, Math.Max(bounds.South, -85));
+        var (maxX, maxY) = SphericalMercator.FromLonLat(east, Math.Min(bounds.North, 85));
+        return new MRect(minX, minY, maxX, maxY);
     }
 
     private DatasetEntry? Entry(string datasetId) =>
