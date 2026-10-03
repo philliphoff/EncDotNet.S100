@@ -97,6 +97,10 @@ public static class S111DatasetReader
             ? root.ReadStringAttribute("issueDate")
             : null;
 
+        string? issueTime = root.AttributeExists("issueTime")
+            ? root.ReadStringAttribute("issueTime")
+            : null;
+
         string? metadata = root.AttributeExists("metadata")
             ? root.ReadStringAttribute("metadata")
             : null;
@@ -149,6 +153,7 @@ public static class S111DatasetReader
                 Epoch = epoch,
                 GeographicIdentifier = geographicIdentifier,
                 IssueDate = issueDate,
+                IssueTime = issueTime,
                 Metadata = metadata,
                 SurfaceCurrentDepth = surfaceCurrentDepth,
                 DataCodingFormat = dataCodingFormat,
@@ -170,6 +175,7 @@ public static class S111DatasetReader
             Epoch = epoch,
             GeographicIdentifier = geographicIdentifier,
             IssueDate = issueDate,
+            IssueTime = issueTime,
             Metadata = metadata,
             SurfaceCurrentDepth = surfaceCurrentDepth,
             DataCodingFormat = dataCodingFormat,

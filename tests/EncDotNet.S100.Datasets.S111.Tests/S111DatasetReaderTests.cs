@@ -41,6 +41,11 @@ public class S111DatasetReaderTests : IDisposable
         Assert.NotNull(dataset.GeographicIdentifier);
         Assert.NotNull(dataset.IssueDate);
         Assert.NotNull(dataset.SurfaceCurrentDepth);
+        // NOAA writes when the file was produced: the 18:00Z run was issued at 19:22Z (#720).
+        Assert.Equal("19:22:48.757376", dataset.IssueTime);
+        Assert.Equal(
+            new DateTime(2026, 3, 20, 19, 22, 48, DateTimeKind.Utc).AddTicks(7_573_760),
+            EncDotNet.S100.Datasets.Pipelines.S100IssueTime.Parse(dataset.IssueDate, dataset.IssueTime));
         Assert.Equal(2, dataset.DataCodingFormat);
     }
 

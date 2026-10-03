@@ -806,6 +806,27 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public void A_timed_dataset_carries_its_issue_time()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 10, 3, 12, 0, 0, DateTimeKind.Utc);
+        var issued = first.AddMinutes(105);
+        var id = new MapDatasetId("cbofs");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)
+        {
+            ProductSpec = "S-111",
+            AvailableTimes = [first, first.AddHours(1)],
+            IssueTime = issued,
+        }));
+
+        session.SetDataset(Dataset(id, productSpec: "S-111"));
+
+        Assert.Equal(issued, Assert.Single(session.GetTimeSnapshot().Datasets).IssueTime);
+    }
+
+    [Fact]
     public void TimeRegistrationAggregatesSamplesAndS111CoverageTolerance()
     {
         using var map = new Map();

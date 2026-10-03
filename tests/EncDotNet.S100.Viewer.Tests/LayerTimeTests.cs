@@ -32,6 +32,86 @@ public sealed class LayerTimeTests
         Coverage = [new MapsuiMapTimeSegment(start, start.AddMinutes(6 * count))],
     };
 
+    // ── forecast runs (#720) ───────────────────────────────────────────
+
+    /// <summary>A Library tile: its name carries the model and tile but not the run; the data says when it was issued.</summary>
+    private static MapsuiMapTimedDataset LibraryTile() => Cbofs() with
+    {
+        Name = "111US00_CBOFS_US4MD1DD",
+        IssueTime = Run.AddMinutes(105),
+    };
+
+    [Fact]
+    public void A_run_in_the_name_wins_over_the_issue_time()
+    {
+        var run = ForecastRunNames.RunOf(Cbofs() with { IssueTime = Run.AddMinutes(105) });
+
+        Assert.Equal(new ForecastRun("cbofs", Run, FromIssueTime: false), run);
+    }
+
+    [Fact]
+    public void A_Library_tile_takes_its_run_from_the_Library_else_its_issue_time()
+    {
+        var tile = LibraryTile();
+        var loaded = new LibraryTimedEntry("feed:cbofs/111US00_CBOFS_US4MD1DD", "111US00_CBOFS_US4MD1DD", "S-111", Run, Run.AddHours(48), LibraryTimedState.Loaded) { Run = Run };
+
+        Assert.Equal("cbofs 00:00Z", ForecastRunNames.Describe(tile, [loaded]));
+        Assert.Equal(new ForecastRun("cbofs", Run.AddMinutes(105), FromIssueTime: true), ForecastRunNames.RunOf(tile));
+        Assert.Equal("cbofs 01:45Z", ForecastRunNames.Describe(tile));
+
+        // Forecast hours count from the run, never from the later issue time.
+        Assert.Equal("08:00Z · T+8 h", LayerTimes.Describe(tile, Run.AddHours(8), false, TimeFormat.Utc, TimeZoneInfo.Utc, ForecastRunNames.RunOf(tile, [loaded])).Text);
+        Assert.Equal("08:00Z", LayerTimes.Describe(tile, Run.AddHours(8), false, TimeFormat.Utc, TimeZoneInfo.Utc, ForecastRunNames.RunOf(tile)).Text);
+    }
+
+    [Fact]
+    public void An_observation_station_is_no_run_whatever_its_issue_time()
+    {
+        var station = Baltimore(Run, 10) with { IssueTime = Run.AddHours(1) };
+
+        Assert.Null(ForecastRunNames.RunOf(station));
+    }
+
+    [Fact]
+    public void The_timeline_lists_a_Library_tiles_run()
+    {
+        var service = new GlobalTimeService();
+        var library = new StaticLibrary(new LibraryTimedEntry("feed:cbofs/111US00_CBOFS_US4MD1DD", "111US00_CBOFS_US4MD1DD", "S-111", Run, Run.AddHours(48), LibraryTimedState.Loaded) { Run = Run });
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(2))), action => action(), library: library);
+        var tile = LibraryTile();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = tile.First,
+            Maximum = tile.Last,
+            Current = tile.First,
+            Samples = tile.Samples,
+            CoverageSegments = [.. tile.Coverage],
+            Datasets = [tile],
+        });
+
+        Assert.Equal(["cbofs 00:00Z"], timeline.Runs);
+        Assert.Contains("cbofs 00:00Z", timeline.RangeLabel, StringComparison.Ordinal);
+    }
+
+    private sealed class StaticLibrary(params LibraryTimedEntry[] entries) : ILibraryTimeSource
+    {
+        public IReadOnlyList<LibraryTimedEntry> Entries => entries;
+
+        public event Action? Changed { add { } remove { } }
+
+        public event Action? ProgressChanged { add { } remove { } }
+
+        public double? ProgressOf(LibraryTimedEntry entry) => null;
+
+        public Task GetAsync(IReadOnlyList<LibraryTimedEntry> entries) => Task.CompletedTask;
+
+        public Task LoadAsync(IReadOnlyList<LibraryTimedEntry> entries) => Task.CompletedTask;
+
+        public void Reveal(LibraryTimedEntry entry)
+        {
+        }
+    }
+
     private static LayerTime Describe(MapsuiMapTimedDataset dataset, DateTime at, bool drawing = false) =>
         LayerTimes.Describe(dataset, at, drawing, TimeFormat.Utc, TimeZoneInfo.Utc);
 

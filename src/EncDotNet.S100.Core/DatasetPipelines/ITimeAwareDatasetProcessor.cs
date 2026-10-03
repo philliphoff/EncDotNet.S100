@@ -14,4 +14,12 @@ public interface ITimeAwareDatasetProcessor
     /// Empty when the dataset carries no temporal dimension.
     /// </summary>
     IReadOnlyList<DateTime> AvailableTimes { get; }
+
+    /// <summary>
+    /// When the producer issued the dataset (UTC), from its <c>issueDate</c> and
+    /// <c>issueTime</c> (see <see cref="S100IssueTime"/>); <see langword="null"/>
+    /// when the dataset does not say. For a forecast this is usually some time
+    /// after the model run it carries.
+    /// </summary>
+    DateTime? IssueTime => null;
 }

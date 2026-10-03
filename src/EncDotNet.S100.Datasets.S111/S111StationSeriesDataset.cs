@@ -28,6 +28,12 @@ public sealed class S111StationSeriesDataset
     /// <summary>Issue date of the dataset (ISO 8601).</summary>
     public string? IssueDate { get; init; }
 
+    /// <summary>
+    /// Issue time of the dataset as written (<c>issueTime</c>, e.g. <c>135227Z</c>
+    /// or <c>13:45:43.63</c>); <see cref="Pipelines.S100IssueTime"/> combines it with <see cref="IssueDate"/>.
+    /// </summary>
+    public string? IssueTime { get; init; }
+
     /// <summary>Reference to an associated metadata file.</summary>
     public string? Metadata { get; init; }
 

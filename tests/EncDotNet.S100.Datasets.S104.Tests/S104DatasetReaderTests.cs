@@ -46,6 +46,11 @@ public class S104DatasetReaderTests : IDisposable
         Assert.NotNull(dataset.GeographicIdentifier);
         Assert.NotNull(dataset.IssueDate);
         Assert.Equal(2, dataset.DataCodingFormat);
+        // NOAA's S-104 writes the issue time as HHMMSSZ (#720).
+        Assert.Matches(@"^\d{6}Z$", dataset.IssueTime);
+        Assert.Equal(
+            new DateTime(2025, 12, 20, 0, 0, 0, DateTimeKind.Utc),
+            EncDotNet.S100.Datasets.Pipelines.S100IssueTime.Parse(dataset.IssueDate, dataset.IssueTime)?.Date);
     }
 
     [SkippableFact]

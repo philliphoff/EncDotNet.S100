@@ -82,6 +82,12 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
     /// <summary>The session's id for the dataset (the value of its <c>MapDatasetId</c>), when known.</summary>
     public string? DatasetId { get; init; }
 
+    /// <summary>
+    /// When the producer issued the dataset (UTC), from its data, when known;
+    /// for a forecast, usually some time after its model run (#720).
+    /// </summary>
+    public DateTime? IssueTime { get; init; }
+
     /// <summary>How the dataset picks the sample it draws.</summary>
     public MapsuiTimeSelectionKind Selection { get; init; } = MapsuiTimeSelectionKind.Nearest;
 
@@ -133,6 +139,7 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && Last == other.Last
         && ProductSpec == other.ProductSpec
         && DatasetId == other.DatasetId
+        && IssueTime == other.IssueTime
         && Selection == other.Selection
         && Tolerance == other.Tolerance
         && Coverage.SequenceEqual(other.Coverage)

@@ -227,6 +227,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         ArgumentNullException.ThrowIfNull(dataset);
 
         TimePolicy? timePolicy = null;
+        DateTime? issueTime = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
             using (processorLease)
@@ -236,6 +237,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                     timePolicy = TimePolicy.TryCreate(
                         dataset.Metadata.Spec.Name,
                         timeAware.AvailableTimes);
+                    issueTime = timeAware.IssueTime;
                 }
             }
         }
@@ -264,6 +266,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 entry.LayerKeys,
                 entry.Dataset.SubLayers);
             entry.TimePolicy = timePolicy;
+            entry.IssueTime = issueTime;
             if (timePolicy is not null)
             {
                 entry.Dataset = CopyDataset(
@@ -1762,6 +1765,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             {
                 ProductSpec = entry.Dataset.Metadata.Spec.Name,
                 DatasetId = entry.Dataset.Id.Value,
+                IssueTime = entry.IssueTime,
                 Selection = entry.TimePolicy.Selection,
                 Tolerance = entry.TimePolicy.Tolerance,
                 Coverage = entry.TimePolicy.CoverageSegments,
@@ -2166,6 +2170,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public MapDataset Dataset { get; set; } = dataset;
 
         public TimePolicy? TimePolicy { get; set; }
+
+        /// <summary>When the dataset was issued, from its data (#720).</summary>
+        public DateTime? IssueTime { get; set; }
 
         public DateTime? RenderedTime { get; set; }
 

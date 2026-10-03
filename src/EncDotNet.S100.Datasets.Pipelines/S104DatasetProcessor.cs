@@ -122,6 +122,14 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public IReadOnlyList<DateTime> AvailableTimes =>
         _source?.AvailableTimes ?? _stationTimes;
 
+    /// <inheritdoc />
+    public DateTime? IssueTime => _data switch
+    {
+        S104DatasetData.GriddedCoverage g => S100IssueTime.Parse(g.Dataset.IssueDate, g.Dataset.IssueTime),
+        S104DatasetData.StationSeries s => S100IssueTime.Parse(s.Dataset.IssueDate, s.Dataset.IssueTime),
+        _ => null,
+    };
+
     /// <summary>
     /// <see langword="true"/> when this dataset is a regularly-gridded (dcf2)
     /// water-level <em>surface</em> — the full-tile colour-band heatmap — rather

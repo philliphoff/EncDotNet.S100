@@ -289,7 +289,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 
     /// <summary>The forecast runs loaded, by model, e.g. "cbofs 12:00Z".</summary>
     public IReadOnlyList<string> Runs => _service.TimedDatasets
-        .Select(d => ForecastRunNames.Describe(d.Name))
+        .Select(d => ForecastRunNames.Describe(d, LibraryEntries))
         .OfType<string>()
         .Distinct(StringComparer.Ordinal)
         .ToArray();

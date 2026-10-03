@@ -601,7 +601,8 @@ public partial class App : Application
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<TimeRefreshProgress>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetService<ITimeFormatProvider>()));
+            sp.GetService<ITimeFormatProvider>(),
+            library: () => sp.GetService<ILibraryTimeSource>()));
         services.AddSingleton<EcdisDisplayState>(sp =>
         {
             var settings = sp.GetRequiredService<ViewerSettings>();

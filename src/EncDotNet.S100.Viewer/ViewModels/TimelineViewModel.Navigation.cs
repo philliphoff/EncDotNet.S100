@@ -330,13 +330,15 @@ internal sealed partial class TimelineViewModel
         _service.TimedDatasets.FirstOrDefault(d => d.Name == _driverName)
         ?? TimelineStepper.DefaultDriver(AxisDatasets, IsForecastDataset);
 
-    private static bool IsForecastDataset(MapsuiMapTimedDataset dataset) =>
+    /// <summary>True for S-111 surface currents and for any dataset of a known forecast run (#720).</summary>
+    private bool IsForecastDataset(MapsuiMapTimedDataset dataset) =>
         string.Equals(dataset.ProductSpec, "S-111", StringComparison.OrdinalIgnoreCase)
-        || ForecastRunNames.Describe(dataset.Name) is not null;
+        || ForecastRunNames.RunOf(dataset, LibraryEntries) is not null;
 
-    /// <summary>"cbofs" for a run, else the dataset name.</summary>
+    /// <summary>"cbofs" for a model's run or tile, else the dataset name.</summary>
     private static string DriverLabel(MapsuiMapTimedDataset dataset) =>
-        ForecastRunNames.Describe(dataset.Name) is { } run ? run.Split(' ')[0] : dataset.Name;
+        ForecastRunNames.ModelAndTile(dataset.Name)?.Model
+        ?? (ForecastRunNames.Describe(dataset.Name) is { } run ? run.Split(' ')[0] : dataset.Name);
 
     /// <summary>Where one step of <paramref name="kind"/> in <paramref name="direction"/> lands, or null.</summary>
     internal DateTime? StepTarget(TimelineStepKind kind, int direction)

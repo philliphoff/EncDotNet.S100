@@ -38,6 +38,8 @@ internal sealed class StubProcessor :
 
     public IReadOnlyList<DateTime> AvailableTimes { get; set; } = [];
 
+    public DateTime? IssueTime { get; set; }
+
     public RenderContext? LastContext { get; private set; }
 
     public int RenderCount { get; private set; }

@@ -42,7 +42,13 @@ internal static class LayerTimes
     internal static readonly TimeSpan DateThreshold = TimeSpan.FromHours(20);
 
     /// <summary>Describes <paramref name="dataset"/> at <paramref name="viewTime"/>.</summary>
-    public static LayerTime Describe(MapsuiMapTimedDataset dataset, DateTime viewTime, bool drawing, TimeFormat format, TimeZoneInfo zone)
+    /// <param name="dataset">The time-aware dataset.</param>
+    /// <param name="viewTime">The Timeline's view time.</param>
+    /// <param name="drawing">True while the dataset draws the view time.</param>
+    /// <param name="format">Local or UTC.</param>
+    /// <param name="zone">The user's zone.</param>
+    /// <param name="run">The dataset's forecast run (<see cref="ForecastRunNames.RunOf"/>); when null, the run in its name.</param>
+    public static LayerTime Describe(MapsuiMapTimedDataset dataset, DateTime viewTime, bool drawing, TimeFormat format, TimeZoneInfo zone, ForecastRun? run = null)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         var culture = CultureInfo.CurrentCulture;
@@ -54,8 +60,10 @@ internal static class LayerTimes
             var text = Clock(sample, format, zone, culture);
             if (sample == viewTime)
             {
-                if (ForecastRunNames.RunTime(dataset.Name) is { } run && sample >= run)
-                    text = string.Format(culture, Strings.LayerTime_ForecastHourFormat, text, (int)Math.Round((sample - run).TotalHours));
+                // Forecast hours count from the run, never from a (later) issue time.
+                var runTime = run is { FromIssueTime: false } known ? known.Time : ForecastRunNames.RunTime(dataset.Name);
+                if (runTime is { } start && sample >= start)
+                    text = string.Format(culture, Strings.LayerTime_ForecastHourFormat, text, (int)Math.Round((sample - start).TotalHours));
                 return new LayerTime(text, LayerTimeState.Exact, null);
             }
             return new LayerTime(string.Format(culture, Strings.LayerTime_OffsetFormat, text, SignedSpan(sample - viewTime, culture)), LayerTimeState.Offset, null);

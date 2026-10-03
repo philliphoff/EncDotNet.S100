@@ -357,21 +357,21 @@ internal sealed partial class TimelineViewModel
                 continue;
             }
             UpdateLaneActions(lane, format);
-            var run = ForecastRunNames.Describe(dataset.Name);
+            var run = ForecastRunNames.RunOf(dataset, LibraryEntries);
             var tiled = ForecastRunNames.ModelAndTile(dataset.Name);
-            lane.Code = tiled?.Model ?? DriverLabel(dataset);
+            lane.Code = DriverLabel(dataset);
             var parts = new List<string>(3);
             if (tiled is { } tile)
                 parts.Add(tile.Tile);
-            if (run?.Split(' ') is [_, var runTime, ..])
-                parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, runTime));
+            if (run is { FromIssueTime: false } known)
+                parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, known.Time.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z"));
             if (TimelineStepper.Cadence(dataset.Samples) is { } cadence && cadence > TimeSpan.Zero)
                 parts.Add(Duration(cadence));
             lane.Sub = string.Join(" · ", parts);
             lane.IsExpired = IsForecastDataset(dataset) && now > dataset.Last;
 
             var time = view is { } at
-                ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone)
+                ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run)
                 : null;
             lane.LayerTime = time?.Text ?? string.Empty;
             lane.IsHidden = time?.IsHidden == true;
