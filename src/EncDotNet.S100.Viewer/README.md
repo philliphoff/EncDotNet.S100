@@ -1045,7 +1045,8 @@ only. To change any of them **mid-session**, use the `set_palette` /
 **Basemap.** `--basemap None|Offline|Online` selects the basemap for
 the run, overriding the persisted setting (also exposed as a selector
 in **Settings → Map**; default **Offline**). **Offline** draws bundled
-Natural Earth 1:10m land (public domain) with zero network access;
+Natural Earth 1:10m land (public domain) with zero network access, at a
+level of detail matched to the zoom and only for the tiles in view;
 **Online** uses OpenStreetMap tiles with a persistent on-disk cache;
 **None** shows only the ENC water background. Legacy `true`/`false`
 map to Online/None. Use None or Offline for offline operation, or for

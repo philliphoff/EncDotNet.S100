@@ -108,15 +108,18 @@ to an `SKBitmap`:
   engine in `EncDotNet.S100.Datasets.Pipelines` (`HeadlessCompositor`); this
   renderer only paints the resolved stack.
 - **`NaturalEarthBasemap`** — the bundled, offline, public-domain **Natural
-  Earth 1:10m land** basemap (issues #295, #411) as a single, Mapsui-free source
-  of land geometry. The embedded GeoJSON (`Assets/Basemap/ne_10m_land.geojson`)
-  is parsed once and each ring projected `lon/lat → EPSG:3857` via `WebMercator`.
-  `LandPolygons` exposes the world-metre rings; `LandScene` is a cached,
-  viewport-independent `VectorScene` of parchment-filled (`238,232,220`)
-  `AreaPaintOp`s. Both the headless render paths (`HeadlessVectorRenderer.Render`
-  and `CoverageHeadlessRenderer.Render` take a `BasemapKind`; `HeadlessCompositor`
-  prepends the land scene) and the interactive Avalonia viewer's offline basemap
-  consume this same asset, so land is never duplicated.
+  Earth 1:10m land** basemap (issues #295, #411, #731) as a single, Mapsui-free
+  source of land geometry. The embedded asset (`Assets/Basemap/ne_10m_land.bin`,
+  built by `tools/BuildBasemap/BuildBasemap.cs`) holds the full-resolution land
+  plus coarser levels of detail, already projected to EPSG:3857 and cut into
+  tiles. `SelectLevel` picks the coarsest level that stays within a pixel at a
+  given resolution; `GetLandPolygons` returns that level's land for a
+  rectangle; `GetLandScene` lowers the land in a `Viewport` to parchment-filled
+  (`238,232,220`) `AreaPaintOp`s. Both the headless render paths
+  (`HeadlessVectorRenderer.Render` and `CoverageHeadlessRenderer.Render` take a
+  `BasemapKind`; `HeadlessCompositor` prepends the land scene) and the
+  interactive Avalonia viewer's offline basemap consume this same asset, so
+  land is never duplicated.
 
 ## Installation
 

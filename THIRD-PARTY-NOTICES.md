@@ -15,11 +15,13 @@ license text appears at the end of this file.
 - **Source:** Natural Earth (https://www.naturalearthdata.com/), 1:10m
   Physical "land" dataset. Version 5.1.1.
 - **Redistributed in this repository at:**
-  - `src/EncDotNet.S100.Renderers.Skia/Assets/Basemap/ne_10m_land.geojson`
+  - `src/EncDotNet.S100.Renderers.Skia/Assets/Basemap/ne_10m_land.bin`
     (embedded resource of the **EncDotNet.S100.Renderers.Skia** library;
-    simplified to ~8% and used as the bundled offline basemap, shared by the
-    Avalonia viewer's Mapsui offline layer and the headless Skia render path —
-    issues #295, #411).
+    the full-resolution land plus coarser simplified levels of detail,
+    projected to Web Mercator and tiled by `tools/BuildBasemap/BuildBasemap.cs`.
+    Used as the bundled offline basemap, shared by the Avalonia viewer's
+    Mapsui offline layer and the headless Skia render path — issues #295,
+    #411, #731).
 
 ---
 
