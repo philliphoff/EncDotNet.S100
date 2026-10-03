@@ -184,7 +184,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private MainViewModel CreateViewModel(IEnumerable<IActivityTab>? tabs, ViewerSettings? settings = null)
+    private MainViewModel CreateViewModel(IEnumerable<IActivityTab>? tabs, ViewerSettings? settings = null, TimelineViewModel? timeline = null)
     {
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
@@ -198,7 +198,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService()),
+            timeline: timeline ?? new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
@@ -242,6 +242,43 @@ public sealed class MultiDockActivityTabTests : IDisposable
         Assert.Same(search, vm.SelectedLeftTab);
         Assert.Same(rightBefore, vm.SelectedRightTab);
         Assert.Same(bottomBefore, vm.SelectedBottomTab);
+    }
+
+    [Fact]
+    public void TimeHud_ShowsWhileTheTimelineDockIsClosedOrTheMapTooNarrow()
+    {
+        // #712 F5: the dock no longer opens by itself; the HUD stands in for it.
+        var time = new GlobalTimeService();
+        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
+        var vm = CreateViewModel(new IActivityTab[] { new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom } }, timeline: timeline);
+        vm.MapWidth = 1200;
+        Assert.False(vm.IsTimeHudVisible);
+
+        var t0 = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        time.ApplySnapshot(new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
+        {
+            Minimum = t0,
+            Maximum = t0.AddHours(2),
+            Current = t0,
+            Samples = [t0, t0.AddHours(1), t0.AddHours(2)],
+            CoverageSegments = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSegment(t0, t0.AddHours(2))],
+            Datasets = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset("x", t0, t0.AddHours(2))],
+        });
+        Assert.True(vm.IsTimeHudVisible);
+
+        vm.ToggleTimelineDockCommand.Execute(null);
+        Assert.True(vm.IsBottomDockShown);
+        Assert.False(vm.IsTimeHudVisible);
+
+        // Under 900 px the dock is hidden (but remembered) and the HUD is the only control.
+        vm.MapWidth = 850;
+        Assert.True(vm.IsBottomDockOpen);
+        Assert.False(vm.IsBottomDockShown);
+        Assert.True(vm.IsTimeHudVisible);
+        Assert.False(vm.ToggleTimelineDockCommand.CanExecute(null));
+
+        vm.MapWidth = 1000;
+        Assert.True(vm.IsBottomDockShown);
     }
 
     [Fact]

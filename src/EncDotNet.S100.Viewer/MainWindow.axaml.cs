@@ -127,6 +127,9 @@ public partial class MainWindow : ShadUI.Window
         // the map, the Timeline or nothing has focus (never while typing).
         AddHandler(KeyDownEvent, OnTimelineKeyDown, RoutingStrategies.Tunnel);
 
+        // The Time HUD and the dock follow the map's width (#712 F5).
+        MapArea.SizeChanged += (_, e) => _viewModel.MapWidth = e.NewSize.Width;
+
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally. The
@@ -1514,7 +1517,7 @@ public partial class MainWindow : ShadUI.Window
         {
             if (visual is Avalonia.Controls.TextBox)
                 return false;
-            if (visual is Views.TimelineView || ReferenceEquals(visual, MapControl))
+            if (visual is Views.TimelineView or Views.TimeHudView || ReferenceEquals(visual, MapControl))
                 return true;
         }
         return false;

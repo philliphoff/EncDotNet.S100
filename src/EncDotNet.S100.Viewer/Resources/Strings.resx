@@ -3852,6 +3852,15 @@
   <data name="TimelinePanel_PresetCustom" xml:space="preserve">
     <value>Custom</value>
   </data>
+  <data name="TimeHud_Live" xml:space="preserve">
+    <value>Live</value>
+  </data>
+  <data name="Tooltip_TimeHudOpenTimeline" xml:space="preserve">
+    <value>Open timeline (T)</value>
+  </data>
+  <data name="Tooltip_TimeHudTime" xml:space="preserve">
+    <value>The map's view time; click, then ← → to step</value>
+  </data>
   <data name="Library_State_AtViewTime" xml:space="preserve">
     <value>Valid at view time</value>
   </data>

@@ -479,7 +479,7 @@
                     <RowDefinition Height="Auto" />
                     <!-- 260: room for a few Timeline lanes (#710); a saved height wins. -->
                     <RowDefinition Height="260" MinHeight="120"
-                                   bh:CollapsibleRow.IsVisible="{Binding IsBottomDockOpen}"
+                                   bh:CollapsibleRow.IsVisible="{Binding IsBottomDockShown}"
                                    bh:CollapsibleRow.ExpandedHeight="260"
                                    bh:CollapsibleRow.MinHeightWhenVisible="120"
                                    bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
@@ -491,16 +491,26 @@
                     downward into the timeline / bottom dock when the map row
                     shrinks.
                 -->
-                <Grid Grid.Row="0" DragDrop.AllowDrop="True" ClipToBounds="True">
+                <Grid x:Name="MapArea" Grid.Row="0" DragDrop.AllowDrop="True" ClipToBounds="True">
                 <diag:InstrumentedMapControl x:Name="MapControl" />
                 <diag:GpuAccelerationProbe />
                 <views:ScaleBarView x:Name="ScaleBar"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Top"
                                     Margin="0,4,0,0" />
+                <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
+                     bottom centre of the map while its dock is closed (or the
+                     map is too narrow for the dock). -->
+                <views:TimeHudView DataContext="{Binding Timeline}"
+                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsTimeHudVisible}"
+                                   DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleTimelineDockCommand}"
+                                   MapWidth="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapWidth}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Bottom"
+                                   Margin="0,0,0,14" />
                 <!-- Map stamp (#713 B4): the view time over the map while the
-                     Timeline is open, so the map (and any screenshot of it)
-                     says which time it shows. Green dot Live, accent Pinned. -->
+                     Timeline dock is shown, so the map (and any screenshot of
+                     it) says which time it shows. Green dot Live, accent Pinned. -->
                 <Panel HorizontalAlignment="Left"
                        VerticalAlignment="Top"
                        Margin="12,12,0,0"
@@ -508,7 +518,7 @@
                     <Panel.IsVisible>
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                             <Binding Path="Timeline.IsActive" />
-                            <Binding Path="IsBottomDockOpen" />
+                            <Binding Path="IsBottomDockShown" />
                         </MultiBinding>
                     </Panel.IsVisible>
                     <Border Background="{DynamicResource BackgroundColor}"
@@ -863,7 +873,7 @@
                               Classes="PaneSplitter"
                               Height="4"
                               ResizeDirection="Rows"
-                              IsVisible="{Binding IsBottomDockOpen}"
+                              IsVisible="{Binding IsBottomDockShown}"
                               bh:HoverDelay.DelayMilliseconds="500"
                               Name="TimelineSplitter" />
 
@@ -881,7 +891,7 @@
                                         CloseCommand="{Binding CloseDockCommand}"
                                         CloseCommandParameter="Bottom"
                                         CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
-                                        IsVisible="{Binding IsBottomDockOpen}">
+                                        IsVisible="{Binding IsBottomDockShown}">
                     <!-- #710 E6: lanes or the strip, remembered. -->
                     <views:ApplicationPanel.HeaderContent>
                         <Button Classes="Ghost"

@@ -1097,7 +1097,8 @@ public partial class App : Application
             iconFactory: static () => new FluentIcon { Icon = Icon.Clock, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
             dock: TabDock.Bottom,
-            autoOpenOnContentSignal: true);
+            // The Time HUD shows time-aware data on the map; the dock opens on request (#712 F5).
+            autoOpenOnContentSignal: false);
 
         // Main window — receives only the StartupOptions plus the small set
         // of cross-cutting services it still owns directly. Per-dataset

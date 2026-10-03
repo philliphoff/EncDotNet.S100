@@ -98,6 +98,38 @@ public sealed class TimelineViewTests
             Assert.Equal(6, timeline.OutsideLanes.Count);
         });
 
+    [Fact]
+    public void The_time_HUD_binds_and_drops_the_offset_then_the_pinned_label_on_narrow_maps() =>
+        HeadlessTest.Run(() =>
+        {
+            var service = new GlobalTimeService();
+            var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+            var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+            service.ApplySnapshot(new MapsuiMapTimeSnapshot
+            {
+                Minimum = samples[0],
+                Maximum = samples[^1],
+                Current = samples[0],
+                Samples = samples,
+                CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+                Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20261002T00Z_US4MD1DD", samples[0], samples[^1]) { ProductSpec = "S-111", Samples = samples }],
+            });
+            service.SetCurrentTime(Run.AddHours(20));
+            var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200 };
+            var window = new Window { Content = hud, Width = 900, Height = 200 };
+            window.Show();
+            window.Measure(new Size(900, 200));
+            window.Arrange(new Rect(0, 0, 900, 200));
+
+            Assert.DoesNotContain("compact", hud.Classes);
+            hud.MapWidth = 600;
+            Assert.Contains("compact", hud.Classes);
+            Assert.DoesNotContain("tiny", hud.Classes);
+            hud.MapWidth = 500;
+            Assert.Contains("tiny", hud.Classes);
+            window.Close();
+        });
+
     private sealed class InViewScope(params string[] inView) : ITimelineMapScope
     {
         public event Action? Changed { add { } remove { } }
