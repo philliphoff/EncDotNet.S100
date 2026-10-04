@@ -156,6 +156,39 @@ public static class S100VectorSceneRenderer
     }
 
     /// <summary>
+    /// Binds to <paramref name="target"/> a copy of the scene bound to
+    /// <paramref name="source"/> that keeps only the ops <paramref name="keep"/>
+    /// accepts — the single-surface counterpart of
+    /// <see cref="S100VectorTileRenderer.TryBindFilteredScene"/>.
+    /// </summary>
+    /// <param name="source">A layer a scene was bound to.</param>
+    /// <param name="target">The layer to bind the filtered scene to.</param>
+    /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
+    /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
+    public static bool TryBindFilteredScene(ILayer source, ILayer target, Func<PaintOp, bool> keep)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(keep);
+
+        VectorScene? scene = null;
+        if (States.TryGetValue(source, out var state))
+        {
+            lock (state.Sync)
+            {
+                scene = state.Scene;
+            }
+        }
+        if (scene is null)
+        {
+            return false;
+        }
+
+        BindScene(target, new VectorScene(scene.Ops.Where(keep).ToList()));
+        return true;
+    }
+
+    /// <summary>
     /// The render handler Mapsui invokes for layers tagged with
     /// <see cref="RendererName"/>. Blits the best available image under a
     /// translation and schedules an off-thread re-raster when the image no longer

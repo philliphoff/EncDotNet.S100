@@ -305,12 +305,32 @@ are deferred (§3.5) and gated on the IHO finishing the spec.
     datasetOrder)` — the S-102 layer lands between the two S-101
     layers.
 - **Level 2 extension (R-101-102-B):** when both products are
-  loaded, suppress every S-101 feature whose code is in
-  `{DepthArea, DepthContour}`. Implemented as
+  loaded, suppress the S-101 features whose code is in
+  `{DepthArea, DepthContour}` and that lie inside an active S-102
+  dataset's coverage extent. Implemented as
   `S100_IC_SuppressedFeatureLayer` inside an
   `S100_IC_PredefinedCombination` keyed on the product set
   `{S-101, S-102}` (Annex A §8.4.1 *"skin-of-the-earth feature
   replacement"* + Part B §B-3.1.2).
+  - **Only inside the S-102 extent (2026-10-03).** The rule first
+    suppressed every S-101 depth feature as soon as any S-102 was
+    visible. A small S-102 tile then emptied the depth shading from
+    the whole harbour cell around it, and mid-channel views showed
+    only the basemap. The surface replaces depth areas and contours
+    only where it is displayed (Part A §A-6.9.1), so the S-102
+    processor now reports its WGS-84 grid extent
+    (`CoveragePortrayalResult.CoverageExtent`). A depth feature is
+    suppressed only when all its vertices lie inside an active S-102
+    extent. A feature that straddles the edge is kept: its fill
+    paints under the opaque surface anyway. An active S-102 that
+    reports no extent is still taken to cover everything.
+  - **The viewer keeps the suppressed layer tiled.** The Mapsui
+    projector rebuilds a suppressed sub-layer from its prebuilt
+    layer. It now binds the prebuilt layer's `VectorScene` minus the
+    dropped features to the new layer
+    (`S100VectorTileRenderer.TryBindFilteredScene`). Before this, the
+    filtered layer fell back to its pick-target features: it was not
+    tiled and it lost its pattern fills.
 
 ### 3.2 Rule R-101-124-A: S-124 warnings render above all ENC base data
 

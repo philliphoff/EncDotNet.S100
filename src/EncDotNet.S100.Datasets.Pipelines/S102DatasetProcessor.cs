@@ -44,6 +44,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly string _fileName;
     private readonly PortrayalPipeline _pipeline;
     private readonly SemaphoreSlim _renderGate = new(1, 1);
+    private GeographicBounds? _coverageExtent;
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -270,6 +271,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     Spec = new SpecRef("S-102", default),
                     SourceDatasetId = _fileName,
                     Info = info,
+                    CoverageExtent = ResolveCoverageExtent(),
                 };
             }
             catch
@@ -282,6 +284,26 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         {
             _renderGate.Release();
         }
+    }
+
+    /// <summary>
+    /// The WGS-84 envelope of the full grid (all four reprojected corners for a
+    /// projected grid), computed once: the S-98 depth-feature rule suppresses
+    /// S-101 depth areas and contours only inside it. Called under the render
+    /// gate.
+    /// </summary>
+    private GeographicBounds ResolveCoverageExtent()
+    {
+        if (_coverageExtent is { } cached)
+        {
+            return cached;
+        }
+
+        var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);
+        var bounds = new GeographicBounds(
+            extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude);
+        _coverageExtent = bounds;
+        return bounds;
     }
 
     /// <summary>
