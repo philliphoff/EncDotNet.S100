@@ -45,7 +45,11 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "S-102 Coverage";
 
-    /// <summary>Layer opacity (0.0–1.0). Defaults to 0.8.</summary>
+    /// <summary>
+    /// The portrayal opacity of the layer (0.0–1.0). Defaults to 0.8. A map
+    /// session multiplies it with the user's dataset opacity rather than
+    /// replacing it.
+    /// </summary>
     public double Opacity { get; set; } = 0.8;
 
     /// <summary>

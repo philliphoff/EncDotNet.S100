@@ -22,6 +22,13 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </summary>
 public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, ILoadedDatasetProjection
 {
+    /// <summary>
+    /// The default opacity of the gridded water-level colour band. Partly
+    /// transparent so the ENC colour fills under it stay readable (S-98 Main
+    /// §9.2.1; Annex A §4.4.1). The user's dataset opacity multiplies it.
+    /// </summary>
+    public const double ColorBandOpacity = 0.8;
+
     // dcf2 only
     private readonly S104CoverageSource? _source;
     private readonly S104PortrayalCatalogue? _catalogue;
@@ -325,6 +332,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     SourceFeatureType = "s104.color-band",
                     Coverage = styledLayer,
                     Viewport = viewport,
+                    // Partly transparent so the ENC colour fills under the
+                    // band stay readable (S-98 Main §9.2.1; Annex A §4.4.1).
+                    Opacity = ColorBandOpacity,
                 },
             },
             Spec = new SpecRef("S-104", default),

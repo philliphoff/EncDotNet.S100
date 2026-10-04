@@ -351,6 +351,7 @@ public sealed class MapsuiDatasetRenderer
         {
             LayerName = grid.LayerName,
             LandAreas = grid.LandAreaMask,
+            Opacity = grid.Opacity,
         };
         return renderer.Render(grid.Coverage, grid.Viewport);
     }

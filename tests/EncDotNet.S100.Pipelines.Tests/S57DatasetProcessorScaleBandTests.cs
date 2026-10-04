@@ -60,9 +60,9 @@ public class S57DatasetProcessorScaleBandTests
         // (it would blank the whole cell with no placeholder — the whole-cell
         // window does the job with an extent border instead).
         Assert.Null(result.OutOfBandMinDisplayScale);
-        var subLayer = Assert.Single(result.SubLayers);
-        Assert.False(subLayer.ApplyOutOfBandCap,
-            "The s57.main sub-layer must not carry the per-feature out-of-band cap.");
+        Assert.Equal(2, result.SubLayers.Count);
+        Assert.All(result.SubLayers, subLayer => Assert.False(subLayer.ApplyOutOfBandCap,
+            $"The {subLayer.LayerKey} sub-layer must not carry the per-feature out-of-band cap."));
     }
 
     [SkippableFact]

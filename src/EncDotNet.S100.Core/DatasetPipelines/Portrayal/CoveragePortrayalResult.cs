@@ -55,6 +55,17 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }
 
     /// <summary>
+    /// The portrayal opacity of the surface, 0 (invisible) to 1 (opaque).
+    /// Defaults to <c>1.0</c>. Renderers multiply it with any user opacity
+    /// rather than replacing it. The S-104 water-level band is partly
+    /// transparent so the ENC colour fills under it stay readable: S-98 Main
+    /// §9.2.1 says on-demand data must not obscure official colour-fill data,
+    /// and Annex A §4.4.1 allows overlays to use transparency for that. S-102
+    /// stays opaque because it replaces the ENC depth areas (Part A §A-6.9.1).
+    /// </summary>
+    public double Opacity { get; init; } = 1.0;
+
+    /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
     /// Used by the S-98 water-area clip rule, which attaches the S-101 land
     /// geometry it discovers to the (processor-produced) S-104 surface sub-layer.
@@ -71,6 +82,7 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
             Coverage = Coverage,
             Viewport = Viewport,
             LandAreaMask = landAreaMask,
+            Opacity = Opacity,
         };
 }
 
