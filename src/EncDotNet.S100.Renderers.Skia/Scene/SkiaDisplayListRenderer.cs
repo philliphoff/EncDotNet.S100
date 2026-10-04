@@ -23,8 +23,10 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// stroke widths, symbol sizes, and text sizes are realised in display pixels
 /// per the IR unit contract (see <see cref="PaintOp"/>).</para>
 /// <para><b>Scope.</b> This renders point, line, solid-area, tiled pattern-area,
-/// and text ops. Antimeridian crossing and Web-Mercator pole limits are out
-/// of scope.</para>
+/// and text ops. The renderer itself does not split geometry at the
+/// antimeridian or the Web-Mercator pole limits: <see cref="VectorSceneBuilder"/>
+/// already keeps rings within their own longitude frame, closes polar rings
+/// along the pole and clips to the latitude limit (issue #760).</para>
 /// </remarks>
 public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 {

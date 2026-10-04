@@ -186,6 +186,12 @@ public static class NaturalEarthBasemap
     /// chart layers via <c>SkiaDisplayListRenderer.RenderOnto</c> or a
     /// <c>VectorCompositeLayer</c> against that same viewport.
     /// </summary>
+    /// <remarks>
+    /// A viewport reaching past ±180° (e.g. one fitted to a dataset kept in a
+    /// 0…360 longitude frame, such as the NIC Arctic S-411 product) also gets
+    /// the land of the adjacent world copies, offset by one
+    /// <see cref="WebMercator.Circumference"/>, as the viewer's basemap does.
+    /// </remarks>
     public static VectorScene GetLandScene(Viewport viewport)
     {
         ArgumentNullException.ThrowIfNull(viewport);
@@ -194,22 +200,39 @@ public static class NaturalEarthBasemap
         var (maxX, maxY) = WebMercator.FromLonLat(viewport.MaxLongitude, viewport.MaxLatitude);
         double metresPerPixel = (maxX - minX) / Math.Max(1, viewport.WidthPixels);
 
-        var polygons = GetLandPolygons(minX, minY, maxX, maxY, metresPerPixel);
-        var ops = new List<PaintOp>(polygons.Count);
-        foreach (var polygon in polygons)
+        var ops = new List<PaintOp>();
+        double half = WebMercator.Circumference / 2.0;
+        for (int copy = -1; copy <= 1; copy++)
         {
-            ops.Add(new AreaPaintOp
+            double offset = copy * WebMercator.Circumference;
+            if (maxX < offset - half || minX > offset + half)
+                continue;
+
+            foreach (var polygon in GetLandPolygons(minX - offset, minY, maxX - offset, maxY, metresPerPixel))
             {
-                FeatureReference = "basemap:ne_10m_land",
-                WorldShell = polygon.WorldShell,
-                WorldHoles = polygon.WorldHoles,
-                Fill = LandFill,
-                OutlineColor = RgbaColor.Transparent,
-                OutlineWidthPx = 0,
-            });
+                ops.Add(new AreaPaintOp
+                {
+                    FeatureReference = "basemap:ne_10m_land",
+                    WorldShell = Offset(polygon.WorldShell, offset),
+                    WorldHoles = polygon.WorldHoles.Select(h => Offset(h, offset)).ToList(),
+                    Fill = LandFill,
+                    OutlineColor = RgbaColor.Transparent,
+                    OutlineWidthPx = 0,
+                });
+            }
         }
 
         return new VectorScene(ops);
+    }
+
+    private static IReadOnlyList<(double X, double Y)> Offset(IReadOnlyList<(double X, double Y)> ring, double dx)
+    {
+        if (dx == 0)
+            return ring;
+        var result = new (double X, double Y)[ring.Count];
+        for (int i = 0; i < ring.Count; i++)
+            result[i] = (ring[i].X + dx, ring[i].Y);
+        return result;
     }
 
     private static IReadOnlyList<LandLevel> LoadLevels()

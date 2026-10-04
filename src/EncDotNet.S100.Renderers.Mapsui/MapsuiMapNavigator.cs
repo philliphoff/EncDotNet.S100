@@ -24,6 +24,9 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </remarks>
 public sealed class MapsuiMapNavigator
 {
+    // The latitude where the Web-Mercator world ends (EPSG:3857 square).
+    private const double WorldMaxLatitude = 85.05112878;
+
     private readonly Navigator _navigator;
 
     /// <summary>
@@ -41,7 +44,10 @@ public sealed class MapsuiMapNavigator
 
     /// <summary>
     /// Frames a rendered dataset extent with ten percent padding on every
-    /// side.
+    /// side. The extent is first clipped to the Web-Mercator world
+    /// (±85.05°), so a polar dataset reaching towards the pole (e.g. the NIC
+    /// Arctic S-411 chart, to 89.3°N) is framed on the part that can be drawn
+    /// rather than on empty space above the top of the world (issue #760).
     /// </summary>
     /// <param name="extent">The dataset extent in the map's coordinate system.</param>
     /// <exception cref="ArgumentNullException">
@@ -55,6 +61,11 @@ public sealed class MapsuiMapNavigator
     public void ZoomToExtent(MRect extent, long durationMilliseconds = -1)
     {
         ArgumentNullException.ThrowIfNull(extent);
+        double worldMaxY = SphericalMercator.FromLonLat(0, WorldMaxLatitude).y;
+        double minY = Math.Max(extent.MinY, -worldMaxY);
+        double maxY = Math.Min(extent.MaxY, worldMaxY);
+        if (maxY > minY)
+            extent = new MRect(extent.MinX, minY, extent.MaxX, maxY);
         var paddingX = extent.Width * 0.1;
         var paddingY = extent.Height * 0.1;
         var paddedExtent = extent.Grow(paddingX, paddingY);
