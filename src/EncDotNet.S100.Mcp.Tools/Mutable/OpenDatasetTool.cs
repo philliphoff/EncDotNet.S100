@@ -26,7 +26,8 @@ public sealed record OpenDatasetResult(
     [property: Description("Number of datasets newly added to the catalog.")] int Count,
     [property: Description("Wall-clock duration of the catalog load hot path, in milliseconds.")] double LoadDurationMs,
     [property: Description("Whether an exchange-set load did not settle before the host's ceiling.")] bool TimedOut,
-    [property: Description("The datasets added to the catalog by this operation.")] IReadOnlyList<OpenedDataset> Datasets);
+    [property: Description("The datasets added to the catalog by this operation.")] IReadOnlyList<OpenedDataset> Datasets,
+    [property: Description("Why catalogued datasets were skipped (unsupported product, orphan update, unreadable file), in the order they arose; empty when nothing was skipped.")] IReadOnlyList<string> Skipped);
 
 /// <summary>
 /// Mutating tool that loads a dataset file or exchange set into the session's
@@ -83,12 +84,14 @@ public sealed class OpenDatasetTool
         }
         var loadDurationMs = stopwatch.Elapsed.TotalMilliseconds;
 
+        var problems = outcome.Problems ?? [];
         if (outcome.Added.Count == 0)
         {
+            var reason = outcome.Kind == DatasetSourceKind.File
+                ? "the file loaded but produced no portrayable dataset"
+                : "the exchange set contained no datasets the host can portray";
             return ToolResult<OpenDatasetResult>.Err(new DatasetLoadFailed(
-                outcome.Kind == DatasetSourceKind.File
-                    ? "the file loaded but produced no portrayable dataset"
-                    : "the exchange set contained no datasets the host can portray"));
+                reason + DescribeProblems(problems)));
         }
 
         // Enrich the ids with spec / bounds from the post-load catalog snapshot.
@@ -112,6 +115,29 @@ public sealed class OpenDatasetTool
             Count: added,
             LoadDurationMs: loadDurationMs,
             TimedOut: outcome.TimedOut,
-            Datasets: datasets));
+            Datasets: datasets,
+            Skipped: problems));
+    }
+
+    /// <summary>The most problems quoted in a <see cref="DatasetLoadFailed"/> reason.</summary>
+    private const int MaxQuotedProblems = 5;
+
+    /// <summary>
+    /// Formats the load's problems as a parenthesised suffix for the failure
+    /// reason, quoting at most <see cref="MaxQuotedProblems"/> of them, so the
+    /// caller learns what was skipped and why. Empty when there are none.
+    /// </summary>
+    private static string DescribeProblems(IReadOnlyList<string> problems)
+    {
+        if (problems.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var quoted = string.Join("; ", problems.Take(MaxQuotedProblems).Select(p => p.TrimEnd('.')));
+        var more = problems.Count > MaxQuotedProblems
+            ? $"; and {problems.Count - MaxQuotedProblems} more"
+            : string.Empty;
+        return $" ({quoted}{more})";
     }
 }

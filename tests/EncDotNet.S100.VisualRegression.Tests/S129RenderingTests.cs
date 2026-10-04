@@ -16,6 +16,9 @@ public sealed class S129RenderingTests
             Height = 600,
         });
 
-        return TestHelpers.VerifyBitmap(bitmap);
+        // Sparse render (ink ~5 700 px): hold it to a share of its own ink
+        // rather than the default 5 % of the image (18 000 px). Its labels
+        // drift up to 14 % of the ink between macOS and Linux.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2_800, maxDifferentInkFraction: 0.3);
     }
 }

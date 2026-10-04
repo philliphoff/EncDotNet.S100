@@ -3,7 +3,12 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
+using Mapsui.Nts;
+using NetTopologySuite.Geometries;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -62,6 +67,94 @@ public class LayerStackProjectorTests
         Assert.Equal(0.5, layer.Opacity);
         Assert.Equal(100.0, layer.MinVisible);
         Assert.Equal(200.0, layer.MaxVisible);
+    }
+
+    [Fact]
+    public void Project_suppressed_vector_layer_keeps_its_tiled_scene_minus_the_dropped_features()
+    {
+        // R-101-102-B dropped DepthArea "1"; the pattern fill "2" survives. The
+        // filtered layer must still be painted by the tiled renderer from the
+        // bound scene: its Mapsui features are pick targets only, so falling
+        // back to them would lose pattern fills and tiling.
+        const string datasetId = "s101.000";
+        var original = BuildVectorItem(datasetId, "1", "2");
+        var ruled = new SubLayerStackItem(
+            ((VectorStackPayload)original.Payload).WithSubLayer(BuildAreaSubLayer("2")),
+            S98DisplayPlane.BaseChartUnder,
+            0,
+            datasetId);
+
+        var square = new[] { (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0) };
+        var prebuiltLayer = new MemoryLayer
+        {
+            Name = "S-101 (areas)",
+            Features = new[] { PickFeature("1"), PickFeature("2") },
+            CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+            MaxVisible = 300.0,
+        };
+        S100VectorTileRenderer.BindScene(prebuiltLayer, new VectorScene(new PaintOp[]
+        {
+            new AreaPaintOp { FeatureReference = "1", WorldShell = square },
+            new PatternAreaPaintOp
+            {
+                FeatureReference = "2", PatternReference = "DIAMOND1", WorldShell = square, TilePng = [],
+            },
+            new PointPaintOp { FeatureReference = "2", World = (0.5, 0.5) },
+        }));
+        var prebuilt = new Dictionary<(string, string), LayerStackEntry>
+        {
+            [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(prebuiltLayer, original),
+        };
+
+        var layer = Assert.IsType<MemoryLayer>(Assert.Single(LayerStackProjector.Project(new[] { ruled }, prebuilt)).Layer);
+
+        Assert.NotSame(prebuiltLayer, layer);
+        Assert.Equal(S100VectorTileRenderer.RendererName, layer.CustomLayerRendererName);
+        Assert.Equal(300.0, layer.MaxVisible);
+        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlayScene));
+        Assert.IsType<PatternAreaPaintOp>(Assert.Single(baseScene.Ops));
+        Assert.Equal("2", Assert.Single(overlayScene.Ops).FeatureReference);
+        Assert.Equal("2", Assert.Single(layer.Features)[MapsuiDisplayListRenderer.FeatureRefKey]);
+    }
+
+    private static GeometryFeature PickFeature(string featureReference)
+    {
+        var feature = new GeometryFeature(new Point(0, 0));
+        feature[MapsuiDisplayListRenderer.FeatureRefKey] = featureReference;
+        return feature;
+    }
+
+    private static VectorSubLayer BuildAreaSubLayer(params string[] featureReferences) => new()
+    {
+        LayerKey = "s101.areas",
+        LayerName = "S-101 (areas)",
+        Instructions = featureReferences
+            .Select(r => (DrawingInstruction)new AreaInstruction { FeatureReference = r, FillColor = "DEPVS" })
+            .ToList(),
+        Plane = S98DisplayPlane.BaseChartUnder,
+        SourceFeatureType = "area",
+    };
+
+    private static SubLayerStackItem BuildVectorItem(string datasetId, params string[] featureReferences)
+    {
+        var subLayer = BuildAreaSubLayer(featureReferences);
+        var result = new VectorPortrayalResult
+        {
+            SubLayers = new[] { subLayer },
+            Palette = new ColorPalette("test", new Dictionary<string, string>()),
+            GeometryProvider = new NoGeometry(),
+            Product = "S-101",
+            Spec = new SpecRef("S-101", default),
+            SourceDatasetId = datasetId,
+            Info = "test",
+        };
+        return new SubLayerStackItem(
+            new VectorStackPayload(result, subLayer), S98DisplayPlane.BaseChartUnder, 0, datasetId);
+    }
+
+    private sealed class NoGeometry : IFeatureGeometryProvider
+    {
+        public FeatureGeometry? GetGeometry(string featureReference) => null;
     }
 
     private static SubLayerStackItem BuildCoverageGridItem(string datasetId)

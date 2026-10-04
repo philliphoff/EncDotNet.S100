@@ -129,6 +129,109 @@ public class S98DefaultRulesTests
     }
 
     [Fact]
+    public void R_101_102_B_suppresses_only_depth_features_inside_the_s102_coverage_extent()
+    {
+        // S-102 covers lat/lon 0..2. DepthArea 1 and DepthContour 4 lie inside;
+        // DepthArea 2 lies outside and DepthContour 5 straddles the edge. The
+        // surface overwrites ENC depth features only where it is displayed
+        // (S-98 Part A §A-6.9.1), so 2 and 5 must keep drawing.
+        var inside = Square(0.5, 0.5, 1.5, 1.5);
+        var outside = Square(5.0, 5.0, 6.0, 6.0);
+        var geometries = new Dictionary<string, FeatureGeometry>
+        {
+            ["1"] = inside,
+            ["2"] = outside,
+            ["3"] = outside,
+            ["4"] = Line(new GeoPosition(0.5, 0.5), new GeoPosition(1.5, 1.5)),
+            ["5"] = Line(new GeoPosition(1.0, 1.0), new GeoPosition(3.0, 3.0)),
+        };
+        var tags = new Dictionary<long, VectorFeatureTag>
+        {
+            [1] = new VectorFeatureTag("DepthArea", null),
+            [2] = new VectorFeatureTag("DepthArea", null),
+            [3] = new VectorFeatureTag("LandArea", null),
+            [4] = new VectorFeatureTag("DepthContour", 5.0),
+            [5] = new VectorFeatureTag("DepthContour", 20.0),
+        };
+        var areas = new VectorSubLayer
+        {
+            LayerKey = "s101.areas",
+            LayerName = "S-101 (areas)",
+            Instructions = new List<DrawingInstruction>
+            {
+                new AreaInstruction { FeatureReference = "1", FillColor = "DEPVS" },
+                new AreaInstruction { FeatureReference = "2", FillColor = "DEPVS" },
+                new AreaInstruction { FeatureReference = "3", FillColor = "LANDA" },
+            },
+            Plane = S98DisplayPlane.BaseChartUnder,
+            SourceFeatureType = "area",
+        };
+        var lines = new VectorSubLayer
+        {
+            LayerKey = "s101.linework",
+            LayerName = "S-101 (lines)",
+            Instructions = new List<DrawingInstruction>
+            {
+                new LineInstruction { FeatureReference = "4", LineColor = "DEPCN" },
+                new LineInstruction { FeatureReference = "5", LineColor = "DEPCN" },
+            },
+            Plane = S98DisplayPlane.BaseChartOver,
+            SourceFeatureType = "linework",
+        };
+        var result = new VectorPortrayalResult
+        {
+            SubLayers = new[] { areas, lines },
+            Palette = new ColorPalette("test", new Dictionary<string, string>()),
+            GeometryProvider = new DictionaryGeometryProvider(geometries),
+            Product = "S-101",
+            Spec = new SpecRef("S-101", default),
+            SourceDatasetId = "s101-cell.000",
+            Info = "test",
+            FeatureTags = tags,
+        };
+        var areaItem = new SubLayerStackItem(
+            new VectorStackPayload(result, areas), S98DisplayPlane.BaseChartUnder, 0, "s101-cell.000");
+        var lineItem = new SubLayerStackItem(
+            new VectorStackPayload(result, lines), S98DisplayPlane.BaseChartOver, 0, "s101-cell.000");
+        var s102 = BuildCoverageGridItem(
+            "s102-tile.h5", "S-102", S98DisplayPlane.Bathymetry, new GeographicBounds(0.0, 0.0, 2.0, 2.0));
+
+        var ruled = _auth.ApplyRules(
+            new[] { areaItem, s102, lineItem },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s102-tile.h5", "S-102", Active: true),
+            });
+
+        Assert.Equal(new[] { "2", "3" }, ReferencesOf(ruled[0]));
+        Assert.Equal(new[] { "5" }, ReferencesOf(ruled[2]));
+    }
+
+    [Fact]
+    public void R_101_102_B_leaves_s101_untouched_when_no_feature_lies_inside_the_s102_extent()
+    {
+        var (areaItem, lineItem) = BuildS101ItemsWithDepthFeatures();
+        var areaPayload = (VectorStackPayload)areaItem.Payload;
+        var linePayload = (VectorStackPayload)lineItem.Payload;
+        var s102 = BuildCoverageGridItem(
+            "s102-tile.h5", "S-102", S98DisplayPlane.Bathymetry, new GeographicBounds(0.0, 0.0, 2.0, 2.0));
+
+        // The depth features have no geometry the rule can place inside the
+        // extent, so none of them is replaced.
+        var ruled = _auth.ApplyRules(
+            new[] { areaItem, s102, lineItem },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s102-tile.h5", "S-102", Active: true),
+            });
+
+        Assert.Same(areaPayload.SubLayer, Assert.IsType<VectorStackPayload>(ruled[0].Payload).SubLayer);
+        Assert.Same(linePayload.SubLayer, Assert.IsType<VectorStackPayload>(ruled[2].Payload).SubLayer);
+    }
+
+    [Fact]
     public void R_101_102_B_does_not_fire_when_s102_inactive()
     {
         var (areaItem, lineItem) = BuildS101ItemsWithDepthFeatures();
@@ -637,7 +740,8 @@ public class S98DefaultRulesTests
     /// product, on the given plane — used to assert which surfaces R-101-104-B
     /// clips to water.
     /// </summary>
-    private static SubLayerStackItem BuildCoverageGridItem(string datasetId, string spec, S98DisplayPlane plane)
+    private static SubLayerStackItem BuildCoverageGridItem(
+        string datasetId, string spec, S98DisplayPlane plane, GeographicBounds? coverageExtent = null)
     {
         var metadata = new GridMetadata
         {
@@ -684,6 +788,7 @@ public class S98DefaultRulesTests
             Spec = new SpecRef(spec, default),
             SourceDatasetId = datasetId,
             Info = "test",
+            CoverageExtent = coverageExtent,
         };
         return new SubLayerStackItem(new CoverageStackPayload(result, grid), plane, 0, datasetId);
     }
@@ -693,6 +798,37 @@ public class S98DefaultRulesTests
         var item = ruled.Single(i => i.SourceDatasetId == datasetId);
         var payload = Assert.IsType<CoverageStackPayload>(item.Payload);
         return Assert.IsType<GridCoverageSubLayer>(payload.SubLayer);
+    }
+
+    private static IReadOnlyList<string?> ReferencesOf(SubLayerStackItem item) =>
+        Assert.IsType<VectorStackPayload>(item.Payload).SubLayer.Instructions
+            .Select(i => i.FeatureReference)
+            .ToList();
+
+    private static FeatureGeometry Square(double south, double west, double north, double east) => new()
+    {
+        Type = GeometryType.Surface,
+        Coordinates = new[]
+        {
+            new GeoPosition(south, west),
+            new GeoPosition(south, east),
+            new GeoPosition(north, east),
+            new GeoPosition(north, west),
+            new GeoPosition(south, west),
+        },
+    };
+
+    private static FeatureGeometry Line(params GeoPosition[] positions) => new()
+    {
+        Type = GeometryType.Curve,
+        Coordinates = positions,
+    };
+
+    private sealed class DictionaryGeometryProvider(IReadOnlyDictionary<string, FeatureGeometry> geometries)
+        : IFeatureGeometryProvider
+    {
+        public FeatureGeometry? GetGeometry(string featureReference) =>
+            geometries.TryGetValue(featureReference, out var geometry) ? geometry : null;
     }
 
     private sealed class StubLandGeometryProvider : IFeatureGeometryProvider

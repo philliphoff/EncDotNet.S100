@@ -247,7 +247,7 @@ public static class S100MutableTools
         + "renderable. 'path' is a local file (S-101 .000, HDF5 .h5, GML, etc.) OR an exchange set (a "
         + "folder containing a catalogue, or a .zip of one); the kind is auto-detected. 'spec' "
         + "optionally forces a product-spec hint for single-file loads. Returns the resulting catalog "
-        + "id(s), spec, and bounding box. MUTATING.";
+        + "id(s), spec, and bounding box, plus why any catalogued dataset was skipped. MUTATING.";
 
     private static McpServerTool CreateOpenDataset(OpenDatasetTool inner) =>
         McpServerTool.Create(
@@ -279,6 +279,7 @@ public static class S100MutableTools
                             ["loadDurationMs"] = v.LoadDurationMs,
                             ["timedOut"] = v.TimedOut,
                             ["datasets"] = datasets,
+                            ["skipped"] = new JsonArray(v.Skipped.Select(p => (JsonNode?)p).ToArray()),
                         };
                     }),
             new McpServerToolCreateOptions

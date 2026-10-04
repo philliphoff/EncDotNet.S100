@@ -267,14 +267,13 @@ public sealed class RenderHarness : IDisposable
         if (instrumented.Length == 0)
         {
             // Mapsui loads ImageStyle sources (e.g. the S-111 SCAROW arrow SVGs)
-            // asynchronously: the first frame only registers them. Run the
-            // pending image fetches to completion and draw the frame again, so
-            // point symbols are in the image rather than missing.
+            // asynchronously: the first frame only creates the styles, and
+            // draws nothing for an image that is not loaded yet. Load every
+            // image and always draw the frame again, so point symbols are in
+            // the image rather than missing.
             var first = RenderFrame(map);
-            if (!DrainImageFetches(map))
-                return first;
-
             first.Dispose();
+            LoadImages(map);
             return RenderFrame(map);
         }
 
@@ -318,25 +317,24 @@ public sealed class RenderHarness : IDisposable
     }
 
     /// <summary>
-    /// Runs the map's pending image-fetch jobs synchronously. Returns
-    /// <see langword="true"/> when any job ran, i.e. a re-render will draw
-    /// images the previous frame could not.
+    /// Loads every image source created so far (Mapsui keeps the sources in
+    /// the process-wide <see cref="Mapsui.Styles.Image.SourceToSourceId"/>)
+    /// into the map's <see cref="Mapsui.Styles.ImageSourceCache"/>, waiting
+    /// for the loads to finish.
     /// </summary>
-    private static bool DrainImageFetches(Map map)
-    {
-        var cache = map.RenderService.ImageSourceCache;
-        bool ran = false;
-        for (int round = 0; round < 16; round++)
-        {
-            var jobs = cache.GetFetchJobs(0, 256);
-            if (jobs.Length == 0)
-                break;
-            foreach (var job in jobs)
-                job.FetchFunc().GetAwaiter().GetResult();
-            ran = true;
-        }
-        return ran;
-    }
+    /// <remarks>
+    /// This must not depend on whether a fetch job is still pending. Zooming
+    /// the navigator makes the map's own background fetcher load the same
+    /// sources, and when it finished between the first frame and a check of
+    /// <see cref="Mapsui.Styles.ImageSourceCache.GetFetchJobs"/>, there was no
+    /// job left and the harness returned the first frame, drawn without the
+    /// images: every S-111 arrow went missing, depending on thread timing.
+    /// Already-loaded sources are skipped.
+    /// </remarks>
+    private static void LoadImages(Map map) =>
+        map.RenderService.ImageSourceCache
+            .FetchAllImageDataAsync(Mapsui.Styles.Image.SourceToSourceId)
+            .GetAwaiter().GetResult();
 
     private static Mapsui.Styles.Color MapsuiColorFromUInt(uint argb)
     {

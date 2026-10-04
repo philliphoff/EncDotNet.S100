@@ -41,7 +41,13 @@ public sealed class DigitalSignatureValue
     /// The resource representation covered by a
     /// <see cref="DigitalSignatureKind.SignatureOnData"/> signature.
     /// </summary>
-    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.11.4 and §15-8.11.6.</remarks>
+    /// <remarks>
+    /// S-100 Edition 5.2.1 Part 15 §15-8.11.4 and §15-8.11.6. When the
+    /// catalogue omits the <c>dataStatus</c> attribute, the reader infers
+    /// <see cref="SignatureDataStatus.Unencrypted"/> for a resource declared
+    /// neither protected nor compressed, and otherwise leaves this
+    /// <see langword="null"/> so verification reports it.
+    /// </remarks>
     public SignatureDataStatus? DataStatus { get; init; }
 
     /// <summary>
