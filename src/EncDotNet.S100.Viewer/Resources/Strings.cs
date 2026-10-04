@@ -243,6 +243,10 @@ internal static class Strings
     public static string About_UpdateSkipped => Get(nameof(About_UpdateSkipped));
     public static string About_CheckFailed => Get(nameof(About_CheckFailed));
     public static string About_ChecksDisabled => Get(nameof(About_ChecksDisabled));
+    public static string About_Website => Get(nameof(About_Website));
+    public static string About_WebsiteTooltip => Get(nameof(About_WebsiteTooltip));
+    public static string About_Documentation => Get(nameof(About_Documentation));
+    public static string About_DocumentationTooltip => Get(nameof(About_DocumentationTooltip));
     public static string About_License => Get(nameof(About_License));
     public static string About_LicenseTooltip => Get(nameof(About_LicenseTooltip));
     public static string About_ThirdPartyNotices => Get(nameof(About_ThirdPartyNotices));

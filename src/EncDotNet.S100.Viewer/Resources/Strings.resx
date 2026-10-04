@@ -2371,6 +2371,18 @@
   <data name="About_ChecksDisabled" xml:space="preserve">
     <value>Automatic update checks are turned off.</value>
   </data>
+  <data name="About_Website" xml:space="preserve">
+    <value>soundcharts.app</value>
+  </data>
+  <data name="About_WebsiteTooltip" xml:space="preserve">
+    <value>Visit the SoundCharts website</value>
+  </data>
+  <data name="About_Documentation" xml:space="preserve">
+    <value>Documentation</value>
+  </data>
+  <data name="About_DocumentationTooltip" xml:space="preserve">
+    <value>Read the documentation on soundcharts.app</value>
+  </data>
   <data name="About_License" xml:space="preserve">
     <value>License</value>
   </data>

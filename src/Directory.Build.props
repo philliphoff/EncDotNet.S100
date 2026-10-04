@@ -7,7 +7,7 @@
     <Authors>Phillip Hoff</Authors>
     <Description>Libraries for manipulating S-100 based nautical charts.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/philliphoff/EncDotNet.S100</PackageProjectUrl>
+    <PackageProjectUrl>https://soundcharts.app/docs/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/philliphoff/EncDotNet.S100</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>

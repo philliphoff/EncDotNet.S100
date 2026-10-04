@@ -50,6 +50,8 @@ internal sealed class AboutDialogViewModel : ViewModelBase
         ReleaseNotesCommand = new RelayCommand(OpenReleaseNotes);
         SkipCommand = new RelayCommand(Skip);
         DisableChecksCommand = new RelayCommand(DisableChecks);
+        WebsiteCommand = new RelayCommand(() => _urlOpener.Open(ProductLinks.WebsiteUrl));
+        DocumentationCommand = new RelayCommand(() => _urlOpener.Open(ProductLinks.DocumentationUrl));
         LicenseCommand = new RelayCommand(() => _urlOpener.Open(GitHubReleaseClient.LicenseUrl));
         ThirdPartyNoticesCommand = new RelayCommand(() => _urlOpener.Open(GitHubReleaseClient.ThirdPartyNoticesUrl));
         CloseCommand = new RelayCommand(() => _dialogManager.Close(this));
@@ -221,6 +223,12 @@ internal sealed class AboutDialogViewModel : ViewModelBase
 
     /// <summary>Turns automatic update checks off.</summary>
     public ICommand DisableChecksCommand { get; }
+
+    /// <summary>Opens the SoundCharts website in the browser.</summary>
+    public ICommand WebsiteCommand { get; }
+
+    /// <summary>Opens the documentation in the browser.</summary>
+    public ICommand DocumentationCommand { get; }
 
     /// <summary>Opens the license in the browser.</summary>
     public ICommand LicenseCommand { get; }

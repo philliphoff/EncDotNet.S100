@@ -3,7 +3,7 @@
 **SoundCharts** (project `EncDotNet.S100.Viewer`) is a cross-platform desktop viewer for IHO S-100 nautical chart data,
 built on Avalonia 12 + Mapsui 5. Runs on macOS (Apple Silicon),
 Windows, and Linux out of the box, with no native HDF5 dependencies
-and no commercial S-52 assets.
+and no commercial S-52 assets. Website: [soundcharts.app](https://soundcharts.app).
 
 This README describes the viewer's **user-visible features**. Internal
 implementation, type names, and per-XAML wiring live in the library
