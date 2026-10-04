@@ -1031,7 +1031,7 @@ item is actionable as a focused follow-up session.
   only, and the upstream Lua port (PR #56) comments the fills out. An
   adapter in `S128PortrayalCatalogue` does the same, so coverages draw as
   dashed outlines and the dataset stays visible by default. Moving to the
-  upstream Lua catalogue is tracked separately.
+  upstream Lua catalogue is tracked in #763.
 
 - **TBD-9.** Should `S98DisplayPlane` be an enum or an open
   string-id? An enum bakes in our nine canonical values; the IC

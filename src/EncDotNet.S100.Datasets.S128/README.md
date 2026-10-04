@@ -71,7 +71,8 @@ adapter, `Adapter/outlineOnly.xsl`. It `xsl:import`s the upstream
 `S128CoverageOverlayTests` checks that the adapter output equals the
 upstream output minus the fills, and that the upstream rule still emits
 them. When a catalogue refresh drops the fills, that test fails and the
-adapter can be removed.
+adapter can be removed. Moving to the upstream Lua catalogue is tracked in
+#763.
 
 ## Producer-bug compensations
 

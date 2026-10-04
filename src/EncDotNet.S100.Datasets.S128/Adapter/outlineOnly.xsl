@@ -12,7 +12,8 @@
   for the three product templates, keeps everything the upstream rule emits
   except its areaInstruction.
 
-  Remove this adapter when the bundled catalogue is refreshed past upstream #56.
+  Remove this adapter when the bundled catalogue is refreshed past upstream #56
+  (EncDotNet.S100 issue #763).
 -->
 <xsl:transform version="1.0"
                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
