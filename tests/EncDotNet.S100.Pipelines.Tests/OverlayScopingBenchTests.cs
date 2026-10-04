@@ -68,13 +68,25 @@ public class OverlayScopingBenchTests
         for (int i = 0; i < 50; i++)
             index.Query(0, 0, w, w, scratch, results);
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 200; i++)
-            index.Query(0, 0, w, w, scratch, results);
-        long delta = GC.GetAllocatedBytesForCurrentThread() - before;
+        // A single window can pick up one-off runtime allocations (tiered JIT /
+        // OSR recompilation lands on the calling thread) on a slow runner, so
+        // measure several windows and keep the quietest. A genuine per-query
+        // allocation (≥ 24 B per object) shows up in every window, so it still
+        // fails: the bound is under 1 B per query.
+        const int frames = 200;
+        const int maxWindows = 20;
+        long minDelta = long.MaxValue;
+        for (int window = 0; window < maxWindows && minDelta > 0; window++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < frames; i++)
+                index.Query(0, 0, w, w, scratch, results);
+            minDelta = Math.Min(minDelta, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
 
         // 200 queries over a 40k-op cell must not allocate (buffers are reused).
-        Assert.True(delta < 4096, $"steady-state query allocated {delta} B over 200 frames");
+        Assert.True(minDelta < frames,
+            $"steady-state query allocated {minDelta} B over {frames} frames (quietest of up to {maxWindows} windows)");
     }
 
     [Fact]
