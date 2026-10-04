@@ -58,7 +58,7 @@ public sealed class S100PickHighlightLayer
     public S100PickHighlightLayer(S100PickHighlightStyle? style = null, string? name = null)
     {
         _style = style ?? S100PickHighlightStyle.Default;
-        _layer = new MemoryLayer
+        _layer = new WorldCopyMemoryLayer
         {
             Name = name ?? DefaultLayerName,
             Style = null,

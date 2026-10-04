@@ -96,8 +96,20 @@ internal sealed class StubProcessor :
     public S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) =>
         Hits.Any(h => h.Ordinal == ordinal) ? FeatureGeometry : null;
 
+    /// <summary>
+    /// When set, <see cref="HitTestFeatures"/> returns <see cref="Hits"/> only
+    /// for longitudes it accepts (and nothing otherwise).
+    /// </summary>
+    public Func<double, bool>? HitsAtLongitude { get; set; }
+
+    /// <summary>The raw extent reported through <see cref="Metadata"/>.</summary>
+    public BoundingBox? Extent { get; set; }
+
+    public DatasetMetadata Metadata => new() { Spec = Spec, Extent = Extent };
+
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
-        double latitude, double longitude, double radiusMeters) => Hits;
+        double latitude, double longitude, double radiusMeters) =>
+        HitsAtLongitude is null || HitsAtLongitude(longitude) ? Hits : [];
 
     public FeatureInfo? GetFeatureInfoAt(int ordinal)
     {

@@ -551,6 +551,12 @@ public sealed class VectorSceneBuilder
             fill = new RgbaColor(fill.R, fill.G, fill.B, alpha);
         }
 
+        // A surface clipped at its frame's edge, a pole or the latitude limit
+        // gains edges that are not part of its boundary. Stroking them drew a
+        // line through data that continues in the adjacent world copy (issue
+        // #773), so such a surface is filled without a stroke and its real
+        // rings are outlined as polylines, which split at the frame's edge.
+        var plain = AntimeridianGeometry.IsPlainSurface(geometry.Coordinates, geometry.InteriorRings);
         foreach (var (shell, holes) in AntimeridianGeometry.ProjectSurface(geometry.Coordinates, geometry.InteriorRings))
         {
             yield return new AreaPaintOp
@@ -561,12 +567,38 @@ public sealed class VectorSceneBuilder
                 WorldShell = shell,
                 WorldHoles = holes,
                 Fill = fill,
-                // Matches the legacy renderer's faint area outline.
-                OutlineColor = new RgbaColor(0, 0, 0, 40),
-                OutlineWidthPx = 0.5,
+                OutlineColor = plain ? AreaOutlineColor : default,
+                OutlineWidthPx = plain ? AreaOutlineWidthPx : 0.0,
             };
         }
+
+        if (plain)
+            yield break;
+
+        foreach (var ring in geometry.InteriorRings.Prepend(geometry.Coordinates))
+        {
+            if (ring.Count < 3)
+                continue;
+
+            var closed = ring[0] == ring[^1] ? ring : [.. ring, ring[0]];
+            foreach (var world in AntimeridianGeometry.ProjectPolyline(closed))
+            {
+                yield return new LinePaintOp
+                {
+                    FeatureReference = instruction.FeatureReference,
+                    ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
+                    ScaleMaximum = instruction.ScaleMaximum,
+                    World = world,
+                    Color = AreaOutlineColor,
+                    WidthPx = AreaOutlineWidthPx,
+                };
+            }
+        }
     }
+
+    // Matches the legacy renderer's faint area outline.
+    private static readonly RgbaColor AreaOutlineColor = new(0, 0, 0, 40);
+    private const double AreaOutlineWidthPx = 0.5;
 
     private IEnumerable<PaintOp> BuildLine(LineInstruction instruction, FeatureGeometry? geometry)
         => BuildLine(instruction, instruction.CoordinatesOverride ?? geometry?.Coordinates);

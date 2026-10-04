@@ -90,4 +90,34 @@ internal static class LayerExtentCulling
             vp.MinX, vp.MinY, vp.MaxX, vp.MaxY,
             marginWorld);
     }
+
+    /// <summary>
+    /// The world copies (<see cref="WorldCopies"/>) of <paramref name="layer"/>
+    /// that overlap the current viewport grown by <paramref name="marginPx"/>,
+    /// as EPSG:3857 X offsets west to east. Empty when no copy is in view, so
+    /// the layer can be skipped. A layer with no known extent draws its own
+    /// frame only.
+    /// </summary>
+    /// <param name="layer">The Mapsui layer being rendered.</param>
+    /// <param name="viewport">The live viewport.</param>
+    /// <param name="resolution">The viewport resolution (metres / DIP).</param>
+    /// <param name="marginPx">Over-render halo, in screen pixels.</param>
+    internal static IReadOnlyList<double> VisibleWorldCopies(
+        ILayer layer, Viewport viewport, double resolution, double marginPx)
+    {
+        var extent = layer.Extent;
+        var vp = viewport.ToExtent();
+        if (extent is null || vp is null)
+        {
+            return WorldCopies.OwnFrame;
+        }
+
+        var marginWorld = marginPx * resolution;
+        if (extent.MaxY + marginWorld < vp.MinY || extent.MinY - marginWorld > vp.MaxY)
+        {
+            return WorldCopies.None;
+        }
+
+        return WorldCopies.Visible(extent.MinX, extent.MaxX, vp.MinX, vp.MaxX, marginWorld);
+    }
 }

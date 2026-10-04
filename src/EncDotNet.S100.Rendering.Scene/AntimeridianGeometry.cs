@@ -49,7 +49,7 @@ internal static class AntimeridianGeometry
         IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
     {
         double west = WindowWest(shell);
-        if (IsPlain(shell, west) && holes.All(h => h.Count < 3 || IsPlain(h, west)))
+        if (IsPlainSurface(shell, holes))
         {
             // The common case: nothing crosses a seam or the latitude limit.
             var plainHoles = new List<IReadOnlyList<(double X, double Y)>>(holes.Count);
@@ -100,6 +100,21 @@ internal static class AntimeridianGeometry
         }
 
         return [(Project(clippedShell), projectedHoles)];
+    }
+
+    /// <summary>
+    /// Whether <see cref="ProjectSurface"/> projects the surface unchanged:
+    /// no edge crosses a seam and no vertex lies beyond the latitude limit.
+    /// Otherwise the projected polygons may carry synthetic edges (along the
+    /// frame's edge, a pole or the latitude limit) that are not part of the
+    /// feature's boundary and must not be outlined.
+    /// </summary>
+    public static bool IsPlainSurface(
+        IReadOnlyList<GeoPosition> shell,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
+    {
+        double west = WindowWest(shell);
+        return IsPlain(shell, west) && holes.All(h => h.Count < 3 || IsPlain(h, west));
     }
 
     /// <summary>

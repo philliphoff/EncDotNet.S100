@@ -78,7 +78,7 @@ public sealed class S100DatasetExtentIndicatorLayer
         string? name = null)
     {
         _style = style ?? S100DatasetExtentIndicatorStyle.Default;
-        _layer = new MemoryLayer
+        _layer = new WorldCopyMemoryLayer
         {
             Name = name ?? DefaultLayerName,
             Style = null,

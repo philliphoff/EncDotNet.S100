@@ -63,7 +63,7 @@ public sealed class S100OverscaleCurtainLayer
         string? name = null)
     {
         _style = style ?? new OverscaleCurtainStyle();
-        _layer = new MemoryLayer
+        _layer = new WorldCopyMemoryLayer
         {
             Name = name ?? DefaultLayerName,
             Style = null,

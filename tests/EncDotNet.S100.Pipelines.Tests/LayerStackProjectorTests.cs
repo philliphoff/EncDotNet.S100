@@ -85,11 +85,12 @@ public class LayerStackProjectorTests
             datasetId);
 
         var square = new[] { (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0) };
-        var prebuiltLayer = new MemoryLayer
+        var prebuiltLayer = new InstrumentedMemoryLayer
         {
             Name = "S-101 (areas)",
             Features = new[] { PickFeature("1"), PickFeature("2") },
             CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+            RepeatsAcrossWorldCopies = true,
             MaxVisible = 300.0,
         };
         S100VectorTileRenderer.BindScene(prebuiltLayer, new VectorScene(new PaintOp[]
@@ -106,7 +107,9 @@ public class LayerStackProjectorTests
             [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(prebuiltLayer, original),
         };
 
-        var layer = Assert.IsType<MemoryLayer>(Assert.Single(LayerStackProjector.Project(new[] { ruled }, prebuilt)).Layer);
+        // The filtered layer keeps the tiled source's world-copy pick features
+        // (issue #773).
+        var layer = Assert.IsType<WorldCopyMemoryLayer>(Assert.Single(LayerStackProjector.Project(new[] { ruled }, prebuilt)).Layer);
 
         Assert.NotSame(prebuiltLayer, layer);
         Assert.Equal(S100VectorTileRenderer.RendererName, layer.CustomLayerRendererName);
