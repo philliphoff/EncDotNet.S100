@@ -35,20 +35,20 @@ export interface Product {
 export const products: Product[] = [
   // Quebec City harbour, Canadian Hydrographic Service sample data (CHS notice in the footer).
   {
-    shot: 'P01', spec: 'S-101', caption: 'Electronic charts', standin: 'S101Screenshot.png',
+    shot: 'P01', spec: 'S-101', caption: 'Electronic charts',
     credit: { text: 'Quebec City · contains CHS data, not for navigation', href: '#chs-notice' },
   },
-  { shot: 'P02', spec: 'S-57', caption: "Today's charts, translated", standin: 's57-viewer-us4fl1lt.png' },
-  { shot: 'P03', spec: 'S-102', caption: 'Bathymetry', standin: 'S102Screenshot.png' },
-  { shot: 'P04', spec: 'S-104', caption: 'Water levels', standin: 'S104Screenshot.png' },
-  { shot: 'P05', spec: 'S-111', caption: 'Surface currents', standin: 'S111Screenshot.png' },
-  { shot: 'P06', spec: 'S-124', caption: 'Navigational warnings', standin: 'S124Screenshot.png' },
-  { shot: 'P07', spec: 'S-125', caption: 'Aids to navigation', standin: 'S125Screenshot.png' },
-  { shot: 'P08', spec: 'S-411', caption: 'Sea ice', standin: 'S411Screenshot.png' },
-  { shot: 'P09', spec: 'S-421', caption: 'Route plans', standin: 'S421Screenshot.png', extra: true },
-  { shot: 'P10', spec: 'S-129', caption: 'Under-keel clearance', standin: 'S129Screenshot.png', extra: true },
+  { shot: 'P02', spec: 'S-57', caption: "Today's charts, translated" },
+  { shot: 'P03', spec: 'S-102', caption: 'Bathymetry' },
+  { shot: 'P04', spec: 'S-104', caption: 'Water levels' },
+  { shot: 'P05', spec: 'S-111', caption: 'Surface currents' },
+  { shot: 'P06', spec: 'S-124', caption: 'Navigational warnings' },
+  { shot: 'P07', spec: 'S-125', caption: 'Aids to navigation' },
+  { shot: 'P08', spec: 'S-411', caption: 'Sea ice' },
+  { shot: 'P09', spec: 'S-421', caption: 'Route plans', extra: true },
+  { shot: 'P10', spec: 'S-129', caption: 'Under-keel clearance', extra: true },
   { shot: 'P11', spec: 'S-401', caption: 'Inland waterways', placeholder: 'Inland ENC', extra: true },
-  { shot: 'P12', spec: 'S-131', caption: 'Harbour infrastructure', standin: 's131-viewer.png', extra: true },
+  { shot: 'P12', spec: 'S-131', caption: 'Harbour infrastructure', extra: true },
 ];
 
 export const standards: [spec: string, subject: string][] = [

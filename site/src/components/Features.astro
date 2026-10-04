@@ -26,9 +26,9 @@ const sizes = '(max-width: 900px) 100vw, 690px';
         </div>
         <div class="layers">
           <div class="stack">
-            <Shot id="F1a" standin="S101Screenshot.png" alt="NOAA chart of the Chesapeake Bay entrance" sizes={sizes} data-layer="0" />
-            <Shot id="F1b" standin="S102Screenshot.png" alt="The same chart with NOAA S-102 bathymetry" sizes={sizes} data-layer="1" style="opacity:0" />
-            <Shot id="F1c" standin="S111Screenshot.png" alt="The same chart with S-102 bathymetry and S-111 surface currents" sizes={sizes} data-layer="2" style="opacity:0" />
+            <Shot id="F1a" alt="NOAA chart of the Chesapeake Bay entrance" sizes={sizes} data-layer="0" />
+            <Shot id="F1b" alt="The same chart with NOAA S-102 bathymetry" sizes={sizes} data-layer="1" style="opacity:0" />
+            <Shot id="F1c" alt="The same chart with S-102 bathymetry and S-111 surface currents" sizes={sizes} data-layer="2" style="opacity:0" />
           </div>
           <div class="layer-tabs" role="group" aria-label="Layers">
             <button type="button" data-layer-btn="0" aria-pressed="true">Chart</button>
@@ -47,12 +47,12 @@ const sizes = '(max-width: 900px) 100vw, 690px';
             layer shows which sample it's drawing.
           </p>
           <ul>
-            <li>Forecast runs with a Now marker and expiry</li>
+            <li>Move through time across forecast data</li>
             <li>Zoom, presets and jump-to-data</li>
-            <li>Local or UTC, your choice</li>
+            <li>Fetch updated forecasts with a single click</li>
           </ul>
         </div>
-        <Shot id="F2" standin="TimelineScreenshot.png" alt="Timeline animating surface currents over Chesapeake Bay" sizes={sizes} />
+        <Shot id="F2" alt="Timeline animating surface currents over Chesapeake Bay" sizes={sizes} />
       </div>
 
       <div class="feature">
@@ -82,7 +82,7 @@ const sizes = '(max-width: 900px) 100vw, 690px';
             bearing update as you edit, and routes are stored in the S-421 route model.
           </p>
         </div>
-        <Shot id="F4" standin="S421Screenshot.png" alt="A route from Seattle to Bremerton with the leg table open" sizes={sizes} />
+        <Shot id="F4" alt="A route from Seattle to Bremerton with the leg table open" sizes={sizes} />
       </div>
 
       <div class="feature">
@@ -90,11 +90,12 @@ const sizes = '(max-width: 900px) 100vw, 690px';
           <span class="eyebrow">Library</span>
           <h3>Find data, not files.</h3>
           <p>
-            The Library indexes local folders, collection manifests and online catalogues, including NOAA's S-100 feeds on
-            AWS. You can browse coverage on the map before you download anything, and keep it up to date afterwards.
+            The Library indexes local folders, collection manifests and online catalogues, including NOAA's charts,
+            high-resolution bathymetry, and water-level and current forecasts. You can browse coverage on the map before you
+            download anything, and keep it up to date afterwards.
           </p>
         </div>
-        <Shot id="F5" standin="DatasetsPanelScreenshot.png" alt="The Library panel browsing NOAA S-102 coverage areas" sizes={sizes} />
+        <Shot id="F5" alt="The Library panel browsing NOAA S-102 coverage areas" sizes={sizes} />
       </div>
     </div>
 

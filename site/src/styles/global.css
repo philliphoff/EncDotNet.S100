@@ -59,7 +59,16 @@ code, pre { font-family: "JetBrains Mono Variable", ui-monospace, monospace; }
 .nav ul a { text-decoration: none; opacity: .82; }
 .nav ul a:hover { opacity: 1; }
 .nav .gh { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; font-size: 14px; text-decoration: none; }
-@media (max-width: 760px) { .nav ul { display: none; } .nav .gh { margin-left: auto; } }
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; margin-right: -14px;
+  border: 1px solid rgba(255,255,255,.22); border-radius: 999px; background: none; color: inherit;
+  font: 500 14px/1 "Inter Variable", system-ui, sans-serif; cursor: pointer;
+}
+.theme-toggle:hover { border-color: rgba(255,255,255,.45); }
+.theme-toggle svg { display: none; }
+.theme-toggle:not([data-mode]) .auto, .theme-toggle[data-mode="auto"] .auto,
+.theme-toggle[data-mode="light"] .light, .theme-toggle[data-mode="dark"] .dark { display: block; }
+@media (max-width: 760px) { .nav ul { display: none; } .theme-toggle { margin-left: auto; } }
 
 /* ---------- hero ---------- */
 .hero {

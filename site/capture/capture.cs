@@ -7,6 +7,7 @@
 //   dotnet run site/capture/capture.cs -- --only H1,F4     (some shots)
 //
 // Options: --only <ids>, --out <dir>, --viewer <exe>, --ienc <dir>, --chs <dir>, --keep-open, --two-shades,
+// --theme light (the themed window shots again with Light chrome, as <ID>.light.png),
 // --no-clone (run the build in place instead of a cached clone),
 // --manifest-only (run the recipes and update the manifest, keeping the existing images).
 // Data is downloaded once into site/capture/.cache/ (gitignored).
@@ -41,6 +42,15 @@ var keepOpen = args.Contains("--keep-open");
 var manifestOnly = args.Contains("--manifest-only");
 ShotManifest.RepoRoot = repoRoot;
 Viewer.FourShades = !args.Contains("--two-shades");
+var theme = Option("--theme")?.ToLowerInvariant() switch
+{
+    null or "dark" => "Dark",
+    "light" => "Light",
+    var t => throw new ArgumentException($"--theme must be light or dark, not {t}"),
+};
+Viewer.ChromeTheme = theme;
+// Light shots sit beside the dark ones as <ID>.light.png (manifest key <ID>.light).
+var suffix = theme == "Light" ? ".light" : "";
 
 var data = new Data(Path.Combine(scriptDir, ".cache"));
 
@@ -75,16 +85,16 @@ var elliottBay = new Box(47.540, -122.560, 47.680, -122.320);
 var shots = new List<Shot>
 {
     // H: hero, the same view in each palette, with the Datasets panel open.
-    new("H1", v => Hero(v, "Day")),
-    new("H3", v => Hero(v, "Dusk")),
-    new("H2", v => Hero(v, "Night")),
+    new("H1", v => Hero(v, "Day"), Themed: true),
+    new("H3", v => Hero(v, "Dusk"), Chrome: "S100Dusk"),
+    new("H2", v => Hero(v, "Night"), Chrome: "S100Night"),
 
     // F1: the same view as layers are added (chart → + depths).
     // F1: the same view at the Chesapeake Bay entrance as layers are added:
     // NOAA chart → + S-102 depths → + S-111 currents (cbofs, latest run).
-    new("F1a", v => Layers(v, depths: false, currents: false)),
-    new("F1b", v => Layers(v, depths: true, currents: false)),
-    new("F1c", v => Layers(v, depths: true, currents: true)),
+    new("F1a", v => Layers(v, depths: false, currents: false), Themed: true),
+    new("F1b", v => Layers(v, depths: true, currents: false), Themed: true),
+    new("F1c", v => Layers(v, depths: true, currents: true), Themed: true),
 
     // F3: Object Information for the lateral buoy nearest the middle of Elliott Bay.
     new("F3", async v =>
@@ -96,7 +106,7 @@ var shots = new List<Shot>
         await v.Call("pick_features", new() { ["latitude"] = lat, ["longitude"] = lon, ["select"] = true });
         await v.Panel("PickReport");
         return await v.Window();
-    }),
+    }, Themed: true),
 
     // F4: a route from Colman Dock round West Point to Shilshole Bay Marina.
     new("F4", async v =>
@@ -113,7 +123,7 @@ var shots = new List<Shot>
         await v.Panel("Routes");
         await v.Frame(new Box(47.590, -122.500, 47.690, -122.320));
         return await v.Window();
-    }),
+    }, Themed: true),
 
     // F2: the currents forecast on the Timeline, Live, with the clock pinned
     // nine hours into the latest cbofs run so the shot is repeatable.
@@ -131,7 +141,7 @@ var shots = new List<Shot>
         await v.Panel("Timeline");
         await v.Frame(new Box(36.940, -76.460, 37.160, -75.900));
         return await v.Window();
-    }),
+    }, Themed: true),
 
     // F5: the Library with NOAA's Washington S-102 areas and ENCs, the Seattle
     // items downloaded, over Puget Sound so online and local tiles both show.
@@ -155,7 +165,7 @@ var shots = new List<Shot>
         await v.Panel("Library");
         await v.Frame(new Box(47.40, -122.75, 47.80, -122.10));
         return await v.Window();
-    }),
+    }, Themed: true),
 
     // F8: the Validation tab for whichever candidate has the most located
     // findings, over the NOAA chart at the Chesapeake Bay entrance: the S-125 AtoN
@@ -187,7 +197,7 @@ var shots = new List<Shot>
         await v.Call("select_dataset", new() { ["datasetId"] = best!.Value.Id, ["tab"] = "validation" });
         await v.Frame(best.Value.Bounds);
         return await v.Window();
-    }),
+    }, Themed: true),
 
     // F9: the ECDIS display controls beside Shilshole Bay and the approach to the
     // Ballard Locks, where the safety contour and four-shade depths show.
@@ -199,7 +209,7 @@ var shots = new List<Shot>
         await v.Panel("EcdisDisplay");
         await v.Frame(new Box(47.655, -122.440, 47.700, -122.370));
         return await v.Window();
-    }),
+    }, Themed: true),
 
     // D2: an agent planning and checking a route over MCP. Every call and result
     // in the transcript is real; the frames are window captures after each step,
@@ -207,9 +217,9 @@ var shots = new List<Shot>
     new("D2", v => AgentClip(v)),
 
     // F7: one harbour crop in each palette (window captures: render_to_image ignores the palette).
-    new("F7-day", v => Palette(v, "Day")),
-    new("F7-dusk", v => Palette(v, "Dusk")),
-    new("F7-night", v => Palette(v, "Night")),
+    new("F7-day", v => Palette(v, "Day"), Themed: true),
+    new("F7-dusk", v => Palette(v, "Dusk"), Chrome: "S100Dusk"),
+    new("F7-night", v => Palette(v, "Night"), Chrome: "S100Night"),
 
     // P: square product tiles, map only.
     // P01: real S-101 from the Canadian Hydrographic Service's S-100 sample
@@ -301,19 +311,27 @@ var shots = new List<Shot>
 };
 
 // ── Run ────────────────────────────────────────────────────────────────
-var selected = shots.Where(s => only is null || only.Contains(s.Id)).ToList();
+var selected = shots.Where(s => (only is null || only.Contains(s.Id)) && (theme == "Dark" || s.Themed)).ToList();
 if (selected.Count == 0)
 {
-    Console.Error.WriteLine($"No shots match --only. Known: {string.Join(", ", shots.Select(s => s.Id))}");
+    Console.Error.WriteLine($"No shots match --only{(theme == "Dark" ? "" : " and --theme")}. Known: {string.Join(", ", shots.Where(s => theme == "Dark" || s.Themed).Select(s => s.Id))}");
     return 1;
 }
 
+// The chrome theme is a startup setting, so a shot that needs other chrome gets a fresh viewer.
+Viewer.ChromeTheme = selected[0].Chrome ?? theme;
 var viewer = await Viewer.StartAsync(viewerExe, keepOpen);
 var failures = 0;
 try
 {
     foreach (var shot in selected)
     {
+        if ((shot.Chrome ?? theme) != Viewer.ChromeTheme)
+        {
+            await viewer.DisposeAsync();
+            Viewer.ChromeTheme = shot.Chrome ?? theme;
+            viewer = await Viewer.StartAsync(viewerExe, keepOpen);
+        }
         for (var attempt = 1; ; attempt++)
         {
             var sw = Stopwatch.StartNew();
@@ -321,22 +339,22 @@ try
             {
                 viewer.BeginShot();
                 var png = await shot.Capture(viewer);
-                var path = Path.Combine(outDir, $"{shot.Id}.png");
+                var path = Path.Combine(outDir, $"{shot.Id}{suffix}.png");
                 var keepImage = manifestOnly && File.Exists(path);
                 if (keepImage)
                 {
-                    Console.WriteLine($"= {shot.Id,-9} manifest only (image kept)");
+                    Console.WriteLine($"= {shot.Id + suffix,-15} manifest only (image kept)");
                 }
                 else
                 {
                     await File.WriteAllBytesAsync(path, png);
-                    Console.WriteLine($"✓ {shot.Id,-9} {png.Length / 1024,6} KB  {sw.Elapsed.TotalSeconds,5:0.0}s  {Path.GetRelativePath(repoRoot, path)}");
+                    Console.WriteLine($"✓ {shot.Id + suffix,-15} {png.Length / 1024,6} KB  {sw.Elapsed.TotalSeconds,5:0.0}s  {Path.GetRelativePath(repoRoot, path)}");
                 }
-                await ShotManifest.RecordAsync(Path.Combine(outDir, "manifest.json"), shot.Id, viewer, path, repoRoot, recapturedImage: !keepImage);
+                await ShotManifest.RecordAsync(Path.Combine(outDir, "manifest.json"), shot.Id + suffix, viewer, path, repoRoot, recapturedImage: !keepImage);
             }
             catch (SkipShot e)
             {
-                Console.WriteLine($"- {shot.Id,-9} skipped: {e.Message}");
+                Console.WriteLine($"- {shot.Id + suffix,-15} skipped: {e.Message}");
             }
             catch (Exception e) when (attempt < 4 && viewer.Died())
             {
@@ -350,7 +368,7 @@ try
             catch (Exception e)
             {
                 failures++;
-                Console.WriteLine($"✗ {shot.Id,-9} {e.Message}");
+                Console.WriteLine($"✗ {shot.Id + suffix,-15} {e.Message}");
             }
             break;
         }
@@ -534,7 +552,10 @@ static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
 // ── Types ──────────────────────────────────────────────────────────────
 record Box(double South, double West, double North, double East);
 
-record Shot(string Id, Func<Viewer, Task<byte[]>> Capture);
+// Themed: a window shot in the Day palette, which --theme light also captures
+// with Light chrome. Chrome: a fixed chrome theme whatever --theme says (the Dusk
+// and Night shots use the matching S-100 chrome). Map-only tiles have no chrome.
+record Shot(string Id, Func<Viewer, Task<byte[]>> Capture, bool Themed = false, string? Chrome = null);
 
 sealed class SkipShot(string message) : Exception(message);
 
@@ -673,20 +694,23 @@ sealed class Viewer : IAsyncDisposable
     /// <summary>Whether to use the mariner's four-shade depth zones (default; --two-shades turns them off).</summary>
     public static bool FourShades { get; set; }
 
+    /// <summary>The chrome theme for the next start: Dark (default), Light (--theme light), or a shot's own S100Dusk / S100Night.</summary>
+    public static string ChromeTheme { get; set; } = "Dark";
+
     public static async Task<Viewer> StartAsync(string exe, bool keepOpen)
     {
         if (!File.Exists(exe)) throw new FileNotFoundException("Build the viewer first: dotnet build -c Release src/EncDotNet.S100.Viewer", exe);
 
         var dataDir = Directory.CreateTempSubdirectory("soundcharts-capture-").FullName;
         var settings = Path.Combine(dataDir, "settings.json");
-        // Dark chrome, no update prompt or status bar, docks closed until a shot opens one.
+        // The chosen chrome (Dark by default), no update prompt or status bar, docks closed until a shot opens one.
         // S-101 viewing groups 90020/90021 (the INFORM01 "additional information"
         // markers) are hidden, as a mariner would, so harbour views stay readable;
         // the out-of-scale extent outlines are off for the same reason, and a
         // small-craft 10 m safety contour keeps isolated-danger marks to real hazards.
         await File.WriteAllTextAsync(settings, $$"""
             {
-              "ChromeTheme": "Dark", "UpdateCheckEnabled": false, "IsStatusBarVisible": false,
+              "ChromeTheme": "{{ChromeTheme}}", "UpdateCheckEnabled": false, "IsStatusBarVisible": false,
               "IsLeftDockOpen": false, "IsRightDockOpen": false, "IsBottomDockOpen": false,
               "EcdisHiddenViewingGroups": { "S-101": "90020,90021", "S-57": "90020,90021" },
               "ShowOutOfScaleExtentIndicators": false,
@@ -1249,7 +1273,7 @@ static class ShotManifest
         root["settings"] = new JsonObject
         {
             ["window"] = "1100×700 logical, captured at 2×",
-            ["chromeTheme"] = "Dark",
+            ["chromeTheme"] = "per shot (Dark; Light for the .light entries; S100Dusk / S100Night for the Dusk and Night shots)",
             ["basemap"] = "Offline (bundled Natural Earth)",
             ["statusBar"] = false,
             ["fourShades"] = Viewer.FourShades,
@@ -1291,7 +1315,7 @@ static class ShotManifest
             // False when recorded with --manifest-only: the image is older than this
             // record, so live data (forecast runs, chart editions) may differ from it.
             ["imageMatchesRecord"] = recapturedImage,
-            ["chromeTheme"] = "Dark",
+            ["chromeTheme"] = Viewer.ChromeTheme,
             ["capture"] = v.CaptureMode,
             ["datasets"] = datasets,
             ["timeline"] = timeline,

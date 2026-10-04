@@ -112,6 +112,8 @@ an S-52 implementation.
 
 ## The Viewer
 
+![SoundCharts showing NOAA charts and S-102 bathymetry over Elliott Bay, Seattle](site/src/assets/shots/H1.png)
+
 **SoundCharts: S-100 Viewer** (project `EncDotNet.S100.Viewer`) is a
 cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and
 [Mapsui](https://mapsui.com/). It loads any combination of the
@@ -160,22 +162,30 @@ product looks like in the viewer.
 
 ### Gallery
 
+The gallery images are the [soundcharts.app](https://soundcharts.app) captures,
+made by [`site/capture/capture.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/site/capture/capture.cs) from public NOAA and
+USACE data and the repo's test fixtures; [`manifest.json`](https://github.com/philliphoff/EncDotNet.S100/blob/main/site/src/assets/shots/manifest.json)
+records the datasets and viewer calls behind each one.
+
 | Product | Screenshot |
 |---|---|
-| S-101 ENC | ![S-101 ENC](readme/S101Screenshot.png) |
-| S-102 Bathymetry | ![S-102 Bathymetry](readme/S102Screenshot.png) |
-| S-104 Water Level | ![S-104 Water Level](readme/S104Screenshot.png) |
-| S-111 Surface Currents | ![S-111 Surface Currents](readme/S111Screenshot.png) |
+| S-101 ENC | ![S-101 ENC, Quebec City harbour](site/src/assets/shots/P01.png)<br>Quebec City harbour, from the Canadian Hydrographic Service's S-100 sample data.<sup>1</sup> |
+| S-57 (via S-101) | ![NOAA S-57 ENC of Elliott Bay rendered through the S-101 pipeline](site/src/assets/shots/P02.png)<br>NOAA ENC, Elliott Bay, Seattle. |
+| S-57 Inland ENC | ![USACE inland ENC at St. Louis](site/src/assets/shots/P11.png)<br>USACE inland ENC, Mississippi and Missouri at St. Louis. |
+| S-102 Bathymetry | ![S-102 Bathymetry](site/src/assets/shots/P03.png)<br>NOAA S-102 over the NOAA ENC, four-shade depth zones. |
+| S-104 Water Level | ![S-104 Water Level](site/src/assets/shots/P04.png)<br>NOAA S-104 water-level pilot, Charleston (repo fixture). |
+| S-111 Surface Currents | ![S-111 Surface Currents](site/src/assets/shots/P05.png)<br>NOAA CBOFS S-111 forecast, Chesapeake Bay entrance. |
 | S-122 Marine Protected Areas | ![S-122 MPAs](readme/S122Screenshot.png) |
-| S-124 Navigational Warnings | ![S-124 Navigational Warnings](readme/S124Screenshot.png) |
-| S-125 Marine AtoN | ![S-125 Marine Aids to Navigation](readme/S125Screenshot.png) |
+| S-124 Navigational Warnings | ![S-124 Navigational Warnings](site/src/assets/shots/P06.png)<br>Synthetic warnings (repo fixture). |
+| S-125 Marine AtoN | ![S-125 Marine Aids to Navigation](site/src/assets/shots/P07.png)<br>S-125 derived from NOAA ENC aids to navigation, Elliott Bay. |
 | S-127 Marine Services | ![S-127 Marine Resources & Services](readme/S127Screenshot.png) |
 | S-128 Catalogue | ![S-128 Catalogue of Nautical Products](readme/S128Screenshot.png) |
-| S-129 UKC | ![S-129 Under Keel Clearance](readme/S129Screenshot.png) |
-| S-131 Marine Harbour | ![S-131 Marine Harbour Infrastructure](readme/s131-viewer.png) |
-| S-411 Sea Ice | ![S-411 Sea Ice](readme/S411Screenshot.png) |
-| S-421 Route Plan | ![S-421 Route Plan](readme/S421Screenshot.png) |
-| S-57 (via S-101) | ![S-57 rendered via S-101 pipeline](docs/images/s57-viewer-us4fl1lt.png) |
+| S-129 UKC | ![S-129 Under Keel Clearance](site/src/assets/shots/P10.png)<br>UKC plan, Torres Strait (repo fixture). |
+| S-131 Marine Harbour | ![S-131 Marine Harbour Infrastructure](site/src/assets/shots/P12.png)<br>S-131 derived from NOAA ENC harbour features, Elliott Bay. |
+| S-411 Sea Ice | ![S-411 Sea Ice](site/src/assets/shots/P08.png)<br>US National Weather Service ice analysis, Alaska. |
+| S-421 Route Plan | ![S-421 Route Plan](site/src/assets/shots/P09.png)<br>Route plan, Baltic (repo fixture). |
+
+<sup>1</sup> The S-101 chart of Quebec City was made by the EncDotNet.S100 project and contains intellectual property of the Canadian Hydrographic Service (CHS) of the Department of Fisheries and Oceans. This product does not meet the requirements of the Navigation Safety Regulations, 2020 under the Canada Shipping Act, 2001. Charts and publications issued by or on the authority of CHS must be used to meet the requirements of those regulations. The copyright in the data are and remain the property of His Majesty the King in Right of Canada and shall not be sold, licensed, leased, assigned or given to a third party. The incorporation of CHS data in this product does not constitute an endorsement or an approval of this product by the Canadian Hydrographic Service, the Department of Fisheries and Oceans or His Majesty the King in Right of Canada.
 
 ## Command-line tool
 

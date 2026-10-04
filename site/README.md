@@ -39,16 +39,20 @@ docfx docfx.json && (cd site && npm run build) && cp -R site/dist/. _site/
 | `src/components/` | One component per section. `Shot.astro` is the image slot. |
 | `src/data/content.ts` | Product tiles, standards list, links |
 | `src/data/release.ts` | Latest release assets, fetched at build time for the download button |
-| `src/assets/shots/` | Final captures, named `<ID>.png` (see the shot list) |
+| `src/assets/shots/` | Final captures, named `<ID>.png`, plus `<ID>.light.png` twins (see the shot list) |
 | `shot-list.md` | What to capture for each shot ID, and how |
 
 ## Images
 
-A `<Shot id="H1" standin="S101Screenshot.png" … />` resolves, in order, to:
+A `<Shot id="H1" standin="Example.png" … />` resolves, in order, to:
 
 1. `src/assets/shots/H1.png`, if it exists
 2. the named stand-in from the repo's `readme/` or `docs/images/`
 3. a drawn placeholder describing the shot
+
+When a capture also has a `H1.light.png` twin (Light chrome), the slot follows the
+visitor's system theme: the light image by default, `H1.png` (Dark chrome) under
+`prefers-color-scheme: dark`. Shots without a twin show the same image in both.
 
 The build turns images into responsive AVIF with a WebP fallback, and drops the
 full-size source copies. Captures come out at 2× (2200 × 1400 for window shots); let the
@@ -60,12 +64,19 @@ build handle sizing.
 over MCP and writes `src/assets/shots/<ID>.png`. It downloads public NOAA data
 (ENCs from charts.noaa.gov, S-102/S-111 from NOAA's AWS buckets) into
 `capture/.cache/` on first use, and runs the viewer in a throwaway `--data-dir`
-with en-US formatting, dark chrome and no status bar.
+with en-US formatting, dark chrome (S-100 Dusk / Night chrome for the Dusk and Night
+shots) and no status bar.
 
 ```bash
 dotnet build -c Release src/EncDotNet.S100.Viewer
 dotnet run site/capture/capture.cs -- --only H1,F4
+dotnet run site/capture/capture.cs -- --theme light   # the Light-chrome twins
 ```
+
+`--theme light` captures only the Day-palette window shots (hero H1, the feature
+rows and F7-day) again with Light chrome, as `<ID>.light.png` and manifest entries
+`<ID>.light`. The Dusk and Night shots use the matching S-100 Dusk / Night chrome in
+both themes, map-only product tiles have no chrome, and the D2 clip stays dark.
 
 The viewer needs a real display, so run it outside any sandbox.
 

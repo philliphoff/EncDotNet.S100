@@ -1,5 +1,7 @@
 // Resolves a shot ID to an image: the real capture in src/assets/shots/<ID>.png
 // when it exists, otherwise a stand-in from the repo's README screenshots.
+// Captures may also have a Light-chrome twin, <ID>.light.png, for visitors whose
+// system theme is light; the plain capture (Dark chrome) is the dark one.
 import type { ImageMetadata } from 'astro';
 
 type Module = { default: ImageMetadata };
@@ -13,12 +15,15 @@ const byFileName = async (modules: Record<string, () => Promise<Module>>, name: 
   return load ? (await load()).default : undefined;
 };
 
-export type ShotSource = { kind: 'capture' | 'standin'; image: ImageMetadata } | { kind: 'todo' };
+export type ShotSource =
+  | { kind: 'capture'; image: ImageMetadata; light?: ImageMetadata }
+  | { kind: 'standin'; image: ImageMetadata }
+  | { kind: 'todo' };
 
 export async function resolveShot(id: string, standin?: string): Promise<ShotSource> {
   for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
     const image = await byFileName(captures, `${id}.${ext}`);
-    if (image) return { kind: 'capture', image };
+    if (image) return { kind: 'capture', image, light: await byFileName(captures, `${id}.light.${ext}`) };
   }
   if (standin) {
     const image = await byFileName(standins, standin);

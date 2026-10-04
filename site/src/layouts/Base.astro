@@ -34,6 +34,13 @@ const dev = import.meta.env.DEV;
     <meta property="og:url" content={canonical} />
     <!-- TODO(B4): replace with the 1200×630 Open Graph card. -->
     <meta property="og:image" content={ogImage} />
+    <script is:inline>
+      // A theme picked with the nav toggle (Nav.astro); without one the page follows the system.
+      try {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
     <script is:inline define:vars={{ dev }}>
       if (dev || new URLSearchParams(location.search).has('review')) document.documentElement.classList.add('review');
     </script>

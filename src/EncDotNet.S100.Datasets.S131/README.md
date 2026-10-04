@@ -13,9 +13,11 @@ Infrastructure** datasets (GML encoding, S-100 Part 10b).
 
 ## Screenshot
 
-S-131 Halifax Harbour sample rendered in the SoundCharts viewer:
+S-131 harbour infrastructure (berths, dolphins, harbour facilities) over the NOAA
+chart of Elliott Bay, Seattle, in the SoundCharts viewer. The S-131 dataset is
+derived from the NOAA ENC's harbour features by the site capture script:
 
-![S-131 Halifax Harbour](../../readme/s131-viewer.png)
+![S-131 harbour infrastructure, Elliott Bay](../../site/src/assets/shots/P12.png)
 
 ## Architecture — GML + Lua hybrid
 

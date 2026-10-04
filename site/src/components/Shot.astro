@@ -1,7 +1,11 @@
 ---
 // One image slot from the shot list: the capture if it exists, else a
-// stand-in screenshot, else a designed placeholder describing the shot.
-import { Picture } from 'astro:assets';
+// stand-in screenshot, else a designed placeholder describing the shot. A capture
+// with a Light-chrome twin follows the visitor's system theme: light by default,
+// the Dark-chrome capture under prefers-color-scheme: dark. The nav's theme toggle
+// overrides that media query on the data-theme-dark sources.
+import { Picture, getImage } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
 import { resolveShot } from '../data/shots';
 
 interface Props {
@@ -23,6 +27,19 @@ const { id, alt, standin, title, detail, sizes = '(max-width: 900px) 100vw, 60vw
   Astro.props;
 const source = await resolveShot(id, standin);
 const label = source.kind === 'standin' ? `${id} · stand-in` : id;
+
+const widthsFor = (image: ImageMetadata) => [640, 1280, 2048].filter((w) => w <= image.width);
+const variant = (image: ImageMetadata, format: 'avif' | 'webp') => getImage({ src: image, widths: widthsFor(image), format });
+const themed =
+  source.kind === 'capture' && source.light
+    ? await Promise.all([
+        variant(source.image, 'avif'),
+        variant(source.image, 'webp'),
+        variant(source.light, 'avif'),
+        variant(source.light, 'webp'),
+      ]).then(([darkAvif, darkWebp, lightAvif, lightWebp]) => ({ darkAvif, darkWebp, lightAvif, lightWebp, light: source.light! }))
+    : undefined;
+const dark = '(prefers-color-scheme: dark)';
 ---
 {
   source.kind === 'todo' ? (
@@ -36,16 +53,35 @@ const label = source.kind === 'standin' ? `${id} · stand-in` : id;
   ) : (
     <div class:list={['slot', className]} {...rest}>
       <span class:list={['badge', source.kind]}>{label}</span>
-      <Picture
-        src={source.image}
-        alt={alt}
-        formats={['avif']}
-        fallbackFormat="webp"
-        widths={[640, 1280, 2048].filter((w) => w <= source.image.width)}
-        sizes={sizes}
-        loading={eager ? 'eager' : 'lazy'}
-        fetchpriority={eager ? 'high' : undefined}
-      />
+      {themed ? (
+        <picture>
+          <source media={dark} data-theme-dark type="image/avif" srcset={themed.darkAvif.srcSet.attribute} sizes={sizes} />
+          <source media={dark} data-theme-dark type="image/webp" srcset={themed.darkWebp.srcSet.attribute} sizes={sizes} />
+          <source type="image/avif" srcset={themed.lightAvif.srcSet.attribute} sizes={sizes} />
+          <img
+            src={themed.lightWebp.src}
+            srcset={themed.lightWebp.srcSet.attribute}
+            sizes={sizes}
+            alt={alt}
+            width={themed.light.width}
+            height={themed.light.height}
+            loading={eager ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchpriority={eager ? 'high' : undefined}
+          />
+        </picture>
+      ) : (
+        <Picture
+          src={source.image}
+          alt={alt}
+          formats={['avif']}
+          fallbackFormat="webp"
+          widths={widthsFor(source.image)}
+          sizes={sizes}
+          loading={eager ? 'eager' : 'lazy'}
+          fetchpriority={eager ? 'high' : undefined}
+        />
+      )}
     </div>
   )
 }
