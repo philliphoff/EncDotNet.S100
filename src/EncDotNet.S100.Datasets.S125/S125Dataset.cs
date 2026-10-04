@@ -140,6 +140,41 @@ public sealed class S125Feature : IS100Feature
     /// </summary>
     public IReadOnlyList<S125FeatureReference> FeatureReferences { get; init; } =
         [];
+
+    /// <summary>
+    /// The feature's thematic attributes as an ordered, lossless tree:
+    /// repeated simple attributes (e.g. the three <c>colour</c> values of a
+    /// red-green-red buoy) appear once per occurrence in document order, and
+    /// complex attributes keep their nested sub-structure (e.g.
+    /// <c>sectorCharacteristics/lightSector/sectorLimit/sectorLimitOne</c>).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Attributes"/> and <see cref="ComplexAttributes"/> are flat,
+    /// last-value-wins views kept for the XSLT projection and pick reports;
+    /// the tree is what the S-101-based AtoN portrayal reads (S-100 Part 9A
+    /// attribute paths such as <c>sectorCharacteristics:1;lightSector:2</c>).
+    /// </remarks>
+    public IReadOnlyList<S125AttributeNode> AttributeTree { get; init; } = [];
+}
+
+/// <summary>
+/// One thematic attribute occurrence of an S-125 feature: either a simple
+/// attribute carrying a <see cref="Value"/>, or a complex attribute carrying
+/// ordered <see cref="Children"/>.
+/// </summary>
+public sealed class S125AttributeNode
+{
+    /// <summary>The attribute code (GML element local name, e.g. <c>colour</c>).</summary>
+    public required string Code { get; init; }
+
+    /// <summary>The simple attribute value, or <see langword="null"/> for a complex attribute.</summary>
+    public string? Value { get; init; }
+
+    /// <summary>Sub-attributes of a complex attribute, in document order; empty for a simple attribute.</summary>
+    public IReadOnlyList<S125AttributeNode> Children { get; init; } = [];
+
+    /// <summary><see langword="true"/> when this node is a complex attribute.</summary>
+    public bool IsComplex => Value is null;
 }
 
 /// <summary>

@@ -28,6 +28,27 @@ internal static class TestHelpers
         return Path.Combine(AppContext.BaseDirectory, "tests", "datasets");
     }
 
+    /// <summary>
+    /// Counts the pixels that differ from <paramref name="background"/> (default
+    /// opaque white) — a cheap content floor so a snapshot test cannot approve
+    /// an empty render.
+    /// </summary>
+    public static int CountNonBackgroundPixels(SKBitmap bitmap, SKColor? background = null)
+    {
+        var bg = background ?? SKColors.White;
+        int count = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var c = bitmap.GetPixel(x, y);
+                if (Math.Abs(c.Red - bg.Red) > 8 || Math.Abs(c.Green - bg.Green) > 8 || Math.Abs(c.Blue - bg.Blue) > 8)
+                    count++;
+            }
+        }
+        return count;
+    }
+
     /// <summary>Encodes an <see cref="SKBitmap"/> as a PNG byte buffer.</summary>
     public static byte[] EncodePng(SKBitmap bitmap)
     {

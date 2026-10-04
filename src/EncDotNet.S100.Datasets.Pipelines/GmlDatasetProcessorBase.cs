@@ -175,6 +175,99 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
         IReadOnlyList<DrawingInstruction> instructions) => instructions;
 
     /// <summary>
+    /// Builds portrayal from a second, non-XSLT source that is merged with the
+    /// product's own XSLT output — e.g. S-125, whose own catalogue portrays
+    /// only AtoN status indications, supplements it with the S-101 AtoN rules.
+    /// Returns <see langword="null"/> (the default) when the product has no
+    /// supplemental portrayal. Called under the render gate.
+    /// </summary>
+    /// <param name="context">The render context (palette, mariner settings, ECDIS display state).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    protected virtual Task<SupplementalPortrayal?> BuildSupplementalPortrayalAsync(
+        RenderContext? context, CancellationToken cancellationToken) =>
+        Task.FromResult<SupplementalPortrayal?>(null);
+
+    /// <summary>
+    /// Drawing instructions and their pre-resolved assets from a supplemental
+    /// portrayal source (see <see cref="BuildSupplementalPortrayalAsync"/>).
+    /// </summary>
+    /// <param name="Instructions">
+    /// Instructions referencing this dataset's features; drawn before the
+    /// product's own XSLT instructions (drawing priority still orders them).
+    /// </param>
+    /// <param name="Palette">
+    /// Colour palette resolving the supplemental instructions' colour tokens;
+    /// it replaces the product palette, so it must also cover the tokens the
+    /// product's own instructions use.
+    /// </param>
+    /// <param name="SymbolSvg">Resolves a supplemental symbol name to SVG, or <see langword="null"/>.</param>
+    /// <param name="LineStyle">Resolves a supplemental line-style name, or <see langword="null"/>.</param>
+    /// <param name="AreaFill">Resolves a supplemental area-fill name, or <see langword="null"/>.</param>
+    /// <param name="Info">Optional extra status line for the dataset info string.</param>
+    protected sealed record SupplementalPortrayal(
+        IReadOnlyList<DrawingInstruction> Instructions,
+        ColorPalette Palette,
+        Func<string, string?> SymbolSvg,
+        Func<string, LineStyle?> LineStyle,
+        Func<string, AreaFill?> AreaFill,
+        string? Info = null);
+
+    /// <summary>
+    /// Runs the XSLT pipeline and any supplemental portrayal, returning the
+    /// merged instructions and asset resolvers. The product's own catalogue
+    /// wins asset-name lookups; the supplemental source fills the rest.
+    /// </summary>
+    private async Task<PortrayalOutput> PortrayAsync(RenderContext? context, CancellationToken cancellationToken)
+    {
+        var catalogue = _catalogue;
+        context?.EcdisDisplay?.ApplyTo(catalogue);
+        ApplyDisplayMode(catalogue, context);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+        var featureSource = CreateFeatureXmlSource();
+        var pipeline = new PortrayalPipeline();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
+
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
+
+        var supplemental = await BuildSupplementalPortrayalAsync(context, cancellationToken).ConfigureAwait(false);
+        if (supplemental is null)
+        {
+            return new PortrayalOutput(
+                instructions,
+                catalogue.ActivePalette,
+                prewarm.ResolveSymbolSvg,
+                prewarm.ResolveLineStyle,
+                prewarm.ResolveAreaFill,
+                featureSource.FeatureTypesPresent,
+                null);
+        }
+
+        var merged = new List<DrawingInstruction>(supplemental.Instructions.Count + instructions.Count);
+        merged.AddRange(supplemental.Instructions);
+        merged.AddRange(instructions);
+        return new PortrayalOutput(
+            merged,
+            supplemental.Palette,
+            name => prewarm.ResolveSymbolSvg(name) ?? supplemental.SymbolSvg(name),
+            name => prewarm.ResolveLineStyle(name) ?? supplemental.LineStyle(name),
+            name => prewarm.ResolveAreaFill(name) ?? supplemental.AreaFill(name),
+            featureSource.FeatureTypesPresent,
+            supplemental.Info);
+    }
+
+    private sealed record PortrayalOutput(
+        IReadOnlyList<DrawingInstruction> Instructions,
+        ColorPalette Palette,
+        Func<string, string?> SymbolSvg,
+        Func<string, LineStyle?> LineStyle,
+        Func<string, AreaFill?> AreaFill,
+        IEnumerable<string> FeatureTypes,
+        string? SupplementalInfo);
+
+    /// <summary>
     /// Appends spec-specific lines to the info string. Override to add
     /// counts like "Information types: N".
     /// </summary>
@@ -213,27 +306,17 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 };
             }
 
-            var catalogue = _catalogue;
-            context?.EcdisDisplay?.ApplyTo(catalogue);
-            ApplyDisplayMode(catalogue, context);
-            await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
-
-            var featureSource = CreateFeatureXmlSource();
-            var pipeline = new PortrayalPipeline();
-            var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
+            var output = await PortrayAsync(context, cancellationToken).ConfigureAwait(false);
+            var instructions = output.Instructions;
 
             Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
                 + $"{instructions.Count} drawing instructions");
 
-            var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
-
-            var featureTypes = featureSource.FeatureTypesPresent;
             var suffix = BuildInfoSuffix();
             var info = $"{Spec.Name} {ProductDescription} — {_fileName}\n"
-                + $"Features: {Features.Count} ({string.Join(", ", featureTypes)})\n"
+                + $"Features: {Features.Count} ({string.Join(", ", output.FeatureTypes)})\n"
                 + (suffix.Length > 0 ? suffix + "\n" : "")
+                + (output.SupplementalInfo is { Length: > 0 } extra ? extra + "\n" : "")
                 + $"Drawing instructions: {instructions.Count}";
 
             var subLayer = new VectorSubLayer
@@ -252,7 +335,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             return new VectorPortrayalResult
             {
                 SubLayers = new[] { subLayer },
-                Palette = catalogue.ActivePalette,
+                Palette = output.Palette,
                 GeometryProvider = new FeatureGeometryProvider<TFeature>(Features),
                 Product = Spec.Name,
                 Spec = Spec,
@@ -260,9 +343,9 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 Info = info,
                 SymbolScale = context?.SymbolScale ?? 1.0,
                 TextScale = context?.TextScale ?? 1.0,
-                SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
-                AreaFillProvider = name => prewarm.ResolveAreaFill(name),
-                LineStyleProvider = name => prewarm.ResolveLineStyle(name),
+                SymbolProvider = output.SymbolSvg,
+                AreaFillProvider = output.AreaFill,
+                LineStyleProvider = output.LineStyle,
                 GeographicExtent = ComputeGeographicExtent(),
             };
         }
@@ -316,33 +399,22 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
         if (GetSuppressionInfo(context) is not null)
             return HeadlessVectorRenderer.RenderBlank(widthPixels, heightPixels, bg);
 
-        var catalogue = _catalogue;
-        context?.EcdisDisplay?.ApplyTo(catalogue);
-        ApplyDisplayMode(catalogue, context);
-        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
-
-        var featureSource = CreateFeatureXmlSource();
-        var pipeline = new PortrayalPipeline();
-        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
-
-        var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
+        var output = await PortrayAsync(context, cancellationToken).ConfigureAwait(false);
 
         var geometryProvider = new FeatureGeometryProvider<TFeature>(Features);
 
         return HeadlessVectorRenderer.Render(
-            instructions,
+            output.Instructions,
             geometryProvider,
-            catalogue.ActivePalette,
-            symbolProvider: name => prewarm.ResolveSymbolSvg(name),
-            lineStyleProvider: name => prewarm.ResolveLineStyle(name),
+            output.Palette,
+            symbolProvider: output.SymbolSvg,
+            lineStyleProvider: output.LineStyle,
             symbolScale: context?.SymbolScale ?? 1.0,
             textScale: context?.TextScale ?? 1.0,
             widthPixels: widthPixels,
             heightPixels: heightPixels,
             background: bg,
-            areaFillProvider: name => prewarm.ResolveAreaFill(name),
+            areaFillProvider: output.AreaFill,
             hiddenCategories: context?.HiddenInstructionCategories
                 ?? DrawingInstructionCategory.None,
             basemap: context?.Basemap ?? BasemapKind.None,

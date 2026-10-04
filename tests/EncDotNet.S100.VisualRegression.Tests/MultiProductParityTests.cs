@@ -84,12 +84,13 @@ public sealed class MultiProductParityTests
     /// resolved, matching the Mapsui "A" arm. Run against the products whose
     /// portrayal anchors text on co-located symbols, where the regression that
     /// motivated this guard (S-421 route labels dropped onto waypoint circles)
-    /// actually lives. (S-125 AtoN is excluded: its synthetic fixtures carry no
-    /// portrayed text, so the guard would be vacuous there.)
+    /// actually lives, and S-125, whose AtoN names and light descriptions sit
+    /// on buoy and light symbols.
     /// </summary>
     [SkippableTheory]
     [InlineData("S421", "RTE-TEST-GFULL.s421.gml")]
     [InlineData("S124", "navwarn_mixed.gml")]
+    [InlineData("S125", "aton_us4va1bf.gml")]
     public void Vector_PointSymbolsDoNotSuppressLabels(string product, string fileName)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);

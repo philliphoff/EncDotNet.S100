@@ -8,6 +8,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
     <InternalsVisibleTo Include="EncDotNet.S100.Datasets.S101.Tests" />
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.S125" />
   </ItemGroup>
 
   <ItemGroup>
