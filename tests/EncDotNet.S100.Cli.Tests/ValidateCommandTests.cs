@@ -1,6 +1,7 @@
 using System.Text.Json;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.TestSupport;
+using Spectre.Console;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -34,6 +35,23 @@ public sealed class ValidateCommandTests
         int exit = CliApp.Build().Run(["validate", dataset, "--strict"]);
 
         Assert.Equal(0, exit);
+    }
+
+    [Fact]
+    public void Validate_conformant_dataset_text_summary_has_no_literal_markup()
+    {
+        // #762: the "no findings" suffix was passed as an interpolated argument,
+        // so Spectre escaped it and printed "[grey]...[/]" literally.
+        var dataset = FixturePath("marine_curve.gml");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var (exit, stdout) = RunCapturingAnsiConsole(["validate", dataset]);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("Valid — S-127", stdout);
+        Assert.Contains("rule(s) evaluated, no findings)", stdout);
+        Assert.DoesNotContain("[grey]", stdout);
+        Assert.DoesNotContain("[/]", stdout);
     }
 
     [Fact]
@@ -134,6 +152,35 @@ public sealed class ValidateCommandTests
         finally
         {
             Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Runs the CLI with the static <see cref="AnsiConsole"/> (which the text
+    /// output writes through) redirected to a wide, colourless in-memory console,
+    /// as when output is piped or <c>NO_COLOR</c> is set.
+    /// </summary>
+    private static (int Exit, string Stdout) RunCapturingAnsiConsole(string[] args)
+    {
+        var writer = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(writer),
+        });
+        console.Profile.Width = 1000;
+
+        var original = AnsiConsole.Console;
+        AnsiConsole.Console = console;
+        try
+        {
+            int exit = CliApp.Build(console: console).Run(args);
+            return (exit, writer.ToString());
+        }
+        finally
+        {
+            AnsiConsole.Console = original;
         }
     }
 

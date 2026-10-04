@@ -378,7 +378,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 glyphExtent,
                 widthPixels,
                 heightPixels,
-                background ?? new RgbaColor(255, 255, 255, 255));
+                background ?? new RgbaColor(255, 255, 255, 255),
+                context?.Basemap ?? BasemapKind.None);
         }
 
         if (_source is null)

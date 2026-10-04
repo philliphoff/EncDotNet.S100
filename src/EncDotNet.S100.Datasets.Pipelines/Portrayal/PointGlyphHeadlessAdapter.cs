@@ -44,13 +44,22 @@ internal static class PointGlyphHeadlessAdapter
         MercatorBounds extent,
         int widthPixels,
         int heightPixels,
-        RgbaColor background)
+        RgbaColor background,
+        BasemapKind basemap = BasemapKind.None)
     {
         var viewport = FitViewport(extent, widthPixels, heightPixels);
+        CompositeLayer[] layers = basemap == BasemapKind.Offline
+            ?
+            [
+                // The land basemap goes under the glyphs, against the same viewport.
+                new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false),
+                CreateLayer(subLayer),
+            ]
+            : [CreateLayer(subLayer)];
         return new HeadlessCompositeRenderer
         {
             Background = background,
-        }.Render(viewport, [CreateLayer(subLayer)]);
+        }.Render(viewport, layers);
     }
 
     private static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels)
