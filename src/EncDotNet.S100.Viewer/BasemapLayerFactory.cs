@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using BruTile.Cache;
 using BruTile.Predefined;
 using EncDotNet.S100.Renderers.Skia.Scene;
@@ -99,53 +100,64 @@ internal static class BasemapLayerFactory
         }
     }
 
-    private static ILayer CreateOfflineLayer()
+    private static ILayer CreateOfflineLayer() => new TiledLandLayer(LayerName)
     {
-        var features = LoadLandFeatures();
-        return new WorldCopiedLandLayer(LayerName)
+        Style = new VectorStyle
         {
-            Features = features,
-            Style = new VectorStyle
-            {
-                Fill = new Brush(LandFill),
-                Outline = null,
-                Line = null,
-            },
-        };
-    }
+            Fill = new Brush(LandFill),
+            Outline = null,
+            Line = null,
+        },
+    };
 
     /// <summary>
-    /// A <see cref="MemoryLayer"/> whose land geometry is repeated across
-    /// adjacent world copies but which reports the canonical single-world
-    /// <see cref="WorldExtent"/>, so the extra copies never widen
+    /// The offline land layer (issue #731). It reuses the shared headless land
+    /// source so the viewer and the Mapsui-free render path draw the same
+    /// embedded Natural Earth asset in the same projection (issue #411). Each
+    /// fetch picks the level of detail for the map resolution and returns only
+    /// the tiles in view, so a harbour-scale view gets the full-resolution
+    /// coastline while every pan frame clips a bounded number of points. The
+    /// land is repeated across adjacent world copies (see
+    /// <see cref="WorldCopyOffsetsX"/>), but the layer reports the canonical
+    /// single-world <see cref="WorldExtent"/>, so the extra copies never widen
     /// <see cref="Mapsui.Map.Extent"/> and thus never blow "zoom to extent"
     /// out to several worlds.
     /// </summary>
-    private sealed class WorldCopiedLandLayer : MemoryLayer
+    private sealed class TiledLandLayer(string name) : BaseLayer(name)
     {
-        public WorldCopiedLandLayer(string name) : base(name)
-        {
-        }
+        // Features are built once per tile and world copy and then reused, so
+        // their ids (which key Mapsui's path cache) stay stable across frames.
+        private readonly ConcurrentDictionary<(LandLevel Level, LandTile Tile, double OffsetX), GeometryFeature[]> _features = new();
 
         /// <inheritdoc />
         public override MRect? Extent => WorldExtent;
-    }
 
-    private static List<GeometryFeature> LoadLandFeatures()
-    {
-        // Reuse the shared headless loader so the viewer and the Mapsui-free
-        // render path consume the same embedded Natural Earth asset and the
-        // same projection (issue #411). The loader already projects rings to
-        // EPSG:3857 metres — identical to Mapsui's SphericalMercator — so the
-        // world coordinates map straight onto NTS geometry. Each polygon is
-        // emitted once per world copy (see WorldCopyOffsetsX) so continuous-
-        // frame antimeridian datasets have land beneath them; Mapsui culls
-        // features by envelope, so the off-screen copies cost only a bounds
-        // test per frame.
-        var features = new List<GeometryFeature>();
-        foreach (var offsetX in WorldCopyOffsetsX)
+        /// <inheritdoc />
+        public override IEnumerable<IFeature> GetFeatures(MRect box, double resolution)
         {
-            foreach (var polygon in NaturalEarthBasemap.LandPolygons)
+            var level = NaturalEarthBasemap.SelectLevel(resolution);
+            if (level is null)
+                yield break;
+
+            foreach (var offsetX in WorldCopyOffsetsX)
+            {
+                var tiles = level.GetTiles(box.MinX - offsetX, box.MinY, box.MaxX - offsetX, box.MaxY);
+                foreach (var tile in tiles)
+                {
+                    var features = _features.GetOrAdd((level, tile, offsetX), key => CreateFeatures(key.Tile, key.OffsetX));
+                    foreach (var feature in features)
+                    {
+                        if (feature.Extent?.Intersects(box) == true)
+                            yield return feature;
+                    }
+                }
+            }
+        }
+
+        private static GeometryFeature[] CreateFeatures(LandTile tile, double offsetX)
+        {
+            var features = new List<GeometryFeature>(tile.Polygons.Count);
+            foreach (var polygon in tile.Polygons)
             {
                 var shell = ToLinearRing(polygon.WorldShell, offsetX, counterClockwise: true);
                 if (shell is null)
@@ -161,9 +173,9 @@ internal static class BasemapLayerFactory
 
                 features.Add(new GeometryFeature(new Polygon(shell, holes.ToArray())));
             }
-        }
 
-        return features;
+            return features.ToArray();
+        }
     }
 
     private static LinearRing? ToLinearRing(

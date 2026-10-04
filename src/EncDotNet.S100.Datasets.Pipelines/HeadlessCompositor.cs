@@ -214,11 +214,11 @@ public sealed class HeadlessCompositor
 
         // 4a. Prepend the land basemap (issue #411) as the bottom-most layer so
         //     it draws under every chart layer, registered with the shared
-        //     viewport. The land scene is viewport-independent world geometry.
+        //     viewport, at a level of detail matching its pixel size (#731).
         if (options.Basemap == BasemapKind.Offline)
         {
             lowered.Insert(0, new VectorCompositeLayer(
-                NaturalEarthBasemap.LandScene, honorScaleVisibility: false));
+                NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false));
         }
 
         // 5. Paint.

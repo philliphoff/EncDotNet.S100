@@ -69,7 +69,7 @@ public static class HeadlessVectorRenderer
     /// <param name="basemap">
     /// Optional basemap drawn <em>beneath</em> the dataset (issue #411). When
     /// <see cref="BasemapKind.Offline"/>, the bundled Natural Earth land layer
-    /// (<see cref="NaturalEarthBasemap.LandScene"/>) is painted first, against
+    /// (<see cref="NaturalEarthBasemap.GetLandScene"/>) is painted first, against
     /// the same auto-fitted viewport, so it registers exactly with the chart.
     /// Defaults to <see cref="BasemapKind.None"/> (no basemap; output unchanged).
     /// </param>
@@ -131,7 +131,7 @@ public static class HeadlessVectorRenderer
             var compositeRenderer = new HeadlessCompositeRenderer { Background = background };
             var layers = new CompositeLayer[]
             {
-                new VectorCompositeLayer(NaturalEarthBasemap.LandScene, honorScaleVisibility: false),
+                new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(resolvedViewport), honorScaleVisibility: false),
                 new VectorCompositeLayer(scene, honorScaleVisibility),
             };
             return compositeRenderer.Render(resolvedViewport, layers);

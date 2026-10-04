@@ -116,7 +116,17 @@ public sealed class CoverageHeadlessRenderer
         // Land basemap (issue #411): painted between the background and the
         // coverage, through the very same centred-fit projection.
         if (basemap == BasemapKind.Offline)
-            DrawLandBasemap(canvas, Project);
+        {
+            // The canvas spans past the extent on the letterboxed axis.
+            DrawLandBasemap(
+                canvas,
+                Project,
+                minX - offsetX / scale,
+                minY - offsetY / scale,
+                maxX + offsetX / scale,
+                maxY + offsetY / scale,
+                1.0 / scale);
+        }
 
         var dest = new SKRect(
             (float)offsetX,
@@ -133,9 +143,18 @@ public sealed class CoverageHeadlessRenderer
     /// Fills the bundled Natural Earth land polygons onto <paramref name="canvas"/>
     /// using the caller's world→screen <paramref name="project"/> function, so the
     /// land registers pixel-for-pixel with the coverage drawn through the same
-    /// projection. Holes are honoured via an even-odd fill.
+    /// projection. Holes are honoured via an even-odd fill. Only the land in the
+    /// canvas's EPSG:3857 rectangle is drawn, at a level of detail matching
+    /// <paramref name="metresPerPixel"/>.
     /// </summary>
-    private static void DrawLandBasemap(SKCanvas canvas, Func<(double X, double Y), (float X, float Y)> project)
+    private static void DrawLandBasemap(
+        SKCanvas canvas,
+        Func<(double X, double Y), (float X, float Y)> project,
+        double minX,
+        double minY,
+        double maxX,
+        double maxY,
+        double metresPerPixel)
     {
         using var paint = new SKPaint
         {
@@ -144,7 +163,7 @@ public sealed class CoverageHeadlessRenderer
             IsAntialias = true,
         };
 
-        foreach (var polygon in NaturalEarthBasemap.LandPolygons)
+        foreach (var polygon in NaturalEarthBasemap.GetLandPolygons(minX, minY, maxX, maxY, metresPerPixel))
         {
             using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
             AddRing(path, polygon.WorldShell, project);
