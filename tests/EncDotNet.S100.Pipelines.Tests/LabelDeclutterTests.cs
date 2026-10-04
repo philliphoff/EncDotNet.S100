@@ -151,4 +151,50 @@ public class LabelDeclutterTests
         Assert.Single(suppressed);
         Assert.Contains(s1, suppressed);
     }
+
+    [Fact]
+    public void Declutter_SameFeatureCoAnchoredLabels_KeepsBoth()
+    {
+        // One feature's text instructions at one anchor form a composite label
+        // (e.g. the S-411 egg code's total concentration over its verbose line);
+        // the portrayal placed them deliberately, so neither suppresses the other.
+        var total = Text("ice.1", 10.0, 0.0, "74");
+        var verbose = Text("ice.1", 10.0, 0.0, "Cp[40, 30, 4] S[85, 84, 81] F[6, 5, 4]");
+        var scene = new VectorScene(new List<PaintOp> { total, verbose });
+
+        var suppressed = Declutter(scene, Centred(10.0, 0.0, 0.4));
+
+        Assert.Empty(suppressed);
+    }
+
+    [Fact]
+    public void Declutter_CompositeLabel_StillYieldsToOtherFeatures()
+    {
+        // A composite label's parts still declutter against another feature's label.
+        var total = Text("ice.1", 10.0, 0.0, "74");
+        var verbose = Text("ice.1", 10.0, 0.0, "Cp[40, 30, 4]");
+        var other = Text("ice.2", 10.0, 0.0, "91");
+        var scene = new VectorScene(new List<PaintOp> { total, verbose, other });
+
+        var suppressed = Declutter(scene, Centred(10.0, 0.0, 0.4));
+
+        Assert.Contains(total, suppressed);
+        Assert.Contains(verbose, suppressed);
+        Assert.DoesNotContain(other, suppressed);
+    }
+
+    [Fact]
+    public void Declutter_SameFeatureLabelsAtDifferentAnchors_StillCollide()
+    {
+        // Labels of one feature at distinct anchors (e.g. the soundings of one
+        // multipoint sounding feature) are separate labels and declutter.
+        var s1 = Text("soundg", 10.0, 0.0, "12");
+        var s2 = Text("soundg", 10.00001, 0.0, "34");
+        var scene = new VectorScene(new List<PaintOp> { s1, s2 });
+
+        var suppressed = Declutter(scene, Centred(10.0, 0.0, 0.4));
+
+        Assert.Single(suppressed);
+        Assert.Contains(s1, suppressed);
+    }
 }
