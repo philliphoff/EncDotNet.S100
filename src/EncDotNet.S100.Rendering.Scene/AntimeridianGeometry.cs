@@ -49,6 +49,19 @@ internal static class AntimeridianGeometry
         IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
     {
         double west = WindowWest(shell);
+        if (IsPlain(shell, west) && holes.All(h => h.Count < 3 || IsPlain(h, west)))
+        {
+            // The common case: nothing crosses a seam or the latitude limit.
+            var plainHoles = new List<IReadOnlyList<(double X, double Y)>>(holes.Count);
+            foreach (var hole in holes)
+            {
+                if (hole.Count >= 3)
+                    plainHoles.Add(Project(hole));
+            }
+
+            return [(Project(shell), plainHoles)];
+        }
+
         var unwrappedShell = Unwrap(shell);
         double winding = unwrappedShell[^1].Lon - unwrappedShell[0].Lon
             + (IsClosed(shell) ? 0 : Wrap180(shell[0].Longitude - shell[^1].Longitude));
@@ -99,6 +112,9 @@ internal static class AntimeridianGeometry
         IReadOnlyList<GeoPosition> coords)
     {
         double west = WindowWest(coords);
+        if (IsPlain(coords, west))
+            return [Project(coords)];
+
         var unwrapped = Unwrap(coords);
         bool within = WithinWindow(unwrapped, west);
 
@@ -376,6 +392,25 @@ internal static class AntimeridianGeometry
         return 180.0 * Math.Floor(min / 180.0);
     }
 
+    // Whether a ring or polyline can be projected vertex by vertex: no edge
+    // crosses a seam, no vertex lies beyond the latitude limit, and it sits
+    // within its frame (which, without seam crossings, it always does).
+    private static bool IsPlain(IReadOnlyList<GeoPosition> coords, double west)
+    {
+        for (int i = 0; i < coords.Count; i++)
+        {
+            var p = coords[i];
+            if (Math.Abs(p.Latitude) > WebMercator.MaxLatitude
+                || p.Longitude > west + 360.0
+                || (i > 0 && Math.Abs(p.Longitude - coords[i - 1].Longitude) > 180.0))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static bool WithinWindow((double Lon, double Lat)[] coords, double west)
     {
         foreach (var (lon, _) in coords)
@@ -454,6 +489,14 @@ internal static class AntimeridianGeometry
         var result = new (double X, double Y)[coords.Count];
         for (int i = 0; i < coords.Count; i++)
             result[i] = WebMercator.FromLonLat(coords[i].Lon, coords[i].Lat);
+        return result;
+    }
+
+    private static (double X, double Y)[] Project(IReadOnlyList<GeoPosition> coords)
+    {
+        var result = new (double X, double Y)[coords.Count];
+        for (int i = 0; i < coords.Count; i++)
+            result[i] = WebMercator.FromLonLat(coords[i].Longitude, coords[i].Latitude);
         return result;
     }
 
