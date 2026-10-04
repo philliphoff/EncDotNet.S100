@@ -352,55 +352,55 @@ public sealed class S125AtonLuaDataProvider : ILuaDataProvider
             switch (f.GeometryType)
             {
                 case S100GeometryType.Point when f.Points.Count > 0:
-                {
-                    var pos = f.Points[0];
-                    string? sid = null;
-                    foreach (var (p, id) in pointIds)
                     {
-                        if (S125AtonPortrayalProjection.SamePosition(p, pos)) { sid = id; break; }
+                        var pos = f.Points[0];
+                        string? sid = null;
+                        foreach (var (p, id) in pointIds)
+                        {
+                            if (S125AtonPortrayalProjection.SamePosition(p, pos)) { sid = id; break; }
+                        }
+                        if (sid is null)
+                        {
+                            sid = $"P:{pointIds.Count + 1}";
+                            pointIds.Add((pos, sid));
+                            _spatialData[sid] = PointData(pos);
+                        }
+                        Associate(fid, sid, "Point");
+                        break;
                     }
-                    if (sid is null)
-                    {
-                        sid = $"P:{pointIds.Count + 1}";
-                        pointIds.Add((pos, sid));
-                        _spatialData[sid] = PointData(pos);
-                    }
-                    Associate(fid, sid, "Point");
-                    break;
-                }
                 case S100GeometryType.Curve when f.Curves.Count > 0:
-                {
-                    var parts = new List<string>();
-                    for (int i = 0; i < f.Curves.Count; i++)
                     {
-                        if (f.Curves[i].Count >= 2)
-                            parts.Add(AddCurve($"{key}:L{i}", f.Curves[i]));
+                        var parts = new List<string>();
+                        for (int i = 0; i < f.Curves.Count; i++)
+                        {
+                            if (f.Curves[i].Count >= 2)
+                                parts.Add(AddCurve($"{key}:L{i}", f.Curves[i]));
+                        }
+                        if (parts.Count == 0) break;
+                        var ccid = $"CC:{key}";
+                        _spatialData[ccid] = CompositeCurveData(parts);
+                        Associate(fid, ccid, "CompositeCurve");
+                        break;
                     }
-                    if (parts.Count == 0) break;
-                    var ccid = $"CC:{key}";
-                    _spatialData[ccid] = CompositeCurveData(parts);
-                    Associate(fid, ccid, "CompositeCurve");
-                    break;
-                }
                 case S100GeometryType.Surface when f.ExteriorRing.Count >= 3:
-                {
-                    var exterior = AddRing($"{key}:R0", f.ExteriorRing);
-                    var interiors = new List<object>();
-                    for (int i = 0; i < f.InteriorRings.Count; i++)
                     {
-                        if (f.InteriorRings[i].Count >= 3)
-                            interiors.Add(SpatialRef(AddRing($"{key}:R{i + 1}", f.InteriorRings[i]), "CompositeCurve"));
+                        var exterior = AddRing($"{key}:R0", f.ExteriorRing);
+                        var interiors = new List<object>();
+                        for (int i = 0; i < f.InteriorRings.Count; i++)
+                        {
+                            if (f.InteriorRings[i].Count >= 3)
+                                interiors.Add(SpatialRef(AddRing($"{key}:R{i + 1}", f.InteriorRings[i]), "CompositeCurve"));
+                        }
+                        var surfaceId = $"S:{key}";
+                        _spatialData[surfaceId] = new Dictionary<string, object?>
+                        {
+                            ["RecordType"] = "Surface",
+                            ["ExteriorRing"] = SpatialRef(exterior, "CompositeCurve"),
+                            ["InteriorRings"] = interiors,
+                        };
+                        Associate(fid, surfaceId, "Surface");
+                        break;
                     }
-                    var surfaceId = $"S:{key}";
-                    _spatialData[surfaceId] = new Dictionary<string, object?>
-                    {
-                        ["RecordType"] = "Surface",
-                        ["ExteriorRing"] = SpatialRef(exterior, "CompositeCurve"),
-                        ["InteriorRings"] = interiors,
-                    };
-                    Associate(fid, surfaceId, "Surface");
-                    break;
-                }
             }
         }
     }
