@@ -61,6 +61,11 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private bool _validationCached;
     private DatasetMetadata? _metadata;
 
+    // Sub-layer keys of the S-98 fill / line-work split (mirrors the S-101
+    // processor's "<spec>.areas" / "<spec>.linework" keys).
+    private const string AreasLayerKey = "s57.areas";
+    private const string LineworkLayerKey = "s57.linework";
+
     // ECDIS settings that hide nothing — used when a render context carries no
     // explicit display state, so a standalone/headless render draws everything
     // the catalogue can (Category.All maps to a null display mode). Mirrors
@@ -323,27 +328,45 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         var cellMinimumDisplayScale = Metadata.DisplayScale?.Minimum;
         var cellCompilationScale = S57Dataset.ResolveCompilationScale(_rawS57Document);
 
+        // S-98 plane split (Annex A §A-6.9.1; Main §9.2.1 layers 2 / 5 / 6):
+        // the cell is translated to S-101 / S-401 and portrayed with that
+        // catalogue, so it splits exactly like a native S-101 cell — area
+        // fills on BaseChartUnder, everything else on BaseChartOver — letting
+        // S-102 (Bathymetry) and the S-104 water-level band (OnDemandSurface)
+        // interleave between the fills and the line work instead of being
+        // painted over by the cell's DepthArea fills.
+        var areaInstructions = prepared.Where(i => i is AreaInstruction).ToList();
+        var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
+
         return new VectorPortrayalResult
         {
-            // S-57 is the legacy ENC fallback; treat the whole layer as
-            // base-chart line-work + symbology on BaseChartOver (S-98 §9.2.1
-            // layer 2). We do not split S-57 into areas vs lines — the legacy
-            // renderer mixes them.
             SubLayers = new[]
             {
                 new VectorSubLayer
                 {
-                    LayerKey = "s57.main",
-                    LayerName = $"S-57: {_fileName}",
-                    Instructions = prepared,
-                    Plane = S98DisplayPlane.BaseChartOver,
+                    LayerKey = AreasLayerKey,
+                    LayerName = $"S-57 (areas): {_fileName}",
+                    Instructions = areaInstructions,
+                    Plane = S98DisplayPlane.BaseChartUnder,
                     WithinPlanePriority = 0,
+                    SourceFeatureType = "area",
                     // The per-feature out-of-band cap is deliberately not
                     // applied for S-57 (see above); the whole-cell window
                     // handles zoom-out suppression with an extent border.
                     ApplyOutOfBandCap = false,
                 },
+                new VectorSubLayer
+                {
+                    LayerKey = LineworkLayerKey,
+                    LayerName = $"S-57 (lines): {_fileName}",
+                    Instructions = otherInstructions,
+                    Plane = S98DisplayPlane.BaseChartOver,
+                    WithinPlanePriority = 0,
+                    SourceFeatureType = "linework",
+                    ApplyOutOfBandCap = false,
+                },
             },
+            LayerNames = new[] { AreasLayerKey, LineworkLayerKey },
             Palette = palette,
             GeometryProvider = geometryProvider,
             Product = "S-57",

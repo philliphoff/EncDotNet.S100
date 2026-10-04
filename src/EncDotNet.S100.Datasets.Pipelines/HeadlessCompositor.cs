@@ -301,7 +301,10 @@ public sealed class HeadlessCompositor
 
                     var (w, e, s, n, nativeToWgs84) = extent.Value;
                     layer = new CoverageCompositeLayer(
-                        grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84, landAreas: grid.LandAreaMask);
+                        grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84, landAreas: grid.LandAreaMask)
+                    {
+                        Opacity = grid.Opacity,
+                    };
                     west = w; east = e; south = s; north = n;
                     return true;
                 }

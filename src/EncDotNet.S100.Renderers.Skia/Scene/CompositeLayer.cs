@@ -172,11 +172,38 @@ public sealed class CoverageCompositeLayer : CompositeLayer
         };
     }
 
+    /// <summary>
+    /// The opacity the surface is composited at, 0 (invisible) to 1 (opaque).
+    /// Defaults to <c>1.0</c>.
+    /// </summary>
+    public double Opacity { get; init; } = 1.0;
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, Viewport viewport)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
-        _renderer.DrawOnto(canvas, viewport, _layer, _west, _east, _south, _north);
+
+        if (Opacity >= 1.0)
+        {
+            _renderer.DrawOnto(canvas, viewport, _layer, _west, _east, _south, _north);
+            return;
+        }
+
+        if (Opacity <= 0.0)
+            return;
+
+        // Composite the whole surface through one alpha layer so overlapping
+        // draws inside it don't stack their transparency.
+        using var paint = new SKPaint { Color = SKColors.White.WithAlpha((byte)Math.Round(Opacity * 255)) };
+        canvas.SaveLayer(paint);
+        try
+        {
+            _renderer.DrawOnto(canvas, viewport, _layer, _west, _east, _south, _north);
+        }
+        finally
+        {
+            canvas.Restore();
+        }
     }
 }

@@ -350,13 +350,17 @@ are deferred (§3.5) and gated on the IHO finishing the spec.
   - S-111 colour band → plane `OnDemandSurface` (20). S-111 arrows
     → plane `DynamicArrows` (60).
   - S-101 line/point work on `BaseChartOver` (30) sits *above* the
-    on-demand surface but *below* the dynamic arrows. **Verify
-    intent of this stacking against Annex A §A-6.9.1 — TBD-2.** It
-    is not entirely clear that S-101 line work must come above an
-    S-104 surface; some implementations render the surface on top
-    with alpha. The current proposal follows the *"obscure ENC
-    features"* reading literally: the surface goes under the base
-    chart's vector work.
+    on-demand surface but *below* the dynamic arrows. **TBD-2
+    resolved (2026-10-03): keep this stacking. See §8 TBD-2 for the
+    spec reading.**
+  - The same holds for S-57 cells translated to S-101 / S-401: they
+    split into `BaseChartUnder` fills and `BaseChartOver` line work
+    just like native S-101 (§4.2.1), so the band lands between them.
+- **Citation correction:** the *"Gridded data will generally go over
+  ENC…"* clause is §A-6.9.1 of **S-98 Part A** (Level 1 Application
+  Schema), and the same text appears in Part B §B-6.9.1. It is not in
+  Annex A, whose appendix stops at A-6.3. Older `Annex A §A-6.9.1`
+  citations in code comments mean Part A §A-6.9.1.
 - **Codebase mapping:** S-104 and S-111 processors already split
   into multiple sub-layers (`MapsuiDatasetResult.Layers` +
   `LayerNames`); the processor sets a per-sub-layer plane.
@@ -455,7 +459,7 @@ Per-processor plane defaults (PR-L1 fills these in):
 | `S101DatasetProcessor` *(post-split)* | lines + points + text | `BaseChartOver` | 0 |
 | `S102DatasetProcessor` | coverage | `Bathymetry` | 0 |
 | `S104DatasetProcessor` | colour band | `OnDemandSurface` | 0 |
-| `S111DatasetProcessor` | colour band | `OnDemandSurface` | 0 |
+| `S111DatasetProcessor` | colour band *(not emitted — the bundled S-111 Ed 2.0.0 PC defines arrows only; reserved plane if one returns)* | `OnDemandSurface` | 0 |
 | `S111DatasetProcessor` | arrow overlay | `DynamicArrows` | 10 |
 | `S122DatasetProcessor` | vector | `OtherChartOverlays` | 0 |
 | `S124DatasetProcessor` | vector | `CautionsAndWarnings` | 0 |
@@ -467,7 +471,8 @@ Per-processor plane defaults (PR-L1 fills these in):
 | `S201DatasetProcessor` | vector | `OtherChartOverlays` | 0 |
 | `S411DatasetProcessor` | vector | `OtherChartOverlays` | 0 |
 | `S421DatasetProcessor` | vector | `OtherChartOverlays` | 0 |
-| `S57DatasetProcessor` | vector | `BaseChartOver` | 0 |
+| `S57DatasetProcessor` | areas (`s57.areas`) | `BaseChartUnder` | 0 |
+| `S57DatasetProcessor` | lines + points + text (`s57.linework`) | `BaseChartOver` | 0 |
 
 #### 4.2.1 The S-101 split problem
 
@@ -495,8 +500,23 @@ implements it. Cost is one extra style sort + render pass per
 S-101 dataset; benchmarks expected to be < 5% per Mapsui's measured
 inner-loop costs.
 
-The split applies only to S-101 (and S-57). Coverage products and
+The split applies only to S-101 (and S-401 and S-57). Coverage products and
 GML overlays do not have a fill-vs-linework split.
+
+> **S-57 follow-up.** `S57DatasetProcessor` originally emitted the
+> translated cell as a single `s57.main` sub-layer on `BaseChartOver`.
+> That put the cell's `DepthArea` fills above `Bathymetry` and
+> `OnDemandSurface`, so an S-104 water-level band, or an S-102 surface,
+> was painted over completely wherever an S-57 ENC covered it. Because
+> the cell is translated to S-101 / S-401 and portrayed with that
+> catalogue, it now splits along the same `AreaInstruction` boundary as
+> native S-101: `s57.areas` (`BaseChartUnder`, `SourceFeatureType =
+> "area"`) and `s57.linework` (`BaseChartOver`). Pinned by
+> `tests/EncDotNet.S100.Pipelines.Tests/S98OnDemandSurfaceOrderingTests.cs`,
+> which builds the stack from the real S-57, S-101, S-104 and S-111
+> processors in every load order. S-57 is still excluded from the
+> S-101-keyed suppression rules (R-101-102-B, R-101-104-B land mask),
+> per Annex A §4.1.1.
 
 ### 4.3 `src/EncDotNet.S100.Viewer/`
 
@@ -898,14 +918,45 @@ item is actionable as a focused follow-up session.
   16 XSD. Drop the XSD into `content/S98/catalogue/` and validate
   `Adapter/defaults.xml` during build. (Annex A §4.2.1.)
 
-- **TBD-2.** Confirm S-104 / S-111 *colour-band* stacking against
-  Annex A §A-6.9.1. The clause is explicit that *"Gridded data
-  will generally go over ENC and obscure ENC features"*, but
-  practical implementations sometimes render S-101 line work on
-  top so soundings, isolated dangers, AtoN remain legible. Our
-  proposal in §3.3 places the colour band **under** S-101 lines.
-  The reviewer should decide whether to keep that or to follow the
-  literal "obscure" reading.
+- **TBD-2 — resolved 2026-10-03: keep the colour band above ENC
+  fills and below ENC line work.** Checked against the S-98 Ed 2.0.0
+  PDFs. S-98 has no clause that places an S-104 or S-111 surface
+  directly; the Interoperability Catalogue is meant to decide
+  (Annex A §8.6, §10.11). The text does constrain the answer, though:
+  - *Part A §A-6.9.1 / Part B §B-6.9.1.* Gridded data goes over the ENC.
+    At Level 0 it obscures all ENC features; at Level 1 and above it
+    obscures only specific ones, by interleaving display planes. The
+    worked Level 1 example (S-102) overwrites depth areas and contours
+    while soundings, aids to navigation and obstructions stay above
+    the grid. Our plane split is that same structure.
+  - *Main §9.2.1 (informative).* Of the priority categories, layer 1
+    is the top. Layer 6, "official on demand data" (water levels,
+    surface currents), must not obscure the information in layer 2
+    (official points, curves and surfaces) or layer 5 (official
+    colour-fill areas). So ENC line work, points, symbols and text
+    must stay above the surface. Main §10.8 also says text is drawn
+    last.
+  - *Annex A §4.4.1–4.4.2.* Level 0 overlays may use transparency so
+    lower layers stay visible. Level 1 interleaves feature layers
+    with the ENC "to prevent ENC data from being obscured".
+
+  Conclusion: ENC line work above the surface is supported by every
+  relevant clause, so it stays. Putting the band over the ENC fills
+  follows the Part A/B model. Read literally, Main §9.2.1 would
+  forbid fully obscuring the fills. Annex A §4.4.1 makes
+  transparency the tool for this, so the S-104 band is **partly
+  transparent by default**: `GridCoverageSubLayer.Opacity` is
+  `S104DatasetProcessor.ColorBandOpacity` (0.8). The viewer's map
+  session multiplies that portrayal opacity by the mariner's dataset
+  and sub-layer opacity rather than replacing it, including when
+  R-101-104-B rebuilds the band's layer with a land mask. The headless
+  compositor composites the band at the same opacity. S-102 stays
+  opaque (1.0) because Part A §A-6.9.1 has it replace the ENC depth
+  areas. Two related points: S-98 Main §6.1.1 requires
+  S-104 only for water-level adjustment, so the band is an optional
+  graphical display (gridded S-104 loads hidden). S-98 never calls
+  for an S-111 colour band; the bundled S-111 portrayal catalogue
+  defines arrows only, and they sit on `DynamicArrows` above the ENC.
 
 - **TBD-3.** Decide between S-101 split Option A (renderer) vs
   Option B (processor double-pass) — §4.2.1. Recommendation is

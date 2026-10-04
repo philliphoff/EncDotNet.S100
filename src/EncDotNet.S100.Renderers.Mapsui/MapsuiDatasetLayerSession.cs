@@ -46,7 +46,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private readonly List<InstrumentedMemoryLayer> _stampedRedrawLayers = [];
     private readonly Dictionary<MapDatasetId, Entry> _entries = [];
     private readonly List<MapDatasetId> _order = [];
-    private readonly ConditionalWeakTable<ILayer, LayerVisibilityRange> _visibilityRanges = new();
+    private readonly ConditionalWeakTable<ILayer, LayerBaseState> _baseStates = new();
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private IReadOnlyList<LayerStackEntry> _stackEntries = [];
     private IReadOnlyList<ILayer> _stackedLayers = [];
@@ -872,7 +872,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             var previous = entry.CaptureRendering();
             entry.Apply(result);
             entry.RenderedTime = entry.TimePolicy is null ? null : selectedTime;
-            CaptureVisibilityRanges(entry.Layers);
+            CaptureBaseStates(entry.Layers);
             entry.Dataset = ReconcileDatasetState(
                 entry.Dataset,
                 entry.LayerKeys,
@@ -1433,7 +1433,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             {
                 var key = LayerKeyAt(snapshot, index);
                 var layer = snapshot.Layers[index];
-                RestoreVisibilityRange(layer);
+                RestoreBaseState(layer);
                 ApplyDisplayState(snapshot.Dataset, key, layer);
             }
 
@@ -1455,7 +1455,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (!_entries.TryGetValue(item.DatasetId, out var entry))
                 continue;
 
-            RestoreProjectedVisibilityRange(item, entry);
+            RestoreProjectedBaseState(item, entry);
             ApplyDisplayState(entry.Dataset, item.LayerKey, item.Layer);
             if (!_ignoreScaleMinimum
                 && EffectiveMinimumDisplayScale(entry) is int minimumDisplayScale)
@@ -1862,7 +1862,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             entry.RenderCts?.Cancel();
     }
 
-    private static void ApplyDisplayState(
+    private void ApplyDisplayState(
         MapDataset dataset,
         string layerKey,
         ILayer layer)
@@ -1872,24 +1872,28 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         layer.Enabled = dataset.IsActive
             && dataset.IsVisible
             && (subLayer?.IsVisible ?? true);
-        layer.Opacity = dataset.Opacity * (subLayer?.Opacity ?? 1.0);
+        var portrayalOpacity = _baseStates.TryGetValue(layer, out var baseState)
+            ? baseState.Opacity
+            : 1.0;
+        layer.Opacity = portrayalOpacity * dataset.Opacity * (subLayer?.Opacity ?? 1.0);
     }
 
-    private void RestoreVisibilityRange(ILayer layer)
+    private void RestoreBaseState(ILayer layer)
     {
         if (layer is not BaseLayer baseLayer)
             return;
 
-        var range = _visibilityRanges.GetValue(
+        var range = _baseStates.GetValue(
             layer,
-            static source => new LayerVisibilityRange(
+            static source => new LayerBaseState(
                 ((BaseLayer)source).MinVisible,
-                ((BaseLayer)source).MaxVisible));
+                ((BaseLayer)source).MaxVisible,
+                source.Opacity));
         baseLayer.MinVisible = range.MinVisible;
         baseLayer.MaxVisible = range.MaxVisible;
     }
 
-    private void RestoreProjectedVisibilityRange(
+    private void RestoreProjectedBaseState(
         MapsuiProjectedDatasetLayer item,
         Entry entry)
     {
@@ -1899,19 +1903,20 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var source = FindSourceLayer(item.LayerKey, entry);
         if (source is not BaseLayer sourceBase || ReferenceEquals(source, item.Layer))
         {
-            RestoreVisibilityRange(item.Layer);
+            RestoreBaseState(item.Layer);
             return;
         }
 
-        var range = _visibilityRanges.GetValue(
+        var range = _baseStates.GetValue(
             source,
-            static layer => new LayerVisibilityRange(
+            static layer => new LayerBaseState(
                 ((BaseLayer)layer).MinVisible,
-                ((BaseLayer)layer).MaxVisible));
+                ((BaseLayer)layer).MaxVisible,
+                layer.Opacity));
         projectedBase.MinVisible = range.MinVisible;
         projectedBase.MaxVisible = range.MaxVisible;
-        _visibilityRanges.Remove(item.Layer);
-        _visibilityRanges.Add(item.Layer, range);
+        _baseStates.Remove(item.Layer);
+        _baseStates.Add(item.Layer, range);
     }
 
     private static ILayer? FindSourceLayer(string layerKey, Entry entry)
@@ -1960,17 +1965,18 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         return null;
     }
 
-    private void CaptureVisibilityRanges(IEnumerable<ILayer> layers)
+    private void CaptureBaseStates(IEnumerable<ILayer> layers)
     {
         foreach (var layer in layers)
         {
             if (layer is BaseLayer baseLayer)
             {
-                _visibilityRanges.GetValue(
+                _baseStates.GetValue(
                     layer,
-                    _ => new LayerVisibilityRange(
+                    _ => new LayerBaseState(
                         baseLayer.MinVisible,
-                        baseLayer.MaxVisible));
+                        baseLayer.MaxVisible,
+                        baseLayer.Opacity));
             }
         }
     }
@@ -2276,7 +2282,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         double? ContentMaxVisibleResolution,
         DateTime? RenderedTime);
 
-    private sealed record LayerVisibilityRange(
+    // A layer's state as its renderer built it, before the session applies
+    // the mariner's display state: the scale window and the portrayal opacity
+    // (e.g. the partly transparent S-104 band), which the dataset and
+    // sub-layer opacity multiply rather than replace.
+    private sealed record LayerBaseState(
         double MinVisible,
-        double MaxVisible);
+        double MaxVisible,
+        double Opacity);
 }

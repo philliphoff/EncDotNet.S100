@@ -184,6 +184,36 @@ public class HeadlessCompositorTests
         Assert.Equal(new SKColor(0xFF, 0x00, 0x00), bitmap.GetPixel(105, 95));
     }
 
+    [Fact]
+    public void Render_composites_a_partly_transparent_surface_at_its_opacity()
+    {
+        var compositor = NewCompositor();
+        var viewport = new Viewport
+        {
+            MinLongitude = 0,
+            MaxLongitude = 8,
+            MinLatitude = 0,
+            MaxLatitude = 4,
+            WidthPixels = 160,
+            HeightPixels = 80,
+            ScaleDenominator = 50_000,
+        };
+
+        using var composite = compositor.Render(
+            new[] { S104Surface(opacity: 0.8) },
+            new HeadlessCompositeOptions
+            {
+                Viewport = viewport,
+                Background = new RgbaColor(255, 255, 255, 255),
+            });
+
+        // Red at 80 % over white: R stays 255, G and B land near 255 × 0.2.
+        var pixel = composite.GetPixel(80, 40);
+        Assert.Equal(255, pixel.Red);
+        Assert.InRange(pixel.Green, 45, 57);
+        Assert.InRange(pixel.Blue, 45, 57);
+    }
+
     // ----------------------------------------------------------------
     // Issue #483 — S-104 water-level surface clipped to water areas.
     // End-to-end proof through the production compositor: the S-98 rule
@@ -350,7 +380,7 @@ public class HeadlessCompositorTests
     /// (native lon 0..7, lat 0..3) whose every cell holds the same value, styled
     /// with a single red band so the whole surface paints solid red.
     /// </summary>
-    private static HeadlessCompositeInput S104Surface()
+    private static HeadlessCompositeInput S104Surface(double opacity = 1.0)
     {
         var metadata = new GridMetadata
         {
@@ -399,6 +429,7 @@ public class HeadlessCompositorTests
                 HeightPixels = 4,
                 ScaleDenominator = 50_000,
             },
+            Opacity = opacity,
         };
         var result = new CoveragePortrayalResult
         {

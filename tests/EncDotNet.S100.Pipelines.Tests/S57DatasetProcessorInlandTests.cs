@@ -72,7 +72,7 @@ public class S57DatasetProcessorInlandTests
 
             Assert.Equal("S-57", result.Spec.Name);
             Assert.Contains($"(S-57 → {expectedSpec})", result.Info);
-            Assert.NotEmpty(Assert.Single(result.SubLayers).Instructions);
+            Assert.NotEmpty(result.SubLayers.SelectMany(s => s.Instructions));
         }
         finally
         {

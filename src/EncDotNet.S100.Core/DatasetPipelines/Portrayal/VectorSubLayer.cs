@@ -10,9 +10,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
 /// place it in the cross-dataset paint order.
 /// </summary>
 /// <remarks>
-/// S-101 emits two sub-layers — area fills and line work — so an S-102
-/// bathymetric surface can interleave between them (S-98 Annex A §A-6.9.1).
-/// GML products and S-57 emit a single sub-layer.
+/// S-101, S-401, and S-57 (translated to S-101 / S-401) emit two sub-layers —
+/// area fills and line work — so an S-102 bathymetric surface or an S-104
+/// water-level band can interleave between them (S-98 Annex A §A-6.9.1).
+/// GML products emit a single sub-layer.
 /// </remarks>
 public sealed class VectorSubLayer
 {
