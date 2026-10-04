@@ -237,7 +237,7 @@ public sealed class VectorSceneBuilder
         if (patternPriorities.Count > 0)
             ClipPatternAreas(ops, patternPriorities, featuresWithPatterns);
 
-        return new VectorScene(ops);
+        return new VectorScene(ops) { ScaleMinimumCap = OutOfBandMinDisplayScale };
     }
 
     private static readonly GeometryFactory ClipGeometryFactory = new();

@@ -79,4 +79,22 @@ public sealed class VectorSceneBuilderOutOfBandCapTests
 
         Assert.Equal(45000, op.ScaleMinimum);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(90000)]
+    public void Scene_RecordsTheCap(int? cap)
+    {
+        // A tiled renderer needs the cap itself, not only its folded per-op
+        // effect, to keep it exact at a snapped band's scale (#761).
+        var builder = new VectorSceneBuilder
+        {
+            ResolveColor = static _ => new RgbaColor(0, 0, 0, 255),
+            OutOfBandMinDisplayScale = cap,
+        };
+
+        var scene = builder.Build(Array.Empty<DrawingInstruction>(), new SinglePointGeometry());
+
+        Assert.Equal(cap, scene.ScaleMinimumCap);
+    }
 }

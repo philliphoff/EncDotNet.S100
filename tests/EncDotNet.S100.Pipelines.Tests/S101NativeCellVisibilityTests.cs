@@ -132,6 +132,59 @@ public class S101NativeCellVisibilityTests
             $"{cell}: {tiles.Count} band-{band} tiles at 1:{InBandScaleDenominator} rasterised fully transparent.");
     }
 
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public async Task NativeCell_TileLineWorkPaints_AtItsBandEdge(string cell)
+    {
+        var processor = CreateFactory().CreateProcessor(Path.Combine(ResolveFixtureDirectory(), cell));
+        using var lifetime = processor as IDisposable;
+        var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
+
+        var result = await renderer.RenderAsync(processor);
+
+        // S-101 PS §4.6: the band includes minimumDisplayScale itself. The live
+        // map snaps to the log-nearest band, whose own scale may lie past the
+        // cap; the cell's line work must still draw there (#761).
+        var cellMinimum = Assert.IsType<int>(result.CellMinimumDisplayScale);
+        MapsuiDatasetRenderer.ApplyCellScaleWindow(result.Layers, cellMinimum);
+
+        var extent = result.Extent;
+        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+            (extent.MinY + extent.MaxY) / 2.0);
+        var resolution = MapsuiDisplayListRenderer.DenominatorToResolution(cellMinimum - 1, latitudeRadians);
+
+        var lineWork = Assert.Single(
+            result.Layers,
+            static l => l.CustomLayerRendererName == S100VectorTileRenderer.RendererName
+                && l.Name.Contains("(lines)", StringComparison.Ordinal));
+        Assert.True(
+            lineWork.MinVisible <= resolution && resolution <= lineWork.MaxVisible,
+            $"{cell}: the line-work layer is out of range at 1:{cellMinimum - 1}.");
+        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(lineWork, out var baseScene, out _));
+        Assert.False(S100VectorTileRenderer.IsPastScaleMinimumCap(
+            baseScene, (extent.MinX + extent.MaxX) / 2.0, (extent.MinY + extent.MaxY) / 2.0, resolution));
+
+        var band = TileGrid.BandForResolution(resolution);
+        var tiles = TileGrid.VisibleTiles(
+            (extent.MinX + extent.MaxX) / 2.0,
+            (extent.MinY + extent.MaxY) / 2.0,
+            extent.Width / resolution,
+            extent.Height / resolution,
+            resolution,
+            band);
+
+        long paintedPixels = 0;
+        foreach (var key in tiles)
+        {
+            using var bitmap = S100VectorTileRenderer.RasterizeTile(baseScene, baseIndex: null, key, deviceScale: 1f);
+            paintedPixels += CountPaintedPixels(bitmap);
+        }
+
+        Assert.True(
+            paintedPixels > 0,
+            $"{cell}: line work rasterised fully transparent in {tiles.Count} band-{band} tiles at 1:{cellMinimum - 1}.");
+    }
+
     private static long CountPaintedPixels(SKBitmap bitmap)
     {
         long count = 0;

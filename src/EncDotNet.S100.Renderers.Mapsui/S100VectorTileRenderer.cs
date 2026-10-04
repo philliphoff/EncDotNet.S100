@@ -695,7 +695,7 @@ public static class S100VectorTileRenderer
                 ops.Add(op);
         }
 
-        BindScene(target, new VectorScene(ops));
+        BindScene(target, new VectorScene(ops) { ScaleMinimumCap = baseScene.ScaleMinimumCap });
         return true;
     }
 
@@ -769,7 +769,9 @@ public static class S100VectorTileRenderer
                 baseOps.Add(op);
         }
 
-        return (new VectorScene(baseOps), new VectorScene(overlayOps));
+        return (
+            new VectorScene(baseOps) { ScaleMinimumCap = scene.ScaleMinimumCap },
+            new VectorScene(overlayOps) { ScaleMinimumCap = scene.ScaleMinimumCap });
     }
 
     /// <summary>
@@ -830,6 +832,19 @@ public static class S100VectorTileRenderer
         // symbols/over-render reach into the view) rendering.
         var state = States.GetValue(layer, static l => new TileState(l));
         if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, CullMarginPx))
+        {
+            if (!offscreen && InvalidateViewport(state))
+            {
+                VectorLayerRepaint.Request(layer);
+            }
+
+            return;
+        }
+
+        // Tiles are rasterised no coarser than the scene's out-of-band cap (see
+        // TileScaleDenominator), so the cap itself is applied here, against the
+        // live display scale, exactly where the status bar reads it (#761).
+        if (IsPastScaleMinimumCap(state.Scene, viewport.CenterX, viewport.CenterY, resolution))
         {
             if (!offscreen && InvalidateViewport(state))
             {
@@ -3347,8 +3362,7 @@ public static class S100VectorTileRenderer
         activity?.SetTag("s100.render.tile.width_px", px);
         activity?.SetTag("s100.render.tile.height_px", px);
 
-        var denom = S100VectorSceneRenderer.ScaleDenominatorFor(
-            (minX + maxX) * 0.5, (minY + maxY) * 0.5, bandResolution);
+        var denom = TileScaleDenominator(scene, (minX + maxX) * 0.5, (minY + maxY) * 0.5, key.Band);
 
         var viewport = new CoreViewport
         {
@@ -3441,10 +3455,7 @@ public static class S100VectorTileRenderer
             {
                 var key = group.First();
                 var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
-                return S100VectorSceneRenderer.ScaleDenominatorFor(
-                    (minX + maxX) * 0.5,
-                    (minY + maxY) * 0.5,
-                    TileGrid.ResolutionForBand(key.Band));
+                return TileScaleDenominator(scene, (minX + maxX) * 0.5, (minY + maxY) * 0.5, key.Band);
             })
             .ToArray();
 
@@ -3538,10 +3549,11 @@ public static class S100VectorTileRenderer
             MaxLongitude = maxLon,
             WidthPixels = widthPx,
             HeightPixels = heightPx,
-            ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(
+            ScaleDenominator = TileScaleDenominator(
+                scene,
                 (seedBounds.MinX + seedBounds.MaxX) * 0.5,
                 (seedBounds.MinY + seedBounds.MaxY) * 0.5,
-                bandResolution),
+                band),
         };
 
         var renderer = new SkiaDisplayListRenderer
@@ -3624,6 +3636,39 @@ public static class S100VectorTileRenderer
             image.Dispose();
         }
     }
+
+    /// <summary>
+    /// The scale denominator a band tile centred at (<paramref name="centerX"/>,
+    /// <paramref name="centerY"/>) is rasterised at: the band's own true scale,
+    /// but no coarser than the scene's <see cref="VectorScene.ScaleMinimumCap"/>.
+    /// </summary>
+    /// <remarks>
+    /// The live map snaps to the log-nearest band, so a band's tiles are shown
+    /// at display scales up to √2 finer than the band's own. When the band's
+    /// denominator lies past the cell's out-of-band cap (S-101 PS §4.6: the
+    /// cell's <c>minimumDisplayScale</c>) while the live scale is still inside
+    /// it, rasterising at the band's denominator culls every capped op and the
+    /// cell's line work vanishes from part of its own band (#761: 1:20 000 at
+    /// 46.8°N snaps to a band at about 1:23 300, past a 1:22 000 cap). Clamping
+    /// to the cap keeps each op's own SCAMIN as before; the cap is applied
+    /// against the live scale instead (<see cref="IsPastScaleMinimumCap"/>).
+    /// </remarks>
+    internal static double TileScaleDenominator(VectorScene scene, double centerX, double centerY, int band)
+    {
+        var denominator = S100VectorSceneRenderer.ScaleDenominatorFor(
+            centerX, centerY, TileGrid.ResolutionForBand(band));
+        return scene.ScaleMinimumCap is double cap ? Math.Min(denominator, cap) : denominator;
+    }
+
+    /// <summary>
+    /// Whether the live display scale at (<paramref name="centerX"/>,
+    /// <paramref name="centerY"/>) and <paramref name="resolution"/> is past
+    /// <paramref name="scene"/>'s <see cref="VectorScene.ScaleMinimumCap"/>, so
+    /// none of its ops may draw. <see langword="false"/> without a scene or cap.
+    /// </summary>
+    internal static bool IsPastScaleMinimumCap(VectorScene? scene, double centerX, double centerY, double resolution) =>
+        scene?.ScaleMinimumCap is double cap
+        && S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution) > cap;
 
     private static VectorScene ScopeSceneForTiles(
         VectorScene scene,

@@ -66,8 +66,11 @@ internal sealed class TileDiskCache : IDisposable
     /// (<see cref="NamespaceFor(string, int)"/>). v2 namespaces mixed tiles
     /// rasterised at different device scales (a 1x off-screen capture's tiles
     /// were served to a 2x window), so they are discarded.
+    /// v4: a tile is rasterised no coarser than its cell's out-of-band cap
+    /// (#761). v3 tiles of a band whose scale lies past the cap lack the
+    /// cell's line work, which would stay missing inside the cell's band.
     /// </remarks>
-    public const int FormatVersion = 3;
+    public const int FormatVersion = 4;
 
     private const string FileExtension = ".png";
 
