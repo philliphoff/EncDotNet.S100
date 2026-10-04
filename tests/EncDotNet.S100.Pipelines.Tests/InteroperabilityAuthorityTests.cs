@@ -23,7 +23,7 @@ public class InteroperabilityAuthorityTests
     [InlineData("S-104", "s104.stations", S98DisplayPlane.OtherChartOverlays)]
     [InlineData("S-111", null, S98DisplayPlane.DynamicArrows)]
     [InlineData("S-111", "s111.arrows", S98DisplayPlane.DynamicArrows)]
-    [InlineData("S-111", "s111.stations", S98DisplayPlane.OtherChartOverlays)]
+    [InlineData("S-111", "s111.stations", S98DisplayPlane.DynamicArrows)]
     [InlineData("S-122", null, S98DisplayPlane.OtherChartOverlays)]
     [InlineData("S-124", null, S98DisplayPlane.CautionsAndWarnings)]
     [InlineData("S-125", null, S98DisplayPlane.OtherChartOverlays)]
@@ -38,6 +38,19 @@ public class InteroperabilityAuthorityTests
     public void GetDefaultPlane_returns_expected_plane(string productSpec, string? kind, S98DisplayPlane expected)
     {
         Assert.Equal(expected, _auth.GetDefaultPlane(productSpec, kind));
+    }
+
+    [Fact]
+    public void S111_station_and_grid_arrows_share_one_plane()
+    {
+        // S-111 Ed 2.0.0: one SurfaceCurrent instruction for every DCF, and
+        // §9.2.9 / §9.3.3 portray station series and meshes with the grid's
+        // arrows — so the sub-layers stack identically against other products
+        // whatever the producer's encoding (#728).
+        var grid = _auth.GetDefaultPlane("S-111", "s111.arrows");
+
+        Assert.Equal(grid, _auth.GetDefaultPlane("S-111", "s111.stations"));
+        Assert.Equal(grid, DefaultDisplayPlaneAuthority.Instance.GetDefaultPlane("S-111", "s111.stations"));
     }
 
     [Fact]

@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <list type="bullet">
 ///   <item><description>S-101 / S-57: <c>"area"</c> → BaseChartUnder; otherwise BaseChartOver.</description></item>
 ///   <item><description>S-104: <c>"s104.stations"</c> → OtherChartOverlays; otherwise OnDemandSurface.</description></item>
-///   <item><description>S-111: <c>"s111.arrows"</c> → DynamicArrows; <c>"s111.stations"</c> → OtherChartOverlays.</description></item>
+///   <item><description>S-111: every sub-layer (<c>"s111.arrows"</c> grid arrows and <c>"s111.stations"</c> station / mesh arrows) → DynamicArrows.</description></item>
 /// </list>
 /// </remarks>
 public sealed class DefaultDisplayPlaneAuthority : IDisplayPlaneAuthority
@@ -49,14 +49,16 @@ public sealed class DefaultDisplayPlaneAuthority : IDisplayPlaneAuthority
                 _ => S98DisplayPlane.OnDemandSurface,
             },
 
-            // S-111 Surface Currents (Edition 2.0.0). Arrows above warnings
-            // as a dynamic overlay; station glyphs as point overlays.
-            "S-111" => kind switch
-            {
-                "s111.arrows" => S98DisplayPlane.DynamicArrows,
-                "s111.stations" => S98DisplayPlane.OtherChartOverlays,
-                _ => S98DisplayPlane.DynamicArrows,
-            },
+            // S-111 Surface Currents (Edition 2.0.0). The portrayal catalogue
+            // gives one SurfaceCurrent instruction for every data coding
+            // format, and S-111 §9.2.9 / §9.3.3 portray station series and
+            // ungeorectified meshes with the same arrows as regular grids, so
+            // grid ("s111.arrows") and station/mesh ("s111.stations") arrows
+            // share one plane. S-98 assigns no specific plane to current
+            // arrows (Main §9.2.1 puts surface currents in layer 6, "official
+            // on demand data"); DynamicArrows is this library's choice — see
+            // S98DisplayPlane.DynamicArrows.
+            "S-111" => S98DisplayPlane.DynamicArrows,
 
             // S-124 Navigational Warnings — MSC.530(106)/Rev.1 §Appendix 2
             // layers 3-4; S-98 Main §9.2.1.

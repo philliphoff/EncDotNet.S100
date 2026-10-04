@@ -72,8 +72,7 @@ public enum S98DisplayPlane
     /// <summary>
     /// Catch-all official overlays that don't have a dedicated plane
     /// in S-98 v2.0.0 — S-122, S-125, S-127, S-128, S-131, S-201,
-    /// S-411, S-421, and station-glyph sub-layers for S-104 / S-111
-    /// (PR-I / PR-J). Derived from MSC.530(106)/Rev.1 §Appendix 2
+    /// S-411, S-421, and the S-104 station-glyph sub-layer (PR-I). Derived from MSC.530(106)/Rev.1 §Appendix 2
     /// layer 6 catch-all reading.
     /// </summary>
     OtherChartOverlays = 40,
@@ -87,11 +86,22 @@ public enum S98DisplayPlane
     CautionsAndWarnings = 50,
 
     /// <summary>
-    /// Dynamic vector overlays drawn above the cautions plane —
-    /// S-111 arrow sub-layer (the catalogue marks its instructions
-    /// with intra-product <c>displayPlane id="OverRadar"</c>) and
-    /// any future dynamic glyph layers.
+    /// Dynamic vector overlays drawn above the cautions plane — S-111
+    /// surface-current arrows for every data coding format (regular
+    /// grids, station series and ungeorectified meshes), AIS targets,
+    /// and any future dynamic glyph layers.
     /// </summary>
+    /// <remarks>
+    /// S-98 Ed 2.0.0 does not name this plane. Main §9.2.1 places
+    /// surface currents in layer 6 ("official on demand data"), which
+    /// only constrains them not to obscure layers 1–5; Part A §A-6.9.1
+    /// says gridded data "will generally go over ENC". Drawing the
+    /// sparse, thinned arrow overlay above the base chart and cautions
+    /// is this library's placement. The S-111 Ed 2.0.0 portrayal
+    /// catalogue (<c>SurfaceCurrent.xsl</c>) marks the arrows with
+    /// intra-product <c>displayPlane</c> <c>UnderRadar</c>, viewing
+    /// group 33060, drawing priority 10.
+    /// </remarks>
     DynamicArrows = 60,
 
     /// <summary>

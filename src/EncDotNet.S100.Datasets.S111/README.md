@@ -71,7 +71,7 @@ define, and how this library follows them:
 | Regular grids: every n-th row and column, `n = 1 + fix(Lsmax / (D · Rmax))`, seeded so the maximum vector is drawn | §9.3.2 Eqn 9.2/9.3, Annex H Rule 11, S-98 Appendix G-1.1 | `SymbolThinning.ThinGrid` with `D` the on-screen cell diagonal and `Lsmax` the largest arrow in the displayed field. |
 | Irregular data and ungeorectified grids: point-by-point overlap elimination (or an implementer heuristic) | §9.3.2, §9.3.3 | `SymbolThinning.ThinPoints`. |
 | No spatial interpolation when zoomed in | §9.3.1 | Arrows are drawn only at nodes; zooming in shows fewer arrows. |
-| Viewing group 33060, display plane UnderRadar, drawing priority 10 | `SurfaceCurrent.xsl` | Grid arrows go to the S-98 `DynamicArrows` plane (S-98 Annex A §A-6.9.1). |
+| Viewing group 33060, display plane UnderRadar, drawing priority 10 | `SurfaceCurrent.xsl` | Arrows for every DCF (grid, station series, mesh) go to the `DynamicArrows` plane, priority 10. S-98 names no arrow plane (Main §9.2.1 layer 6 only ranks surface currents as on-demand data); the plane is this library's choice. |
 
 ### Implementation choices
 

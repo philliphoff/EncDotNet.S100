@@ -410,8 +410,11 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         //
         // The bundled portrayal catalogue (S-111 Ed 2.0.0, SurfaceCurrent.xsl)
         // declares the arrows with viewing group 33060, intra-product
-        // displayPlane="UnderRadar" and drawing priority 10; S-98 Annex A
-        // §A-6.9.1 maps current arrows to the DynamicArrows plane.
+        // displayPlane="UnderRadar" and drawing priority 10. The arrows go on
+        // the DynamicArrows plane (S-98 Main §9.2.1 layer 6 puts surface
+        // currents among on-demand data but names no plane; see
+        // S98DisplayPlane.DynamicArrows). The station / mesh path uses the
+        // same plane and priority.
         return new CoveragePortrayalResult
         {
             SubLayers = new CoverageSubLayerBase[]
@@ -656,16 +659,19 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         return new CoveragePortrayalResult
         {
-            // S-111 station glyphs (dcf3/dcf8) — point overlays on the
-            // catch-all OtherChartOverlays plane.
+            // S-111 station / mesh arrows (dcf1/dcf3/dcf8). The catalogue's
+            // SurfaceCurrent instruction is the same for every DCF, and S-111
+            // §9.2.9 / §9.3.3 portray these with the grid's arrows, so they
+            // share the dcf2 grid path's plane and priority. The layer key
+            // stays "s111.stations" for the pick router and layer UI.
             SubLayers = new CoverageSubLayerBase[]
             {
                 new GlyphCoverageSubLayer
                 {
                     LayerKey = "s111.stations",
                     LayerName = $"S-111: {_fileName}",
-                    Plane = S98DisplayPlane.OtherChartOverlays,
-                    WithinPlanePriority = 0,
+                    Plane = S98DisplayPlane.DynamicArrows,
+                    WithinPlanePriority = 10,
                     SourceFeatureType = "s111.stations",
                     Glyphs = glyphs,
                     Extent = extent,
