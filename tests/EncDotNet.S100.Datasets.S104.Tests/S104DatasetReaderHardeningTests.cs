@@ -220,4 +220,64 @@ public class S104DatasetReaderHardeningTests
         }
         finally { File.Delete(path); }
     }
+
+    /// <summary>
+    /// <c>timePoint</c> follows the same ISO 8601 grammar as the validator
+    /// (<c>Iso8601Text</c>, #738): basic, extended and mixed forms, offsets,
+    /// fractional seconds, and no zone (taken as UTC).
+    /// </summary>
+    [Theory]
+    [InlineData("20260902T105406Z", "2026-09-02T10:54:06")]
+    [InlineData("20260902T105406+0000", "2026-09-02T10:54:06")]
+    [InlineData("2026-09-02T05:54:06-05:00", "2026-09-02T10:54:06")]
+    [InlineData("20260902T125406+02", "2026-09-02T10:54:06")]
+    [InlineData("20260902T10:54:06Z", "2026-09-02T10:54:06")]
+    [InlineData("2026-09-02T10:54:06.25Z", "2026-09-02T10:54:06.25")]
+    [InlineData("20260902T105406", "2026-09-02T10:54:06")]
+    public void Read_TimePoint_AcceptsIso8601Forms(string timePoint, string expectedUtc)
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            S104FixtureBuilder.WriteFile(path, new[] { new S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 1 } }, 1, 1,
+                useF64GridAttrs: true,
+                useUnsignedCounts: false,
+                timePoint: timePoint);
+
+            using var file = PureHdfFile.Open(path);
+            var coverage = Assert.Single(S104DatasetReader.Read(file).Coverages);
+
+            var expected = DateTime.SpecifyKind(
+                DateTime.Parse(expectedUtc, System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc);
+            Assert.Equal(expected, coverage.TimePoint);
+            Assert.Equal(DateTimeKind.Utc, coverage.TimePoint.Kind);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>A malformed <c>timePoint</c> is a schema error naming the attribute and group.</summary>
+    [Theory]
+    [InlineData("not-a-time")]
+    [InlineData("20230229T000000Z")]
+    [InlineData("20260902T250000Z")]
+    public void Read_MalformedTimePoint_ThrowsSchemaException(string timePoint)
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            S104FixtureBuilder.WriteFile(path, new[] { new S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 1 } }, 1, 1,
+                useF64GridAttrs: true,
+                useUnsignedCounts: false,
+                timePoint: timePoint);
+
+            using var file = PureHdfFile.Open(path);
+            var ex = Assert.Throws<EncDotNet.S100.Hdf5.S100DatasetSchemaException>(() => S104DatasetReader.Read(file));
+
+            Assert.Equal("S-104", ex.Product);
+            Assert.Equal("timePoint", ex.AttributeOrDataset);
+            Assert.EndsWith("/Group_001", ex.GroupPath, StringComparison.Ordinal);
+            Assert.Contains(timePoint, ex.Message, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
 }

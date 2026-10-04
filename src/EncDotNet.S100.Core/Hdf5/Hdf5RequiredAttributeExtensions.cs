@@ -1,3 +1,5 @@
+using EncDotNet.S100.Validation;
+
 namespace EncDotNet.S100.Hdf5;
 
 /// <summary>
@@ -84,6 +86,31 @@ public static class Hdf5RequiredAttributeExtensions
         {
             throw MakeSchemaException(product, file, groupPath, name, specReference, ex);
         }
+    }
+
+    /// <summary>
+    /// Reads a required ISO 8601 date or date-time string attribute (such as
+    /// <c>timePoint</c> or <c>dateTimeOfFirstRecord</c>) from
+    /// <paramref name="group"/> as a UTC time, using the grammar of
+    /// <see cref="Iso8601Text.TryParseDateOrDateTime"/>. Throws
+    /// <see cref="S100DatasetSchemaException"/> if the attribute is missing or
+    /// its value is not such a date or date-time.
+    /// </summary>
+    public static DateTime ReadRequiredDateTimeAttribute(
+        this IHdf5Group group,
+        string name,
+        string product,
+        string? file,
+        string groupPath,
+        string? specReference)
+    {
+        var text = group.ReadRequiredStringAttribute(name, product, file, groupPath, specReference);
+        if (Iso8601Text.TryParseDateOrDateTime(text, out var utc))
+            return utc;
+
+        var message = ExceptionMessageFormatter.FormatSchema(product, file, groupPath, name, specReference)
+            + $" Value '{text}' is not an ISO 8601 date or date-time.";
+        throw new S100DatasetSchemaException(product, file, groupPath, name, specReference, message);
     }
 
     /// <summary>

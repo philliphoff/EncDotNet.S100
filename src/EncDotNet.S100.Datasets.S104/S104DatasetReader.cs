@@ -281,7 +281,8 @@ public static class S104DatasetReader
                     continue;
 
                 var group = instance.OpenGroup(groupName);
-                var t = ParseTimePoint(group.ReadStringAttribute("timePoint"));
+                var t = group.ReadRequiredDateTimeAttribute(
+                    "timePoint", "S-104", null, $"{instancePath}/{groupName}", spec);
                 if (t < min) min = t;
                 if (t > max) max = t;
                 anyTime = true;
@@ -322,18 +323,6 @@ public static class S104DatasetReader
 
         return any ? new TimeCoverage(min, max) : null;
     }
-
-    /// <summary>
-    /// Parses an S-104 <c>timePoint</c> attribute (S-100 Part 10c) accepting
-    /// both the compact <c>yyyyMMddTHHmmssZ</c> and extended
-    /// <c>yyyy-MM-ddTHH:mm:ssZ</c> ISO-8601 forms seen in production files.
-    /// </summary>
-    private static DateTime ParseTimePoint(string timePointStr) =>
-        DateTime.ParseExact(
-            timePointStr,
-            ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
 
     /// <summary>
     /// Runs <see cref="ReadCoverages"/>, enriching any
@@ -507,7 +496,8 @@ public static class S104DatasetReader
 
             var group = instance.OpenGroup(groupName);
 
-            DateTime timePoint = ParseTimePoint(group.ReadStringAttribute("timePoint"));
+            DateTime timePoint = group.ReadRequiredDateTimeAttribute(
+                "timePoint", "S-104", null, $"{instancePath}/{groupName}", spec);
 
             var values = ReadValues(group);
 
@@ -672,8 +662,8 @@ public static class S104DatasetReader
             string groupName = timeGroupNames[timeIndex];
             string groupPath = $"{instancePath}/{groupName}";
             var group = instance.OpenGroup(groupName);
-            sampleTimes[timeIndex] = ParseTimestamp(group.ReadRequiredStringAttribute(
-                "timePoint", "S-104", null, groupPath, spec));
+            sampleTimes[timeIndex] = group.ReadRequiredDateTimeAttribute(
+                "timePoint", "S-104", null, groupPath, spec);
             if (timeIndex > 0 && sampleTimes[timeIndex] <= sampleTimes[timeIndex - 1])
             {
                 throw new S100DatasetSchemaException(
@@ -1017,13 +1007,10 @@ public static class S104DatasetReader
                 ? group.ReadStringAttribute("stationIdentification")
                 : groupName;
 
-            string startStr = group.ReadRequiredStringAttribute(
+            DateTime startTime = group.ReadRequiredDateTimeAttribute(
                 "startDateTime", "S-104", null, groupPath, spec);
-            string endStr = group.ReadRequiredStringAttribute(
+            DateTime endTime = group.ReadRequiredDateTimeAttribute(
                 "endDateTime", "S-104", null, groupPath, spec);
-
-            DateTime startTime = ParseTimestamp(startStr);
-            DateTime endTime = ParseTimestamp(endStr);
 
             int numberOfTimes = (int)group.ReadRequiredInt64Attribute(
                 "numberOfTimes", "S-104", null, groupPath, spec);
@@ -1069,15 +1056,6 @@ public static class S104DatasetReader
         // shortfall (consistent with the spec's allowance for trailing
         // empty groups), but we don't try to invent stations.
         _ = numberOfStations;
-    }
-
-    private static DateTime ParseTimestamp(string s)
-    {
-        return DateTime.ParseExact(
-            s,
-            ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
     }
 
     private static (float[] Heights, byte[] Trends) ReadStationValues(IHdf5Group group, int numberOfTimes)

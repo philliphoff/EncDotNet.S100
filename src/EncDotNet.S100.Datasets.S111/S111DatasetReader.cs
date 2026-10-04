@@ -1,4 +1,3 @@
-using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
@@ -304,7 +303,8 @@ public static class S111DatasetReader
                 && instance.AttributeExists("dateTimeOfFirstRecord")
                 && instance.AttributeExists("timeRecordInterval"))
             {
-                DateTime first = ParseTimestamp(instance.ReadStringAttribute("dateTimeOfFirstRecord"));
+                DateTime first = instance.ReadRequiredDateTimeAttribute(
+                    "dateTimeOfFirstRecord", "S-111", null, instancePath, spec);
                 double intervalSeconds = ReadIntervalSeconds(instance);
                 DateTime last = first.AddSeconds(intervalSeconds * (groupNames.Count - 1));
                 if (first < min) min = first;
@@ -316,7 +316,8 @@ public static class S111DatasetReader
                 foreach (var groupName in groupNames)
                 {
                     var group = instance.OpenGroup(groupName);
-                    var t = ParseTimestamp(group.ReadStringAttribute("timePoint"));
+                    var t = group.ReadRequiredDateTimeAttribute(
+                        "timePoint", "S-111", null, $"{instancePath}/{groupName}", spec);
                     if (t < min) min = t;
                     if (t > max) max = t;
                     anyTime = true;
@@ -436,7 +437,8 @@ public static class S111DatasetReader
             && instance.AttributeExists("dateTimeOfFirstRecord")
             && instance.AttributeExists("timeRecordInterval"))
         {
-            DateTime first = ParseTimestamp(instance.ReadStringAttribute("dateTimeOfFirstRecord"));
+            DateTime first = instance.ReadRequiredDateTimeAttribute(
+                "dateTimeOfFirstRecord", "S-111", null, instancePath, spec);
             double intervalSeconds = ReadIntervalSeconds(instance);
 
             var groupNames = instance.GroupNames
@@ -484,7 +486,8 @@ public static class S111DatasetReader
 
             var group = instance.OpenGroup(groupName);
 
-            DateTime timePoint = ParseTimestamp(group.ReadStringAttribute("timePoint"));
+            DateTime timePoint = group.ReadRequiredDateTimeAttribute(
+                "timePoint", "S-111", null, $"{instancePath}/{groupName}", spec);
 
             var values = ReadValues(group);
 
@@ -645,8 +648,8 @@ public static class S111DatasetReader
         {
             var group = instance.OpenGroup(timeGroupNames[t]);
             var groupPath = $"{instancePath}/{timeGroupNames[t]}";
-            sampleTimes[t] = ParseTimestamp(group.ReadRequiredStringAttribute(
-                "timePoint", "S-111", null, groupPath, spec));
+            sampleTimes[t] = group.ReadRequiredDateTimeAttribute(
+                "timePoint", "S-111", null, groupPath, spec);
             if (t > 0 && sampleTimes[t] <= sampleTimes[t - 1])
             {
                 throw new S100DatasetSchemaException(
@@ -974,13 +977,10 @@ public static class S111DatasetReader
                 ? group.ReadStringAttribute("stationIdentification")
                 : groupName;
 
-            string startStr = group.ReadRequiredStringAttribute(
+            DateTime startTime = group.ReadRequiredDateTimeAttribute(
                 "startDateTime", "S-111", null, groupPath, spec);
-            string endStr = group.ReadRequiredStringAttribute(
+            DateTime endTime = group.ReadRequiredDateTimeAttribute(
                 "endDateTime", "S-111", null, groupPath, spec);
-
-            DateTime startTime = ParseTimestamp(startStr);
-            DateTime endTime = ParseTimestamp(endStr);
 
             int numberOfTimes = (int)group.ReadRequiredInt64Attribute(
                 "numberOfTimes", "S-111", null, groupPath, spec);
@@ -1026,19 +1026,6 @@ public static class S111DatasetReader
         // shortfall (consistent with the spec's allowance for trailing
         // empty groups), but we don't try to invent stations.
         _ = numberOfStations;
-    }
-
-    private static DateTime ParseTimestamp(string s)
-    {
-        return DateTime.ParseExact(
-            s,
-            [
-                "yyyyMMdd'T'HHmmss'Z'",
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
-                "yyyyMMdd'T'HH:mm:ss'Z'",
-            ],
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
     }
 
     private static (float[] Speeds, float[] Directions) ReadStationValues(IHdf5Group group, int numberOfTimes)

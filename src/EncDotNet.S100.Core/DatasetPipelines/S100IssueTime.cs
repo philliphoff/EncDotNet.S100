@@ -1,4 +1,4 @@
-using System.Globalization;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -16,54 +16,25 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </remarks>
 public static class S100IssueTime
 {
-    private static readonly string[] DateFormats = ["yyyyMMdd", "yyyy-MM-dd"];
-
-    private static readonly string[] TimeFormats =
-    [
-        "HHmmss", "HHmm", "HH:mm:ss", "HH:mm", "HH:mm:ss.FFFFFFF", "HHmmss.FFFFFFF",
-    ];
-
     /// <summary>
     /// The UTC issue time, or <see langword="null"/> when the date is missing
     /// or unreadable. A missing or unreadable time is taken as 00:00Z of the date.
     /// </summary>
+    /// <remarks>
+    /// Both attributes follow <see cref="Iso8601Text"/>, the same grammar the
+    /// validation rules check them against; a time without a zone designator
+    /// is taken as UTC.
+    /// </remarks>
     /// <param name="issueDate">The <c>issueDate</c> attribute.</param>
     /// <param name="issueTime">The <c>issueTime</c> attribute, if any.</param>
     public static DateTime? Parse(string? issueDate, string? issueTime)
     {
-        if (string.IsNullOrWhiteSpace(issueDate)
-            || !DateTime.TryParseExact(issueDate.Trim(), DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-        {
+        if (!Iso8601Text.TryParseCalendarDate(issueDate, out var date))
             return null;
-        }
-        var utc = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
-        return TimeOfDay(issueTime) is { } time ? utc + time : utc;
-    }
 
-    /// <summary>The time of day in UTC, honouring a <c>Z</c> or <c>±hh[:]mm</c> suffix.</summary>
-    private static TimeSpan? TimeOfDay(string? issueTime)
-    {
-        if (string.IsNullOrWhiteSpace(issueTime))
-            return null;
-        var text = issueTime.Trim();
-        var offset = TimeSpan.Zero;
-        if (text.EndsWith('Z') || text.EndsWith('z'))
-        {
-            text = text[..^1];
-        }
-        else if (text.LastIndexOfAny(['+', '-']) is var sign and > 0)
-        {
-            var zone = text[(sign + 1)..].Replace(":", string.Empty, StringComparison.Ordinal);
-            if (zone.Length is 2 or 4
-                && int.TryParse(zone[..2], NumberStyles.None, CultureInfo.InvariantCulture, out var hours)
-                && int.TryParse(zone.Length == 4 ? zone[2..] : "0", NumberStyles.None, CultureInfo.InvariantCulture, out var minutes))
-            {
-                offset = new TimeSpan(hours, minutes, 0) * (text[sign] == '-' ? -1 : 1);
-                text = text[..sign];
-            }
-        }
-        return DateTime.TryParseExact(text, TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
-            ? time.TimeOfDay - offset
-            : null;
+        return !string.IsNullOrWhiteSpace(issueTime)
+            && Iso8601Text.TryParseDateOrDateTime($"{issueDate!.Trim()}T{issueTime.Trim()}", out var utc)
+                ? utc
+                : date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
     }
 }
