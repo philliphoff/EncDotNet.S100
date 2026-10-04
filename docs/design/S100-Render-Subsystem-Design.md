@@ -639,6 +639,15 @@ output dimensions cannot preserve the exact independent-tile world-to-pixel
 ratio. Visible slices publish together and request one redraw, while speculative
 slices do not redraw.
 
+The cell-wide out-of-band cap (`VectorScene.ScaleMinimumCap`, the cell's
+`minimumDisplayScale`) is not left to the band denominator. The live map shows
+a band's tiles at scales up to √2 finer than the band's own, so near a cell's
+band edge the band's scale can lie past the cap while the live scale is inside
+it, and every capped op (all of a cell's line work) would be culled (#761).
+Tiles are rasterised no coarser than the cap (`TileScaleDenominator`), and the
+cap is applied against the live scale when compositing
+(`IsPastScaleMinimumCap`).
+
 `S100_VECTOR_TILE_METATILE` / `TileMetatileEnabled` is an opt-in A/B knob and
 defaults off pending performance results. Telemetry separates union raster
 time, slicing overhead, achieved tiles per job, completed jobs, and fallbacks

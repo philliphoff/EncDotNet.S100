@@ -270,4 +270,20 @@ public sealed class VectorScene
 
     /// <summary>The resolved paint operations, in draw order.</summary>
     public IReadOnlyList<PaintOp> Ops { get; }
+
+    /// <summary>
+    /// The layer-wide out-of-scale-band cap (a scale denominator; the cell's
+    /// <c>DataCoverage.minimumDisplayScale</c>, S-101 FC §3.1.1) already folded
+    /// into every op's <see cref="PaintOp.ScaleMinimum"/> by
+    /// <see cref="VectorSceneBuilder.OutOfBandMinDisplayScale"/>, or
+    /// <see langword="null"/> when none was applied.
+    /// </summary>
+    /// <remarks>
+    /// A renderer that evaluates SCAMIN at the live display scale needs nothing
+    /// more. A tiled renderer rasterises at a snapped band's denominator, which
+    /// can lie past the cap while the live display scale is still inside it;
+    /// it uses this value to rasterise no coarser than the cap and to apply the
+    /// cap itself against the live scale instead.
+    /// </remarks>
+    public double? ScaleMinimumCap { get; init; }
 }
