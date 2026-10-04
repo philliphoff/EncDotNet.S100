@@ -106,6 +106,9 @@ internal sealed class MapsuiMapHost :
     public GeoPosition? TryGetViewportCenterWgs84() =>
         _session.Navigator.TryGetViewportCenterWgs84();
 
+    public double? TryGetViewportResolution() =>
+        _session.Navigator.TryGetViewportResolution();
+
     public (double Width, double Height)? TryGetViewportSizePx() =>
         _adapter.TryGetViewportSizePx();
 

@@ -102,6 +102,25 @@ public sealed class MapsuiMapNavigatorTests
     }
 
     [Fact]
+    public void TryGetViewportResolution_UnsizedViewport_ReturnsNull()
+    {
+        using var map = new Map();
+        var navigation = new MapsuiMapNavigator(map);
+
+        Assert.Null(navigation.TryGetViewportResolution());
+    }
+
+    [Fact]
+    public void TryGetViewportResolution_SizedViewport_ReturnsAppliedResolution()
+    {
+        using var map = SizedMap();
+        var navigation = new MapsuiMapNavigator(map);
+        navigation.SetViewportToCenterAndResolution(new MPoint(0, 0), 7);
+
+        Assert.Equal(7, navigation.TryGetViewportResolution()!.Value, 6);
+    }
+
+    [Fact]
     public void TryGetViewportCenterWgs84_SizedViewport_ReturnsProjectedCenter()
     {
         using var map = SizedMap();

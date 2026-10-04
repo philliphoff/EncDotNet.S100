@@ -26,4 +26,11 @@ internal interface IMapViewportController
 
     /// <summary>Returns the laid-out viewport center in WGS-84 coordinates.</summary>
     GeoPosition? TryGetViewportCenterWgs84();
+
+    /// <summary>
+    /// Returns the laid-out viewport resolution in EPSG:3857 metres per pixel,
+    /// after any zoom limits, or <see langword="null"/> when it is not
+    /// available (the default for hosts without a live navigator).
+    /// </summary>
+    double? TryGetViewportResolution() => null;
 }

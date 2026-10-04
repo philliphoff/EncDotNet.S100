@@ -158,7 +158,7 @@ Core read-only/mutating tools (full table in `docs/mcp-server.md`):
 |---|---|
 | `open_dataset {path, spec?}` | Load a cell/tile/exchange-set. Returns bbox + `loadDurationMs`. |
 | `list_datasets` | Enumerate loaded datasets + ids. |
-| `set_viewport {south,west,north,east}` *or* `{centerLat,centerLon,zoom}` | Frame the data (forms are mutually exclusive). |
+| `set_viewport {south,west,north,east}`, `{centerLat,centerLon,zoom}`, *or* `{centerLat,centerLon,scaleDenominator}` | Frame the data (forms are mutually exclusive). Prefer `scaleDenominator` when checking a cell's display band or SCAMIN; the result echoes the scale the live map actually applied. |
 | `set_palette {palette}` | Day / Dusk / Night — full re-render. |
 | `set_display_category {category}` | DisplayBase / Standard / OtherInformation / All. |
 | `set_time_step {index|timestamp}` | S-104 / S-111 / S-411 time-aware datasets. |
