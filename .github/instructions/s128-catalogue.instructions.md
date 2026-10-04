@@ -41,10 +41,10 @@ When modifying S-128 code or its bundled portrayal assets:
   Do not edit those files directly. If the upstream `main.xsl`
   ever needs adapting for this codebase's display-list dialect,
   add a small adapter XSLT alongside it (mirror the S-411 pattern).
-- The upstream coverage fills are 70 % opaque and stack over the ENC,
-  so the viewer loads an exchange-set S-128 hidden
-  (`DatasetLoadVisibility`; see the project README). Keep that default
-  rather than thinning the fills in the bundled catalogue.
+- `Adapter/outlineOnly.xsl` wraps the upstream `main.xsl` and drops the
+  product coverage fills (70 % opaque over the ENC; upstream issue #51,
+  Lua port PR #56). Keep it until the bundled catalogue is refreshed past
+  upstream #56; `S128CoverageOverlayTests` fails when that happens.
 - Portrayal flows through XSLT (no Lua); keep transforms to features
   supported by .NET's `XslCompiledTransform`.
 - `S128ProductEntry.Status` is a **heuristic** derived from

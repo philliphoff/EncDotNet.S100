@@ -268,16 +268,59 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         var start = Stopwatch.GetTimestamp();
 
         var primaryBytes = await ReadAllBytesAsync(ruleFile, cancellationToken).ConfigureAwait(false);
+        var registeredBytes = await PrefetchRuleFilesAsync(ruleFile, primaryBytes, cancellationToken).ConfigureAwait(false);
+        var transform = Compile(primaryBytes, ruleFile.FileName, registeredBytes);
 
-        // Pre-fetch every other registered rule file so AssetSourceXmlResolver
-        // can serve xsl:include / xsl:import lookups synchronously from memory.
+        var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        activity?.SetTag("s100.xslt.compile.duration_ms", elapsedMs);
+
+        return transform;
+    }
+
+    /// <summary>
+    /// Compiles an adapter stylesheet that is not part of the catalogue
+    /// against the catalogue's rule files, so the adapter can
+    /// <c>xsl:import</c> or <c>xsl:include</c> them by file name (for example
+    /// <c>&lt;xsl:import href="main.xsl"/&gt;</c>). Lets a subclass wrap an
+    /// upstream rule without editing the bundled catalogue.
+    /// </summary>
+    /// <param name="adapter">The adapter stylesheet.</param>
+    /// <param name="adapterFileName">
+    /// The adapter's file name, used as its base URI; it must not collide
+    /// with a catalogue rule file name.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The compiled adapter.</returns>
+    protected async Task<XslCompiledTransform> LoadAdapterXsltAsync(
+        Stream adapter,
+        string adapterFileName,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+
+        using var activity = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.xslt.compile");
+        activity?.SetTag(TelemetryTags.XsltRule, adapterFileName);
+
+        using var ms = new MemoryStream();
+        await adapter.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+        var registeredBytes = await PrefetchRuleFilesAsync(null, null, cancellationToken).ConfigureAwait(false);
+        return Compile(ms.ToArray(), adapterFileName, registeredBytes);
+    }
+
+    // Pre-fetch every registered rule file so AssetSourceXmlResolver can
+    // serve xsl:include / xsl:import lookups synchronously from memory.
+    private async Task<Dictionary<string, byte[]>> PrefetchRuleFilesAsync(
+        RuleFile? primary,
+        byte[]? primaryBytes,
+        CancellationToken cancellationToken)
+    {
         var registeredBytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         foreach (var rf in _provider.Catalogue.RuleFiles)
         {
             if (registeredBytes.ContainsKey(rf.FileName)) continue;
-            if (string.Equals(rf.Id, ruleFile.Id, StringComparison.OrdinalIgnoreCase))
+            if (primary is not null && string.Equals(rf.Id, primary.Id, StringComparison.OrdinalIgnoreCase))
             {
-                registeredBytes[rf.FileName] = primaryBytes;
+                registeredBytes[rf.FileName] = primaryBytes!;
                 continue;
             }
             try
@@ -291,21 +334,22 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
             }
         }
 
+        return registeredBytes;
+    }
+
+    private XslCompiledTransform Compile(byte[] stylesheet, string fileName, IReadOnlyDictionary<string, byte[]> registeredBytes)
+    {
         var resolver = CreateXmlResolver(registeredBytes);
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
         };
 
-        using var primaryStream = new MemoryStream(primaryBytes, writable: false);
-        using var reader = XmlReader.Create(primaryStream, settings, ruleFile.FileName);
+        using var stream = new MemoryStream(stylesheet, writable: false);
+        using var reader = XmlReader.Create(stream, settings, fileName);
 
         var transform = new XslCompiledTransform();
         transform.Load(reader, XsltSettings.TrustedXslt, resolver);
-
-        var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-        activity?.SetTag("s100.xslt.compile.duration_ms", elapsedMs);
-
         return transform;
     }
 
