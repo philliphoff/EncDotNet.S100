@@ -34,9 +34,13 @@ public static class DatasetMetadataSerializer
     /// <summary>
     /// Schema version stamped into every frame. Bump on any change to the
     /// serialized layout so previously persisted sidecars are treated as a
-    /// miss instead of being misread.
+    /// miss instead of being misread. Also bumped when the <em>values</em> a
+    /// reader derives change meaning: version 2 retires sidecars whose
+    /// <see cref="DatasetMetadata.DisplayScale"/> was resolved without
+    /// normalising inverted S-101 <c>DataCoverage</c> scale pairs
+    /// (<see cref="DisplayScaleRange.FromDeclared"/>).
     /// </summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     /// <summary>Serializes <paramref name="metadata"/> into the binary frame.</summary>
     /// <param name="metadata">The metadata to persist.</param>

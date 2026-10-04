@@ -216,7 +216,9 @@ public sealed class S101Dataset
     /// denominator) is the maximum <c>minimumDisplayScale</c> and the finest
     /// bound (smallest denominator) is the minimum <c>maximumDisplayScale</c>
     /// across all coverages, matching the exchange-set catalogue's
-    /// <c>DatasetDiscoveryMetadata</c> resolution.
+    /// <c>DatasetDiscoveryMetadata</c> resolution. Each coverage's pair is
+    /// normalised first, so an inverted declaration still yields the intended
+    /// band (see <see cref="DisplayScaleRange.FromDeclared"/>).
     /// </summary>
     private static DisplayScaleRange? ResolveDisplayScale(S101Document document)
     {
@@ -237,19 +239,27 @@ public sealed class S101Dataset
             if (feature.FeatureTypeCode != dataCoverageCode.Value)
                 continue;
 
+            int? declaredMin = null;
+            int? declaredMax = null;
             foreach (var attr in feature.Attributes)
             {
                 if (minCode is not null && attr.NumericCode == minCode.Value
                     && TryParseDenominator(attr.Value, out int minDenom))
                 {
-                    coarsest = coarsest is null ? minDenom : Math.Max(coarsest.Value, minDenom);
+                    declaredMin = minDenom;
                 }
                 else if (maxCode is not null && attr.NumericCode == maxCode.Value
                     && TryParseDenominator(attr.Value, out int maxDenom))
                 {
-                    finest = finest is null ? maxDenom : Math.Min(finest.Value, maxDenom);
+                    declaredMax = maxDenom;
                 }
             }
+
+            var window = DisplayScaleRange.FromDeclared(declaredMin, declaredMax);
+            if (window.Minimum is int coarse)
+                coarsest = coarsest is null ? coarse : Math.Max(coarsest.Value, coarse);
+            if (window.Maximum is int fine)
+                finest = finest is null ? fine : Math.Min(finest.Value, fine);
         }
 
         if (coarsest is null && finest is null)

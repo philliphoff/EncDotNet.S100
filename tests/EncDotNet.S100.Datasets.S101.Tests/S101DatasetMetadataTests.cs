@@ -67,6 +67,21 @@ public sealed class S101DatasetMetadataTests
     }
 
     [Fact]
+    public void ReadMetadata_InvertedDataCoveragePair_IsNormalised()
+    {
+        // The extra coverage declares minimumDisplayScale 22000 with
+        // maximumDisplayScale 120000 (inverted, as IHO test cell
+        // 101AA00DS0006 does); it is read as the 1:120 000..1:22 000 band.
+        var dataset = S101Dataset.FromDocument(BuildDocument(extraCoverageMin: 22000, extraCoverageMax: 120000));
+
+        var meta = dataset.ReadMetadata();
+
+        Assert.NotNull(meta.DisplayScale);
+        Assert.Equal(120000, meta.DisplayScale!.Value.Minimum);
+        Assert.Equal(22000, meta.DisplayScale.Value.Maximum);
+    }
+
+    [Fact]
     public void ReadMetadata_PointAtOrigin_YieldsNonNullExtent()
     {
         // A dataset whose only coordinate is 0°N 0°E is a legitimate extent,

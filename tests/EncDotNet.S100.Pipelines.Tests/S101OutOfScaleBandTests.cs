@@ -97,6 +97,41 @@ public class S101OutOfScaleBandTests
     }
 
     [Fact]
+    public void Resolve_InvertedPair_UsesCoarserDenominator()
+    {
+        // IHO S-101 test cells 101AA00DS0006/0007/0015 declare
+        // minimumDisplayScale 22000 with maximumDisplayScale 90000. Read
+        // literally, the cell vanished beyond 1:22 000 instead of 1:90 000.
+        var features = new[]
+        {
+            Feature("DataCoverage", 1,
+                ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "90000")),
+        };
+
+        Assert.Equal(90000, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
+    }
+
+    [Fact]
+    public void Resolve_WellOrderedPair_UsesMinimumDisplayScale()
+    {
+        var features = new[]
+        {
+            Feature("DataCoverage", 1,
+                ("minimumDisplayScale", "90000"), ("maximumDisplayScale", "22000")),
+        };
+
+        Assert.Equal(90000, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
+    }
+
+    [Fact]
+    public void Resolve_MaximumDisplayScaleOnly_ReturnsNull()
+    {
+        var features = new[] { Feature("DataCoverage", 1, ("maximumDisplayScale", "22000")) };
+
+        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
+    }
+
+    [Fact]
     public void Resolve_MinimumDisplayScaleOnNonDataCoverage_IsIgnored()
     {
         var features = new[] { Feature("DepthArea", 1, ("minimumDisplayScale", "90000")) };

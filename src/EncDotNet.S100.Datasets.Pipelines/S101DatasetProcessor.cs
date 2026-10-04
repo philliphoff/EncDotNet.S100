@@ -1017,7 +1017,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// <see langword="null"/> when no <c>DataCoverage</c> feature carries one.
     /// When several <c>DataCoverage</c> features declare different bands, the
     /// most permissive (largest denominator) is used so detail stays visible
-    /// wherever any coverage region still permits it.
+    /// wherever any coverage region still permits it. A coverage whose
+    /// declared pair is inverted (minimum finer than maximum) is normalised
+    /// first via <see cref="DisplayScaleRange.FromDeclared"/>.
     /// </returns>
     internal static int? ResolveOutOfBandMinDisplayScale(
         IEnumerable<EncDotNet.S100.Pipelines.Vector.Feature> features)
@@ -1029,16 +1031,28 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         {
             if (!string.Equals(feature.FeatureType, "DataCoverage", StringComparison.Ordinal))
                 continue;
-            if (!feature.Attributes.TryGetValue("minimumDisplayScale", out var raw) || raw is null)
-                continue;
-            if (!int.TryParse(raw.ToString(), System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var denom) || denom <= 0)
+
+            var window = DisplayScaleRange.FromDeclared(
+                ParseDenominator(feature, "minimumDisplayScale"),
+                ParseDenominator(feature, "maximumDisplayScale"));
+            if (window.Minimum is not int denom)
                 continue;
 
             minDisplayScale = minDisplayScale is null ? denom : Math.Max(minDisplayScale.Value, denom);
         }
 
         return minDisplayScale;
+    }
+
+    private static int? ParseDenominator(EncDotNet.S100.Pipelines.Vector.Feature feature, string attribute)
+    {
+        if (!feature.Attributes.TryGetValue(attribute, out var raw) || raw is null)
+            return null;
+
+        return int.TryParse(raw.ToString(), System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var denom) && denom > 0
+            ? denom
+            : null;
     }
 
     /// <inheritdoc/>

@@ -66,4 +66,16 @@ public class DisplayScaleBandTests
         Assert.Null(metadata.ResolveMinimumDisplayScale());
         Assert.Null(metadata.ResolveMaximumDisplayScale());
     }
+
+    [Fact]
+    public void ResolveMinimum_InvertedCoveragePair_IsNormalised()
+    {
+        // A coverage that declares its minimum finer than its maximum (as
+        // IHO S-101 test cell 101AA00DS0006 does) still yields 1:90 000..1:22 000.
+        var metadata = Metadata(
+            new DataCoverage { MinimumDisplayScale = 22000, MaximumDisplayScale = 90000 });
+
+        Assert.Equal(90000, metadata.ResolveMinimumDisplayScale());
+        Assert.Equal(22000, metadata.ResolveMaximumDisplayScale());
+    }
 }
