@@ -830,8 +830,15 @@ public static class S100VectorTileRenderer
         // worker publish — once per off-view cell. Culling here makes off-view
         // cells cost nothing. The CullMarginPx halo keeps edge cells (whose
         // symbols/over-render reach into the view) rendering.
+        //
+        // The cell is drawn at every world copy that meets the view (issue
+        // #773), so data kept in a 0…360 or other continuous longitude frame
+        // shows wherever the viewer pans, like the basemap. Each copy is the
+        // same data-space tiles blitted at a shifted centre, so a copy costs a
+        // blit, not a raster.
         var state = States.GetValue(layer, static l => new TileState(l));
-        if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, CullMarginPx))
+        var copies = LayerExtentCulling.VisibleWorldCopies(layer, viewport, resolution, CullMarginPx);
+        if (copies.Count == 0)
         {
             if (!offscreen && InvalidateViewport(state))
             {
@@ -859,7 +866,7 @@ public static class S100VectorTileRenderer
         // erase every pixel it draws (tiles and live overlay alike), so treat it
         // as culled. Null (no finer coverage active) skips nothing.
         var hidden = CoverageClip.GetHiddenCoverage(layer, resolution);
-        if (hidden is not null && IsViewportHidden(hidden, viewport, resolution))
+        if (hidden is not null && AreAllCopiesHidden(hidden, viewport, resolution, copies))
         {
             S100Diag.Telemetry.TileLayerHiddenSkipped.Add(1);
             if (!offscreen && InvalidateViewport(state))
@@ -897,7 +904,11 @@ public static class S100VectorTileRenderer
             ? (widthDip, heightDip)
             : TileGrid.RotatedCoverSize(widthDip, heightDip, rotationDeg);
 
-        var visible = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
+        // The copy whose data lies nearest the view centre orders the tile queue.
+        var layerExtent = layer.Extent;
+        var primaryOffset = copies.Count == 1 || layerExtent is null
+            ? copies[0]
+            : WorldCopies.Nearest(copies, layerExtent.MinX, layerExtent.MaxX, centerX);
 
         var workersToStart = 0;
         var requestAdmissionRetry = false;
@@ -925,8 +936,24 @@ public static class S100VectorTileRenderer
             // them keeps raster, cache, disk and per-frame blit work bounded by
             // the part of the viewport this cell covers. Tiles wholly under
             // finer, currently-drawing coverage are dropped too: the coverage
-            // clip would erase them (issue #691).
-            visible = WithContent(state, visible, hidden);
+            // clip would erase them (issue #691). Each world copy contributes
+            // the data-space tiles under its part of the view; scheduling works
+            // on their union.
+            var copyTiles = new CopyTiles[copies.Count];
+            for (var i = 0; i < copies.Count; i++)
+            {
+                var tiles = WithContent(
+                    state,
+                    TileGrid.VisibleTiles(centerX - copies[i], centerY, coverWidth, coverHeight, resolution, band),
+                    hidden);
+                copyTiles[i] = new CopyTiles(
+                    copies[i],
+                    copies.Count > 1 && layerExtent is not null
+                        ? WithCoreInExtent(tiles, layerExtent.MinX, layerExtent.MaxX, TileGrid.ResolutionForBand(band))
+                        : tiles);
+            }
+
+            var visible = UnionTiles(copyTiles);
 
             // An off-screen render (BeginOffscreenRender: a capture or print
             // through the live layers, typically at another device scale) only
@@ -1036,10 +1063,9 @@ public static class S100VectorTileRenderer
                 state.CurrentSpeculative.Clear();
                 if (PredictionEnabled)
                 {
-                    var predicted = TileGrid.PredictedTiles(
-                        centerX, centerY, coverWidth, coverHeight, resolution, band,
-                        state.VelocityX, state.VelocityY);
-                    foreach (var key in predicted)
+                    foreach (var key in SpeculativeTiles(copies, offset => TileGrid.PredictedTiles(
+                        centerX - offset, centerY, coverWidth, coverHeight, resolution, band,
+                        state.VelocityX, state.VelocityY)))
                     {
                         if (!TileHasContent(state, key) || IsTileHidden(state, key, hidden))
                         {
@@ -1078,10 +1104,9 @@ public static class S100VectorTileRenderer
                     && coldExposure == 0
                     && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
                 {
-                    var crossBand = TileGrid.CrossBandPrewarmTiles(
-                        centerX, centerY, coverWidth, coverHeight, resolution, band,
-                        CrossBandPrewarmMaxTiles);
-                    foreach (var key in crossBand)
+                    foreach (var key in SpeculativeTiles(copies, offset => TileGrid.CrossBandPrewarmTiles(
+                        centerX - offset, centerY, coverWidth, coverHeight, resolution, band,
+                        CrossBandPrewarmMaxTiles)))
                     {
                         // Zooming in only adds active finer coverages, so a tile of a
                         // finer band hidden now stays hidden there. Zooming out can
@@ -1114,7 +1139,7 @@ public static class S100VectorTileRenderer
                 {
                     state.PendingDeviceScale = deviceScale;
                     state.PendingGeneration = state.Generation;
-                    state.PendingCenterX = centerX;
+                    state.PendingCenterX = centerX - primaryOffset;
                     state.PendingCenterY = centerY;
                     // Spin up workers to cover the pending tiles. The per-layer
                     // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
@@ -1212,7 +1237,7 @@ public static class S100VectorTileRenderer
                 // resolution (screen-space, so tiles stay cached; zoom-aware, so
                 // a finer cell that has dropped out of its band no longer leaves
                 // a blank hole).
-                var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution);
+                var clipPaths = BuildCopyClipPaths(layer, viewport, resolution);
                 compositeClipEnd = Stopwatch.GetTimestamp();
                 var clipApplied = false;
                 try
@@ -1228,13 +1253,18 @@ public static class S100VectorTileRenderer
                             canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
                     }
 
-                    Composite(canvas, state, band, visible, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext, pinVisible: !offscreen);
+                    Composite(canvas, state, band, copyTiles, visible, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext, pinVisible: !offscreen);
                     compositeBaseEnd = Stopwatch.GetTimestamp();
 
                     // Draw point symbols + soundings live, on top of the composited
                     // base tiles, at constant on-screen size (the base tiles are
-                    // band-scaled, so symbols must not be baked into them).
-                    DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                    // band-scaled, so symbols must not be baked into them). Each
+                    // world copy draws (and declutters) its own overlay.
+                    foreach (var offset in copies)
+                    {
+                        DrawOverlay(canvas, state, centerX - offset, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                    }
+
                     compositeOverlayEnd = Stopwatch.GetTimestamp();
                 }
                 finally
@@ -1497,6 +1527,150 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
+    /// Whether finer coverage hides the cell across the view at every world
+    /// copy in <paramref name="copies"/> (see <see cref="IsViewportHidden"/>).
+    /// The hidden region is in the data frame, so each copy tests the viewport
+    /// shifted back into it.
+    /// </summary>
+    internal static bool AreAllCopiesHidden(
+        HiddenCoverage hidden, Viewport viewport, double resolution, IReadOnlyList<double> copies)
+    {
+        foreach (var offset in copies)
+        {
+            if (!IsViewportHidden(hidden, viewport with { CenterX = viewport.CenterX - offset }, resolution))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The screen-space difference clips for every world copy of the finer
+    /// coverages attached to <paramref name="layer"/>. Finer cells draw at
+    /// their own copies, so a finer cell in any copy hides whatever copy of
+    /// this cell lies beneath it on screen; coverages off-view are culled by
+    /// <see cref="CoverageClip.BuildActiveDifferencePaths"/>.
+    /// </summary>
+    private static List<SKPath> BuildCopyClipPaths(ILayer layer, Viewport viewport, double resolution)
+    {
+        var paths = new List<SKPath>();
+        if (CoverageClip.Get(layer) is null)
+        {
+            return paths;
+        }
+
+        foreach (var offset in WorldCopies.OffsetsX)
+        {
+            paths.AddRange(CoverageClip.BuildActiveDifferencePaths(
+                layer, viewport with { CenterX = viewport.CenterX - offset }, resolution));
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// Whether any op one world east or west has a copy within the world box
+    /// (<paramref name="minX"/>..<paramref name="maxY"/>).
+    /// </summary>
+    private static bool HasAdjacentWorldOps(
+        BaseSpatialIndex baseIndex, double minX, double minY, double maxX, double maxY)
+    {
+        foreach (var offset in WorldCopies.OffsetsX)
+        {
+            if (offset != 0.0 && baseIndex.Intersects(minX - offset, minY, maxX - offset, maxY))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The tiles whose core (gutter excluded) overlaps the data's X span
+    /// [<paramref name="minX"/>, <paramref name="maxX"/>]. With several world
+    /// copies in view, a tile just past the data's frame edge has content only
+    /// in its gutter, and its core lies under the adjacent copy's tile, which
+    /// holds the data there; blitting both drew the seam column twice. Dropping
+    /// it leaves every screen column to the one copy whose data it shows. A
+    /// core that overlaps by less than <paramref name="tolerance"/> (a pixel at
+    /// the band's resolution) counts as outside, so data ending exactly on the
+    /// tile edge (0° and 360° are edges at every band) is not caught by
+    /// rounding.
+    /// </summary>
+    private static IReadOnlyList<TileKey> WithCoreInExtent(
+        IReadOnlyList<TileKey> keys, double minX, double maxX, double tolerance)
+    {
+        List<TileKey>? kept = null;
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var (tileMinX, _, tileMaxX, _) = TileGrid.TileWorldBounds(keys[i]);
+            var inside = tileMaxX > minX + tolerance && tileMinX < maxX - tolerance;
+            if (!inside && kept is null)
+            {
+                kept = new List<TileKey>(keys.Count);
+                for (var j = 0; j < i; j++)
+                {
+                    kept.Add(keys[j]);
+                }
+            }
+            else if (inside)
+            {
+                kept?.Add(keys[i]);
+            }
+        }
+
+        return (IReadOnlyList<TileKey>?)kept ?? keys;
+    }
+
+    /// <summary>
+    /// The distinct tiles of every world copy, in copy order: the set the frame
+    /// schedules and pins. A single copy is returned as is.
+    /// </summary>
+    private static IReadOnlyList<TileKey> UnionTiles(CopyTiles[] copies)
+    {
+        if (copies.Length == 1)
+        {
+            return copies[0].Tiles;
+        }
+
+        var seen = new HashSet<TileKey>();
+        var union = new List<TileKey>();
+        foreach (var copy in copies)
+        {
+            foreach (var key in copy.Tiles)
+            {
+                if (seen.Add(key))
+                {
+                    union.Add(key);
+                }
+            }
+        }
+
+        return union;
+    }
+
+    /// <summary>
+    /// The speculative (predicted or cross-band) tiles of every world copy in
+    /// view, built by <paramref name="tilesAt"/> for each copy's offset.
+    /// Duplicates are possible across copies; the callers' pending sets
+    /// absorb them.
+    /// </summary>
+    private static IEnumerable<TileKey> SpeculativeTiles(
+        IReadOnlyList<double> copies, Func<double, IReadOnlyList<TileKey>> tilesAt)
+    {
+        foreach (var offset in copies)
+        {
+            foreach (var key in tilesAt(offset))
+            {
+                yield return key;
+            }
+        }
+    }
+
+    /// <summary>
     /// Filters <paramref name="keys"/> to the tiles that intersect base content
     /// (see <see cref="TileHasContent"/>) and are not wholly hidden by finer
     /// coverage (see <see cref="IsTileHidden"/>), returning the input list
@@ -1669,9 +1843,12 @@ public static class S100VectorTileRenderer
     /// <paramref name="heightDip"/>. An off-screen frame passes
     /// <paramref name="pinVisible"/> <see langword="false"/> so it does not
     /// replace the live view's eviction pins with its own viewport's tiles.
+    /// Each entry of <paramref name="copies"/> is one world copy: its tiles are
+    /// blitted against the centre shifted by the copy's offset, and
+    /// <paramref name="target"/> is the union of their tiles.
     /// </summary>
     private static void Composite(
-        SKCanvas canvas, TileState state, int band, IReadOnlyList<TileKey> target,
+        SKCanvas canvas, TileState state, int band, IReadOnlyList<CopyTiles> copies, IReadOnlyList<TileKey> target,
         double centerX, double centerY, double widthDip, double heightDip,
         double coverWidth, double coverHeight, double resolution, double rotationDeg,
         GRContext? grContext, bool pinVisible = true)
@@ -1732,34 +1909,44 @@ public static class S100VectorTileRenderer
         // incomplete (during a zoom transition). Draw the SINGLE nearest cached
         // band — never multiple bands at once — so symbols rasterised at
         // different scales cannot stack and ghost. Skipped once the target band
-        // is complete (its opaque fills fully occlude any backdrop anyway).
-        var fallback = new List<TileKey>();
+        // is complete (its opaque fills fully occlude any backdrop anyway). The
+        // band is chosen across every world copy, then each copy keeps the
+        // tiles that land in view at its own centre.
+        var blits = new CopyBlits[copies.Count];
+        for (var i = 0; i < copies.Count; i++)
+        {
+            blits[i] = new CopyBlits(centerX - copies[i].OffsetX, new List<TileKey>(), copies[i].Tiles);
+        }
+
         if (!targetComplete)
         {
             var nearestDist = int.MaxValue;
             foreach (var key in state.Cache.SnapshotKeys())
             {
                 var dist = Math.Abs(key.Band - band);
-                if (dist == 0 || dist > MaxFallbackBandDistance)
+                if (dist == 0 || dist > MaxFallbackBandDistance || dist > nearestDist)
                 {
                     continue;
                 }
 
-                var core = TileGrid.TileCoreScreenRect(key, centerX, centerY, widthDip, heightDip, resolution);
-                if (!core.IntersectsViewport(coverWidth, coverHeight))
+                foreach (var blit in blits)
                 {
-                    continue;
-                }
+                    var core = TileGrid.TileCoreScreenRect(key, blit.CenterX, centerY, widthDip, heightDip, resolution);
+                    if (!core.IntersectsViewport(coverWidth, coverHeight))
+                    {
+                        continue;
+                    }
 
-                if (dist < nearestDist)
-                {
-                    nearestDist = dist;
-                    fallback.Clear();
-                }
+                    if (dist < nearestDist)
+                    {
+                        nearestDist = dist;
+                        foreach (var other in blits)
+                        {
+                            other.Fallback.Clear();
+                        }
+                    }
 
-                if (dist == nearestDist)
-                {
-                    fallback.Add(key);
+                    blit.Fallback.Add(key);
                 }
             }
         }
@@ -1777,27 +1964,50 @@ public static class S100VectorTileRenderer
         if (rotationDeg != 0)
         {
             CompositeRotated(
-                canvas, state, fallback, target,
-                centerX, centerY, widthDip, heightDip, coverWidth, coverHeight,
+                canvas, state, blits,
+                centerY, widthDip, heightDip, coverWidth, coverHeight,
                 resolution, rotationDeg, grContext, gpuCache);
         }
         else
         {
-            foreach (var key in fallback)
-            {
-                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-            }
-
-            // Exact target band on top (crisp where present).
-            foreach (var key in target)
-            {
-                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-            }
+            BlitCopies(canvas, state, blits, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
         }
 
         if (DiagEnabled)
         {
+            var fallback = new List<TileKey>();
+            foreach (var blit in blits)
+            {
+                fallback.AddRange(blit.Fallback);
+            }
+
             DiagComposite(state, band, centerX, centerY, coverWidth, coverHeight, resolution, fallback, offscreen: !pinVisible);
+        }
+    }
+
+    /// <summary>
+    /// Blits each world copy's backdrop and then its exact target band (crisp
+    /// where present) against the copy's shifted centre.
+    /// </summary>
+    private static void BlitCopies(
+        SKCanvas canvas, TileState state, IReadOnlyList<CopyBlits> blits,
+        double centerY, double widthDip, double heightDip, double resolution,
+        GRContext? grContext, TileCache? gpuCache)
+    {
+        foreach (var blit in blits)
+        {
+            foreach (var key in blit.Fallback)
+            {
+                BlitTile(canvas, state, key, blit.CenterX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+            }
+        }
+
+        foreach (var blit in blits)
+        {
+            foreach (var key in blit.Target)
+            {
+                BlitTile(canvas, state, key, blit.CenterX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+            }
         }
     }
 
@@ -1822,9 +2032,8 @@ public static class S100VectorTileRenderer
     /// chart stays visible rather than dropping the frame.
     /// </remarks>
     private static void CompositeRotated(
-        SKCanvas canvas, TileState state,
-        IReadOnlyList<TileKey> fallback, IReadOnlyList<TileKey> target,
-        double centerX, double centerY, double widthDip, double heightDip,
+        SKCanvas canvas, TileState state, IReadOnlyList<CopyBlits> blits,
+        double centerY, double widthDip, double heightDip,
         double coverWidth, double coverHeight, double resolution, double rotationDeg,
         GRContext? grContext, TileCache? gpuCache)
     {
@@ -1858,16 +2067,7 @@ public static class S100VectorTileRenderer
         {
             canvas.Save();
             canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
-            foreach (var key in fallback)
-            {
-                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-            }
-
-            foreach (var key in target)
-            {
-                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-            }
-
+            BlitCopies(canvas, state, blits, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
             canvas.Restore();
             return;
         }
@@ -1880,16 +2080,7 @@ public static class S100VectorTileRenderer
         offCanvas.Scale(deviceScale);
         offCanvas.Translate((float)-originX, (float)-originY);
 
-        foreach (var key in fallback)
-        {
-            BlitTile(offCanvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-        }
-
-        // Exact target band on top (crisp where present).
-        foreach (var key in target)
-        {
-            BlitTile(offCanvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-        }
+        BlitCopies(offCanvas, state, blits, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
 
         var image = surface.Snapshot();
 
@@ -3003,6 +3194,19 @@ public static class S100VectorTileRenderer
         CrossBand,
     }
 
+    /// <summary>
+    /// The data-space tiles one world copy contributes to a frame: those under
+    /// the view shifted back by <paramref name="OffsetX"/> (EPSG:3857 metres).
+    /// </summary>
+    private readonly record struct CopyTiles(double OffsetX, IReadOnlyList<TileKey> Tiles);
+
+    /// <summary>
+    /// One world copy's blits for a frame: the centre its tiles are projected
+    /// against (the live centre shifted back by the copy offset), its backdrop
+    /// tiles and its exact target-band tiles.
+    /// </summary>
+    private readonly record struct CopyBlits(double CenterX, List<TileKey> Fallback, IReadOnlyList<TileKey> Target);
+
     internal enum TileRelevance
     {
         Irrelevant,
@@ -3387,7 +3591,142 @@ public static class S100VectorTileRenderer
             EnableSeamWrap = false,
         };
 
-        return renderer.Render(tileScene, viewport);
+        var bitmap = renderer.Render(tileScene, viewport);
+        if (baseIndex is not null)
+        {
+            DrawAdjacentWorldOps(renderer, bitmap, baseIndex, viewport, gutterWorld, fullMinX, fullMinY, fullMaxX, fullMaxY);
+        }
+
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Draws into a tile's gutter the ops one world east and west whose copies
+    /// reach into it (issue #773). Data kept in a 0…360 frame is clipped at
+    /// 360°, so the tile ending there had an empty gutter: scaled for a zoom
+    /// between bands, its edge blended with that transparency and showed a
+    /// faint line where the data continues in the adjacent world copy. The
+    /// copies are drawn only outside the tile's core, which shows the data at
+    /// its own position (the compositor blits each copy's own tiles there, so
+    /// a copy in the core would draw twice), and outside the scene's own X
+    /// span, where none of its ops can be. A side whose core edge lies past
+    /// that span gets none either: the core is empty there, and a filled
+    /// gutter would bleed into it over the copy that draws that place.
+    /// </summary>
+    private static void DrawAdjacentWorldOps(
+        SkiaDisplayListRenderer renderer, SKBitmap bitmap, BaseSpatialIndex baseIndex, CoreViewport viewport,
+        double gutterWorld, double fullMinX, double fullMinY, double fullMaxX, double fullMaxY)
+    {
+        if (baseIndex.XSpan is not { } span)
+        {
+            return;
+        }
+
+        SKCanvas? canvas = null;
+        try
+        {
+            foreach (var offset in WorldCopies.OffsetsX)
+            {
+                if (offset == 0.0)
+                {
+                    continue;
+                }
+
+                // The ops whose copy at +offset lies in the tile sit at -offset.
+                var ops = baseIndex.Query(fullMinX - offset, fullMinY, fullMaxX - offset, fullMaxY);
+                if (ops.Count == 0)
+                {
+                    continue;
+                }
+
+                if (canvas is null)
+                {
+                    var pxPerMetre = bitmap.Width / (fullMaxX - fullMinX);
+                    var gutterPx = (float)(gutterWorld * pxPerMetre);
+                    var tolerance = gutterWorld / GutterDip;
+                    var left = fullMinX + gutterWorld < span.MinX - tolerance ? -1f : gutterPx;
+                    var right = fullMaxX - gutterWorld > span.MaxX + tolerance ? bitmap.Width + 1f : bitmap.Width - gutterPx;
+                    canvas = new SKCanvas(bitmap);
+                    canvas.ClipRect(
+                        new SKRect(left, gutterPx, right, bitmap.Height - gutterPx),
+                        SKClipOperation.Difference,
+                        antialias: false);
+                    canvas.ClipRect(
+                        new SKRect(
+                            (float)((span.MinX - fullMinX) * pxPerMetre), -1f,
+                            (float)((span.MaxX - fullMinX) * pxPerMetre), bitmap.Height + 1f),
+                        SKClipOperation.Difference,
+                        antialias: true);
+                }
+
+                var degrees = offset / WorldCopies.Circumference * 360.0;
+                renderer.RenderOnto(canvas, new VectorScene(ops), viewport with
+                {
+                    MinLongitude = viewport.MinLongitude - degrees,
+                    MaxLongitude = viewport.MaxLongitude - degrees,
+                });
+            }
+        }
+        finally
+        {
+            canvas?.Flush();
+            canvas?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Draws into a tile the ops one world east and west whose copies reach
+    /// into it (issue #773). Data kept in a 0…360 frame is clipped at 360°, so
+    /// the tile ending there had an empty gutter: scaled for a zoom between
+    /// bands, its edge blended with that transparency and showed a faint line
+    /// where the data continues in the adjacent world copy. Drawing the copy's
+    /// ops into the gutter makes the tiles on either side of the seam meet like
+    /// any other pair of tiles. Only the gutter is drawn: a tile's core shows
+    /// the data at its own position, and the copy's data there is drawn by the
+    /// copy's own tile, so filling the core too would draw it twice.
+    /// </summary>
+    private static void DrawAdjacentWorldOps(
+        SkiaDisplayListRenderer renderer, SKBitmap bitmap, BaseSpatialIndex baseIndex, CoreViewport viewport,
+        float deviceScale, double fullMinX, double fullMinY, double fullMaxX, double fullMaxY)
+    {
+        var gutterPx = (float)((bitmap.Width - TileGrid.TileSizeDip * deviceScale) * 0.5);
+        var core = new SKRect(gutterPx, gutterPx, bitmap.Width - gutterPx, bitmap.Height - gutterPx);
+        SKCanvas? canvas = null;
+        try
+        {
+            foreach (var offset in WorldCopies.OffsetsX)
+            {
+                if (offset == 0.0)
+                {
+                    continue;
+                }
+
+                // The ops whose copy at +offset lies in the tile sit at -offset.
+                var ops = baseIndex.Query(fullMinX - offset, fullMinY, fullMaxX - offset, fullMaxY);
+                if (ops.Count == 0)
+                {
+                    continue;
+                }
+
+                var degrees = offset / WorldCopies.Circumference * 360.0;
+                if (canvas is null)
+                {
+                    canvas = new SKCanvas(bitmap);
+                    canvas.ClipRect(core, SKClipOperation.Difference, antialias: false);
+                }
+
+                renderer.RenderOnto(canvas, new VectorScene(ops), viewport with
+                {
+                    MinLongitude = viewport.MinLongitude - degrees,
+                    MaxLongitude = viewport.MaxLongitude - degrees,
+                });
+            }
+        }
+        finally
+        {
+            canvas?.Flush();
+            canvas?.Dispose();
+        }
     }
 
     internal static IReadOnlyDictionary<TileKey, SKImage> RasterizeMetatile(
@@ -3530,6 +3869,18 @@ public static class S100VectorTileRenderer
         var fullMinY = blockMinY - gutterWorld;
         var fullMaxX = blockMaxX + gutterWorld;
         var fullMaxY = blockMaxY + gutterWorld;
+        // A block that the adjacent world copies reach into is rasterised tile
+        // by tile: each tile's gutter takes the copies' ops but its core must
+        // not (see DrawAdjacentWorldOps), and in one shared bitmap an inner
+        // tile's gutter is its neighbour's core. Only tiles at a dataset's
+        // frame edge are affected.
+        if (baseIndex is not null && HasAdjacentWorldOps(baseIndex, fullMinX, fullMinY, fullMaxX, fullMaxY))
+        {
+            activity?.SetTag("s100.render.tile.rasterize.fallback", "world_copy");
+            RecordMetatileFallback("world_copy");
+            return RasterizeIndividualTiles(scene, baseIndex, keys, deviceScale);
+        }
+
         var scopedScene = ScopeSceneForBounds(
             scene, baseIndex, fullMinX, fullMinY, fullMaxX, fullMaxY);
         activity?.SetTag("s100.render.tile.candidate_operations", scopedScene.Ops.Count);
@@ -3565,6 +3916,7 @@ public static class S100VectorTileRenderer
 
         var rasterStart = Stopwatch.GetTimestamp();
         using var bitmap = renderer.Render(scopedScene, viewport);
+
         S100Diag.Telemetry.MetatileRasterizeDuration.Record(
             Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
 

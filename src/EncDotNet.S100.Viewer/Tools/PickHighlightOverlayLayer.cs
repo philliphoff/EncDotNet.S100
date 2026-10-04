@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Geodesy;
 using Mapsui;
 using Mapsui.Layers;
@@ -113,8 +114,11 @@ internal static class PickHighlightOverlayLayer
     private const double MarkerCasingWidth = 5.0;
     private const double MarkerRingWidth = 2.0;
 
-    /// <summary>Creates a fresh, empty overlay layer.</summary>
-    public static MemoryLayer Create() => new()
+    /// <summary>
+    /// Creates a fresh, empty overlay layer. It repeats across world copies,
+    /// as the chart does, so a pick on a copy is outlined there (issue #773).
+    /// </summary>
+    public static MemoryLayer Create() => new WorldCopyMemoryLayer
     {
         Name = LayerName,
         Style = null,

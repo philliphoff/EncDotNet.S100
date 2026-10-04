@@ -279,6 +279,59 @@ public class S100McpServerRoundTripTests
         Assert.Equal("inside", features[1]!["containment"]!.GetValue<string>());
     }
 
+    [Theory]
+    [InlineData(210.0)]
+    [InlineData(-150.0)]
+    public async Task IdentifyFeatures_matches_continuous_frame_data_from_either_world(double longitude)
+    {
+        // Data kept east of the antimeridian (~175°E → ~225°E, like the NWS
+        // Alaska S-411) is found at its own longitude (210°) and at the same
+        // place in the standard world (150°W), where the viewer also draws it
+        // (issue #773).
+        var area = new S124Feature
+        {
+            Id = "ice-1",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = [
+                new GeoPosition(70.0, 180.0), new GeoPosition(70.0, 220.0), new GeoPosition(75.0, 220.0), new GeoPosition(75.0, 180.0), new GeoPosition(70.0, 180.0)],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
+            References = [],
+        };
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-alaska", bounds: LoadedDatasetFactory.Box(70, 180, 75, 220), model: S124Synth.Dataset(area)));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 72.5,
+            ["longitude"] = longitude,
+        });
+
+        Assert.False(result.IsError ?? false, $"identify_features returned an error: {DumpText(result)}");
+        var feature = Assert.Single(ParseSingleJson(result)["features"]!.AsArray());
+        Assert.Equal("ice-1", feature!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task IdentifyFeatures_rejects_longitude_beyond_the_adjacent_worlds()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 0.0,
+            ["longitude"] = 600.0,
+        });
+
+        Assert.True(result.IsError ?? false);
+    }
+
     [Fact]
     public async Task NearestFeatures_round_trip_ranks_by_true_distance()
     {

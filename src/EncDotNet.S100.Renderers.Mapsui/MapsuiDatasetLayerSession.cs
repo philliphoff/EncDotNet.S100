@@ -1278,48 +1278,15 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             using (lease)
             {
                 var processor = lease.Processor;
-                var hits = processor.HitTestFeatures(query.Latitude, query.Longitude, radius);
-                if (hits.Count > 0)
+                // The dataset draws at every world copy in view (issue #773),
+                // so a pick on a copy hits the data one world east or west of
+                // the pointer. The first longitude with a hit wins.
+                var extent = processor.Metadata.Extent;
+                foreach (var longitude in WorldCopies.CandidateLongitudes(
+                    query.Longitude, extent?.WestLongitude, extent?.EastLongitude))
                 {
-                    foreach (var hit in hits)
-                    {
-                        var info = processor.GetFeatureInfoAt(hit.Ordinal)
-                            ?? processor.GetFeatureInfo(hit.FeatureRef);
-                        if (info is null)
-                            continue;
-                        ranked.Add((
-                            stackRank,
-                            (int)hit.Primitive,
-                            hit.DistanceMeters,
-                            new S100Pick
-                            {
-                                DatasetId = id,
-                                Info = info,
-                                Geometry = processor.GetFeatureGeometryAt(hit.Ordinal),
-                                IsCoverage = false,
-                                FeatureType = hit.FeatureType,
-                                Primitive = hit.Primitive,
-                                Inside = hit.Inside,
-                                DistanceMeters = hit.DistanceMeters,
-                            }));
-                    }
-                }
-                else if (processor.GetCoverageInfo(query.Latitude, query.Longitude, currentTime)
-                    is { } coverage)
-                {
-                    // Coverage picks sort after a dataset's feature picks.
-                    ranked.Add((
-                        stackRank,
-                        int.MaxValue,
-                        double.MaxValue,
-                        new S100Pick
-                        {
-                            DatasetId = id,
-                            Info = coverage,
-                            IsCoverage = true,
-                            Inside = true,
-                            DistanceMeters = 0.0,
-                        }));
+                    if (PickDataset(processor, id, stackRank, query.Latitude, longitude, radius, currentTime, ranked))
+                        break;
                 }
             }
         }
@@ -1339,6 +1306,71 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         if (query.MaxResults is { } max)
             ordered = ordered.Take(Math.Max(0, max));
         return ordered.ToArray();
+    }
+
+    /// <summary>
+    /// Adds <paramref name="processor"/>'s feature picks at the point to
+    /// <paramref name="ranked"/>, or its coverage pick when no feature is hit.
+    /// Returns whether anything was picked.
+    /// </summary>
+    private static bool PickDataset(
+        IDatasetProcessor processor,
+        MapDatasetId id,
+        int stackRank,
+        double latitude,
+        double longitude,
+        double radius,
+        DateTime? currentTime,
+        List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)> ranked)
+    {
+        var hits = processor.HitTestFeatures(latitude, longitude, radius);
+        if (hits.Count > 0)
+        {
+            foreach (var hit in hits)
+            {
+                var info = processor.GetFeatureInfoAt(hit.Ordinal)
+                    ?? processor.GetFeatureInfo(hit.FeatureRef);
+                if (info is null)
+                    continue;
+                ranked.Add((
+                    stackRank,
+                    (int)hit.Primitive,
+                    hit.DistanceMeters,
+                    new S100Pick
+                    {
+                        DatasetId = id,
+                        Info = info,
+                        Geometry = processor.GetFeatureGeometryAt(hit.Ordinal),
+                        IsCoverage = false,
+                        FeatureType = hit.FeatureType,
+                        Primitive = hit.Primitive,
+                        Inside = hit.Inside,
+                        DistanceMeters = hit.DistanceMeters,
+                    }));
+            }
+
+            return true;
+        }
+
+        if (processor.GetCoverageInfo(latitude, longitude, currentTime) is { } coverage)
+        {
+            // Coverage picks sort after a dataset's feature picks.
+            ranked.Add((
+                stackRank,
+                int.MaxValue,
+                double.MaxValue,
+                new S100Pick
+                {
+                    DatasetId = id,
+                    Info = coverage,
+                    IsCoverage = true,
+                    Inside = true,
+                    DistanceMeters = 0.0,
+                }));
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Removes every managed dataset layer and subscription.</summary>

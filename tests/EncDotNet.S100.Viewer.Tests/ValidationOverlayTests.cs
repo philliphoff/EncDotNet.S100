@@ -188,7 +188,7 @@ public class ValidationOverlayTests
         using var svc = new ValidationOverlayService(host, vm);
 
         Assert.Single(host.Overlays);
-        var layer = Assert.IsType<MemoryLayer>(host.Overlays[0]);
+        var layer = Assert.IsAssignableFrom<MemoryLayer>(host.Overlays[0]);
         Assert.Equal(2, CountFeatures(layer));
     }
 

@@ -13,7 +13,11 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// Request payload for <see cref="IdentifyFeaturesService"/>.
 /// </summary>
 /// <param name="Latitude">Pick latitude (decimal degrees, WGS-84). Must be in <c>[-90, 90]</c>.</param>
-/// <param name="Longitude">Pick longitude (decimal degrees, WGS-84). Must be in <c>[-180, 180]</c>.</param>
+/// <param name="Longitude">
+/// Pick longitude (decimal degrees, WGS-84). Must be in <c>[-540, 540]</c>: a
+/// longitude past ±180° (as a pick on a map's adjacent world copy reads)
+/// matches the same place one world east or west.
+/// </param>
 /// <param name="Spec">Optional spec filter; <c>null</c> matches every vector spec.</param>
 /// <param name="RadiusMeters">
 /// Search tolerance for point and curve features (metres). A point or
@@ -24,7 +28,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// <param name="MaxResults">Maximum ranked matches to return; clamped to <c>[1, 200]</c>.</param>
 public sealed record IdentifyFeaturesRequest(
     [property: Description("Pick latitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-90, 90].")] double Latitude,
-    [property: Description("Pick longitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-180, 180].")] double Longitude,
+    [property: Description("Pick longitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-540, 540]; a value past ±180 (a point on an adjacent world copy) matches the same place one world east or west, so data kept in a 0…360 or other continuous longitude frame is found either way.")] double Longitude,
     [property: Description("Optional spec filter; null matches every vector spec.")] SpecRef? Spec = null,
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
     [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20);
@@ -103,6 +107,10 @@ public sealed class IdentifyFeaturesService
 
     private const double MetersPerDegreeLatitude = 111_320.0;
 
+    // Three worlds: the standard one and a world copy either side, as a map
+    // that repeats data across world copies shows them.
+    private const double MaxLongitude = 540.0;
+
     /// <summary>
     /// Attribute codes whose value names an externally referenced text file
     /// (S-101 Feature Catalogue simple attribute <c>fileReference</c>, aliases
@@ -136,10 +144,10 @@ public sealed class IdentifyFeaturesService
                 new InvalidArgument("latitude", $"value {request.Latitude} is outside the WGS-84 range [-90, 90]")));
         }
 
-        if (double.IsNaN(request.Longitude) || request.Longitude < -180.0 || request.Longitude > 180.0)
+        if (double.IsNaN(request.Longitude) || request.Longitude < -MaxLongitude || request.Longitude > MaxLongitude)
         {
             return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Err(
-                new InvalidArgument("longitude", $"value {request.Longitude} is outside the WGS-84 range [-180, 180]")));
+                new InvalidArgument("longitude", $"value {request.Longitude} is outside the range [-{MaxLongitude}, {MaxLongitude}]")));
         }
 
         if (!double.IsFinite(request.RadiusMeters))
@@ -164,12 +172,6 @@ public sealed class IdentifyFeaturesService
         // sources (S-101) answer this in sub-linear time; other
         // products fall back to a linear MBR scan (still cheaper than
         // resolving distance for every feature). See issue #490.
-        var pickExtent = new BoundingBox(
-            Math.Clamp(request.Latitude - latPad, -90.0, 90.0),
-            request.Longitude - lonPad,
-            Math.Clamp(request.Latitude + latPad, -90.0, 90.0),
-            request.Longitude + lonPad);
-
         var snapshot = _catalog.Datasets;
         var hits = new List<Hit>();
 
@@ -182,11 +184,21 @@ public sealed class IdentifyFeaturesService
                 continue;
             }
 
-            if (!SpatialPredicates.Contains(Inflated(dataset.Bounds, latPad, lonPad), point))
+            // A dataset kept in a 0…360 or other continuous frame holds the
+            // place one world east or west of a standard longitude, and a
+            // pick on a map's adjacent world copy reads past ±180°: match the
+            // dataset at whichever of those longitudes it covers (issue #773).
+            if (DatasetLongitude(dataset.Bounds, request.Latitude, request.Longitude, latPad, lonPad) is not { } longitude)
             {
                 continue;
             }
 
+            var datasetPoint = new GeoPoint(request.Latitude, longitude);
+            var pickExtent = new BoundingBox(
+                Math.Clamp(request.Latitude - latPad, -90.0, 90.0),
+                longitude - lonPad,
+                Math.Clamp(request.Latitude + latPad, -90.0, 90.0),
+                longitude + lonPad);
             var features = FeatureAccessor.GetFeatures(dataset, pickExtent);
             if (features is null)
             {
@@ -199,7 +211,7 @@ public sealed class IdentifyFeaturesService
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (TryMatch(feature, point, latPad, lonPad, out var hit)
+                if (TryMatch(feature, datasetPoint, latPad, lonPad, out var hit)
                     && (hit.Inside || hit.DistanceMeters <= radius))
                 {
                     hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature });
@@ -233,6 +245,26 @@ public sealed class IdentifyFeaturesService
                 builder,
                 total,
                 take < total)));
+    }
+
+    /// <summary>
+    /// The longitude at which <paramref name="bounds"/> (padded) holds the
+    /// pick: <paramref name="longitude"/> itself, else the same place one
+    /// world east or west; <see langword="null"/> when none is covered.
+    /// </summary>
+    private static double? DatasetLongitude(
+        BoundingBox bounds, double latitude, double longitude, double latPad, double lonPad)
+    {
+        var padded = Inflated(bounds, latPad, lonPad);
+        foreach (var candidate in (ReadOnlySpan<double>)[longitude, longitude + 360.0, longitude - 360.0])
+        {
+            if (SpatialPredicates.Contains(padded, new GeoPoint(latitude, candidate)))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private bool TryMatch(

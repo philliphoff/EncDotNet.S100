@@ -820,6 +820,58 @@ public class S100MapSessionTests
     }
 
     [Fact]
+    public async Task PickAsyncHitsDatasetDrawnOnAdjacentWorldCopy()
+    {
+        // A dataset kept in a continuous frame east of the antimeridian
+        // (~175°E → ~225°E, like the NWS Alaska S-411) also draws one world
+        // west (issue #773), so a pick at 170°W hits its data at 190°.
+        using var map = new Map();
+        using var s100 = IdentitySession(map);
+        var id = new MapDatasetId("alaska");
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                Hits = [Hit(0, "ice", S100GeometryType.Surface)],
+                HitsAtLongitude = longitude => Math.Abs(longitude - 190.0) < 1e-9,
+                Extent = new BoundingBox(60, 175, 75, 225),
+            });
+
+        var pick = Assert.Single(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 72, Longitude = -170 }));
+
+        Assert.Equal("ice", pick.Info.FeatureRef);
+    }
+
+    [Fact]
+    public async Task PickAsyncDoesNotTryWorldCopiesOutsideDatasetExtent()
+    {
+        // A dataset in the standard frame has no copy near 170°W + 360°, so the
+        // pick is not repeated there: only the pointer's own longitude is tried.
+        using var map = new Map();
+        using var s100 = IdentitySession(map);
+        var id = new MapDatasetId("standard");
+        var tried = new List<double>();
+        await s100.AddDatasetAsync(
+            Dataset(id),
+            new StubProcessor(id.Value)
+            {
+                Hits = [Hit(0, "x", S100GeometryType.Surface)],
+                HitsAtLongitude = longitude =>
+                {
+                    lock (tried)
+                        tried.Add(longitude);
+                    return false;
+                },
+                Extent = new BoundingBox(50, -10, 60, 10),
+            });
+
+        Assert.Empty(await s100.Query.PickAsync(
+            new GeographicPickQuery { Latitude = 55, Longitude = -170 }));
+        Assert.Equal([-170.0], tried);
+    }
+
+    [Fact]
     public async Task PickAsyncHonorsMaxResults()
     {
         using var map = new Map();

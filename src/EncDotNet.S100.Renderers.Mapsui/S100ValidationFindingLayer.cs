@@ -73,7 +73,7 @@ public sealed class S100ValidationFindingLayer
         string? name = null)
     {
         _style = style ?? S100ValidationFindingStyle.Default;
-        _layer = new MemoryLayer
+        _layer = new WorldCopyMemoryLayer
         {
             Name = name ?? DefaultLayerName,
             Style = null,

@@ -43,6 +43,24 @@ public class PickHighlightOverlayLayerTests
     }
 
     [Fact]
+    public void Layer_RepeatsAcrossWorldCopies()
+    {
+        // A pick on the west copy of data kept past the antimeridian (210°E,
+        // drawn at 150°W too) is highlighted where the user sees it (#773).
+        var layer = PickHighlightOverlayLayer.Create();
+        PickHighlightOverlayLayer.Update(
+            layer,
+            new PickHighlightState(new GeoPosition(72, 210), Geometry: null),
+            Appearance);
+        var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(-150, 72);
+
+        var copies = layer.GetFeatures(new Mapsui.MRect(x - 1000, y - 1000, x + 1000, y + 1000), 100).ToList();
+
+        Assert.Equal(FeatureCount(layer), copies.Count);
+        Assert.All(copies, f => Assert.InRange(f.Extent!.Centroid.X, x - 1000, x + 1000));
+    }
+
+    [Fact]
     public void Update_LocationOnly_DrawsMarkerTriplet()
     {
         var layer = PickHighlightOverlayLayer.Create();

@@ -257,6 +257,7 @@ public sealed class MapsuiDisplayListRenderer
             Features = mapFeatures,
             Style = null,
             CustomLayerRendererName = tiledRendererName,
+            RepeatsAcrossWorldCopies = TiledSceneModeIsTiled,
         };
 
         if (TiledSceneModeIsTiled)

@@ -101,6 +101,45 @@ public sealed class S411PolarAntimeridianGeometryTests
         Assert.All(lines.SelectMany(l => l.World), p => AssertInFrame(p.X, frameWest));
     }
 
+    [Theory]
+    [InlineData(SeamRing, 0)]
+    [InlineData(PolarRing, 0)]
+    public void ClippedArea_IsNotStrokedAlongItsCut(string posList, double frameWest)
+    {
+        // The pieces of a clipped ring meet at the frame's edge, where the
+        // data continues in the adjacent world copy (issue #773). Stroking the
+        // fill drew a line along that cut, so the fill has no stroke and the
+        // ring's own edges are outlined by line ops that never run along it.
+        var ops = Build(posList, new AreaInstruction { FeatureReference = FeatureId(posList), FillColor = "ICE" });
+        var areas = ops.OfType<AreaPaintOp>().ToList();
+        var outlines = ops.OfType<LinePaintOp>().ToList();
+
+        Assert.True(areas.Count >= 1);
+        Assert.All(areas, a => Assert.Equal(0.0, a.OutlineWidthPx));
+        Assert.NotEmpty(outlines);
+        double west = WebMercator.FromLonLat(frameWest, 0).X;
+        foreach (var line in outlines)
+        {
+            AssertNoWorldSpanningSegment(line.World);
+            for (int i = 1; i < line.World.Count; i++)
+            {
+                var (a, b) = (line.World[i - 1], line.World[i]);
+                bool alongEdge = (Math.Abs(a.X - west) < 1 && Math.Abs(b.X - west) < 1)
+                    || (Math.Abs(a.X - west - C) < 1 && Math.Abs(b.X - west - C) < 1);
+                Assert.False(alongEdge, $"outline runs along the frame edge at segment {i}");
+            }
+        }
+    }
+
+    [Fact]
+    public void PlainArea_KeepsItsStroke()
+    {
+        var ops = Build(ContinuousRing, new AreaInstruction { FeatureReference = FeatureId(ContinuousRing), FillColor = "ICE" });
+
+        Assert.True(Assert.Single(ops.OfType<AreaPaintOp>()).OutlineWidthPx > 0);
+        Assert.Empty(ops.OfType<LinePaintOp>());
+    }
+
     [Fact]
     public void ContinuousFrameRing_ProjectsUnchanged()
     {

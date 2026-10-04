@@ -1054,11 +1054,19 @@ performance runs that want to measure only dataset rendering without
 basemap tile fetch / raster activity (issue #295).
 
 The **Offline** basemap repeats its Natural Earth land across the
-immediately-adjacent world copies (one circumference east and west), so
-a dataset kept in a continuous longitude frame across the ±180°
-antimeridian — e.g. the US NWS S-411 sea-ice product (~175°E → ~225°E) —
-has land beneath it instead of floating over empty water. The layer
-still reports a single-world extent, so "zoom to extent" is unaffected.
+immediately-adjacent world copies (one circumference east and west), and
+chart data does the same: each dataset is drawn in its own longitude
+frame and one world east and west of it, wherever those copies are in
+view. A dataset kept in a 0…360 frame (the NIC Arctic S-411) or in a
+continuous frame across the ±180° antimeridian (the US NWS S-411 sea-ice
+product, ~175°E → ~225°E) therefore shows on both sides of 0° and ±180°
+over the matching land. Picks, the pick highlight, extent outlines, the
+overscale curtain and validation findings follow the copies. Layers still
+report their own extent, so "zoom to extent" frames the dataset's own
+frame. The repeat covers one world either side of the dataset's frame,
+so a view zoomed out past about two worlds can show the basemap beyond
+the data's last copy. The **Single surface** scene mode (Settings →
+Scene mode) draws the dataset's own frame only.
 The **Online** OpenStreetMap tiles are *not* world-copied (the XYZ tile
 schema spans one world and Mapsui's tiling does not wrap), so such a
 dataset shows no online tiles beneath the portion east of +180°; use the

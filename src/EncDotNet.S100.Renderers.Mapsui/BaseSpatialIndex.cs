@@ -64,6 +64,12 @@ internal sealed class BaseSpatialIndex
     /// <summary>The base ops, in original draw order.</summary>
     public IReadOnlyList<PaintOp> Ops => _ops;
 
+    /// <summary>
+    /// The west and east world X of every bounded op together, or
+    /// <see langword="null"/> when no op has bounds.
+    /// </summary>
+    public (double MinX, double MaxX)? XSpan => _maxX >= _minX ? (_minX, _maxX) : null;
+
     /// <summary>Builds the index over <paramref name="baseScene"/>'s area/line ops.</summary>
     public BaseSpatialIndex(VectorScene baseScene)
     {

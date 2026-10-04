@@ -69,8 +69,12 @@ internal sealed class TileDiskCache : IDisposable
     /// v4: a tile is rasterised no coarser than its cell's out-of-band cap
     /// (#761). v3 tiles of a band whose scale lies past the cap lack the
     /// cell's line work, which would stay missing inside the cell's band.
+    /// v5: seam-crossing and polar surfaces are projected and outlined
+    /// differently, and tiles at a world-copy seam fill their gutter from the
+    /// adjacent copy (issues #760, #773), without any change to the style
+    /// state, so tiles cached before would keep their wedges and seam lines.
     /// </remarks>
-    public const int FormatVersion = 4;
+    public const int FormatVersion = 5;
 
     private const string FileExtension = ".png";
 

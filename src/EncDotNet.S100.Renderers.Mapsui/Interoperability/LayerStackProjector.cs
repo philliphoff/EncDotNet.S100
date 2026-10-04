@@ -190,14 +190,15 @@ public static class LayerStackProjector
 
         // Build a fresh MemoryLayer mirroring the source rather than mutating it
         // — the session retains the prebuilt layer for the un-suppressed case (e.g.
-        // an S-102 deactivation restores the full S-101 depth shading).
-        var filtered = new MemoryLayer
-        {
-            Name = source.Name,
-            Features = kept,
-            Style = source.Style,
-            CustomLayerRendererName = source.CustomLayerRendererName,
-        };
+        // an S-102 deactivation restores the full S-101 depth shading). A tiled
+        // source repeats its pick features across world copies, as it is drawn.
+        var filtered = source is InstrumentedMemoryLayer { RepeatsAcrossWorldCopies: true }
+            ? new WorldCopyMemoryLayer()
+            : new MemoryLayer();
+        filtered.Name = source.Name;
+        filtered.Features = kept;
+        filtered.Style = source.Style;
+        filtered.CustomLayerRendererName = source.CustomLayerRendererName;
         CopyDisplayState(source, filtered);
 
         // The source is painted by a scene renderer from its bound VectorScene;
