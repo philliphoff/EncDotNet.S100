@@ -77,4 +77,56 @@ public class GmlCoordinateParserTests
         Assert.Equal(70.0, coord!.Value.Latitude, 6);
         Assert.Equal(-155.0, coord.Value.Longitude, 6);
     }
+
+    [Fact]
+    public void ParsePosList_list_with_one_lon_first_pair_is_read_lon_first_throughout()
+    {
+        // NIC Arctic S-411: a ring straddling 90°E. "45 81" alone looks
+        // latitude first, but "120 80" shows the list is longitude first.
+        var coords = GmlCoordinateParser.ParsePosList("45 81 120 80");
+
+        Assert.Equal(81, coords[0].Latitude, 6);
+        Assert.Equal(45, coords[0].Longitude, 6);
+        Assert.Equal(80, coords[1].Latitude, 6);
+        Assert.Equal(120, coords[1].Longitude, 6);
+    }
+
+    [Fact]
+    public void ParsePosList_longitude_first_order_swaps_every_pair()
+    {
+        // A ring lying wholly within ±90° longitude in a longitude-first
+        // dataset (issue #760).
+        var coords = GmlCoordinateParser.ParsePosList("30 75 60 76", GmlAxisOrder.LongitudeFirst);
+
+        Assert.Equal(75, coords[0].Latitude, 6);
+        Assert.Equal(30, coords[0].Longitude, 6);
+        Assert.Equal(76, coords[1].Latitude, 6);
+        Assert.Equal(60, coords[1].Longitude, 6);
+    }
+
+    [Fact]
+    public void DetectAxisOrder_finds_a_lon_first_position_anywhere_in_the_dataset()
+    {
+        var root = System.Xml.Linq.XElement.Parse("""
+            <d xmlns:gml="http://www.opengis.net/gml/3.2">
+              <gml:posList>30 75 60 76</gml:posList>
+              <gml:posList>200 70 210 71</gml:posList>
+            </d>
+            """);
+
+        Assert.Equal(GmlAxisOrder.LongitudeFirst, GmlCoordinateParser.DetectAxisOrder(root));
+    }
+
+    [Fact]
+    public void DetectAxisOrder_is_auto_for_conformant_lat_first_data()
+    {
+        var root = System.Xml.Linq.XElement.Parse("""
+            <d xmlns:gml="http://www.opengis.net/gml/3.2">
+              <gml:posList>62.1 -167.3 66.3 -165.5</gml:posList>
+              <gml:pos>60 95</gml:pos>
+            </d>
+            """);
+
+        Assert.Equal(GmlAxisOrder.Auto, GmlCoordinateParser.DetectAxisOrder(root));
+    }
 }

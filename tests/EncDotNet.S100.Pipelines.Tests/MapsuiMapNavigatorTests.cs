@@ -162,6 +162,20 @@ public sealed class MapsuiMapNavigatorTests
         AssertExtent(new MRect(-60, -60, 60, 60), map.Navigator.Viewport.ToExtent());
     }
 
+    [Fact]
+    public void ZoomToExtent_ClipsAnExtentReachingPastTheTopOfTheWorld()
+    {
+        // A polar dataset's extent runs towards the pole (issue #760); only the
+        // part inside the Web-Mercator world is framed.
+        using var map = SizedMap();
+        var navigation = new MapsuiMapNavigator(map);
+        double top = SphericalMercator.FromLonLat(0, 85.05112878).y;
+
+        navigation.ZoomToExtent(new MRect(-50, top - 100, 50, top + 1e7), durationMilliseconds: 0);
+
+        AssertExtent(new MRect(-60, top - 110, 60, top + 10), map.Navigator.Viewport.ToExtent());
+    }
+
     private static Map SizedMap()
     {
         var map = new Map();

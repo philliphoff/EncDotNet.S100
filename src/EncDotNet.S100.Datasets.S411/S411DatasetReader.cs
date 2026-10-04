@@ -108,6 +108,11 @@ internal static class S411DatasetReader
 
         var features = new List<S411Feature>();
 
+        // NWS and NIC write longitude first. Decide once for the dataset so
+        // rings lying wholly within ±90° longitude are read the same way as
+        // the rest (issue #760).
+        var axisOrder = GmlCoordinateParser.DetectAxisOrder(root);
+
         // Operational S-411 producers (e.g. the Canadian Ice Service) frequently
         // emit every feature with the same gml:id ("seaice.None"). The geometry
         // provider keys on Feature.Id, so collisions cause every drawing
@@ -126,7 +131,7 @@ internal static class S411DatasetReader
                     CultureInfo.InvariantCulture, "{0}.{1:0000}", featureEl.Name.LocalName, ++idCounter);
                 featureEl.SetAttributeValue(GmlNamespaces.Gml + "id", syntheticId);
 
-                features.Add(ParseIceFeature(featureEl));
+                features.Add(ParseIceFeature(featureEl, axisOrder));
             }
         }
 
@@ -156,12 +161,12 @@ internal static class S411DatasetReader
         return null;
     }
 
-    private static S411Feature ParseIceFeature(XElement element)
+    private static S411Feature ParseIceFeature(XElement element, GmlAxisOrder axisOrder)
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var featureType = element.Name.LocalName;
 
-        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseInlineGmlGeometry(element);
+        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseInlineGmlGeometry(element, axisOrder);
         var simple = new Dictionary<string, string>();
 
         foreach (var child in element.Elements())
@@ -187,7 +192,7 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseInlineGmlGeometry(XElement element)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseInlineGmlGeometry(XElement element, GmlAxisOrder axisOrder)
     {
         IReadOnlyList<GeoPosition> points = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
@@ -198,14 +203,14 @@ internal static class S411DatasetReader
         var polygon = element.Element(GmlNamespaces.Gml + "Polygon");
         if (polygon is not null)
         {
-            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(polygon);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(polygon, axisOrder);
             return (S100GeometryType.Surface, points, curves, ext, intRings);
         }
 
         var lineString = element.Element(GmlNamespaces.Gml + "LineString") ?? element.Element(GmlNamespaces.Gml + "Curve");
         if (lineString is not null)
         {
-            var coords = GmlCoordinateParser.ParseCurveCoordinates(lineString);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(lineString, axisOrder);
             curves = coords.Count > 0
                 ? [coords]
                 : [];
@@ -215,7 +220,7 @@ internal static class S411DatasetReader
         var point = element.Element(GmlNamespaces.Gml + "Point");
         if (point is not null)
         {
-            var coord = GmlCoordinateParser.ParsePointElement(point);
+            var coord = GmlCoordinateParser.ParsePointElement(point, null, axisOrder);
             if (coord is not null)
             {
                 geometryType = S100GeometryType.Point;
@@ -250,12 +255,13 @@ internal static class S411DatasetReader
         }
 
         var features = new List<S411Feature>();
+        var axisOrder = GmlCoordinateParser.DetectAxisOrder(root);
         foreach (var memberContainer in EnumerateMembers(root, datasetNs))
         {
             foreach (var element in memberContainer.Elements())
             {
                 if (!IsFeatureType(element.Name, datasetNs)) continue;
-                features.Add(ParseGenericFeature(element, s100Ns));
+                features.Add(ParseGenericFeature(element, s100Ns, axisOrder));
             }
         }
 
@@ -299,14 +305,14 @@ internal static class S411DatasetReader
         return S100Ns_5_0;
     }
 
-    private static S411Feature ParseGenericFeature(XElement element, XNamespace s100Ns)
+    private static S411Feature ParseGenericFeature(XElement element, XNamespace s100Ns, GmlAxisOrder axisOrder)
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
             ?? element.Attribute("id")?.Value
             ?? "";
         var featureType = element.Name.LocalName;
 
-        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGenericGeometry(element, s100Ns);
+        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGenericGeometry(element, s100Ns, axisOrder);
         var (simpleAttrs, complexAttrs) = ParseGenericAttributes(element, s100Ns);
 
         return new S411Feature
@@ -323,7 +329,7 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns, GmlAxisOrder axisOrder)
     {
         IReadOnlyList<GeoPosition> points = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
@@ -341,7 +347,7 @@ internal static class S411DatasetReader
             ?? geometryContainer.Element(s100Ns + "Point");
         if (pointProp is not null)
         {
-            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp, null, axisOrder);
             if (coord is not null)
             {
                 geometryType = S100GeometryType.Point;
@@ -353,7 +359,7 @@ internal static class S411DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp, axisOrder);
             curves = coords.Count > 0
                 ? [coords]
                 : [];
@@ -363,7 +369,7 @@ internal static class S411DatasetReader
         if (surfaceProp is not null)
         {
             geometryType = S100GeometryType.Surface;
-            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp, axisOrder);
             exteriorRing = ext;
             interiorRings = intRings;
         }

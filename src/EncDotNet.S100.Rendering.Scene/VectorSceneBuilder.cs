@@ -208,7 +208,7 @@ public sealed class VectorSceneBuilder
 
         void AddOp(DrawingInstruction instruction, FeatureGeometry? geom)
         {
-            PaintOp? op = instruction switch
+            IEnumerable<PaintOp> built = instruction switch
             {
                 // Pattern fills are lowered only when a resolver is supplied (the
                 // headless path); otherwise they are deferred to the Mapsui
@@ -217,18 +217,19 @@ public sealed class VectorSceneBuilder
                     => BuildPatternArea(areaPattern, patternRef, geom),
                 AreaInstruction area when geom is not null => BuildArea(area, geom),
                 LineInstruction line => BuildLine(line, geom),
-                PointInstruction point when geom is not null => BuildPoint(point, geom),
-                TextInstruction text when geom is not null => BuildText(text, geom),
-                _ => null,
+                PointInstruction point when geom is not null => [BuildPoint(point, geom)],
+                TextInstruction text when geom is not null => BuildText(text, geom) is { } textOp ? [textOp] : [],
+                _ => [],
             };
 
-            if (op is not null)
+            foreach (var op in built)
             {
                 ops.Add(op);
                 if (op is PatternAreaPaintOp patternOp)
                     patternPriorities.Add((patternOp, instruction.DrawingPriority));
             }
         }
+
 
         // Priority-clip pattern ops in the IR (shared with the Mapsui feature
         // path via PatternPriorityClipper) so the headless Skia backend and the
@@ -507,45 +508,41 @@ public sealed class VectorSceneBuilder
         return result;
     }
 
-    private PatternAreaPaintOp? BuildPatternArea(
+    private IEnumerable<PaintOp> BuildPatternArea(
         AreaInstruction instruction, string patternRef, FeatureGeometry geometry)
     {
         if (PatternResolver is null)
-            return null;
+            yield break;
 
         if (geometry.Coordinates.Count < 3)
-            return null;
+            yield break;
 
         var tile = PatternResolver(patternRef);
         if (tile is null || tile.Length == 0)
-            return null;
+            yield break;
 
-        var holes = new List<IReadOnlyList<(double, double)>>(geometry.InteriorRings.Count);
-        foreach (var ring in geometry.InteriorRings)
+        foreach (var (shell, holes) in AntimeridianGeometry.ProjectSurface(geometry.Coordinates, geometry.InteriorRings))
         {
-            if (ring.Count >= 3)
-                holes.Add(Project(ring));
+            yield return new PatternAreaPaintOp
+            {
+                FeatureReference = instruction.FeatureReference,
+                ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
+                ScaleMaximum = instruction.ScaleMaximum,
+                PatternReference = patternRef,
+                WorldShell = shell,
+                WorldHoles = holes,
+                TilePng = tile,
+            };
         }
-
-        return new PatternAreaPaintOp
-        {
-            FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
-            ScaleMaximum = instruction.ScaleMaximum,
-            PatternReference = patternRef,
-            WorldShell = Project(geometry.Coordinates),
-            WorldHoles = holes,
-            TilePng = tile,
-        };
     }
 
-    private AreaPaintOp? BuildArea(AreaInstruction instruction, FeatureGeometry geometry)
+    private IEnumerable<PaintOp> BuildArea(AreaInstruction instruction, FeatureGeometry geometry)
     {
         if (instruction.FillColor is null)
-            return null;
+            yield break;
 
         if (geometry.Coordinates.Count < 3)
-            return null;
+            yield break;
 
         var fill = ResolveColor(instruction.FillColor);
         if (instruction.Transparency.HasValue)
@@ -554,34 +551,30 @@ public sealed class VectorSceneBuilder
             fill = new RgbaColor(fill.R, fill.G, fill.B, alpha);
         }
 
-        var holes = new List<IReadOnlyList<(double, double)>>(geometry.InteriorRings.Count);
-        foreach (var ring in geometry.InteriorRings)
+        foreach (var (shell, holes) in AntimeridianGeometry.ProjectSurface(geometry.Coordinates, geometry.InteriorRings))
         {
-            if (ring.Count >= 3)
-                holes.Add(Project(ring));
+            yield return new AreaPaintOp
+            {
+                FeatureReference = instruction.FeatureReference,
+                ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
+                ScaleMaximum = instruction.ScaleMaximum,
+                WorldShell = shell,
+                WorldHoles = holes,
+                Fill = fill,
+                // Matches the legacy renderer's faint area outline.
+                OutlineColor = new RgbaColor(0, 0, 0, 40),
+                OutlineWidthPx = 0.5,
+            };
         }
-
-        return new AreaPaintOp
-        {
-            FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
-            ScaleMaximum = instruction.ScaleMaximum,
-            WorldShell = Project(geometry.Coordinates),
-            WorldHoles = holes,
-            Fill = fill,
-            // Matches the legacy renderer's faint area outline.
-            OutlineColor = new RgbaColor(0, 0, 0, 40),
-            OutlineWidthPx = 0.5,
-        };
     }
 
-    private LinePaintOp? BuildLine(LineInstruction instruction, FeatureGeometry? geometry)
+    private IEnumerable<PaintOp> BuildLine(LineInstruction instruction, FeatureGeometry? geometry)
         => BuildLine(instruction, instruction.CoordinatesOverride ?? geometry?.Coordinates);
 
-    private LinePaintOp? BuildLine(LineInstruction instruction, IReadOnlyList<GeoPosition>? coords)
+    private IEnumerable<PaintOp> BuildLine(LineInstruction instruction, IReadOnlyList<GeoPosition>? coords)
     {
         if (coords is null || coords.Count < 2)
-            return null;
+            yield break;
 
         string? colorToken = instruction.LineColor;
         double width = instruction.LineWidth;
@@ -620,17 +613,21 @@ public sealed class VectorSceneBuilder
             defaultDash = true;
         }
 
-        return new LinePaintOp
+        var color = ResolveColor(colorToken);
+        foreach (var world in AntimeridianGeometry.ProjectPolyline(coords))
         {
-            FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
-            ScaleMaximum = instruction.ScaleMaximum,
-            World = Project(coords),
-            Color = ResolveColor(colorToken),
-            WidthPx = widthPx,
-            DashArrayPx = dashArray,
-            DefaultDash = defaultDash,
-        };
+            yield return new LinePaintOp
+            {
+                FeatureReference = instruction.FeatureReference,
+                ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
+                ScaleMaximum = instruction.ScaleMaximum,
+                World = world,
+                Color = color,
+                WidthPx = widthPx,
+                DashArrayPx = dashArray,
+                DefaultDash = defaultDash,
+            };
+        }
     }
 
     private PointPaintOp BuildPoint(PointInstruction instruction, FeatureGeometry geometry)
@@ -665,7 +662,7 @@ public sealed class VectorSceneBuilder
             FeatureReference = instruction.FeatureReference,
             ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
-            World = WebMercator.FromLonLat(lon, lat),
+            World = ProjectAnchor(lat, lon),
             Symbol = symbol,
             FallbackColor = ColorResolver.ResolveSymbolColor(instruction.SymbolReference, ResolveColor),
             FallbackScale = 0.15 * instruction.SymbolScale * SymbolScale,
@@ -731,7 +728,7 @@ public sealed class VectorSceneBuilder
             FeatureReference = instruction.FeatureReference,
             ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
-            World = WebMercator.FromLonLat(lon, lat),
+            World = ProjectAnchor(lat, lon),
             Text = instruction.Text,
             FontSizePx = instruction.FontSize * TextScale,
             ForeColor = foreColor,
@@ -743,14 +740,11 @@ public sealed class VectorSceneBuilder
         };
     }
 
-    private static IReadOnlyList<(double X, double Y)> Project(
-        IReadOnlyList<GeoPosition> coords)
-    {
-        var result = new (double, double)[coords.Count];
-        for (int i = 0; i < coords.Count; i++)
-            result[i] = WebMercator.FromLonLat(coords[i].Longitude, coords[i].Latitude);
-        return result;
-    }
+    // A point or label anchor poleward of the Web-Mercator limit (e.g. the
+    // centroid of an Arctic ice area) is pinned to the limit, so it still
+    // draws at the top of the world and does not stretch a fitted extent.
+    private static (double X, double Y) ProjectAnchor(double lat, double lon) =>
+        WebMercator.FromLonLat(lon, Math.Clamp(lat, -WebMercator.MaxLatitude, WebMercator.MaxLatitude));
 
     // The parts of a multi-part curve or surface, each as a geometry of its
     // own (a surface part with its own holes).
