@@ -15,7 +15,11 @@ internal sealed class AppScreenshotProvider : IAppScreenshotProvider
     public Control? Target { get; set; }
 
     /// <inheritdoc />
-    public async Task<byte[]?> CapturePngAsync(CancellationToken cancellationToken = default)
+    public Task<byte[]?> CapturePngAsync(CancellationToken cancellationToken = default) =>
+        CapturePngAsync(1.0, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<byte[]?> CapturePngAsync(double scale, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -24,6 +28,7 @@ internal sealed class AppScreenshotProvider : IAppScreenshotProvider
             ? null
             : await AvaloniaControlCapture.CapturePngAsync(
                 target,
+                scale,
                 cancellationToken).ConfigureAwait(false);
     }
 }

@@ -1,0 +1,60 @@
+---
+import { docs, links, withBase } from '../data/content';
+---
+<section class="oss" style="padding-top: 24px" aria-labelledby="oss-title">
+  <div class="wrap">
+    <h2 id="oss-title">Open source, made in the open.</h2>
+    <p class="lede" style="margin: 14px auto 0">
+      SoundCharts and EncDotNet.S100 are MIT licensed. Issues, ideas and pull requests are all welcome. The project was
+      named for Puget Sound and is built for waters everywhere.
+    </p>
+    <div class="ctas">
+      <a class="btn btn-primary" href={links.repo}>Star on GitHub</a>
+      <a class="btn btn-ghost" href={links.discord}>Join the Discord</a>
+      <a class="btn btn-ghost" href={withBase(docs.home)}>Read the docs</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <span>© SoundCharts · soundcharts.app</span>
+      <ul>
+        <li><a href={links.releases}>Releases</a></li>
+        <li><a href={withBase(docs.home)}>Docs</a></li>
+        <li><a href={links.license}>License</a></li>
+        <li><a href={links.security}>Security</a></li>
+      </ul>
+    </div>
+    <p class="disclaimer">
+      <strong>Not for navigation.</strong> SoundCharts is not a type-approved ECDIS and must not be used as a primary
+      means of navigation. Chart imagery: NOAA Office of Coast Survey and National Weather Service (public domain),
+      USACE, Natural Earth, and the Canadian Hydrographic Service (below).
+    </p>
+    <p class="disclaimer" id="chs-notice">
+      The S-101 chart of Quebec City was made by the EncDotNet.S100 project and contains intellectual property of
+      the Canadian Hydrographic Service (CHS) of the Department of Fisheries and Oceans. This product does not meet
+      the requirements of the Navigation Safety Regulations, 2020 under the Canada Shipping Act, 2001. Charts and
+      publications issued by or on the authority of CHS must be used to meet the requirements of those regulations.
+      The copyright in the data are and remain the property of His Majesty the King in Right of Canada and shall
+      not be sold, licensed, leased, assigned or given to a third party. The incorporation of CHS data in this
+      product does not constitute an endorsement or an approval of this product by the Canadian Hydrographic
+      Service, the Department of Fisheries and Oceans or His Majesty the King in Right of Canada.
+    </p>
+  </div>
+</footer>
+
+<div class="review-bar" role="region" aria-label="Review controls">
+  Review · <span style="color:#a8e6b8">■</span> captured <span style="color:#ffe9a6">■</span> stand-in
+  <span style="color:#ffd84d">■</span> to capture
+  <button type="button" id="toggle-badges">Hide shot IDs</button>
+</div>
+
+<script>
+  const toggle = document.getElementById('toggle-badges');
+  toggle?.addEventListener('click', () => {
+    const off = document.documentElement.classList.toggle('badges-off');
+    toggle.textContent = off ? 'Show shot IDs' : 'Hide shot IDs';
+  });
+</script>

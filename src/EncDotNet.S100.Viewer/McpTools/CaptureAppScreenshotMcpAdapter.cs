@@ -28,7 +28,9 @@ internal static class CaptureAppScreenshotMcpAdapter
         + "chrome (activity docks, panels, timeline, status bar) — and returns it as an MCP ImageContentBlock "
         + "alongside a JSON metadata block. Primary use case: agent-driven verification of non-rendering UX "
         + "changes, e.g. confirming that set_panel actually opened a panel. Complements render_to_image, which "
-        + "captures only the map surface. Read-only and side-effect free; the window is not mutated. "
+        + "captures only the map surface. Pass scale (e.g. 2) for a sharper image: the window is rendered at "
+        + "that many pixels per logical pixel, clamped to [0.5, 3]; the default is 1. "
+        + "Read-only and side-effect free; the window is not mutated. "
         + "Viewer-injected tool — not available from a headless MCP host until that host supplies its own "
         + "equivalent.";
 
@@ -37,7 +39,9 @@ internal static class CaptureAppScreenshotMcpAdapter
     {
         ArgumentNullException.ThrowIfNull(inner);
 
-        var del = (CancellationToken ct = default) => DispatchAsync(() => inner.InvokeAsync(ct));
+        var del = (
+            [System.ComponentModel.Description("Device pixels per logical pixel (2 = Retina-sharp). Clamped to [0.5, 3]; omit for 1.")] double? scale = null,
+            CancellationToken ct = default) => DispatchAsync(() => inner.InvokeAsync(scale, ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {

@@ -1,0 +1,64 @@
+---
+import Clip from './Clip.astro';
+import { docs, links, standards, withBase } from '../data/content';
+---
+<section id="developers" aria-labelledby="dev-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">For developers</span>
+      <h2 id="dev-title">Built on an SDK you can use.</h2>
+      <p class="lede">
+        Everything SoundCharts does is in <strong>EncDotNet.S100</strong>, a managed .NET library for reading,
+        portraying, rendering and validating S-100 data. It has no native dependencies and no commercial S-52 assets.
+      </p>
+    </div>
+    <div class="dev-grid">
+      <div class="dev">
+        <span class="eyebrow">Library</span>
+        <h3>Three lines to a PNG.</h3>
+        <p>Open any supported dataset, and the bundled feature and portrayal catalogues take care of the rest.</p>
+        <pre><span class="k">using var</span> ds = S100Dataset.Open(<span class="s">"chart.000"</span>);
+<span class="k">using var</span> r  = <span class="k">new</span> PngS100DatasetRenderer();
+<span class="k">byte</span>[] png = <span class="k">await</span> r.RenderAsync(ds);</pre>
+        <div class="links">
+          <a href={withBase(docs.gettingStarted)}>Get started</a>
+          <a href={links.nuget}>NuGet</a>
+          <a href={withBase(docs.api)}>API reference</a>
+        </div>
+      </div>
+      <div class="dev">
+        <span class="eyebrow">Command line</span>
+        <h3>Render from the shell.</h3>
+        <p>
+          The self-contained <code>s100</code> tool renders, inspects and validates data, and serves S-100 feeds. It's
+          handy for batch jobs and CI, and needs no .NET install.
+        </p>
+        <pre><span class="c"># any product, any palette</span>
+s100 render currents.h5 out.png \
+  --palette night --time-step 6</pre>
+        <div class="links">
+          <a href={withBase(docs.cli)}>CLI guide</a>
+          <a href={links.releases}>Download</a>
+        </div>
+      </div>
+      <div class="dev">
+        <span class="eyebrow">MCP</span>
+        <h3>Let agents read the chart.</h3>
+        <p>An optional MCP server lets AI agents query features, sample depths and currents, plan routes and drive the viewer.</p>
+        <Clip id="D2" alt="An AI agent plans a route in SoundCharts over MCP, finds a shoal with S-102 depths and moves two waypoints" title="Agent planning a route" detail="Transcript next to the viewer" sizes="(max-width: 960px) 100vw, 330px" />
+        <div class="links"><a href={withBase(docs.mcp)}>MCP server docs</a></div>
+      </div>
+    </div>
+
+    <div style="margin-top: 72px">
+      <h3 style="font-size: 26px; margin-bottom: 18px">Supported standards</h3>
+      <div class="standards">
+        {standards.map(([spec, subject]) => <div class="std"><b>{spec}</b><span>{subject}</span></div>)}
+      </div>
+      <p class="std-note">
+        Each standard comes with a reader and portrayal, and validation rule packs where the spec defines them.
+        <a href={links.standards}>Full details →</a>
+      </p>
+    </div>
+  </div>
+</section>

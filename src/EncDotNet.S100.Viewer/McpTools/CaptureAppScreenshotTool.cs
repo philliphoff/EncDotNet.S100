@@ -39,6 +39,12 @@ internal sealed class CaptureAppScreenshotTool
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "capture_app_screenshot";
 
+    /// <summary>Smallest accepted <c>scale</c>; lower values are clamped up.</summary>
+    public const double MinScale = 0.5;
+
+    /// <summary>Largest accepted <c>scale</c>; higher values are clamped down.</summary>
+    public const double MaxScale = 3.0;
+
     private readonly IAppScreenshotProvider _provider;
 
     /// <summary>Creates a new <see cref="CaptureAppScreenshotTool"/>.</summary>
@@ -49,15 +55,22 @@ internal sealed class CaptureAppScreenshotTool
     }
 
     /// <summary>Executes the tool.</summary>
+    /// <param name="scale">
+    /// Device pixels per logical pixel (2 = Retina-sharp). Null captures at 1;
+    /// other values are clamped to [<see cref="MinScale"/>, <see cref="MaxScale"/>].
+    /// </param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
     public async Task<ToolResult<CaptureAppScreenshotResult>> InvokeAsync(
+        double? scale = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var effectiveScale = scale is { } s && double.IsFinite(s) ? Math.Clamp(s, MinScale, MaxScale) : 1.0;
         byte[]? bytes;
         try
         {
-            bytes = await _provider.CapturePngAsync(cancellationToken).ConfigureAwait(false);
+            bytes = await _provider.CapturePngAsync(effectiveScale, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
