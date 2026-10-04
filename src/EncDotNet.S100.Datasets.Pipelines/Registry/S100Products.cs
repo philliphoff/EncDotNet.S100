@@ -138,10 +138,10 @@ public static class S100Products
     public static S100ProductRegistration S125 { get; } = Gml(
         "S-125",
         (s, path) => new S125DatasetProcessor(
-            path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
+            path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager, s.LuaEngine),
         (s, r) => new S125DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
-            s.FeatureCatalogueManager),
+            s.FeatureCatalogueManager, s.LuaEngine),
         static d => Ns(d, "S-125", "S125") || Local(d, "S125")
             || DataSetAttr(d, "S125", "S-125"));
 

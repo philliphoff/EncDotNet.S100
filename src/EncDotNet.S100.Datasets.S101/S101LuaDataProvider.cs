@@ -77,7 +77,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// the raw host data (List of {SpatialID, SpatialType, Orientation})
     /// into proper SpatialAssociation objects via CreateSpatialAssociation().
     /// </summary>
-    private const string SpatialAssociationShim = """
+    internal const string SpatialAssociationShim = """
         local _rawHostGetSpatial = HostFeatureGetSpatialAssociations
         HostFeatureGetSpatialAssociations = function(featureID)
             local raw = _rawHostGetSpatial(featureID)
@@ -97,7 +97,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// to get raw data, then constructing proper Spatial Lua objects via the
     /// Create* functions from PortrayalAPI.lua.
     /// </summary>
-    private const string HostGetSpatialShim = """
+    internal const string HostGetSpatialShim = """
         local _rawHostGetSpatialData = HostGetSpatialData
         function HostGetSpatial(spatialID)
             local data = _rawHostGetSpatialData(spatialID)
@@ -153,7 +153,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// return <c>DynValue.Void</c> (rather than nil) from <c>__index</c> when an
     /// attribute is missing, causing <c>type()</c> to error.
     /// </summary>
-    private const string ContainsGuard = """
+    internal const string ContainsGuard = """
         local _orig_contains = contains
         function contains(value, array)
             if value == nil then return false end
@@ -176,7 +176,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// matching the FC's optional semantics. When <c>nameUsage</c> is
     /// present, the original <c>1</c>/<c>2</c> branching is preserved.
     /// </summary>
-    private const string FeatureNamePatch = """
+    internal const string FeatureNamePatch = """
         function GetFeatureName(feature, contextParameters)
             -- Match upstream featurePortrayal:GetFeatureName side effect so
             -- main.lua's fallback PortrayFeatureName guard sees this call and
