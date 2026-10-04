@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Datasets.S101.Tests.Validation;
 /// composing <see cref="S101Document"/> instances directly; no real
 /// ENC datasets are required.
 /// </summary>
-public class S101ValidationTests
+public partial class S101ValidationTests
 {
     // ---------------------------------------------------------------
     // Fixture helpers

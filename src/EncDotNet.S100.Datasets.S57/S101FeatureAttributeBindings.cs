@@ -38,6 +38,7 @@ public sealed class S101FeatureAttributeBindings
     private readonly FrozenSet<string> _attributeCodes;
     private readonly FrozenSet<(string Feature, string Association, string InformationType)> _informationBindings;
     private readonly FrozenSet<(string Feature, string Association, string Role, string OtherFeature)> _featureAssociationBindings;
+    private readonly FrozenDictionary<string, FrozenSet<string>> _subAttributesByComplex;
 
     private static readonly ConcurrentDictionary<string, Lazy<S101FeatureAttributeBindings>> BySpec =
         new(StringComparer.OrdinalIgnoreCase);
@@ -48,7 +49,8 @@ public sealed class S101FeatureAttributeBindings
         FrozenSet<string> featureTypeCodes,
         FrozenSet<string> attributeCodes,
         FrozenSet<(string Feature, string Association, string InformationType)> informationBindings,
-        FrozenSet<(string Feature, string Association, string Role, string OtherFeature)> featureAssociationBindings)
+        FrozenSet<(string Feature, string Association, string Role, string OtherFeature)> featureAssociationBindings,
+        FrozenDictionary<string, FrozenSet<string>> subAttributesByComplex)
     {
         _featureCodesByAttribute = featureCodesByAttribute;
         _singleValuedBindings = singleValuedBindings;
@@ -56,6 +58,7 @@ public sealed class S101FeatureAttributeBindings
         _attributeCodes = attributeCodes;
         _informationBindings = informationBindings;
         _featureAssociationBindings = featureAssociationBindings;
+        _subAttributesByComplex = subAttributesByComplex;
     }
 
     /// <summary>
@@ -149,13 +152,25 @@ public sealed class S101FeatureAttributeBindings
             .Where(code => !string.IsNullOrEmpty(code))
             .ToFrozenSet(StringComparer.Ordinal);
 
+        var subAttributesByComplex = catalogue.ComplexAttributes
+            .Where(ca => !string.IsNullOrEmpty(ca.Code))
+            .GroupBy(ca => ca.Code, StringComparer.Ordinal)
+            .ToFrozenDictionary(
+                g => g.Key,
+                g => g.SelectMany(ca => ca.SubAttributeBindings)
+                    .Select(b => b.AttributeRef)
+                    .Where(code => !string.IsNullOrEmpty(code))
+                    .ToFrozenSet(StringComparer.Ordinal),
+                StringComparer.Ordinal);
+
         return new S101FeatureAttributeBindings(
             frozen,
             singleValued.ToFrozenSet(),
             featureTypeCodes.ToFrozenSet(StringComparer.Ordinal),
             attributeCodes,
             informationBindings.ToFrozenSet(),
-            featureAssociationBindings.ToFrozenSet());
+            featureAssociationBindings.ToFrozenSet(),
+            subAttributesByComplex);
     }
 
     /// <summary>
@@ -176,6 +191,30 @@ public sealed class S101FeatureAttributeBindings
     /// <param name="attributeCode">The attribute code, e.g. <c>"categoryOfBridge"</c>.</param>
     public bool DefinesAttribute(string? attributeCode)
         => !string.IsNullOrEmpty(attributeCode) && _attributeCodes.Contains(attributeCode);
+
+    /// <summary>
+    /// Returns <c>true</c> if the Feature Catalogue defines a <em>complex</em>
+    /// attribute named <paramref name="attributeCode"/> (case-sensitive), such as
+    /// <c>featureName</c> or <c>zoneOfConfidence</c>.
+    /// </summary>
+    /// <param name="attributeCode">The attribute code, e.g. <c>"featureName"</c>.</param>
+    public bool IsComplexAttribute(string? attributeCode)
+        => !string.IsNullOrEmpty(attributeCode) && _subAttributesByComplex.ContainsKey(attributeCode);
+
+    /// <summary>
+    /// Returns <c>true</c> if the complex attribute named
+    /// <paramref name="complexAttributeCode"/> declares a sub-attribute binding
+    /// for the (simple or complex) attribute named
+    /// <paramref name="attributeCode"/> in the Feature Catalogue — for example
+    /// <c>zoneOfConfidence</c> binds <c>categoryOfZoneOfConfidenceInData</c>.
+    /// </summary>
+    /// <param name="complexAttributeCode">The parent complex attribute code.</param>
+    /// <param name="attributeCode">The candidate sub-attribute code.</param>
+    public bool BindsSubAttribute(string? complexAttributeCode, string? attributeCode)
+        => !string.IsNullOrEmpty(complexAttributeCode)
+            && !string.IsNullOrEmpty(attributeCode)
+            && _subAttributesByComplex.TryGetValue(complexAttributeCode, out var subs)
+            && subs.Contains(attributeCode);
 
     /// <summary>
     /// Returns <c>true</c> if the feature class (or information type) named

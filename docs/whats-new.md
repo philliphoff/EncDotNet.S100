@@ -18,6 +18,15 @@ Current highlights:
 
 ## 2026
 
+### October 2026
+
+- **S-57 validation reports the data, not the translation.** Validating a NOAA
+  cell no longer reports thousands of `S101-as-S57/*` errors caused by the S-57
+  → S-101 translation: complex sub-attributes now carry their parent index,
+  ring checks follow edge orientation, and bridge spans get their own feature
+  identifier. Findings now carry a location, so the viewer's validation
+  overlay marks them. See [S-57 to S-101](s57-to-s101.md).
+
 ### September 2026
 
 - **Local collection manifests**: a hand-written `*.s100collection.json` file

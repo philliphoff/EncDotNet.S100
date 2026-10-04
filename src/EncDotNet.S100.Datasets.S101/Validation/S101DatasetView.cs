@@ -1,4 +1,6 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Datasets.S101.Validation;
 
@@ -30,6 +32,7 @@ namespace EncDotNet.S100.Datasets.S101.Validation;
 public sealed class S101DatasetView
 {
     private readonly Dictionary<string, List<S101FeatureView>> _byType;
+    private readonly Dictionary<uint, S101FindingLocation> _featureLocations = new();
 
     private S101DatasetView(
         S101Document raw,
@@ -185,6 +188,46 @@ public sealed class S101DatasetView
     }
 
     /// <summary>
+    /// The location a finding about <paramref name="feature"/> carries so it can
+    /// be shown on a map: the position of a feature with a single point, or the
+    /// WGS-84 envelope of every vertex of every spatial record the feature
+    /// references. Empty when none of its spatial associations resolves.
+    /// </summary>
+    internal S101FindingLocation Locate(S101FeatureView feature)
+    {
+        if (_featureLocations.TryGetValue(feature.Raw.RecordId, out var cached))
+            return cached;
+
+        var vertices = new List<(int Y, int X)>();
+        foreach (var sa in feature.SpatialAssociations)
+            S101SpatialGeometry.AppendVertices(Raw, sa.RecordName, sa.RecordId, vertices);
+        var location = LocateVertices(vertices);
+        _featureLocations[feature.Raw.RecordId] = location;
+        return location;
+    }
+
+    /// <summary>
+    /// The location of the spatial record <paramref name="recordId"/> of kind
+    /// <paramref name="recordName"/> (RCNM): its point, or the envelope of its
+    /// vertices. Empty when the record does not resolve.
+    /// </summary>
+    internal S101FindingLocation LocateSpatial(byte recordName, uint recordId)
+    {
+        var vertices = new List<(int Y, int X)>();
+        S101SpatialGeometry.AppendVertices(Raw, recordName, recordId, vertices);
+        return LocateVertices(vertices);
+    }
+
+    private S101FindingLocation LocateVertices(List<(int Y, int X)> vertices)
+    {
+        if (vertices.Count == 0) return default;
+        var cmf = S101SpatialGeometry.EffectiveCmf(Raw.StructureInfo);
+        if (vertices.TrueForAll(v => v == vertices[0]))
+            return new S101FindingLocation(S101SpatialGeometry.ToGeoPosition(vertices[0], cmf), null);
+        return new S101FindingLocation(null, S101SpatialGeometry.Envelope(vertices, cmf));
+    }
+
+    /// <summary>
     /// Builds a façade for the supplied document, resolving every
     /// feature's type code and attribute codes once against the
     /// embedded catalogues. The <paramref name="decoder"/> is
@@ -218,6 +261,7 @@ public sealed class S101DatasetView
                     Acronym = acronym,
                     NumericCode = attr.NumericCode,
                     Index = attr.Index,
+                    ParentIndex = attr.ParentIndex,
                     Value = attr.Value,
                 });
             }
@@ -256,3 +300,12 @@ public sealed class S101DiagnosticView
     /// <summary>Human-readable description of the diagnostic.</summary>
     public required string Message { get; init; }
 }
+
+/// <summary>
+/// Where a validation finding about an S-101 feature or spatial record lies:
+/// a point for a single-position geometry, otherwise a bounding box. Both are
+/// <c>null</c> when the geometry could not be resolved.
+/// </summary>
+/// <param name="Point">The WGS-84 position of a single-position geometry.</param>
+/// <param name="BoundingBox">The WGS-84 envelope of a geometry with extent.</param>
+internal readonly record struct S101FindingLocation(GeoPosition? Point, BoundingBox? BoundingBox);

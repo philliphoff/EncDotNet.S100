@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -83,42 +84,57 @@ public sealed class ValidateCommandTests
     [Fact]
     public void Validate_suppressing_all_rules_drops_findings_and_passes()
     {
-        // The S-57 cell is translated to S-101 and flagged by the
-        // "S101-as-S57/*" rule family; suppressing that family should leave
-        // no effective findings and flip the dataset to valid (exit 0).
-        var dataset = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        // The S-57 cell is translated to S-101; its duplicate FOID is flagged
+        // by the "S101-as-S57/*" rule family. Suppressing that family should
+        // leave no effective findings and flip the dataset to valid (exit 0).
+        var dir = Directory.CreateTempSubdirectory("s100-validate-").FullName;
+        try
+        {
+            var dataset = SyntheticS57Cell.WriteWithSourceErrors(dir, "US5MA1BO.000");
 
-        var (baselineExit, baselineOut) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
-        using var baseline = JsonDocument.Parse(baselineOut);
-        int baselineFindings = baseline.RootElement.GetProperty("findings").GetArrayLength();
-        Skip.If(baselineFindings == 0, "Fixture produced no findings to suppress.");
-        Assert.Equal(6, baselineExit);
+            var (baselineExit, baselineOut) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
+            using var baseline = JsonDocument.Parse(baselineOut);
+            int baselineFindings = baseline.RootElement.GetProperty("findings").GetArrayLength();
+            Assert.True(baselineFindings > 0, "Expected the duplicate FOID to be reported.");
+            Assert.Equal(6, baselineExit);
 
-        var (exit, stdout) = RunCapturingStdout(
-            ["validate", dataset, "--format", "json", "--suppress", "S101-as-S57/*"]);
+            var (exit, stdout) = RunCapturingStdout(
+                ["validate", dataset, "--format", "json", "--suppress", "S101-as-S57/*"]);
 
-        using var doc = JsonDocument.Parse(stdout);
-        var root = doc.RootElement;
-        Assert.True(root.GetProperty("valid").GetBoolean());
-        Assert.Equal(0, root.GetProperty("findings").GetArrayLength());
-        Assert.Equal(baselineFindings, root.GetProperty("suppressedCount").GetInt32());
-        Assert.Equal(0, exit);
+            using var doc = JsonDocument.Parse(stdout);
+            var root = doc.RootElement;
+            Assert.True(root.GetProperty("valid").GetBoolean());
+            Assert.Equal(0, root.GetProperty("findings").GetArrayLength());
+            Assert.Equal(baselineFindings, root.GetProperty("suppressedCount").GetInt32());
+            Assert.Equal(0, exit);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]
     public void Validate_suppressing_one_rule_keeps_other_errors_failing()
     {
-        var dataset = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        var dir = Directory.CreateTempSubdirectory("s100-validate-").FullName;
+        try
+        {
+            var dataset = SyntheticS57Cell.WriteWithSourceErrors(dir, "US5MA1BO.000", zeroCompilationScale: true);
 
-        var (baselineExit, _) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
-        Skip.IfNot(baselineExit == 6, "Fixture did not produce failing findings.");
+            var (baselineExit, _) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
+            Assert.Equal(6, baselineExit);
 
-        // Suppress just one of several flagged rules; remaining errors keep it failing.
-        int exit = CliApp.Build().Run(
-            ["validate", dataset, "--suppress", "S101-as-S57/S101-R-1.2"]);
-        Assert.Equal(6, exit);
+            // Suppress just one of the flagged rules; the zero compilation scale
+            // (S57-R-1.1) keeps it failing.
+            int exit = CliApp.Build().Run(
+                ["validate", dataset, "--suppress", "S101-as-S57/S101-R-2.1"]);
+            Assert.Equal(6, exit);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     private static (int Exit, string Stdout) RunCapturingStdout(string[] args)
