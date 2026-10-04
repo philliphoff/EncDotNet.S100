@@ -35,7 +35,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// directly.
 /// </para>
 /// </remarks>
-public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, IDisposable, ILoadedDatasetProjection
+public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -84,6 +84,16 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
+
+    /// <summary>
+    /// Always empty: an S-102 bathymetric surface has no time steps. The
+    /// processor is an <see cref="ITimeAwareDatasetProcessor"/> only to report
+    /// <see cref="IssueTime"/>.
+    /// </summary>
+    public IReadOnlyList<DateTime> AvailableTimes => [];
+
+    /// <inheritdoc />
+    public DateTime? IssueTime => S100IssueTime.Parse(_dataset.IssueDate, _dataset.IssueTime);
 
     /// <summary>
     /// Initializes a new <see cref="S102DatasetProcessor"/> by reading and
