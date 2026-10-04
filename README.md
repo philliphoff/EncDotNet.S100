@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/tag/philliphoff/EncDotNet.S100?label=release&sort=semver)](https://github.com/philliphoff/EncDotNet.S100/releases)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4)](https://dotnet.microsoft.com/)
 [![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
-[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://philliphoff.github.io/EncDotNet.S100/)
+[![Docs](https://img.shields.io/badge/docs-soundcharts.app-blue)](https://soundcharts.app/docs/)
 [![Discord](https://img.shields.io/discord/1516327073663156294?label=Discord&logo=discord&logoColor=white)](https://discord.gg/kf6B9EZqqB)
 
 ## Overview
@@ -112,7 +112,7 @@ an S-52 implementation.
 
 ## The Viewer
 
-**SoundCharts: S-100 Viewer** (project `EncDotNet.S100.Viewer`) is a
+**SoundCharts: S-100 Viewer** (project `EncDotNet.S100.Viewer`; website [soundcharts.app](https://soundcharts.app)) is a
 cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and
 [Mapsui](https://mapsui.com/). It loads any combination of the
 supported products and renders them time-aligned over a bundled

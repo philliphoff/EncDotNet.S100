@@ -68,6 +68,18 @@
                     <TextBlock Text="{Binding ProductSubtitle}"
                                FontSize="13"
                                Opacity="0.7" />
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,2,0,0">
+                        <Button Classes="link"
+                                Command="{Binding WebsiteCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.About_WebsiteTooltip}">
+                            <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_Website}" />
+                        </Button>
+                        <Button Classes="link"
+                                Command="{Binding DocumentationCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.About_DocumentationTooltip}">
+                            <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_Documentation}" />
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
             </StackPanel>
 

@@ -14,7 +14,7 @@ Before asking, it can help to check:
 
 - The [README](README.md) and the per-library `README.md` files under
   `src/<project>/`.
-- The [project documentation](https://philliphoff.github.io/EncDotNet.S100/).
+- The [project documentation](https://soundcharts.app/docs/).
 - Existing [issues](https://github.com/philliphoff/EncDotNet.S100/issues) and
   [discussions](https://github.com/philliphoff/EncDotNet.S100/discussions) in
   case your question has already been answered.
