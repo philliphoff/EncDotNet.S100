@@ -7,6 +7,11 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// map a user-supplied time-step index to a concrete <see cref="DateTime"/>
 /// without reflecting over concrete processor types.
 /// </summary>
+/// <remarks>
+/// A static product may implement it with an empty <see cref="AvailableTimes"/>
+/// just to report <see cref="IssueTime"/> (S-102); callers treat a dataset with
+/// no time steps as untimed.
+/// </remarks>
 public interface ITimeAwareDatasetProcessor
 {
     /// <summary>
