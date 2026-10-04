@@ -358,7 +358,7 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
         if (report is null)
         {
             AnsiConsole.MarkupLineInterpolated(
-                $"[grey]No validation rules are available for[/] {Markup.Escape(spec.Name)}.");
+                $"[grey]No validation rules are available for[/] {spec.Name}.");
             return 0;
         }
 
@@ -369,7 +369,9 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
             var suffix = suppressedCount > 0
                 ? $" ([grey]{report.RulesEvaluated} rule(s) evaluated; {suppressedCount} finding(s) suppressed[/])"
                 : $" ([grey]{report.RulesEvaluated} rule(s) evaluated, no findings[/])";
-            AnsiConsole.MarkupLineInterpolated($"[green]Valid[/] — {Markup.Escape(spec.Name)}{suffix}");
+            // suffix is markup, so build the line with MarkupLine; an
+            // interpolated argument would be escaped and print literally (#762).
+            AnsiConsole.MarkupLine($"[green]Valid[/] — {Markup.Escape(spec.Name)}{suffix}");
             return 0;
         }
 

@@ -1,6 +1,7 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S104.Tests.Fixtures;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Validation;
 using Mapsui.Layers;
 using SkiaSharp;
@@ -87,6 +88,32 @@ public class S104Dcf8ProcessorTests
 
             Assert.Contains("station:Alpha", refs);
             Assert.Contains("station:Bravo", refs);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task RenderHeadless_Dcf8_OfflineBasemap_PaintsLandUnderStations()
+    {
+        // The station-series path once skipped the render context's basemap
+        // (found while fixing #735). Both stations are in London, so the fitted
+        // frame is all land: its corner is parchment with the basemap and the
+        // plain background without it.
+        var path = WriteFixture();
+        try
+        {
+            var processor = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            using var none = await processor.RenderHeadlessAsync(256, 256);
+            using var offline = await processor.RenderHeadlessAsync(
+                256, 256, new S104RenderContext { Basemap = BasemapKind.Offline });
+
+            var land = NaturalEarthBasemap.LandFill;
+            Assert.Equal(SKColors.White, none.GetPixel(2, 2));
+            Assert.Equal(new SKColor(land.R, land.G, land.B), offline.GetPixel(2, 2));
         }
         finally
         {

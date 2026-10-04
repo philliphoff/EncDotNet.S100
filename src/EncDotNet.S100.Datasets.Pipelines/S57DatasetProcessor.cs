@@ -601,6 +601,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 areaFillProvider: name => prewarm.ResolveAreaFill(name),
                 hiddenCategories: context?.HiddenInstructionCategories
                     ?? DrawingInstructionCategory.None,
+                basemap: context?.Basemap ?? BasemapKind.None,
                 viewport: context?.Viewport);
         }
         finally
