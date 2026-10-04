@@ -48,18 +48,28 @@ public sealed class MultiProductParityTests
     /// verifies it against a committed golden — the per-product regression guard
     /// for the tiled renderer.
     /// </summary>
+    /// <remarks>
+    /// Most fixtures are sparse — a few symbols or lines on a white chart — so
+    /// each row carries an ink floor and a differing-pixel budget relative to
+    /// the golden's own ink (<see cref="TestHelpers.VerifySparseBitmap"/>);
+    /// the whole-image 5 % default would exceed all the ink present. Budgets
+    /// come from measured macOS/Linux drift: unlabelled geometry is stable,
+    /// while label glyphs shift a pixel or two, so labelled goldens need room
+    /// for every glyph pixel to differ. A <see langword="null"/> budget keeps
+    /// the whole-image default for a dense render.
+    /// </remarks>
     [SkippableTheory]
-    [InlineData("S122", "122TESTDATASET.gml")]
-    [InlineData("S124", "navwarn_mixed.gml")]
-    [InlineData("S125", "aton_chesapeake.gml")]
-    [InlineData("S127", "marine_mixed.gml")]
-    [InlineData("S128", "S128_TDS_sample.gml")]
-    [InlineData("S129", "12900MCTDS130TS.gml")]
-    [InlineData("S131", "harbour_surface.gml")]
-    [InlineData("S201", "aton_light.gml")]
-    [InlineData("S411", "iho_4112C00TDS001.gml")]
-    [InlineData("S421", "RTE-TEST-GFULL.s421.gml")]
-    public Task Vector_BArmGolden(string product, string fileName)
+    [InlineData("S122", "122TESTDATASET.gml", 700, 0.25)]       // ink ~1 450 px
+    [InlineData("S124", "navwarn_mixed.gml", 800, 0.5)]         // ink ~1 620 px; labels drift 29 %
+    [InlineData("S125", "aton_chesapeake.gml", 1_200, 0.35)]    // ink ~2 400 px; small labels
+    [InlineData("S127", "marine_mixed.gml", 1_500, 0.25)]       // ink ~3 150 px
+    [InlineData("S128", "S128_TDS_sample.gml", 90_000, null)]   // dense fills, ink ~185 000 px
+    [InlineData("S129", "12900MCTDS130TS.gml", 2_800, 0.3)]     // ink ~5 700 px; labels drift 14 %
+    [InlineData("S131", "harbour_surface.gml", 1_900, 0.25)]    // ink ~3 900 px
+    [InlineData("S201", "aton_light.gml", 40, 0.25)]            // ink ~90 px: one light
+    [InlineData("S411", "iho_4112C00TDS001.gml", 3_300, 0.25)]  // ink ~6 700 px
+    [InlineData("S421", "RTE-TEST-GFULL.s421.gml", 3_500, 0.65)] // ink ~7 000 px; labels drift 44 %
+    public Task Vector_BArmGolden(string product, string fileName, int minimumInkPixels, double? maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);
         Skip.IfNot(File.Exists(path), $"{product} test dataset not present: {path}");
@@ -72,8 +82,17 @@ public sealed class MultiProductParityTests
             Palette = PaletteType.Day,
         });
 
-        // Perceptual tolerance absorbs sub-pixel anti-aliasing drift in the
-        // tiled compositor across platforms/GPUs, matching the other baselines.
+        if (maxDifferentInkFraction is { } inkFraction)
+        {
+            return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels, inkFraction)
+                .UseParameters(product);
+        }
+
+        // Dense render: the whole-image perceptual tolerance absorbs sub-pixel
+        // anti-aliasing drift in the tiled compositor across platforms/GPUs.
+        var ink = TestHelpers.CountNonBackgroundPixels(bitmap);
+        Assert.True(ink >= minimumInkPixels,
+            $"{product} rendered only {ink} non-background pixels (expected at least {minimumInkPixels}).");
         return TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction: 0.05)
             .UseParameters(product);
     }
@@ -84,12 +103,13 @@ public sealed class MultiProductParityTests
     /// resolved, matching the Mapsui "A" arm. Run against the products whose
     /// portrayal anchors text on co-located symbols, where the regression that
     /// motivated this guard (S-421 route labels dropped onto waypoint circles)
-    /// actually lives. (S-125 AtoN is excluded: its synthetic fixtures carry no
-    /// portrayed text, so the guard would be vacuous there.)
+    /// actually lives, and S-125, whose AtoN names and light descriptions sit
+    /// on buoy and light symbols.
     /// </summary>
     [SkippableTheory]
     [InlineData("S421", "RTE-TEST-GFULL.s421.gml")]
     [InlineData("S124", "navwarn_mixed.gml")]
+    [InlineData("S125", "aton_us4va1bf.gml")]
     public void Vector_PointSymbolsDoNotSuppressLabels(string product, string fileName)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);

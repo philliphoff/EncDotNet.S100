@@ -17,10 +17,16 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 public sealed class S411RenderingTests
 {
     [SkippableTheory]
-    [InlineData("iho_4112C00TDS001.gml")]
-    [InlineData("iho_4112C00TDS002.gml")]
-    [InlineData("cis_seaice_synthetic.gml")]
-    public Task SeaIce(string fileName)
+    [InlineData("iho_4112C00TDS001.gml", 3_300, 0.25)] // sparse, ink ~6 700 px; no drift
+    [InlineData("iho_4112C00TDS002.gml", 4_200, 0.25)] // sparse, ink ~8 500 px; no drift
+    // Dense area fills (ink ~101 000 px) plus egg-code labels. The default
+    // whole-image 5 % hid a changed outline and a lost label (#417's baseline
+    // drifted ~6k px unnoticed). Cross-platform drift is all text
+    // anti-aliasing (~1 900 px macOS vs Linux), so 5 % of ink (~5 000 px)
+    // leaves headroom for it while catching geometry changes. A lost label is
+    // only ~100 px; SeaIce_EggCodeLabelsSurviveDeclutter guards that.
+    [InlineData("cis_seaice_synthetic.gml", 50_000, 0.05)]
+    public Task SeaIce(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S411", fileName);
         Skip.IfNot(File.Exists(path), $"S-411 test dataset not present: {path}");
@@ -32,17 +38,8 @@ public sealed class S411RenderingTests
             Height = 600,
         });
 
-        // The CIS render is two flat ice polygons plus their egg-code labels, so
-        // the default 5% bound hid both a lost label and a changed outline
-        // (#417's baseline drifted ~6k px unnoticed). Its cross-platform drift
-        // is confined to text anti-aliasing (~1.9k px, 0.54%, macOS vs Linux),
-        // so 1.5% leaves headroom for that while catching geometry changes. A
-        // lost egg-code label is only ~100 px, below any platform-safe pixel
-        // bound — SeaIce_EggCodeLabelsSurviveDeclutter guards that structurally.
-        var settings = fileName == "cis_seaice_synthetic.gml"
-            ? TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction: 0.015)
-            : TestHelpers.VerifyBitmap(bitmap);
-        return settings.UseParameters(Path.GetFileNameWithoutExtension(fileName));
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels, maxDifferentInkFraction)
+            .UseParameters(Path.GetFileNameWithoutExtension(fileName));
     }
 
     /// <summary>

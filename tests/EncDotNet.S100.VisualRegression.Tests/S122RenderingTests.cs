@@ -10,8 +10,9 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 public sealed class S122RenderingTests
 {
     [SkippableTheory]
-    [InlineData("122TESTDATASET.gml")]
-    public Task MarineProtectedArea(string fileName)
+    // Ink ~1 450 px. Line work only: macOS/Linux drift measured at 2 px.
+    [InlineData("122TESTDATASET.gml", 700, 0.25)]
+    public Task MarineProtectedArea(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S122", fileName);
         Skip.IfNot(File.Exists(path), $"S-122 test dataset not present: {path}");
@@ -23,7 +24,9 @@ public sealed class S122RenderingTests
             Height = 600,
         });
 
-        return TestHelpers.VerifyBitmap(bitmap)
+        // Sparse render: hold it to a share of its own ink rather than the
+        // default 5 % of the image, which exceeds all the ink present.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels, maxDifferentInkFraction)
             .UseParameters(Path.GetFileNameWithoutExtension(fileName));
     }
 }

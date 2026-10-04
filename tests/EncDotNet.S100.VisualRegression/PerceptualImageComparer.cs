@@ -8,7 +8,7 @@ namespace EncDotNet.S100.VisualRegression;
 /// is equivalent to B vs A.
 /// </summary>
 /// <remarks>
-/// Two thresholds control acceptance:
+/// Two thresholds (plus an optional third) control acceptance:
 /// <list type="bullet">
 ///   <item><see cref="MaxChannelDelta"/> — the largest per-channel (R, G, B, A)
 ///         absolute difference allowed for a single pixel to be considered
@@ -17,6 +17,13 @@ namespace EncDotNet.S100.VisualRegression;
 ///   <item><see cref="MaxDifferentPixelFraction"/> — the largest fraction of
 ///         pixels (in <c>[0, 1]</c>) that may differ before the overall
 ///         comparison fails.</item>
+///   <item><see cref="MaxDifferentInkFraction"/> — optional. The largest number
+///         of differing pixels, as a fraction of the <em>expected</em> image's
+///         ink (pixels that differ from <see cref="Background"/>). Use it for
+///         sparse renders, where a fraction of the whole image can exceed all
+///         the ink present and so let every symbol appear or vanish unnoticed.
+///         Because the budget is taken from the expected image, a blank
+///         baseline gets no budget at all.</item>
 /// </list>
 /// The defaults (per-channel ≤ 4, fraction ≤ 0.05) tolerate sub-pixel
 /// rasterisation jitter and cross-platform font hinting drift (especially
@@ -30,6 +37,26 @@ public sealed class PerceptualImageComparer
 
     /// <summary>Maximum allowed fraction of pixels that may differ. Default: 0.05 (5%).</summary>
     public double MaxDifferentPixelFraction { get; init; } = 0.05;
+
+    /// <summary>
+    /// Maximum allowed number of differing pixels as a fraction of the expected
+    /// image's non-background pixel count, or <see langword="null"/> (the
+    /// default) for no ink-relative limit. Applies in addition to
+    /// <see cref="MaxDifferentPixelFraction"/>.
+    /// </summary>
+    public double? MaxDifferentInkFraction { get; init; }
+
+    /// <summary>
+    /// Background colour used to count ink for <see cref="MaxDifferentInkFraction"/>.
+    /// Default: opaque white, the render harness background.
+    /// </summary>
+    public SKColor Background { get; init; } = SKColors.White;
+
+    /// <summary>
+    /// Largest per-channel (R, G, B) difference from the background at which a
+    /// pixel still counts as background rather than ink.
+    /// </summary>
+    public const int InkChannelThreshold = 8;
 
     /// <summary>Default comparer.</summary>
     public static PerceptualImageComparer Default { get; } = new();
@@ -70,6 +97,7 @@ public sealed class PerceptualImageComparer
         int total = width * height;
         int different = 0;
         int maxDelta = 0;
+        int expectedInk = 0;
 
         for (int y = 0; y < height; y++)
         {
@@ -84,6 +112,7 @@ public sealed class PerceptualImageComparer
                 int pixelDelta = Math.Max(Math.Max(dr, dg), Math.Max(db, da));
                 if (pixelDelta > maxDelta) maxDelta = pixelDelta;
                 if (pixelDelta > MaxChannelDelta) different++;
+                if (IsInk(e, Background)) expectedInk++;
             }
         }
 
@@ -92,6 +121,16 @@ public sealed class PerceptualImageComparer
         string? reason = ok ? null
             : $"{different} / {total} pixels differ ({fraction:P2}) — limit {MaxDifferentPixelFraction:P2}; max channel delta {maxDelta}.";
 
+        if (ok && MaxDifferentInkFraction is { } inkFraction)
+        {
+            int inkBudget = (int)Math.Floor(expectedInk * inkFraction);
+            if (different > inkBudget)
+            {
+                ok = false;
+                reason = $"{different} pixels differ — limit {inkBudget} ({inkFraction:P0} of the expected image's {expectedInk} ink pixels); max channel delta {maxDelta}.";
+            }
+        }
+
         return new ImageComparisonResult(
             AreEqual: ok,
             Reason: reason,
@@ -99,6 +138,31 @@ public sealed class PerceptualImageComparer
             DifferentPixelCount: different,
             TotalPixelCount: total);
     }
+
+    /// <summary>
+    /// Counts the pixels of <paramref name="bitmap"/> that differ from
+    /// <paramref name="background"/> by more than <see cref="InkChannelThreshold"/>
+    /// in any colour channel — the render's "ink".
+    /// </summary>
+    public static int CountNonBackgroundPixels(SKBitmap bitmap, SKColor background)
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+
+        int count = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                if (IsInk(bitmap.GetPixel(x, y), background)) count++;
+            }
+        }
+        return count;
+    }
+
+    private static bool IsInk(SKColor c, SKColor background) =>
+        Math.Abs(c.Red - background.Red) > InkChannelThreshold
+        || Math.Abs(c.Green - background.Green) > InkChannelThreshold
+        || Math.Abs(c.Blue - background.Blue) > InkChannelThreshold;
 }
 
 /// <summary>Result of a perceptual image comparison.</summary>
