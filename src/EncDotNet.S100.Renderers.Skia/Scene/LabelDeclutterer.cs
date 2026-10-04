@@ -24,6 +24,15 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// suppressed.
 /// </para>
 /// <para>
+/// <b>Composite labels.</b> Text instructions that one feature emits at the
+/// <i>same</i> anchor (same <see cref="PaintOp.FeatureReference"/> and world
+/// position) are a single annotation whose parts the portrayal placed relative
+/// to each other with offsets — e.g. the S-411 WMO egg code's total
+/// concentration over its verbose partial-concentration line. Such labels never
+/// suppress one another (the "A" arm drew both); each still declutters against
+/// every other feature's labels.
+/// </para>
+/// <para>
 /// Letting a point symbol suppress an overlapping label would drop annotation
 /// text the "A" arm always draws — e.g. S-421 route action-point / leg labels
 /// anchored on (or beside) a co-located waypoint symbol, which the coarse
@@ -121,10 +130,11 @@ public sealed class LabelDeclutterer : IDisposable
             var font = scratch.FontFor((float)text.FontSizePx);
             var rect = SkiaDisplayListRenderer.LayoutText(text, ax, ay, font, scratch.Paint).Background;
 
-            if (index.Intersects(rect))
+            var owner = new LabelOwner(text.FeatureReference, text.World);
+            if (index.Intersects(rect, owner))
                 suppressed.Add(text);
             else
-                index.Add(rect);
+                index.Add(rect, owner);
         }
 
         return suppressed;
@@ -139,6 +149,12 @@ public sealed class LabelDeclutterer : IDisposable
     public void Dispose() => _scratch.Dispose();
 
     /// <summary>
+    /// Identifies a composite label: the labels one feature emits at one anchor.
+    /// Labels sharing an owner never collide with each other.
+    /// </summary>
+    private readonly record struct LabelOwner(string FeatureReference, (double X, double Y) World);
+
+    /// <summary>
     /// A uniform screen-space grid of occupied label rectangles giving near-O(1)
     /// overlap queries, so decluttering thousands of label ops per frame stays
     /// linear. Rectangles are bucketed by the fixed-size cells they touch.
@@ -151,8 +167,8 @@ public sealed class LabelDeclutterer : IDisposable
     private sealed class ScreenRectIndex
     {
         private const float CellSize = 64f;
-        private readonly Dictionary<(int Cx, int Cy), List<SKRect>> _cells = new();
-        private readonly Stack<List<SKRect>> _pool = new();
+        private readonly Dictionary<(int Cx, int Cy), List<(SKRect Rect, LabelOwner Owner)>> _cells = new();
+        private readonly Stack<List<(SKRect Rect, LabelOwner Owner)>> _pool = new();
 
         /// <summary>
         /// Recycles all bucket lists into the free pool and empties the grid,
@@ -168,7 +184,7 @@ public sealed class LabelDeclutterer : IDisposable
             _cells.Clear();
         }
 
-        public void Add(SKRect rect)
+        public void Add(SKRect rect, LabelOwner owner)
         {
             int minX = (int)Math.Floor(rect.Left / CellSize);
             int maxX = (int)Math.Floor(rect.Right / CellSize);
@@ -182,15 +198,19 @@ public sealed class LabelDeclutterer : IDisposable
                     var key = (cx, cy);
                     if (!_cells.TryGetValue(key, out var list))
                     {
-                        list = _pool.Count > 0 ? _pool.Pop() : new List<SKRect>(4);
+                        list = _pool.Count > 0 ? _pool.Pop() : new List<(SKRect Rect, LabelOwner Owner)>(4);
                         _cells[key] = list;
                     }
-                    list.Add(rect);
+                    list.Add((rect, owner));
                 }
             }
         }
 
-        public bool Intersects(SKRect rect)
+        /// <summary>
+        /// Whether <paramref name="rect"/> overlaps a placed rectangle of a
+        /// <i>different</i> owner.
+        /// </summary>
+        public bool Intersects(SKRect rect, LabelOwner owner)
         {
             int minX = (int)Math.Floor(rect.Left / CellSize);
             int maxX = (int)Math.Floor(rect.Right / CellSize);
@@ -205,7 +225,7 @@ public sealed class LabelDeclutterer : IDisposable
                         continue;
                     foreach (var other in list)
                     {
-                        if (rect.IntersectsWith(other))
+                        if (rect.IntersectsWith(other.Rect) && other.Owner != owner)
                             return true;
                     }
                 }

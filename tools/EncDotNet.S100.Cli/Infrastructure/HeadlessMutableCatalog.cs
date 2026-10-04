@@ -240,7 +240,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
         }
 
-        return Task.FromResult(new DatasetLoadOutcome(path, kind, added, TimedOut: false));
+        return Task.FromResult(new DatasetLoadOutcome(path, kind, added, TimedOut: false, warnings));
     }
 
     /// <inheritdoc />

@@ -99,6 +99,7 @@ internal sealed class ViewerMutableDatasetCatalog : IMutableDatasetCatalog
         _inner.Changed += OnChanged;
 
         var timedOut = false;
+        IReadOnlyList<string> problems = [];
         try
         {
             if (kind == DatasetPathKind.File)
@@ -116,16 +117,18 @@ internal sealed class ViewerMutableDatasetCatalog : IMutableDatasetCatalog
             }
             else
             {
-                var dispatched = await _gateway
+                var dispatch = await _gateway
                     .TriggerExchangeSetAsync(path, cancellationToken).ConfigureAwait(false);
-                if (dispatched == 0)
+                problems = dispatch.Problems;
+                if (dispatch.Dispatched == 0)
                 {
                     // No datasets this viewer can read — fail fast rather than
-                    // waiting out the quiet window.
-                    return new DatasetLoadOutcome(path, DatasetSourceKind.ExchangeSet, [], TimedOut: false);
+                    // waiting out the quiet window, and say why.
+                    return new DatasetLoadOutcome(
+                        path, DatasetSourceKind.ExchangeSet, [], TimedOut: false, problems);
                 }
                 timedOut = await WaitForQuiescenceAsync(
-                    activity, dispatched, () => CountAdded(before), cancellationToken).ConfigureAwait(false);
+                    activity, dispatch.Dispatched, () => CountAdded(before), cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -146,7 +149,8 @@ internal sealed class ViewerMutableDatasetCatalog : IMutableDatasetCatalog
             path,
             kind == DatasetPathKind.File ? DatasetSourceKind.File : DatasetSourceKind.ExchangeSet,
             added,
-            timedOut);
+            timedOut,
+            problems);
     }
 
     /// <inheritdoc />

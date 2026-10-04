@@ -20,7 +20,11 @@ public sealed class S111RenderingTests
             TimeStepIndex = 0,
         });
 
-        return TestHelpers.VerifyBitmap(bitmap);
+        // Sparse render (5 arrows, ink ~325 px): hold it to a share of its own
+        // ink rather than the default 5 % of the image (18 000 px). The arrows
+        // render identically on macOS, linux-arm64 and linux-x64, so one
+        // missing or moved arrow (~65 px) fails either limit.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 280, maxDifferentInkFraction: 0.1);
     }
 
     [SkippableFact]
@@ -39,6 +43,10 @@ public sealed class S111RenderingTests
             Palette = PaletteType.Night,
         });
 
-        return TestHelpers.VerifyBitmap(bitmap);
+        // Sparse render (5 arrows, ink ~325 px): hold it to a share of its own
+        // ink rather than the default 5 % of the image (18 000 px). The arrows
+        // render identically on macOS, linux-arm64 and linux-x64, so one
+        // missing or moved arrow (~65 px) fails either limit.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 280, maxDifferentInkFraction: 0.1);
     }
 }

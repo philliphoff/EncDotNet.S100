@@ -658,6 +658,48 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
+    /// Binds to <paramref name="target"/> a copy of the scene bound to
+    /// <paramref name="source"/> that keeps only the ops <paramref name="keep"/>
+    /// accepts, so a layer derived from another (for example one whose S-101
+    /// depth features an S-98 rule suppressed) is still painted by the tiled
+    /// renderer, pattern fills included, rather than by its pick-target
+    /// features. The copy bypasses the warm disk cache: its content no longer
+    /// matches the source's namespace.
+    /// </summary>
+    /// <param name="source">A layer a scene was bound to.</param>
+    /// <param name="target">The layer to bind the filtered scene to.</param>
+    /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
+    /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
+    public static bool TryBindFilteredScene(ILayer source, ILayer target, Func<PaintOp, bool> keep)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(keep);
+
+        if (!TryGetPartitionedScene(source, out var baseScene, out var overlayScene))
+        {
+            return false;
+        }
+
+        // Base then overlay: BindScene re-partitions, and each plane keeps its
+        // own Part 9 order.
+        var ops = new List<PaintOp>(baseScene.Ops.Count + overlayScene.Ops.Count);
+        foreach (var op in baseScene.Ops)
+        {
+            if (keep(op))
+                ops.Add(op);
+        }
+        foreach (var op in overlayScene.Ops)
+        {
+            if (keep(op))
+                ops.Add(op);
+        }
+
+        BindScene(target, new VectorScene(ops));
+        return true;
+    }
+
+    /// <summary>
     /// Attempts to retrieve the partitioned <i>base</i> and <i>overlay</i>
     /// <see cref="VectorScene"/>s most recently bound to <paramref name="layer"/>
     /// via <see cref="BindScene(ILayer, VectorScene, string?, string?)"/>.

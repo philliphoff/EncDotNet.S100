@@ -262,4 +262,13 @@ public sealed class CoveragePortrayalResult
     /// When null the renderer derives them from each sub-layer's key.
     /// </summary>
     public IReadOnlyList<string>? LayerNames { get; init; }
+
+    /// <summary>
+    /// The WGS-84 extent of the whole coverage grid, independent of the
+    /// viewport a render sampled, or <see langword="null"/> when the producer
+    /// does not report one. S-98 rules that act only where the coverage is
+    /// displayed read it: S-102 replaces ENC depth features inside this extent
+    /// and nowhere else (S-98 Part A §A-6.9.1).
+    /// </summary>
+    public GeographicBounds? CoverageExtent { get; init; }
 }

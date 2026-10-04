@@ -33,21 +33,8 @@ internal static class TestHelpers
     /// opaque white) — a cheap content floor so a snapshot test cannot approve
     /// an empty render.
     /// </summary>
-    public static int CountNonBackgroundPixels(SKBitmap bitmap, SKColor? background = null)
-    {
-        var bg = background ?? SKColors.White;
-        int count = 0;
-        for (int y = 0; y < bitmap.Height; y++)
-        {
-            for (int x = 0; x < bitmap.Width; x++)
-            {
-                var c = bitmap.GetPixel(x, y);
-                if (Math.Abs(c.Red - bg.Red) > 8 || Math.Abs(c.Green - bg.Green) > 8 || Math.Abs(c.Blue - bg.Blue) > 8)
-                    count++;
-            }
-        }
-        return count;
-    }
+    public static int CountNonBackgroundPixels(SKBitmap bitmap, SKColor? background = null) =>
+        PerceptualImageComparer.CountNonBackgroundPixels(bitmap, background ?? SKColors.White);
 
     /// <summary>Encodes an <see cref="SKBitmap"/> as a PNG byte buffer.</summary>
     public static byte[] EncodePng(SKBitmap bitmap)
@@ -94,6 +81,54 @@ internal static class TestHelpers
             var comparer = new PerceptualImageComparer
             {
                 MaxDifferentPixelFraction = maxDifferentPixelFraction,
+            };
+            return Verifier.Verify(bytes, "png")
+                .UsePerceptualImageComparer(comparer);
+        }
+        finally
+        {
+            bitmap.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verify a <em>sparse</em> render — a few symbols or lines on a white
+    /// chart — as a PNG snapshot. The default 5 % differing-pixel limit is
+    /// 18 000 px on a 600x600 image, more than such a render's entire ink, so a
+    /// sparse snapshot could lose or gain every symbol and still pass. This
+    /// instead:
+    /// <list type="bullet">
+    ///   <item>asserts the render carries at least
+    ///         <paramref name="minimumInkPixels"/> non-background pixels, so a
+    ///         blank render can never be approved as a baseline; and</item>
+    ///   <item>limits the differing pixels to
+    ///         <paramref name="maxDifferentInkFraction"/> of the verified
+    ///         image's ink (see
+    ///         <see cref="PerceptualImageComparer.MaxDifferentInkFraction"/>).</item>
+    /// </list>
+    /// The bitmap is disposed by this method.
+    /// </summary>
+    /// <param name="bitmap">The rendered bitmap to verify.</param>
+    /// <param name="minimumInkPixels">Smallest acceptable non-background pixel count.</param>
+    /// <param name="maxDifferentInkFraction">
+    /// Maximum differing pixels as a fraction of the verified image's ink. Size
+    /// it from measured cross-platform drift: geometry is stable to within a
+    /// few pixels, but label text shifts by a pixel or two between macOS and
+    /// Linux, so every glyph pixel of a labelled render can differ.
+    /// </param>
+    public static SettingsTask VerifySparseBitmap(SKBitmap bitmap, int minimumInkPixels, double maxDifferentInkFraction)
+    {
+        try
+        {
+            var ink = CountNonBackgroundPixels(bitmap);
+            Assert.True(
+                ink >= minimumInkPixels,
+                $"Render has only {ink} non-background pixels (expected at least {minimumInkPixels}); the portrayal drew (almost) nothing.");
+
+            var bytes = EncodePng(bitmap);
+            var comparer = new PerceptualImageComparer
+            {
+                MaxDifferentInkFraction = maxDifferentInkFraction,
             };
             return Verifier.Verify(bytes, "png")
                 .UsePerceptualImageComparer(comparer);
