@@ -138,4 +138,22 @@ public sealed class AboutDialogViewTests
         Assert.Equal(GitHubReleaseClient.ThirdPartyNoticesUrl, opener.LastUrl);
         Assert.EndsWith("/THIRD-PARTY-NOTICES.md", GitHubReleaseClient.ThirdPartyNoticesUrl);
     }
+
+    [Fact]
+    public void WebsiteAndDocumentationCommands_OpenSoundChartsSite()
+    {
+        var opener = new StubUrlOpener();
+        var vm = new AboutDialogViewModel(
+            new ShadUI.DialogManager(),
+            new StubUpdateService(),
+            new StubVersionProvider(),
+            opener,
+            TimeProvider.System);
+
+        vm.WebsiteCommand.Execute(null);
+        Assert.Equal("https://soundcharts.app/", opener.LastUrl);
+
+        vm.DocumentationCommand.Execute(null);
+        Assert.Equal("https://soundcharts.app/docs/", opener.LastUrl);
+    }
 }
