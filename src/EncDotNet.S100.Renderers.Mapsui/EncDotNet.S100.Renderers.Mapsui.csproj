@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
+    <InternalsVisibleTo Include="EncDotNet.S100.VisualRegression" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Mapsui" />

@@ -20,14 +20,14 @@ public sealed class HeadlessS100SessionEcdisTests
     private static string FixturePath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", "US5MA1BO.000");
 
-    [SkippableFact]
+    [Fact]
     public async Task SetDisplayCategory_ChangesHeadlessCompositeRender()
     {
-        Skip.IfNot(File.Exists(FixturePath), $"Fixture not found: {FixturePath}");
+        Assert.SkipUnless(File.Exists(FixturePath), $"Fixture not found: {FixturePath}");
 
         using var catalog = new HeadlessMutableCatalog();
         var outcome = await catalog.LoadAsync(FixturePath);
-        Skip.If(outcome.Added.Count == 0, "The S-57 cell could not be loaded into the catalog.");
+        Assert.SkipWhen(outcome.Added.Count == 0, "The S-57 cell could not be loaded into the catalog.");
 
         using var session = new HeadlessS100Session(catalog);
         var presentation = (IPresentationController)session;

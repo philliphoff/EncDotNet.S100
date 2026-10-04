@@ -14,16 +14,16 @@ public sealed class HeadlessMutableCatalogParseOnceTests
     private static string FixturePath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", "US5MA1BO.000");
 
-    [SkippableFact]
+    [Fact]
     public async Task Load_then_render_twice_builds_one_processor()
     {
-        Skip.IfNot(File.Exists(FixturePath), $"Fixture not found: {FixturePath}");
+        Assert.SkipUnless(File.Exists(FixturePath), $"Fixture not found: {FixturePath}");
 
         using var counting = new CountingProcessorFactory(BundledDatasetProcessorFactory.Create());
         using var catalog = new HeadlessMutableCatalog(transforms: null, factory: counting);
 
         var outcome = await catalog.LoadAsync(FixturePath);
-        Skip.If(outcome.Added.Count == 0, "The cell could not be loaded into the catalog.");
+        Assert.SkipWhen(outcome.Added.Count == 0, "The cell could not be loaded into the catalog.");
 
         // One dataset loaded → exactly one processor built. The read model was
         // projected from that same processor, not from a second parse.

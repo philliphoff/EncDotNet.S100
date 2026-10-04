@@ -15,10 +15,10 @@ public sealed class RenderCompositeCommandTests
     private static string S124 => Path.Combine(AppContext.BaseDirectory, "TestData", "S124", "navwarn_surface.gml");
     private static string S125 => Path.Combine(AppContext.BaseDirectory, "TestData", "S125", "aton_point.gml");
 
-    [SkippableFact]
+    [Fact]
     public void Composite_two_layers_writes_a_valid_png_at_requested_dimensions()
     {
-        Skip.IfNot(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
+        Assert.SkipUnless(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
         try
@@ -44,10 +44,10 @@ public sealed class RenderCompositeCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Composite_with_output_option_writes_a_valid_png()
     {
-        Skip.IfNot(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
+        Assert.SkipUnless(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
         try
@@ -67,10 +67,10 @@ public sealed class RenderCompositeCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Composite_with_explicit_bbox_writes_a_valid_png()
     {
-        Skip.IfNot(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
+        Assert.SkipUnless(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
         try
@@ -93,10 +93,10 @@ public sealed class RenderCompositeCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Composite_offline_basemap_differs_from_none_over_land()
     {
-        Skip.IfNot(File.Exists(S124), "S-124 fixture not present.");
+        Assert.SkipUnless(File.Exists(S124), "S-124 fixture not present.");
 
         // A bounding box over the Texas coast (Galveston) so the Natural Earth
         // 1:10m land layer certainly covers part of the frame, making the
@@ -147,10 +147,10 @@ public sealed class RenderCompositeCommandTests
         Assert.False(File.Exists(output));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Composite_with_missing_layer_returns_nonzero()
     {
-        Skip.IfNot(File.Exists(S124), "S-124 fixture not present.");
+        Assert.SkipUnless(File.Exists(S124), "S-124 fixture not present.");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(
@@ -159,10 +159,10 @@ public sealed class RenderCompositeCommandTests
         Assert.False(File.Exists(output));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Composite_with_two_positional_arguments_returns_nonzero()
     {
-        Skip.IfNot(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
+        Assert.SkipUnless(File.Exists(S124) && File.Exists(S125), "S-124 and S-125 fixtures not both present.");
 
         // With --layer, only a single positional (the output) is allowed.
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
@@ -178,7 +178,7 @@ public sealed class RenderCompositeCommandTests
         // Alignment: a single vector dataset now honours an explicit viewport
         // (previously composite-only). marine_curve.gml is S-127 (vector).
         var dataset = Path.Combine(AppContext.BaseDirectory, "TestData", "marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         try
@@ -199,7 +199,7 @@ public sealed class RenderCompositeCommandTests
     public void Center_without_scale_returns_nonzero()
     {
         var dataset = Path.Combine(AppContext.BaseDirectory, "TestData", "marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(

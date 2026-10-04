@@ -17,10 +17,10 @@ public sealed class S101RenderingTests
         TestHelpers.DatasetsRoot,
         "S101", "S-101", "DATASET_FILES", "101AA0000DS0009.000");
 
-    [SkippableFact]
+    [Fact]
     public Task EncCell_DayPalette()
     {
-        Skip.IfNot(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
+        Assert.SkipUnless(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(CommittedCellPath, new HarnessOptions
@@ -40,10 +40,10 @@ public sealed class S101RenderingTests
     // boundary: the committed image is the pre-refactor baseline and post-
     // refactor rendering must reproduce it byte-for-byte.
 
-    [SkippableFact]
+    [Fact]
     public Task EncCell_DuskPalette()
     {
-        Skip.IfNot(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
+        Assert.SkipUnless(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(CommittedCellPath, new HarnessOptions
@@ -57,10 +57,10 @@ public sealed class S101RenderingTests
         return TestHelpers.VerifyBitmap(bitmap);
     }
 
-    [SkippableFact]
+    [Fact]
     public Task EncCell_NightPalette()
     {
-        Skip.IfNot(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
+        Assert.SkipUnless(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(CommittedCellPath, new HarnessOptions
@@ -80,7 +80,7 @@ public sealed class S101RenderingTests
     // under the developer's Downloads. It renders all three palettes at two
     // symbol scales to exercise the pattern-fill priority clip and confirm the
     // boundary geometry is stable across palettes.
-    [SkippableTheory]
+    [Theory]
     [InlineData(PaletteType.Day, 1.0)]
     [InlineData(PaletteType.Dusk, 1.0)]
     [InlineData(PaletteType.Night, 1.0)]
@@ -92,7 +92,7 @@ public sealed class S101RenderingTests
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Downloads", "Complete S10X datasets", "S-101 Trial Cells",
             "101GB00GB302045.000");
-        Skip.IfNot(File.Exists(densePath), $"Dense S-101 trial cell not present: {densePath}");
+        Assert.SkipUnless(File.Exists(densePath), $"Dense S-101 trial cell not present: {densePath}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(densePath, new HarnessOptions

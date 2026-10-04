@@ -157,12 +157,12 @@ public sealed class S57ExchangeSetVerificationTests
     /// (pointing at the folder containing <c>CATALOG.031</c>). Skipped otherwise
     /// so CI never depends on (or commits) real ENC data.
     /// </summary>
-    [SkippableFact]
+    [Fact]
     public async Task VerifyAsync_RealExchangeSet_VerifiesIntegrity()
     {
         string? root = Environment.GetEnvironmentVariable("ENCDOTNET_S57_EXCHANGE_SET");
-        Skip.If(string.IsNullOrEmpty(root), "ENCDOTNET_S57_EXCHANGE_SET not set.");
-        Skip.IfNot(
+        Assert.SkipWhen(string.IsNullOrEmpty(root), "ENCDOTNET_S57_EXCHANGE_SET not set.");
+        Assert.SkipUnless(
             File.Exists(Path.Combine(root!, "CATALOG.031")),
             $"No CATALOG.031 in {root}.");
 

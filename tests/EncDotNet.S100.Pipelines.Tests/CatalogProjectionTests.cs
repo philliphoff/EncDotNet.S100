@@ -24,11 +24,11 @@ public sealed class CatalogProjectionTests
     private static string FixturePath(string relative) =>
         Path.Combine(AppContext.BaseDirectory, "TestData", relative);
 
-    [SkippableFact]
+    [Fact]
     public void Project_gml_dataset_yields_vector_data_with_bounds()
     {
         var path = FixturePath(Path.Combine("S411", "display_modes.gml"));
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         using var stream = File.OpenRead(path);
         var projected = LoadedDatasetProjector.Project(new DatasetId("s411-1"), "S-411", stream);
@@ -42,11 +42,11 @@ public sealed class CatalogProjectionTests
         Assert.NotEqual(LoadedDatasetProjector.WorldBounds, projected.Bounds);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Project_s102_coverage_yields_coverage_data_with_nonworld_bounds()
     {
         var path = FixturePath("102US004MI1CI262227.h5");
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         using var stream = File.OpenRead(path);
         var projected = LoadedDatasetProjector.Project(new DatasetId("s102-1"), "S-102", stream);
@@ -57,14 +57,14 @@ public sealed class CatalogProjectionTests
         Assert.NotEqual(LoadedDatasetProjector.WorldBounds, projected.Bounds);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Project_s57_stream_translates_cell_and_keeps_s57_identity()
     {
         // Regression: the stream overload used to open S-57 bytes with the
         // S-101 reader, yielding an empty dataset with world bounds and the
         // payload-derived identity "S-101".
         var path = S57FixturePath();
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         using var stream = File.OpenRead(path);
         var projected = LoadedDatasetProjector.Project(new DatasetId("s57-1"), "S-57", stream);
@@ -80,11 +80,11 @@ public sealed class CatalogProjectionTests
         Assert.InRange(projected.Bounds.WestLongitude, -72.0, -70.0);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Project_s57_stream_matches_processor_projection()
     {
         var path = S57FixturePath();
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         var catalogueManager = new PortrayalCatalogueManager();
         catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
@@ -155,11 +155,11 @@ public sealed class CatalogProjectionTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void FileDatasetCatalog_build_projects_s57_cell_with_s57_identity()
     {
         var path = S57FixturePath();
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         var catalog = FileDatasetCatalog.Build(
             [new FileDatasetInput(new DatasetId("US5MA1BO"), "S-57", path)]);
@@ -191,11 +191,11 @@ public sealed class CatalogProjectionTests
         Assert.Null(projected);
     }
 
-    [SkippableFact]
+    [Fact]
     public void FileDatasetCatalog_build_projects_successes_and_reports_warnings()
     {
         var gml = FixturePath(Path.Combine("S411", "display_modes.gml"));
-        Skip.IfNot(File.Exists(gml), $"Fixture not found: {gml}");
+        Assert.SkipUnless(File.Exists(gml), $"Fixture not found: {gml}");
 
         var missing = FixturePath(Path.Combine("S411", "does-not-exist.gml"));
 

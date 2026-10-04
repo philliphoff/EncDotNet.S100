@@ -12,7 +12,7 @@
     <PackageReference Include="Mapsui" />
     <PackageReference Include="Mapsui.Rendering.Skia" />
     <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="Verify.Xunit" />
+    <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 
   <ItemGroup>

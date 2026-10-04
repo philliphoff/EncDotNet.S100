@@ -20,5 +20,5 @@ When modifying S-101 code:
   renderer-specific types into the parser.
 - Respect COMF/SOMF integer coordinate scaling — convert to decimal
   degrees at the source boundary, not in pipeline/renderer code.
-- Any new public API requires a matching xunit test (use `SkippableFact`
-  when a real ENC is required).
+- Any new public API requires a matching xunit test (skip with
+  `Assert.SkipUnless` when a real ENC is required).

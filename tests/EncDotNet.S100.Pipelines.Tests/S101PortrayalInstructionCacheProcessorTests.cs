@@ -53,11 +53,11 @@ public class S101PortrayalInstructionCacheProcessorTests
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider(),
             sharedInstructionCache: instructionCache);
 
-    [SkippableFact]
+    [Fact]
     public async Task WarmDiskCache_SecondColdOpen_ReusesPreparedInstructions()
     {
         var cell = FindCell();
-        Skip.If(cell is null, "No S-101 trial cell present.");
+        Assert.SkipWhen(cell is null, "No S-101 trial cell present.");
 
         var cacheDir = Path.Combine(
             Path.GetTempPath(), "encdotnet-dlistcache-proc-" + Guid.NewGuid().ToString("N"));
@@ -99,11 +99,11 @@ public class S101PortrayalInstructionCacheProcessorTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task DefaultProcessor_FallsBackToInMemoryCache_AndRenders()
     {
         var cell = FindCell();
-        Skip.If(cell is null, "No S-101 trial cell present.");
+        Assert.SkipWhen(cell is null, "No S-101 trial cell present.");
 
         // Construct the processor directly via the public path ctor WITHOUT a
         // shared instruction cache, so it falls back to its own bounded in-memory

@@ -127,11 +127,11 @@ public sealed class TileMetatileTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task RealS101Metatile_SlicesMatchIndependentTiles()
     {
         var path = ResolveRealCellPath();
-        Skip.IfNot(File.Exists(path), $"Real S-101 trial cell not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Real S-101 trial cell not present: {path}");
 
         IReadOnlyDictionary<TileKey, SKImage>? actual = null;
         try

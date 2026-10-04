@@ -20,11 +20,11 @@ public class S57DatasetProcessorEcdisFilterTests
     private static int InstructionCount(EncDotNet.S100.Datasets.Pipelines.Portrayal.VectorPortrayalResult result)
         => result.SubLayers.Sum(s => s.Instructions.Count);
 
-    [SkippableFact]
+    [Fact]
     public async Task DisplayCategory_FiltersInstructions_Monotonically()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-57 fixture not found at expected path: {fixturePath}");
 
         var luaEngine = new MoonSharpLuaEngine();
@@ -52,7 +52,7 @@ public class S57DatasetProcessorEcdisFilterTests
         // A real ENC cell carries non-base content, so DisplayBase must drop at
         // least one instruction relative to All. If the cell happened to be
         // base-only, skip rather than fail.
-        Skip.If(displayBase == all,
+        Assert.SkipWhen(displayBase == all,
             "Fixture has only Display Base content; cannot observe category filtering.");
         Assert.True(displayBase < all,
             $"Expected DisplayBase ({displayBase}) to filter out content present in All ({all}).");

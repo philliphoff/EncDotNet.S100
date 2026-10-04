@@ -21,5 +21,5 @@ When modifying S-102 code:
   native-CRS bitmap into EPSG:3857 — reproject per pixel.
 - Cite the S-102 section number in XML doc comments when adding
   spec-derived constants, attribute names, or group paths.
-- Any new public API requires a matching xunit test (use `SkippableFact`
-  when a real HDF5 file is required).
+- Any new public API requires a matching xunit test (skip with
+  `Assert.SkipUnless` when a real HDF5 file is required).

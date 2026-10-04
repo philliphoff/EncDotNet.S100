@@ -89,7 +89,7 @@ public sealed class SkiaHeadlessRealDataTests
         MaybeDump(bitmap, "s124_navwarn_surface.png");
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task S101_Cell_RendersThroughSkiaCore()
     {
         // Committed S-101 exchange-set cell (ISO 8211). Patterns are deferred in
@@ -97,7 +97,7 @@ public sealed class SkiaHeadlessRealDataTests
         // soundings/symbols, and text are rendered.
         var path = Path.Combine(
             TestHelpers.DatasetsRoot, "S101", "S-101", "DATASET_FILES", "101AA00DS0008.000");
-        Skip.IfNot(File.Exists(path), $"S-101 cell not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-101 cell not present: {path}");
 
         using var manager = CreateCatalogueManager();
         var featureCatalogues = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);

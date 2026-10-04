@@ -5,11 +5,11 @@ public class S411DatasetReaderIssueDateTests
     private static readonly string TestDataDir =
         Path.Combine(AppContext.BaseDirectory, "TestData");
 
-    [SkippableFact]
+    [Fact]
     public void IhoSampleDataset_exposes_dataset_reference_date_as_IssueDate()
     {
         var path = Path.Combine(TestDataDir, "iho_4112C00TDS001.gml");
-        Skip.IfNot(File.Exists(path), $"Fixture missing: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture missing: {path}");
 
         using var s = File.OpenRead(path);
         var ds = S411Dataset.Open(s);

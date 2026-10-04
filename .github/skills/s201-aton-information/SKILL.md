@@ -141,7 +141,7 @@ Treat both as the dataset root.
    `xsl:include`.
 8. Public API changes have xunit tests; synthetic GML fixtures live
    under `tests/datasets/S201/`. Real-world dataset coverage is
-   gated by the `S201_REAL_DATASET_PATH` env var (SkippableFact).
+   gated by the `S201_REAL_DATASET_PATH` env var (`Assert.SkipUnless`).
 
 ## Known pitfalls in this repo
 - **Real datasets do NOT match the bundled XSD shape.** The

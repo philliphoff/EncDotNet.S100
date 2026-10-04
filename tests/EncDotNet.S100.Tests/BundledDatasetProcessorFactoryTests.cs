@@ -33,10 +33,10 @@ public sealed class BundledDatasetProcessorFactoryTests
             () => factory.CreateProcessorWithFilesystemUpdates("any.gml"));
     }
 
-    [SkippableFact]
+    [Fact]
     public void CreateProcessor_BuildsProcessorFromBundledCatalogues()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var factory = BundledDatasetProcessorFactory.Create();
 

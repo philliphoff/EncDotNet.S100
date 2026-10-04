@@ -290,15 +290,34 @@ public sealed class RenderHarness : IDisposable
 
             // First frame schedules the worker raster for the visible tiles.
             var bitmap = RenderFrame(map);
+            var sawVisibleWork = false;
 
             while (Stopwatch.GetTimestamp() < deadline)
             {
                 if (!redraw.Wait(options.SettleQuietPeriod))
                 {
-                    // No new tile published within the quiet period: the base
-                    // plane has settled.
-                    break;
+                    // A quiet spell is only "settled" once no visible tile is
+                    // still queued or rasterising: a cold first render (JIT,
+                    // catalogue load) on a slow runner can outlast the quiet
+                    // period, and breaking then returned a blank frame.
+                    if (instrumented.Any(S100VectorTileRenderer.HasVisibleTileWorkForTest))
+                    {
+                        sawVisibleWork = true;
+                        continue;
+                    }
+
+                    // A worker leaves InFlight just before it requests the
+                    // redraw; after busy-to-idle, give that redraw one more
+                    // quiet period to land.
+                    if (!sawVisibleWork || !redraw.Wait(options.SettleQuietPeriod))
+                    {
+                        // No new tile published and none pending: the base
+                        // plane has settled.
+                        break;
+                    }
                 }
+
+                sawVisibleWork = false;
 
                 redraw.Reset();
                 bitmap.Dispose();

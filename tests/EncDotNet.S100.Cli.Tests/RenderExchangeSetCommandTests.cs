@@ -38,10 +38,10 @@ public sealed class RenderExchangeSetCommandTests
         Assert.Equal(height, bitmap.Height);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Positional_directory_composites_the_whole_set()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var output = TempOutput();
         try
@@ -58,10 +58,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Positional_catalogue_file_composites_the_whole_set()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var output = TempOutput();
         try
@@ -78,10 +78,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Explicit_exchange_set_option_is_equivalent_to_positional()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var output = TempOutput();
         try
@@ -98,10 +98,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void From_alias_is_accepted()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var output = TempOutput();
         try
@@ -118,10 +118,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Only_filter_restricts_to_named_specs()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var output = TempOutput();
         try
@@ -138,10 +138,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Only_filter_matching_no_datasets_returns_nonzero()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         // The set contains S-124 and S-125 only; S-101 matches nothing.
         var output = TempOutput();
@@ -152,10 +152,10 @@ public sealed class RenderExchangeSetCommandTests
         Assert.False(File.Exists(output));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Zip_exchange_set_is_extracted_and_composited()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var zip = Path.Combine(Path.GetTempPath(), $"s100-cli-es-{Guid.NewGuid():N}.zip");
         var output = TempOutput();
@@ -176,10 +176,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Explicit_bbox_applies_to_exchange_set_form()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var output = TempOutput();
         try
@@ -197,10 +197,10 @@ public sealed class RenderExchangeSetCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Layer_and_exchange_set_together_returns_nonzero()
     {
-        Skip.IfNot(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
+        Assert.SkipUnless(FixturePresent, "Synthetic-Renderable exchange-set fixture not present.");
 
         var layer = Path.Combine(ExchangeSetDir, "S124", "navwarn_surface.gml");
         var output = TempOutput();
@@ -215,7 +215,7 @@ public sealed class RenderExchangeSetCommandTests
     public void Only_without_exchange_set_returns_nonzero()
     {
         var dataset = Path.Combine(AppContext.BaseDirectory, "TestData", "S124", "navwarn_surface.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = TempOutput();
         int exit = CliApp.Build().Run(

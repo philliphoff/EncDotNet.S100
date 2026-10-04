@@ -51,7 +51,7 @@ description: |
    `S101PortrayalCatalogue` from `EncDotNet.S100.Specifications` (not
    hard-coded in the dataset library).
 7. Tests live in `tests/EncDotNet.S100.Pipelines.Tests` (or a dedicated
-   S101 test project). Use `SkippableFact` when a real ENC is required.
+   S101 test project). Skip with `Assert.SkipUnless` when a real ENC is required.
 
 ## Known pitfalls in this repo
 - ISO 8211 string fields can be ISO/IEC 8859-1, UTF-8, or UCS-2; honor

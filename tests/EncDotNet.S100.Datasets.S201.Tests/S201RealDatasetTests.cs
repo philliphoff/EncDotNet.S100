@@ -13,16 +13,16 @@ public class S201RealDatasetTests
 {
     private const string EnvVar = "S201_REAL_DATASET_PATH";
 
-    [SkippableFact]
+    [Fact]
     public void Open_RealDataset_ParsesFeatures()
     {
         var path = Environment.GetEnvironmentVariable(EnvVar);
-        Skip.If(string.IsNullOrEmpty(path), $"Set {EnvVar} to enable real-dataset tests.");
+        Assert.SkipWhen(string.IsNullOrEmpty(path), $"Set {EnvVar} to enable real-dataset tests.");
 
         var files = Directory.Exists(path)
             ? Directory.EnumerateFiles(path, "*.gml", SearchOption.AllDirectories).ToArray()
             : new[] { path };
-        Skip.If(files.Length == 0, $"No .gml files found at {path}");
+        Assert.SkipWhen(files.Length == 0, $"No .gml files found at {path}");
 
         int totalFeatures = 0;
         int parsedFiles = 0;
@@ -37,7 +37,7 @@ public class S201RealDatasetTests
             parsedFiles++;
         }
 
-        Skip.If(parsedFiles == 0, "No parseable files.");
+        Assert.SkipWhen(parsedFiles == 0, "No parseable files.");
         // At least one of the supplied datasets must contain content.
         Assert.True(totalFeatures > 0,
             $"Parsed {parsedFiles} file(s) but found zero features — reader likely misclassified the dataset shape.");

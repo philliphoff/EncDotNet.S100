@@ -36,13 +36,13 @@ public sealed class RenderParityTests
     /// verifies it against a committed golden snapshot — the durable regression
     /// guard for the renderer.
     /// </summary>
-    [SkippableTheory]
+    [Theory]
     [InlineData(PaletteType.Day)]
     [InlineData(PaletteType.Dusk)]
     [InlineData(PaletteType.Night)]
     public Task BMode_EncCell_Palette(PaletteType palette)
     {
-        Skip.IfNot(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
+        Assert.SkipUnless(File.Exists(CommittedCellPath), $"S-101 test dataset not present: {CommittedCellPath}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(CommittedCellPath, new HarnessOptions
@@ -72,14 +72,14 @@ public sealed class RenderParityTests
     /// committed cell (<see cref="BMode_EncCell_Palette"/>); the in-viewer Metal
     /// recipe in <c>README.md</c> covers what headless cannot (rotation, GPU).
     /// </summary>
-    [SkippableFact]
+    [Fact]
     public void BMode_DenseCell_LabelsAndSymbols()
     {
         var densePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Downloads", "Complete S10X datasets", "S-101 Trial Cells",
             "101GB00302045", "101GB00GB302045", "101GB00GB302045.000");
-        Skip.IfNot(File.Exists(densePath), $"Dense S-101 trial cell not present: {densePath}");
+        Assert.SkipUnless(File.Exists(densePath), $"Dense S-101 trial cell not present: {densePath}");
 
         using var harness = new RenderHarness();
         using var bitmap = harness.Render(densePath, new HarnessOptions

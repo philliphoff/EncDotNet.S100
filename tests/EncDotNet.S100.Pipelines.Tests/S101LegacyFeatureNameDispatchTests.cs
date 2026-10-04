@@ -37,11 +37,11 @@ public class S101LegacyFeatureNameDispatchTests
         "BeaconCardinal",
     ];
 
-    [SkippableFact]
+    [Fact]
     public void LegacyNamedBuoyAndBeaconFeatures_DoNotFallBackToDefaultSymbology()
     {
         var fixturePath = ResolveFixturePath(BuoyBeaconFixture);
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-101 fixture not found at expected path: {fixturePath}");
 
         var dataset = S101Dataset.Open(fixturePath);
@@ -57,7 +57,7 @@ public class S101LegacyFeatureNameDispatchTests
                 legacyFeatures[feat.RecordId] = code;
         }
 
-        Skip.If(legacyFeatures.Count == 0,
+        Assert.SkipWhen(legacyFeatures.Count == 0,
             "Fixture contains no legacy-named buoy or beacon features.");
 
         var emitted = RunExecutor(dataset);

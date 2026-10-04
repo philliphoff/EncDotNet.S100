@@ -48,13 +48,13 @@ public sealed class McpServeCommandTests
     private static string FixturePath(string fileName) =>
         Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
-    [SkippableFact]
+    [Fact]
     public async Task Serve_over_stdio_lists_tools_and_serves_the_dataset()
     {
         var host = HostPath();
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(host), $"CLI host not found: {host}");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(host), $"CLI host not found: {host}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
@@ -84,13 +84,13 @@ public sealed class McpServeCommandTests
         Assert.Contains("navwarn_surface.gml", text);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task Serve_is_mutable_by_default_setting_palette_and_rendering()
     {
         var host = HostPath();
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(host), $"CLI host not found: {host}");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(host), $"CLI host not found: {host}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
 
@@ -135,13 +135,13 @@ public sealed class McpServeCommandTests
         Assert.False(image.Data.IsEmpty, "render_to_image produced no image bytes.");
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task Serve_opens_and_closes_a_dataset_mid_session()
     {
         var host = HostPath();
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(host), $"CLI host not found: {host}");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(host), $"CLI host not found: {host}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
 

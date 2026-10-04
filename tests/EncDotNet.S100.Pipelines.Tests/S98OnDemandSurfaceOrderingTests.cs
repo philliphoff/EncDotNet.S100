@@ -31,7 +31,7 @@ public class S98OnDemandSurfaceOrderingTests
 
     private readonly InteroperabilityAuthority _authority = new();
 
-    [SkippableFact]
+    [Fact]
     public async Task S57_cell_splits_fills_onto_BaseChartUnder_and_linework_onto_BaseChartOver()
     {
         var result = await PortrayS57Async();
@@ -52,7 +52,7 @@ public class S98OnDemandSurfaceOrderingTests
         Assert.Equal(new[] { "s57.areas", "s57.linework" }, result.LayerNames);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task S104_band_paints_between_S57_fills_and_S57_linework_in_any_load_order()
     {
         var s57 = VectorItems(await PortrayS57Async(), "s57");
@@ -63,7 +63,7 @@ public class S98OnDemandSurfaceOrderingTests
             ["s57/s57.areas", "s104/s104.color-band", "s57/s57.linework"]);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task S104_band_is_partly_transparent_so_ENC_fills_show_through()
     {
         // Main §9.2.1: on-demand data must not obscure official colour fills.
@@ -73,7 +73,7 @@ public class S98OnDemandSurfaceOrderingTests
         Assert.InRange(band.Opacity, 0.5, 0.95);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task S104_band_paints_between_S101_fills_and_S101_linework_in_any_load_order()
     {
         var s101 = VectorItems(await PortrayS101Async(), "s101");
@@ -84,7 +84,7 @@ public class S98OnDemandSurfaceOrderingTests
             ["s101/s101.areas", "s104/s104.color-band", "s101/s101.linework"]);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task S111_arrows_paint_above_ENC_linework_and_S104_band_in_any_load_order()
     {
         var s57 = VectorItems(await PortrayS57Async(), "s57");
@@ -105,7 +105,7 @@ public class S98OnDemandSurfaceOrderingTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task S111_emits_no_colour_band_that_could_cover_the_ENC()
     {
         // The bundled S-111 Ed 2.0.0 portrayal catalogue defines arrows only;
@@ -213,7 +213,7 @@ public class S98OnDemandSurfaceOrderingTests
                 return candidate;
         }
 
-        Skip.If(true, $"Fixture not found: {repoRelativePath}");
+        Assert.SkipWhen(true, $"Fixture not found: {repoRelativePath}");
         throw new InvalidOperationException("Unreachable.");
     }
 }

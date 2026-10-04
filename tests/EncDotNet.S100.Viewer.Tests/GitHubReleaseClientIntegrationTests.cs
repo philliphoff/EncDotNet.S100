@@ -11,10 +11,10 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// </summary>
 public sealed class GitHubReleaseClientIntegrationTests
 {
-    [SkippableFact]
+    [Fact]
     public async Task GetLatestReleaseAsync_HitsRealRepository_ReturnsPublishedRelease()
     {
-        Skip.If(
+        Assert.SkipWhen(
             Environment.GetEnvironmentVariable("S100_UPDATE_INTEGRATION") != "1",
             "S100_UPDATE_INTEGRATION not set; skipping live GitHub call.");
 
@@ -30,10 +30,10 @@ public sealed class GitHubReleaseClientIntegrationTests
             release.HtmlUrl);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task UpdateService_WithOldVersion_ReportsUpdateAvailable()
     {
-        Skip.If(
+        Assert.SkipWhen(
             Environment.GetEnvironmentVariable("S100_UPDATE_INTEGRATION") != "1",
             "S100_UPDATE_INTEGRATION not set; skipping live GitHub call.");
 

@@ -507,12 +507,12 @@ public class ExchangeSetServiceLoaderTests
     /// environment variable (the folder containing <c>CATALOG.031</c>).
     /// Skipped otherwise so CI never depends on (or commits) real ENC data.
     /// </summary>
-    [SkippableFact]
+    [Fact]
     public async Task OpenAsync_RealS57ExchangeSet_DispatchesCellsAsS57Entries()
     {
         var root = Environment.GetEnvironmentVariable("ENCDOTNET_S57_EXCHANGE_SET");
-        Skip.If(string.IsNullOrEmpty(root), "ENCDOTNET_S57_EXCHANGE_SET not set.");
-        Skip.IfNot(
+        Assert.SkipWhen(string.IsNullOrEmpty(root), "ENCDOTNET_S57_EXCHANGE_SET not set.");
+        Assert.SkipUnless(
             File.Exists(Path.Combine(root!, "CATALOG.031")),
             $"No CATALOG.031 in {root}.");
 

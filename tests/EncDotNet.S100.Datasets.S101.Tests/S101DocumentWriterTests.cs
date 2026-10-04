@@ -200,11 +200,11 @@ public class S101DocumentWriterTests
         await Assert.ThrowsAsync<ArgumentException>(() => S101DocumentWriter.WriteToFileAsync("", document));
     }
 
-    [SkippableFact]
+    [Fact]
     public void ConvertRealS57Fixture_Translate_Write_Read_RoundTrips()
     {
         var fixture = LocateFixture(Path.Combine("S57", "US5MA1BO", "US5MA1BO.000"));
-        Skip.If(fixture is null, "S-57 fixture US5MA1BO.000 not found.");
+        Assert.SkipWhen(fixture is null, "S-57 fixture US5MA1BO.000 not found.");
 
         var dataset = S57Dataset.Open(fixture!);
         var translator = new S57ToS101Translator(S57S101Mapping.Default, allowedEnumValues: null);

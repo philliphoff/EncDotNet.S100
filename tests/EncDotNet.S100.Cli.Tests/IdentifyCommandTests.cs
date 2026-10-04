@@ -20,7 +20,7 @@ public sealed class IdentifyCommandTests
     public void Identify_single_gml_dataset_returns_success()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["identify", dataset, "--lat", "51.085", "--lon", "1.30"]);
 
@@ -31,7 +31,7 @@ public sealed class IdentifyCommandTests
     public void Identify_emits_well_formed_json_with_ranked_features()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var (exit, stdout) = RunCapturingStdout(
             ["identify", dataset, "--lat", "51.085", "--lon", "1.30", "--format", "json"]);
@@ -60,8 +60,8 @@ public sealed class IdentifyCommandTests
     {
         var s124 = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
         var s125 = FixturePath(Path.Combine("S125", "aton_point.gml"));
-        Skip.IfNot(File.Exists(s124), $"Fixture not found: {s124}");
-        Skip.IfNot(File.Exists(s125), $"Fixture not found: {s125}");
+        Assert.SkipUnless(File.Exists(s124), $"Fixture not found: {s124}");
+        Assert.SkipUnless(File.Exists(s125), $"Fixture not found: {s125}");
 
         // Pick inside the S-124 polygon; the S-125 layer simply contributes no
         // features here, proving multi-layer resolution succeeds.
@@ -76,8 +76,8 @@ public sealed class IdentifyCommandTests
     {
         var s124 = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
         var s125 = FixturePath(Path.Combine("S125", "aton_point.gml"));
-        Skip.IfNot(File.Exists(s124), $"Fixture not found: {s124}");
-        Skip.IfNot(File.Exists(s125), $"Fixture not found: {s125}");
+        Assert.SkipUnless(File.Exists(s124), $"Fixture not found: {s124}");
+        Assert.SkipUnless(File.Exists(s125), $"Fixture not found: {s125}");
 
         var (exit, stdout) = RunCapturingStdout(
             ["identify", "--layer", s124, "--layer", s125,
@@ -94,7 +94,7 @@ public sealed class IdentifyCommandTests
     public void Identify_without_coordinates_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["identify", dataset]);
 
@@ -105,7 +105,7 @@ public sealed class IdentifyCommandTests
     public void Identify_with_bad_format_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(
             ["identify", dataset, "--lat", "51.085", "--lon", "1.30", "--format", "bogus"]);
@@ -117,7 +117,7 @@ public sealed class IdentifyCommandTests
     public void Identify_with_nan_coordinate_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["identify", dataset, "--lat", "NaN", "--lon", "1.30"]);
 
@@ -128,7 +128,7 @@ public sealed class IdentifyCommandTests
     public void Identify_positional_combined_with_layer_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(
             ["identify", dataset, "--layer", dataset, "--lat", "51.085", "--lon", "1.30"]);
@@ -140,7 +140,7 @@ public sealed class IdentifyCommandTests
     public void Identify_only_without_exchange_set_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(
             ["identify", "--layer", dataset, "--lat", "51.085", "--lon", "1.30", "--only", "S124"]);
@@ -152,7 +152,7 @@ public sealed class IdentifyCommandTests
     public void Identify_with_non_finite_radius_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(
             ["identify", dataset, "--lat", "51.085", "--lon", "1.30", "--radius", "NaN"]);

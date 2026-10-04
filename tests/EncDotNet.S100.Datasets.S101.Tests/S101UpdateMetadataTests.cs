@@ -71,11 +71,11 @@ public class S101UpdateMetadataTests
         Assert.Equal((ushort)2, attribute.ParentIndex);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ReadFromFile_BaseCell_HasBaseUpdateMetadata()
     {
         var path = FindDatasetFile(".000");
-        Skip.If(path is null, "No S-101 base cell (.000) found under IC-ENC sample data.");
+        Assert.SkipWhen(path is null, "No S-101 base cell (.000) found under IC-ENC sample data.");
 
         var document = S101DocumentReader.ReadFromFile(path!);
 
@@ -87,11 +87,11 @@ public class S101UpdateMetadataTests
         Assert.All(document.Features, f => Assert.Equal(S101UpdateInstruction.Insert, f.UpdateInstruction));
     }
 
-    [SkippableFact]
+    [Fact]
     public void ReadFromFile_UpdateCell_HasUpdateMetadata()
     {
         var path = FindDatasetFile(".001");
-        Skip.If(path is null, "No S-101 update file (.001) found under IC-ENC sample data.");
+        Assert.SkipWhen(path is null, "No S-101 update file (.001) found under IC-ENC sample data.");
 
         var document = S101DocumentReader.ReadFromFile(path!);
 
@@ -104,18 +104,18 @@ public class S101UpdateMetadataTests
         Assert.All(document.Features, f => Assert.NotEqual(S101UpdateInstruction.None, f.UpdateInstruction));
     }
 
-    [SkippableFact]
+    [Fact]
     public void OpenWithUpdates_AppliesSiblingUpdate()
     {
         var basePath = FindDatasetFile(".000");
-        Skip.If(basePath is null, "No S-101 base cell (.000) found under IC-ENC sample data.");
+        Assert.SkipWhen(basePath is null, "No S-101 base cell (.000) found under IC-ENC sample data.");
 
         // Find an update (.001) that targets the same cell (same file stem).
         var stem = Path.GetFileNameWithoutExtension(basePath!);
         var updatePath = Directory
             .EnumerateFiles(RootOf(basePath!), stem + ".001", SearchOption.AllDirectories)
             .FirstOrDefault();
-        Skip.If(updatePath is null, $"No matching .001 update found for base cell '{stem}'.");
+        Assert.SkipWhen(updatePath is null, $"No matching .001 update found for base cell '{stem}'.");
 
         var dataset = S101Dataset.OpenWithUpdates(basePath!, new[] { updatePath! });
 

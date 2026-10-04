@@ -36,10 +36,10 @@ public class S101PatternFillDiagnosticTests
     /// features overlap and what patterns they reference. This helps diagnose
     /// whether the crosshatch comes from instruction-level overlap.
     /// </summary>
-    [SkippableFact]
+    [Fact]
     public void DumpAreaFillInstructions()
     {
-        Skip.IfNot(DatasetExists, $"Test dataset not found at {DatasetDir}/{TestDataset}");
+        Assert.SkipUnless(DatasetExists, $"Test dataset not found at {DatasetDir}/{TestDataset}");
         Directory.CreateDirectory(OutputDir);
 
         var (parsed, _, _) = RunLuaPipeline();
@@ -102,10 +102,10 @@ public class S101PatternFillDiagnosticTests
     /// Rasterizes each unique pattern tile to a PNG file for visual inspection.
     /// This directly tests the tile bitmap without any Mapsui involvement.
     /// </summary>
-    [SkippableFact]
-    public void DumpPatternTiles()
+    [Fact]
+    public async Task DumpPatternTiles()
     {
-        Skip.IfNot(DatasetExists, $"Test dataset not found at {DatasetDir}/{TestDataset}");
+        Assert.SkipUnless(DatasetExists, $"Test dataset not found at {DatasetDir}/{TestDataset}");
         Directory.CreateDirectory(OutputDir);
 
         var (parsed, palette, catalogue) = RunLuaPipeline();
@@ -123,10 +123,10 @@ public class S101PatternFillDiagnosticTests
         {
             try
             {
-                var areaFill = catalogue.GetAreaFillAsync(fillName).AsTask().GetAwaiter().GetResult();
+                var areaFill = await catalogue.GetAreaFillAsync(fillName);
                 if (areaFill.PatternSymbol is null) continue;
 
-                var svgContent = catalogue.GetSymbolAsync(areaFill.PatternSymbol).AsTask().GetAwaiter().GetResult().SvgContent;
+                var svgContent = (await catalogue.GetSymbolAsync(areaFill.PatternSymbol)).SvgContent;
                 var processed = SvgProcessor.Process(svgContent, palette);
 
                 // Dump SVG and area fill details
@@ -209,10 +209,10 @@ public class S101PatternFillDiagnosticTests
     /// drawing each area fill instruction on a single canvas. This isolates
     /// whether the crosshatch is a tile/instruction issue vs a Mapsui issue.
     /// </summary>
-    [SkippableFact]
-    public void RenderAreaFillsToSkiaBitmap()
+    [Fact]
+    public async Task RenderAreaFillsToSkiaBitmap()
     {
-        Skip.IfNot(DatasetExists, $"Test dataset not found at {DatasetDir}/{TestDataset}");
+        Assert.SkipUnless(DatasetExists, $"Test dataset not found at {DatasetDir}/{TestDataset}");
         Directory.CreateDirectory(OutputDir);
 
         var (parsed, palette, catalogue) = RunLuaPipeline();
@@ -374,10 +374,10 @@ public class S101PatternFillDiagnosticTests
             {
                 try
                 {
-                    var areaFill = catalogue.GetAreaFillAsync(symbolRef).AsTask().GetAwaiter().GetResult();
+                    var areaFill = await catalogue.GetAreaFillAsync(symbolRef);
                     if (areaFill.PatternSymbol is not null)
                     {
-                        var svgContent = catalogue.GetSymbolAsync(areaFill.PatternSymbol).AsTask().GetAwaiter().GetResult().SvgContent;
+                        var svgContent = (await catalogue.GetSymbolAsync(areaFill.PatternSymbol)).SvgContent;
                         var processed = SvgProcessor.Process(svgContent, palette);
                         var png = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
                         if (png is not null)

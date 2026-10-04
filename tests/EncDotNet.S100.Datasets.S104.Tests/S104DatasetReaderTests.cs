@@ -32,10 +32,10 @@ public class S104DatasetReaderTests : IDisposable
 
     private void SkipIfNoTestData()
     {
-        Skip.If(_hdf5 is null, $"S-104 test data not found in {TestDataDir}/.");
+        Assert.SkipWhen(_hdf5 is null, $"S-104 test data not found in {TestDataDir}/.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_RootAttributes_ParsedCorrectly()
     {
         SkipIfNoTestData();
@@ -53,7 +53,7 @@ public class S104DatasetReaderTests : IDisposable
             EncDotNet.S100.Datasets.Pipelines.S100IssueTime.Parse(dataset.IssueDate, dataset.IssueTime)?.Date);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_Coverages_HasMultipleTimeSteps()
     {
         SkipIfNoTestData();
@@ -64,7 +64,7 @@ public class S104DatasetReaderTests : IDisposable
         Assert.True(dataset.Coverages.Count >= 2, $"Expected multiple time steps, got {dataset.Coverages.Count}");
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_Coverages_TimePointsAreOrdered()
     {
         SkipIfNoTestData();
@@ -79,7 +79,7 @@ public class S104DatasetReaderTests : IDisposable
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_CoverageGrid_HasExpectedDimensions()
     {
         SkipIfNoTestData();
@@ -94,7 +94,7 @@ public class S104DatasetReaderTests : IDisposable
         Assert.Equal(first.NumPointsLatitudinal * first.NumPointsLongitudinal, first.Values.Length);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_Values_ContainRealisticWaterLevelData()
     {
         SkipIfNoTestData();

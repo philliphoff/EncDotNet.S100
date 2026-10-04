@@ -2361,6 +2361,38 @@ public static class S100VectorTileRenderer
         return sizes;
     }
 
+    /// <summary>
+    /// Test-only seam: whether <paramref name="layer"/> still has visible tiles
+    /// queued or rasterising, so a headless settle loop can tell "no tile has
+    /// published yet" apart from "nothing left to publish". Speculative
+    /// (prediction / cross-band) work is ignored: it never requests a redraw.
+    /// </summary>
+    internal static bool HasVisibleTileWorkForTest(ILayer layer)
+    {
+        if (!States.TryGetValue(layer, out var state))
+        {
+            return false;
+        }
+
+        lock (state.Sync)
+        {
+            if (state.PendingVisible.Count > 0)
+            {
+                return true;
+            }
+
+            foreach (var key in state.InFlight)
+            {
+                if (GetTileRelevance(state, key, state.Generation) == TileRelevance.Visible)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     /// <summary>Test-only seam: the current GPU-registry entry count.</summary>
     internal static int GpuRegistryEntryCountForTest
     {

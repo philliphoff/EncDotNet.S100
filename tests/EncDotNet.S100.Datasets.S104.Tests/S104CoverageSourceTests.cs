@@ -30,10 +30,10 @@ public class S104CoverageSourceTests : IDisposable
 
     private void SkipIfNoTestData()
     {
-        Skip.If(_dataset is null, $"S-104 test data not found in {TestDataDir}/.");
+        Assert.SkipWhen(_dataset is null, $"S-104 test data not found in {TestDataDir}/.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void Metadata_ProductSpec_IsS104()
     {
         SkipIfNoTestData();
@@ -43,7 +43,7 @@ public class S104CoverageSourceTests : IDisposable
         Assert.Equal("S-104", source.Metadata.Spec.Name);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Metadata_ValueFields_ContainHeightAndTrend()
     {
         SkipIfNoTestData();
@@ -55,7 +55,7 @@ public class S104CoverageSourceTests : IDisposable
         Assert.Contains("waterLevelTrend", fieldNames);
     }
 
-    [SkippableFact]
+    [Fact]
     public void AvailableTimes_ReturnsAllTimeSteps()
     {
         SkipIfNoTestData();
@@ -67,7 +67,7 @@ public class S104CoverageSourceTests : IDisposable
         Assert.True(times.Count >= 2);
     }
 
-    [SkippableFact]
+    [Fact]
     public void SelectTime_ChangesWhichCoverageIsSampled()
     {
         SkipIfNoTestData();
@@ -90,7 +90,7 @@ public class S104CoverageSourceTests : IDisposable
         Assert.Equal(height0.GetLength(1), heightLast.GetLength(1));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Sample_Full_ReturnsCorrectDimensions()
     {
         SkipIfNoTestData();
@@ -108,7 +108,7 @@ public class S104CoverageSourceTests : IDisposable
         Assert.Equal(coverage.NumPointsLongitudinal, trend.GetLength(1));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Sample_StrideLargerThanSubset_RetainsIntersectingCell()
     {
         SkipIfNoTestData();

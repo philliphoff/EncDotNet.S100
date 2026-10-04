@@ -47,7 +47,8 @@ description: |
    `timeRecordInterval` * index unless explicit time coordinates are
    present.
 5. Fill values come from spec/file attributes — do not hard-code NaN.
-6. Public API changes have xunit tests using `SkippableFact`.
+6. Public API changes have xunit tests (skip with `Assert.SkipUnless` when
+   real data is required).
 
 ## Known pitfalls in this repo
 - The same coverage container can hold multiple `WaterLevel.NN`

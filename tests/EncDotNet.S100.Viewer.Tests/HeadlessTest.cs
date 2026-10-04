@@ -14,9 +14,8 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// headless session's UI thread, where <c>CheckAccess()</c> is <c>true</c>.
 /// </para>
 /// <para>
-/// We use the base <c>Avalonia.Headless</c> session API rather than
-/// <c>Avalonia.Headless.XUnit</c>'s <c>[AvaloniaFact]</c> because that
-/// package targets xunit v3 while this test suite uses xunit v2.
+/// This predates the suite's move to xunit v3; <c>Avalonia.Headless.XUnit</c>'s
+/// <c>[AvaloniaFact]</c> is now usable and replaces this helper in #776.
 /// </para>
 /// </summary>
 internal static class HeadlessTest

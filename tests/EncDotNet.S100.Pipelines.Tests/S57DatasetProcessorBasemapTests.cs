@@ -29,11 +29,11 @@ public class S57DatasetProcessorBasemapTests
         ScaleDenominator = 2_000_000,
     };
 
-    [SkippableFact]
+    [Fact]
     public async Task RenderHeadless_OfflineBasemap_PaintsLandOutsideTheCell()
     {
         var fixturePath = ResolveFixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-57 fixture not found at expected path: {fixturePath}");
 
         var catalogueManager = new PortrayalCatalogueManager();

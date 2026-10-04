@@ -25,7 +25,7 @@ consulted (`.github/skills/<spec>/SKILL.md`):
 ## Tests
 
 - [ ] Added/updated xunit tests under `tests/`
-- [ ] Tests requiring real data files use `SkippableFact`
+- [ ] Tests requiring real data files skip via `Assert.SkipUnless`/`Assert.SkipWhen`
 - [ ] `dotnet test --configuration Release` passes locally
 
 ## Documentation
