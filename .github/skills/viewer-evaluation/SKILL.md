@@ -203,6 +203,10 @@ See the cartography skill for the rendering cost model.
   synthetic fixture under `tests/datasets/…`. Gate fixtures that need
   real ENC/HDF5 data with `Assert.SkipUnless(...)` (xunit v3) so CI
   passes without them.
+- If it is panel / dialog / control behaviour (clicks, selection, keyboard,
+  what a view shows for a given state): add an `[AvaloniaFact]` view test in
+  `tests/EncDotNet.S100.Viewer.Tests` that drives the real view through
+  `ViewHost`, finding controls by automation id. See that project's README.
 - If it is genuinely render-output behaviour, keep a documented
   repro recipe (dataset path + flags + expected image) in the
   session-state notes — **not** a committed binary screenshot.

@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// </summary>
 public sealed class AddCollectionManifestDialogViewTests
 {
-    [Fact]
+    [AvaloniaFact]
     public async Task View_LoadsAndLaysOut_InEveryState()
     {
         using var context = new LibraryTestContext();
@@ -48,23 +48,20 @@ public sealed class AddCollectionManifestDialogViewTests
         editing.InitializeEdit(collection.Id, source);
         await editing.LoadCatalogAsync();
 
-        HeadlessTest.Run(() =>
+        foreach (var scope in new[] { adding, broken, editing })
         {
-            foreach (var scope in new[] { adding, broken, editing })
-            {
-                var view = new AddCollectionManifestDialogView { DataContext = new AddCollectionManifestDialogViewModel(scope) };
-                var window = new Window { Content = view, Width = 640, Height = 820 };
-                window.Show();
-                window.Measure(new Size(640, 820));
-                window.Arrange(new Rect(0, 0, 640, 820));
+            var view = new AddCollectionManifestDialogView { DataContext = new AddCollectionManifestDialogViewModel(scope) };
+            var window = new Window { Content = view, Width = 640, Height = 820 };
+            window.Show();
+            window.Measure(new Size(640, 820));
+            window.Arrange(new Rect(0, 0, 640, 820));
 
-                Assert.Equal(640, view.Bounds.Width);
-                window.Close();
-            }
-        });
+            Assert.Equal(640, view.Bounds.Width);
+            window.Close();
+        }
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(560)]
     [InlineData(700)]
     [InlineData(1000)]
@@ -80,25 +77,22 @@ public sealed class AddCollectionManifestDialogViewTests
         scope.Initialize(AddToLibraryKind.LocalManifest, path, targetCollectionId: null);
         await scope.LoadCatalogAsync();
 
-        HeadlessTest.Run(() =>
+        var view = new AddCollectionManifestDialogView { DataContext = new AddCollectionManifestDialogViewModel(scope) };
+        var window = new Window { Content = view, Width = 640, Height = windowHeight };
+        window.Show();
+        window.Measure(new Size(640, windowHeight));
+        window.Arrange(new Rect(0, 0, 640, windowHeight));
+
+        var buttons = view.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Content is "Cancel" or "Add to Library")
+            .ToArray();
+        Assert.Equal(2, buttons.Length);
+        foreach (var button in buttons)
         {
-            var view = new AddCollectionManifestDialogView { DataContext = new AddCollectionManifestDialogViewModel(scope) };
-            var window = new Window { Content = view, Width = 640, Height = windowHeight };
-            window.Show();
-            window.Measure(new Size(640, windowHeight));
-            window.Arrange(new Rect(0, 0, 640, windowHeight));
+            var bottom = button.TranslatePoint(new Point(0, button.Bounds.Height), window)!.Value.Y;
+            Assert.InRange(bottom, 1, windowHeight);
+        }
 
-            var buttons = view.GetVisualDescendants().OfType<Button>()
-                .Where(b => b.Content is "Cancel" or "Add to Library")
-                .ToArray();
-            Assert.Equal(2, buttons.Length);
-            foreach (var button in buttons)
-            {
-                var bottom = button.TranslatePoint(new Point(0, button.Bounds.Height), window)!.Value.Y;
-                Assert.InRange(bottom, 1, windowHeight);
-            }
-
-            window.Close();
-        });
+        window.Close();
     }
 }

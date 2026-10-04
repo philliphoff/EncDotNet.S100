@@ -27,108 +27,104 @@ public sealed class TimelineViewTests
         window.Close();
     }
 
-    [Fact]
-    public void An_empty_timeline_binds_without_looping() =>
-        HeadlessTest.Run(() =>
+    [AvaloniaFact]
+    public void An_empty_timeline_binds_without_looping()
+    {
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(new DateTimeOffset(Run)), action => action());
+
+        Show(timeline);
+
+        Assert.False(timeline.IsActive);
+    }
+
+    [AvaloniaFact]
+    public void A_timeline_with_gaps_binds_and_lays_out()
+    {
+        var service = new GlobalTimeService();
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+        var early = Enumerable.Range(0, 24).Select(h => Run.AddDays(-60).AddHours(h)).ToArray();
+        var late = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        var samples = early.Concat(late).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
-            var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(new DateTimeOffset(Run)), action => action());
-
-            Show(timeline);
-
-            Assert.False(timeline.IsActive);
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(early[0], early[^1]), new MapsuiMapTimeSegment(late[0], late[^1])],
+            Datasets =
+            [
+                new MapsuiMapTimedDataset("104US004SC1BO_20251217T12Z", early[0], early[^1]) { ProductSpec = "S-104", Samples = early },
+                new MapsuiMapTimedDataset("111US00_CBOFS_US4MD1DD", late[0], late[^1]) { ProductSpec = "S-111", Samples = late },
+            ],
         });
 
-    [Fact]
-    public void A_timeline_with_gaps_binds_and_lays_out() =>
-        HeadlessTest.Run(() =>
+        Show(timeline);
+
+        Assert.NotEmpty(timeline.Gaps);
+        Assert.Contains(timeline.AxisLabels, l => l.Kind == AxisLabelKind.Gap);
+    }
+
+    [AvaloniaFact]
+    public void Lanes_with_a_folded_row_bind_and_lay_out()
+    {
+        var service = new GlobalTimeService();
+        var scope = new InViewScope("m0", "m1");
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), scope: scope);
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
-            var service = new GlobalTimeService();
-            var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
-            var early = Enumerable.Range(0, 24).Select(h => Run.AddDays(-60).AddHours(h)).ToArray();
-            var late = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
-            var samples = early.Concat(late).ToArray();
-            service.ApplySnapshot(new MapsuiMapTimeSnapshot
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [.. Enumerable.Range(0, 8).Select(i => new MapsuiMapTimedDataset($"111US00_M{i}OFS_20261002T00Z_US4XX1DD", samples[0], samples[^1])
             {
-                Minimum = samples[0],
-                Maximum = samples[^1],
-                Current = samples[0],
+                DatasetId = $"m{i}",
+                ProductSpec = "S-111",
                 Samples = samples,
-                CoverageSegments = [new MapsuiMapTimeSegment(early[0], early[^1]), new MapsuiMapTimeSegment(late[0], late[^1])],
-                Datasets =
-                [
-                    new MapsuiMapTimedDataset("104US004SC1BO_20251217T12Z", early[0], early[^1]) { ProductSpec = "S-104", Samples = early },
-                    new MapsuiMapTimedDataset("111US00_CBOFS_US4MD1DD", late[0], late[^1]) { ProductSpec = "S-111", Samples = late },
-                ],
-            });
-
-            Show(timeline);
-
-            Assert.NotEmpty(timeline.Gaps);
-            Assert.Contains(timeline.AxisLabels, l => l.Kind == AxisLabelKind.Gap);
+            })],
         });
+        timeline.IsOutsideExpanded = true;
 
-    [Fact]
-    public void Lanes_with_a_folded_row_bind_and_lay_out() =>
-        HeadlessTest.Run(() =>
+        Show(timeline);
+
+        Assert.True(timeline.ShowLanes);
+        Assert.Equal(2, Assert.Single(timeline.LaneGroups).Count);
+        Assert.Equal(6, timeline.OutsideLanes.Count);
+    }
+
+    [AvaloniaFact]
+    public void The_time_HUD_binds_and_drops_the_offset_then_the_pinned_label_on_narrow_maps()
+    {
+        var service = new GlobalTimeService();
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
-            var service = new GlobalTimeService();
-            var scope = new InViewScope("m0", "m1");
-            var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), scope: scope);
-            var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
-            service.ApplySnapshot(new MapsuiMapTimeSnapshot
-            {
-                Minimum = samples[0],
-                Maximum = samples[^1],
-                Current = samples[0],
-                Samples = samples,
-                CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
-                Datasets = [.. Enumerable.Range(0, 8).Select(i => new MapsuiMapTimedDataset($"111US00_M{i}OFS_20261002T00Z_US4XX1DD", samples[0], samples[^1])
-                {
-                    DatasetId = $"m{i}",
-                    ProductSpec = "S-111",
-                    Samples = samples,
-                })],
-            });
-            timeline.IsOutsideExpanded = true;
-
-            Show(timeline);
-
-            Assert.True(timeline.ShowLanes);
-            Assert.Equal(2, Assert.Single(timeline.LaneGroups).Count);
-            Assert.Equal(6, timeline.OutsideLanes.Count);
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20261002T00Z_US4MD1DD", samples[0], samples[^1]) { ProductSpec = "S-111", Samples = samples }],
         });
+        service.SetCurrentTime(Run.AddHours(20));
+        var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200 };
+        var window = new Window { Content = hud, Width = 900, Height = 200 };
+        window.Show();
+        window.Measure(new Size(900, 200));
+        window.Arrange(new Rect(0, 0, 900, 200));
 
-    [Fact]
-    public void The_time_HUD_binds_and_drops_the_offset_then_the_pinned_label_on_narrow_maps() =>
-        HeadlessTest.Run(() =>
-        {
-            var service = new GlobalTimeService();
-            var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
-            var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
-            service.ApplySnapshot(new MapsuiMapTimeSnapshot
-            {
-                Minimum = samples[0],
-                Maximum = samples[^1],
-                Current = samples[0],
-                Samples = samples,
-                CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
-                Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20261002T00Z_US4MD1DD", samples[0], samples[^1]) { ProductSpec = "S-111", Samples = samples }],
-            });
-            service.SetCurrentTime(Run.AddHours(20));
-            var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200 };
-            var window = new Window { Content = hud, Width = 900, Height = 200 };
-            window.Show();
-            window.Measure(new Size(900, 200));
-            window.Arrange(new Rect(0, 0, 900, 200));
-
-            Assert.DoesNotContain("compact", hud.Classes);
-            hud.MapWidth = 600;
-            Assert.Contains("compact", hud.Classes);
-            Assert.DoesNotContain("tiny", hud.Classes);
-            hud.MapWidth = 500;
-            Assert.Contains("tiny", hud.Classes);
-            window.Close();
-        });
+        Assert.DoesNotContain("compact", hud.Classes);
+        hud.MapWidth = 600;
+        Assert.Contains("compact", hud.Classes);
+        Assert.DoesNotContain("tiny", hud.Classes);
+        hud.MapWidth = 500;
+        Assert.Contains("tiny", hud.Classes);
+        window.Close();
+    }
 
     private sealed class InViewScope(params string[] inView) : ITimelineMapScope
     {

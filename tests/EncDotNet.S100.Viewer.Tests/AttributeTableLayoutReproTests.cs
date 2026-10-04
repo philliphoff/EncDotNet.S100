@@ -105,11 +105,11 @@ public class AttributeTableLayoutReproTests
             $"value right edge {right:F1} exceeds host width {HostWidth} (h={horizontal}, value width {value.Bounds.Width:F1}, x {topLeft.X:F1})");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void LongValue_HorizontalDisabled_StaysWithinHost()
-        => HeadlessTest.Run(() => AssertWithinHost(ScrollBarVisibility.Disabled));
+        => AssertWithinHost(ScrollBarVisibility.Disabled);
 
-    [Fact]
+    [AvaloniaFact]
     public void LongValue_HorizontalScrollAllowed_ViewportCapStillContains()
-        => HeadlessTest.Run(() => AssertWithinHost(ScrollBarVisibility.Auto));
+        => AssertWithinHost(ScrollBarVisibility.Auto);
 }

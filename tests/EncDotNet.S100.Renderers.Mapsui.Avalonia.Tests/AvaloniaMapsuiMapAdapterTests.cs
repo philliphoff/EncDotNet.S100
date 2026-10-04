@@ -10,143 +10,121 @@ namespace EncDotNet.S100.Renderers.Mapsui.Avalonia.Tests;
 
 public class AvaloniaMapsuiMapAdapterTests
 {
-    [Fact]
+    [AvaloniaFact]
     public async Task Attach_requires_ui_thread()
     {
         // Run inside the headless session so a real Avalonia UI thread exists,
         // then dispatch Attach from a genuine non-UI (thread pool) thread. This
         // keeps the thread-affinity check deterministic regardless of whether a
         // prior test already bound the dispatcher.
-        await HeadlessTest.RunAsync(async () =>
-        {
-            var control = new CaptureSynchronizedMapControl { Map = new Map() };
+        var control = new CaptureSynchronizedMapControl { Map = new Map() };
 
-            await Assert.ThrowsAsync<InvalidOperationException>(
-                () => Task.Run(() => AvaloniaMapsuiMapAdapter.Attach(control)));
-            return true;
-        });
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Task.Run(() => AvaloniaMapsuiMapAdapter.Attach(control)));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Converts_live_viewport_center_to_wgs84()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            var position = adapter.TryScreenToWgs84(400, 300);
+        var position = adapter.TryScreenToWgs84(400, 300);
 
-            Assert.NotNull(position);
-            Assert.Equal(10.0, position.Value.Latitude, 6);
-            Assert.Equal(20.0, position.Value.Longitude, 6);
-            Assert.Equal((800.0, 600.0), adapter.TryGetViewportSizePx());
-        });
+        Assert.NotNull(position);
+        Assert.Equal(10.0, position.Value.Latitude, 6);
+        Assert.Equal(20.0, position.Value.Longitude, 6);
+        Assert.Equal((800.0, 600.0), adapter.TryGetViewportSizePx());
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Snapshot_pixel_conversion_matches_rotated_snapshot_viewport()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            map.Navigator.RotateTo(35, duration: 0);
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        map.Navigator.RotateTo(35, duration: 0);
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            var captured = adapter.TryImagePixelToWgs84(250, 180, 800, 600);
-            using var expectedMap = new Map();
-            expectedMap.Navigator.SetSize(800, 600);
-            expectedMap.Navigator.ZoomToBox(
-                map.Navigator.Viewport.ToExtent()!,
-                MBoxFit.Fit);
-            expectedMap.Navigator.RotateTo(35, duration: 0);
-            var expectedWorld = expectedMap.Navigator.Viewport.ScreenToWorld(250, 180);
-            var (expectedLongitude, expectedLatitude) = SphericalMercator.ToLonLat(
-                expectedWorld.X,
-                expectedWorld.Y);
+        var captured = adapter.TryImagePixelToWgs84(250, 180, 800, 600);
+        using var expectedMap = new Map();
+        expectedMap.Navigator.SetSize(800, 600);
+        expectedMap.Navigator.ZoomToBox(
+            map.Navigator.Viewport.ToExtent()!,
+            MBoxFit.Fit);
+        expectedMap.Navigator.RotateTo(35, duration: 0);
+        var expectedWorld = expectedMap.Navigator.Viewport.ScreenToWorld(250, 180);
+        var (expectedLongitude, expectedLatitude) = SphericalMercator.ToLonLat(
+            expectedWorld.X,
+            expectedWorld.Y);
 
-            Assert.NotNull(captured);
-            Assert.Equal(expectedLatitude, captured.Value.Latitude, 6);
-            Assert.Equal(expectedLongitude, captured.Value.Longitude, 6);
-        });
+        Assert.NotNull(captured);
+        Assert.Equal(expectedLatitude, captured.Value.Latitude, 6);
+        Assert.Equal(expectedLongitude, captured.Value.Longitude, 6);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Coordinate_conversion_rejects_unsupported_map_crs()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            map.CRS = "EPSG:32632";
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        map.CRS = "EPSG:32632";
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            Assert.Null(adapter.TryScreenToWgs84(400, 300));
-            Assert.Null(adapter.TryImagePixelToWgs84(400, 300, 800, 600));
-        });
+        Assert.Null(adapter.TryScreenToWgs84(400, 300));
+        Assert.Null(adapter.TryImagePixelToWgs84(400, 300, 800, 600));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Dispose_detaches_without_disposing_borrowed_map()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            adapter.Dispose();
-            adapter.Dispose();
+        adapter.Dispose();
+        adapter.Dispose();
 
-            Assert.Throws<ObjectDisposedException>(
-                () => adapter.TryGetViewportSizePx());
-            Assert.Same(map, control.Map);
-        });
+        Assert.Throws<ObjectDisposedException>(
+            () => adapter.TryGetViewportSizePx());
+        Assert.Same(map, control.Map);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void RequestRedraw_raises_map_refresh_request()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            var requested = false;
-            map.RefreshGraphicsRequest += (_, _) => requested = true;
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        var requested = false;
+        map.RefreshGraphicsRequest += (_, _) => requested = true;
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            adapter.RequestRedraw();
+        adapter.RequestRedraw();
 
-            Assert.True(requested);
-        });
+        Assert.True(requested);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Adapter_attaches_to_a_plain_map_control()
     {
         // Map.AddS100 / Attach accept any Mapsui MapControl: a host that never
         // captures the view to an image needs no capture-synchronized subclass.
         // The adapter is fully functional over a stock control - redraw and
         // coordinate conversion behave identically.
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            var requested = false;
-            map.RefreshGraphicsRequest += (_, _) => requested = true;
-            var control = new global::Mapsui.UI.Avalonia.MapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        var requested = false;
+        map.RefreshGraphicsRequest += (_, _) => requested = true;
+        var control = new global::Mapsui.UI.Avalonia.MapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            adapter.RequestRedraw();
-            var position = adapter.TryScreenToWgs84(400, 300);
+        adapter.RequestRedraw();
+        var position = adapter.TryScreenToWgs84(400, 300);
 
-            Assert.True(requested);
-            Assert.NotNull(position);
-            Assert.Equal(10.0, position.Value.Latitude, 6);
-            Assert.Equal(20.0, position.Value.Longitude, 6);
-            Assert.Equal((800.0, 600.0), adapter.TryGetViewportSizePx());
-        });
+        Assert.True(requested);
+        Assert.NotNull(position);
+        Assert.Equal(10.0, position.Value.Latitude, 6);
+        Assert.Equal(20.0, position.Value.Longitude, 6);
+        Assert.Equal((800.0, 600.0), adapter.TryGetViewportSizePx());
     }
 
     [Fact]
@@ -167,98 +145,79 @@ public class AvaloniaMapsuiMapAdapterTests
         Assert.Equal(typeof(global::Mapsui.UI.Avalonia.MapControl), addS100Param);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Render_current_view_returns_png()
     {
-        var png = await HeadlessTest.RunAsync(async () =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            return await adapter.RenderCurrentViewToPngAsync(320, 200, 1.0);
-        });
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var png = await adapter.RenderCurrentViewToPngAsync(320, 200, 1.0);
 
         Assert.NotNull(png);
         Assert.True(png.Length > 8);
         Assert.Equal(new byte[] { 137, 80, 78, 71 }, png[..4]);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Control_capture_returns_null_for_unlaid_out_target()
     {
-        byte[]? png = [];
-        HeadlessTest.Run(() =>
-        {
-            png = AvaloniaControlCapture.CapturePngAsync(
-                new global::Mapsui.UI.Avalonia.MapControl())
-                .GetAwaiter()
-                .GetResult();
-        });
+        var png = AvaloniaControlCapture.CapturePngAsync(
+            new global::Mapsui.UI.Avalonia.MapControl())
+            .GetAwaiter()
+            .GetResult();
         Assert.Null(png);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Plain_control_capture_bypasses_mapsui_synchronization()
     {
-        var result = await HeadlessTest.RunAsync(async () =>
-        {
-            var target = new CaptureProbeControl();
-            target.Measure(new Size(20, 10));
-            target.Arrange(new Rect(0, 0, 20, 10));
+        var target = new CaptureProbeControl();
+        target.Measure(new Size(20, 10));
+        target.Arrange(new Rect(0, 0, 20, 10));
 
-            Assert.False(
-                AvaloniaControlCapture.RequiresCaptureSynchronization(target));
-            var png = await AvaloniaControlCapture.CapturePngAsync(target);
-            return (Png: png, target.CaptureWasActive);
-        });
+        Assert.False(
+            AvaloniaControlCapture.RequiresCaptureSynchronization(target));
+        var png = await AvaloniaControlCapture.CapturePngAsync(target);
 
-        Assert.NotNull(result.Png);
-        Assert.False(result.CaptureWasActive);
+        Assert.NotNull(png);
+        Assert.False(target.CaptureWasActive);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Capture_at_scale_two_renders_the_control()
     {
-        var png = await HeadlessTest.RunAsync(async () =>
-        {
-            var target = new CaptureProbeControl();
-            target.Measure(new Size(20, 10));
-            target.Arrange(new Rect(0, 0, 20, 10));
-            return await AvaloniaControlCapture.CapturePngAsync(target, 2.0);
-        });
+        var target = new CaptureProbeControl();
+        target.Measure(new Size(20, 10));
+        target.Arrange(new Rect(0, 0, 20, 10));
+        var png = await AvaloniaControlCapture.CapturePngAsync(target, 2.0);
 
         // Headless drawing is a stub, so pixel sizes are checked in the live viewer;
         // this covers the scaled render path end to end.
         Assert.NotNull(png);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(0.0)]
     [InlineData(-1.0)]
     [InlineData(double.NaN)]
     public async Task Capture_rejects_a_non_positive_scale(double scale)
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => HeadlessTest.RunAsync(
-                async () => await AvaloniaControlCapture.CapturePngAsync(new Border(), scale)));
+            () => AvaloniaControlCapture.CapturePngAsync(new Border(), scale));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Plain_mapsui_control_tree_capture_is_rejected()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => HeadlessTest.RunAsync(async () =>
-            {
-                var target = new Border
-                {
-                    Child = new global::Mapsui.UI.Avalonia.MapControl(),
-                };
-                target.Measure(new Size(20, 10));
-                target.Arrange(new Rect(0, 0, 20, 10));
+        var target = new Border
+        {
+            Child = new global::Mapsui.UI.Avalonia.MapControl(),
+        };
+        target.Measure(new Size(20, 10));
+        target.Arrange(new Rect(0, 0, 20, 10));
 
-                await AvaloniaControlCapture.CapturePngAsync(target);
-                return true;
-            }));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AvaloniaControlCapture.CapturePngAsync(target));
     }
 
     [Fact]
@@ -312,156 +271,132 @@ public class AvaloniaMapsuiMapAdapterTests
         Assert.Null(snapshot);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void PickAtScreen_translates_pixel_to_geographic_query()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            var recording = new RecordingMapQuery();
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var recording = new RecordingMapQuery();
 
-            var picks = adapter
-                .PickAtScreenAsync(recording, 400, 300, radiusMeters: 25, maxResults: 3)
-                .GetAwaiter()
-                .GetResult();
+        var picks = adapter
+            .PickAtScreenAsync(recording, 400, 300, radiusMeters: 25, maxResults: 3)
+            .GetAwaiter()
+            .GetResult();
 
-            // The pick is delegated to the session query unchanged.
-            Assert.Same(recording.Result, picks);
-            Assert.Equal(1, recording.CallCount);
+        // The pick is delegated to the session query unchanged.
+        Assert.Same(recording.Result, picks);
+        Assert.Equal(1, recording.CallCount);
 
-            // The center pixel maps to the map center (lon 20 / lat 10), the live
-            // resolution (100) rides along for scale filtering, and the tolerance
-            // and cap pass through.
-            var query = Assert.IsType<GeographicPickQuery>(recording.LastQuery);
-            Assert.Equal(10.0, query.Latitude, 6);
-            Assert.Equal(20.0, query.Longitude, 6);
-            Assert.Equal(100.0, query.Resolution!.Value, 6);
-            Assert.Equal(25.0, query.RadiusMeters, 6);
-            Assert.Equal(3, query.MaxResults);
-        });
+        // The center pixel maps to the map center (lon 20 / lat 10), the live
+        // resolution (100) rides along for scale filtering, and the tolerance
+        // and cap pass through.
+        var query = Assert.IsType<GeographicPickQuery>(recording.LastQuery);
+        Assert.Equal(10.0, query.Latitude, 6);
+        Assert.Equal(20.0, query.Longitude, 6);
+        Assert.Equal(100.0, query.Resolution!.Value, 6);
+        Assert.Equal(25.0, query.RadiusMeters, 6);
+        Assert.Equal(3, query.MaxResults);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void PickAtScreen_returns_empty_without_querying_for_unsupported_crs()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            map.CRS = "EPSG:32632";
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            var recording = new RecordingMapQuery();
+        var map = CreateLaidOutMap();
+        map.CRS = "EPSG:32632";
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var recording = new RecordingMapQuery();
 
-            var picks = adapter
-                .PickAtScreenAsync(recording, 400, 300)
-                .GetAwaiter()
-                .GetResult();
+        var picks = adapter
+            .PickAtScreenAsync(recording, 400, 300)
+            .GetAwaiter()
+            .GetResult();
 
-            Assert.Empty(picks);
-            Assert.Equal(0, recording.CallCount);
-        });
+        Assert.Empty(picks);
+        Assert.Equal(0, recording.CallCount);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void PickAtScreen_returns_empty_without_querying_for_unlaid_out_viewport()
     {
-        HeadlessTest.Run(() =>
-        {
-            // A map with no laid-out viewport (never sized) has width/height 0.
-            using var map = new Map();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            var recording = new RecordingMapQuery();
+        // A map with no laid-out viewport (never sized) has width/height 0.
+        using var map = new Map();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var recording = new RecordingMapQuery();
 
-            var picks = adapter
-                .PickAtScreenAsync(recording, 400, 300)
-                .GetAwaiter()
-                .GetResult();
+        var picks = adapter
+            .PickAtScreenAsync(recording, 400, 300)
+            .GetAwaiter()
+            .GetResult();
 
-            Assert.Empty(picks);
-            Assert.Equal(0, recording.CallCount);
-        });
+        Assert.Empty(picks);
+        Assert.Equal(0, recording.CallCount);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void PickAtScreen_returns_empty_without_querying_for_non_finite_pixel()
     {
-        HeadlessTest.Run(() =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            var recording = new RecordingMapQuery();
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var recording = new RecordingMapQuery();
 
-            var picks = adapter
-                .PickAtScreenAsync(recording, double.NaN, 300)
-                .GetAwaiter()
-                .GetResult();
+        var picks = adapter
+            .PickAtScreenAsync(recording, double.NaN, 300)
+            .GetAwaiter()
+            .GetResult();
 
-            Assert.Empty(picks);
-            Assert.Equal(0, recording.CallCount);
-        });
+        Assert.Empty(picks);
+        Assert.Equal(0, recording.CallCount);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task PickAtScreen_runs_query_off_the_ui_thread()
     {
-        await HeadlessTest.RunAsync(async () =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            var recording = new ThreadRecordingMapQuery();
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var recording = new ThreadRecordingMapQuery();
 
-            // On the UI thread. The query must be dispatched to the thread pool
-            // so a session using ConfigureAwait(true) can't post its continuation
-            // back to a (potentially blocked) UI thread.
-            await adapter.PickAtScreenAsync(recording, 400, 300);
+        // On the UI thread. The query must be dispatched to the thread pool
+        // so a session using ConfigureAwait(true) can't post its continuation
+        // back to a (potentially blocked) UI thread.
+        await adapter.PickAtScreenAsync(recording, 400, 300);
 
-            // Non-null confirms the query actually ran; false confirms it ran
-            // off the UI thread.
-            Assert.NotNull(recording.InvokedWithUiAccess);
-            Assert.False(recording.InvokedWithUiAccess.Value);
-            return true;
-        });
+        // Non-null confirms the query actually ran; false confirms it ran
+        // off the UI thread.
+        Assert.NotNull(recording.InvokedWithUiAccess);
+        Assert.False(recording.InvokedWithUiAccess.Value);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task PickAtScreen_queries_directly_when_called_off_the_ui_thread()
     {
-        await HeadlessTest.RunAsync(async () =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
-            var recording = new RecordingMapQuery();
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var recording = new RecordingMapQuery();
 
-            // Called from a pool thread: the adapter hops to the UI thread only
-            // to read the viewport, then queries directly (no redundant Task.Run).
-            var picks = await Task.Run(
-                () => adapter.PickAtScreenAsync(recording, 400, 300));
+        // Called from a pool thread: the adapter hops to the UI thread only
+        // to read the viewport, then queries directly (no redundant Task.Run).
+        var picks = await Task.Run(
+            () => adapter.PickAtScreenAsync(recording, 400, 300));
 
-            Assert.Same(recording.Result, picks);
-            Assert.Equal(1, recording.CallCount);
-            return true;
-        });
+        Assert.Same(recording.Result, picks);
+        Assert.Equal(1, recording.CallCount);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task PickAtScreen_rejects_null_query()
     {
-        await HeadlessTest.RunAsync(async () =>
-        {
-            var map = CreateLaidOutMap();
-            var control = new CaptureSynchronizedMapControl { Map = map };
-            using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
+        var map = CreateLaidOutMap();
+        var control = new CaptureSynchronizedMapControl { Map = map };
+        using var adapter = AvaloniaMapsuiMapAdapter.Attach(control);
 
-            await Assert.ThrowsAsync<ArgumentNullException>(
-                () => adapter.PickAtScreenAsync(null!, 400, 300));
-            return true;
-        });
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => adapter.PickAtScreenAsync(null!, 400, 300));
     }
 
     private sealed class RecordingMapQuery : IS100MapQuery

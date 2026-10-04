@@ -365,7 +365,8 @@
                         SelectedIndex="{Binding ActiveTabIndex, Mode=TwoWay}">
 
                 <!-- ── Exchange sets tab: source → dataset tree, no reorder. -->
-                <TabItem Header="{x:Static loc:Strings.Pane_Tab_ExchangeSets}">
+                <TabItem Header="{x:Static loc:Strings.Pane_Tab_ExchangeSets}"
+                         AutomationProperties.AutomationId="Datasets.ExchangeSetsTab">
                     <DockPanel LastChildFill="True">
                         <!-- Add-source affordance, left-aligned. -->
                         <Grid DockPanel.Dock="Top"
@@ -511,7 +512,8 @@
                 </TabItem>
 
                 <!-- ── Datasets tab: flat render-order list with reorder. -->
-                <TabItem Header="{x:Static loc:Strings.Pane_Tab_Datasets}">
+                <TabItem Header="{x:Static loc:Strings.Pane_Tab_Datasets}"
+                         AutomationProperties.AutomationId="Datasets.DatasetsTab">
                     <DockPanel LastChildFill="True">
                         <!-- Bulk-action toolbar: applies to every loaded
                              dataset. "Isolate" is per-row (context menu). -->
@@ -546,6 +548,7 @@
                              zeroed on items so the entire row hit-tests for
                              click-to-select and right-click. -->
                         <ListBox x:Name="DatasetList"
+                     AutomationProperties.AutomationId="Datasets.List"
                      ItemsSource="{Binding Entries}"
                      SelectedItem="{Binding SelectedDataset, Mode=TwoWay}"
                      Classes="accentList"
@@ -591,6 +594,7 @@
                                         Classes="Icon"
                                         Command="{Binding ToggleVisibilityCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
+                                        AutomationProperties.AutomationId="Datasets.Row.ToggleVisibility"
                                         VerticalAlignment="Center"
                                         Margin="0,0,10,0">
                                     <Panel>
@@ -644,6 +648,7 @@
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
                                         CommandParameter="{Binding}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
+                                        AutomationProperties.AutomationId="Datasets.Row.MoveUp"
                                         VerticalAlignment="Center"
                                         Margin="6,0,0,0">
                                     <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
@@ -653,6 +658,7 @@
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
                                         CommandParameter="{Binding}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
+                                        AutomationProperties.AutomationId="Datasets.Row.MoveDown"
                                         VerticalAlignment="Center"
                                         Margin="2,0,0,0">
                                     <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14" />
@@ -662,6 +668,7 @@
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
                                         CommandParameter="{Binding}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveDataset}"
+                                        AutomationProperties.AutomationId="Datasets.Row.Remove"
                                         VerticalAlignment="Center"
                                         Margin="2,0,0,0">
                                     <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
@@ -775,12 +782,14 @@
 
                     <TabControl Classes="CenteredTabs"
                                 x:Name="InspectorTabs"
+                                AutomationProperties.AutomationId="Datasets.Inspector"
                                 IsVisible="{Binding HasSelection}"
                                 SelectedIndex="{Binding InspectorTabIndex, Mode=TwoWay}"
                                 Padding="0"
                                 Margin="0,8,0,0">
                         <!-- Dataset-wide UX -->
-                        <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Dataset}">
+                        <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Dataset}"
+                                 AutomationProperties.AutomationId="Datasets.Inspector.DatasetTab">
                             <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                           VerticalScrollBarVisibility="Auto">
                                 <StackPanel Spacing="12" Margin="8,8,8,8">
@@ -828,7 +837,8 @@
                         <!-- Sub-layer UX. Always present so users learn
                              where to look; an empty-state message covers
                              single-layer products. -->
-                        <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Layers}">
+                        <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Layers}"
+                                 AutomationProperties.AutomationId="Datasets.Inspector.LayersTab">
                             <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                           VerticalScrollBarVisibility="Auto">
                                 <Panel Margin="8,8,8,8">
@@ -891,7 +901,8 @@
                              are present; severity drives the badge
                              colour via three boolean classes on the
                              view model. -->
-                        <TabItem HeaderTemplate="{x:Null}">
+                        <TabItem HeaderTemplate="{x:Null}"
+                                 AutomationProperties.AutomationId="Datasets.Inspector.ValidationTab">
                             <TabItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
