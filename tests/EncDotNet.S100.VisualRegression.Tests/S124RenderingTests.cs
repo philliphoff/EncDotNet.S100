@@ -7,11 +7,14 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 public sealed class S124RenderingTests
 {
     [SkippableTheory]
-    [InlineData("navwarn_point.gml")]
-    [InlineData("navwarn_curve.gml")]
-    [InlineData("navwarn_surface.gml")]
-    [InlineData("navwarn_mixed.gml")]
-    public Task NavWarning(string fileName)
+    // Ink budgets from the measured macOS/Linux drift: line work and the NW
+    // symbols are stable, but label glyphs shift a pixel or two, so the
+    // labelled fixtures need room for every glyph pixel to differ.
+    [InlineData("navwarn_point.gml", 500, 0.85)]   // ink ~1 050 px; label drift 56 % of ink
+    [InlineData("navwarn_curve.gml", 1_000, 0.25)] // ink ~2 070 px; no drift
+    [InlineData("navwarn_surface.gml", 500, 0.25)] // ink ~1 020 px; no drift
+    [InlineData("navwarn_mixed.gml", 800, 0.5)]    // ink ~1 620 px; label drift 29 % of ink
+    public Task NavWarning(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S124", fileName);
         Skip.IfNot(File.Exists(path), $"S-124 test dataset not present: {path}");
@@ -23,7 +26,9 @@ public sealed class S124RenderingTests
             Height = 600,
         });
 
-        return TestHelpers.VerifyBitmap(bitmap)
+        // Sparse render: hold it to a share of its own ink rather than the
+        // default 5 % of the image, which exceeds all the ink present.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels, maxDifferentInkFraction)
             .UseParameters(Path.GetFileNameWithoutExtension(fileName));
     }
 }
