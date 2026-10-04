@@ -39,4 +39,17 @@ internal interface IAppScreenshotProvider
     /// target is attached or it has no on-screen size yet.
     /// </returns>
     Task<byte[]?> CapturePngAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renders <see cref="Target"/> to PNG-encoded bytes at
+    /// <paramref name="scale"/> device pixels per logical pixel (2 for a
+    /// Retina-sharp image), marshalling to the UI thread as needed.
+    /// </summary>
+    /// <param name="scale">Device pixels per logical pixel; must be positive.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>
+    /// PNG bytes of the current window, or <see langword="null"/> when no
+    /// target is attached or it has no on-screen size yet.
+    /// </returns>
+    Task<byte[]?> CapturePngAsync(double scale, CancellationToken cancellationToken = default);
 }

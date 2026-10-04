@@ -1,0 +1,24 @@
+---
+import Shot from './Shot.astro';
+
+const palettes = ['Day', 'Dusk', 'Night'];
+---
+<section class="palettes" aria-labelledby="pal-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Palettes</span>
+      <h2 id="pal-title">Day, Dusk and Night.</h2>
+      <p class="lede">All three IHO colour palettes, with the app's chrome following along, from a bright afternoon to a dark wheelhouse.</p>
+    </div>
+    <div class="triptych">
+      {
+        palettes.map((p) => (
+          <figure>
+            <Shot id={`F7-${p.toLowerCase()}`} alt={`The same harbour view in the ${p} palette`} title={p} sizes="(max-width: 700px) 100vw, 380px" />
+            <figcaption>{p}</figcaption>
+          </figure>
+        ))
+      }
+    </div>
+  </div>
+</section>

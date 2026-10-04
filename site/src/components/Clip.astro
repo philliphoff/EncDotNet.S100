@@ -1,0 +1,48 @@
+---
+// A short looping clip from public/clips/<id>.{mp4,webm}, with the shot of the
+// same id as its poster. Falls back to the plain Shot when no clip exists.
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { getImage } from 'astro:assets';
+import Shot from './Shot.astro';
+import { resolveShot } from '../data/shots';
+import { withBase } from '../data/content';
+
+interface Props {
+  id: string;
+  alt: string;
+  title?: string;
+  detail?: string;
+  sizes?: string;
+}
+
+const { id, alt, title, detail, sizes } = Astro.props;
+// Resolved from the project root: import.meta.url points into the build output.
+const hasClip = existsSync(join(process.cwd(), 'public', 'clips', `${id}.mp4`));
+const source = await resolveShot(id);
+const poster = source.kind === 'todo' ? undefined : (await getImage({ src: source.image, width: 1280, format: 'webp' })).src;
+---
+{
+  hasClip ? (
+    <div class="slot clip">
+      <span class="badge capture">{id} · clip</span>
+      <video autoplay muted loop playsinline preload="metadata" poster={poster} aria-label={alt}>
+        <source src={withBase(`clips/${id}.webm`)} type="video/webm" />
+        <source src={withBase(`clips/${id}.mp4`)} type="video/mp4" />
+      </video>
+    </div>
+  ) : (
+    <Shot id={id} alt={alt} title={title} detail={detail} sizes={sizes} />
+  )
+}
+
+<script>
+  // Respect reduced motion: stop on the poster and offer controls instead.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll<HTMLVideoElement>('.slot.clip video').forEach((video) => {
+      video.removeAttribute('autoplay');
+      video.pause();
+      video.controls = true;
+    });
+  }
+</script>

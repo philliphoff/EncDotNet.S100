@@ -27,6 +27,9 @@ public sealed class FeatureDescriberRegistry
         new S101FeatureDescriber(),
         // S-401 inland ENC shares the S-101 ISO 8211 record model.
         new S101FeatureDescriber("S-401"),
+        // S-57 cells load translated to the in-memory S-101 model (S101DatasetData),
+        // so the S-101 describer reads them as they are portrayed and queried.
+        new S101FeatureDescriber("S-57"),
         new S102FeatureDescriber(),
         new S104FeatureDescriber(),
         new S111FeatureDescriber(),

@@ -1,0 +1,34 @@
+---
+import Shot from './Shot.astro';
+import { products } from '../data/content';
+---
+<section id="data" aria-labelledby="data-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Beyond the chart</span>
+      <h2 id="data-title">One map, many layers of the sea.</h2>
+      <p class="lede">
+        S-100 is the IHO's framework for the next generation of marine data. A chart is the base layer. Depth surfaces,
+        water levels, currents, warnings, ice, routes and harbour data each come as their own product, and SoundCharts
+        reads and draws more than fifteen of them, along with today's S-57 charts.
+      </p>
+    </div>
+    <div class="products">
+      {
+        products.map((p) => (
+          <div class:list={['product', { extra: p.extra }]}>
+            <Shot
+              id={p.shot}
+              standin={p.standin}
+              alt={`${p.spec} ${p.caption.toLowerCase()} in SoundCharts`}
+              title={p.placeholder ?? p.caption}
+              sizes="(max-width: 900px) 50vw, 290px"
+            />
+            <div class="spec">{p.spec}</div>
+            <div class="cap">{p.caption}</div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

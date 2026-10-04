@@ -1,0 +1,109 @@
+---
+import Shot from './Shot.astro';
+import { getRelease } from '../data/release';
+
+const release = await getRelease();
+const heroSizes = '(max-width: 1212px) calc(100vw - 32px), 1180px';
+---
+<section class="hero" aria-labelledby="hero-title">
+  <svg class="contours" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <path d="M-20 160 C 220 110, 380 230, 620 170 S 1020 70, 1460 150" />
+    <path d="M-20 210 C 240 160, 400 290, 640 220 S 1040 120, 1460 205" />
+    <path d="M-20 265 C 260 215, 420 350, 660 275 S 1060 175, 1460 262" />
+    <path d="M-20 330 C 280 280, 440 420, 680 340 S 1080 240, 1460 330" />
+    <path d="M-20 410 C 300 360, 460 500, 700 420 S 1100 320, 1460 412" />
+    <path d="M-20 505 C 320 455, 480 595, 720 515 S 1120 415, 1460 508" />
+  </svg>
+
+  <div class="wrap hero-copy">
+    <span class="eyebrow">Free &amp; open source · macOS · Windows · Linux</span>
+    <h1 id="hero-title">Next-generation marine data, <em>on one map.</em></h1>
+    <p class="lede">
+      SoundCharts opens IHO S-100 charts and the layers that come with them, including depths, tides, currents,
+      warnings and sea ice. It draws them together, aligned in time, on your desktop. Under the hood is an open .NET SDK
+      that you can use too.
+    </p>
+    <div class="ctas">
+      <a
+        class="btn btn-primary"
+        id="download"
+        href={release.mac ?? release.url}
+        data-mac={release.mac}
+        data-windows={release.windows}
+        data-linux={release.linux}
+        data-url={release.url}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"></path></svg>
+        <span id="download-label">{release.mac ? 'Download for macOS' : 'Download'}</span>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/philliphoff/EncDotNet.S100">View on GitHub</a>
+    </div>
+    <p class="fineprint">
+      {release.tag && <>{release.tag} · </>}<a href={release.url}>All platforms</a> · MIT licensed · Not for navigation
+    </p>
+  </div>
+
+  <div class="hero-shot">
+    <div class="palette-switch" role="group" aria-label="Chart palette">
+      <button type="button" data-pal="day" aria-pressed="true">Day</button>
+      <button type="button" data-pal="dusk" aria-pressed="false">Dusk</button>
+      <button type="button" data-pal="night" aria-pressed="false">Night</button>
+    </div>
+    <Shot
+      id="H1"
+      standin="S101Screenshot.png"
+      alt="SoundCharts showing an electronic chart with depth shading and current arrows layered over Elliott Bay, Seattle"
+      sizes={heroSizes}
+      eager
+      data-pal-slot="day"
+    />
+    <Shot
+      id="H3"
+      alt="The same view in the Dusk palette"
+      title="Hero, Dusk palette"
+      detail="Elliott Bay · S-57 + S-102 + S-111 · Datasets panel + Timeline"
+      sizes={heroSizes}
+      data-pal-slot="dusk"
+      hidden
+    />
+    <Shot
+      id="H2"
+      alt="The same view in the Night palette"
+      title="Hero, Night palette"
+      detail="Same viewport as H1 · dark chrome"
+      sizes={heroSizes}
+      data-pal-slot="night"
+      hidden
+    />
+  </div>
+</section>
+
+<script>
+  // Palette switch swaps between the H1 / H3 / H2 captures.
+  document.querySelectorAll<HTMLButtonElement>('[data-pal]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-pal]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      document.querySelectorAll<HTMLElement>('[data-pal-slot]').forEach((s) => {
+        s.hidden = s.dataset.palSlot !== btn.dataset.pal;
+      });
+    }),
+  );
+
+  // Point the download button at this visitor's platform when that asset exists.
+  const link = document.getElementById('download') as HTMLAnchorElement | null;
+  const label = document.getElementById('download-label');
+  if (link && label) {
+    const ua = navigator.userAgent;
+    const platform = /Windows/.test(ua) ? 'windows' : /Linux/.test(ua) && !/Android/.test(ua) ? 'linux' : 'mac';
+    const names = { mac: 'macOS', windows: 'Windows', linux: 'Linux' } as const;
+    const href = link.dataset[platform];
+    if (href) {
+      link.href = href;
+      label.textContent = `Download for ${names[platform]}`;
+    } else {
+      // No build for this platform in the latest release: send them to the release page.
+      link.href = link.dataset.url ?? link.href;
+      label.textContent = 'Download';
+    }
+  }
+</script>

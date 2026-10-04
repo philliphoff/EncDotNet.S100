@@ -1,0 +1,51 @@
+---
+// One image slot from the shot list: the capture if it exists, else a
+// stand-in screenshot, else a designed placeholder describing the shot.
+import { Picture } from 'astro:assets';
+import { resolveShot } from '../data/shots';
+
+interface Props {
+  id: string;
+  alt: string;
+  standin?: string;
+  /** Placeholder heading and detail, shown while the shot is still to capture. */
+  title?: string;
+  detail?: string;
+  sizes?: string;
+  eager?: boolean;
+  class?: string;
+  [key: `data-${string}`]: string | undefined;
+  hidden?: boolean;
+  style?: string;
+}
+
+const { id, alt, standin, title, detail, sizes = '(max-width: 900px) 100vw, 60vw', eager = false, class: className, ...rest } =
+  Astro.props;
+const source = await resolveShot(id, standin);
+const label = source.kind === 'standin' ? `${id} · stand-in` : id;
+---
+{
+  source.kind === 'todo' ? (
+    <div class:list={['slot', 'placeholder', className]} role="img" aria-label={alt} {...rest}>
+      <span class="badge">{label}</span>
+      <div>
+        <strong>{title ?? alt}</strong>
+        {detail}
+      </div>
+    </div>
+  ) : (
+    <div class:list={['slot', className]} {...rest}>
+      <span class:list={['badge', source.kind]}>{label}</span>
+      <Picture
+        src={source.image}
+        alt={alt}
+        formats={['avif']}
+        fallbackFormat="webp"
+        widths={[640, 1280, 2048].filter((w) => w <= source.image.width)}
+        sizes={sizes}
+        loading={eager ? 'eager' : 'lazy'}
+        fetchpriority={eager ? 'high' : undefined}
+      />
+    </div>
+  )
+}

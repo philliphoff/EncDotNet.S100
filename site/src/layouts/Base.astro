@@ -1,0 +1,44 @@
+---
+import '@fontsource-variable/inter';
+import '@fontsource-variable/fraunces';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/global.css';
+// The viewer's app icon (src/EncDotNet.S100.Viewer/Branding) is the site mark.
+import iconSvg from '../../../src/EncDotNet.S100.Viewer/Branding/icon.svg?url';
+import iconPng from '../../../src/EncDotNet.S100.Viewer/Branding/png/AppIcon-256.png?url';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const ogImage = new URL(iconPng, Astro.site);
+const dev = import.meta.env.DEV;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={iconSvg} />
+    <link rel="apple-touch-icon" href={iconPng} />
+    <meta name="theme-color" content="#0a1826" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <!-- TODO(B4): replace with the 1200×630 Open Graph card. -->
+    <meta property="og:image" content={ogImage} />
+    <script is:inline define:vars={{ dev }}>
+      if (dev || new URLSearchParams(location.search).has('review')) document.documentElement.classList.add('review');
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

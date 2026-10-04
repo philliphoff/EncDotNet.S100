@@ -1,21 +1,37 @@
 name: Docs
 
+# Builds and deploys soundcharts.app: the Astro landing page (site/) at the
+# root, with the DocFX output at its existing paths (docs/, api/, src/, ...).
 on:
   push:
     branches: [ main ]
   pull_request:
+  workflow_dispatch:
+  # Rebuild after a tagged CI run publishes a release, so the landing page's
+  # download button points at the new assets. (Releases are created with
+  # GITHUB_TOKEN, which doesn't trigger `release` events.)
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
 
 permissions:
   contents: read
 
 concurrency:
-  # Pull requests get their own group so they never cancel a Pages deploy.
-  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.event.pull_request.number) || 'pages' }}
+  # Pull requests, and CI completions that aren't release tags (the build job
+  # skips those), get their own groups so they never cancel a Pages deploy.
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v') && format('docs-ci-{0}', github.event.workflow_run.id) || 'pages' }}
   cancel-in-progress: true
 
 jobs:
   build:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
 
     steps:
       - uses: actions/checkout@v5
@@ -35,14 +51,43 @@ jobs:
       - name: Build docs
         run: docfx docfx.json --warningsAsErrors
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      # Base URL and path of the Pages site: "/" once the soundcharts.app
+      # custom domain is set, "/EncDotNet.S100" on the github.io URL before.
+      - name: Configure Pages
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Build landing page
+        working-directory: site
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run build
+
+      # The landing page replaces DocFX's root index.html; everything else
+      # keeps the paths existing links already use.
+      - name: Merge landing page into the docs output
+        run: cp -R site/dist/. _site/
+
       - name: Upload Pages artifact
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request' && needs.build.result == 'success'
     needs: build
     runs-on: ubuntu-latest
     permissions:

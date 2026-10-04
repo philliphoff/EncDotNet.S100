@@ -1,0 +1,130 @@
+---
+import Shot from './Shot.astro';
+
+const sizes = '(max-width: 900px) 100vw, 690px';
+---
+<section id="viewer" aria-labelledby="viewer-title" style="padding-top: 0">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The viewer</span>
+      <h2 id="viewer-title">Built for exploring the data.</h2>
+      <p class="lede">
+        SoundCharts is a desktop app for anyone who wants to see what S-100 data actually contains: hydrographers,
+        developers, sailors and anyone curious.
+      </p>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Layers</span>
+          <h3>Layers that know their place.</h3>
+          <p>
+            Products stack by the S-98 interoperability rules (display planes, priorities and inter-product rules), not
+            by the order you loaded them. Add depths and currents to a chart and they stay readable.
+          </p>
+        </div>
+        <div class="layers">
+          <div class="stack">
+            <Shot id="F1a" standin="S101Screenshot.png" alt="NOAA chart of the Chesapeake Bay entrance" sizes={sizes} data-layer="0" />
+            <Shot id="F1b" standin="S102Screenshot.png" alt="The same chart with NOAA S-102 bathymetry" sizes={sizes} data-layer="1" style="opacity:0" />
+            <Shot id="F1c" standin="S111Screenshot.png" alt="The same chart with S-102 bathymetry and S-111 surface currents" sizes={sizes} data-layer="2" style="opacity:0" />
+          </div>
+          <div class="layer-tabs" role="group" aria-label="Layers">
+            <button type="button" data-layer-btn="0" aria-pressed="true">Chart</button>
+            <button type="button" data-layer-btn="1" aria-pressed="false">+ Depths</button>
+            <button type="button" data-layer-btn="2" aria-pressed="false">+ Currents</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Time</span>
+          <h3>Tides and currents on one timeline.</h3>
+          <p>
+            Time-varying products share one clock. Follow Live, pin a moment, or step through a forecast run, and every
+            layer shows which sample it's drawing.
+          </p>
+          <ul>
+            <li>Forecast runs with a Now marker and expiry</li>
+            <li>Zoom, presets and jump-to-data</li>
+            <li>Local or UTC, your choice</li>
+          </ul>
+        </div>
+        <Shot id="F2" standin="TimelineScreenshot.png" alt="Timeline animating surface currents over Chesapeake Bay" sizes={sizes} />
+      </div>
+
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Inspect</span>
+          <h3>Click anything.</h3>
+          <p>
+            Object Information decodes every attribute into plain names and follows links between features. For tide and
+            current stations it charts the time series right in the panel.
+          </p>
+        </div>
+        <Shot
+          id="F3"
+          alt="Object Information for a lit buoy"
+          title="Object Information"
+          detail="Lit buoy off Alki Point, decoded attributes · F3b: S-104 station time-series chart"
+          sizes={sizes}
+        />
+      </div>
+
+      <div class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Routes</span>
+          <h3>Sketch a passage.</h3>
+          <p>
+            Drop waypoints on the chart and drag them around. Each leg can be great-circle or rhumb-line, distance and
+            bearing update as you edit, and routes are stored in the S-421 route model.
+          </p>
+        </div>
+        <Shot id="F4" standin="S421Screenshot.png" alt="A route from Seattle to Bremerton with the leg table open" sizes={sizes} />
+      </div>
+
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Library</span>
+          <h3>Find data, not files.</h3>
+          <p>
+            The Library indexes local folders, collection manifests and online catalogues, including NOAA's S-100 feeds on
+            AWS. You can browse coverage on the map before you download anything, and keep it up to date afterwards.
+          </p>
+        </div>
+        <Shot id="F5" standin="DatasetsPanelScreenshot.png" alt="The Library panel browsing NOAA S-102 coverage areas" sizes={sizes} />
+      </div>
+    </div>
+
+    <div class="minis">
+      <div class="mini">
+        <Shot id="F8" alt="Validation findings with map markers" title="Validation panel" detail="Findings + map markers" sizes="(max-width: 900px) 100vw, 380px" />
+        <div class="body">
+          <h3>Validation built in</h3>
+          <p>Normative rule packs for every S-100 product. Click a finding to jump to it on the map.</p>
+        </div>
+      </div>
+      <div class="mini">
+        <Shot id="F9" alt="ECDIS display controls" title="ECDIS display controls" detail="Display category, safety contour" sizes="(max-width: 900px) 100vw, 380px" />
+        <div class="body">
+          <h3>ECDIS-style controls</h3>
+          <p>Display categories, viewing groups, safety contour, four-shade depths and simplified symbols.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-layer-btn]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const n = Number(btn.dataset.layerBtn);
+      document.querySelectorAll('[data-layer-btn]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      document.querySelectorAll<HTMLElement>('[data-layer]').forEach((s) => {
+        s.style.opacity = Number(s.dataset.layer) <= n ? '1' : '0';
+      });
+    }),
+  );
+</script>

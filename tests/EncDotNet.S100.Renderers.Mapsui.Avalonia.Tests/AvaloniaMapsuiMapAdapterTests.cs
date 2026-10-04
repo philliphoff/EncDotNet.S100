@@ -217,6 +217,33 @@ public class AvaloniaMapsuiMapAdapterTests
     }
 
     [Fact]
+    public async Task Capture_at_scale_two_renders_the_control()
+    {
+        var png = await HeadlessTest.RunAsync(async () =>
+        {
+            var target = new CaptureProbeControl();
+            target.Measure(new Size(20, 10));
+            target.Arrange(new Rect(0, 0, 20, 10));
+            return await AvaloniaControlCapture.CapturePngAsync(target, 2.0);
+        });
+
+        // Headless drawing is a stub, so pixel sizes are checked in the live viewer;
+        // this covers the scaled render path end to end.
+        Assert.NotNull(png);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    [InlineData(double.NaN)]
+    public async Task Capture_rejects_a_non_positive_scale(double scale)
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => HeadlessTest.RunAsync(
+                async () => await AvaloniaControlCapture.CapturePngAsync(new Border(), scale)));
+    }
+
+    [Fact]
     public async Task Plain_mapsui_control_tree_capture_is_rejected()
     {
         await Assert.ThrowsAsync<InvalidOperationException>(

@@ -23,11 +23,17 @@ internal sealed class FakeAppScreenshotProvider : IAppScreenshotProvider
 
     public int Calls { get; private set; }
 
+    public double? LastScale { get; private set; }
+
     public Avalonia.Controls.Control? Target { get; set; }
 
-    public Task<byte[]?> CapturePngAsync(CancellationToken cancellationToken = default)
+    public Task<byte[]?> CapturePngAsync(CancellationToken cancellationToken = default) =>
+        CapturePngAsync(1.0, cancellationToken);
+
+    public Task<byte[]?> CapturePngAsync(double scale, CancellationToken cancellationToken = default)
     {
         Calls++;
+        LastScale = scale;
         if (_throw is not null)
         {
             throw _throw;
@@ -72,6 +78,23 @@ public class CaptureAppScreenshotToolTests
         Assert.Same(png, value.ImageBytes);
         Assert.Equal(1600, value.Width);
         Assert.Equal(1000, value.Height);
+    }
+
+    [Theory]
+    [InlineData(null, 1.0)]
+    [InlineData(2.0, 2.0)]
+    [InlineData(0.1, CaptureAppScreenshotTool.MinScale)]
+    [InlineData(10.0, CaptureAppScreenshotTool.MaxScale)]
+    [InlineData(double.NaN, 1.0)]
+    public async Task Invoke_passes_the_clamped_scale_to_the_provider(double? scale, double expected)
+    {
+        var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(2200, 1400));
+        var tool = new CaptureAppScreenshotTool(provider);
+
+        var result = await tool.InvokeAsync(scale);
+
+        Assert.True(result.TryGetValue(out _));
+        Assert.Equal(expected, provider.LastScale);
     }
 
     [Fact]
@@ -144,7 +167,7 @@ public class CaptureAppScreenshotToolTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tool.InvokeAsync(cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tool.InvokeAsync(cancellationToken: cts.Token));
     }
 
     [Fact]
