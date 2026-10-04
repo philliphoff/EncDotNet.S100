@@ -135,9 +135,9 @@ public class SetViewportToolTests
 
     [Theory]
     [InlineData(-91.0, -3.66, 50.50, -3.50)] // south < -90
-    [InlineData(50.40, -181.0, 50.50, -3.50)] // west < -180
+    [InlineData(50.40, -541.0, 50.50, -3.50)] // west < -540
     [InlineData(50.40, -3.66, 91.0, -3.50)] // north > 90
-    [InlineData(50.40, -3.66, 50.50, 181.0)] // east > 180
+    [InlineData(50.40, -3.66, 50.50, 541.0)] // east > 540
     public async Task Out_of_range_bbox_edge_is_rejected(
         double south, double west, double north, double east)
     {
@@ -149,7 +149,9 @@ public class SetViewportToolTests
 
     [Theory]
     [InlineData(50.50, -3.50, 50.40, -3.66)] // south >= north
-    [InlineData(50.40, -3.50, 50.50, -3.66)] // west >= east (no antimeridian)
+    [InlineData(50.40, -3.50, 50.50, -3.50)] // west == east
+    [InlineData(50.40, 400.0, 50.50, -100.0)] // west > east by more than a world
+    [InlineData(50.40, 300.0, 50.50, 200.0)] // crossing past the east world copy (east 560)
     public async Task Inverted_bbox_is_rejected_with_geometry_invalid(
         double south, double west, double north, double east)
     {
@@ -157,6 +159,86 @@ public class SetViewportToolTests
         var result = await tool.InvokeAsync(new SetViewportRequest(south, west, north, east));
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<GeometryInvalid>(err);
+    }
+
+    [Fact]
+    public async Task Bbox_past_the_antimeridian_frames_the_east_world_copy()
+    {
+        // Issue #759 acceptance: the Beaufort Sea part of the NWS Alaska S-411
+        // (kept in a 175…225 frame) is framed at its own longitudes.
+        var (tool, host) = Make();
+        host.LiveCenter = new GeoPosition(72.5, 205);
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            South: 69.5, West: 190, North: 74.5, East: 220));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(190, ok!.West, 6);
+        Assert.Equal(220, ok.East, 6);
+        Assert.Equal(205, ok.CenterLon);
+        var call = Assert.Single(host.ExtentCalls);
+        var (x190, _) = Mapsui.Projections.SphericalMercator.FromLonLat(190, 0);
+        var (x220, _) = Mapsui.Projections.SphericalMercator.FromLonLat(220, 0);
+        Assert.Equal(x190, call.MinX, 3);
+        Assert.Equal(x220, call.MaxX, 3);
+    }
+
+    [Theory]
+    [InlineData(170.0, -140.0, 170.0, 220.0)] // crosses ±180 from the standard world
+    [InlineData(-200.0, -170.0, -200.0, -170.0)] // west copy, no crossing
+    [InlineData(350.0, 10.0, 350.0, 370.0)] // crosses 360 in a 0…360 frame
+    public async Task Seam_crossing_bbox_is_framed_in_one_continuous_frame(
+        double west, double east, double framedWest, double framedEast)
+    {
+        var (tool, host) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            South: 60, West: west, North: 70, East: east));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(framedWest, ok!.West, 6);
+        Assert.Equal(framedEast, ok.East, 6);
+        var call = Assert.Single(host.ExtentCalls);
+        Assert.True(call.MaxX > call.MinX);
+        Assert.Equal(Mapsui.Projections.SphericalMercator.FromLonLat(framedEast, 0).x, call.MaxX, 3);
+    }
+
+    [Fact]
+    public async Task Center_past_the_antimeridian_frames_the_east_world_copy()
+    {
+        var (tool, host) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: 72, CenterLon: 205, ScaleDenominator: 10_000_000));
+
+        Assert.True(result.TryGetValue(out var ok));
+        var call = Assert.Single(host.CenterCalls);
+        Assert.Equal(Mapsui.Projections.SphericalMercator.FromLonLat(205, 0).x, call.X, 3);
+        // The echoed frame stays in the centre's continuous frame.
+        Assert.True(ok!.West < 205 && ok.East > 205, $"{ok.West}…{ok.East}");
+        Assert.True(ok.East > 180);
+    }
+
+    [Theory]
+    [InlineData(-540.5)]
+    [InlineData(540.5)]
+    public async Task Center_beyond_the_adjacent_world_copies_is_rejected(double lon)
+    {
+        var (tool, _) = Make();
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: 50, CenterLon: lon, Zoom: 5));
+        Assert.True(result.TryGetError(out var err));
+        Assert.IsType<InvalidArgument>(err);
+    }
+
+    [Fact]
+    public void Adapter_echoes_live_centre()
+    {
+        var ok = ToolResult<SetViewportResult>.Ok(
+            new SetViewportResult("bbox", 69.5, 190, 74.5, 220, 0, 10_000_000, CenterLat: 72.3, CenterLon: 205));
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(SetViewportMcpAdapter.TranslateResult(ok).Content));
+        Assert.Contains("\"centerLon\":205", text.Text);
+        Assert.Contains("\"east\":220", text.Text);
     }
 
     [Theory]
