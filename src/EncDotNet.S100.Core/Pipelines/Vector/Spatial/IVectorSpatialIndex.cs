@@ -32,7 +32,7 @@ public interface IVectorSpatialIndex
     /// build/query telemetry emitted through
     /// <see cref="EncDotNet.S100.Diagnostics.PipelineMetrics"/>.
     /// </param>
-    public static IVectorSpatialIndex Build(
+    static IVectorSpatialIndex Build(
         IReadOnlyList<Feature> features, string? productTag = null)
         => Spatial.StrRTree.Build(features, productTag);
 
