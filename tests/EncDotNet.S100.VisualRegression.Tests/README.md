@@ -71,9 +71,9 @@ regressions in geometry, colour, or symbology.
 The whole-image fraction only works for dense renders. On a 600x600 snapshot
 5 % is 18 000 px, more than all the ink in a few symbols on a white chart, so a
 sparse snapshot could lose or gain every symbol (or be approved blank) and still
-pass. Sparse renders — most of S-122, S-124, S-125, S-127, S-129, S-131, S-201,
-S-411 and S-421 — use `TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels,
-maxDifferentInkFraction)` instead, which:
+pass. Sparse renders — S-111 and most of S-122, S-124, S-125, S-127, S-129,
+S-131, S-201, S-411 and S-421 — use `TestHelpers.VerifySparseBitmap(bitmap,
+minimumInkPixels, maxDifferentInkFraction)` instead, which:
 
 - asserts a minimum count of non-background ("ink") pixels, so a blank render
   can never become a baseline; and
@@ -84,7 +84,15 @@ maxDifferentInkFraction)` instead, which:
 Size the budget from measured macOS/Linux drift: unlabelled geometry is stable
 to within a few pixels (use 0.25), but label glyphs shift a pixel or two between
 platforms, so every glyph pixel of a labelled render can differ. Give labelled
-fixtures about 1.5× their measured drift.
+fixtures about 1.5× their measured drift. A very sparse fixture can go lower:
+S-111's five arrows (~325 px of ink) render identically across platforms, so
+it uses 0.1, small enough that one missing or moved arrow fails.
+
+The harness draws Mapsui `ImageStyle` symbols (the S-111 arrow SVGs) only
+after loading every image source, then renders a second frame. Do not make that
+second frame depend on a fetch job still being pending: the map's own
+background fetcher can load the images first, and returning the first frame
+then drops every symbol, intermittently.
 
 ## Adding a new test
 
