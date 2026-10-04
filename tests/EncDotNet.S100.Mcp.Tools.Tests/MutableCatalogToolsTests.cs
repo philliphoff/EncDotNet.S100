@@ -60,6 +60,45 @@ public class MutableCatalogToolsTests
     }
 
     [Fact]
+    public async Task OpenDataset_EmptyExchangeSet_ReasonSaysWhatWasSkippedAndWhy()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [],
+            NextKind = DatasetSourceKind.ExchangeSet,
+            NextProblems =
+            [
+                "Failed to open exchange set 'x': Digital signature is missing required attribute 'dataStatus'.",
+                "Skipped 'S-128/a.gml': unsupported product 'S-128'.",
+            ],
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+        Assert.StartsWith("the exchange set contained no datasets the host can portray (", error.Reason);
+        Assert.Contains("dataStatus", error.Reason);
+        Assert.Contains("unsupported product 'S-128'", error.Reason);
+    }
+
+    [Fact]
+    public async Task OpenDataset_ManyProblems_QuotesFirstFiveAndCountsTheRest()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [],
+            NextKind = DatasetSourceKind.ExchangeSet,
+            NextProblems = Enumerable.Range(1, 8).Select(i => $"problem {i}").ToList(),
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+        Assert.Contains("problem 5; and 3 more)", error.Reason);
+        Assert.DoesNotContain("problem 6", error.Reason);
+    }
+
+    [Fact]
     public async Task OpenDataset_MissingPath_IsInvalidArgument()
     {
         var catalog = new FakeMutableDatasetCatalog();

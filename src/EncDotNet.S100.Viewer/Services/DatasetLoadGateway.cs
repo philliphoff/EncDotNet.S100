@@ -111,16 +111,22 @@ internal sealed class DatasetLoadGateway : IDatasetLoadGateway
     }
 
     /// <inheritdoc />
-    public async Task<int> TriggerExchangeSetAsync(string path, CancellationToken cancellationToken = default)
+    public async Task<ExchangeSetDispatch> TriggerExchangeSetAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
-        var dispatched = 0;
+        var dispatch = ExchangeSetDispatch.Of(0);
         await _dispatcher(async () =>
         {
             var result = await _exchangeSet.OpenAsync(path, progress: null, cancellationToken).ConfigureAwait(true);
-            dispatched = result.Loaded;
+            var problems = new List<string>();
+            if (!string.IsNullOrWhiteSpace(result.FailureMessage))
+            {
+                problems.Add(result.FailureMessage);
+            }
+            problems.AddRange(result.SkipMessages);
+            dispatch = new ExchangeSetDispatch(result.Loaded, problems);
         }).ConfigureAwait(false);
-        return dispatched;
+        return dispatch;
     }
 
     /// <inheritdoc />

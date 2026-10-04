@@ -13,9 +13,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// anchors for tests. <see cref="R_101_124_A"/> is the analogous Level-0
 /// derivation for S-124. The Level-2 rule
 /// <see cref="R_101_102_B_SuppressDepthFeatures"/> is the only one with a
-/// non-identity effect — it removes S-101 <c>DepthArea</c> and
-/// <c>DepthContour</c> features from the stack when an S-102 dataset is loaded
-/// and active, honouring the MSC.232(82) §5.8 safety-contour exception.
+/// non-identity effect — it removes the S-101 <c>DepthArea</c> and
+/// <c>DepthContour</c> features inside an active S-102 dataset's coverage from
+/// the stack, honouring the MSC.232(82) §5.8 safety-contour exception.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -48,8 +48,16 @@ public static class S98DefaultRules
 
     /// <summary>
     /// R-101-102-B (Level 2) — when an S-102 dataset is loaded and active,
-    /// suppress every S-101 <c>DepthArea</c> and <c>DepthContour</c> feature so
-    /// the gridded bathymetric surface replaces the legacy depth shading. The
+    /// suppress the S-101 <c>DepthArea</c> and <c>DepthContour</c> features
+    /// that lie inside its coverage extent so the gridded bathymetric surface
+    /// replaces the legacy depth shading there. Outside every active S-102
+    /// extent the ENC depth features stay: the surface overwrites them only
+    /// where it is displayed (S-98 Part A §A-6.9.1), so suppressing them
+    /// everywhere left a chart without depth shading beyond a small S-102
+    /// tile. A feature that straddles the extent's edge is kept; its fill
+    /// paints under the opaque surface anyway. An active S-102 dataset whose
+    /// stack items report no <see cref="CoveragePortrayalResult.CoverageExtent"/>
+    /// is taken to cover everything. The
     /// S-101 safety contour (the contour whose <c>VALDCO</c> equals the
     /// mariner's
     /// <see cref="EncDotNet.S100.Pipelines.MarinerSettings.SafetyContour"/>) is
@@ -166,6 +174,17 @@ public static class S98DefaultRules
         S98RuleContext context)
     {
         var safetyContour = context.EffectiveMariner.SafetyContour.TotalMetres;
+        var coverage = CollectS102Extents(stack, context);
+        if (coverage.Extents.Count == 0 && !coverage.Unbounded)
+        {
+            // No active S-102 dataset: nothing replaces the ENC depth features.
+            return stack;
+        }
+
+        // Many sub-layers share one portrayal result; decide each feature's
+        // containment once per result.
+        var containment = new Dictionary<VectorPortrayalResult, Dictionary<long, bool>>(
+            ReferenceEqualityComparer.Instance);
 
         var result = new List<SubLayerStackItem>(stack.Count);
         foreach (var item in stack)
@@ -179,7 +198,29 @@ public static class S98DefaultRules
                 continue;
             }
 
-            var filtered = FilterSubLayer(vector, safetyContour);
+            Func<long, bool> isCovered = _ => true;
+            if (!coverage.Unbounded)
+            {
+                if (!containment.TryGetValue(vector.Result, out var decided))
+                {
+                    decided = new Dictionary<long, bool>();
+                    containment.Add(vector.Result, decided);
+                }
+                var geometry = vector.Result.GeometryProvider;
+                isCovered = id =>
+                {
+                    if (!decided.TryGetValue(id, out var inside))
+                    {
+                        inside = LiesWithin(
+                            geometry.GetGeometry(id.ToString(CultureInfo.InvariantCulture)),
+                            coverage.Extents);
+                        decided.Add(id, inside);
+                    }
+                    return inside;
+                };
+            }
+
+            var filtered = FilterSubLayer(vector, safetyContour, isCovered);
             if (ReferenceEquals(filtered, vector.SubLayer))
             {
                 result.Add(item);
@@ -280,7 +321,84 @@ public static class S98DefaultRules
         }
     }
 
-    private static VectorSubLayer FilterSubLayer(VectorStackPayload payload, double safetyContour)
+    /// <summary>
+    /// Gathers the coverage extents of the active S-102 datasets from their
+    /// coverage stack items. <c>Unbounded</c> is set when an active S-102
+    /// dataset reports no extent (no coverage item in the stack, or a result
+    /// without <see cref="CoveragePortrayalResult.CoverageExtent"/>); it is
+    /// then taken to cover everything.
+    /// </summary>
+    private static (List<GeographicBounds> Extents, bool Unbounded) CollectS102Extents(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        var extents = new List<GeographicBounds>();
+        var unbounded = false;
+        foreach (var dataset in context.LoadedDatasets)
+        {
+            if (!dataset.Active || !string.Equals(dataset.ProductSpec, "S-102", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            GeographicBounds? extent = null;
+            foreach (var item in stack)
+            {
+                if (item.Payload is CoverageStackPayload coverage
+                    && string.Equals(item.SourceDatasetId, dataset.DatasetId, StringComparison.Ordinal)
+                    && coverage.Result.CoverageExtent is { } reported)
+                {
+                    extent = reported;
+                    break;
+                }
+            }
+
+            if (extent is { } known)
+            {
+                extents.Add(known);
+            }
+            else
+            {
+                unbounded = true;
+            }
+        }
+        return (extents, unbounded);
+    }
+
+    /// <summary>
+    /// Whether every vertex of <paramref name="geometry"/> lies inside one of
+    /// <paramref name="extents"/>. A feature with no resolvable geometry is
+    /// not covered, so it is kept.
+    /// </summary>
+    private static bool LiesWithin(FeatureGeometry? geometry, List<GeographicBounds> extents)
+    {
+        if (geometry is null || geometry.Coordinates.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var position in geometry.Coordinates)
+        {
+            var inside = false;
+            foreach (var extent in extents)
+            {
+                if (position.Latitude >= extent.MinLatitude && position.Latitude <= extent.MaxLatitude
+                    && position.Longitude >= extent.MinLongitude && position.Longitude <= extent.MaxLongitude)
+                {
+                    inside = true;
+                    break;
+                }
+            }
+            if (!inside)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static VectorSubLayer FilterSubLayer(
+        VectorStackPayload payload, double safetyContour, Func<long, bool> isCovered)
     {
         var subLayer = payload.SubLayer;
         var tags = payload.Result.FeatureTags;
@@ -295,7 +413,7 @@ public static class S98DefaultRules
         bool changed = false;
         foreach (var instruction in subLayer.Instructions)
         {
-            if (ShouldSuppress(instruction, tags, safetyContour))
+            if (ShouldSuppress(instruction, tags, safetyContour, isCovered))
             {
                 changed = true;
                 continue;
@@ -327,7 +445,8 @@ public static class S98DefaultRules
     private static bool ShouldSuppress(
         DrawingInstruction instruction,
         IReadOnlyDictionary<long, VectorFeatureTag> tags,
-        double safetyContour)
+        double safetyContour,
+        Func<long, bool> isCovered)
     {
         if (!long.TryParse(
                 instruction.FeatureReference,
@@ -343,6 +462,7 @@ public static class S98DefaultRules
             return false;
         }
 
-        return S98SuppressionPolicy.ShouldSuppress(tag.FeatureType, tag.DepthContourValue, safetyContour);
+        return S98SuppressionPolicy.ShouldSuppress(tag.FeatureType, tag.DepthContourValue, safetyContour)
+            && isCovered(id);
     }
 }

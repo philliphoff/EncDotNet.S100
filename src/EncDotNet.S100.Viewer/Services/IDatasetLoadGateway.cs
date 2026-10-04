@@ -73,8 +73,9 @@ internal interface IDatasetLoadGateway
     /// </summary>
     /// <returns>The number of datasets dispatched for loading (0 when the
     /// exchange set contained no datasets this viewer can read), so callers
-    /// can distinguish "nothing to load" from "loads still in flight".</returns>
-    Task<int> TriggerExchangeSetAsync(string path, CancellationToken cancellationToken = default);
+    /// can distinguish "nothing to load" from "loads still in flight", plus
+    /// the reasons the open failed or skipped catalogued datasets.</returns>
+    Task<ExchangeSetDispatch> TriggerExchangeSetAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Removes every loaded dataset whose catalog id (the entry's display
@@ -91,4 +92,15 @@ internal interface IDatasetLoadGateway
     /// handle to release.
     /// </summary>
     Task<IDisposable> LockAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The result of <see cref="IDatasetLoadGateway.TriggerExchangeSetAsync"/>.</summary>
+/// <param name="Dispatched">The number of datasets dispatched for loading.</param>
+/// <param name="Problems">Why the open failed (for example an unreadable
+/// catalogue) or skipped catalogued datasets, in the order they arose; empty
+/// when nothing went wrong.</param>
+internal sealed record ExchangeSetDispatch(int Dispatched, IReadOnlyList<string> Problems)
+{
+    /// <summary>A dispatch of <paramref name="dispatched"/> datasets with no problems.</summary>
+    public static ExchangeSetDispatch Of(int dispatched) => new(dispatched, []);
 }

@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -190,12 +191,32 @@ public static class LayerStackProjector
         // Build a fresh MemoryLayer mirroring the source rather than mutating it
         // — the session retains the prebuilt layer for the un-suppressed case (e.g.
         // an S-102 deactivation restores the full S-101 depth shading).
-        return new MemoryLayer
+        var filtered = new MemoryLayer
         {
             Name = source.Name,
             Features = kept,
             Style = source.Style,
+            CustomLayerRendererName = source.CustomLayerRendererName,
         };
+        CopyDisplayState(source, filtered);
+
+        // The source is painted by a scene renderer from its bound VectorScene;
+        // its features only carry pick identity (pattern fills are near-invisible
+        // hit targets). Bind the same scene minus the dropped features, or the
+        // filtered layer would fall back to those pick styles: untiled, and
+        // without its pattern fills.
+        bool Keep(PaintOp op) => !droppedRefs.Contains(op.FeatureReference);
+        var bound = source.CustomLayerRendererName switch
+        {
+            S100VectorTileRenderer.RendererName => S100VectorTileRenderer.TryBindFilteredScene(source, filtered, Keep),
+            S100VectorSceneRenderer.RendererName => S100VectorSceneRenderer.TryBindFilteredScene(source, filtered, Keep),
+            _ => true,
+        };
+        if (!bound)
+        {
+            filtered.CustomLayerRendererName = null;
+        }
+        return filtered;
     }
 
     /// <summary>
