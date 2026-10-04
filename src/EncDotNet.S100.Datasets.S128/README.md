@@ -49,6 +49,22 @@ upstream sample (`DistributorInformation`, `ProducerInformation`,
 | `S128FeatureXmlSource` | Projects the dataset into the S-100 Part 9 FeatureXML neutral form consumed by the bundled XSLT |
 | `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes) |
 
+## Viewer visibility in exchange sets
+
+The bundled portrayal catalogue is the IHO upstream's, unedited. It fills
+each product's coverage with `CHYLW` / `CHGRN` / `CHMGD` at transparency
+0.30 (70 % opaque) on `displayPlane` `OVERRADAR`, and the S-98 layer stack
+puts S-128 on `OtherChartOverlays`, above the ENC's line work. Nested
+products (a harbour cell inside an approach cell) compound to about 91 %
+opaque, which hides the chart.
+
+So an S-128 dataset that comes from an **exchange set loads hidden** in the
+viewer (`DatasetLoadVisibility`, beside the gridded S-104 default of issue
+#483). The catalogue stays browsable in the Library panel, and the user can
+show the coverage from the Datasets list. A catalogue opened on its own
+loads visible. `S128CoverageOverlayTests` pins the upstream fill behaviour,
+so a catalogue refresh that changes it prompts a review of this default.
+
 ## Producer-bug compensations
 
 The reader inherits the four mitigations applied to other GML-encoded

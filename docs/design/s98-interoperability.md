@@ -1002,6 +1002,28 @@ item is actionable as a focused follow-up session.
   (b) commit to specific planes per product spec, (c) wait for
   S-98 v3.0.0 to enumerate them.
 
+  *S-128 decision (2026-10-03).* S-128 stays on `OtherChartOverlays`; no
+  plane changed. S-128 Ed 1.0.0 §13 leaves portrayal to implementers, and
+  the bundled Ed 2.0.0 portrayal catalogue is the IHO upstream's, kept
+  byte-identical. It fills every product coverage 70 % opaque on
+  `OVERRADAR`, so nested products compound to about 91 % opaque over the
+  ENC, against Main §9.2.1's rule that other data must not obscure layers 2
+  and 5. Three options were weighed:
+
+  - *Outline only over ENCs* would rewrite the IHO instructions at
+    runtime and drop the colours that tell electronic, physical and
+    service products apart.
+  - *Much lower opacity* would also override the IHO catalogue, and
+    stacking still compounds: n nested products leave 1−(1−α)ⁿ covered.
+  - *Load hidden inside exchange sets* keeps the IHO portrayal intact for
+    a mariner who opts in, and matches the gridded S-104 precedent (#483).
+    The catalogue is still browsable in the Library panel.
+
+  We took the third. The viewer's `DatasetLoadVisibility` loads an
+  exchange-set S-128 hidden; a file the user opens on its own is shown.
+  `S128CoverageOverlayTests` pins the upstream fill and plane behaviour
+  that motivates this.
+
 - **TBD-9.** Should `S98DisplayPlane` be an enum or an open
   string-id? An enum bakes in our nine canonical values; the IC
   schema (Annex A §A-3.2.1.1) lets a catalogue declare *any*

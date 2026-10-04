@@ -643,7 +643,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
     /// <summary>
     /// Applies Viewer load defaults once a processor is registered: collapse
-    /// duplicate coverage variants, default an S-104 gridded surface to hidden,
+    /// duplicate coverage variants, default an S-104 gridded surface or an
+    /// exchange-set S-128 catalogue to hidden (<see cref="DatasetLoadVisibility"/>),
     /// surface S-101 update diagnostics, and register S-128 catalogues.
     /// </summary>
     private void ApplyPostRegistrationPolicies(
@@ -679,19 +680,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             }
         }
 
-        // S-104 gridded (dcf2) water-level surfaces are a synthesised,
-        // non-normative colour-band heatmap (S-104 Edition 2.0.0 defines no
-        // official portrayal catalogue and treats water level as ECDIS
-        // vertical-adjustment input, not a chart layer). Default the surface
-        // to hidden so it never dominates the display uninvited; the user
-        // opts in via the eye icon in the Datasets list (issue #483).
-        // Fixed-station (dcf8) glyphs are discrete symbols at genuine
-        // stations and stay visible.
-        // Default the surface to hidden only on the session's first load.
-        // Lazy unload retains session state and its order slot, so a reload
-        // preserves a surface the user had opted into (issue #483).
-        if (processor is S104DatasetProcessor { IsGriddedSurface: true }
-            && !wasKnownBySession)
+        // S-104 gridded surfaces and exchange-set S-128 catalogues default
+        // to hidden so they never dominate the chart uninvited; the user
+        // opts in via the eye icon in the Datasets list.
+        if (DatasetLoadVisibility.LoadsHidden(processor, entry.IsFromExchangeSet, wasKnownBySession))
         {
             entry.IsVisible = false;
         }
