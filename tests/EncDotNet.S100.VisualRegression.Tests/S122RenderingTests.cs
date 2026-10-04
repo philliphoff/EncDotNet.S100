@@ -9,13 +9,13 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S122RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     // Ink ~1 450 px. Line work only: macOS/Linux drift measured at 2 px.
     [InlineData("122TESTDATASET.gml", 700, 0.25)]
     public Task MarineProtectedArea(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S122", fileName);
-        Skip.IfNot(File.Exists(path), $"S-122 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-122 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

@@ -204,11 +204,11 @@ public class S57DatasetMetadataTests
         return Path.Combine("tests", "datasets", "S57", "US5MA1BO", fileName);
     }
 
-    [SkippableFact]
+    [Fact]
     public void ReadMetadata_real_cell_overloads_agree_and_extent_matches_full_translation()
     {
         var path = ResolveFixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(path), $"S-57 test cell not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-57 test cell not present: {path}");
 
         var pathExtent = S57Dataset.ReadMetadata(path).Extent;
         Assert.NotNull(pathExtent);

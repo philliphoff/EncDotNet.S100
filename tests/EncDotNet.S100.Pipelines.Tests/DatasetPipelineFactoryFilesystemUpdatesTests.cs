@@ -46,12 +46,12 @@ public class DatasetPipelineFactoryFilesystemUpdatesTests
             () => factory.CreateProcessorWithFilesystemUpdates(""));
     }
 
-    [SkippableFact]
+    [Fact]
     public void CreateProcessorWithFilesystemUpdates_RealS101BaseCell_BuildsS101Processor()
     {
         var basePath = Environment.GetEnvironmentVariable("ENCDOTNET_S101_BASE_CELL");
-        Skip.If(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
-        Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
+        Assert.SkipWhen(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
+        Assert.SkipUnless(File.Exists(basePath!), $"Base cell not found: {basePath}.");
 
         var factory = CreateFactory();
 
@@ -62,12 +62,12 @@ public class DatasetPipelineFactoryFilesystemUpdatesTests
         Assert.IsType<S101DatasetProcessor>(processor);
     }
 
-    [SkippableFact]
+    [Fact]
     public void CreateProcessorWithFilesystemUpdates_RealS57BaseCell_BuildsS57Processor()
     {
         var basePath = Environment.GetEnvironmentVariable("ENCDOTNET_S57_BASE_CELL");
-        Skip.If(string.IsNullOrEmpty(basePath), "ENCDOTNET_S57_BASE_CELL not set.");
-        Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
+        Assert.SkipWhen(string.IsNullOrEmpty(basePath), "ENCDOTNET_S57_BASE_CELL not set.");
+        Assert.SkipUnless(File.Exists(basePath!), $"Base cell not found: {basePath}.");
 
         var factory = CreateFactory();
 

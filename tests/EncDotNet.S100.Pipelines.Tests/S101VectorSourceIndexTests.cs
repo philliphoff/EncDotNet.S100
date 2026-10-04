@@ -23,7 +23,7 @@ public sealed class S101VectorSourceIndexTests
 {
     private const string FixtureFile = "101AA00DS0016.000";
 
-    [SkippableFact]
+    [Fact]
     public void S101VectorSource_ImplementsIndexInterface_AndExposesIndex()
     {
         var dataset = OpenFixture();
@@ -36,13 +36,13 @@ public sealed class S101VectorSourceIndexTests
         Assert.Equal(all.Count, indexed.Index.Count);
     }
 
-    [SkippableFact]
+    [Fact]
     public void GetFeatures_WithExtent_MatchesBruteForceMbrScan()
     {
         var dataset = OpenFixture();
         var source = new S101VectorSource(dataset);
         var all = source.GetFeatures();
-        Skip.If(all.Count == 0, "Fixture yielded no features.");
+        Assert.SkipWhen(all.Count == 0, "Fixture yielded no features.");
 
         var full = source.Metadata.Extent;
         var midLat = (full.SouthLatitude + full.NorthLatitude) / 2.0;
@@ -72,7 +72,7 @@ public sealed class S101VectorSourceIndexTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void SecondVectorSource_OverSameDataset_ReusesCachedFeatureListAndIndex()
     {
         // The identify path builds `new S101VectorSource(dataset)` per
@@ -97,7 +97,7 @@ public sealed class S101VectorSourceIndexTests
     private static S101Dataset OpenFixture()
     {
         var path = ResolveFixturePath(FixtureFile);
-        Skip.IfNot(File.Exists(path), $"S-101 fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-101 fixture not found: {path}");
         return S101Dataset.Open(path);
     }
 

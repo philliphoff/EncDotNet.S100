@@ -300,3 +300,7 @@ dotnet_naming_rule.parameters_locals_camel.severity = suggestion
 [tests/**.cs]
 dotnet_naming_rule.members_pascal.severity = none
 dotnet_diagnostic.IDE0005.severity = warning
+# xunit v3 (#776): xUnit1051 asks every call that takes a CancellationToken to
+# pass TestContext.Current.CancellationToken. Adopting it means touching ~1000
+# call sites; off until that sweep is done deliberately.
+dotnet_diagnostic.xUnit1051.severity = none

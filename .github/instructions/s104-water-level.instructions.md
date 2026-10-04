@@ -18,8 +18,8 @@ When modifying S-104 code:
   index` unless an explicit time dataset exists.
 - Cite the S-104 section number in XML doc comments when adding
   spec-derived constants, attribute names, or group paths.
-- Any new public API requires a matching xunit test (use `SkippableFact`
-  when a real HDF5 file is required).
+- Any new public API requires a matching xunit test (skip with
+  `Assert.SkipUnless` when a real HDF5 file is required).
 - **Portrayal is synthesised by design.** IHO publishes no official S-104
   portrayal catalogue (the spec treats water levels as input to ECDIS
   depth adjustment, not a visual layer). `S104PortrayalCatalogue` ships

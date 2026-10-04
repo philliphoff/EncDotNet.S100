@@ -20,7 +20,7 @@ You are reviewing a proposed feature for the EncDotNet.S100 repository
    - API shape implications (new types, changes to existing interfaces,
      which pipeline — coverage vs. vector).
    - HDF5/GML/ISO 8211 encoding details that must be honored.
-   - Test fixtures required (synthetic vs. real-data `SkippableFact`).
+   - Test fixtures required (synthetic vs. real data skipped via `Assert.SkipUnless`).
    - Breaking-change risk vs. prior spec editions supported by the repo.
 4. **Reconcile** conflicts or overlaps between spec guidance (e.g. a
    `CoveragePipeline` change that has to satisfy S-102, S-104, and

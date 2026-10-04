@@ -38,11 +38,11 @@ public class S57DatasetProcessorScaleBandTests
             fixturePath, catalogueManager, luaEngine, featureCatalogueManager);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task BuildVectorPortrayal_DerivesWholeCellWindow_FromCompilationScaleAndScamin()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-57 fixture not found at expected path: {fixturePath}");
 
         var processor = CreateProcessor(fixturePath);
@@ -65,11 +65,11 @@ public class S57DatasetProcessorScaleBandTests
             $"The {subLayer.LayerKey} sub-layer must not carry the per-feature out-of-band cap."));
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task BuildVectorPortrayal_WholeCellWindow_IsUngated()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-57 fixture not found at expected path: {fixturePath}");
 
         var processor = CreateProcessor(fixturePath);
@@ -87,11 +87,11 @@ public class S57DatasetProcessorScaleBandTests
         Assert.True(result.CellMinimumDisplayScale > 0);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Metadata_MatchesReaderPeek_AndIsMemoized()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-57 fixture not found at expected path: {fixturePath}");
 
         var processor = CreateProcessor(fixturePath);

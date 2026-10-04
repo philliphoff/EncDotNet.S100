@@ -27,11 +27,11 @@ public class S101FeatureNameTextTests
     /// </summary>
     private const string FixtureFile = "101AA00DS0008.000";
 
-    [SkippableFact]
+    [Fact]
     public void NamedSurfaceFeatures_EmitTextInstruction()
     {
         var (emitted, namedSurfaces, _) = RunPipelineAndClassify();
-        Skip.If(namedSurfaces.Count == 0, "Fixture has no named surface features.");
+        Assert.SkipWhen(namedSurfaces.Count == 0, "Fixture has no named surface features.");
 
         var withText = emitted
             .Where(e => uint.TryParse(e.FeatureRef, out var id)
@@ -46,11 +46,11 @@ public class S101FeatureNameTextTests
             $"found 0 of {namedSurfaces.Count} named surface features.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void NamedPointFeatures_EmitTextInstruction()
     {
         var (emitted, _, namedPoints) = RunPipelineAndClassify();
-        Skip.If(namedPoints.Count == 0, "Fixture has no named point features.");
+        Assert.SkipWhen(namedPoints.Count == 0, "Fixture has no named point features.");
 
         var withText = emitted
             .Where(e => uint.TryParse(e.FeatureRef, out var id)
@@ -65,7 +65,7 @@ public class S101FeatureNameTextTests
             $"found 0 of {namedPoints.Count} named point features.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void NamedFeatures_EmitTextInstruction_AtMostOncePerFeature()
     {
         // Regression guard: main.lua falls back to PortrayFeatureName when
@@ -74,7 +74,7 @@ public class S101FeatureNameTextTests
         // label twice with different offsets (visible as duplicated, slightly
         // offset text in the viewer).
         var (emitted, namedSurfaces, namedPoints) = RunPipelineAndClassify();
-        Skip.If(namedSurfaces.Count == 0 && namedPoints.Count == 0,
+        Assert.SkipWhen(namedSurfaces.Count == 0 && namedPoints.Count == 0,
             "Fixture has no named features.");
 
         var named = namedSurfaces.Concat(namedPoints)
@@ -102,7 +102,7 @@ public class S101FeatureNameTextTests
                     IReadOnlyDictionary<uint, string> NamedPoints) RunPipelineAndClassify()
     {
         var fixturePath = ResolveFixturePath(FixtureFile);
-        Skip.IfNot(File.Exists(fixturePath),
+        Assert.SkipUnless(File.Exists(fixturePath),
             $"S-101 fixture not found at expected path: {fixturePath}");
 
         var dataset = S101Dataset.Open(fixturePath);
@@ -133,7 +133,7 @@ public class S101FeatureNameTextTests
             if (string.Equals(attrName, "name", StringComparison.OrdinalIgnoreCase))
                 nameCode = code;
         }
-        Skip.IfNot(featureNameCode is not null && nameCode is not null,
+        Assert.SkipUnless(featureNameCode is not null && nameCode is not null,
             "Fixture catalogue does not define featureName/name attributes.");
 
         var namedSurfaces = new Dictionary<uint, string>();

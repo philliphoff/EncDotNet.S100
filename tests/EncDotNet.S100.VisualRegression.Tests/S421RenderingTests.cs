@@ -3,7 +3,7 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// <summary>Visual regression tests for S-421 route plan rendering.</summary>
 public sealed class S421RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     [InlineData("RTE-TEST-GMIN.s421.gml", 100, 0.25)]     // ink ~200 px; no drift
     [InlineData("RTE-TEST-GBASIC.s421.gml", 1_700, 0.25)] // ink ~3 500 px; no drift
     // Ink ~7 600 px; the boxed action-point labels shift a pixel or two
@@ -12,7 +12,7 @@ public sealed class S421RenderingTests
     public Task RoutePlan(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S421", fileName);
-        Skip.IfNot(File.Exists(path), $"S-421 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-421 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

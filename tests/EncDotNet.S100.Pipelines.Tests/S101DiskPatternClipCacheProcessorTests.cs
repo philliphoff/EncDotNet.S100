@@ -35,10 +35,10 @@ public class S101DiskPatternClipCacheProcessorTests
         return manager;
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task WarmDiskCache_SecondColdOpen_IsClipCacheHit()
     {
-        Skip.IfNot(File.Exists(DenseCellPath), $"Dense S-101 trial cell not present: {DenseCellPath}");
+        Assert.SkipUnless(File.Exists(DenseCellPath), $"Dense S-101 trial cell not present: {DenseCellPath}");
 
         var cacheDir = Path.Combine(
             Path.GetTempPath(), "encdotnet-clipcache-proc-" + Guid.NewGuid().ToString("N"));

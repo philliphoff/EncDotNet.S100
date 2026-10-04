@@ -468,12 +468,12 @@ public class S100MapSessionTests
             () => s100.Datasets.LoadAsync("missing.000"));
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task LoadAsyncLoadsRealS101CellAndRejectsDuplicate()
     {
         var basePath = Environment.GetEnvironmentVariable("ENCDOTNET_S101_BASE_CELL");
-        Skip.If(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
-        Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
+        Assert.SkipWhen(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
+        Assert.SkipUnless(File.Exists(basePath!), $"Base cell not found: {basePath}.");
 
         using var map = new Map();
         using var s100 = map.AddS100(new S100MapsuiOptions
@@ -854,12 +854,12 @@ public class S100MapSessionTests
             new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PickAsyncResolvesFeaturesInRealS101Cell()
     {
         var basePath = Environment.GetEnvironmentVariable("ENCDOTNET_S101_BASE_CELL");
-        Skip.If(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
-        Skip.IfNot(File.Exists(basePath!), $"Base cell not found: {basePath}.");
+        Assert.SkipWhen(string.IsNullOrEmpty(basePath), "ENCDOTNET_S101_BASE_CELL not set.");
+        Assert.SkipUnless(File.Exists(basePath!), $"Base cell not found: {basePath}.");
 
         using var map = new Map();
         using var s100 = map.AddS100(new S100MapsuiOptions

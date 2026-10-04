@@ -61,11 +61,11 @@ public class S101SimpleLineStyleRegressionTests
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task BuildVectorPortrayal_DoesNotThrowForSimpleLineStyle()
     {
         var cell = FindCell();
-        Skip.If(cell is null, "No S-101 cell present.");
+        Assert.SkipWhen(cell is null, "No S-101 cell present.");
 
         var missingAssets = new List<string>();
         EventHandler<FirstChanceExceptionEventArgs> handler = (_, e) =>

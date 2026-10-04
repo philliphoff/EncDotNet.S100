@@ -16,7 +16,7 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S411RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     [InlineData("iho_4112C00TDS001.gml", 3_300, 0.25)] // sparse, ink ~6 700 px; no drift
     [InlineData("iho_4112C00TDS002.gml", 4_200, 0.25)] // sparse, ink ~8 500 px; no drift
     // Dense area fills (ink ~101 000 px) plus egg-code labels. The default
@@ -29,7 +29,7 @@ public sealed class S411RenderingTests
     public Task SeaIce(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S411", fileName);
-        Skip.IfNot(File.Exists(path), $"S-411 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-411 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions
@@ -49,11 +49,11 @@ public sealed class S411RenderingTests
     /// declutter must keep both. The two labels are only ~100 pixels of a dense
     /// render, so the snapshot alone cannot reliably catch losing one.
     /// </summary>
-    [SkippableFact]
+    [Fact]
     public void SeaIce_EggCodeLabelsSurviveDeclutter()
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S411", "cis_seaice_synthetic.gml");
-        Skip.IfNot(File.Exists(path), $"S-411 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-411 test dataset not present: {path}");
 
         const int size = 600;
         using var harness = new RenderHarness();

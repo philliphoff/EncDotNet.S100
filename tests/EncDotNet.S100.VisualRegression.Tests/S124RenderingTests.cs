@@ -6,7 +6,7 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S124RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     // Ink budgets from the measured macOS/Linux drift: line work and the NW
     // symbols are stable, but label glyphs shift a pixel or two, so the
     // labelled fixtures need room for every glyph pixel to differ.
@@ -17,7 +17,7 @@ public sealed class S124RenderingTests
     public Task NavWarning(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S124", fileName);
-        Skip.IfNot(File.Exists(path), $"S-124 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-124 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

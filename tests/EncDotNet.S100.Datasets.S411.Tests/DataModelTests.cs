@@ -17,14 +17,14 @@ public class DataModelTests
     private static S411Dataset Load(string fileName)
     {
         var path = Path.Combine(TestDataDir, fileName);
-        Skip.IfNot(File.Exists(path), $"Fixture missing: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture missing: {path}");
         using var s = File.OpenRead(path);
         return S411Dataset.Open(s);
     }
 
     // ── JCOMM operational shape ────────────────────────────────────────
 
-    [SkippableFact]
+    [Fact]
     public void From_JcommSyntheticDataset_NormalisesShortCodesAndProjectsEggCode()
     {
         var dataset = Load("cis_seaice_synthetic.gml");
@@ -60,7 +60,7 @@ public class DataModelTests
         Assert.Empty(first.ExtraAttributes);
     }
 
-    [SkippableFact]
+    [Fact]
     public void EggCodePermutations_Fixture_ProjectsEachVariant()
     {
         var dataset = Load("cis_seaice_eggcode_permutations.gml");
@@ -111,7 +111,7 @@ public class DataModelTests
 
     // ── IHO 1.2.1 sample shape ─────────────────────────────────────────
 
-    [SkippableFact]
+    [Fact]
     public void From_IhoSample_TDS001_TypesAllFeatureClassesAndPopulatesDataCoverage()
     {
         var dataset = Load("iho_4112C00TDS001.gml");
@@ -172,7 +172,7 @@ public class DataModelTests
         Assert.Contains(inventory.OtherFeatures, o => o.NormalizedFeatureType == "IcebergLimit");
     }
 
-    [SkippableFact]
+    [Fact]
     public void From_IhoSample_TDS002_RoundTripsTheSecondSampleShape()
     {
         var dataset = Load("iho_4112C00TDS002.gml");
@@ -202,7 +202,7 @@ public class DataModelTests
             () => S411SeaIceInventory.From(null!, out _));
     }
 
-    [SkippableFact]
+    [Fact]
     public void EggCode_BothAttributeFormsPresent_PrefersJcommShortCode()
     {
         // Synthetic JCOMM fixture uses iceact; verify the projection
@@ -215,7 +215,7 @@ public class DataModelTests
             s => Assert.NotNull(s.EggCode?.TotalConcentration));
     }
 
-    [SkippableFact]
+    [Fact]
     public void NormalizedFeatureType_JcommShortCodes_MapToPascalCase()
     {
         // The synthetic fixture only exercises seaice → SeaIce; this test

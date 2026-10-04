@@ -11,12 +11,12 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S128RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     [InlineData("S128_TDS_sample.gml")]
     public Task CatalogueOfNauticalProducts(string fileName)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S128", fileName);
-        Skip.IfNot(File.Exists(path), $"S-128 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-128 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

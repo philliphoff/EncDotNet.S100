@@ -44,7 +44,8 @@ description: |
    not "coming from". Document/cite this when surfacing it.
 5. Times derived from `dateTimeOfFirstRecord` + `timeRecordInterval`
    unless explicit time dataset is present.
-6. Public API changes have xunit tests using `SkippableFact`.
+6. Public API changes have xunit tests (skip with `Assert.SkipUnless` when
+   real data is required).
 
 ## Known pitfalls in this repo
 - Speed units vary by producer — spec says knots, but always honor the

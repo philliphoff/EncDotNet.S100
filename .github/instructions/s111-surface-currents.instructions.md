@@ -21,5 +21,5 @@ When modifying S-111 code:
   directions.
 - Cite the S-111 section number in XML doc comments when adding
   spec-derived constants, attribute names, or group paths.
-- Any new public API requires a matching xunit test (use `SkippableFact`
-  when a real HDF5 file is required).
+- Any new public API requires a matching xunit test (skip with
+  `Assert.SkipUnless` when a real HDF5 file is required).

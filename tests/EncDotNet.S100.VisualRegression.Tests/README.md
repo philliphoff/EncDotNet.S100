@@ -7,7 +7,7 @@ the output as a PNG, and compares it against a checked-in baseline.
 Built on the [`EncDotNet.S100.VisualRegression`](../EncDotNet.S100.VisualRegression/)
 harness (which uses `Mapsui.Rendering.Skia` headlessly for vector products and
 `SkiaCoverageRenderer` directly for coverage products) and
-[Verify.Xunit](https://github.com/VerifyTests/Verify) for snapshot management.
+[Verify.XunitV3](https://github.com/VerifyTests/Verify) for snapshot management.
 
 ## Layout
 
@@ -34,7 +34,7 @@ writes a sibling `*.received.png` (the new output) and the harness writes a
 dotnet test tests/EncDotNet.S100.VisualRegression.Tests
 ```
 
-Tests use `[SkippableFact]` / `[SkippableTheory]` so they auto-skip when the
+Tests call `Assert.SkipUnless(...)` so they auto-skip when the
 required dataset under `tests/datasets/` is missing — they will not fail CI
 for missing fixtures.
 
@@ -99,11 +99,11 @@ then drops every symbol, intermittently.
 1. Place the dataset under `tests/datasets/<spec>/...` (small fixtures only).
 2. Add a method to the matching `S<NNN>RenderingTests` class:
    ```csharp
-   [SkippableFact]
+   [Fact]
    public Task MyScenario()
    {
        var path = Path.Combine(TestHelpers.DatasetsRoot, "S101", "myCell.000");
-       Skip.IfNot(File.Exists(path), $"Dataset not present: {path}");
+       Assert.SkipUnless(File.Exists(path), $"Dataset not present: {path}");
 
        using var harness = new RenderHarness();
        var bitmap = harness.Render(path, new HarnessOptions { Width = 800, Height = 600 });

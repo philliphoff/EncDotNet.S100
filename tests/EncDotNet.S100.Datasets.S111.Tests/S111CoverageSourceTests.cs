@@ -27,10 +27,10 @@ public class S111CoverageSourceTests : IDisposable
 
     private void SkipIfNoTestData()
     {
-        Skip.If(_dataset is null, $"S-111 test data not found at {TestDataFile}.");
+        Assert.SkipWhen(_dataset is null, $"S-111 test data not found at {TestDataFile}.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void Metadata_ProductSpec_IsS111()
     {
         SkipIfNoTestData();
@@ -40,7 +40,7 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Equal("S-111", source.Metadata.Spec.Name);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Metadata_ValueFields_ContainSpeedAndDirection()
     {
         SkipIfNoTestData();
@@ -52,7 +52,7 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Contains("surfaceCurrentDirection", fieldNames);
     }
 
-    [SkippableFact]
+    [Fact]
     public void AvailableTimes_ReturnsAllTimeSteps()
     {
         SkipIfNoTestData();
@@ -64,7 +64,7 @@ public class S111CoverageSourceTests : IDisposable
         Assert.True(times.Count >= 2);
     }
 
-    [SkippableFact]
+    [Fact]
     public void SelectTime_ChangesWhichCoverageIsSampled()
     {
         SkipIfNoTestData();
@@ -87,7 +87,7 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Equal(speed0.GetLength(1), speedLast.GetLength(1));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Sample_Full_ReturnsCorrectDimensions()
     {
         SkipIfNoTestData();
@@ -105,7 +105,7 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Equal(coverage.NumPointsLongitudinal, direction.GetLength(1));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Sample_StrideLargerThanSubset_RetainsIntersectingCell()
     {
         SkipIfNoTestData();
@@ -123,7 +123,7 @@ public class S111CoverageSourceTests : IDisposable
     public async Task PortrayalCatalogue_ResolveColorScheme_MapsSpeedToColors()
     {
         const string portrayalPath = "TestData/PortrayalCatalogue";
-        Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+        Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var source = FileSystemAssetSource.Create(portrayalPath);
         using var provider = await PortrayalCatalogueProvider.OpenAsync(source);
@@ -140,16 +140,16 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Null(scheme);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task CoveragePipeline_ProducesStyledLayer()
     {
         SkipIfNoTestData();
 
         const string portrayalPath = "TestData/PortrayalCatalogue";
-        Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+        Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var assetSource = FileSystemAssetSource.Create(portrayalPath);
-        using var provider = PortrayalCatalogueProvider.OpenAsync(assetSource).GetAwaiter().GetResult();
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(assetSource);
 
         var source = new S111CoverageSource(_dataset!);
         var catalogue = new S111PortrayalCatalogue(provider);
@@ -172,7 +172,7 @@ public class S111CoverageSourceTests : IDisposable
     public async Task PortrayalCatalogue_ResolveSymbolScheme_Returns9Bands()
     {
         const string portrayalPath = "TestData/PortrayalCatalogue";
-        Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+        Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var source = FileSystemAssetSource.Create(portrayalPath);
         using var provider = await PortrayalCatalogueProvider.OpenAsync(source);

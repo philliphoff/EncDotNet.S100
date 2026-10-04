@@ -41,10 +41,10 @@ public class DatasetProcessorHitTestTests
         AssertHitsRoundTrip(processor);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S101_HitTestFeatures_RoundTripsOrdinalToFeatureInfo()
     {
-        Skip.IfNot(File.Exists(DenseS101CellPath), $"Dense S-101 trial cell not present: {DenseS101CellPath}");
+        Assert.SkipUnless(File.Exists(DenseS101CellPath), $"Dense S-101 trial cell not present: {DenseS101CellPath}");
 
         var factory = new DatasetPipelineFactory(
             CreateCatalogueManager(),
@@ -75,7 +75,7 @@ public class DatasetProcessorHitTestTests
             new DisplayPlaneAuthorityProvider(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
 
-        Skip.If(processor.Metadata.Extent is null, "Processor did not derive an extent to aim the pick at.");
+        Assert.SkipWhen(processor.Metadata.Extent is null, "Processor did not derive an extent to aim the pick at.");
         var extent = processor.Metadata.Extent!;
         var centreLat = (extent.SouthLatitude + extent.NorthLatitude) / 2.0;
         var centreLon = (extent.WestLongitude + extent.EastLongitude) / 2.0;
@@ -120,7 +120,7 @@ public class DatasetProcessorHitTestTests
     /// </summary>
     private static void AssertHitsRoundTrip(IDatasetProcessor processor)
     {
-        Skip.If(processor.Metadata.Extent is null, "Processor did not derive an extent to aim the pick at.");
+        Assert.SkipWhen(processor.Metadata.Extent is null, "Processor did not derive an extent to aim the pick at.");
         var extent = processor.Metadata.Extent!;
         var centreLat = (extent.SouthLatitude + extent.NorthLatitude) / 2.0;
         var centreLon = (extent.WestLongitude + extent.EastLongitude) / 2.0;

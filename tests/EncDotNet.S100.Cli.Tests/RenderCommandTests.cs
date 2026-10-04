@@ -19,7 +19,7 @@ public sealed class RenderCommandTests
     public void Render_writes_a_valid_png_at_requested_dimensions()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         try
@@ -59,7 +59,7 @@ public sealed class RenderCommandTests
     public void Render_with_bad_palette_returns_nonzero()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(["render", dataset, output, "--palette", "bogus"]);
@@ -79,7 +79,7 @@ public sealed class RenderCommandTests
     public void Render_infers_non_png_format_from_extension(string extension)
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.{extension}");
         try
@@ -110,7 +110,7 @@ public sealed class RenderCommandTests
     public void Render_honours_explicit_format_option_over_extension()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         // No extension on the output path; --format drives the encoder.
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}");
@@ -137,7 +137,7 @@ public sealed class RenderCommandTests
     public void Render_with_unknown_format_returns_nonzero()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(["render", dataset, output, "--format", "tiff"]);
@@ -149,7 +149,7 @@ public sealed class RenderCommandTests
     public void Render_with_format_extension_mismatch_returns_nonzero()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(["render", dataset, output, "--format", "jpeg"]);
@@ -161,7 +161,7 @@ public sealed class RenderCommandTests
     public void Render_with_out_of_range_quality_returns_nonzero()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.jpg");
         int exit = CliApp.Build().Run(["render", dataset, output, "--quality", "0"]);
@@ -173,7 +173,7 @@ public sealed class RenderCommandTests
     public void Render_writes_a_valid_png_for_an_s57_cell()
     {
         var dataset = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-s57-{Guid.NewGuid():N}.png");
         try
@@ -200,11 +200,11 @@ public sealed class RenderCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Render_applies_sibling_updates_for_an_s101_base_cell()
     {
         var basePath = FindS101BaseCellWithUpdate();
-        Skip.If(basePath is null,
+        Assert.SkipWhen(basePath is null,
             "No S-101 base cell (.000) with a sibling .001 update found under IC-ENC sample data.");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-s101upd-{Guid.NewGuid():N}.png");
@@ -227,11 +227,11 @@ public sealed class RenderCommandTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Render_with_no_updates_flag_renders_s101_base_cell()
     {
         var basePath = FindS101BaseCellWithUpdate();
-        Skip.If(basePath is null,
+        Assert.SkipWhen(basePath is null,
             "No S-101 base cell (.000) with a sibling .001 update found under IC-ENC sample data.");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-s101noupd-{Guid.NewGuid():N}.png");
@@ -254,7 +254,7 @@ public sealed class RenderCommandTests
     public void Render_writes_a_display_list_json_document()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
         try
@@ -295,7 +295,7 @@ public sealed class RenderCommandTests
     public void Render_display_list_json_is_deterministic()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var first = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
         var second = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
@@ -319,7 +319,7 @@ public sealed class RenderCommandTests
     public void Render_json_via_explicit_format_over_non_image_extension()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.txt");
         try
@@ -341,7 +341,7 @@ public sealed class RenderCommandTests
     public void Render_format_json_conflicting_with_image_extension_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"]);
@@ -353,7 +353,7 @@ public sealed class RenderCommandTests
     public void Render_json_rejected_for_composite_form_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
         int exit = CliApp.Build().Run(["render", "--layer", dataset, output]);
@@ -365,7 +365,7 @@ public sealed class RenderCommandTests
     public void Render_single_dataset_with_bbox_writes_png()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         try
@@ -392,7 +392,7 @@ public sealed class RenderCommandTests
     public void Render_single_dataset_with_center_scale_writes_png()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         try
@@ -415,7 +415,7 @@ public sealed class RenderCommandTests
     public void Render_viewport_flags_rejected_with_format_json_returns_nonzero()
     {
         var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
         int exit = CliApp.Build().Run(["render", dataset, output, "--bbox", "-80,30,-60,45"]);
@@ -427,7 +427,7 @@ public sealed class RenderCommandTests
     public void Render_projected_coverage_with_partially_overlapping_bbox_writes_png()
     {
         var dataset = FixturePath(Path.Combine("S102", "102US004MI1CI262227.h5"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         try
@@ -460,7 +460,7 @@ public sealed class RenderCommandTests
     public void Render_s104_coverage_with_center_scale_writes_png()
     {
         var dataset = FixturePath(Path.Combine("S104", "104US004SC1CO_20251217T12Z.h5"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         AssertCoverageRenderSucceeds(
             dataset,
@@ -471,7 +471,7 @@ public sealed class RenderCommandTests
     public void Render_s111_coverage_with_bbox_writes_png()
     {
         var dataset = FixturePath(Path.Combine("S111", "111US00_DBOFS_20260320T18Z_US4DE1BB.h5"));
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         AssertCoverageRenderSucceeds(
             dataset,

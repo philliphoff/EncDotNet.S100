@@ -42,8 +42,8 @@ Test conventions:
 - Every new public API or bug fix must be accompanied by an xunit test in the
   appropriate project under `tests/`.
 - Tests that require optional external data files (real HDF5, S-101 datasets,
-  etc.) must use [`Xunit.SkippableFact`](https://github.com/AArnott/Xunit.SkippableFact)
-  via `Skip.If(...)` so CI does not fail when those files are absent.
+  etc.) must skip dynamically with xunit v3's `Assert.SkipUnless(...)` /
+  `Assert.SkipWhen(...)` so CI does not fail when those files are absent.
 - **Never commit real ENC data files to the repository.** Use small synthetic
   test fixtures, or skip tests that require live data. Synthetic GML fixtures
   live under `tests/datasets/<SXXX>/`.

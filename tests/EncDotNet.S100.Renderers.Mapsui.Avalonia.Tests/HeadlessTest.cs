@@ -53,6 +53,16 @@ internal static class HeadlessTest
         {
             throw BrokenSessionTimeout(exception);
         }
+        finally
+        {
+            // The session completes a dispatch (result or exception) from a
+            // TaskCompletionSource that runs continuations inline, so we resume
+            // on the UI loop thread. An async test would then finish there, and
+            // xunit v3 runs the next test inline on the same thread: its blocking
+            // Run() waits on the very loop it is occupying and deadlocks. Hop to
+            // the thread pool before returning or throwing.
+            await Task.Yield();
+        }
     }
 
     private static async Task WaitForDispatch(Task dispatch)

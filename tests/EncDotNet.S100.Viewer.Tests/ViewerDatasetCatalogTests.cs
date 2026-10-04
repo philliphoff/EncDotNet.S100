@@ -27,14 +27,14 @@ public class ViewerDatasetCatalogTests
     private static string Path(string spec, string fileName) =>
         System.IO.Path.Combine(DatasetsDir, spec, fileName);
 
-    [SkippableFact]
+    [Fact]
     public void S57_entry_is_projected_with_S57_identity_and_real_bounds()
     {
         // Regression: the catalog used to open S-57 bytes with the S-101 reader,
         // reporting spec "S-101", world bounds, and no features. With no resident
         // processor it now falls back to the projector's S-57 stream translation.
         var path = Path("S57", System.IO.Path.Combine("US5MA1BO", "US5MA1BO.000"));
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -49,11 +49,11 @@ public class ViewerDatasetCatalogTests
         AssertBoundsAreNotWorld(loaded.Bounds);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S57_entry_is_projected_from_the_resident_processor()
     {
         var path = Path("S57", System.IO.Path.Combine("US5MA1BO", "US5MA1BO.000"));
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var catalogueManager = new PortrayalCatalogueManager();
         catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
@@ -82,11 +82,11 @@ public class ViewerDatasetCatalogTests
         Assert.Same(resident.Dataset, data.Dataset);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S101_entry_is_projected_as_S101()
     {
         var path = Path("S101", System.IO.Path.Combine("DATASET_FILES", "101AA00DS0003.000"));
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -120,11 +120,11 @@ public class ViewerDatasetCatalogTests
         Assert.Equal(default, edition);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S101_entry_surfaces_declared_edition()
     {
         var path = Path("S101", System.IO.Path.Combine("DATASET_FILES", "101AA00DS0003.000"));
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -161,11 +161,11 @@ public class ViewerDatasetCatalogTests
             RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
 
-    [SkippableFact]
+    [Fact]
     public void S104_entry_is_projected_with_real_bounds()
     {
         var path = Path("S104", "104US004SC1CP_20251217T12Z.h5");
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -179,11 +179,11 @@ public class ViewerDatasetCatalogTests
         AssertBoundsAreNotWorld(loaded.Bounds);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S111_entry_is_projected_with_real_bounds()
     {
         var path = Path("S111", "111US00_DBOFS_20260320T18Z_US4DE1BB.h5");
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -197,11 +197,11 @@ public class ViewerDatasetCatalogTests
         AssertBoundsAreNotWorld(loaded.Bounds);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S131_entry_is_projected_as_S131()
     {
         var path = Path("S131", "harbour_point.gml");
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -214,11 +214,11 @@ public class ViewerDatasetCatalogTests
         Assert.IsType<S131DatasetData>(loaded.Data);
     }
 
-    [SkippableFact]
+    [Fact]
     public void S124_entry_has_computed_bounds_not_world()
     {
         var path = Path("S124", "navwarn_point.gml");
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
@@ -240,7 +240,7 @@ public class ViewerDatasetCatalogTests
         // LoadedDatasetData already carries everything downstream
         // consumers need.
         var fixture = Path("S124", "navwarn_point.gml");
-        Skip.IfNot(File.Exists(fixture), $"Missing fixture {fixture}");
+        Assert.SkipUnless(File.Exists(fixture), $"Missing fixture {fixture}");
         var bytes = File.ReadAllBytes(fixture);
 
         var loader = new FakeDatasetLoaderService();
@@ -259,14 +259,14 @@ public class ViewerDatasetCatalogTests
         Assert.IsType<S124DatasetData>(loaded.Data);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Gml_entry_bounds_match_canonical_ReadMetadata_extent()
     {
         // Parity guard for issue #467 WS1: the catalog now derives GML bounds
         // from the dataset's canonical ReadMetadata() rather than a hand-rolled
         // coordinate walk. The projected bounds must equal that extent exactly.
         var fixture = Path("S124", "navwarn_surface.gml");
-        Skip.IfNot(File.Exists(fixture), $"Missing fixture {fixture}");
+        Assert.SkipUnless(File.Exists(fixture), $"Missing fixture {fixture}");
 
         BoundingBox? expected;
         using (var stream = File.OpenRead(fixture))
@@ -307,7 +307,7 @@ public class ViewerDatasetCatalogTests
         using var catalog = new ViewerDatasetCatalog(loader);
 
         var path = Path("S124", "navwarn_point.gml");
-        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+        Assert.SkipUnless(File.Exists(path), $"Missing fixture {path}");
 
         var entry = new DatasetEntry(path, "S-124");
         loader.RaiseLoaded(entry);

@@ -10,11 +10,11 @@ namespace EncDotNet.S100.Datasets.S57.Tests;
 /// </summary>
 public class S57DatasetHeaderTests
 {
-    [SkippableFact]
+    [Fact]
     public void Read_real_cell_matches_full_parse()
     {
         var path = ResolveFixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         var header = S57DatasetHeader.Read(path);
         var full = S57DocumentReader.ReadFromFile(path, logger: null);
@@ -30,11 +30,11 @@ public class S57DatasetHeaderTests
         Assert.Equal(full.DataSetParameters!.CompilationScale, header.CompilationScale);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_consumes_only_the_leading_records()
     {
         var path = ResolveFixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         using var stream = File.OpenRead(path);
         Assert.NotNull(S57DatasetHeader.Read(stream));
@@ -52,12 +52,12 @@ public class S57DatasetHeaderTests
         Assert.Null(S57DatasetHeader.Read(stream));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_returns_null_for_an_s101_cell()
     {
         // S-101 cells are ISO 8211 too, but their DSID lacks S-57 subfields.
         var path = Path.Combine(ResolveDatasetsRoot(), "S101", "S-101", "DATASET_FILES", "101AA00DS0019.000");
-        Skip.IfNot(File.Exists(path), $"Fixture not found: {path}");
+        Assert.SkipUnless(File.Exists(path), $"Fixture not found: {path}");
 
         Assert.Null(S57DatasetHeader.Read(path));
     }

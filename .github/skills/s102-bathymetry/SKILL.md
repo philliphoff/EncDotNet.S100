@@ -54,8 +54,8 @@ description: |
 6. CRS may be UTM (EPSG:326xx); per-pixel reprojection is required for
    correct overlay on EPSG:3857. Do not stretch a native-CRS bitmap
    into a Mercator bbox.
-7. Public API changes have xunit tests using `SkippableFact` for real
-   HDF5 data.
+7. Public API changes have xunit tests that skip with `Assert.SkipUnless`
+   when real HDF5 data is absent.
 
 ## Known pitfalls in this repo
 - See `/memories/repo/s102-viewer-notes.md` for hard-won viewer

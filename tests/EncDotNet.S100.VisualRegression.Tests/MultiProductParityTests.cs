@@ -58,7 +58,7 @@ public sealed class MultiProductParityTests
     /// for every glyph pixel to differ. A <see langword="null"/> budget keeps
     /// the whole-image default for a dense render.
     /// </remarks>
-    [SkippableTheory]
+    [Theory]
     [InlineData("S122", "122TESTDATASET.gml", 700, 0.25)]       // ink ~1 450 px
     [InlineData("S124", "navwarn_mixed.gml", 800, 0.5)]         // ink ~1 620 px; labels drift 29 %
     [InlineData("S125", "aton_chesapeake.gml", 1_200, 0.35)]    // ink ~2 400 px; small labels
@@ -72,7 +72,7 @@ public sealed class MultiProductParityTests
     public Task Vector_BArmGolden(string product, string fileName, int minimumInkPixels, double? maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);
-        Skip.IfNot(File.Exists(path), $"{product} test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"{product} test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions
@@ -106,14 +106,14 @@ public sealed class MultiProductParityTests
     /// actually lives, and S-125, whose AtoN names and light descriptions sit
     /// on buoy and light symbols.
     /// </summary>
-    [SkippableTheory]
+    [Theory]
     [InlineData("S421", "RTE-TEST-GFULL.s421.gml")]
     [InlineData("S124", "navwarn_mixed.gml")]
     [InlineData("S125", "aton_us4va1bf.gml")]
     public void Vector_PointSymbolsDoNotSuppressLabels(string product, string fileName)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);
-        Skip.IfNot(File.Exists(path), $"{product} test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"{product} test dataset not present: {path}");
 
         const int width = 1024;
         const int height = 1024;

@@ -13,12 +13,12 @@ public sealed class S57RenderingTests
 {
     // Standard, the live viewer's default display category (#357): soundings,
     // names and the quality-of-data coverage are "Other" and drop out.
-    [SkippableFact]
+    [Fact]
     public Task EncCell_DayPalette() => RenderCell(EcdisDisplayCategory.Standard);
 
     // No display-mode filter ("All"), so the translated soundings, names and
     // quality-of-data coverage stay guarded.
-    [SkippableFact]
+    [Fact]
     public Task EncCell_DayPalette_AllDisplayCategories() => RenderCell(null);
 
     private static Task RenderCell(EcdisDisplayCategory? displayCategory)
@@ -26,7 +26,7 @@ public sealed class S57RenderingTests
         var path = Path.Combine(
             TestHelpers.DatasetsRoot,
             "S57", "US5MA1BO", "US5MA1BO.000");
-        Skip.IfNot(File.Exists(path), $"S-57 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-57 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

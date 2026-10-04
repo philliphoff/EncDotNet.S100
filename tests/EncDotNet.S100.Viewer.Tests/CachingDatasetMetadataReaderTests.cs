@@ -62,11 +62,11 @@ public class CachingDatasetMetadataReaderTests : IDisposable
         Assert.Null(reader.TryRead(file));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Reads_s101_extent_then_serves_a_hit()
     {
         var cell = S101Cell();
-        Skip.IfNot(File.Exists(cell), $"S-101 test cell not present: {cell}");
+        Assert.SkipUnless(File.Exists(cell), $"S-101 test cell not present: {cell}");
 
         var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
         var reader = new CachingDatasetMetadataReader(cache);
@@ -84,11 +84,11 @@ public class CachingDatasetMetadataReaderTests : IDisposable
         Assert.Equal(1, cache.Misses);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Reads_s57_extent_then_serves_a_hit()
     {
         var cell = S57Cell();
-        Skip.IfNot(File.Exists(cell), $"S-57 test cell not present: {cell}");
+        Assert.SkipUnless(File.Exists(cell), $"S-57 test cell not present: {cell}");
 
         var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
         var reader = new CachingDatasetMetadataReader(cache);

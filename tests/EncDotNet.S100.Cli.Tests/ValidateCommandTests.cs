@@ -19,7 +19,7 @@ public sealed class ValidateCommandTests
     public void Validate_conformant_dataset_returns_success()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["validate", dataset]);
 
@@ -30,7 +30,7 @@ public sealed class ValidateCommandTests
     public void Validate_conformant_dataset_with_strict_returns_success()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["validate", dataset, "--strict"]);
 
@@ -43,7 +43,7 @@ public sealed class ValidateCommandTests
         // #762: the "no findings" suffix was passed as an interpolated argument,
         // so Spectre escaped it and printed "[grey]...[/]" literally.
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var (exit, stdout) = RunCapturingAnsiConsole(["validate", dataset]);
 
@@ -58,7 +58,7 @@ public sealed class ValidateCommandTests
     public void Validate_emits_well_formed_json()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var (exit, stdout) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
 
@@ -83,7 +83,7 @@ public sealed class ValidateCommandTests
     public void Validate_with_bad_format_returns_nonzero()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["validate", dataset, "--format", "bogus"]);
         Assert.NotEqual(0, exit);
@@ -93,7 +93,7 @@ public sealed class ValidateCommandTests
     public void Validate_with_empty_suppress_returns_nonzero()
     {
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         int exit = CliApp.Build().Run(["validate", dataset, "--suppress", ","]);
         Assert.NotEqual(0, exit);

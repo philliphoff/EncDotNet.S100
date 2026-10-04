@@ -19,4 +19,4 @@ When modifying code in these projects:
   exposed through `Specification.*` factory methods — not ad-hoc
   resource loading in dataset libraries.
 - Any new public API requires a matching xunit test under
-  `tests/` (use `SkippableFact` when a real asset file is required).
+  `tests/` (skip with `Assert.SkipUnless` when a real asset file is required).

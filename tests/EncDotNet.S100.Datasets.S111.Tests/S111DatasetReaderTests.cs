@@ -27,10 +27,10 @@ public class S111DatasetReaderTests : IDisposable
 
     private void SkipIfNoTestData()
     {
-        Skip.If(_hdf5 is null, $"S-111 test data not found at {TestDataFile}.");
+        Assert.SkipWhen(_hdf5 is null, $"S-111 test data not found at {TestDataFile}.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_RootAttributes_ParsedCorrectly()
     {
         SkipIfNoTestData();
@@ -49,7 +49,7 @@ public class S111DatasetReaderTests : IDisposable
         Assert.Equal(2, dataset.DataCodingFormat);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_Coverages_HasMultipleTimeSteps()
     {
         SkipIfNoTestData();
@@ -61,7 +61,7 @@ public class S111DatasetReaderTests : IDisposable
         Assert.True(dataset.Coverages.Count >= 2, $"Expected multiple time steps, got {dataset.Coverages.Count}");
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_Coverages_TimePointsAreOrdered()
     {
         SkipIfNoTestData();
@@ -76,7 +76,7 @@ public class S111DatasetReaderTests : IDisposable
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_CoverageGrid_HasExpectedDimensions()
     {
         SkipIfNoTestData();
@@ -91,7 +91,7 @@ public class S111DatasetReaderTests : IDisposable
         Assert.Equal(first.NumPointsLatitudinal * first.NumPointsLongitudinal, first.Values.Length);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_Values_ContainRealisticCurrentData()
     {
         SkipIfNoTestData();
@@ -111,7 +111,7 @@ public class S111DatasetReaderTests : IDisposable
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void Read_AllCoverages_ShareGridMetadata()
     {
         SkipIfNoTestData();

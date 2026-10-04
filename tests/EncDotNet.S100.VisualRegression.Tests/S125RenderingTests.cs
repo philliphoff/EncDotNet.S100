@@ -11,7 +11,7 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S125RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     [InlineData("aton_point.gml", 100)]
     [InlineData("aton_curve.gml", 200)]
     // Coverage-only fixture: S-125 portrays DataCoverage with a null
@@ -22,7 +22,7 @@ public sealed class S125RenderingTests
     public Task AtoN(string fileName, int minimumInkPixels)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S125", fileName);
-        Skip.IfNot(File.Exists(path), $"S-125 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-125 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

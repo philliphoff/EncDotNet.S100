@@ -21,7 +21,7 @@ public sealed class SpecVersionWarningCliTests
         // marine_curve.gml is a conformant S-127 dataset that declares no
         // productEdition → Unknown → the warning must NOT fire.
         var dataset = FixturePath("marine_curve.gml");
-        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var originalError = Console.Error;
         var originalOut = Console.Out;

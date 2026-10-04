@@ -130,11 +130,11 @@ public sealed class UncleanShutdownSentinelTests : IDisposable
         UncleanShutdownSentinel.MarkCleanExit();
     }
 
-    [SkippableFact]
+    [Fact]
     public void BeginSession_MarkerFromLiveOtherInstance_NotReportedAndRetained()
     {
         using var child = StartSleeper();
-        Skip.If(child is null, "Could not spawn a helper process on this platform.");
+        Assert.SkipWhen(child is null, "Could not spawn a helper process on this platform.");
 
         child!.Refresh();
         WriteMarker(
@@ -155,11 +155,11 @@ public sealed class UncleanShutdownSentinelTests : IDisposable
         TryKill(child);
     }
 
-    [SkippableFact]
+    [Fact]
     public void BeginSession_PidReusedWithDifferentStartTime_ReportedAsCrash()
     {
         using var child = StartSleeper();
-        Skip.If(child is null, "Could not spawn a helper process on this platform.");
+        Assert.SkipWhen(child is null, "Could not spawn a helper process on this platform.");
 
         // Same (live) PID, but a start time from long ago: this simulates a
         // recycled PID whose original viewer session is actually dead.

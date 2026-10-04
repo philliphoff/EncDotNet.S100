@@ -5,11 +5,11 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S102RenderingTests
 {
-    [SkippableFact]
+    [Fact]
     public Task BathymetricSurface_DepthShading_DefaultPalette()
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S102", "102US004MI1CI262227.h5");
-        Skip.IfNot(File.Exists(path), $"S-102 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-102 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

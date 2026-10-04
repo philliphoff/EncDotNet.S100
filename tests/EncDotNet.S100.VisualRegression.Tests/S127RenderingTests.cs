@@ -6,7 +6,7 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S127RenderingTests
 {
-    [SkippableTheory]
+    [Theory]
     // Unlabelled line work and symbols: no macOS/Linux drift measured.
     [InlineData("marine_point.gml", 180, 0.25)]     // ink ~370 px
     [InlineData("marine_curve.gml", 750, 0.25)]     // ink ~1 540 px
@@ -15,7 +15,7 @@ public sealed class S127RenderingTests
     public Task MarineService(string fileName, int minimumInkPixels, double maxDifferentInkFraction)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, "S127", fileName);
-        Skip.IfNot(File.Exists(path), $"S-127 test dataset not present: {path}");
+        Assert.SkipUnless(File.Exists(path), $"S-127 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
         var bitmap = harness.Render(path, new HarnessOptions

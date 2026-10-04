@@ -201,7 +201,7 @@ See the cartography skill for the rendering cost model.
 - If the cause is in a library (display-list build, geometry,
   simplification, coverage sampling): add an **xunit** test there with a
   synthetic fixture under `tests/datasets/…`. Gate fixtures that need
-  real ENC/HDF5 data with `Skip.If(...)` (`Xunit.SkippableFact`) so CI
+  real ENC/HDF5 data with `Assert.SkipUnless(...)` (xunit v3) so CI
   passes without them.
 - If it is genuinely render-output behaviour, keep a documented
   repro recipe (dataset path + flags + expected image) in the

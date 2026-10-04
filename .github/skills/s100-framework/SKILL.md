@@ -55,8 +55,8 @@ description: |
    `Specification.CreatePortrayalCatalogueSource`.
 5. Exchange set parsing changes preserve compatibility with both ZIP and
    filesystem asset sources.
-6. New public APIs have XML doc comments and xunit tests (use
-   `SkippableFact` when real data files are required).
+6. New public APIs have XML doc comments and xunit tests (skip with
+   `Assert.SkipUnless` when real data files are required).
 
 ## Known pitfalls in this repo
 - Do not assume an exchange set is a ZIP — both ZIP and directory layouts

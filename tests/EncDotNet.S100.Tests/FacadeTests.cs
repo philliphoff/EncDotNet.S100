@@ -17,10 +17,10 @@ public sealed class FacadeTests
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
-    [SkippableFact]
+    [Fact]
     public void Open_DetectsSpec_AndReportsHeadlessCapability()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var ds = S100Dataset.Open(S124Surface);
 
@@ -35,10 +35,10 @@ public sealed class FacadeTests
         Assert.Throws<FileNotFoundException>(() => S100Dataset.Open("does-not-exist.gml"));
     }
 
-    [SkippableFact]
+    [Fact]
     public void BundledFeatureCatalogue_EnumeratesFeatures_AndResolvesOne()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var ds = S100Dataset.Open(S124Surface);
         var fc = S100FeatureCatalogue.Bundled(ds.Spec.Name);
@@ -52,10 +52,10 @@ public sealed class FacadeTests
         Assert.Equal(first.FeatureRef, info!.FeatureRef);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_BundledDefaults_ProducesPngBytes()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var ds = S100Dataset.Open(S124Surface);
         using var renderer = new PngS100DatasetRenderer();
@@ -65,10 +65,10 @@ public sealed class FacadeTests
         AssertIsPng(png);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_ExplicitLayerWithBundledCatalogues_ProducesPng()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var ds = S100Dataset.Open(S124Surface);
         using var renderer = new PngS100DatasetRenderer();
@@ -85,10 +85,10 @@ public sealed class FacadeTests
         AssertIsPng(png);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_ReusedAcrossDatasets_ProducesPngForEach()
     {
-        Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
+        Assert.SkipUnless(File.Exists(S124Surface) && File.Exists(S125Point),
             "S-124 and S-125 fixtures not both present.");
 
         using var renderer = new PngS100DatasetRenderer();
@@ -100,10 +100,10 @@ public sealed class FacadeTests
             AssertIsPng(await renderer.RenderAsync(b, new S100RendererOptions { Width = 256, Height = 256 }));
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_CustomPortrayalCatalogue_IsReusableAcrossRenders()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         // A caller-supplied portrayal catalogue must survive being used by a
         // transient host (whose teardown must NOT dispose the caller's source),
@@ -122,10 +122,10 @@ public sealed class FacadeTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_CompositesMultipleVectorLayers_ProducesPng()
     {
-        Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
+        Assert.SkipUnless(File.Exists(S124Surface) && File.Exists(S125Point),
             "S-124 and S-125 fixtures not both present.");
 
         using var a = S100Dataset.Open(S124Surface);
@@ -154,10 +154,10 @@ public sealed class FacadeTests
             () => renderer.RenderAsync(Array.Empty<S100Layer>(), new S100CompositeOptions()));
     }
 
-    [SkippableFact]
+    [Fact]
     public void PngRenderer_Composite_PropagatesExplicitViewportToRenderContext()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var dataset = S100Dataset.Open(S124Surface);
         var viewport = new Pipelines.Viewport
@@ -180,10 +180,10 @@ public sealed class FacadeTests
         Assert.Same(viewport, context.Viewport);
     }
 
-    [SkippableFact]
+    [Fact]
     public void PngRenderer_Composite_PropagatesEcdisDisplayToRenderContext()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var dataset = S100Dataset.Open(S124Surface);
         var ecdis = new Datasets.Pipelines.EcdisDisplaySettings
@@ -203,10 +203,10 @@ public sealed class FacadeTests
         Assert.Same(ecdis, context.EcdisDisplay);
     }
 
-    [SkippableFact]
+    [Fact]
     public void PngRenderer_Composite_PerSpecDisplayMode_OverridesGlobalDisplayModeId()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var dataset = S100Dataset.Open(S124Surface);
         var spec = dataset.Processor.PortrayalSpec.Name; // "S-124"
@@ -233,10 +233,10 @@ public sealed class FacadeTests
         Assert.Equal("PerSpecMode", context.DisplayModeId);
     }
 
-    [SkippableFact]
+    [Fact]
     public void PngRenderer_Composite_GlobalDisplayModeId_UsedWhenNoPerSpecEntry()
     {
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var dataset = S100Dataset.Open(S124Surface);
         var ecdis = new Datasets.Pipelines.EcdisDisplaySettings
@@ -261,10 +261,10 @@ public sealed class FacadeTests
         Assert.Equal("GlobalMode", context.DisplayModeId);
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_Composite_HiddenCategories_ChangesOutput()
     {
-        Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
+        Assert.SkipUnless(File.Exists(S124Surface) && File.Exists(S125Point),
             "S-124 and S-125 fixtures not both present.");
 
         using var a = S100Dataset.Open(S124Surface);
@@ -298,13 +298,13 @@ public sealed class FacadeTests
             "Hiding all categories should change the composited output.");
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task PngRenderer_CompositesResidentProcessors_ReusableWithoutReparse()
     {
         // Issue #566: a host that keeps resident processors can composite them
         // directly and repeatedly, with no per-render re-parse. One processor is
         // parsed once (S100Dataset.Processor) and rendered twice.
-        Skip.IfNot(File.Exists(S124Surface), "S-124 surface fixture not present.");
+        Assert.SkipUnless(File.Exists(S124Surface), "S-124 surface fixture not present.");
 
         using var ds = S100Dataset.Open(S124Surface);
         using var renderer = new PngS100DatasetRenderer();
@@ -318,13 +318,13 @@ public sealed class FacadeTests
         AssertIsPng(await renderer.RenderAsync(processors, options));
     }
 
-    [SkippableFact]
+    [Fact]
     public void ProjectFromProcessor_MatchesStreamProjection()
     {
         // Issue #566: projecting a LoadedDataset from a resident processor must
         // yield the same catalog entry as parsing the bytes afresh — same spec,
         // bounds, temporal coverage, and payload variant.
-        Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
+        Assert.SkipUnless(File.Exists(S124Surface) && File.Exists(S125Point),
             "S-124 and S-125 fixtures not both present.");
 
         foreach (var (spec, path) in new[] { ("S-124", S124Surface), ("S-125", S125Point) })
@@ -346,7 +346,7 @@ public sealed class FacadeTests
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public void BundledFactory_DeclaredSpec_RescuesFileWhoseExtensionDefeatsDetection()
     {
         // Issue #566 review: a declared product spec (a --spec hint or an
@@ -354,7 +354,7 @@ public sealed class FacadeTests
         // processor, so a dataset whose product cannot be sniffed from its bytes /
         // extension still loads. Detection keys off the extension, so an S-125
         // GML saved as ".xml" is undetectable — but the declared spec rescues it.
-        Skip.IfNot(File.Exists(S125Point), "S-125 fixture not present.");
+        Assert.SkipUnless(File.Exists(S125Point), "S-125 fixture not present.");
 
         var xml = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
         File.Copy(S125Point, xml, overwrite: true);

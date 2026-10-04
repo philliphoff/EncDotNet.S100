@@ -20,11 +20,11 @@ public sealed class S57ConvertCommandTests : IDisposable
     private static string FixturePath(string fileName) =>
         Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
-    [SkippableFact]
+    [Fact]
     public void Convert_writes_a_readable_s101_dataset()
     {
         var source = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+        Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
         var output = Path.Combine(_outputDir, "converted.000");
 
@@ -46,22 +46,22 @@ public sealed class S57ConvertCommandTests : IDisposable
         Assert.False(File.Exists(output));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Convert_missing_output_option_returns_validation_error()
     {
         var source = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+        Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
         int exit = CliApp.Build().Run(["s57", "convert", source]);
 
         Assert.NotEqual(0, exit);
     }
 
-    [SkippableFact]
+    [Fact]
     public void Convert_missing_output_directory_returns_validation_error()
     {
         var source = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+        Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
         var missingDir = Path.Combine(_outputDir, "missing");
         var output = Path.Combine(missingDir, "converted.000");
@@ -73,11 +73,11 @@ public sealed class S57ConvertCommandTests : IDisposable
         Assert.False(File.Exists(output));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Convert_report_writes_json_diagnostics()
     {
         var source = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+        Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
         var output = Path.Combine(_outputDir, "converted.000");
         var report = Path.Combine(_outputDir, "report.json");
@@ -94,11 +94,11 @@ public sealed class S57ConvertCommandTests : IDisposable
         Assert.Equal(0, root.GetProperty("updatesApplied").GetArrayLength());
     }
 
-    [SkippableFact]
+    [Fact]
     public void Convert_report_missing_directory_returns_validation_error()
     {
         var source = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+        Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
         var output = Path.Combine(_outputDir, "converted.000");
         var report = Path.Combine(_outputDir, "missing", "report.json");
@@ -109,11 +109,11 @@ public sealed class S57ConvertCommandTests : IDisposable
         Assert.False(File.Exists(report));
     }
 
-    [SkippableFact]
+    [Fact]
     public void Convert_no_updates_still_writes_dataset()
     {
         var source = FixturePath("US5MA1BO.000");
-        Skip.IfNot(File.Exists(source), $"Fixture not found: {source}");
+        Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
         var output = Path.Combine(_outputDir, "converted.000");
 

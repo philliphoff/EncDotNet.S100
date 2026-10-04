@@ -84,7 +84,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 | ISO 8211 | `EncDotNet.Iso8211` NuGet package |
 | CRS projection | [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) |
 | CLI tools | Spectre.Console.Cli |
-| Testing | xunit 2, Xunit.SkippableFact, coverlet |
+| Testing | xunit v3, coverlet |
 | Package management | Central Package Management via `Directory.Packages.props` |
 | Documentation | DocFX (`docfx.json`) |
 | CI/CD | GitHub Actions (`.github/workflows/ci.yml`, `release.yml`, `docs.yml`) |
@@ -102,7 +102,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 
 ### Tests
 - Every new public API or bug fix must be accompanied by an xunit test in the appropriate test project under `tests/`.
-- Use `Xunit.SkippableFact` (via `Skip.If(...)`) for tests that require optional external data files (e.g. real HDF5 or S-101 datasets) so CI does not fail when those files are absent.
+- Use xunit's dynamic skips (`Assert.SkipUnless(...)` / `Assert.SkipWhen(...)`) for tests that require optional external data files (e.g. real HDF5 or S-101 datasets) so CI does not fail when those files are absent.
 - Run tests with: `dotnet test --configuration Release`
 
 ### Documentation

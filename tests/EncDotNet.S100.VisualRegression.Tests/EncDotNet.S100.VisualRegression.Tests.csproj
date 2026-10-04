@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
     <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
   </PropertyGroup>
@@ -9,10 +10,9 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Xunit.SkippableFact" />
-    <PackageReference Include="Verify.Xunit" />
+    <PackageReference Include="Verify.XunitV3" />
     <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
