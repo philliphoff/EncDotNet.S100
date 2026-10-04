@@ -66,6 +66,26 @@ hinting drift** (the same dataset rendered on macOS vs Linux can disagree on
 ~1–2 % of pixels in label glyphs alone) while still catching real rendering
 regressions in geometry, colour, or symbology.
 
+### Sparse renders
+
+The whole-image fraction only works for dense renders. On a 600x600 snapshot
+5 % is 18 000 px, more than all the ink in a few symbols on a white chart, so a
+sparse snapshot could lose or gain every symbol (or be approved blank) and still
+pass. Sparse renders — most of S-122, S-124, S-125, S-127, S-129, S-131, S-201,
+S-411 and S-421 — use `TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels,
+maxDifferentInkFraction)` instead, which:
+
+- asserts a minimum count of non-background ("ink") pixels, so a blank render
+  can never become a baseline; and
+- sets `PerceptualImageComparer.MaxDifferentInkFraction`, limiting the
+  differing pixels to a share of the **verified** image's ink. A blank or
+  near-blank baseline therefore has (almost) no budget.
+
+Size the budget from measured macOS/Linux drift: unlabelled geometry is stable
+to within a few pixels (use 0.25), but label glyphs shift a pixel or two between
+platforms, so every glyph pixel of a labelled render can differ. Give labelled
+fixtures about 1.5× their measured drift.
+
 ## Adding a new test
 
 1. Place the dataset under `tests/datasets/<spec>/...` (small fixtures only).
