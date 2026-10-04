@@ -25,7 +25,8 @@ public sealed class S128RenderingTests
             Height = 600,
         });
 
-        return TestHelpers.VerifyBitmap(bitmap)
+        // Dashed coverage outlines only (outline-only adapter): sparse ink.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2_000, maxDifferentInkFraction: 0.25)
             .UseParameters(Path.GetFileNameWithoutExtension(fileName));
     }
 }

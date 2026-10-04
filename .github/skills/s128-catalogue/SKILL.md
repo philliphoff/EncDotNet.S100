@@ -115,3 +115,6 @@ product feature classes; consumers should query through
   ordering / selection is a renderer-side UX concern.
 - `S128PortrayalCatalogue` is a clone of the S-122 catalogue with
   Day/Dusk/Night enabled (the upstream PC ships all three palettes).
+  It also swaps the `main` rule for `Adapter/outlineOnly.xsl`, which
+  imports the upstream `main.xsl` and drops the product coverage fills
+  (upstream issue #51, Lua port PR #56).

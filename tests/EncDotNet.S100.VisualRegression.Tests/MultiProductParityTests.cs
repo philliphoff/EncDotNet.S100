@@ -63,7 +63,7 @@ public sealed class MultiProductParityTests
     [InlineData("S124", "navwarn_mixed.gml", 800, 0.5)]         // ink ~1 620 px; labels drift 29 %
     [InlineData("S125", "aton_chesapeake.gml", 1_200, 0.35)]    // ink ~2 400 px; small labels
     [InlineData("S127", "marine_mixed.gml", 1_500, 0.25)]       // ink ~3 150 px
-    [InlineData("S128", "S128_TDS_sample.gml", 90_000, null)]   // dense fills, ink ~185 000 px
+    [InlineData("S128", "S128_TDS_sample.gml", 2_100, 0.25)]    // ink ~4 300 px: dashed coverage outlines
     [InlineData("S129", "12900MCTDS130TS.gml", 2_800, 0.3)]     // ink ~5 700 px; labels drift 14 %
     [InlineData("S131", "harbour_surface.gml", 1_900, 0.25)]    // ink ~3 900 px
     [InlineData("S201", "aton_light.gml", 40, 0.25)]            // ink ~90 px: one light

@@ -47,7 +47,32 @@ upstream sample (`DistributorInformation`, `ProducerInformation`,
 | `S128ProductCatalogue` (`DataModel/`) | Strongly-typed projection of the dataset as a catalogue of typed `S128CatalogueEntry` subclasses with resolved `Supersedes`/`SupersededBy` navigation. See [Strongly-typed data model](#strongly-typed-data-model). |
 | `S128CatalogueRules` (`Validation/`) | Default pilot rule pack for `S128ProductCatalogue` (rule IDs `S128-R-12.*` traced to S-128 § 12). See [Validation](#validation). |
 | `S128FeatureXmlSource` | Projects the dataset into the S-100 Part 9 FeatureXML neutral form consumed by the bundled XSLT |
-| `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes) |
+| `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes), with the outline-only adapter on the `main` rule (see [Outline-only coverages](#outline-only-coverages)) |
+
+## Outline-only coverages
+
+The bundled portrayal catalogue is the IHO upstream's, unedited. Its rules
+fill each product's coverage with `CHYLW` / `CHGRN` / `CHMGD` at
+transparency 0.30 (70 % opaque) on `displayPlane` `OVERRADAR`, and the
+S-98 layer stack puts S-128 on `OtherChartOverlays`, above the ENC's line
+work. Nested products (a harbour cell inside an approach cell) compound to
+about 91 % opaque and hide the chart, against S-98 Main §9.2.1.
+
+Upstream has since reached the same view: issue
+[#51](https://github.com/iho-ohi/S-128-Product-Specification-Development/issues/51)
+recommends outlines only, and the Lua port of the catalogue
+([#56](https://github.com/iho-ohi/S-128-Product-Specification-Development/pull/56))
+comments the fills out. `S128PortrayalCatalogue` does the same with an
+adapter, `Adapter/outlineOnly.xsl`. It `xsl:import`s the upstream
+`main.xsl` and, for `ElectronicProduct`, `PhysicalProduct` and
+`S100Service` surfaces, keeps everything the upstream rule emits except its
+`areaInstruction`. Coverages draw as the upstream dashed outlines.
+
+`S128CoverageOverlayTests` checks that the adapter output equals the
+upstream output minus the fills, and that the upstream rule still emits
+them. When a catalogue refresh drops the fills, that test fails and the
+adapter can be removed. Moving to the upstream Lua catalogue is tracked in
+#763.
 
 ## Producer-bug compensations
 

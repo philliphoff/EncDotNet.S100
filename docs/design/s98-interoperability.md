@@ -1022,6 +1022,17 @@ item is actionable as a focused follow-up session.
   (b) commit to specific planes per product spec, (c) wait for
   S-98 v3.0.0 to enumerate them.
 
+  *S-128 decision (2026-10-03).* S-128 stays on `OtherChartOverlays`; no
+  plane changed. The bundled Ed 2.0.0 portrayal catalogue (kept
+  byte-identical to the IHO upstream) filled every product coverage 70 %
+  opaque on `OVERRADAR`, so nested products compounded to about 91 %
+  opaque over the ENC, against Main §9.2.1's rule that other data must
+  not obscure layers 2 and 5. Upstream issue #51 recommends outlines
+  only, and the upstream Lua port (PR #56) comments the fills out. An
+  adapter in `S128PortrayalCatalogue` does the same, so coverages draw as
+  dashed outlines and the dataset stays visible by default. Moving to the
+  upstream Lua catalogue is tracked in #763.
+
 - **TBD-9.** Should `S98DisplayPlane` be an enum or an open
   string-id? An enum bakes in our nine canonical values; the IC
   schema (Annex A §A-3.2.1.1) lets a catalogue declare *any*
