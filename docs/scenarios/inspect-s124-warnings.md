@@ -15,7 +15,7 @@ Open a `.gml` S-124 dataset in the viewer and inspect features in Pick mode.
 3. Switch Day/Dusk/Night palette to validate readability.
 4. Use the timeline if the warning set includes temporal transitions.
 
-![S-124 viewer example](../images/gallery/S124Screenshot.png)
+![S-124 viewer example](../../site/src/assets/shots/P06.png)
 
 ## Troubleshooting
 

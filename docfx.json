@@ -58,7 +58,11 @@
         "files": [
           "docs/images/**",
           "readme/**",
+          "site/src/assets/shots/*.png",
           "src/*/images/**"
+        ],
+        "exclude": [
+          "site/src/assets/shots/*.light.png"
         ]
       }
     ],

@@ -66,15 +66,15 @@ then guide you into deeper API and architecture detail.
 
 ## Visual gallery
 
-| S-101 ENC | S-102 Bathymetry |
+| S-57 ENC (via S-101) | S-102 Bathymetry |
 |---|---|
-| <img class="docs-shot" alt="S-101 viewer" src="images/gallery/S101Screenshot.png" /> | <img class="docs-shot" alt="S-102 viewer" src="images/gallery/S102Screenshot.png" /> |
+| <img class="docs-shot" alt="NOAA ENC of Elliott Bay rendered through the S-101 pipeline" src="../site/src/assets/shots/P02.png" /> | <img class="docs-shot" alt="NOAA S-102 bathymetry over the NOAA ENC, Elliott Bay" src="../site/src/assets/shots/P03.png" /> |
 
 ### Portrayal comparison (before/after workflow)
 
 | Before (base chart context) | After (with temporal/overlay analysis) |
 |---|---|
-| <img class="docs-shot" alt="S-101 base view" src="images/gallery/S101Screenshot.png" /> | <img class="docs-shot" alt="timeline and overlays" src="images/gallery/TimelineScreenshot.png" /> |
+| <img class="docs-shot" alt="NOAA chart of the Chesapeake Bay entrance" src="../site/src/assets/shots/F1a.png" /> | <img class="docs-shot" alt="The same chart with NOAA S-102 bathymetry and S-111 surface currents" src="../site/src/assets/shots/F1c.png" /> |
 
 ```mermaid
 flowchart LR

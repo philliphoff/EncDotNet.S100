@@ -21,7 +21,7 @@ These apply to every shot unless a shot says otherwise.
 |---|---|
 | Window | `--window-size 1600x1000` on a Retina display, so captures come out at 3200×2000 px. |
 | Capture | Use `capture_app_screenshot` (whole window, chrome included) for app shots. Use `render_to_image` (map only) for product tiles. |
-| Chrome theme | Dark for the hero and feature rows. Light only where a shot says so. |
+| Chrome theme | Dark for the hero and feature rows, with a Light twin (`<ID>.light.png`, `--theme light`) of each Day-palette window shot for visitors on a light system theme. |
 | Palette | Day unless the shot says otherwise. Use `set_palette`. `render_to_image` ignores palette changes, so check palette shots with `capture_app_screenshot`. |
 | Basemap | Bundled Natural Earth, not OSM. This removes the OSM attribution and gives a cleaner look. |
 | Clean state | Run `dismiss_notification` for everything, then `await_render_idle` before each capture. Use no crash markers and a fresh `--data-dir`. |
@@ -97,7 +97,7 @@ fallback.
   `sfbofs` S-111, all public domain).
 
 ### H2 · Same view, Night
-- Same as H1, with the palette set to Night and the dark chrome. This is used by the
+- Same as H1, with the palette set to Night and the S-100 Night chrome. This is used by the
   page's Day/Dusk/Night switch and in the palette row (F7).
 
 ### H3 · Same view, Dusk
