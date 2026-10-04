@@ -38,7 +38,6 @@ public class Part15DigitalSignatureTests
     }
 
     [Theory]
-    [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert">AQ==</S100SE:S100_SE_SignatureOnData>""")]
     [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert" dataStatus="unknown">AQ==</S100SE:S100_SE_SignatureOnData>""")]
     [InlineData("""<S100SE:S100_SE_SignatureOnSignature id="s" certificateRef="cert">AQ==</S100SE:S100_SE_SignatureOnSignature>""")]
     [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert" dataStatus="unencrypted">not-base64</S100SE:S100_SE_SignatureOnData>""")]
@@ -48,6 +47,40 @@ public class Part15DigitalSignatureTests
             $"<S100XC:digitalSignatureValue>{signatureElement}</S100XC:digitalSignatureValue>"));
 
         Assert.NotEmpty(exception.Message);
+    }
+
+    [Fact]
+    public void Read_SignatureOnDataWithoutDataStatus_OnPlainResource_InfersUnencrypted()
+    {
+        // PRIMAR's S-100 5.2 exchange sets omit dataStatus; a record that is
+        // neither protected nor compressed can only be signed in plain form.
+        var catalogue = ReadCatalogue(
+            """
+            <S100XC:compressionFlag>false</S100XC:compressionFlag>
+            <S100XC:dataProtection>false</S100XC:dataProtection>
+            <S100XC:digitalSignatureValue>
+              <S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert">AQ==</S100SE:S100_SE_SignatureOnData>
+            </S100XC:digitalSignatureValue>
+            """);
+
+        var signature = Assert.Single(catalogue.DatasetDiscoveryMetadata[0].DigitalSignatures);
+        Assert.Equal(DigitalSignatureKind.SignatureOnData, signature.Kind);
+        Assert.Equal(SignatureDataStatus.Unencrypted, signature.DataStatus);
+    }
+
+    [Fact]
+    public void Read_SignatureOnDataWithoutDataStatus_OnProtectedResource_LeavesStatusUnknown()
+    {
+        var catalogue = ReadCatalogue(
+            """
+            <S100XC:dataProtection>true</S100XC:dataProtection>
+            <S100XC:digitalSignatureValue>
+              <S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert">AQ==</S100SE:S100_SE_SignatureOnData>
+            </S100XC:digitalSignatureValue>
+            """);
+
+        var signature = Assert.Single(catalogue.DatasetDiscoveryMetadata[0].DigitalSignatures);
+        Assert.Null(signature.DataStatus);
     }
 
     [Theory]

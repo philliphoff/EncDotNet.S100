@@ -625,6 +625,16 @@ public static class ExchangeCatalogueReader
         XElement parent,
         XNamespace xc)
     {
+        // Some producers (e.g. PRIMAR's 2025 S-100 5.2 exchange sets) omit
+        // dataStatus on S100_SE_SignatureOnData. When the record declares the
+        // resource neither protected nor compressed, the only representation a
+        // signature can cover is the plain one, so it is inferred; otherwise
+        // the status is left unknown for the verifier to report.
+        var inferredDataStatus =
+            !ParseBool(parent, "dataProtection", xc) && !ParseBool(parent, "compressionFlag", xc)
+                ? SignatureDataStatus.Unencrypted
+                : (SignatureDataStatus?)null;
+
         var signatures = new List<DigitalSignatureValue>();
         foreach (var wrapper in parent.Elements(xc + "digitalSignatureValue"))
         {
@@ -642,13 +652,15 @@ public static class ExchangeCatalogueReader
                     $"Unexpected digital signature namespace '{signatureElement.Name.NamespaceName}'.");
             }
 
-            signatures.Add(ReadDigitalSignature(signatureElement));
+            signatures.Add(ReadDigitalSignature(signatureElement, inferredDataStatus));
         }
 
         return signatures;
     }
 
-    private static DigitalSignatureValue ReadDigitalSignature(XElement element)
+    private static DigitalSignatureValue ReadDigitalSignature(
+        XElement element,
+        SignatureDataStatus? inferredDataStatus)
     {
         var kind = element.Name.LocalName switch
         {
@@ -661,7 +673,9 @@ public static class ExchangeCatalogueReader
         ValidateSignatureAttributes(element, kind);
 
         SignatureDataStatus? dataStatus = kind == DigitalSignatureKind.SignatureOnData
-            ? ParseDataStatus(RequiredAttribute(element, "dataStatus"))
+            ? element.Attribute("dataStatus") is null
+                ? inferredDataStatus
+                : ParseDataStatus(RequiredAttribute(element, "dataStatus"))
             : null;
         var signatureRef = kind == DigitalSignatureKind.SignatureOnSignature
             ? RequiredAttribute(element, "signatureRef")

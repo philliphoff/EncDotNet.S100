@@ -26,6 +26,9 @@ internal sealed class FakeMutableDatasetCatalog : IMutableDatasetCatalog
     /// <summary>The timed-out flag the next load reports.</summary>
     public bool NextTimedOut { get; set; }
 
+    /// <summary>The problems the next load reports.</summary>
+    public IReadOnlyList<string>? NextProblems { get; set; }
+
     /// <summary>Number of <see cref="LoadAsync"/> calls observed.</summary>
     public int LoadCount { get; private set; }
 
@@ -49,7 +52,7 @@ internal sealed class FakeMutableDatasetCatalog : IMutableDatasetCatalog
                 Kind = DatasetCatalogChangeKind.Batch,
             });
         }
-        return Task.FromResult(new DatasetLoadOutcome(path, NextKind, added, NextTimedOut));
+        return Task.FromResult(new DatasetLoadOutcome(path, NextKind, added, NextTimedOut, NextProblems));
     }
 
     public bool Remove(DatasetId id)

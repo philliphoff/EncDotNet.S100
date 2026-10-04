@@ -87,7 +87,7 @@ internal sealed class FakeDatasetLoadGateway : IDatasetLoadGateway
     public bool IsReady { get; set; } = true;
     public DatasetPathKind Kind { get; set; } = DatasetPathKind.File;
     public Func<string, string?, Task<bool>>? OnLoadFile { get; set; }
-    public Func<string, Task<int>>? OnTriggerExchangeSet { get; set; }
+    public Func<string, Task<ExchangeSetDispatch>>? OnTriggerExchangeSet { get; set; }
     public Func<string, Task<int>>? OnRemove { get; set; }
 
     public DatasetPathKind Classify(string path) => Kind;
@@ -95,8 +95,8 @@ internal sealed class FakeDatasetLoadGateway : IDatasetLoadGateway
     public Task<bool> LoadFileAsync(string path, string? specHint, CancellationToken cancellationToken = default)
         => OnLoadFile?.Invoke(path, specHint) ?? Task.FromResult(false);
 
-    public Task<int> TriggerExchangeSetAsync(string path, CancellationToken cancellationToken = default)
-        => OnTriggerExchangeSet?.Invoke(path) ?? Task.FromResult(0);
+    public Task<ExchangeSetDispatch> TriggerExchangeSetAsync(string path, CancellationToken cancellationToken = default)
+        => OnTriggerExchangeSet?.Invoke(path) ?? Task.FromResult(ExchangeSetDispatch.Of(0));
 
     public Task<int> RemoveAsync(string datasetId, CancellationToken cancellationToken = default)
         => OnRemove?.Invoke(datasetId) ?? Task.FromResult(0);

@@ -76,7 +76,7 @@ public class ViewerMutableDatasetCatalogTests
                     catalog.Add("a.000", "S-101");
                     catalog.Add("b.000", "S-102");
                 });
-                return Task.FromResult(2);
+                return Task.FromResult(ExchangeSetDispatch.Of(2));
             },
         };
         var sut = new ViewerMutableDatasetCatalog(catalog, gateway, quietMs: 150, maxWaitMs: 5000);
@@ -95,7 +95,8 @@ public class ViewerMutableDatasetCatalogTests
         var gateway = new FakeDatasetLoadGateway
         {
             Kind = DatasetPathKind.ExchangeSet,
-            OnTriggerExchangeSet = _ => Task.FromResult(0),
+            OnTriggerExchangeSet = _ => Task.FromResult(
+                new ExchangeSetDispatch(0, ["S-128/catalog.gml: unsupported product 'S-128'"])),
         };
         var sut = new ViewerMutableDatasetCatalog(catalog, gateway, quietMs: 100, maxWaitMs: 5000);
 
@@ -104,6 +105,7 @@ public class ViewerMutableDatasetCatalogTests
         sw.Stop();
 
         Assert.Empty(outcome.Added);
+        Assert.Equal(["S-128/catalog.gml: unsupported product 'S-128'"], outcome.Problems);
         Assert.True(sw.ElapsedMilliseconds < 2000, $"took {sw.ElapsedMilliseconds}ms; should fail fast");
     }
 

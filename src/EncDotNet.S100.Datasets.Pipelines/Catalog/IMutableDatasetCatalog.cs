@@ -63,11 +63,19 @@ public interface IMutableDatasetCatalog : IDatasetCatalog
 /// <param name="Kind">How the path was classified.</param>
 /// <param name="Added">Catalog ids of the datasets newly added, in add order. Empty when nothing portrayable was produced.</param>
 /// <param name="TimedOut"><see langword="true"/> when an exchange-set load did not quiesce before the host's ceiling; some datasets may still be arriving.</param>
+/// <param name="Problems">
+/// Human-readable reasons the load failed or skipped datasets (for example an
+/// unreadable catalogue, or a catalogued file with an unsupported product), in
+/// the order they arose. <see langword="null"/> or empty when nothing was
+/// skipped. A tool reporting an empty <paramref name="Added"/> includes these so
+/// the caller learns why nothing loaded.
+/// </param>
 public sealed record DatasetLoadOutcome(
     [property: Description("The filesystem path that was loaded.")] string Path,
     [property: Description("How the path was classified: file or exchangeSet.")] DatasetSourceKind Kind,
     [property: Description("Catalog ids of datasets newly added, in add order; empty when the path produced nothing portrayable.")] IReadOnlyList<DatasetId> Added,
-    [property: Description("True when an exchange-set load did not settle before the host's ceiling; some datasets may still be arriving.")] bool TimedOut);
+    [property: Description("True when an exchange-set load did not settle before the host's ceiling; some datasets may still be arriving.")] bool TimedOut,
+    [property: Description("Why the load failed or skipped datasets, in the order they arose; empty when nothing was skipped.")] IReadOnlyList<string>? Problems = null);
 
 /// <summary>How a load path was classified.</summary>
 public enum DatasetSourceKind
