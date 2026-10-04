@@ -28,10 +28,16 @@ export interface Product {
   placeholder?: string;
   /** Hidden on narrow screens, which show eight tiles. */
   extra?: boolean;
+  /** Data credit shown under the tile, linking to the matching notice in the footer. */
+  credit?: { text: string; href: string };
 }
 
 export const products: Product[] = [
-  { shot: 'P01', spec: 'S-101', caption: 'Electronic charts', standin: 'S101Screenshot.png' },
+  // Quebec City harbour, Canadian Hydrographic Service sample data (CHS notice in the footer).
+  {
+    shot: 'P01', spec: 'S-101', caption: 'Electronic charts', standin: 'S101Screenshot.png',
+    credit: { text: 'Quebec City · contains CHS data, not for navigation', href: '#chs-notice' },
+  },
   { shot: 'P02', spec: 'S-57', caption: "Today's charts, translated", standin: 's57-viewer-us4fl1lt.png' },
   { shot: 'P03', spec: 'S-102', caption: 'Bathymetry', standin: 'S102Screenshot.png' },
   { shot: 'P04', spec: 'S-104', caption: 'Water levels', standin: 'S104Screenshot.png' },

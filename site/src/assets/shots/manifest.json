@@ -5465,23 +5465,23 @@
     },
     "P01": {
       "image": "P01.png",
-      "imageCapturedUtc": "2026-10-04T00:51:35.3531438Z",
-      "recordedUtc": "2026-10-04T05:06:45.9463440Z",
-      "imageMatchesRecord": false,
+      "imageCapturedUtc": "2026-10-04T05:46:25.8459275Z",
+      "recordedUtc": "2026-10-04T05:46:25.8838740Z",
+      "imageMatchesRecord": true,
       "chromeTheme": "Dark",
       "capture": "map (render_to_image 600×600, pixel density 2)",
       "datasets": [
         {
-          "file": "tests/datasets/S101/S-101/DATASET_FILES/101AA00DS0020.000",
-          "source": "IHO S-101 test data set (fictional area)",
-          "licence": "IHO test data, bundled in this repo",
-          "id": "101AA00DS0020.000",
+          "file": "~/Downloads/Unencrypted_S100_DatasetsNov2025 (1)/COMBINED/S100_ROOT/S-101/DATASET_FILES/CA00/101CA00P468N0712W/2/101CA00P468N0712W.000",
+          "source": "Canadian Hydrographic Service S-100 sample package (Nov 2025)",
+          "licence": "CHS licence: non-commercial, CHS notice required, data not redistributed",
+          "id": "101CA00P468N0712W.000",
           "spec": "S-101",
           "bounds": {
-            "southLatitude": -32.3,
-            "westLongitude": 62,
-            "northLatitude": -32.1333333,
-            "eastLongitude": 62.1666667
+            "southLatitude": 46.8,
+            "westLongitude": -71.2,
+            "northLatitude": 46.8855778,
+            "eastLongitude": -71.1278611
           }
         }
       ],
@@ -5497,15 +5497,15 @@
         {
           "tool": "open_dataset",
           "args": {
-            "path": "tests/datasets/S101/S-101/DATASET_FILES/101AA00DS0020.000"
+            "path": "~/Downloads/Unencrypted_S100_DatasetsNov2025 (1)/COMBINED/S100_ROOT/S-101/DATASET_FILES/CA00/101CA00P468N0712W/2/101CA00P468N0712W.000"
           }
         },
         {
           "tool": "set_viewport",
           "args": {
-            "centerLat": -32.2167,
-            "centerLon": 62.0833,
-            "scaleDenominator": 20000
+            "centerLat": 46.835,
+            "centerLon": -71.17,
+            "scaleDenominator": 12000
           }
         }
       ]

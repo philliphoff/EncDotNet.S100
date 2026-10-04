@@ -6,7 +6,7 @@
 //   dotnet run site/capture/capture.cs                     (all shots)
 //   dotnet run site/capture/capture.cs -- --only H1,F4     (some shots)
 //
-// Options: --only <ids>, --out <dir>, --viewer <exe>, --ienc <dir>, --keep-open, --two-shades,
+// Options: --only <ids>, --out <dir>, --viewer <exe>, --ienc <dir>, --chs <dir>, --keep-open, --two-shades,
 // --no-clone (run the build in place instead of a cached clone),
 // --manifest-only (run the recipes and update the manifest, keeping the existing images).
 // Data is downloaded once into site/capture/.cache/ (gitignored).
@@ -35,6 +35,7 @@ string? Option(string name) => Array.IndexOf(args, name) is var i and >= 0 && i 
 var only = Option("--only")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
 var outDir = Path.GetFullPath(Option("--out") ?? Path.Combine(repoRoot, "site", "src", "assets", "shots"));
 var viewerExe = Option("--viewer") ?? Path.Combine(repoRoot, "src", "EncDotNet.S100.Viewer", "bin", "Release", "net10.0", "osx-arm64", "SoundCharts");
+var chsDir = Option("--chs") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Unencrypted_S100_DatasetsNov2025 (1)", "COMBINED");
 var iencDir = Option("--ienc") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SynologyDrive", "Charts", "Inland S-57 ENCs");
 var keepOpen = args.Contains("--keep-open");
 var manifestOnly = args.Contains("--manifest-only");
@@ -211,15 +212,19 @@ var shots = new List<Shot>
     new("F7-night", v => Palette(v, "Night")),
 
     // P: square product tiles, map only.
-    // P01: S-101 from the IHO test data set (producer code AA, a fictional area).
-    // No public-domain S-101 covers a real place yet; DS0020 (a buoyed channel)
-    // reads most like a chart of the IHO symbology test cells. Its display band
-    // starts at about 1:22 000, so frame it at 1:20 000 (by the land and channel marks) rather than the whole cell.
+    // P01: real S-101 from the Canadian Hydrographic Service's S-100 sample
+    // package (Nov 2025): Quebec City harbour at the cell's optimum scale. CHS
+    // licence: non-commercial use with the CHS notice (in the page footer); the
+    // data itself is never committed, so it's read from --chs (a local copy).
     new("P01", async v =>
     {
+        var cell = Directory.Exists(chsDir)
+            ? Directory.GetFiles(chsDir, "101CA00P468N0712W.000", SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+        if (cell is null) throw new SkipShot($"CHS sample package not found under {chsDir} (pass --chs)");
         await v.Reset();
-        await v.OpenAll([Fixture("S101/S-101/DATASET_FILES/101AA00DS0020.000")]);
-        await v.Call("set_viewport", new() { ["centerLat"] = -32.2167, ["centerLon"] = 62.0833, ["scaleDenominator"] = 20000 });
+        await v.OpenAll([cell]);
+        await v.Call("set_viewport", new() { ["centerLat"] = 46.835, ["centerLon"] = -71.170, ["scaleDenominator"] = 12000 });
         return await v.Map(1200, 1200);
     }),
     new("P02", async v =>
@@ -1314,6 +1319,7 @@ static class ShotManifest
 
         (string Source, string Licence) = 0 switch
         {
+            _ when p.Contains("Unencrypted_S100_Datasets") => ("Canadian Hydrographic Service S-100 sample package (Nov 2025)", "CHS licence: non-commercial, CHS notice required, data not redistributed"),
             _ when p.Contains("/tests/datasets/S101/") => ("IHO S-101 test data set (fictional area)", "IHO test data, bundled in this repo"),
             _ when p.Contains("/tests/datasets/") => ("EncDotNet.S100 test fixture", "repo fixture (MIT)"),
             _ when p.Contains("/.cache/derived/") => ("Derived by capture.cs from NOAA ENC cells", "public domain source (NOAA)"),

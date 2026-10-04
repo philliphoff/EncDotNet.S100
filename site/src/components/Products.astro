@@ -26,6 +26,7 @@ import { products } from '../data/content';
             />
             <div class="spec">{p.spec}</div>
             <div class="cap">{p.caption}</div>
+            {p.credit && <a class="credit" href={p.credit.href}>{p.credit.text}</a>}
           </div>
         ))
       }

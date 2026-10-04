@@ -137,6 +137,8 @@ Not in the grid but listed in the standards table: S-122, S-127, S-128, S-201.
 
 ---
 
+**P01 (2026-10-04):** real S-101 from the Canadian Hydrographic Service S-100 sample package (Nov 2025), Quebec City harbour cell 101CA00P468N0712W at 1:12 000. Unblocked by #754 (S-102 no longer suppresses S-101 depth areas outside its coverage). CHS licence: non-commercial use with the CHS notice, which is in the footer (`#chs-notice`) and credited under the tile; the data is read from a local copy (`--chs`) and never committed.
+
 **P08 (2026-10-04):** US National Weather Service sea-ice analysis for Alaska (public domain), the latest chart from the BSH/BSIS S-411 Ice Portal (https://www.bsis-ice.de/IcePortal/). NWS publishes it in a continuous longitude frame (≈175°E–225°E), and `set_viewport` only accepts −180…180, so the recipe centres on the antimeridian at 1:10 000 000.
 
 **The manifest:** `src/assets/shots/manifest.json` (written by capture.cs) is the exact record of each shot: datasets with source, licence, file and forecast run, the recorded viewer calls (viewport, palette, category, panels, clock), and capture times. `--manifest-only` refreshes it without replacing images; such entries have `imageMatchesRecord: false`. The descriptions below are the original plan and may not match the captures.
