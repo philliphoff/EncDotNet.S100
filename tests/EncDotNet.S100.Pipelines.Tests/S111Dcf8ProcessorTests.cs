@@ -1,6 +1,7 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Validation;
@@ -132,6 +133,65 @@ public class S111Dcf8ProcessorTests
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public async Task BuildPortrayal_Dcf8_UsesTheGridArrowPlaneAndPriority()
+    {
+        // #728: station arrows stack like dcf2 grid arrows (DynamicArrows,
+        // priority 10) and keep the "s111.stations" key the pick router uses.
+        var path = WriteFixture();
+        try
+        {
+            using var catalogues = S111TestCatalogues.Create();
+            using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
+
+            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext());
+
+            AssertGridArrowPlacement(Assert.Single(result.SubLayers));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task BuildPortrayal_Dcf3_UsesTheGridArrowPlaneAndPriority()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            S111Dcf3FixtureBuilder.WriteFile(
+                path,
+                [
+                    new() { Latitude = 47.6f, Longitude = -122.3f },
+                    new() { Latitude = 47.7f, Longitude = -122.4f },
+                ],
+                [
+                    new() { TimePoint = "20240101T000000Z", Values = [new() { SurfaceCurrentSpeed = 0.5f, SurfaceCurrentDirection = 45f }, new() { SurfaceCurrentSpeed = 1.5f, SurfaceCurrentDirection = 90f }] },
+                ],
+                lastDateTime: "20240101T000000Z");
+            using var catalogues = S111TestCatalogues.Create();
+            using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
+
+            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext());
+
+            AssertGridArrowPlacement(Assert.Single(result.SubLayers));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static void AssertGridArrowPlacement(CoverageSubLayerBase subLayer)
+    {
+        var sub = Assert.IsType<GlyphCoverageSubLayer>(subLayer);
+        Assert.Equal("s111.stations", sub.LayerKey);
+        Assert.Equal(S98DisplayPlane.DynamicArrows, sub.Plane);
+        Assert.Equal(10, sub.WithinPlanePriority);
+        Assert.All(sub.Glyphs, g => Assert.StartsWith("station:", g.FeatureRefTag));
     }
 
     [Fact]

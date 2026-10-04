@@ -37,10 +37,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 ///     S-104: <c>"s104.color-band"</c> →
 ///     <see cref="S98DisplayPlane.OnDemandSurface"/>;
 ///     <c>"s104.stations"</c> → <see cref="S98DisplayPlane.OtherChartOverlays"/>.
-///     S-111: <c>"s111.arrows"</c> →
-///     <see cref="S98DisplayPlane.DynamicArrows"/>;
-///     <c>"s111.stations"</c> →
-///     <see cref="S98DisplayPlane.OtherChartOverlays"/>. (S-111
+///     S-111: grid arrows (<c>"s111.arrows"</c>) and station / mesh
+///     arrows (<c>"s111.stations"</c>) →
+///     <see cref="S98DisplayPlane.DynamicArrows"/>. (S-111
 ///     Ed 2.0.0 has no colour-band sub-layer: the bundled
 ///     portrayal catalogue at
 ///     <c>content/S111/pc/Rules/select_arrow.xsl</c> defines

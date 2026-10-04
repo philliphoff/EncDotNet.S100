@@ -393,7 +393,7 @@ are deferred (§3.5) and gated on the IHO finishing the spec.
 | R-101-102-B | 2 | S-101, S-102 | Suppress S-101 `DepthArea`, `DepthContour` when S-102 covers same area | Annex A §8.4.1 + Part B §B-3.1.2 |
 | R-101-124-A | 0 | S-101, S-124 | S-124 warnings on plane `CautionsAndWarnings` | S-98 Main §9.2.1 + MSC.530(106)/Rev.1 §Appendix 2 (S-124 not in IC) |
 | R-104-A | 1 | S-101, S-104 | S-104 colour band on `OnDemandSurface`, below S-101 line work | Annex A §A-6.9.1 + S-98 Main §9.2.1 layer 6 |
-| R-111-A | 1 | S-101, S-111 | S-111 colour band on `OnDemandSurface`; arrows on `DynamicArrows` | Annex A §A-6.9.1 + existing PC `displayPlane id="OverRadar"` |
+| R-111-A | 1 | S-101, S-111 | S-111 arrows for every DCF (grid, station series, mesh) on `DynamicArrows`, priority 10 | Main §9.2.1 layer 6 + Part A §A-6.9.1; the `DynamicArrows` plane itself is a library choice — S-98 names no arrow plane, and the S-111 PC marks the arrows `UnderRadar` (#728) |
 
 That's **five proposed v1 rules** spanning four product pairs.
 Three of them (R-101-102-A, R-104-A, R-111-A) are pure default

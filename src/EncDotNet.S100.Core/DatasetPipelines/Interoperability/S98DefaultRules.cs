@@ -99,13 +99,17 @@ public static class S98DefaultRules
     /// R-111-A (Level 1) — S-111 colour-band surface renders on
     /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.OnDemandSurface"/>;
     /// the arrow overlay renders on
-    /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.DynamicArrows"/>.
+    /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.DynamicArrows"/>
+    /// for every data coding format. S-98 names no arrow plane: Main §9.2.1
+    /// puts surface currents in layer 6 and Part A §A-6.9.1 has gridded data
+    /// go over the ENC; the DynamicArrows placement is this library's
+    /// (see <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.DynamicArrows"/>).
     /// Identity effect.
     /// </summary>
     // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
     public static readonly S98InteroperabilityRule R_111_A = new(
         RuleId: "R-111-A",
-        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1",
+        SpecCitation: "S-98 Ed.2.0.0 Main §9.2.1 layer 6 + Part A §A-6.9.1",
         Condition: HasActiveProductSet("S-101", "S-111"),
         Effect: Identity);
 
