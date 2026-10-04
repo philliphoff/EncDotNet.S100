@@ -18,31 +18,34 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// (<paramref name="CenterLat"/>/<paramref name="CenterLon"/>/<paramref name="ScaleDenominator"/>).
 /// Every value of the chosen form must be supplied; mixing forms (including
 /// <paramref name="Zoom"/> with <paramref name="ScaleDenominator"/>) is
-/// rejected with <see cref="InvalidArgument"/>. Antimeridian-crossing bboxes are not
-/// supported in v1 (would need <c>west &gt; east</c>).
+/// rejected with <see cref="InvalidArgument"/>. Longitudes may run past ±180°
+/// in a continuous frame (to ±540°, one world copy either side), and a bbox
+/// with <c>west &gt; east</c> crosses the antimeridian (issue #759).
 /// </remarks>
-[Description("Request for set_viewport: supply EXACTLY ONE of a WGS-84 bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale (centerLat/centerLon/scaleDenominator). Coordinates are decimal degrees. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map scale the status bar shows.")]
+[Description("Request for set_viewport: supply EXACTLY ONE of a WGS-84 bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale (centerLat/centerLon/scaleDenominator). Coordinates are decimal degrees; longitudes may run past ±180 (to ±540) to frame the adjacent world copy, and a bbox with west > east crosses the antimeridian. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map scale the status bar shows.")]
 internal sealed record SetViewportRequest(
     [property: Description("Bounding-box south edge in decimal degrees (WGS-84). Must be paired with west/north/east; mutually exclusive with centre+zoom.")] double? South = null,
-    [property: Description("Bounding-box west edge in decimal degrees (WGS-84). Must be paired with south/north/east; mutually exclusive with centre+zoom.")] double? West = null,
+    [property: Description("Bounding-box west edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/north/east; mutually exclusive with centre+zoom. Greater than east for a box that crosses the antimeridian.")] double? West = null,
     [property: Description("Bounding-box north edge in decimal degrees (WGS-84). Must be paired with south/west/east; mutually exclusive with centre+zoom.")] double? North = null,
-    [property: Description("Bounding-box east edge in decimal degrees (WGS-84). Must be paired with south/west/north; mutually exclusive with centre+zoom.")] double? East = null,
+    [property: Description("Bounding-box east edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/west/north; mutually exclusive with centre+zoom. Past 180 (e.g. 220 = 140°W) frames the world copy east of the antimeridian.")] double? East = null,
     [property: Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLat = null,
-    [property: Description("Centre longitude in decimal degrees (WGS-84). Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLon = null,
+    [property: Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy (e.g. 205 = 155°W, east of the antimeridian). Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLon = null,
     [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? Zoom = null,
     [property: Description("Optional clockwise viewport rotation in degrees (0 = north-up). Applied on top of the bbox or centre+zoom frame, so it exercises the rotated-viewport render path (e.g. upright-label verification). Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? Rotation = null,
     [property: Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form. Converted at the centre latitude with the 0.28 mm pixel the status bar uses, so the status bar reads back this scale.")] double? ScaleDenominator = null);
 
 /// <summary>Result of <see cref="SetViewportTool"/>.</summary>
-[Description("Result of set_viewport: the request mode that was applied (bbox or center) plus an echo of the resolved WGS-84 viewport and its map scale. The echo is the precise frame the navigator was set to and is suitable for verification in scripted runs.")]
+[Description("Result of set_viewport: the request mode that was applied (bbox or center) plus an echo of the resolved WGS-84 viewport and its map scale. The echo is the precise frame the navigator was set to and is suitable for verification in scripted runs. Longitudes are in the continuous frame that was framed: west < east, and past ±180 for a frame on or across the antimeridian.")]
 internal sealed record SetViewportResult(
     [property: Description("\"bbox\" when the call resolved through the south/west/north/east form; \"center\" when it resolved through a centre form (centerLat/centerLon with zoom or scaleDenominator).")] string Mode,
     [property: Description("Echoed south edge of the resolved viewport in decimal degrees, WGS-84.")] double South,
-    [property: Description("Echoed west edge of the resolved viewport in decimal degrees, WGS-84.")] double West,
+    [property: Description("Echoed west edge of the resolved viewport in decimal degrees, in the continuous frame that was framed.")] double West,
     [property: Description("Echoed north edge of the resolved viewport in decimal degrees, WGS-84.")] double North,
-    [property: Description("Echoed east edge of the resolved viewport in decimal degrees, WGS-84.")] double East,
+    [property: Description("Echoed east edge of the resolved viewport in decimal degrees, in the continuous frame that was framed (greater than west; past 180 for a box that crosses the antimeridian).")] double East,
     [property: Description("Clockwise viewport rotation in degrees that was applied (0 = north-up), normalised to [0, 360).")] double Rotation,
-    [property: Description("Unrounded 1:N scale denominator of the applied viewport, as the status bar computes it. Read from the live map after the change (so it reflects zoom limits and, for a bbox, the fit to the control); for the centre forms it falls back to the requested scale when the map is not laid out yet. Null for a bbox when the map is not laid out.")] double? ScaleDenominator = null);
+    [property: Description("Unrounded 1:N scale denominator of the applied viewport, as the status bar computes it. Read from the live map after the change (so it reflects zoom limits and, for a bbox, the fit to the control); for the centre forms it falls back to the requested scale when the map is not laid out yet. Null for a bbox when the map is not laid out.")] double? ScaleDenominator = null,
+    [property: Description("Latitude of the live map centre after the change, decimal degrees; null when the map is not laid out.")] double? CenterLat = null,
+    [property: Description("Longitude of the live map centre after the change, in the continuous frame (e.g. 205 on the world copy east of the antimeridian); null when the map is not laid out.")] double? CenterLon = null);
 
 /// <summary>
 /// Mutates the live viewer's navigator to a specific WGS-84 viewport
@@ -62,8 +65,8 @@ internal sealed record SetViewportResult(
 /// <para>
 /// Validation:
 /// <list type="bullet">
-/// <item><description>Latitudes must be in [-90, 90]; longitudes in [-180, 180].</description></item>
-/// <item><description>Bbox: <c>south &lt; north</c> and <c>west &lt; east</c> (no antimeridian wrap).</description></item>
+/// <item><description>Latitudes must be in [-90, 90]; longitudes in [-540, 540], a continuous frame one world copy either side of the standard one.</description></item>
+/// <item><description>Bbox: <c>south &lt; north</c>; <c>west &gt; east</c> crosses the antimeridian (east is taken one world east), and the box is at most one world wide.</description></item>
 /// <item><description>Zoom: in [0, 24] and finite.</description></item>
 /// <item><description>Scale denominator: positive and finite.</description></item>
 /// <item><description>Exactly one of {bbox, centre+zoom, centre+scale} must be fully supplied; partial / mixed forms are rejected.</description></item>
@@ -77,8 +80,11 @@ internal sealed class SetViewportTool
 
     internal const double MinLat = -90.0;
     internal const double MaxLat = 90.0;
-    internal const double MinLon = -180.0;
-    internal const double MaxLon = 180.0;
+    // The viewer draws the basemap and chart data one world copy either side
+    // of the standard world (issue #773), so a longitude may name a place on
+    // any of the three (issue #759).
+    internal const double MinLon = -540.0;
+    internal const double MaxLon = 540.0;
     internal const double MinZoom = 0.0;
     internal const double MaxZoom = 24.0;
     internal const double FullCircleDegrees = 360.0;
@@ -179,20 +185,25 @@ internal sealed class SetViewportTool
                 "request",
                 $"south ({south}) must be less than north ({north})"));
         }
-        if (west >= east)
+        // A box with west > east crosses the antimeridian: its east edge lies
+        // one world further east, in the same continuous frame as its west.
+        var framedEast = west > east ? east + FullCircleDegrees : east;
+        if (framedEast <= west || framedEast - west > FullCircleDegrees || framedEast > MaxLon)
         {
             return Err(new GeometryInvalid(
                 "request",
-                $"west ({west}) must be less than east ({east}); antimeridian crossing is not supported in v1"));
+                $"west ({west}) and east ({east}) must span more than 0 and at most {FullCircleDegrees} degrees within [{MinLon}, {MaxLon}]; west > east crosses the antimeridian"));
         }
 
         var (minX, minY) = SphericalMercator.FromLonLat(west, south);
-        var (maxX, maxY) = SphericalMercator.FromLonLat(east, north);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(framedEast, north);
         host.SetViewportToExtent(new MRect(minX, minY, maxX, maxY));
         host.SetRotation(rotation);
 
         var scale = ReadAppliedScale(host, fallbackLatitude: (south + north) / 2.0, fallbackResolution: null);
-        return Ok(new SetViewportResult("bbox", south, west, north, east, rotation, scale));
+        var center = host.TryGetViewportCenterWgs84();
+        return Ok(new SetViewportResult(
+            "bbox", south, west, north, framedEast, rotation, scale, center?.Latitude, center?.Longitude));
     }
 
     private static Task<ToolResult<SetViewportResult>> ApplyCenter(
@@ -254,7 +265,9 @@ internal sealed class SetViewportTool
         // render pass.
         var (south, west, north, east) = ResolveCenterFrame(cx, cy, resolution);
         var scale = ReadAppliedScale(host, fallbackLatitude: lat, fallbackResolution: resolution);
-        return Ok(new SetViewportResult("center", south, west, north, east, rotation, scale));
+        var center = host.TryGetViewportCenterWgs84();
+        return Ok(new SetViewportResult(
+            "center", south, west, north, east, rotation, scale, center?.Latitude, center?.Longitude));
     }
 
     /// <summary>
@@ -294,10 +307,11 @@ internal sealed class SetViewportTool
         var halfHMeters = refHeightPx * resolution * 0.5;
         var (west, south) = SphericalMercator.ToLonLat(centerMx - halfWMeters, centerMy - halfHMeters);
         var (east, north) = SphericalMercator.ToLonLat(centerMx + halfWMeters, centerMy + halfHMeters);
-        // Clamp to valid WGS-84 ranges in case the centre+zoom strays
-        // close to the poles where the Mercator projection diverges.
-        return (Math.Clamp(south, MinLat, MaxLat), Math.Clamp(west, MinLon, MaxLon),
-                Math.Clamp(north, MinLat, MaxLat), Math.Clamp(east, MinLon, MaxLon));
+        // Clamp latitudes in case the centre+zoom strays close to the poles
+        // where the Mercator projection diverges. Longitudes stay in the
+        // continuous frame of the centre, so a frame on or across the
+        // antimeridian reads as framed (e.g. 190…220, not -180…-140).
+        return (Math.Clamp(south, MinLat, MaxLat), west, Math.Clamp(north, MinLat, MaxLat), east);
     }
 
     private static ToolError? Validate(double value, string name, double min, double max)
@@ -305,7 +319,7 @@ internal sealed class SetViewportTool
         if (double.IsNaN(value) || double.IsInfinity(value))
             return new InvalidArgument(name, $"value {value} is not a finite number");
         if (value < min || value > max)
-            return new InvalidArgument(name, $"value {value} is outside the WGS-84 range [{min}, {max}]");
+            return new InvalidArgument(name, $"value {value} is outside the supported range [{min}, {max}]");
         return null;
     }
 
