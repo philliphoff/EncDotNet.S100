@@ -26,6 +26,12 @@ public sealed class S102Dataset
     /// <summary>Issue date of the dataset (ISO 8601).</summary>
     public string? IssueDate { get; init; }
 
+    /// <summary>
+    /// Issue time of the dataset as written (<c>issueTime</c>, e.g. <c>105406+0000</c>
+    /// or <c>10:54:06Z</c>), or <c>null</c> when the attribute is absent.
+    /// </summary>
+    public string? IssueTime { get; init; }
+
     /// <summary>Reference to an associated metadata file.</summary>
     public string? Metadata { get; init; }
 

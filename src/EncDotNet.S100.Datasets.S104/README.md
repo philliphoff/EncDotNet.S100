@@ -84,7 +84,7 @@ foreach (var finding in report.Findings)
 | `S104-R-2.2`             | Warning  | Successive `TimePoint` deltas vary by no more than ±10% of the median delta (skipped when `Coverages.Count < 3`).       |
 | `S104-R-3.1`             | Warning  | `MethodWaterLevelProduct` is set when `Coverages.Count > 1`.                                                            |
 | `S104-R-4.1`             | Warning  | Non-NODATA water-level values lie in `[-15, 15]` m (one finding per offending coverage; `-9999f`/NaN/±Infinity skipped).|
-| `S104-R-4.2`             | Error    | Each coverage's origin and `origin + (numPoints - 1) × spacing` extent stay in WGS-84 ranges without antimeridian wrap. |
+| `S104-R-4.2`             | Error    | Each coverage's origin and `origin + (numPoints - 1) × spacing` extent are valid in `HorizontalCRS` (WGS-84 ranges without antimeridian wrap when geographic; UTM bounds, reprojecting to WGS 84, when projected). |
 | `S104-PROJ-SCHEMA`       | Error    | Defensive surrogate: emitted when the underlying HDF5 dataset fails schema-level parsing inside `Validate()`.           |
 | `S104-STATION-SHAPE`     | Error    | Station timestamps, heights, trends, and declared sample count disagree.                                               |
 | `S104-STATION-TIME`      | Error    | Explicit station timestamps are not strictly increasing.                                                              |

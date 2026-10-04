@@ -82,9 +82,10 @@ foreach (var finding in report.Findings)
 | `S102-R-1.1`         | Error    | Each coverage's `Values.Length` equals `NumPointsLatitudinal × NumPointsLongitudinal`.                                   |
 | `S102-R-2.1`         | Error    | NODATA fill in `Depth`/`Uncertainty` is exactly `1_000_000f`; flags `NaN` / ±`Infinity` as illegal sentinel substitutes. |
 | `S102-R-3.1`         | Warning  | `HorizontalCRS`, when set, is a recognised EPSG code (4326, 4269, or WGS-84 UTM band).                                   |
-| `S102-R-3.2`         | Warning  | `IssueDate`, when set, parses as ISO 8601.                                                                               |
-| `S102-R-4.1`         | Error    | Each coverage's `OriginLatitude` ∈ [-90, 90] and `OriginLongitude` ∈ [-180, 180].                                        |
-| `S102-R-4.2`         | Error    | Each coverage's extent stays inside WGS-84 bounds and does not wrap the antimeridian.                                    |
+| `S102-R-3.2`         | Warning  | `IssueDate`, when set, parses as an ISO 8601 date or date-time, basic (`20260902`) or extended (`2026-09-02`).           |
+| `S102-R-3.3`         | Warning  | `IssueTime`, when set, parses as an ISO 8601 time of day, basic (`105406+0000`) or extended (`10:54:06Z`).               |
+| `S102-R-4.1`         | Error    | Each coverage's origin is valid in `HorizontalCRS`: lat ∈ [-90, 90] / lon ∈ [-180, 180] when geographic; UTM easting/northing bounds (and reprojects to WGS 84) when projected. |
+| `S102-R-4.2`         | Error    | Each coverage's far corner is valid in `HorizontalCRS` the same way; a geographic extent must not wrap the antimeridian.  |
 | `S102-R-5.1`         | Warning  | Non-NODATA depth values fall within [-50, 12 000] m (one finding per offending coverage).                                |
 | `S102-PROJ-SCHEMA`   | Error    | Defensive surrogate: emitted when the underlying HDF5 dataset fails schema-level parsing inside `Validate()`.            |
 

@@ -513,7 +513,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         {
             try
             {
-                _validationReport = S102DatasetRules.Default.Run(_dataset);
+                _validationReport = S102DatasetRules.Default.Run(_dataset, new ValidationContext { CrsTransformFactory = _crsTransformFactory });
             }
             catch (S100DatasetSchemaException ex)
             {

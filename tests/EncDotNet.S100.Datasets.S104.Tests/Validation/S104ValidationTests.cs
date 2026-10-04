@@ -357,6 +357,44 @@ public class S104ValidationTests
         Assert.DoesNotContain(report.Findings, x => x.RuleId == "S104-R-4.2");
     }
 
+    [Fact]
+    public void R4_2_Does_Not_Fire_For_Projected_Utm_Grid_In_Metres()
+    {
+        // WGS 84 / UTM 17N grid off Charleston: origin and spacing are metres.
+        var coverage = MakeCoverage(
+            originLat: 3_585_000.0, originLon: 590_000.0,
+            spacingLat: 200.0, spacingLon: 200.0);
+        var dataset = new S104Dataset
+        {
+            HorizontalCRS = 32617,
+            DataCodingFormat = 2,
+            Coverages = new[] { coverage },
+        };
+
+        var report = S104DatasetRules.Default.Run(dataset);
+        Assert.DoesNotContain(report.Findings, x => x.RuleId == "S104-R-4.2");
+    }
+
+    [Fact]
+    public void R4_2_Fires_For_Projected_Grid_Outside_Utm_Bounds_Without_Degree_Bounds()
+    {
+        // Degrees written into a UTM dataset: a negative easting is impossible.
+        var coverage = MakeCoverage(originLat: 32.4, originLon: -80.1);
+        var dataset = new S104Dataset
+        {
+            HorizontalCRS = 32617,
+            DataCodingFormat = 2,
+            Coverages = new[] { coverage },
+        };
+
+        var report = S104DatasetRules.Default.Run(dataset);
+
+        var f = Assert.Single(report.Findings, x => x.RuleId == "S104-R-4.2");
+        Assert.Contains("easting", f.Message);
+        // No transform factory in the context, so no metres are passed off as a degree box.
+        Assert.Null(f.BoundingBox);
+    }
+
     // ----- Multi-coverage RelatedFeatureId reflects GroupPath -----
 
     [Fact]

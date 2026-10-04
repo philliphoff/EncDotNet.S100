@@ -1,3 +1,5 @@
+using EncDotNet.S100.Pipelines;
+
 namespace EncDotNet.S100.Validation;
 
 /// <summary>
@@ -43,6 +45,14 @@ public sealed class ValidationContext
     /// single-dataset contexts.
     /// </summary>
     public IServiceProvider? Services { get; init; }
+
+    /// <summary>
+    /// Optional CRS transform factory that coverage rules use to reproject a
+    /// projected grid (e.g. an S-102 tile in WGS 84 / UTM) to WGS 84 when
+    /// checking its georeferencing (see <see cref="GridGeoreferencing"/>).
+    /// When null, those rules fall back to checks in the grid's native CRS.
+    /// </summary>
+    public ICrsTransformFactory? CrsTransformFactory { get; init; }
 
     /// <summary>A default context using the current UTC time and no service provider.</summary>
     public static ValidationContext Default { get; } = new();

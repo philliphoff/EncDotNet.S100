@@ -231,23 +231,32 @@ public static class S111SurfaceCurrentRules
 
     /// <summary>
     /// <c>S111-R-3.1</c> — <see cref="S111Dataset.SurfaceCurrentDepth"/>,
-    /// <em>when present</em>, lies in the plausible range [0, 1500]
-    /// metres below the surface. Skipped entirely when the attribute is
-    /// absent / null (it is optional on the <c>/SurfaceCurrent</c>
-    /// container).
+    /// <em>when present</em>, has a plausible magnitude: within 1500
+    /// metres of its reference level, either side. Skipped entirely when
+    /// the attribute is absent / null (it is optional on the dataset root).
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-111 Edition 2.0.0 §10 / §12
-    /// (<c>surfaceCurrentDepth</c> root attribute on the
-    /// <c>SurfaceCurrent</c> container). The 1500 m upper bound is a
-    /// plausibility heuristic (currents reported as "surface" are
-    /// typically tens of metres deep at most; operational depths beyond
-    /// 1500 m almost certainly indicate a unit error). Implements the
-    /// "root-attribute completeness" conditional pattern in design §7.5.
+    /// <para>
+    /// Spec reference: S-111 Edition 1.x / 2.0.0 root attribute
+    /// <c>surfaceCurrentDepth</c>, interpreted per <c>depthTypeIndex</c>.
+    /// For a height or depth relative to a datum (sea surface, sea bottom,
+    /// or a tidal datum) the vertical axis is directed <em>upward</em>, so
+    /// a current level below the reference surface is <em>negative</em>
+    /// (NOAA's OFS products write <c>-4.5</c> m below the sea surface);
+    /// for a layer average the value is the positive layer thickness.
+    /// The sign therefore depends on the reference and is not checked —
+    /// only the magnitude is.
+    /// </para>
+    /// <para>
+    /// The 1500 m bound is a plausibility heuristic (currents reported as
+    /// "surface" are typically tens of metres deep at most; magnitudes
+    /// beyond 1500 m almost certainly indicate a unit error). Implements
+    /// the "root-attribute completeness" conditional pattern in design §7.5.
+    /// </para>
     /// </remarks>
     public static IValidationRule<S111Dataset> SurfaceCurrentDepthInRange { get; } =
         ValidationRuleBuilder.RuleFor<S111Dataset>("S111-R-3.1")
-            .WithDescription("SurfaceCurrentDepth, when present, must lie in [0, 1500] metres.")
+            .WithDescription("SurfaceCurrentDepth, when present, must lie within 1500 metres of its reference level (either sign).")
             .WithSeverity(ValidationSeverity.Warning)
             .Yield((dataset, _) =>
             {
@@ -261,12 +270,14 @@ public static class S111SurfaceCurrentRules
                         {
                             RuleId = "S111-R-3.1",
                             Severity = ValidationSeverity.Warning,
-                            Message = $"SurfaceCurrentDepth is non-finite ({depth}); expected a value in [0, 1500] metres.",
+                            Message = $"SurfaceCurrentDepth is non-finite ({depth}); expected a value in [-1500, 1500] metres.",
                             RelatedFeatureId = FallbackCoveragePath,
                         },
                     };
                 }
-                if (depth >= 0f && depth <= 1500f)
+                // Signed per depthTypeIndex (upward axis: below the datum is
+                // negative), so only the magnitude is plausibility-checked.
+                if (Math.Abs(depth) <= 1500f)
                     return Array.Empty<ValidationFinding>();
 
                 return new[]
@@ -276,8 +287,8 @@ public static class S111SurfaceCurrentRules
                         RuleId = "S111-R-3.1",
                         Severity = ValidationSeverity.Warning,
                         Message =
-                            $"SurfaceCurrentDepth {Fmt(depth)} m is outside the plausible range [0, 1500] m; " +
-                            "verify the producer is reporting metres below the surface.",
+                            $"SurfaceCurrentDepth {Fmt(depth)} m is outside the plausible range [-1500, 1500] m; " +
+                            "verify the producer is reporting metres relative to the reference level.",
                         RelatedFeatureId = FallbackCoveragePath,
                     },
                 };
@@ -465,9 +476,12 @@ public static class S111SurfaceCurrentRules
                         if (dir >= 0f && dir < 360f)
                             continue;
 
-                        offending++;
-                        if (Math.Abs(dir - 180f) > Math.Abs(worst - 180f))
+                        // Track the value furthest from the valid range's centre;
+                        // the first offender seeds it (360 is exactly as far
+                        // from 180 as the 0 a zero-initialised value would be).
+                        if (offending == 0 || Math.Abs(dir - 180f) > Math.Abs(worst - 180f))
                             worst = dir;
+                        offending++;
                     }
                     if (offending == 0)
                         continue;

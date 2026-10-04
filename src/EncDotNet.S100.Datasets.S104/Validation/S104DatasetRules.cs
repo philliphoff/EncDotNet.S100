@@ -1,5 +1,4 @@
 using System.Globalization;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.S104.Validation;
@@ -364,41 +363,45 @@ public static class S104DatasetRules
             .Build();
 
     /// <summary>
-    /// <c>S104-R-4.2</c> — Each coverage's
-    /// <see cref="WaterLevelCoverage.OriginLatitude"/> is in [-90, 90]
-    /// and <see cref="WaterLevelCoverage.OriginLongitude"/> is in
-    /// [-180, 180], and the extent
-    /// (<c>origin + (numPoints - 1) × spacing</c>) stays in range
-    /// without wrapping the antimeridian or crossing the pole.
+    /// <c>S104-R-4.2</c> — Each coverage's grid origin and far corner
+    /// (<c>origin + (numPoints - 1) × spacing</c>) are plausible positions
+    /// in the dataset's <see cref="S104Dataset.HorizontalCRS"/>: within
+    /// [-90, 90] / [-180, 180] degrees for a geographic CRS (so the extent
+    /// does not wrap the antimeridian or cross the pole), or within the
+    /// projected bounds (and reprojecting to a valid WGS 84 position) for a
+    /// projected one.
     /// </summary>
     /// <remarks>
     /// Folds the V-1 S102-R-4.1 (origin range) and S102-R-4.2 (extent
     /// range) into a single rule because the S-104 time-series shape
     /// already inflates the per-coverage rule count. Per-coverage
     /// finding; populates <see cref="ValidationFinding.BoundingBox"/>
-    /// to the offending tile extent (clamped to ordered edges; values
-    /// may themselves be out of range). Spec reference: S-100 Part 10c
+    /// with the offending tile extent in WGS 84 (edges ordered; values
+    /// may themselves be out of range) — for a projected grid only when it
+    /// can be reprojected. S-100 names the grid attributes
+    /// <c>gridOriginLatitude</c> / <c>gridOriginLongitude</c> whatever the
+    /// CRS, so for a projected grid they are metres; see
+    /// <see cref="GridGeoreferencing"/> for the CRS-specific checks (a CRS
+    /// it cannot classify is not checked). Spec reference: S-100 Part 10c
     /// §10.2.1.2 (grid georeferencing). Implements the
     /// <c>s104-water-level</c> skill review-checklist items
-    /// "georeferencing attributes within WGS-84 range" and "tile extent
-    /// stays within WGS-84 ranges".
+    /// "georeferencing attributes within range" and "tile extent
+    /// stays within range".
     /// </remarks>
     public static IValidationRule<S104Dataset> CoverageGeoreferencingInRange { get; } =
         ValidationRuleBuilder.RuleFor<S104Dataset>("S104-R-4.2")
-            .WithDescription("Coverage origin and extent must stay in WGS-84 range and not wrap the antimeridian or cross the pole.")
+            .WithDescription("Coverage origin and extent must be valid positions in the dataset's horizontal CRS (no antimeridian wrap or pole crossing).")
             .WithSeverity(ValidationSeverity.Error)
-            .Yield((dataset, _) =>
+            .Yield((dataset, context) =>
             {
+                var georef = GridGeoreferencing.For(dataset.HorizontalCRS, context);
                 var findings = new List<ValidationFinding>();
                 for (var i = 0; i < dataset.Coverages.Count; i++)
                 {
                     var c = dataset.Coverages[i];
 
-                    var problems = new List<string>();
-                    if (c.OriginLatitude < -90 || c.OriginLatitude > 90)
-                        problems.Add($"OriginLatitude {Fmt(c.OriginLatitude)} outside [-90, 90]");
-                    if (c.OriginLongitude < -180 || c.OriginLongitude > 180)
-                        problems.Add($"OriginLongitude {Fmt(c.OriginLongitude)} outside [-180, 180]");
+                    var problems = new List<string>(
+                        georef.CheckPosition(c.OriginLongitude, c.OriginLatitude, "OriginLongitude", "OriginLatitude"));
 
                     double latEnd = c.OriginLatitude;
                     double lonEnd = c.OriginLongitude;
@@ -406,20 +409,15 @@ public static class S104DatasetRules
                     {
                         latEnd = c.OriginLatitude + (c.NumPointsLatitudinal - 1) * c.SpacingLatitudinal;
                         lonEnd = c.OriginLongitude + (c.NumPointsLongitudinal - 1) * c.SpacingLongitudinal;
-                        if (latEnd > 90 || latEnd < -90)
-                            problems.Add($"latitude end {Fmt(latEnd)} outside [-90, 90]");
-                        if (lonEnd > 180 || lonEnd < -180)
-                            problems.Add($"longitude end {Fmt(lonEnd)} outside [-180, 180] (antimeridian-spanning tiles are out of scope for V-2)");
+                        problems.AddRange(georef.CheckPosition(
+                            lonEnd, latEnd, "longitude end", "latitude end",
+                            longitudeNote: "(antimeridian-spanning tiles are out of scope for V-2)"));
                     }
 
                     if (problems.Count == 0)
                         continue;
 
-                    double south = Math.Min(c.OriginLatitude, latEnd);
-                    double north = Math.Max(c.OriginLatitude, latEnd);
-                    double west = Math.Min(c.OriginLongitude, lonEnd);
-                    double east = Math.Max(c.OriginLongitude, lonEnd);
-
+                    georef.TryGetGeographicBounds(c.OriginLongitude, c.OriginLatitude, lonEnd, latEnd, out var bounds);
                     findings.Add(new ValidationFinding
                     {
                         RuleId = "S104-R-4.2",
@@ -428,7 +426,7 @@ public static class S104DatasetRules
                             $"WaterLevelCoverage at '{CoveragePath(c)}' (timePoint {FmtTime(c.TimePoint)}) has out-of-range " +
                             "georeferencing: " + string.Join("; ", problems) + ".",
                         RelatedFeatureId = CoveragePath(c),
-                        BoundingBox = new BoundingBox(south, west, north, east),
+                        BoundingBox = bounds,
                     });
                 }
                 return findings;

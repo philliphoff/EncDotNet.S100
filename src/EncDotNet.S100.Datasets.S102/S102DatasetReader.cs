@@ -40,6 +40,10 @@ public static class S102DatasetReader
             ? root.ReadStringAttribute("issueDate")
             : null;
 
+        string? issueTime = root.AttributeExists("issueTime")
+            ? root.ReadStringAttribute("issueTime")
+            : null;
+
         string? metadata = root.AttributeExists("metadata")
             ? root.ReadStringAttribute("metadata")
             : null;
@@ -60,6 +64,7 @@ public static class S102DatasetReader
             Epoch = epoch,
             GeographicIdentifier = geographicIdentifier,
             IssueDate = issueDate,
+            IssueTime = issueTime,
             Metadata = metadata,
             DeclaredProductSpecification = productSpecification,
             Coverages = coverages,

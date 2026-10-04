@@ -146,7 +146,7 @@ foreach (var finding in report.Findings)
 |--------------------------|----------|-------------------------------------------------------------------------------------------------------------------------|
 | `S111-R-1.1`             | Error    | Each coverage's `Values.Length` equals `NumPointsLatitudinal × NumPointsLongitudinal`.                                  |
 | `S111-R-2.1`             | Warning  | `Coverages` are strictly increasing by `TimePoint` and successive deltas vary by no more than ±10% of the median delta. |
-| `S111-R-3.1`             | Warning  | `SurfaceCurrentDepth`, when set, falls in `[0, 1500]` m below the surface.                                              |
+| `S111-R-3.1`             | Warning  | `SurfaceCurrentDepth`, when set, has magnitude ≤ 1500 m (signed per `depthTypeIndex`: below the sea surface is negative). |
 | `S111-R-3.2`             | Warning  | `TypeOfCurrentData`, when set, is a member of the S-111 enumerated set `{1..6}`.                                        |
 | `S111-R-4.1`             | Warning  | Non-NODATA current speeds lie in the plausible range `[0, 15]` m/s; fill / NaN / ±Infinity skipped.                     |
 | `S111-R-4.2`             | Error    | Non-NODATA current directions lie in the half-open range `[0, 360)` degrees true.                                       |
