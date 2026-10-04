@@ -7,159 +7,128 @@ public class S100MapControlTests
     private static S100MapsuiOptions IdentityOptions() =>
         new() { CrsTransformFactory = new IdentityCrsTransformFactory() };
 
-    [Fact]
+    [AvaloniaFact]
     public void Accessors_throw_before_configure()
     {
-        HeadlessTest.Run(() =>
-        {
-            using var control = new S100MapControl();
+        using var control = new S100MapControl();
 
-            Assert.False(control.IsConfigured);
-            Assert.Throws<InvalidOperationException>(() => control.Session);
-            Assert.Throws<InvalidOperationException>(() => control.Adapter);
-        });
+        Assert.False(control.IsConfigured);
+        Assert.Throws<InvalidOperationException>(() => control.Session);
+        Assert.Throws<InvalidOperationException>(() => control.Adapter);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Configure_attaches_session_and_adapter_over_a_default_map()
     {
-        HeadlessTest.Run(() =>
-        {
-            using var control = new S100MapControl();
+        using var control = new S100MapControl();
 
-            var session = control.Configure(IdentityOptions());
+        var session = control.Configure(IdentityOptions());
 
-            Assert.True(control.IsConfigured);
-            Assert.Same(session, control.Session);
-            Assert.NotNull(control.Adapter);
-            // Configure created the EPSG:3857 map when the control had none.
-            Assert.NotNull(control.Map);
-            Assert.Equal("EPSG:3857", control.Map!.CRS);
-        });
+        Assert.True(control.IsConfigured);
+        Assert.Same(session, control.Session);
+        Assert.NotNull(control.Adapter);
+        // Configure created the EPSG:3857 map when the control had none.
+        Assert.NotNull(control.Map);
+        Assert.Equal("EPSG:3857", control.Map!.CRS);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Configure_keeps_a_host_supplied_map()
     {
-        HeadlessTest.Run(() =>
-        {
-            var hostMap = new global::Mapsui.Map { CRS = "EPSG:3857" };
-            using var control = new S100MapControl { Map = hostMap };
+        var hostMap = new global::Mapsui.Map { CRS = "EPSG:3857" };
+        using var control = new S100MapControl { Map = hostMap };
 
-            control.Configure(IdentityOptions());
+        control.Configure(IdentityOptions());
 
-            Assert.Same(hostMap, control.Map);
-        });
+        Assert.Same(hostMap, control.Map);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Configure_rejects_a_non_web_mercator_map()
     {
-        HeadlessTest.Run(() =>
+        using var control = new S100MapControl
         {
-            using var control = new S100MapControl
-            {
-                Map = new global::Mapsui.Map { CRS = "EPSG:4326" },
-            };
+            Map = new global::Mapsui.Map { CRS = "EPSG:4326" },
+        };
 
-            // The renderer and pick/coordinate adapters only work in Web Mercator,
-            // so a conflicting CRS fails fast instead of attaching a broken session.
-            Assert.Throws<InvalidOperationException>(() => control.Configure(IdentityOptions()));
-            Assert.False(control.IsConfigured);
-        });
+        // The renderer and pick/coordinate adapters only work in Web Mercator,
+        // so a conflicting CRS fails fast instead of attaching a broken session.
+        Assert.Throws<InvalidOperationException>(() => control.Configure(IdentityOptions()));
+        Assert.False(control.IsConfigured);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     public void Configure_normalizes_an_unset_or_blank_map_crs(string? crs)
     {
-        HeadlessTest.Run(() =>
+        using var control = new S100MapControl
         {
-            using var control = new S100MapControl
-            {
-                Map = new global::Mapsui.Map { CRS = crs },
-            };
+            Map = new global::Mapsui.Map { CRS = crs },
+        };
 
-            control.Configure(IdentityOptions());
+        control.Configure(IdentityOptions());
 
-            Assert.Equal("EPSG:3857", control.Map!.CRS);
-        });
+        Assert.Equal("EPSG:3857", control.Map!.CRS);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Configure_twice_throws()
     {
-        HeadlessTest.Run(() =>
-        {
-            using var control = new S100MapControl();
-            control.Configure(IdentityOptions());
+        using var control = new S100MapControl();
+        control.Configure(IdentityOptions());
 
-            Assert.Throws<InvalidOperationException>(
-                () => control.Configure(IdentityOptions()));
-        });
+        Assert.Throws<InvalidOperationException>(
+            () => control.Configure(IdentityOptions()));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Configure_requires_the_ui_thread()
     {
         // Configure mutates the control (map creation / CRS), so it guards the UI
         // thread up front — before that mutation — rather than only relying on
         // AddS100 to throw after the fact. Mirrors Attach_requires_ui_thread.
-        await HeadlessTest.RunAsync(async () =>
-        {
-            var control = new S100MapControl();
+        var control = new S100MapControl();
 
-            await Assert.ThrowsAsync<InvalidOperationException>(
-                () => Task.Run(() => control.Configure(IdentityOptions())));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Task.Run(() => control.Configure(IdentityOptions())));
 
-            Assert.False(control.IsConfigured);
-            control.Dispose();
-            return true;
-        });
+        Assert.False(control.IsConfigured);
+        control.Dispose();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Configure_rejects_null_options()
     {
-        HeadlessTest.Run(() =>
-        {
-            using var control = new S100MapControl();
-            Assert.Throws<ArgumentNullException>(() => control.Configure(null!));
-        });
+        using var control = new S100MapControl();
+        Assert.Throws<ArgumentNullException>(() => control.Configure(null!));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Dispose_before_configure_is_safe()
     {
-        HeadlessTest.Run(() =>
-        {
-            var control = new S100MapControl();
-            control.Dispose();
-            control.Dispose();
-        });
+        var control = new S100MapControl();
+        control.Dispose();
+        control.Dispose();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Dispose_releases_the_attached_session()
     {
-        HeadlessTest.Run(() =>
-        {
-            var control = new S100MapControl();
-            var session = control.Configure(IdentityOptions());
+        var control = new S100MapControl();
+        var session = control.Configure(IdentityOptions());
 
-            control.Dispose();
+        control.Dispose();
 
-            // The control owns the session, so disposing it disposes the session.
-            Assert.Throws<ObjectDisposedException>(() => session.GetDatasets());
-            // The control presents a self-contained disposed contract: accessors
-            // throw and IsConfigured reads false rather than handing back a
-            // disposed session/adapter.
-            Assert.False(control.IsConfigured);
-            Assert.Throws<ObjectDisposedException>(() => control.Session);
-            Assert.Throws<ObjectDisposedException>(() => control.Adapter);
-        });
+        // The control owns the session, so disposing it disposes the session.
+        Assert.Throws<ObjectDisposedException>(() => session.GetDatasets());
+        // The control presents a self-contained disposed contract: accessors
+        // throw and IsConfigured reads false rather than handing back a
+        // disposed session/adapter.
+        Assert.False(control.IsConfigured);
+        Assert.Throws<ObjectDisposedException>(() => control.Session);
+        Assert.Throws<ObjectDisposedException>(() => control.Adapter);
     }
 
     private sealed class IdentityCrsTransformFactory : ICrsTransformFactory

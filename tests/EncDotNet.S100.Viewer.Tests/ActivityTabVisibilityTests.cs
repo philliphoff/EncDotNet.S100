@@ -51,8 +51,8 @@ public sealed class ActivityTabVisibilityTests
         Assert.False(tab.IsVisible);
     }
 
-    [Fact]
-    public void VisibilityChanged_RaisesPropertyChanged() => HeadlessTest.Run(() =>
+    [AvaloniaFact]
+    public void VisibilityChanged_RaisesPropertyChanged()
     {
         var source = new FakeVisibility(initial: false);
         using var tab = CreateTab(source);
@@ -67,7 +67,7 @@ public sealed class ActivityTabVisibilityTests
 
         Assert.True(tab.IsVisible);
         Assert.Equal(1, raised);
-    });
+    }
 
     [Fact]
     public void Dispose_UnsubscribesFromVisibilitySource()

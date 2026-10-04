@@ -50,22 +50,19 @@ public sealed class AboutDialogViewTests
         new StubUrlOpener(),
         TimeProvider.System);
 
-    [Fact]
+    [AvaloniaFact]
     public void View_LoadsAndBinds_WithoutError()
     {
-        HeadlessTest.Run(() =>
-        {
-            var vm = CreateViewModel();
-            var view = new AboutDialogView { DataContext = vm };
+        var vm = CreateViewModel();
+        var view = new AboutDialogView { DataContext = vm };
 
-            var window = new Window { Content = view, Width = 480, Height = 640 };
-            window.Show();
-            window.Measure(new Size(480, 640));
-            window.Arrange(new Rect(0, 0, 480, 640));
+        var window = new Window { Content = view, Width = 480, Height = 640 };
+        window.Show();
+        window.Measure(new Size(480, 640));
+        window.Arrange(new Rect(0, 0, 480, 640));
 
-            Assert.NotNull(view.DataContext);
-            window.Close();
-        });
+        Assert.NotNull(view.DataContext);
+        window.Close();
     }
 
     [Fact]

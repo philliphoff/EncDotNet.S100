@@ -10,6 +10,7 @@
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Headless" Version="12.0.5" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Skia" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5" />
     <!-- DevTools support; Avalonia 12 replaced the old Avalonia.Diagnostics package. -->

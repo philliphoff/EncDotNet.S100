@@ -1,83 +1,135 @@
-using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
-using ShadTheme = ShadUI.ShadTheme;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// The real Datasets panel, bound and laid out headlessly: the inspector's
-/// tab strip follows <see cref="DatasetsViewModel.InspectorTab"/> and a tab
-/// click writes back to it (the binding the MCP <c>select_dataset</c> tool
-/// relies on).
+/// The real Datasets panel, bound and laid out headlessly. The binding tests
+/// cover what the MCP <c>select_dataset</c> tool relies on; the flow tests
+/// drive the panel with pointer and keyboard input, as a user would, finding
+/// controls by their <c>Datasets.*</c> automation ids.
 /// </summary>
 public sealed class DatasetsViewTests
 {
-    private static (Window Window, DatasetsView View) Show(DatasetsViewModel datasets)
+    private static ViewHost Show(DatasetsViewModel datasets)
+        => ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
+
+    [AvaloniaFact]
+    public void Inspector_tabs_follow_the_view_model_both_ways()
     {
-        var view = new DatasetsView { DataContext = datasets };
-        // The app's ShadUI theme templates the tab strips; add it before the
-        // content, since a control resolves its implicit theme when it joins
-        // the tree.
-        var window = new Window { Width = 420, Height = 900 };
-        window.Styles.Add(new ShadTheme());
-        window.Content = view;
-        window.Show();
-        window.Measure(new Size(420, 900));
-        window.Arrange(new Rect(0, 0, 420, 900));
-        return (window, view);
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        datasets.SelectDataset(cell);
+        datasets.InspectorTab = DatasetInspectorTab.Validation;
+
+        using var host = Show(datasets);
+        var inspector = host.Find<TabControl>("Datasets.Inspector");
+        Assert.Equal(2, inspector.SelectedIndex);
+
+        datasets.InspectorTab = DatasetInspectorTab.Layers;
+        host.Settle();
+        Assert.Equal(1, inspector.SelectedIndex);
+
+        ((TabItem)inspector.Items[0]!).IsSelected = true;
+        Assert.Equal(DatasetInspectorTab.Dataset, datasets.InspectorTab);
     }
 
-    [Fact]
-    public void Inspector_tabs_follow_the_view_model_both_ways() =>
-        HeadlessTest.Run(() =>
-        {
-            var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-            var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
-            datasets.SelectDataset(cell);
-            datasets.InspectorTab = DatasetInspectorTab.Validation;
+    [AvaloniaFact]
+    public void Selecting_a_dataset_highlights_its_row_on_the_datasets_tab()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5OTHER.000", "S-57");
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
 
-            var (window, view) = Show(datasets);
-            try
-            {
-                var inspector = view.FindControl<TabControl>("InspectorTabs")!;
-                Assert.True(inspector.IsVisible);
-                Assert.Equal(2, inspector.SelectedIndex);
+        using var host = Show(datasets);
+        datasets.SelectDataset(cell);
+        host.Settle();
 
-                datasets.InspectorTab = DatasetInspectorTab.Layers;
-                Assert.Equal(1, inspector.SelectedIndex);
+        Assert.Same(cell, host.Find<ListBox>("Datasets.List").SelectedItem);
+        Assert.True(host.Find<TabControl>("Datasets.Inspector").IsVisible);
+    }
 
-                // A click on the Dataset tab selects it in the tab strip.
-                ((TabItem)inspector.Items[0]!).IsSelected = true;
-                Assert.Equal(DatasetInspectorTab.Dataset, datasets.InspectorTab);
-            }
-            finally
-            {
-                window.Close();
-            }
-        });
+    [AvaloniaFact]
+    public void Clicking_a_row_selects_the_dataset_and_opens_its_inspector()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5OTHER.000", "S-57");
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
 
-    [Fact]
-    public void Selecting_a_dataset_highlights_its_row_on_the_datasets_tab() =>
-        HeadlessTest.Run(() =>
-        {
-            var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-            datasets.Add("/data/US5OTHER.000", "S-57");
-            var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        using var host = Show(datasets);
+        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
+        Assert.False(datasets.HasSelection);
 
-            var (window, view) = Show(datasets);
-            try
-            {
-                datasets.SelectDataset(cell);
+        host.Click(Row(host, cell));
 
-                var list = view.FindControl<ListBox>("DatasetList")!;
-                Assert.Same(cell, list.SelectedItem);
-                Assert.True(view.FindControl<TabControl>("InspectorTabs")!.IsVisible);
-            }
-            finally
-            {
-                window.Close();
-            }
-        });
+        Assert.Same(cell, datasets.SelectedDataset);
+        Assert.True(host.Find<TabControl>("Datasets.Inspector").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Clicking_an_inspector_tab_switches_the_inspector()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        datasets.SelectDataset(cell);
+
+        using var host = Show(datasets);
+        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
+        Assert.Equal(DatasetInspectorTab.Dataset, datasets.InspectorTab);
+
+        host.Click(host.Find<TabItem>("Datasets.Inspector.LayersTab"));
+        Assert.Equal(DatasetInspectorTab.Layers, datasets.InspectorTab);
+
+        host.Click(host.Find<TabItem>("Datasets.Inspector.ValidationTab"));
+        Assert.Equal(DatasetInspectorTab.Validation, datasets.InspectorTab);
+    }
+
+    [AvaloniaFact]
+    public void Arrow_keys_move_the_selection_through_the_list()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5OTHER.000", "S-57");
+        datasets.Add("/data/US5SEAFL.000", "S-57");
+
+        using var host = Show(datasets);
+        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
+        // The list is in render order, newest on top; work down from the top row.
+        var (top, next) = (datasets.Entries[0], datasets.Entries[1]);
+        host.Click(Row(host, top));
+        Assert.Same(top, datasets.SelectedDataset);
+
+        host.Press(PhysicalKey.ArrowDown);
+        Assert.Same(next, datasets.SelectedDataset);
+
+        host.Press(PhysicalKey.ArrowUp);
+        Assert.Same(top, datasets.SelectedDataset);
+    }
+
+    [AvaloniaFact]
+    public void A_rows_buttons_act_on_that_dataset_only()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var other = datasets.Add("/data/US5OTHER.000", "S-57");
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+
+        using var host = Show(datasets);
+        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
+        Assert.Equal([cell, other], datasets.Entries);
+
+        host.Click(host.Find<Button>("Datasets.Row.ToggleVisibility", Row(host, cell)));
+        Assert.False(cell.IsVisible);
+        Assert.True(other.IsVisible);
+
+        host.Click(host.Find<Button>("Datasets.Row.MoveDown", Row(host, cell)));
+        Assert.Equal([other, cell], datasets.Entries);
+
+        host.Click(host.Find<Button>("Datasets.Row.Remove", Row(host, cell)));
+        Assert.Equal([other], datasets.Entries);
+    }
+
+    private static ListBoxItem Row(ViewHost host, DatasetEntry entry)
+        => host.Find<ListBoxItem>(item => ReferenceEquals(item.DataContext, entry));
 }

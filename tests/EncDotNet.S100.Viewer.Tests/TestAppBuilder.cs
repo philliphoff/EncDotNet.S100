@@ -10,16 +10,35 @@ using EncDotNet.S100.Viewer.Tests;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// Minimal headless Avalonia application used by <c>[AvaloniaFact]</c>
-/// tests. Avalonia 12's dispatcher rework means
-/// <see cref="Avalonia.Threading.Dispatcher.UIThread"/> is only marshaled
-/// (and pumped) on a real dispatcher thread; view-model tests that exercise
-/// the <c>Dispatcher.UIThread</c> path therefore run under the headless
-/// platform so the dispatcher is available and pumped per test.
+/// Headless Avalonia application for <c>[AvaloniaFact]</c> tests. Avalonia 12's
+/// dispatcher rework means <see cref="Avalonia.Threading.Dispatcher.UIThread"/>
+/// is only marshaled (and pumped) on a real dispatcher thread, so view-model
+/// tests that exercise the <c>Dispatcher.UIThread</c> path, and view tests,
+/// run under the headless platform.
 /// </summary>
 public static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<Application>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+        => AppBuilder.Configure<HeadlessViewerApp>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+}
+
+/// <summary>
+/// The viewer's real <see cref="App"/> with only its XAML loaded: every style,
+/// theme (ShadUI plus the S-100 Day/Dusk/Night chrome variants) and resource in
+/// <c>App.axaml</c>, so a view under test looks up the same templates and brushes
+/// as in the app.
+/// </summary>
+/// <remarks>
+/// <see cref="App.OnFrameworkInitializationCompleted"/> is skipped on purpose: it
+/// builds the full service container, starts the MCP host and reads and writes
+/// crash markers in the user's data directory. Tests compose the view models
+/// they need themselves.
+/// </remarks>
+public sealed class HeadlessViewerApp : App
+{
+    public override void OnFrameworkInitializationCompleted()
+    {
+    }
 }

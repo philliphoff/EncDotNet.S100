@@ -59,8 +59,8 @@ public class LayerStackViewModelDynamicSourceTests
         Assert.False(entry.IsActive);
     }
 
-    [Fact]
-    public void SourcesChanged_TriggersRebuild_AddingNewRow() => HeadlessTest.Run(() =>
+    [AvaloniaFact]
+    public void SourcesChanged_TriggersRebuild_AddingNewRow()
     {
         var loader = new ControllableLoader();
         var registry = new FakeRegistry();
@@ -72,10 +72,10 @@ public class LayerStackViewModelDynamicSourceTests
 
         var plane = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
         Assert.Single(plane.Children.OfType<LayerStackDynamicEntryViewModel>());
-    });
+    }
 
-    [Fact]
-    public void SourcesChanged_TriggersRebuild_RemovingRow() => HeadlessTest.Run(() =>
+    [AvaloniaFact]
+    public void SourcesChanged_TriggersRebuild_RemovingRow()
     {
         var loader = new ControllableLoader();
         var registry = new FakeRegistry();
@@ -85,7 +85,7 @@ public class LayerStackViewModelDynamicSourceTests
         registry.RemoveAt(0);
 
         Assert.DoesNotContain(vm.Planes, p => p.Plane == S98DisplayPlane.DynamicArrows);
-    });
+    }
 
     [Fact]
     public void MixedPlane_DatasetAndDynamicRowsCoexist_DatasetsFirst()
