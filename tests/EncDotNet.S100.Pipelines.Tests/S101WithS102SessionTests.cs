@@ -13,7 +13,6 @@ using EncDotNet.S100.Specifications;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
-using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
