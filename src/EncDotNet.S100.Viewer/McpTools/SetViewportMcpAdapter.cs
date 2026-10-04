@@ -25,10 +25,12 @@ internal static class SetViewportMcpAdapter
     };
 
     private const string Description =
-        "Mutates the live viewer's map navigator to a specific WGS-84 viewport. Supply EITHER a " +
-        "bbox (south/west/north/east) OR centre+zoom (centerLat/centerLon/zoom); mixing the two " +
-        "is rejected. Coordinates are decimal degrees. Zoom is the standard web-mercator level " +
-        "(0–24). An optional rotation (degrees clockwise, 0 = north-up) is applied on top of the " +
+        "Mutates the live viewer's map navigator to a specific WGS-84 viewport. Supply EXACTLY ONE " +
+        "of a bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale " +
+        "(centerLat/centerLon/scaleDenominator); mixing forms is rejected. Coordinates are decimal " +
+        "degrees. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map " +
+        "scale (e.g. 50000), converted at the centre latitude the same way the status bar reads it. " +
+        "The result echoes the applied scaleDenominator read back from the live map. An optional rotation (degrees clockwise, 0 = north-up) is applied on top of the " +
         "frame so scripted runs can exercise the rotated-viewport render path. " +
         "Antimeridian-crossing bboxes are not supported in v1. Companion to render_to_image: " +
         "this tool drives the navigator, render_to_image then captures the resulting frame. " +
@@ -44,13 +46,14 @@ internal static class SetViewportMcpAdapter
             [Description("Bounding-box west edge in decimal degrees (WGS-84). Must be paired with south/north/east; mutually exclusive with centre+zoom.")] double? west = null,
             [Description("Bounding-box north edge in decimal degrees (WGS-84). Must be paired with south/west/east; mutually exclusive with centre+zoom.")] double? north = null,
             [Description("Bounding-box east edge in decimal degrees (WGS-84). Must be paired with south/west/north; mutually exclusive with centre+zoom.")] double? east = null,
-            [Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and zoom; mutually exclusive with the bbox form.")] double? centerLat = null,
-            [Description("Centre longitude in decimal degrees (WGS-84). Must be paired with centerLat and zoom; mutually exclusive with the bbox form.")] double? centerLon = null,
-            [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with the bbox form.")] double? zoom = null,
+            [Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLat = null,
+            [Description("Centre longitude in decimal degrees (WGS-84). Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLon = null,
+            [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? zoom = null,
             [Description("Optional clockwise viewport rotation in degrees (0 = north-up), applied on top of the bbox or centre+zoom frame. Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? rotation = null,
+            [Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form.")] double? scaleDenominator = null,
             CancellationToken ct = default) =>
             DispatchAsync(() => inner.InvokeAsync(
-                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation),
+                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation, scaleDenominator),
                 ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -105,6 +108,10 @@ internal static class SetViewportMcpAdapter
             ["east"] = value.East,
             ["rotation"] = value.Rotation,
         };
+        if (value.ScaleDenominator is { } scale)
+        {
+            payload["scaleDenominator"] = scale;
+        }
 
         return new CallToolResult
         {

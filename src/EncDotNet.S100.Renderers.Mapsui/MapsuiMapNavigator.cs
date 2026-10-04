@@ -146,6 +146,27 @@ public sealed class MapsuiMapNavigator
         return IsValid(position) ? position : null;
     }
 
+    /// <summary>
+    /// Returns the laid-out viewport resolution in map units per pixel
+    /// (EPSG:3857 metres at the equator), after any zoom limits the map
+    /// applies.
+    /// </summary>
+    /// <returns>
+    /// The current resolution, or <see langword="null"/> when the viewport is
+    /// not laid out or the resolution is not a positive, finite number.
+    /// </returns>
+    public double? TryGetViewportResolution()
+    {
+        var viewport = _navigator.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+        {
+            return null;
+        }
+
+        var resolution = viewport.Resolution;
+        return double.IsFinite(resolution) && resolution > 0 ? resolution : null;
+    }
+
     private static bool IsValid(GeoPosition position) =>
         double.IsFinite(position.Latitude)
         && double.IsFinite(position.Longitude)

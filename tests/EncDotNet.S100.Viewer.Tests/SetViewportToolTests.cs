@@ -30,8 +30,15 @@ public class SetViewportToolTests
 
         public void SetRotation(double degrees) => RotationCalls.Add(degrees);
 
+        /// <summary>Resolution the live map reports after a change; null = not laid out.</summary>
+        public double? LiveResolution { get; set; }
+
+        /// <summary>Centre the live map reports; null = not laid out.</summary>
+        public GeoPosition? LiveCenter { get; set; }
+
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
-        public GeoPosition? TryGetViewportCenterWgs84() => null;
+        public GeoPosition? TryGetViewportCenterWgs84() => LiveCenter;
+        public double? TryGetViewportResolution() => LiveResolution;
     }
 
     private static (SetViewportTool tool, RecordingMapHost host) Make(
@@ -291,5 +298,138 @@ public class SetViewportToolTests
         var single = Assert.Single(call.Content);
         var text = Assert.IsType<TextContentBlock>(single);
         Assert.Contains("\"code\":\"invalid_argument\"", text.Text);
+    }
+
+    [Fact]
+    public async Task Center_scale_form_sets_resolution_that_reads_back_as_the_scale()
+    {
+        var (tool, host) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: -32.383, CenterLon: 61.75, ScaleDenominator: 50000));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal("center", ok!.Mode);
+        var call = Assert.Single(host.CenterCalls);
+        Assert.Equal(MapScaleFormatter.ScaleDenominatorToResolution(50000, -32.383), call.Resolution, 9);
+        Assert.Empty(host.ExtentCalls);
+        // Not laid out: the echo falls back to the requested scale.
+        Assert.Equal(50000, ok.ScaleDenominator!.Value, 6);
+        Assert.True(ok.South < -32.383 && -32.383 < ok.North);
+        Assert.True(ok.West < 61.75 && 61.75 < ok.East);
+    }
+
+    [Fact]
+    public async Task Center_scale_echo_reads_the_live_map_scale()
+    {
+        var (tool, host) = Make();
+        // Simulate the navigator clamping the request to 1:100 000.
+        host.LiveCenter = new GeoPosition(50.0, -3.0);
+        host.LiveResolution = MapScaleFormatter.ScaleDenominatorToResolution(100000, 50.0);
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: 50.0, CenterLon: -3.0, ScaleDenominator: 500));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(100000, ok!.ScaleDenominator!.Value, 6);
+    }
+
+    [Fact]
+    public async Task Center_zoom_form_echoes_its_scale()
+    {
+        var (tool, _) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: 0, CenterLon: 0, Zoom: 0));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(
+            SetViewportTool.ResolutionAtZoomZero / MapScaleFormatter.PixelSizeMeters,
+            ok!.ScaleDenominator!.Value,
+            3);
+    }
+
+    [Fact]
+    public async Task Bbox_echo_scale_is_null_until_laid_out_then_live()
+    {
+        var (tool, host) = Make();
+        var request = new SetViewportRequest(South: 50.40, West: -3.66, North: 50.50, East: -3.50);
+
+        var before = await tool.InvokeAsync(request);
+        Assert.True(before.TryGetValue(out var unlaid));
+        Assert.Null(unlaid!.ScaleDenominator);
+
+        host.LiveCenter = new GeoPosition(50.45, -3.58);
+        host.LiveResolution = MapScaleFormatter.ScaleDenominatorToResolution(42000, 50.45);
+        var after = await tool.InvokeAsync(request);
+        Assert.True(after.TryGetValue(out var laid));
+        Assert.Equal(42000, laid!.ScaleDenominator!.Value, 6);
+    }
+
+    [Fact]
+    public async Task Zoom_and_scale_together_are_rejected()
+    {
+        var (tool, host) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: 50, CenterLon: -3, Zoom: 12, ScaleDenominator: 50000));
+
+        Assert.True(result.TryGetError(out var err));
+        Assert.IsType<InvalidArgument>(err);
+        Assert.Empty(host.CenterCalls);
+    }
+
+    [Fact]
+    public async Task Scale_with_bbox_is_rejected()
+    {
+        var (tool, host) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            South: 50.40, West: -3.66, North: 50.50, East: -3.50, ScaleDenominator: 50000));
+
+        Assert.True(result.TryGetError(out var err));
+        Assert.IsType<InvalidArgument>(err);
+        Assert.Empty(host.ExtentCalls);
+    }
+
+    [Fact]
+    public async Task Partial_center_scale_is_rejected()
+    {
+        var (tool, _) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(CenterLat: 50, ScaleDenominator: 50000));
+
+        Assert.True(result.TryGetError(out var err));
+        var invalid = Assert.IsType<InvalidArgument>(err);
+        Assert.Contains("scaleDenominator", invalid.Reason, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-50000.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public async Task Invalid_scale_is_rejected(double scale)
+    {
+        var (tool, host) = Make();
+
+        var result = await tool.InvokeAsync(new SetViewportRequest(
+            CenterLat: 50, CenterLon: -3, ScaleDenominator: scale));
+
+        Assert.True(result.TryGetError(out var err));
+        Assert.Equal("scaleDenominator", Assert.IsType<InvalidArgument>(err).Parameter);
+        Assert.Empty(host.CenterCalls);
+    }
+
+    [Fact]
+    public void Adapter_success_payload_includes_scale_only_when_known()
+    {
+        var withScale = SetViewportMcpAdapter.TranslateResult(
+            ToolResult<SetViewportResult>.Ok(new SetViewportResult("center", 50, -4, 51, -3, 0, 50000)));
+        Assert.Contains("\"scaleDenominator\":50000", Assert.IsType<TextContentBlock>(Assert.Single(withScale.Content)).Text);
+
+        var without = SetViewportMcpAdapter.TranslateResult(
+            ToolResult<SetViewportResult>.Ok(new SetViewportResult("bbox", 50, -4, 51, -3, 0)));
+        Assert.DoesNotContain("scaleDenominator", Assert.IsType<TextContentBlock>(Assert.Single(without.Content)).Text);
     }
 }
