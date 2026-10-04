@@ -240,7 +240,7 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S111** | S-111 surface currents reader, coverage pipeline (per-feature arrow symbology), validation pack. |
 | **EncDotNet.S100.Datasets.S122** | S-122 marine protected areas reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S124** | S-124 navigational warnings reader, XSLT portrayal pipeline, validation pack. |
-| **EncDotNet.S100.Datasets.S125** | S-125 marine aids to navigation reader (with typed AtoN projection and xlink-resolved status), XSLT portrayal, validation pack. |
+| **EncDotNet.S100.Datasets.S125** | S-125 marine aids to navigation reader (with typed AtoN projection and xlink-resolved status), XSLT portrayal of status indications plus AtoN symbology via the S-101 Lua rules, validation pack. |
 | **EncDotNet.S100.Datasets.S127** | S-127 marine resources and services reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S128** | S-128 catalogue of nautical products reader (with typed `DataModel` projection), XSLT portrayal, validation pack. |
 | **EncDotNet.S100.Datasets.S129** | S-129 under keel clearance reader, XSLT portrayal pipeline, validation pack. |

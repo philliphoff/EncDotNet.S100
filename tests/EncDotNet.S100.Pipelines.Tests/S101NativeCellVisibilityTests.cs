@@ -7,13 +7,15 @@ using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using Mapsui;
 using Mapsui.Layers;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
 /// Real-data regression cover: every committed IHO S-101 test cell, run through
-/// the viewer's Mapsui render path, must produce drawing instructions and
-/// leave features visible at a scale inside the cell's own display band.
+/// the viewer's Mapsui render path, must produce drawing instructions, leave
+/// features visible, and rasterise non-empty tiles at a scale inside the
+/// cell's own display band.
 /// </summary>
 /// <remarks>
 /// Cells 101AA00DS0006 / 0007 / 0015 declare an inverted <c>DataCoverage</c>
@@ -66,6 +68,80 @@ public class S101NativeCellVisibilityTests
             .SelectMany(static l => l.Features)
             .Count(f => IsVisibleAt(f, resolution));
         Assert.True(lineworkVisible > 0, $"{cell}: no line/point/text feature is visible at 1:{InBandScaleDenominator}.");
+    }
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public async Task NativeCell_TileRendererPaintsPixels_AtInBandScale(string cell)
+    {
+        var processor = CreateFactory().CreateProcessor(Path.Combine(ResolveFixtureDirectory(), cell));
+        using var lifetime = processor as IDisposable;
+        var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
+
+        var result = await renderer.RenderAsync(processor);
+
+        // Apply the whole-cell zoom-out window exactly as the viewer's layer
+        // session does, so a wrong cell band hides the layers here too.
+        var cellMinimum = Assert.IsType<int>(result.CellMinimumDisplayScale);
+        MapsuiDatasetRenderer.ApplyCellScaleWindow(result.Layers, cellMinimum);
+
+        var extent = result.Extent;
+        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+            (extent.MinY + extent.MaxY) / 2.0);
+        var resolution = MapsuiDisplayListRenderer.DenominatorToResolution(InBandScaleDenominator, latitudeRadians);
+
+        var tiledLayers = result.Layers
+            .Where(static l => l.CustomLayerRendererName == S100VectorTileRenderer.RendererName)
+            .ToList();
+        Assert.NotEmpty(tiledLayers);
+
+        var visibleLayers = tiledLayers
+            .Where(l => l.Enabled && l.MinVisible <= resolution && resolution <= l.MaxVisible)
+            .ToList();
+        Assert.True(
+            visibleLayers.Count > 0,
+            $"{cell}: every tiled layer is out of range at 1:{InBandScaleDenominator} (cell band ends at 1:{cellMinimum}).");
+
+        // Rasterise every base-plane tile over the cell at the band the live
+        // map snaps to for this resolution, as the tile workers would.
+        var band = TileGrid.BandForResolution(resolution);
+        var tiles = TileGrid.VisibleTiles(
+            (extent.MinX + extent.MaxX) / 2.0,
+            (extent.MinY + extent.MaxY) / 2.0,
+            extent.Width / resolution,
+            extent.Height / resolution,
+            resolution,
+            band);
+
+        long paintedPixels = 0;
+        foreach (var layer in visibleLayers)
+        {
+            Assert.True(
+                S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out _),
+                $"{cell}: no scene bound to tiled layer '{layer.Name}'.");
+
+            foreach (var key in tiles)
+            {
+                using var bitmap = S100VectorTileRenderer.RasterizeTile(baseScene, baseIndex: null, key, deviceScale: 1f);
+                paintedPixels += CountPaintedPixels(bitmap);
+            }
+        }
+
+        Assert.True(
+            paintedPixels > 0,
+            $"{cell}: {tiles.Count} band-{band} tiles at 1:{InBandScaleDenominator} rasterised fully transparent.");
+    }
+
+    private static long CountPaintedPixels(SKBitmap bitmap)
+    {
+        long count = 0;
+        foreach (var pixel in bitmap.Pixels)
+        {
+            if (pixel.Alpha != 0)
+                count++;
+        }
+
+        return count;
     }
 
     private static bool IsVisibleAt(IFeature feature, double resolution) =>

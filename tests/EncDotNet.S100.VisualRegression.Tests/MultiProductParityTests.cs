@@ -61,7 +61,7 @@ public sealed class MultiProductParityTests
     [SkippableTheory]
     [InlineData("S122", "122TESTDATASET.gml", 700, 0.25)]       // ink ~1 450 px
     [InlineData("S124", "navwarn_mixed.gml", 800, 0.5)]         // ink ~1 620 px; labels drift 29 %
-    [InlineData("S125", "aton_chesapeake.gml", 120, 0.35)]      // ink ~240 px
+    [InlineData("S125", "aton_chesapeake.gml", 1_200, 0.35)]    // ink ~2 400 px; small labels
     [InlineData("S127", "marine_mixed.gml", 1_500, 0.25)]       // ink ~3 150 px
     [InlineData("S128", "S128_TDS_sample.gml", 90_000, null)]   // dense fills, ink ~185 000 px
     [InlineData("S129", "12900MCTDS130TS.gml", 2_800, 0.3)]     // ink ~5 700 px; labels drift 14 %
@@ -103,12 +103,13 @@ public sealed class MultiProductParityTests
     /// resolved, matching the Mapsui "A" arm. Run against the products whose
     /// portrayal anchors text on co-located symbols, where the regression that
     /// motivated this guard (S-421 route labels dropped onto waypoint circles)
-    /// actually lives. (S-125 AtoN is excluded: its synthetic fixtures carry no
-    /// portrayed text, so the guard would be vacuous there.)
+    /// actually lives, and S-125, whose AtoN names and light descriptions sit
+    /// on buoy and light symbols.
     /// </summary>
     [SkippableTheory]
     [InlineData("S421", "RTE-TEST-GFULL.s421.gml")]
     [InlineData("S124", "navwarn_mixed.gml")]
+    [InlineData("S125", "aton_us4va1bf.gml")]
     public void Vector_PointSymbolsDoNotSuppressLabels(string product, string fileName)
     {
         var path = Path.Combine(TestHelpers.DatasetsRoot, product, fileName);

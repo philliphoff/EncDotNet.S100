@@ -173,6 +173,7 @@ internal static class S125DatasetReader
             ComplexAttributes = complexAttrs,
             InformationReferences = infoRefs,
             FeatureReferences = featureRefs,
+            AttributeTree = ParseAttributeTree(element, s100Ns),
         };
     }
 
@@ -320,6 +321,39 @@ internal static class S125DatasetReader
         }
 
         return (simple, complex, infoRefs, featureRefs);
+    }
+
+    /// <summary>
+    /// Builds the ordered, lossless attribute tree of a feature element:
+    /// every non-geometry, non-reference child becomes a node, repeated
+    /// occurrences are kept, and complex attributes recurse.
+    /// </summary>
+    private static IReadOnlyList<S125AttributeNode> ParseAttributeTree(XElement element, XNamespace s100Ns)
+    {
+        var nodes = new List<S125AttributeNode>();
+        foreach (var child in element.Elements())
+        {
+            var localName = child.Name.LocalName;
+            if (localName is "geometry" or "boundedBy" ||
+                child.Name.Namespace == GmlNamespaces.Gml ||
+                child.Name.Namespace == s100Ns)
+                continue;
+
+            if (child.HasElements)
+            {
+                var children = ParseAttributeTree(child, s100Ns);
+                if (children.Count > 0)
+                    nodes.Add(new S125AttributeNode { Code = localName, Children = children });
+            }
+            else if (!string.IsNullOrEmpty(child.Value))
+            {
+                // Element-only references (xlink:href with no content) are
+                // associations, not attributes, and are skipped by the empty
+                // value check above.
+                nodes.Add(new S125AttributeNode { Code = localName, Value = child.Value.Trim() });
+            }
+        }
+        return nodes;
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)
