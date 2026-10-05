@@ -908,7 +908,9 @@ public partial class App : Application
                 sp.GetRequiredService<ViewerLibraryController>(),
                 sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
-                () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources)));
+                () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources),
+            // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
+            sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
