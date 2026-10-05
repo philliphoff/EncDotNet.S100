@@ -27,6 +27,8 @@ consulted (`.github/skills/<spec>/SKILL.md`):
 - [ ] Added/updated xunit tests under `tests/`
 - [ ] Tests requiring real data files skip via `Assert.SkipUnless`/`Assert.SkipWhen`
 - [ ] `dotnet test --configuration Release` passes locally
+- [ ] New or changed viewer UI has automation ids and accessible names (see
+      `.github/instructions/viewer.instructions.md`, Accessibility and automation)
 
 ## Documentation
 

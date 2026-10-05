@@ -189,6 +189,15 @@ When editing `src/EncDotNet.S100.Viewer/**`, follow the rules in
   (use `string.Format` for parameterized status text). No hardcoded
   user-facing strings in views, view-models, or code-behind.
 - Every button must have a meaningful `ToolTip.Tip`.
+- New or changed UI includes its accessibility and automation attributes,
+  done as part of the same change:
+  - every interactive control gets an `AutomationProperties.AutomationId`
+    (`<View>.<Element>`, abstract English, never localized);
+  - every control gets a short, localized accessible name
+    (`AutomationProperties.Name`; a button whose content is an icon or panel
+    always needs one), with longer text in `AutomationProperties.HelpText`;
+  - `AccessibilityGuardTests` must pass, and new views must never be added to
+    its `ViewsAwaitingIds` list.
 - All `GridSplitter`s use `Classes="PaneSplitter"` with thickness 4
   and a 500ms hover delay before the accent shows. Adjacent panels
   must not draw their own border on the splitter-facing edge.

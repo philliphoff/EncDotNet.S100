@@ -37,6 +37,51 @@ When modifying viewer code:
   meaningful `ToolTip.Tip`** sourced from `Strings.Tooltip_*` (or an
   equivalent resx key). Icon-only buttons especially need tooltips.
 
+## Accessibility and automation
+
+Accessibility and automation are part of building any new or changed UI, not
+a later pass. Screen readers, the headless view tests and the `ui_*` MCP tools
+all reach controls through Avalonia's automation peers, so the same attributes
+serve all three. See `tests/EncDotNet.S100.Viewer.Tests/README.md` for the full
+conventions.
+
+- **Give every interactive control an automation id**:
+  `AutomationProperties.AutomationId="<View>.<Element>"` in dotted PascalCase,
+  e.g. `Datasets.Toolbar.Add`, `Settings.FourShades`,
+  `Library.NodeMenu.Rename`. Ids are abstract, English and **never
+  localized**; keep them when the visible text changes. A control repeated
+  per row shares one id (`Datasets.Row.Remove`); tests and tools scope it by
+  the row.
+- **Give every control an accessible name**, from a localized `Strings.*`
+  value. A button whose content is a string is named by it. A button whose
+  content is a control (an icon, or a panel holding an icon and text) is
+  not: Avalonia names it after the content's type (e.g.
+  `FluentIcons.Avalonia.FluentIcon`), so set `AutomationProperties.Name`.
+  Inside a data template, bind it to the row's own text (e.g.
+  `{Binding Label}`).
+- **Keep names short** ("Move up", "Zoom in"). Put a longer description in
+  the tooltip and in `AutomationProperties.HelpText`, and a keyboard
+  shortcut in `AutomationProperties.AcceleratorKey`, not in the name.
+- **Name inputs after their label.** A text box, combo box, slider, number
+  box or toggle switch next to a label `TextBlock` gets
+  `AutomationProperties.Name` set to the label's string; on its own a screen
+  reader announces only "toggle switch, on".
+- **Hide duplicates.** Mark a control that only repeats its parent's
+  action (e.g. a tree item's expand chevron)
+  `AutomationProperties.AccessibilityView="Raw"` instead of naming it.
+- **Don't rely on raw pointer events for behaviour.** Behaviour behind
+  `PointerPressed`/`Tapped` alone cannot be reached by the keyboard, screen
+  readers or the `ui_*` tools. Back it with a control that has a command
+  (a `Button`, `ToggleButton`, list selection…).
+- **Run the guard.** `UiAutomation/AccessibilityGuardTests` in
+  `tests/EncDotNet.S100.Viewer.Tests` fails on an unnamed button, and on a
+  control without an automation id in any view not on its
+  `ViewsAwaitingIds` list. A new view must pass it: never add a view to
+  that list. When you finish a listed view, remove it.
+- **Test new UI through its ids.** Add an `[AvaloniaFact]` view test that
+  drives the new UI with `ViewHost` and finds controls by automation id,
+  not by localized text.
+
 ## GridSplitters
 
 - All `GridSplitter` instances use the shared style class
