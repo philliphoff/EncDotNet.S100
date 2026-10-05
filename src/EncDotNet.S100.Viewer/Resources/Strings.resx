@@ -3873,6 +3873,9 @@
   <data name="Tooltip_TimeHudOpenTimeline" xml:space="preserve">
     <value>Open timeline (T)</value>
   </data>
+  <data name="Timeline_ViewTime" xml:space="preserve">
+    <value>View time</value>
+  </data>
   <data name="Tooltip_TimeHudTime" xml:space="preserve">
     <value>The map's view time; click, then ← → to step</value>
   </data>

@@ -165,16 +165,19 @@
                                 <TextBlock Text="{Binding ActionDetail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" MaxWidth="320" />
                                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
                                     <Button Classes="Primary"
+                                            AutomationProperties.AutomationId="Timeline.Lane.Get"
                                             Height="28" MinHeight="0" Padding="12,0" FontSize="12"
                                             IsVisible="{Binding CanGet}"
                                             Content="{Binding GetText}"
                                             Command="{Binding GetCommand}" />
                                     <Button Classes="Outline"
+                                            AutomationProperties.AutomationId="Timeline.Lane.Load"
                                             Height="28" MinHeight="0" Padding="12,0" FontSize="12"
                                             IsVisible="{Binding CanLoad}"
                                             Content="{x:Static loc:Strings.TimelinePanel_BandLoad}"
                                             Command="{Binding LoadCommand}" />
                                     <Button Classes="Ghost"
+                                            AutomationProperties.AutomationId="Timeline.Lane.Reveal"
                                             Height="28" MinHeight="0" Padding="8,0" FontSize="12"
                                             Content="{x:Static loc:Strings.TimelinePanel_BandReveal}"
                                             Command="{Binding RevealCommand}" />
@@ -258,12 +261,14 @@
                                 IsVisible="{Binding AreStepButtonsVisible}">
                         <!-- C7: previous / next data, flanking the step controls. -->
                         <Button Classes="Icon"
+                                AutomationProperties.AutomationId="Timeline.PreviousData"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousData}"
                                 Command="{Binding PreviousDataCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousData}">
                             <ic:FluentIcon Icon="Previous" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
+                                AutomationProperties.AutomationId="Timeline.PreviousStep"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
                                 Command="{Binding PreviousStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
@@ -271,6 +276,7 @@
                         </Button>
                         <!-- C6: the step menu (built in code-behind: "Sample of ▸" lists the layers). -->
                         <Button x:Name="StepMenuButton"
+                                AutomationProperties.AutomationId="Timeline.StepMenu"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineStep}"
                                 Classes="Outline"
                                 Height="28" MinHeight="0" Padding="8,0"
@@ -282,12 +288,14 @@
                             </StackPanel>
                         </Button>
                         <Button Classes="Icon"
+                                AutomationProperties.AutomationId="Timeline.NextStep"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
                                 Command="{Binding NextStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
                             <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
+                                AutomationProperties.AutomationId="Timeline.NextData"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextData}"
                                 Command="{Binding NextDataCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextData}">
@@ -295,6 +303,7 @@
                         </Button>
                         <!-- Go live (A1): shown while pinned. -->
                         <Button Classes="Primary"
+                                AutomationProperties.AutomationId="Timeline.GoLive"
                                 IsVisible="{Binding !IsLive}"
                                 Height="28" MinHeight="0" Padding="12,0" Margin="6,0,0,0"
                                 FontSize="12"
@@ -303,6 +312,7 @@
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
                         <!-- C5: the window presets. -->
                         <Button x:Name="PresetMenuButton"
+                                AutomationProperties.AutomationId="Timeline.Preset"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreset}"
                                 Classes="Outline"
                                 Height="28" MinHeight="0" Padding="8,0" Margin="6,0,0,0"
@@ -339,12 +349,14 @@
                                        LetterSpacing="0.6"
                                        Opacity="0.6" />
                             <CheckBox IsVisible="{Binding IsInMapViewAvailable}"
+                                      AutomationProperties.AutomationId="Timeline.InMapView"
                                       IsChecked="{Binding IsInMapView}"
                                       Content="{x:Static loc:Strings.TimelinePanel_InMapView}"
                                       FontSize="12"
                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineInMapView}" />
                             <!-- #711 E2: what the Library knows but has not loaded. -->
                             <CheckBox IsVisible="{Binding IsShowOnlineAvailable}"
+                                      AutomationProperties.AutomationId="Timeline.ShowOnline"
                                       IsChecked="{Binding ShowOnline}"
                                       Content="{x:Static loc:Strings.TimelinePanel_ShowOnline}"
                                       FontSize="12"
@@ -362,6 +374,8 @@
                         <!-- A strip for the NOW label (every timeline, A2). -->
                         <Panel Grid.Row="1" Grid.Column="1" Height="14" />
                         <Slider Grid.Row="2" Grid.Column="1"
+                                AutomationProperties.AutomationId="Timeline.ViewTime"
+                                AutomationProperties.Name="{x:Static loc:Strings.Timeline_ViewTime}"
                                 Foreground="{DynamicResource AccentBrush}"
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"
@@ -432,6 +446,7 @@
                                     IsVisible="{Binding HasStatusMessage}">
                             <!-- D4: "No data … for N of M layers" opens the layer list on the first hidden layer. -->
                             <Button Classes="StatusText"
+                                    AutomationProperties.AutomationId="Timeline.Status"
                                     Content="{Binding StatusMessage}"
                                     Command="{Binding ShowLayersCommand}"
                                     IsHitTestVisible="{Binding IsStatusWarning}"
@@ -441,6 +456,7 @@
                                     Classes.drawing="{Binding IsDrawing}"
                                     VerticalAlignment="Center" />
                             <Button Classes="Ghost"
+                                    AutomationProperties.AutomationId="Timeline.StatusAction"
                                     IsVisible="{Binding HasStatusAction}"
                                     Content="{Binding StatusActionText}"
                                     Command="{Binding StatusActionCommand}"
@@ -467,7 +483,7 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:TimelineLaneGroupViewModel">
                                             <StackPanel>
-                                                <Button Classes="LaneGroup" Command="{Binding ToggleCommand}" AutomationProperties.Name="{Binding Title}">
+                                                <Button Classes="LaneGroup" Command="{Binding ToggleCommand}" AutomationProperties.Name="{Binding Title}" AutomationProperties.AutomationId="Timeline.LaneGroup">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
                                                         <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
@@ -486,6 +502,7 @@
                                 <StackPanel IsVisible="{Binding HasOutsideLanes}">
                                     <Grid ColumnDefinitions="248,*" Height="28">
                                         <Button Classes="LaneGroup"
+                                                AutomationProperties.AutomationId="Timeline.OutsideLanes"
                                                 AutomationProperties.Name="{Binding OutsideLabel}"
                                                 Command="{Binding ToggleOutsideCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineOutsideMapView}">
