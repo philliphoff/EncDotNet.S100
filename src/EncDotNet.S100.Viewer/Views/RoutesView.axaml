@@ -137,12 +137,14 @@
         <Border DockPanel.Dock="Top" Padding="8,4,6,4">
             <Grid ColumnDefinitions="*,Auto,Auto">
                 <Button Grid.Column="1"
+                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_PromoteMeasurement}"
                         Classes="Icon"
                         Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).PromoteMeasurementToRouteCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
                     <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                 </Button>
                 <Button Grid.Column="2"
+                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddRoute}"
                         Classes="Icon"
                         Command="{Binding AddRouteCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddRoute}">
@@ -191,6 +193,7 @@
                                            Opacity="0.6" />
                             </StackPanel>
                             <Button Grid.Column="2"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RouteRowMenu}"
                                     Classes="Icon"
                                     VerticalAlignment="Center"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteRowMenu}">
@@ -231,6 +234,7 @@
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
                         <Button Grid.Column="1"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_EditRouteName}"
                                 Classes="Icon"
                                 Command="{Binding BeginRenameCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_EditRouteName}">
@@ -276,6 +280,7 @@
                                         <Border Classes="wpTint" />
                                         <!-- Full-area select target (bottom layer). -->
                                         <Button Classes="wpHit"
+                                                AutomationProperties.Name="{Binding Label}"
                                                 Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).SelectWaypointCommand}"
                                                 CommandParameter="{Binding}" />
                                         <!-- Row visuals (top layer). The circle/text
@@ -306,6 +311,7 @@
                                                  across the flyout popup, but the
                                                  inherited DataContext does. -->
                                             <Button Grid.Column="1"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_WaypointRowMenu}"
                                                     Classes="Icon"
                                                     VerticalAlignment="Center"
                                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_WaypointRowMenu}">
@@ -371,6 +377,7 @@
                         BorderThickness="0,1,0,0">
                     <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
                         <Button Grid.Column="0"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_InsertWaypoint}"
                                 Classes="Outline"
                                 VerticalContentAlignment="Center"
                                 Command="{Binding InsertAfterSelectedCommand}"
@@ -381,6 +388,7 @@
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReverseRoute}"
                                 Classes="Outline"
                                 VerticalContentAlignment="Center"
                                 Command="{Binding ReverseActiveRouteCommand}"

@@ -70,11 +70,13 @@
                                Opacity="0.7" />
                     <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,2,0,0">
                         <Button Classes="link"
+                                AutomationProperties.Name="{x:Static loc:Strings.About_WebsiteTooltip}"
                                 Command="{Binding WebsiteCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.About_WebsiteTooltip}">
                             <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_Website}" />
                         </Button>
                         <Button Classes="link"
+                                AutomationProperties.Name="{x:Static loc:Strings.About_DocumentationTooltip}"
                                 Command="{Binding DocumentationCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.About_DocumentationTooltip}">
                             <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_Documentation}" />
@@ -128,6 +130,7 @@
                                    Opacity="0.7" />
                     </StackPanel>
                     <Button Grid.Column="2"
+                            AutomationProperties.Name="{x:Static loc:Strings.About_CheckNowTooltip}"
                             Classes="link"
                             Command="{Binding CheckNowCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.About_CheckNowTooltip}">
@@ -163,6 +166,7 @@
                     <StackPanel Margin="14,12,14,14" Spacing="12">
                         <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                             <Button Classes="Primary"
+                                    AutomationProperties.Name="{x:Static loc:Strings.About_UpdateNowTooltip}"
                                     Command="{Binding UpdateNowCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.About_UpdateNowTooltip}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -173,11 +177,13 @@
                                 </StackPanel>
                             </Button>
                             <Button Classes="link"
+                                    AutomationProperties.Name="{x:Static loc:Strings.About_ReleaseNotesTooltip}"
                                     Command="{Binding ReleaseNotesCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.About_ReleaseNotesTooltip}">
                                 <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_ReleaseNotes}" />
                             </Button>
                             <Button Classes="link"
+                                    AutomationProperties.Name="{x:Static loc:Strings.About_SkipTooltip}"
                                     IsVisible="{Binding CanSkip}"
                                     Command="{Binding SkipCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.About_SkipTooltip}">
@@ -205,6 +211,7 @@
                                VerticalAlignment="Center"
                                Opacity="0.8" />
                     <Button Grid.Column="1"
+                            AutomationProperties.Name="{x:Static loc:Strings.About_CheckNowTooltip}"
                             Classes="link"
                             Command="{Binding CheckNowCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.About_CheckNowTooltip}">
@@ -242,12 +249,14 @@
                            FontSize="12"
                            Opacity="0.7" />
                 <Button Grid.Column="1"
+                        AutomationProperties.Name="{x:Static loc:Strings.About_LicenseTooltip}"
                         Classes="link"
                         Command="{Binding LicenseCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.About_LicenseTooltip}">
                     <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_License}" />
                 </Button>
                 <Button Grid.Column="2"
+                        AutomationProperties.Name="{x:Static loc:Strings.About_ThirdPartyNoticesTooltip}"
                         Classes="link"
                         Margin="16,0,0,0"
                         Command="{Binding ThirdPartyNoticesCommand}"

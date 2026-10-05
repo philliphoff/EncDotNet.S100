@@ -3055,6 +3055,9 @@
   <data name="Menu_LibraryCopyUrl" xml:space="preserve">
     <value>Copy URL</value>
   </data>
+  <data name="Library_ToggleGroup" xml:space="preserve">
+    <value>Show or hide the datasets in this package</value>
+  </data>
   <data name="Library_Quick_Folder" xml:space="preserve">
     <value>Add a folder…</value>
   </data>

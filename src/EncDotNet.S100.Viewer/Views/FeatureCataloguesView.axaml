@@ -46,6 +46,7 @@
                                     Spacing="2"
                                     VerticalAlignment="Center">
                             <Button Classes="Icon"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenCatalogueInExaminer}"
                                     Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).OpenInExaminerCommand}"
                                     CommandParameter="{Binding}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenCatalogueInExaminer}"
@@ -53,6 +54,7 @@
                                 <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
                                     Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                     CommandParameter="{Binding}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"

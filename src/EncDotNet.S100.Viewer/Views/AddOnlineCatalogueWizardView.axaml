@@ -71,7 +71,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:WizardStepViewModel">
-                            <Button Classes="wizardStep" Command="{Binding GoToCommand}" Margin="0,0,12,0">
+                            <Button Classes="wizardStep" Command="{Binding GoToCommand}" Margin="0,0,12,0" AutomationProperties.Name="{Binding Label}">
                                 <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
                                     <Panel Width="22" Height="22" VerticalAlignment="Top">
                                         <Ellipse Classes="stepMarker"

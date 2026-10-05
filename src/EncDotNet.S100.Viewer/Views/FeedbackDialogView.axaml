@@ -70,6 +70,7 @@
                 <!-- Raw data disclosure (custom toggle for precise alignment) -->
                 <StackPanel Spacing="0">
                     <ToggleButton Classes="Ghost"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Feedback_RawDataHeader}"
                                   Padding="4,2"
                                   HorizontalAlignment="Left"
                                   IsChecked="{Binding IsRawDataExpanded, Mode=TwoWay}"

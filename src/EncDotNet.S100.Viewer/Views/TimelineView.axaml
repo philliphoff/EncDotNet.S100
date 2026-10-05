@@ -258,17 +258,20 @@
                                 IsVisible="{Binding AreStepButtonsVisible}">
                         <!-- C7: previous / next data, flanking the step controls. -->
                         <Button Classes="Icon"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousData}"
                                 Command="{Binding PreviousDataCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousData}">
                             <ic:FluentIcon Icon="Previous" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
                                 Command="{Binding PreviousStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
                             <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <!-- C6: the step menu (built in code-behind: "Sample of ▸" lists the layers). -->
                         <Button x:Name="StepMenuButton"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineStep}"
                                 Classes="Outline"
                                 Height="28" MinHeight="0" Padding="8,0"
                                 FontSize="12"
@@ -279,11 +282,13 @@
                             </StackPanel>
                         </Button>
                         <Button Classes="Icon"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
                                 Command="{Binding NextStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
                             <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextData}"
                                 Command="{Binding NextDataCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextData}">
                             <ic:FluentIcon Icon="Next" IconVariant="Regular" FontSize="14" />
@@ -298,6 +303,7 @@
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
                         <!-- C5: the window presets. -->
                         <Button x:Name="PresetMenuButton"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreset}"
                                 Classes="Outline"
                                 Height="28" MinHeight="0" Padding="8,0" Margin="6,0,0,0"
                                 FontSize="12"
@@ -461,7 +467,7 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:TimelineLaneGroupViewModel">
                                             <StackPanel>
-                                                <Button Classes="LaneGroup" Command="{Binding ToggleCommand}">
+                                                <Button Classes="LaneGroup" Command="{Binding ToggleCommand}" AutomationProperties.Name="{Binding Title}">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
                                                         <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
@@ -480,6 +486,7 @@
                                 <StackPanel IsVisible="{Binding HasOutsideLanes}">
                                     <Grid ColumnDefinitions="248,*" Height="28">
                                         <Button Classes="LaneGroup"
+                                                AutomationProperties.Name="{Binding OutsideLabel}"
                                                 Command="{Binding ToggleOutsideCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineOutsideMapView}">
                                             <StackPanel Orientation="Horizontal" Spacing="6">

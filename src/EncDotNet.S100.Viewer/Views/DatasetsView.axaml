@@ -372,6 +372,7 @@
                         <Grid DockPanel.Dock="Top"
                               Margin="8,0,8,6">
                             <Button x:Name="SourcesAddButton"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddSource}"
                                     Classes="Icon"
                                     HorizontalAlignment="Left"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddSource}">
@@ -410,6 +411,7 @@
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
@@ -452,6 +454,7 @@
                                                            Icon="Shield" IconVariant="Regular" Opacity="0.4" />
                                         </Panel>
                                         <Button Grid.Column="4"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseExchangeSet}"
                                                 Classes="Icon"
                                                 VerticalAlignment="Center"
                                                 Command="{Binding CloseCommand}"
@@ -465,6 +468,7 @@
                                     <Grid ColumnDefinitions="Auto,*,Auto"
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
@@ -482,6 +486,7 @@
                                                        TextTrimming="CharacterEllipsis" />
                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
                                             <Button Grid.Column="0"
+                                                    AutomationProperties.Name="{Binding LayerTimeText}"
                                                     Classes="LayerTime"
                                                     Classes.hidden="{Binding IsLayerHidden}"
                                                     Classes.drawing="{Binding IsLayerDrawing}"
@@ -523,21 +528,25 @@
                                     Spacing="4"
                                     Margin="8,0,8,4">
                             <Button Classes="Icon"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddDataset}"
                                     x:Name="ToolbarAddButton"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataset}">
                                 <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ShowAllDatasets}"
                                     Command="{Binding ShowAllCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowAllDatasets}">
                                 <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_HideAllDatasets}"
                                     Command="{Binding HideAllCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_HideAllDatasets}">
                                 <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}"
                                     Command="{Binding ResetOpacityCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}">
                                 <ic:FluentIcon Icon="ArrowReset" IconVariant="Regular" FontSize="14" />
@@ -591,6 +600,7 @@
                             </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
                                 <Button Grid.Column="0"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                         Classes="Icon"
                                         Command="{Binding ToggleVisibilityCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
@@ -619,6 +629,7 @@
                                                Opacity="0.6" />
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
                                         <Button Grid.Column="0"
+                                                AutomationProperties.Name="{Binding LayerTimeText}"
                                                 Classes="LayerTime"
                                                 Classes.hidden="{Binding IsLayerHidden}"
                                                 Classes.drawing="{Binding IsLayerDrawing}"
@@ -644,6 +655,7 @@
                                                IsVisible="{Binding HasVersionWarning}"
                                                ToolTip.Tip="{Binding VersionWarningTooltip}" />
                                 <Button Grid.Column="3"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
                                         Classes="Icon"
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
                                         CommandParameter="{Binding}"
@@ -654,6 +666,7 @@
                                     <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
                                 </Button>
                                 <Button Grid.Column="4"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
                                         Classes="Icon"
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
                                         CommandParameter="{Binding}"
@@ -664,6 +677,7 @@
                                     <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14" />
                                 </Button>
                                 <Button Grid.Column="5"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RemoveDataset}"
                                         Classes="Icon"
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
                                         CommandParameter="{Binding}"
@@ -860,6 +874,7 @@
                                                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
                                                       ColumnSpacing="6">
                                                     <Button Grid.Row="0" Grid.Column="0"
+                                                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleSubLayerVisibility}"
                                                             Classes="Icon"
                                                             Command="{Binding ToggleVisibilityCommand}"
                                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleSubLayerVisibility}"
@@ -944,6 +959,7 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:ValidationFindingViewModel">
                                                     <Button Classes="FindingRow"
+                                                            AutomationProperties.Name="{Binding ZoomTooltip}"
                                                             Command="{Binding ZoomToFindingCommand}"
                                                             IsEnabled="{Binding HasSpatialLocation}"
                                                             ToolTip.Tip="{Binding ZoomTooltip}">

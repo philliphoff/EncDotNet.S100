@@ -23,6 +23,7 @@
                          VerticalContentAlignment="Center"
                          Padding="8,4" />
                 <Button Grid.Column="1"
+                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearSearch}"
                         Margin="4,0,0,0"
                         Padding="8,4"
                         Command="{Binding ClearQueryCommand}"
