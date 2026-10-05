@@ -372,6 +372,8 @@
                                     </Border.IsVisible>
                                 </Border>
                                 <ToggleButton Classes="ActivityIcon"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
+                                              AutomationProperties.Name="{Binding Title}"
                                               Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
                                               CommandParameter="{Binding}"
                                               ToolTip.Tip="{Binding Tooltip}"
@@ -413,6 +415,8 @@
                                     </Border.IsVisible>
                                 </Border>
                                 <ToggleButton Classes="ActivityIcon"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
+                                              AutomationProperties.Name="{Binding Title}"
                                               Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
                                               CommandParameter="{Binding}"
                                               ToolTip.Tip="{Binding Tooltip}"

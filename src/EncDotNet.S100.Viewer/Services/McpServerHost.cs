@@ -45,6 +45,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly AdjustableTimeProvider? _testClock;
     private readonly IViewerLibraryController? _library;
     private readonly IViewerLibraryEditor? _libraryEditor;
+    private readonly IViewerUiAutomation? _uiAutomation;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -73,7 +74,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         IViewerNotificationController? notifications = null,
         AdjustableTimeProvider? testClock = null,
         IViewerLibraryController? library = null,
-        IViewerLibraryEditor? libraryEditor = null)
+        IViewerLibraryEditor? libraryEditor = null,
+        IViewerUiAutomation? uiAutomation = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -98,6 +100,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _testClock = testClock;
         _library = library;
         _libraryEditor = libraryEditor;
+        _uiAutomation = uiAutomation;
         _loggers = loggers;
     }
 
@@ -304,7 +307,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// <see cref="SocketError.AddressAlreadyInUse"/> as well as the
     /// .NET 10 <c>AddressInUseException</c> wrapper.
     /// </summary>
-    private System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
+    internal System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
     {
         var tools = new System.Collections.Generic.List<McpServerTool>();
         if (_viewportAccessor is not null)
@@ -378,6 +381,16 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_testClock is not null && _settings.McpTestHooks)
         {
             tools.Add(ViewerStateMcpAdapters.Create(new SetTestClockTool(_testClock)));
+        }
+
+        // Test hooks only: the ui_* tools can click anything in the UI, so they
+        // are for scripted testing and never offered to someone who just turns
+        // the MCP server on in Settings.
+        if (_uiAutomation is not null && _settings.McpTestHooks)
+        {
+            tools.Add(UiAutomationMcpAdapters.Create(new UiTreeTool(_uiAutomation)));
+            foreach (var action in Enum.GetValues<UiAction>())
+                tools.Add(UiAutomationMcpAdapters.Create(new UiActionTool(_uiAutomation, action)));
         }
         if (_routesService is not null)
         {

@@ -70,9 +70,12 @@ dotnet run --project src/EncDotNet.S100.Viewer -- \
   once the server is listening, so an agent can discover an ephemeral
   port (`--mcp-port 0`, the default). The endpoint is also printed to
   stdout as `[MCP] listening on …`.
-- `--mcp-test-hooks` also registers test-only tools (today
-  `set_test_clock`, which moves or freezes the viewer's notion of now).
-  Use it only for scripted testing; it implies `--mcp`.
+- `--mcp-test-hooks` also registers test-only tools: `set_test_clock`,
+  which moves or freezes the viewer's notion of now, and the `ui_*` UI
+  automation tools, which can click, type into and select anything in
+  the viewer's UI. Use it only for scripted testing; it implies `--mcp`.
+  The flag is never saved, so turning MCP on in Settings never offers
+  these tools.
 - A CLI-driven MCP run **never persists** the bound port back to
   `settings.json`. Combine with `--ephemeral` (throwaway settings),
   `--settings <PATH>` (alternate settings file), or `--data-dir <PATH>`
@@ -130,6 +133,8 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `list_notifications` *(viewer only, read-only)* | Lists the notifications on screen, oldest first: `id`, `severity`, `title`, `message`, `createdUtc`, `persistent`, and its action labels. |
 | `dismiss_notification` *(viewer only, **mutating**)* | Dismisses the notification with `id`, or every one (`all`, the default), as the user's close button does. Returns the ids dismissed; `notification_not_found` for an id not on screen. Useful before a screenshot. |
 | `set_test_clock` *(viewer only, **mutating**, test hooks only)* | Registered only when the viewer starts with `--mcp-test-hooks`. Moves (`now`, `advance` such as `+1h`), freezes (`freeze`) or resets (`reset`) the viewer's notion of now, so forecasts age, runs expire and a Live Timeline advances without waiting. Minute-tick consumers (the Timeline, the Library's expiry check) react immediately. |
+| `ui_tree` *(viewer only, read-only, test hooks only)* | Lists the UI as an accessibility client sees it, through Avalonia's automation peers: one root per window and open popup (`kind` `window` or `popup`: context menus and flyouts), each a tree of elements with a `ref` (`e12`; valid while the element stays on screen), `id` (its automation id, see the convention in `tests/EncDotNet.S100.Viewer.Tests/README.md`, e.g. `Datasets.DatasetsTab`, `Library.Tree`, `ActivityBar.Datasets`), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem`…), `name`, `text` (the visible text of a row, or the tooltip of an icon button, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and promotes the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree; `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) bound the size. The map is one element: use the map tools for chart content. |
+| `ui_invoke` / `ui_set_value` / `ui_toggle` / `ui_select` / `ui_expand` / `ui_collapse` / `ui_focus` / `ui_context_menu` *(viewer only, **mutating**, test hooks only)* | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on`/`off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target by `id` or `ref` (exactly one). An id repeated per row (`Datasets.Row.Remove`) is ambiguous on its own: scope it with `within` (the row's ref or an ancestor's id) or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled`, `ui_action_not_supported` (with the element's `patterns`). A dialog or popup closing animates for a moment after the call returns; read `ui_tree` again before relying on it being gone. |
 | `list_library_sources` *(viewer only, read-only)* | Lists the Library: each collection (top-level node) with its kind tag (`DIR`, `ZIP`, `WEB`, `AWS`, `LIST`, `FEED`, `JSON`, `S-128`), item count and status line, and each source with its index state, `indexedAt` (how stale a cached online catalogue is), URL (shared-feed tokens masked) and, unless `counts: false`, item counts by state. |
 | `query_library_items` *(viewer only, read-only)* | Finds Library datasets, paged (`page`, `pageSize` 1–500, default 50). Filters: `sourceId` (collection or source), `states` (`online`, `local`, `loaded`, `on_pan`, `update`, `expired`, `missing`, `listed`), `validAt` (`view_time`, as the Library's Valid at view time toggle, or an ISO-8601 time: data whose run or time coverage holds it), `spec`, `text` (as the Library filter box), a bounding box (`south`/`west`/`north`/`east`), or a point (`lat`/`lon`: what covers it, most detailed first, as tapping the map does). Each item reports `id` (`<sourceId>:<key>`), spec, state and tags as its row shows them, edition, issue date, size, bounds, local path, and for forecasts the model, run and `validUntil`. |
 | `describe_library_item` *(viewer only, read-only)* | Returns one item (by `itemId`) with its details pane: groups of labelled fields (Forecast, Product, Coverage, Source, …). `library_item_not_found` for an unknown id. |
@@ -192,7 +197,8 @@ Tools fall into two groups:
   without changing it), `get_timeline_state` and `list_notifications`
   (which snapshot the Timeline and the notifications), and the Library
   reads `list_library_sources`, `query_library_items`,
-  `describe_library_item`, `list_known_sources` and `await_library_idle`.
+  `describe_library_item`, `list_known_sources` and `await_library_idle`,
+  and, with `--mcp-test-hooks`, `ui_tree`.
 * **Mutating** — modify the live viewer's state (navigator, palette,
   time step, loaded datasets, routes, etc.). Use only when you intend to
   drive the viewer's UI from outside. Examples: `set_viewport`,
@@ -208,7 +214,7 @@ Tools fall into two groups:
   `delete_waypoint`, `set_leg_attributes`, and `set_route_info`, and
   `set_panel` (which shows / hides the viewer's activity panels), and
   `set_view_time`, `step_time`, `set_timeline_view`, `set_dataset_state`, `select_dataset`, `dismiss_notification` and, with
-  `--mcp-test-hooks`, `set_test_clock`, and the Library changes
+  `--mcp-test-hooks`, `set_test_clock` and the `ui_*` actions, and the Library changes
   `add_library_source`, `refresh_library_source`, `library_action` and
   `remove_library_source`.
 
@@ -340,6 +346,9 @@ near-mechanical mapping.
   or unloading datasets, driving the viewport, palette, or time step) —
   see the read-only vs mutating breakdown above. None can write
   arbitrary files.
+- The `ui_*` tools can do anything a user can do in the UI, so they are
+  registered only with `--mcp-test-hooks`, a command-line flag that is
+  never saved; turning MCP on in Settings does not offer them.
 
 ## Disable from the UI
 
