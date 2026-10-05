@@ -76,6 +76,7 @@
                             </ToolTip.Tip>
                         </TextBlock>
                         <Button Grid.Column="2"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
                                 Width="22" Height="22"
                                 MinWidth="0" MinHeight="0"
                                 Padding="0"
@@ -152,6 +153,7 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="2"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyReferencedText}"
                                 VerticalAlignment="Top"
                                 Padding="6"
                                 Margin="4"
@@ -272,6 +274,7 @@
                                          VerticalAlignment="Center"
                                          TextWrapping="Wrap" />
                     <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyLocation}"
                             VerticalAlignment="Center"
                             Padding="6"
                             Background="Transparent"
@@ -719,6 +722,7 @@
                             Spacing="2"
                             VerticalAlignment="Top">
                     <Button Padding="6"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
                             Background="Transparent"
                             Command="{Binding OpenFeatureInExaminerCommand}"
                             IsVisible="{Binding IsExaminerAvailable}"
@@ -726,6 +730,7 @@
                         <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <Button Padding="6"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyIdentity}"
                             Background="Transparent"
                             Command="{Binding CopyIdentityCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyIdentity}">
@@ -749,6 +754,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="pp:FeatureReference">
                                 <Button Margin="0,1"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_FollowReference}"
                                         Padding="6,2"
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Left"

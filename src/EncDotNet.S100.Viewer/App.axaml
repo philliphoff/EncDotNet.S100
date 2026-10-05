@@ -317,6 +317,7 @@
                                             </MultiBinding>
                                         </Grid.Margin>
                                         <ToggleButton Name="PART_ExpandCollapseChevron"
+                                                      AutomationProperties.AccessibilityView="Raw"
                                                       Focusable="False"
                                                       Background="Transparent"
                                                       IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"

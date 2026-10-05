@@ -127,6 +127,8 @@
     <shadui:Window.RightWindowTitleBarContent>
         <StackPanel Orientation="Horizontal" Spacing="0">
             <Button Command="{Binding ShowFeedbackCommand}"
+                    AutomationProperties.AutomationId="MainWindow.Feedback"
+                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReportFeedback}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReportFeedback}"
                     Width="32" Height="28"
                     Padding="0"
@@ -138,6 +140,8 @@
                                Foreground="{DynamicResource ForegroundColor}" />
             </Button>
             <Button Command="{Binding ToggleThemeCommand}"
+                    AutomationProperties.AutomationId="MainWindow.ToggleTheme"
+                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleTheme}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
                     Width="32" Height="28"
                     Padding="0"
@@ -264,6 +268,8 @@
                                IsVisible="{Binding IsMapScaleVisible}"
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
                     <Button x:Name="OverscaleButton"
+                            AutomationProperties.AutomationId="Map.Overscale"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_Overscale}"
                             VerticalAlignment="Center"
                             Margin="10,0,0,0"
                             Padding="8,1"
@@ -555,6 +561,8 @@
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
                     <Button x:Name="PickModeButton"
+                            AutomationProperties.AutomationId="Map.PickMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_PickMode}"
                             Classes="Icon MapOverlay"
                             Classes.pickActive="{Binding IsPickModeActive}"
                             Command="{Binding TogglePickModeCommand}"
@@ -615,6 +623,8 @@
                       Window.KeyBindings block at the top of this file).
                     -->
                     <Button x:Name="MeasureModeButton"
+                            AutomationProperties.AutomationId="Map.MeasureMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_MeasureMode}"
                             Classes="Icon MapOverlay"
                             Classes.measureActive="{Binding IsMeasureModeActive}"
                             Command="{Binding ToggleMeasureModeCommand}"
@@ -647,6 +657,8 @@
                       route editor (click to add waypoints, drag to move).
                     -->
                     <Button x:Name="RouteEditModeButton"
+                            AutomationProperties.AutomationId="Map.RouteEditMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RouteEditMode}"
                             Classes="Icon MapOverlay"
                             Classes.routeActive="{Binding IsRouteEditModeActive}"
                             Command="{Binding ToggleRouteEditModeCommand}"
@@ -682,6 +694,8 @@
                       Measure mode buttons above.
                     -->
                     <Button x:Name="DisplaySettingsButton"
+                            AutomationProperties.AutomationId="Map.DisplaySettings"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_DisplaySettings}"
                             Classes="Icon MapOverlay"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplaySettings}">
                         <Button.Styles>
@@ -723,6 +737,8 @@
                                                    Opacity="0.7"
                                                    VerticalAlignment="Center" />
                                         <Button Grid.Column="1"
+                                                AutomationProperties.AutomationId="DisplaySettings.Close"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}"
                                                 Classes="Icon"
                                                 Width="28"
                                                 Height="28"
@@ -745,21 +761,25 @@
                                         <Border Classes="segmentTrack">
                                             <UniformGrid Rows="1">
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Base"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.Segment_DisplayBase}"
                                                              IsChecked="{Binding DisplayToolbar.IsDisplayBase, Mode=OneWay}"
                                                              Command="{Binding DisplayToolbar.SetDisplayBaseCommand}" />
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Standard"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.DisplayCategory_Standard}"
                                                              IsChecked="{Binding DisplayToolbar.IsStandard, Mode=OneWay}"
                                                              Command="{Binding DisplayToolbar.SetStandardCommand}" />
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Other"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.Segment_DisplayOther}"
                                                              IsChecked="{Binding DisplayToolbar.IsOtherInformation, Mode=OneWay}"
                                                              Command="{Binding DisplayToolbar.SetOtherInformationCommand}" />
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.All"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.DisplayCategory_All}"
                                                              IsChecked="{Binding DisplayToolbar.IsAll, Mode=OneWay}"
@@ -778,14 +798,17 @@
                                                 IsEnabled="{Binding TextToolbar.IsEnabled}">
                                             <UniformGrid Rows="1">
                                                 <ToggleButton Classes="segment"
+                                                              AutomationProperties.AutomationId="DisplaySettings.Text.Important"
                                                               Content="{x:Static loc:Strings.Segment_TextImportant}"
                                                               IsChecked="{Binding TextToolbar.IsImportantVisible, Mode=OneWay}"
                                                               Command="{Binding TextToolbar.ToggleImportantCommand}" />
                                                 <ToggleButton Classes="segment"
+                                                              AutomationProperties.AutomationId="DisplaySettings.Text.Other"
                                                               Content="{x:Static loc:Strings.Segment_TextOther}"
                                                               IsChecked="{Binding TextToolbar.IsOtherVisible, Mode=OneWay}"
                                                               Command="{Binding TextToolbar.ToggleOtherCommand}" />
                                                 <ToggleButton Classes="segment"
+                                                              AutomationProperties.AutomationId="DisplaySettings.Text.All"
                                                               Content="{x:Static loc:Strings.Segment_TextAll}"
                                                               IsChecked="{Binding TextToolbar.IsAllVisible, Mode=OneWay}"
                                                               Command="{Binding TextToolbar.ToggleAllCommand}" />
@@ -808,16 +831,19 @@
                                         <Border Classes="segmentTrack">
                                             <UniformGrid Rows="1">
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Day"
                                                              GroupName="DisplaySettingsPalette"
                                                              Content="{x:Static loc:Strings.Palette_Day}"
                                                              IsChecked="{Binding Settings.IsPaletteDay, Mode=OneWay}"
                                                              Command="{Binding Settings.SetPaletteDayCommand}" />
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Dusk"
                                                              GroupName="DisplaySettingsPalette"
                                                              Content="{x:Static loc:Strings.Palette_Dusk}"
                                                              IsChecked="{Binding Settings.IsPaletteDusk, Mode=OneWay}"
                                                              Command="{Binding Settings.SetPaletteDuskCommand}" />
                                                 <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Night"
                                                              GroupName="DisplaySettingsPalette"
                                                              Content="{x:Static loc:Strings.Palette_Night}"
                                                              IsChecked="{Binding Settings.IsPaletteNight, Mode=OneWay}"
@@ -849,16 +875,22 @@
                     -->
                     <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
                         <Button x:Name="ZoomInButton"
+                                AutomationProperties.AutomationId="Map.ZoomIn"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomIn}"
                                 Classes="Icon MapOverlay"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
                             <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
                         </Button>
                         <Button x:Name="ZoomOutButton"
+                                AutomationProperties.AutomationId="Map.ZoomOut"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomOut}"
                                 Classes="Icon MapOverlay"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
                             <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
                         </Button>
                         <Button x:Name="ZoomToExtentButton"
+                                AutomationProperties.AutomationId="Map.ZoomToExtent"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomToExtent}"
                                 Classes="Icon MapOverlay"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
                             <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
@@ -898,6 +930,7 @@
                     <!-- #710 E6: lanes or the strip, remembered. -->
                     <views:ApplicationPanel.HeaderContent>
                         <Button Classes="Ghost"
+                                AutomationProperties.AutomationId="Timeline.ToggleStrip"
                                 x:DataType="vm:TimelineViewModel"
                                 DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Timeline}"
                                 IsVisible="{Binding IsActive}"
