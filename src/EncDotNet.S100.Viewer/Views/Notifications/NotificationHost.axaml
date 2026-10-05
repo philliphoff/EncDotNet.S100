@@ -125,6 +125,7 @@
         <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:NotificationViewModel">
                 <Border Classes="notificationCard"
+                        AutomationProperties.AutomationId="Notification.Card"
                         ClipToBounds="True"
                         Classes.success="{Binding IsSuccess}"
                         Classes.warning="{Binding IsWarning}"
@@ -162,6 +163,7 @@
                                            Margin="0,0,26,0"
                                            Text="{Binding Title}" />
                                 <TextBlock Classes="notificationBody"
+                                           AutomationProperties.AutomationId="Notification.Body"
                                            Text="{Binding Message}"
                                            MaxLines="{Binding BodyMaxLines}"
                                            behaviors:TextTruncationTracker.Track="True"
@@ -169,6 +171,7 @@
                                            IsVisible="{Binding HasMessage}" />
 
                                 <Button Classes="notificationLink"
+                                        AutomationProperties.AutomationId="Notification.ToggleExpand"
                                         Content="{Binding ToggleExpandLabel}"
                                         Command="{Binding ToggleExpandCommand}"
                                         IsVisible="{Binding ShowExpandToggle}"
@@ -191,6 +194,7 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:NotificationActionViewModel">
                                             <Button Classes="notificationAction"
+                                                    AutomationProperties.AutomationId="Notification.Action"
                                                     Margin="4"
                                                     Content="{Binding Label}"
                                                     Command="{Binding Command}"
@@ -219,7 +223,8 @@
                                     HorizontalContentAlignment="Center"
                                     VerticalContentAlignment="Center"
                                     Command="{Binding CloseCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Notification_Close}">
+                                    ToolTip.Tip="{x:Static loc:Strings.Notification_Close}"
+                                    AutomationProperties.AutomationId="Notification.Close">
                                 <ic:FluentIcon FontSize="14" Icon="Dismiss"
                                                IconVariant="Regular"
                                                Foreground="{DynamicResource ForegroundColor}" />

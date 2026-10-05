@@ -94,6 +94,7 @@
                 <Button Classes="HudText"
                         Content="{Binding StatusMessage}"
                         Command="{Binding ShowLayersCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Status"
                         IsHitTestVisible="{Binding IsStatusWarning}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineShowLayers}"
                         Classes.warning="{Binding IsStatusWarning}"
@@ -103,6 +104,7 @@
                         IsVisible="{Binding HasStatusAction}"
                         Content="{Binding StatusActionText}"
                         Command="{Binding StatusActionCommand}"
+                        AutomationProperties.AutomationId="TimeHud.StatusAction"
                         FontWeight="SemiBold"
                         VerticalAlignment="Center" />
             </StackPanel>
@@ -122,6 +124,7 @@
                     </StackPanel>
                 </Border>
                 <Border x:Name="PinnedPill"
+                        AutomationProperties.AutomationId="TimeHud.PinnedPill"
                         Classes="ModePill"
                         IsVisible="{Binding !IsLive}"
                         CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
@@ -129,6 +132,7 @@
                 </Border>
                 <!-- F6: clicking the time focuses the bar for the keyboard; there is no picker. -->
                 <TextBlock x:Name="TimeText"
+                           AutomationProperties.AutomationId="TimeHud.Time"
                            Text="{Binding CurrentTimeLabel}"
                            FontFamily="Menlo, Consolas, monospace"
                            FontSize="13" FontWeight="SemiBold"
@@ -147,11 +151,13 @@
                 <Border Classes="HudSeparator" />
                 <Button Classes="Icon HudIcon"
                         Command="{Binding PreviousStepCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Previous"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
                     <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
                 </Button>
                 <Button Classes="Icon HudIcon"
                         Command="{Binding NextStepCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Next"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
                     <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
                 </Button>
@@ -161,9 +167,11 @@
                         FontSize="12"
                         Content="{x:Static loc:Strings.TimeHud_Live}"
                         Command="{Binding NowCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Live"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
                 <Border Classes="HudSeparator" />
                 <Button x:Name="DockToggle"
+                        AutomationProperties.AutomationId="TimeHud.DockToggle"
                         Classes="Icon HudIcon"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}">
                     <ic:FluentIcon Icon="PanelBottom" IconVariant="Regular" FontSize="16" />

@@ -10,9 +10,9 @@ public sealed class LibraryPanelViewModelTests : IDisposable
 {
     private readonly LibraryTestContext _context = new();
     private readonly LibraryService _library;
-    private readonly RecordingImporter _importer = new();
-    private readonly FakeLoader _loader = new();
-    private readonly FakeDownloader _downloader = new();
+    private readonly RecordingLibraryImporter _importer = new();
+    private readonly FakeLibraryLoader _loader = new();
+    private readonly FakeLibraryDownloader _downloader = new();
 
     public LibraryPanelViewModelTests()
     {
@@ -665,99 +665,6 @@ public sealed class LibraryPanelViewModelTests : IDisposable
             }
 
             return ValueTask.FromResult(new SourceIndex(source.Id, DateTimeOffset.UtcNow, null, [item], []));
-        }
-    }
-
-    private sealed class FakeDownloader : ILibraryDownloader
-    {
-        public LibraryDownloadProgress? Progress { get; set; }
-
-        public bool CancelledAll { get; private set; }
-
-        public event EventHandler? ProgressChanged;
-
-        public void RaiseProgress() => ProgressChanged?.Invoke(this, EventArgs.Empty);
-
-        public void CancelAll() => CancelledAll = true;
-
-        public bool Downloaded { get; set; }
-
-        public bool Outdated { get; set; }
-
-        public bool CanDownloadAll { get; set; }
-
-        public int Downloads { get; private set; }
-
-        public event EventHandler? Changed;
-
-        public CollectionItem Localize(CollectionItem item) =>
-            Downloaded && item.Location is RemoteItemLocation
-                ? item with { Location = new LocalItemLocation("/tmp/x", "x.000", []) }
-                : item;
-
-        public bool IsOutdated(CollectionItem item) => Outdated;
-
-        public bool CanDownload(CollectionItem item) => CanDownloadAll || item.Location is RemoteItemLocation;
-
-        public Task<LibraryDownloadResult> DownloadAsync(IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
-        {
-            Downloads += items.Count;
-            Changed?.Invoke(this, EventArgs.Empty);
-            return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
-        }
-
-        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    private sealed class FakeLoader : ILibraryLoader
-    {
-        public LibraryLoadState State { get; set; }
-
-        public List<(bool Defer, int Count)> Calls { get; } = [];
-
-        public event EventHandler? Changed;
-
-        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
-
-        public LibraryLoadState StateOf(CollectionItem item) => State;
-
-        public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
-        {
-            Calls.Add((defer, items.Count));
-            return Task.FromResult(new LibraryLoadResult(items.Count, 0));
-        }
-    }
-
-    private sealed class RecordingImporter : ILibraryImporter
-    {
-        public List<(string Kind, Guid? Target)> Calls { get; } = [];
-
-        public Task AddFolderAsync(Guid? targetCollectionId) => Record("folder", targetCollectionId);
-
-        public Task AddExchangeSetZipAsync(Guid? targetCollectionId) => Record("zip", targetCollectionId);
-
-        public Task AddOnlineCatalogueAsync(Guid? targetCollectionId) => Record("online", targetCollectionId);
-
-        public Task AddSharedFeedAsync(Guid? targetCollectionId) => Record("feed", targetCollectionId);
-
-        public Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId) =>
-            Record("known:" + source.Id, targetCollectionId);
-
-        public Task AddS128CatalogueAsync(Guid? targetCollectionId) => Record("s128", targetCollectionId);
-
-        public Task AddCollectionManifestAsync(Guid? targetCollectionId) => Record("manifest", targetCollectionId);
-
-        public Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source) =>
-            Record("choose:" + source.Id, collectionId);
-
-        public Task AddPathAsync(string path, Guid? targetCollectionId) => Record("path", targetCollectionId);
-
-        public bool IsInLibrary(string path) => false;
-
-        private Task Record(string kind, Guid? target)
-        {
-            Calls.Add((kind, target));
-            return Task.CompletedTask;
         }
     }
 }

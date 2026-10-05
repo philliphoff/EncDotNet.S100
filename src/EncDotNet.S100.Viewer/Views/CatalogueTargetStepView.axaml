@@ -23,9 +23,11 @@
             <Border Classes="wizardCard" Classes.chosen="{Binding CreateNew}">
                 <StackPanel Spacing="8">
                     <RadioButton Classes="cardRadio" GroupName="WizardTarget" IsChecked="{Binding CreateNew}"
+                                 AutomationProperties.AutomationId="CatalogueTarget.CreateNew"
                                  Content="{x:Static loc:Strings.Library_NewCollection}" />
                     <StackPanel Spacing="4" Classes.inactive="{Binding AddToExisting}">
                         <TextBox Text="{Binding NewCollectionName}"
+                                 AutomationProperties.AutomationId="CatalogueTarget.Name"
                                  PlaceholderText="{x:Static loc:Strings.Library_CollectionNameWatermark}" />
                         <TextBlock Text="{Binding NameHint}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
                     </StackPanel>
@@ -35,8 +37,10 @@
                     IsEnabled="{Binding HasExistingCollections}">
                 <StackPanel Spacing="8">
                     <RadioButton Classes="cardRadio" GroupName="WizardTarget" IsChecked="{Binding AddToExisting}"
+                                 AutomationProperties.AutomationId="CatalogueTarget.AddToExisting"
                                  Content="{x:Static loc:Strings.Library_ExistingCollection}" />
                     <ComboBox ItemsSource="{Binding ExistingCollections}"
+                              AutomationProperties.AutomationId="CatalogueTarget.Existing"
                               SelectedItem="{Binding SelectedCollection}"
                               HorizontalAlignment="Stretch"
                               Classes.inactive="{Binding CreateNew}">

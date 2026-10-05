@@ -1,6 +1,7 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Viewer.Library;
+using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -84,4 +85,97 @@ internal sealed class ThrowingIndexer : ICollectionSourceIndexer
     public ValueTask<SourceIndex> IndexAsync(
         CollectionSource source, IProgress<IndexProgress>? progress, CancellationToken cancellationToken) =>
         throw new InvalidOperationException("Indexing exploded.");
+}
+
+internal sealed class FakeLibraryDownloader : ILibraryDownloader
+{
+    public LibraryDownloadProgress? Progress { get; set; }
+
+    public bool CancelledAll { get; private set; }
+
+    public event EventHandler? ProgressChanged;
+
+    public void RaiseProgress() => ProgressChanged?.Invoke(this, EventArgs.Empty);
+
+    public void CancelAll() => CancelledAll = true;
+
+    public bool Downloaded { get; set; }
+
+    public bool Outdated { get; set; }
+
+    public bool CanDownloadAll { get; set; }
+
+    public int Downloads { get; private set; }
+
+    public event EventHandler? Changed;
+
+    public CollectionItem Localize(CollectionItem item) =>
+        Downloaded && item.Location is RemoteItemLocation
+            ? item with { Location = new LocalItemLocation("/tmp/x", "x.000", []) }
+            : item;
+
+    public bool IsOutdated(CollectionItem item) => Outdated;
+
+    public bool CanDownload(CollectionItem item) => CanDownloadAll || item.Location is RemoteItemLocation;
+
+    public Task<LibraryDownloadResult> DownloadAsync(IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
+    {
+        Downloads += items.Count;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
+    }
+
+    public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+}
+
+internal sealed class FakeLibraryLoader : ILibraryLoader
+{
+    public LibraryLoadState State { get; set; }
+
+    public List<(bool Defer, int Count)> Calls { get; } = [];
+
+    public event EventHandler? Changed;
+
+    public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+    public LibraryLoadState StateOf(CollectionItem item) => State;
+
+    public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
+    {
+        Calls.Add((defer, items.Count));
+        return Task.FromResult(new LibraryLoadResult(items.Count, 0));
+    }
+}
+
+internal sealed class RecordingLibraryImporter : ILibraryImporter
+{
+    public List<(string Kind, Guid? Target)> Calls { get; } = [];
+
+    public Task AddFolderAsync(Guid? targetCollectionId) => Record("folder", targetCollectionId);
+
+    public Task AddExchangeSetZipAsync(Guid? targetCollectionId) => Record("zip", targetCollectionId);
+
+    public Task AddOnlineCatalogueAsync(Guid? targetCollectionId) => Record("online", targetCollectionId);
+
+    public Task AddSharedFeedAsync(Guid? targetCollectionId) => Record("feed", targetCollectionId);
+
+    public Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId) =>
+        Record("known:" + source.Id, targetCollectionId);
+
+    public Task AddS128CatalogueAsync(Guid? targetCollectionId) => Record("s128", targetCollectionId);
+
+    public Task AddCollectionManifestAsync(Guid? targetCollectionId) => Record("manifest", targetCollectionId);
+
+    public Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source) =>
+        Record("choose:" + source.Id, collectionId);
+
+    public Task AddPathAsync(string path, Guid? targetCollectionId) => Record("path", targetCollectionId);
+
+    public bool IsInLibrary(string path) => false;
+
+    private Task Record(string kind, Guid? target)
+    {
+        Calls.Add((kind, target));
+        return Task.CompletedTask;
+    }
 }

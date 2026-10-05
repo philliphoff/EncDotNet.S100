@@ -21,7 +21,10 @@ public static class TestAppBuilder
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<HeadlessViewerApp>()
             .UseSkia()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            // As the app does (Program.BuildAvaloniaApp): the same embedded font on
+            // every OS, so text lays out and renders alike in CI and locally.
+            .WithInterFont();
 }
 
 /// <summary>
