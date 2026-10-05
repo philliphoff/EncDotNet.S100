@@ -255,7 +255,10 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
                     var bytes = new Progress<long>(n =>
                     {
                         Interlocked.Exchange(ref received[index], n);
-                        _status[key] = new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, n, size);
+                        // Progress<T> posts callbacks, so one can land after the item has
+                        // finished: only a still-running item takes the new byte count.
+                        if (_status.TryGetValue(key, out var current) && current.State == LibraryDownloadItemState.Running)
+                            _status.TryUpdate(key, new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, n, size), current);
                         UpdateProgress(done, failed, received, sizes);
                         RaiseProgress(force: false);
                     });
