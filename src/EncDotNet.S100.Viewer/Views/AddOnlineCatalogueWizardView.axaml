@@ -117,6 +117,7 @@
                         </TextBlock>
                     </StackPanel>
                     <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Wizard_Change}"
+                            AutomationProperties.AutomationId="Wizard.ChangeCatalogue"
                             Command="{Binding ChangeCatalogueCommand}" />
                 </Grid>
 
@@ -154,6 +155,7 @@
                 Background="{DynamicResource MutedBackgroundColor}">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
                 <Button Grid.Column="0" Classes="Outline" Height="36" Content="{x:Static loc:Strings.Button_Back}"
+                        AutomationProperties.AutomationId="Wizard.Back"
                         Command="{Binding BackCommand}" />
                 <Panel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding StepOfText}" Classes="muted" FontSize="12.5"
@@ -162,11 +164,14 @@
                                IsVisible="{Binding HasFooterHint}" />
                 </Panel>
                 <Button Grid.Column="2" Classes="Ghost" Content="{x:Static loc:Strings.Button_Cancel}"
+                        AutomationProperties.AutomationId="Wizard.Cancel"
                         Command="{Binding CancelCommand}" />
                 <Panel Grid.Column="3">
                     <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Next}"
+                            AutomationProperties.AutomationId="Wizard.Next"
                             Command="{Binding NextCommand}" IsVisible="{Binding !IsLastStep}" IsDefault="True" />
                     <Button Classes="Primary" Content="{x:Static loc:Strings.Button_AddToLibrary}"
+                            AutomationProperties.AutomationId="Wizard.Add"
                             Command="{Binding AddCommand}" IsVisible="{Binding IsLastStep}" />
                 </Panel>
             </Grid>

@@ -95,6 +95,7 @@
         <!-- Search, with the count at the right. -->
         <Panel Grid.Row="0" Margin="0,0,0,8">
             <TextBox Text="{Binding SearchText}" Padding="10,0,72,0"
+                     AutomationProperties.AutomationId="Catalogues.Search"
                      PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
             <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="12" IsHitTestVisible="False"
                        HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" />
@@ -102,6 +103,7 @@
 
         <Panel Grid.Row="1">
             <ListBox Name="CatalogueList"
+                     AutomationProperties.AutomationId="Catalogues.List"
                      ItemsSource="{Binding Rows}"
                      SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                      Background="Transparent"
@@ -183,7 +185,8 @@
 
         <!-- Add a catalogue by URL: collapsed to one dashed row until asked for. -->
         <Panel Grid.Row="2" Margin="0,10,0,0" IsVisible="{Binding CanAddByUrl}">
-            <Button Classes="addByUrl" IsVisible="{Binding !IsUrlPanelOpen}" Command="{Binding OpenUrlPanelCommand}">
+            <Button Classes="addByUrl" IsVisible="{Binding !IsUrlPanelOpen}" Command="{Binding OpenUrlPanelCommand}"
+                    AutomationProperties.AutomationId="Catalogues.AddByUrl">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
                     <ic:FluentIcon Icon="Add" FontSize="14" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.Library_DirectoryAddByUrl}" FontSize="13"
@@ -202,8 +205,10 @@
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <TextBox Name="UrlBox" Text="{Binding CatalogueUrl}" Classes.error="{Binding HasUrlError}"
+                                 AutomationProperties.AutomationId="Catalogues.Url"
                                  PlaceholderText="https://…/catalogue.xml" />
-                        <Button Grid.Column="1" Classes="Outline" Command="{Binding AddUrlCommand}">
+                        <Button Grid.Column="1" Classes="Outline" Command="{Binding AddUrlCommand}"
+                                AutomationProperties.AutomationId="Catalogues.CheckAndAdd">
                             <Panel>
                                 <TextBlock Text="{x:Static loc:Strings.Button_CheckAndAdd}" IsVisible="{Binding !IsChecking}" />
                                 <TextBlock Text="{x:Static loc:Strings.Button_Checking}" IsVisible="{Binding IsChecking}" />

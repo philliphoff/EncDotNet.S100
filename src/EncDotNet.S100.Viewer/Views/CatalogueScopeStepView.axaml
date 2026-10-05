@@ -84,7 +84,8 @@
              when a path is missing. -->
         <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="10,0">
-                <CheckBox Classes="facet" IsChecked="{Binding IsSelected}">
+                <CheckBox Classes="facet" IsChecked="{Binding IsSelected}"
+                          AutomationProperties.AutomationId="CatalogueScope.Option">
                     <StackPanel VerticalAlignment="Center" Margin="0,4">
                         <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
                         <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" Classes="muted" FontSize="12"
@@ -144,6 +145,7 @@
                 <Border Classes="wizardCard" Classes.chosen="{Binding IncludeAll}">
                     <StackPanel Spacing="2">
                         <RadioButton Classes="cardRadio" GroupName="WizardScope" IsChecked="{Binding IncludeAll}"
+                                     AutomationProperties.AutomationId="CatalogueScope.Everything"
                                      Content="{x:Static loc:Strings.Wizard_Everything}" />
                         <TextBlock Text="{Binding EverythingSummary}" Classes="muted" FontSize="12"
                                    TextTrimming="CharacterEllipsis" Margin="26,0,0,0" />
@@ -152,6 +154,7 @@
                 <Border Grid.Column="1" Classes="wizardCard" Classes.chosen="{Binding OnlySelected}">
                     <StackPanel Spacing="2">
                         <RadioButton Classes="cardRadio" GroupName="WizardScope" IsChecked="{Binding OnlySelected}"
+                                     AutomationProperties.AutomationId="CatalogueScope.OnlySelected"
                                      Content="{x:Static loc:Strings.Wizard_OnlySelected}" />
                         <TextBlock Text="{Binding OnlySelectedSummary}" Classes="muted" FontSize="12"
                                    TextTrimming="CharacterEllipsis" Margin="26,0,0,0" />

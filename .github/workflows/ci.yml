@@ -61,6 +61,8 @@ jobs:
           path: |
             tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
             tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.diff.png
           if-no-files-found: ignore
 
       - name: Pack NuGet packages
@@ -154,6 +156,8 @@ jobs:
           path: |
             tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
             tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.diff.png
           if-no-files-found: ignore
 
   publish:

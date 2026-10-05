@@ -275,11 +275,13 @@
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryAddCurrents}" Command="{Binding AddCurrentsForAreaCommand}"
                       IsVisible="{Binding CanAddCurrentsForArea}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.Rename"
                       IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryCopyUrl}" Click="OnCopySourceUrl"
                       IsVisible="{Binding SelectedNode.HasSourceUrl, FallbackValue=False}" />
             <Separator IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.Remove"
                       IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
         </ContextMenu>
     </UserControl.Resources>
@@ -291,7 +293,8 @@
                        HorizontalAlignment="Center" />
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.7"
                        TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6" />
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddFolderCommand}">
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddFolderCommand}"
+                    AutomationProperties.AutomationId="Library.Quick.Folder">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="DIR" /></Border>
                     <StackPanel Grid.Column="1">
@@ -300,7 +303,8 @@
                     </StackPanel>
                 </Grid>
             </Button>
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddOnlineCatalogueCommand}">
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddOnlineCatalogueCommand}"
+                    AutomationProperties.AutomationId="Library.Quick.Online">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="WEB" /></Border>
                     <StackPanel Grid.Column="1">
@@ -309,7 +313,8 @@
                     </StackPanel>
                 </Grid>
             </Button>
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddSharedFeedCommand}">
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddSharedFeedCommand}"
+                    AutomationProperties.AutomationId="Library.Quick.Feed">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="FEED" /></Border>
                     <StackPanel Grid.Column="1">
@@ -318,7 +323,8 @@
                     </StackPanel>
                 </Grid>
             </Button>
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddCollectionManifestCommand}">
+            <Button Classes="Outline libraryQuickAction" Command="{Binding AddCollectionManifestCommand}"
+                    AutomationProperties.AutomationId="Library.Quick.Manifest">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="JSON" /></Border>
                     <StackPanel Grid.Column="1">
@@ -376,6 +382,7 @@
                  panel, see code-behind) until the user drags the splitter. -->
             <TreeView Grid.Row="1"
                       x:Name="CollectionTree"
+                      AutomationProperties.AutomationId="Library.Tree"
                       Classes="accentTree libraryTree"
                       Margin="4,0"
                       ItemsSource="{Binding Nodes}"
@@ -404,6 +411,7 @@
                                        FontWeight="{Binding IsCollection, Converter={x:Static views:LibraryPanelView.BoolToWeight}}"
                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             <TextBox Grid.Column="1" Text="{Binding RenameText}"
+                                     AutomationProperties.AutomationId="Library.Tree.RenameBox"
                                      IsVisible="{Binding IsRenaming}"
                                      Padding="4,1" MinHeight="0"
                                      AttachedToVisualTree="OnRenameBoxAttached">
@@ -504,6 +512,7 @@
                     </Panel>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
+                                 AutomationProperties.AutomationId="Library.Filter"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
                                 <TextBlock Text="{Binding ItemsSummary}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
@@ -596,6 +605,7 @@
                 </StackPanel>
 
                 <ListBox x:Name="ItemList"
+                         AutomationProperties.AutomationId="Library.Items"
                          ItemsSource="{Binding Items}"
                          SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                          Classes="accentList"
@@ -715,6 +725,7 @@
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                     <Button Classes="Primary libraryHeaderAction"
                                             Command="{Binding DownloadOnlyCommand}"
+                                            AutomationProperties.AutomationId="Library.Details.Download"
                                             IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
                                             ToolTip.Tip="{Binding SelectedItem.DownloadTooltip}"
                                             AutomationProperties.Name="{Binding SelectedItem.DownloadTooltip}">
@@ -723,6 +734,7 @@
                                     <!-- #711 G3: the dataset's window on the Timeline. -->
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding ShowOnTimelineCommand}"
+                                            AutomationProperties.AutomationId="Library.Details.ShowOnTimeline"
                                             IsVisible="{Binding HasValidWindow}"
                                             ToolTip.Tip="{x:Static loc:Strings.Library_ShowOnTimeline}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_ShowOnTimeline}">
@@ -730,6 +742,7 @@
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding GoToRunStartCommand}"
+                                            AutomationProperties.AutomationId="Library.Details.GoToRunStart"
                                             IsVisible="{Binding HasValidWindow}"
                                             ToolTip.Tip="{x:Static loc:Strings.Library_GoToRunStart}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_GoToRunStart}">
@@ -737,12 +750,14 @@
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding ZoomToCommand}"
+                                            AutomationProperties.AutomationId="Library.Details.ZoomTo"
                                             ToolTip.Tip="{x:Static loc:Strings.Button_ZoomTo}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Button_ZoomTo}">
                                         <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding LoadOrDownloadCommand}"
+                                            AutomationProperties.AutomationId="Library.Details.Load"
                                             ToolTip.Tip="{Binding SelectedItem.LoadTooltip}"
                                             AutomationProperties.Name="{Binding SelectedItem.LoadTooltip}">
                                         <ic:FluentIcon Icon="Layer" FontSize="16" />

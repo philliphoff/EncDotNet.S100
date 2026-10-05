@@ -1,4 +1,6 @@
+using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -14,6 +16,26 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 internal static class AccentColors
 {
+    /// <summary>
+    /// Publishes the accent brushes for the chrome theme
+    /// <paramref name="variant"/> resolves to: <c>AccentBrush</c> (the
+    /// <see cref="ForTheme"/> colour) and <c>AccentSubtleBrush</c> (the same at
+    /// 20 % alpha). The main window calls this at startup and whenever the
+    /// accent or theme changes; headless view tests call it on their host
+    /// window so views resolve the same brushes.
+    /// </summary>
+    /// <param name="resources">The window's resources.</param>
+    /// <param name="accent">The user-selected accent colour.</param>
+    /// <param name="variant">The application's actual theme variant.</param>
+    public static void Apply(IResourceDictionary resources, Color accent, ThemeVariant? variant)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+        var theme = ChromeThemes.FromVariant(variant) ?? ChromeTheme.Light;
+        var themed = ForTheme(accent, theme);
+        resources["AccentBrush"] = new SolidColorBrush(themed);
+        resources["AccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(0x33, themed.R, themed.G, themed.B));
+    }
+
     /// <summary>
     /// Returns the accent colour to assign to the <c>AccentBrush</c>
     /// resource for the supplied chrome <paramref name="theme"/>.
