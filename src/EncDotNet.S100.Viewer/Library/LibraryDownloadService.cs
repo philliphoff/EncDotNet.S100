@@ -254,11 +254,19 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
                     RaiseProgress(force: true);
                     var bytes = new Progress<long>(n =>
                     {
+                        // Progress<T> posts each report, so one can arrive after the
+                        // item has finished or failed. Only update an item that is
+                        // still running: a late report must not turn a failure back
+                        // into Running (the batch would then drop it, error and all)
+                        // or re-add an item that already completed.
+                        if (!_status.TryGetValue(key, out var current)
+                            || current.State != LibraryDownloadItemState.Running
+                            || !_status.TryUpdate(key, current with { BytesReceived = n }, current))
+                        {
+                            return;
+                        }
+
                         Interlocked.Exchange(ref received[index], n);
-                        // Progress<T> posts callbacks, so one can land after the item has
-                        // finished: only a still-running item takes the new byte count.
-                        if (_status.TryGetValue(key, out var current) && current.State == LibraryDownloadItemState.Running)
-                            _status.TryUpdate(key, new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, n, size), current);
                         UpdateProgress(done, failed, received, sizes);
                         RaiseProgress(force: false);
                     });

@@ -3055,6 +3055,9 @@
   <data name="Menu_LibraryCopyUrl" xml:space="preserve">
     <value>Copy URL</value>
   </data>
+  <data name="Library_ToggleGroup" xml:space="preserve">
+    <value>Show or hide the datasets in this package</value>
+  </data>
   <data name="Library_Quick_Folder" xml:space="preserve">
     <value>Add a folder…</value>
   </data>
@@ -3869,6 +3872,9 @@
   </data>
   <data name="Tooltip_TimeHudOpenTimeline" xml:space="preserve">
     <value>Open timeline (T)</value>
+  </data>
+  <data name="Timeline_ViewTime" xml:space="preserve">
+    <value>View time</value>
   </data>
   <data name="Tooltip_TimeHudTime" xml:space="preserve">
     <value>The map's view time; click, then ← → to step</value>

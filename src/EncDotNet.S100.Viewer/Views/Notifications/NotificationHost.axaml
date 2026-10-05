@@ -211,6 +211,7 @@
                                  (hover/pressed come for free), Padding=0, sized to
                                  a small glyph, anchored in the top-right corner. -->
                             <Button Width="24"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Notification_Close}"
                                     Height="24"
                                     MinWidth="0"
                                     MinHeight="0"

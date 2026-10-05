@@ -538,6 +538,7 @@ internal static class Strings
     public static string TimelinePanel_PresetCustom => Get(nameof(TimelinePanel_PresetCustom));
     public static string TimeHud_Live => Get(nameof(TimeHud_Live));
     public static string Tooltip_TimeHudOpenTimeline => Get(nameof(Tooltip_TimeHudOpenTimeline));
+    public static string Timeline_ViewTime => Get(nameof(Timeline_ViewTime));
     public static string Tooltip_TimeHudTime => Get(nameof(Tooltip_TimeHudTime));
     public static string Library_State_AtViewTime => Get(nameof(Library_State_AtViewTime));
     public static string Tooltip_LibraryAtViewTimeFormat => Get(nameof(Tooltip_LibraryAtViewTimeFormat));
@@ -1163,6 +1164,7 @@ internal static class Strings
     public static string Toast_LibraryUnpackedManyFormat => Get(nameof(Toast_LibraryUnpackedManyFormat));
     public static string Library_Field_Datasets => Get(nameof(Library_Field_Datasets));
     public static string Menu_LibraryCopyUrl => Get(nameof(Menu_LibraryCopyUrl));
+    public static string Library_ToggleGroup => Get(nameof(Library_ToggleGroup));
     public static string Library_Quick_Folder => Get(nameof(Library_Quick_Folder));
     public static string Library_Quick_FolderSub => Get(nameof(Library_Quick_FolderSub));
     public static string Library_Quick_Online => Get(nameof(Library_Quick_Online));

@@ -142,9 +142,16 @@ internal sealed partial class ViewerUiAutomation : IViewerUiAutomation
         }
     }
 
+    /// <summary>
+    /// Whether the interactive view lists an element: one with an id or an
+    /// action, unless it is hidden from automation clients
+    /// (<c>AutomationProperties.AccessibilityView="Raw"</c>, e.g. a tree item's
+    /// chevron, which only duplicates the item's own expand / collapse).
+    /// </summary>
     private static bool IsInteresting(Control control, AutomationPeer peer)
-        => AutomationProperties.GetAutomationId(control) is { Length: > 0 }
-            || PatternsOf(peer, control).Any(p => ActionPatterns.Contains(p));
+        => peer.IsControlElement()
+            && (AutomationProperties.GetAutomationId(control) is { Length: > 0 }
+                || PatternsOf(peer, control).Any(p => ActionPatterns.Contains(p)));
 
     private UiElementSnapshot Describe(Control control, AutomationPeer peer, IReadOnlyList<UiElementSnapshot>? children)
     {

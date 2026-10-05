@@ -39,6 +39,7 @@
                                                   VerticalAlignment="Center"
                                                   Margin="0,0,4,0" />
                                 <Button Grid.Column="2"
+                                        AutomationProperties.Name="{TemplateBinding CloseButtonToolTip}"
                                         Width="24"
                                         Height="24"
                                         MinWidth="0"

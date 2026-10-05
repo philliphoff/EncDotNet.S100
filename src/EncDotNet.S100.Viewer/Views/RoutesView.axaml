@@ -137,12 +137,16 @@
         <Border DockPanel.Dock="Top" Padding="8,4,6,4">
             <Grid ColumnDefinitions="*,Auto,Auto">
                 <Button Grid.Column="1"
+                        AutomationProperties.AutomationId="Routes.PromoteMeasurement"
+                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_PromoteMeasurement}"
                         Classes="Icon"
                         Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).PromoteMeasurementToRouteCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
                     <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                 </Button>
                 <Button Grid.Column="2"
+                        AutomationProperties.AutomationId="Routes.Add"
+                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddRoute}"
                         Classes="Icon"
                         Command="{Binding AddRouteCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddRoute}">
@@ -163,6 +167,7 @@
 
             <!-- Routes list. -->
             <ListBox Grid.Row="0"
+                     AutomationProperties.AutomationId="Routes.List"
                      x:Name="RouteList"
                      MaxHeight="200"
                      ItemsSource="{Binding Routes}"
@@ -191,6 +196,8 @@
                                            Opacity="0.6" />
                             </StackPanel>
                             <Button Grid.Column="2"
+                                    AutomationProperties.AutomationId="Routes.Row.Menu"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RouteRowMenu}"
                                     Classes="Icon"
                                     VerticalAlignment="Center"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteRowMenu}">
@@ -198,13 +205,16 @@
                                 <Button.Flyout>
                                     <MenuFlyout>
                                         <MenuItem Header="{x:Static loc:Strings.Menu_RenameRoute}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Rename"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RenameRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                         <MenuItem Header="{x:Static loc:Strings.Menu_ReverseRoute}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Reverse"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ReverseRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                         <Separator />
                                         <MenuItem Header="{x:Static loc:Strings.Menu_RemoveRoute}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Remove"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RemoveRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                     </MenuFlyout>
@@ -231,6 +241,8 @@
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
                         <Button Grid.Column="1"
+                                AutomationProperties.AutomationId="Routes.Active.Rename"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_EditRouteName}"
                                 Classes="Icon"
                                 Command="{Binding BeginRenameCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_EditRouteName}">
@@ -238,6 +250,8 @@
                         </Button>
                     </Grid>
                     <TextBox Text="{Binding RenameText, Mode=TwoWay}"
+                             AutomationProperties.AutomationId="Routes.Active.NameBox"
+                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_EditRouteName}"
                              FontSize="13"
                              Padding="4,2"
                              IsVisible="{Binding IsRenamingActiveRoute}">
@@ -276,6 +290,8 @@
                                         <Border Classes="wpTint" />
                                         <!-- Full-area select target (bottom layer). -->
                                         <Button Classes="wpHit"
+                                                AutomationProperties.AutomationId="Routes.Waypoint"
+                                                AutomationProperties.Name="{Binding Label}"
                                                 Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).SelectWaypointCommand}"
                                                 CommandParameter="{Binding}" />
                                         <!-- Row visuals (top layer). The circle/text
@@ -306,6 +322,8 @@
                                                  across the flyout popup, but the
                                                  inherited DataContext does. -->
                                             <Button Grid.Column="1"
+                                                    AutomationProperties.AutomationId="Routes.Waypoint.Menu"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_WaypointRowMenu}"
                                                     Classes="Icon"
                                                     VerticalAlignment="Center"
                                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_WaypointRowMenu}">
@@ -313,9 +331,11 @@
                                                 <Button.Flyout>
                                                     <MenuFlyout>
                                                         <MenuItem Header="{x:Static loc:Strings.Menu_InsertWaypointAfter}"
+                                                                  AutomationProperties.AutomationId="Routes.WaypointMenu.InsertAfter"
                                                                   Command="{Binding InsertAfterCommand}"
                                                                   CommandParameter="{Binding}" />
                                                         <MenuItem Header="{x:Static loc:Strings.Menu_DeleteWaypoint}"
+                                                                  AutomationProperties.AutomationId="Routes.WaypointMenu.Delete"
                                                                   Command="{Binding DeleteCommand}"
                                                                   CommandParameter="{Binding}" />
                                                     </MenuFlyout>
@@ -341,6 +361,7 @@
                                                    Opacity="0.75"
                                                    VerticalAlignment="Center" />
                                         <Button Classes="geoChip"
+                                                AutomationProperties.AutomationId="Routes.Leg.Geometry"
                                                 Classes.geodesic="{Binding IsGeodesic}"
                                                 Content="{Binding GeometryText}"
                                                 Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).ToggleLegGeometryAtCommand}"
@@ -371,6 +392,8 @@
                         BorderThickness="0,1,0,0">
                     <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
                         <Button Grid.Column="0"
+                                AutomationProperties.AutomationId="Routes.InsertWaypoint"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_InsertWaypoint}"
                                 Classes="Outline"
                                 VerticalContentAlignment="Center"
                                 Command="{Binding InsertAfterSelectedCommand}"
@@ -381,6 +404,8 @@
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1"
+                                AutomationProperties.AutomationId="Routes.Reverse"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReverseRoute}"
                                 Classes="Outline"
                                 VerticalContentAlignment="Center"
                                 Command="{Binding ReverseActiveRouteCommand}"
@@ -391,6 +416,7 @@
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="3"
+                                AutomationProperties.AutomationId="Routes.Done"
                                 Classes="Primary"
                                 VerticalContentAlignment="Center"
                                 Content="{x:Static loc:Strings.Button_DoneRouteEdit}"

@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -24,10 +23,6 @@ public partial class LibraryPanelView : UserControl
         var splitter = this.FindControl<GridSplitter>("TreeSplitter");
         if (grid is not null && splitter is not null)
             FitTreeToContent(grid, splitter);
-
-        var tree = this.FindControl<TreeView>("CollectionTree");
-        if (tree is not null)
-            tree.ContextRequested += OnTreeContextRequested;
 
         var list = this.FindControl<ListBox>("ItemList");
         if (list is not null)
@@ -126,16 +121,6 @@ public partial class LibraryPanelView : UserControl
             treeRow.Height = new GridLength(Math.Max(1, tree), GridUnitType.Star);
             listRow.Height = new GridLength(Math.Max(1, list), GridUnitType.Star);
         };
-    }
-
-    private void OnTreeContextRequested(object? sender, ContextRequestedEventArgs e)
-    {
-        // The context menu acts on the selected node, so select the one under the pointer first.
-        if (DataContext is LibraryPanelViewModel vm
-            && (e.Source as Control)?.FindAncestorOfType<TreeViewItem>(includeSelf: true) is { DataContext: LibraryNodeViewModel node })
-        {
-            vm.SelectedNode = node;
-        }
     }
 
     private void OnRenameBoxAttached(object? sender, VisualTreeAttachmentEventArgs e)

@@ -108,5 +108,28 @@ view has distinct parts.
 | A control repeated once per item | `Datasets.Row.Remove` (scope with `Find<T>(id, row)`) |
 
 Ids are stable identifiers, not user-facing text. Keep them in English and keep
-them when the visible text changes. Set `AutomationProperties.Name` separately
-for screen readers.
+them when the visible text changes.
+
+## Accessible names
+
+A screen reader reads `AutomationProperties.Name`, and so does `ui_tree`. A
+button whose content is a string is named by it. A button whose content is a
+control (an icon, or a panel with an icon and text) is not: Avalonia names it
+after the content's type, e.g. `FluentIcons.Avalonia.FluentIcon`. Give such a
+button `AutomationProperties.Name`, usually the same localized string as its
+tooltip, or a binding to the row's own text inside a data template. A setting's
+input (toggle switch, combo box, number box) is named after its row's label.
+Mark a control that only repeats its parent's action (a tree item's expand
+chevron) `AutomationProperties.AccessibilityView="Raw"` instead.
+
+## The accessibility guard
+
+`UiAutomation/AccessibilityGuardTests` checks every view's XAML:
+
+- every button has an accessible name (`AutomationProperties.Name`, string
+  `Content`, or text content), unless it is marked `Raw`;
+- every interactive control has an automation id, except template parts and
+  `Raw` elements, in every view not on its `ViewsAwaitingIds` list (#784).
+
+When you finish a view's ids, remove it from `ViewsAwaitingIds`; the test fails
+until you do, so the list only shrinks.

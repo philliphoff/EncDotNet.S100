@@ -42,6 +42,7 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="1"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
                                 Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:PortrayalCataloguesViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
